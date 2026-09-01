@@ -95,6 +95,45 @@ void main() {
       expect(entry.contentSha256, isNull);
     });
 
+    test('download cancellation contains late source errors', () async {
+      final sourceListened = Completer<void>();
+      final source = StreamController<Uint8List>(
+        onListen: sourceListened.complete,
+        onCancel: () => Future<void>.error(StateError('cancel failed')),
+      );
+      final attrs = SftpFileAttrs(
+        size: 1,
+        mode: const SftpFileMode.value(0x81A4),
+      );
+      final client = _FakeSftpClient(statResult: attrs);
+      client.openedFile = _ControlledReadSftpFile(
+        client,
+        attrs,
+        source.stream,
+      );
+      final fileSystem = DartSshRemoteFileSystem(client);
+      final cancellation = RemoteTransferCancellation();
+      final transfer = fileSystem.download(
+        '/srv/file.txt',
+        _DiscardingSink(),
+        cancellation: cancellation,
+      );
+      await sourceListened.future;
+
+      cancellation.cancel();
+      await expectLater(
+        transfer,
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.cancelled,
+          ),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+    });
+
     test('maps SFTP ownership and timestamps into entries', () async {
       final client = _FakeSftpClient(
         statResult: SftpFileAttrs(
@@ -254,6 +293,7 @@ class _FakeSftpClient implements SftpClient {
   String? lastReadlinkPath;
   String? lastLinkFirstArgument;
   String? lastLinkSecondArgument;
+  SftpFile? openedFile;
 
   @override
   Future<SftpFileAttrs> stat(String path, {bool followLink = true}) async {
@@ -261,6 +301,13 @@ class _FakeSftpClient implements SftpClient {
     if (statError case final error?) throw error;
     return statResult;
   }
+
+  @override
+  Future<SftpFile> open(
+    String path, {
+    SftpFileOpenMode mode = SftpFileOpenMode.read,
+  }) async =>
+      openedFile ?? _FakeSftpFile(this, fileBytes, statResult, writtenBytes);
 
   @override
   Future<void> setStat(String path, SftpFileAttrs attrs) async {
@@ -279,12 +326,6 @@ class _FakeSftpClient implements SftpClient {
     lastLinkFirstArgument = linkPath;
     lastLinkSecondArgument = targetPath;
   }
-
-  @override
-  Future<SftpFile> open(
-    String path, {
-    SftpFileOpenMode mode = SftpFileOpenMode.read,
-  }) async => _FakeSftpFile(this, fileBytes, statResult, writtenBytes);
 
   @override
   Future<void> rename(String oldPath, String newPath) async {}
@@ -325,4 +366,47 @@ class _FakeSftpFile extends SftpFile {
   Future<void> writeBytes(Uint8List data, {int offset = 0}) async {
     writtenBytes.add(data);
   }
+}
+
+class _ControlledReadSftpFile extends SftpFile {
+  _ControlledReadSftpFile(
+    SftpClient client,
+    this.attrs,
+    this.source,
+  ) : super(client, Uint8List(0));
+
+  final SftpFileAttrs attrs;
+  final Stream<Uint8List> source;
+
+  @override
+  Future<SftpFileAttrs> stat() async => attrs;
+
+  @override
+  Stream<Uint8List> read({
+    int? length,
+    int offset = 0,
+    void Function(int bytesRead)? onProgress,
+    int chunkSize = 1,
+    int maxPendingRequests = 1,
+  }) => source;
+
+  @override
+  Future<void> close() async {}
+}
+
+class _DiscardingSink implements StreamSink<List<int>> {
+  @override
+  void add(List<int> data) {}
+
+  @override
+  void addError(Object error, [StackTrace? stackTrace]) {}
+
+  @override
+  Future<void> addStream(Stream<List<int>> stream) => stream.drain<void>();
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<void> get done => Future<void>.value();
 }
