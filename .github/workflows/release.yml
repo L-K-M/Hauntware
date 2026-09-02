@@ -54,6 +54,10 @@ jobs:
           sdk: stable
       - name: Resolve workspace
         run: dart pub get
+      - name: Verify release tag and versions
+        run: >-
+          dart run tool/release_version/bin/release_version.dart
+          check-tag --tag "${{ inputs.tag || github.ref_name }}"
       - name: Resolve M0 benchmark harness
         if: hashFiles('tool/bench/pubspec.yaml') != ''
         working-directory: tool/bench
