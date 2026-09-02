@@ -12,6 +12,8 @@ final class MemorySettingsFileSystem implements SettingsFileSystem {
   bool blockWrites = false;
   bool failWrites = false;
   bool failFirstWrite = false;
+  Object? firstReadError;
+  int readCount = 0;
   Object? deleteError;
   Object? renameError;
   Completer<void>? _release;
@@ -30,7 +32,14 @@ final class MemorySettingsFileSystem implements SettingsFileSystem {
   Future<bool> exists(String path) async => contents.containsKey(path);
 
   @override
-  Future<String?> read(String path) async => contents[path];
+  Future<String?> read(String path) async {
+    readCount++;
+    if (firstReadError case final error? when readCount == 1) {
+      throw error;
+    }
+
+    return contents[path];
+  }
 
   @override
   Future<void> rename(String source, String destination) async {

@@ -18,9 +18,12 @@ class AppPreferences {
   final SettingsStore _store;
 
   Future<double> loadPaneRatio() async {
-    final ratio = await _store.get<double>(_paneRatioKey);
-    if (ratio == null || !ratio.isFinite) return _defaultPaneRatio;
+    final storedRatio = await _store.get<num>(_paneRatioKey);
+    if (storedRatio == null || !storedRatio.isFinite) {
+      return _defaultPaneRatio;
+    }
 
+    final ratio = storedRatio.toDouble();
     return ratio.clamp(0, 1).toDouble();
   }
 
@@ -31,19 +34,22 @@ class AppPreferences {
   }
 
   Future<Rect?> loadWindowBounds() async {
-    final values = await Future.wait<double?>([
-      _store.get<double>(_windowLeftKey),
-      _store.get<double>(_windowTopKey),
-      _store.get<double>(_windowWidthKey),
-      _store.get<double>(_windowHeightKey),
+    final storedValues = await Future.wait<num?>([
+      _store.get<num>(_windowLeftKey),
+      _store.get<num>(_windowTopKey),
+      _store.get<num>(_windowWidthKey),
+      _store.get<num>(_windowHeightKey),
     ]);
-    if (values.any((value) => value == null || !value.isFinite)) return null;
+    if (storedValues.any((value) => value == null || !value.isFinite)) {
+      return null;
+    }
 
-    final width = values[2]!;
-    final height = values[3]!;
+    final values = storedValues.map((value) => value!.toDouble()).toList();
+    final width = values[2];
+    final height = values[3];
     if (width <= 0 || height <= 0) return null;
 
-    return Rect.fromLTWH(values[0]!, values[1]!, width, height);
+    return Rect.fromLTWH(values[0], values[1], width, height);
   }
 
   Future<void> saveWindowBounds(Rect bounds) async {

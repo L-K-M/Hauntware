@@ -29,6 +29,16 @@ void main() {
       expect(result, const Rect.fromLTWH(370, 140, 1180, 760));
     });
 
+    test('uses the fallback when no work areas are reported', () {
+      final result = clampWindowBounds(
+        bounds: const Rect.fromLTWH(3000, 2000, 1180, 760),
+        workAreas: const [],
+        fallbackWorkArea: primaryWorkArea,
+      );
+
+      expect(result, const Rect.fromLTWH(370, 140, 1180, 760));
+    });
+
     test('shrinks oversized bounds to the chosen work area', () {
       final result = clampWindowBounds(
         bounds: const Rect.fromLTWH(-50, -40, 2200, 1200),

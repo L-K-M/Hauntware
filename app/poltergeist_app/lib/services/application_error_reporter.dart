@@ -24,6 +24,14 @@ final class ApplicationErrorReporter {
       },
     );
   }
+
+  Future<void> guard(Future<void> Function() operation) async {
+    try {
+      await operation();
+    } catch (error, stackTrace) {
+      report(error, stackTrace);
+    }
+  }
 }
 
 void _reportFlutterError(Object error, StackTrace stackTrace) {

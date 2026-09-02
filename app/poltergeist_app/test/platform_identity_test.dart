@@ -59,6 +59,15 @@ void main() {
     expect(offenders, isEmpty);
   });
 
+  test('keeps iOS asset symbol generation enabled in every mode', () {
+    final project = _read('ios/Runner.xcodeproj/project.pbxproj');
+    const setting =
+        'ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS';
+
+    expect(RegExp('$setting = YES;').allMatches(project), hasLength(3));
+    expect(project, isNot(contains('$setting = AppIcon;')));
+  });
+
   test('keeps shipped application and bundle names ASCII', () {
     for (final name in [_linuxBinaryName, _macExecutableName, _productName]) {
       expect(ascii.encode(name), hasLength(name.length));
@@ -79,6 +88,33 @@ void main() {
         contains(r'LINUX_DESKTOP_FILE="$LINUX_APPLICATION_ID.desktop"'),
         contains('StartupWMClass=\$LINUX_STARTUP_WM_CLASS'),
         contains(r'$LINUX_DESKTOP_FILE'),
+      ),
+    );
+  });
+
+  test('defines the Linux window title once', () {
+    final runner = _read('linux/runner/my_application.cc');
+
+    expect(
+      runner,
+      contains('constexpr char kWindowTitle[] = "$_productName";'),
+    );
+    expect(RegExp('"$_productName"').allMatches(runner), hasLength(1));
+    expect(
+      RegExp('set_title\\([^;]*kWindowTitle').allMatches(runner),
+      hasLength(2),
+    );
+  });
+
+  test('guards late Windows font changes after teardown', () {
+    final runner = _read('windows/runner/flutter_window.cpp');
+
+    expect(
+      runner,
+      contains(
+        'case WM_FONTCHANGE:\n'
+        '      if (flutter_controller_) {\n'
+        '        flutter_controller_->engine()->ReloadSystemFonts();',
       ),
     );
   });
@@ -120,6 +156,16 @@ void main() {
     );
   });
 
+  test('uses the product name in the native macOS menu and window', () {
+    final menu = _read('macos/Runner/Base.lproj/MainMenu.xib');
+
+    expect(menu, isNot(contains('APP_NAME')));
+    expect(menu, contains('title="About $_productName"'));
+    expect(menu, contains('title="Hide $_productName"'));
+    expect(menu, contains('title="Quit $_productName"'));
+    expect(menu, contains('<window title="$_productName"'));
+  });
+
   test('keeps macOS desktop builds unsandboxed', () {
     for (final path in [
       'macos/Runner/DebugProfile.entitlements',
@@ -139,10 +185,7 @@ void main() {
     expect(lifecycle, contains('enableFullSizeContentView()'));
     expect(lifecycle, contains('makeTitlebarTransparent()'));
     expect(lifecycle, contains('hideTitle()'));
-    expect(
-      lifecycle,
-      isNot(contains('titleBarStyle: TitleBarStyle.normal')),
-    );
+    expect(lifecycle, isNot(contains('titleBarStyle: TitleBarStyle.normal')));
   });
 
   test('master icon is a 1024px square PNG', () {

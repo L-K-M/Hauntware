@@ -48,6 +48,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   double _contentWidth = 0;
   Future<void> _saveTail = Future.value();
   var _saveRevision = 0;
+  var _hasPendingSave = false;
 
   @override
   void initState() {
@@ -58,6 +59,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
 
   @override
   void dispose() {
+    _commitPaneRatio();
     _splitterFocusNode.dispose();
     super.dispose();
   }
@@ -108,6 +110,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
             increasedValue: widget.formatRatio(increasedRatio),
             decreasedValue: widget.formatRatio(decreasedRatio),
             onResize: (delta) => _resize(context, delta),
+            onResizeEnd: _commitPaneRatio,
           ),
         ),
         SizedBox(
@@ -137,7 +140,8 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
     if (ratio == _paneRatio) return;
 
     setState(() => _paneRatio = ratio);
-    _savePaneRatio(ratio);
+    _saveRevision++;
+    _hasPendingSave = true;
   }
 
   double _ratioAfterLogicalDelta(
@@ -188,14 +192,21 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
     return displayed.primaryWidth / usableWidth;
   }
 
-  void _savePaneRatio(double ratio) {
+  void _commitPaneRatio() {
+    if (!_hasPendingSave) return;
+
+    // Persist once at the interaction boundary, not per drag or key repeat.
+    _hasPendingSave = false;
+    _savePaneRatio(_paneRatio, _saveRevision);
+  }
+
+  void _savePaneRatio(double ratio, int revision) {
     final save = widget.onPaneRatioChanged;
     if (save == null) {
       _lastSavedPaneRatio = ratio;
       return;
     }
 
-    final revision = ++_saveRevision;
     final report = widget.onPaneRatioSaveError;
     _saveTail = _saveTail.then((_) async {
       try {
@@ -224,6 +235,7 @@ class _PaneSplitter extends StatelessWidget {
     required this.increasedValue,
     required this.decreasedValue,
     required this.onResize,
+    required this.onResizeEnd,
   });
 
   final FocusNode focusNode;
@@ -232,21 +244,31 @@ class _PaneSplitter extends StatelessWidget {
   final String increasedValue;
   final String decreasedValue;
   final ValueChanged<double> onResize;
+  final VoidCallback onResizeEnd;
 
   @override
   Widget build(BuildContext context) {
     return Focus(
       focusNode: focusNode,
+      onFocusChange: (hasFocus) {
+        if (hasFocus) return;
+
+        onResizeEnd();
+      },
       onKeyEvent: (_, event) {
-        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-          return KeyEventResult.ignored;
-        }
-        if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-          onResize(-_keyboardResizeStep);
+        final delta = switch (event.logicalKey) {
+          LogicalKeyboardKey.arrowLeft => -_keyboardResizeStep,
+          LogicalKeyboardKey.arrowRight => _keyboardResizeStep,
+          _ => null,
+        };
+        if (delta == null) return KeyEventResult.ignored;
+
+        if (event is KeyUpEvent) {
+          onResizeEnd();
           return KeyEventResult.handled;
         }
-        if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-          onResize(_keyboardResizeStep);
+        if (event is KeyDownEvent || event is KeyRepeatEvent) {
+          onResize(delta);
           return KeyEventResult.handled;
         }
 
@@ -279,6 +301,7 @@ class _PaneSplitter extends StatelessWidget {
                   ? _keyboardResizeStep
                   : -_keyboardResizeStep,
             );
+            onResizeEnd();
           },
           onDecrease: () {
             final direction = Directionality.of(context);
@@ -287,6 +310,7 @@ class _PaneSplitter extends StatelessWidget {
                   ? -_keyboardResizeStep
                   : _keyboardResizeStep,
             );
+            onResizeEnd();
           },
           child: MouseRegion(
             cursor: SystemMouseCursors.resizeColumn,
@@ -295,6 +319,8 @@ class _PaneSplitter extends StatelessWidget {
               dragStartBehavior: DragStartBehavior.down,
               onTap: focusNode.requestFocus,
               onHorizontalDragUpdate: (details) => onResize(details.delta.dx),
+              onHorizontalDragEnd: (_) => onResizeEnd(),
+              onHorizontalDragCancel: onResizeEnd,
               child: Center(
                 child: VerticalDivider(
                   width: 1,

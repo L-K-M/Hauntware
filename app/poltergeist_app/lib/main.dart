@@ -24,7 +24,7 @@ Future<void> main() async {
     preferences,
     onError: errorReporter.report,
   );
-  await windowLifecycle.prepare();
+  await errorReporter.guard(windowLifecycle.prepare);
 
   runApp(
     PoltergeistApp(
@@ -36,5 +36,5 @@ Future<void> main() async {
       },
     ),
   );
-  await windowLifecycle.show();
+  await errorReporter.guard(windowLifecycle.show);
 }

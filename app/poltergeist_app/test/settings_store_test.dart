@@ -77,6 +77,24 @@ void main() {
     expect(errors, [isA<FormatException>()]);
   });
 
+  test('reports a transient load failure and retries', () async {
+    final loadFailure = StateError('read failed');
+    final errors = <Object>[];
+    final files = MemorySettingsFileSystem()
+      ..firstReadError = loadFailure
+      ..contents['/support/settings.json'] = '{"density":2}';
+    final store = SettingsStore(
+      path: '/support/settings.json',
+      fileSystem: files,
+      onError: (error, _) => errors.add(error),
+    );
+
+    await expectLater(store.get<int>('density'), throwsA(same(loadFailure)));
+    expect(await store.get<int>('density'), 2);
+    expect(files.readCount, 2);
+    expect(errors, [same(loadFailure)]);
+  });
+
   test('reports both corrupt input and a failed quarantine', () async {
     final quarantineFailure = StateError('rename failed');
     final errors = <Object>[];

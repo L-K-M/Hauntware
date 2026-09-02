@@ -79,13 +79,33 @@ final class SettingsStore {
   }
 
   Future<void> _ensureLoaded() {
-    return _loadFuture ??= _load();
+    final activeLoad = _loadFuture;
+    if (activeLoad != null) return activeLoad;
+
+    final load = _load();
+    _loadFuture = load;
+    unawaited(
+      load.then<void>(
+        (_) {},
+        onError: (Object _, StackTrace _) {
+          // A transient filesystem failure must not poison later reads.
+          if (identical(_loadFuture, load)) _loadFuture = null;
+        },
+      ),
+    );
+    return load;
   }
 
   Future<void> _load() async {
-    await _fileSystem.createDirectory(_parentDirectory(_path));
+    late final String? contents;
+    try {
+      await _fileSystem.createDirectory(_parentDirectory(_path));
+      contents = await _fileSystem.read(_path);
+    } catch (error, stack) {
+      _report(error, stack);
+      rethrow;
+    }
 
-    final contents = await _fileSystem.read(_path);
     if (contents == null) return;
 
     try {

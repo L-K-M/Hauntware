@@ -103,50 +103,59 @@ void main() {
 
   testWidgets('exposes focusable adjustable semantics', (tester) async {
     final semantics = tester.ensureSemantics();
-    await _pumpShell(tester);
+    try {
+      await _pumpShell(tester);
 
-    final data = tester
-        .getSemantics(find.byKey(AdaptiveShell.splitterKey))
-        .getSemanticsData();
-    expect(data.label, 'Resize panes');
-    expect(data.value, '50%');
-    expect(data.increasedValue, '51%');
-    expect(data.decreasedValue, '49%');
-    expect(data.flagsCollection.isFocused, isNot(ui.Tristate.none));
-    expect(data.hasAction(ui.SemanticsAction.focus), isTrue);
-    expect(data.hasAction(ui.SemanticsAction.increase), isTrue);
-    expect(data.hasAction(ui.SemanticsAction.decrease), isTrue);
-    semantics.dispose();
+      final data = tester
+          .getSemantics(find.byKey(AdaptiveShell.splitterKey))
+          .getSemanticsData();
+      expect(data.label, 'Resize panes');
+      expect(data.value, '50%');
+      expect(data.increasedValue, '51%');
+      expect(data.decreasedValue, '49%');
+      expect(data.flagsCollection.isFocused, isNot(ui.Tristate.none));
+      expect(data.hasAction(ui.SemanticsAction.focus), isTrue);
+      expect(data.hasAction(ui.SemanticsAction.increase), isTrue);
+      expect(data.hasAction(ui.SemanticsAction.decrease), isTrue);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('announces the actual compact-width resize step', (tester) async {
     final semantics = tester.ensureSemantics();
-    await _pumpShell(tester, size: const Size(680, 600));
+    try {
+      await _pumpShell(tester, size: const Size(680, 600));
 
-    final data = tester
-        .getSemantics(find.byKey(AdaptiveShell.splitterKey))
-        .getSemanticsData();
-    expect(data.value, '50%');
-    expect(data.increasedValue, '52%');
-    expect(data.decreasedValue, '48%');
-    semantics.dispose();
+      final data = tester
+          .getSemantics(find.byKey(AdaptiveShell.splitterKey))
+          .getSemanticsData();
+      expect(data.value, '50%');
+      expect(data.increasedValue, '52%');
+      expect(data.decreasedValue, '48%');
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('semantic increase follows RTL reading order', (tester) async {
     final semantics = tester.ensureSemantics();
-    await _pumpShell(tester, textDirection: TextDirection.rtl);
+    try {
+      await _pumpShell(tester, textDirection: TextDirection.rtl);
 
-    final before = tester
-        .getSize(find.byKey(AdaptiveShell.primaryPaneKey))
-        .width;
-    tester.semantics.increase(find.semantics.byLabel('Resize panes'));
-    await tester.pump();
-    final after = tester
-        .getSize(find.byKey(AdaptiveShell.primaryPaneKey))
-        .width;
+      final before = tester
+          .getSize(find.byKey(AdaptiveShell.primaryPaneKey))
+          .width;
+      tester.semantics.increase(find.semantics.byLabel('Resize panes'));
+      await tester.pump();
+      final after = tester
+          .getSize(find.byKey(AdaptiveShell.primaryPaneKey))
+          .width;
 
-    expect(after - before, 16);
-    semantics.dispose();
+      expect(after - before, 16);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('reports the normalized pane ratio after resizing', (
@@ -207,6 +216,80 @@ void main() {
         .getSize(find.byKey(AdaptiveShell.primaryPaneKey))
         .width;
     expect(after - before, 32);
+  });
+
+  testWidgets('persists one final ratio after a drag', (tester) async {
+    final savedRatios = <double>[];
+    await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
+
+    final splitter = find.byKey(AdaptiveShell.splitterKey);
+    final gesture = await tester.startGesture(tester.getCenter(splitter));
+    await gesture.moveBy(const Offset(20, 0));
+    await gesture.moveBy(const Offset(12, 0));
+    await tester.pump();
+
+    expect(savedRatios, isEmpty);
+
+    await gesture.up();
+    await tester.pump();
+
+    expect(savedRatios, hasLength(1));
+    expect(savedRatios.single, closeTo(0.527491, 0.000001));
+  });
+
+  testWidgets('persists one final ratio after key repeats', (tester) async {
+    final savedRatios = <double>[];
+    await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
+
+    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(savedRatios, isEmpty);
+
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(savedRatios, hasLength(1));
+    expect(savedRatios.single, closeTo(0.541237, 0.000001));
+  });
+
+  testWidgets('persists a held-key resize when focus leaves', (tester) async {
+    final savedRatios = <double>[];
+    await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
+
+    await tester.tap(find.byKey(AdaptiveShell.splitterKey));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(savedRatios, isEmpty);
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pump();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+
+    expect(savedRatios, hasLength(1));
+    expect(savedRatios.single, closeTo(0.513746, 0.000001));
+  });
+
+  testWidgets('persists the final ratio when removed during a drag', (
+    tester,
+  ) async {
+    final savedRatios = <double>[];
+    await _pumpShell(tester, onPaneRatioChanged: savedRatios.add);
+
+    final splitter = find.byKey(AdaptiveShell.splitterKey);
+    final gesture = await tester.startGesture(tester.getCenter(splitter));
+    await gesture.moveBy(const Offset(20, 0));
+    await gesture.moveBy(const Offset(12, 0));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    await gesture.removePointer();
+
+    expect(savedRatios, hasLength(1));
+    expect(savedRatios.single, closeTo(0.527491, 0.000001));
   });
 
   testWidgets('keeps the splitter at the right edge', (tester) async {

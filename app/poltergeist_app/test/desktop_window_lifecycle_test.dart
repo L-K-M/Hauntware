@@ -194,6 +194,8 @@ void main() {
 
     await debounce.fire();
 
+    expect(jsonValue(files, 'window.left'), 80.0);
+    expect(jsonValue(files, 'window.top'), 60.0);
     expect(jsonValue(files, 'window.width'), 1180.0);
     expect(jsonValue(files, 'window.height'), 760.0);
   });
@@ -270,14 +272,18 @@ void main() {
     () async {
       final window = FakeWindowAdapter()..failDestroy = true;
       final errors = <Object>[];
+      final errorReported = Completer<void>();
       final lifecycle = _lifecycle(
         window: window,
-        onError: (error, _) => errors.add(error),
+        onError: (error, _) {
+          errors.add(error);
+          if (!errorReported.isCompleted) errorReported.complete();
+        },
       );
 
       await lifecycle.prepare();
       window.emitClose();
-      await Future<void>.delayed(Duration.zero);
+      await errorReported.future;
 
       expect(errors, contains(isA<StateError>()));
     },
@@ -315,7 +321,8 @@ DesktopWindowLifecycle _lifecycle({
 double? jsonValue(MemorySettingsFileSystem files, String key) {
   final contents = files.contents['/support/settings.json'];
   if (contents == null) return null;
-  return (jsonDecode(contents) as Map<String, dynamic>)[key] as double?;
+  final value = (jsonDecode(contents) as Map<String, dynamic>)[key];
+  return (value as num?)?.toDouble();
 }
 
 final class FakeWindowAdapter implements DesktopWindowAdapter {
@@ -459,14 +466,14 @@ final class FakeMacTitlebarAdapter implements MacTitlebarAdapter {
 final class FakeDebounceScheduler {
   int cancelCount = 0;
   Future<void> Function()? _callback;
+  final _activeCallbacks = <Future<void> Function()>{};
 
   void Function() schedule(Duration delay, Future<void> Function() callback) {
     _callback = callback;
-    var active = true;
+    _activeCallbacks.add(callback);
     return () {
-      if (!active) return;
+      if (!_activeCallbacks.remove(callback)) return;
 
-      active = false;
       cancelCount++;
       if (identical(_callback, callback)) _callback = null;
     };
@@ -475,6 +482,7 @@ final class FakeDebounceScheduler {
   Future<void> fire() async {
     final callback = _callback;
     _callback = null;
+    _activeCallbacks.remove(callback);
     if (callback != null) await callback();
   }
 }

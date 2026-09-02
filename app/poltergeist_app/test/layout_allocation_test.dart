@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/ui/layout/pane_allocation.dart';
 
+const _desktopBoundary = 1080.0;
+
 void main() {
   group('allocatePanes', () {
     test('keeps both panes at the compact boundary', () {
@@ -29,6 +31,22 @@ void main() {
       expect(allocation.secondaryWidth, 0);
     });
 
+    test('switches from compact to desktop at the boundary', () {
+      final compact = allocatePanes(
+        width: _desktopBoundary - 1,
+        ratio: 0.5,
+        secondPaneIntent: SecondPaneIntent.shown,
+      );
+      final desktop = allocatePanes(
+        width: _desktopBoundary,
+        ratio: 0.5,
+        secondPaneIntent: SecondPaneIntent.shown,
+      );
+
+      expect(compact.stage, LayoutStage.compact);
+      expect(desktop.stage, LayoutStage.desktop);
+    });
+
     test('preserves explicit second-pane hiding after regrowth', () {
       final allocation = allocatePanes(
         width: 1180,
@@ -38,6 +56,8 @@ void main() {
 
       expect(allocation.stage, LayoutStage.desktop);
       expect(allocation.showsSecondPane, isFalse);
+      expect(allocation.primaryWidth, 1180);
+      expect(allocation.secondaryWidth, 0);
     });
 
     test('clamps a restored ratio to usable pane widths', () {

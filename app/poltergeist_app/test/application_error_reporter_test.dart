@@ -35,4 +35,16 @@ void main() {
     reporter.observe(Future<void>.error(StateError('operation failed')));
     await Future<void>.delayed(Duration.zero);
   });
+
+  test('reports a guarded asynchronous operation failure', () async {
+    final failure = StateError('window failed');
+    final errors = <Object>[];
+    final reporter = ApplicationErrorReporter(
+      sink: (error, _) => errors.add(error),
+    );
+
+    await reporter.guard(() => Future<void>.error(failure));
+
+    expect(errors, [same(failure)]);
+  });
 }

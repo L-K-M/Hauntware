@@ -1,14 +1,30 @@
 import 'package:flutter/material.dart';
 
-final class ContentSizeReporter extends StatelessWidget {
+typedef ContentSizeScheduler = void Function(VoidCallback callback);
+
+void _scheduleAfterFrame(VoidCallback callback) {
+  WidgetsBinding.instance.addPostFrameCallback((_) => callback());
+}
+
+final class ContentSizeReporter extends StatefulWidget {
   const ContentSizeReporter({
     required this.child,
     required this.onSize,
+    this.scheduleAfterFrame = _scheduleAfterFrame,
     super.key,
   });
 
   final Widget child;
   final ValueChanged<Size> onSize;
+  final ContentSizeScheduler scheduleAfterFrame;
+
+  @override
+  State<ContentSizeReporter> createState() => _ContentSizeReporterState();
+}
+
+final class _ContentSizeReporterState extends State<ContentSizeReporter> {
+  Size? _lastReportedSize;
+  Size? _pendingSize;
 
   @override
   Widget build(BuildContext context) {
@@ -16,10 +32,24 @@ final class ContentSizeReporter extends StatelessWidget {
       builder: (context, constraints) {
         if (constraints.hasBoundedWidth && constraints.hasBoundedHeight) {
           final size = Size(constraints.maxWidth, constraints.maxHeight);
-          WidgetsBinding.instance.addPostFrameCallback((_) => onSize(size));
+          _scheduleReport(size);
         }
-        return child;
+
+        return widget.child;
       },
     );
+  }
+
+  void _scheduleReport(Size size) {
+    if (size == _lastReportedSize || size == _pendingSize) return;
+
+    _pendingSize = size;
+    widget.scheduleAfterFrame(() {
+      if (!mounted || _pendingSize != size) return;
+
+      _pendingSize = null;
+      _lastReportedSize = size;
+      widget.onSize(size);
+    });
   }
 }
