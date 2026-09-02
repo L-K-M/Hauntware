@@ -158,14 +158,10 @@ commit SHAs and CI must never upload artifacts embedding the pinned code
 ## Repo-specific traps (each is documented; none is a suggestion)
 
 - Scaffold the app at M1 with `flutter create --org com.lkm` — the `--org`
-  fixes the three platform ids (07 §3.2). **Known in-repo contradiction to
-  resolve at M1**: 07 §3.2 says the `.desktop` `StartupWMClass` must be the
-  binary name `poltergeist_app` (X11 `WM_CLASS` follows CMake
-  `BINARY_NAME`), while AGENTS.md §3 and `scripts/package-linux.sh` (which
-  hard-codes `StartupWMClass=com.lkm.poltergeist_app`) claim the dotted id
-  — each side documents a mechanism. Verify empirically on the packaged
-  build (`xprop WM_CLASS`) and fix the wrong side — script or chapter — in
-  the same PR per 09 §8.2; never leave the two disagreeing.
+  fixes the three platform ids (07 §3.2). The packaged build reports X11
+  `WM_CLASS` as instance `com.lkm.poltergeist_app`, class
+  `Com.lkm.poltergeist_app`; the case-sensitive class is the desktop entry's
+  `StartupWMClass`. Keep the script, test, and docs aligned.
 - Create `media-sources/poltergeist-icon.png` with the scaffold —
   packaging hard-fails without it. Do **not** add `app/poltergeist_app` to
   the root pubspec `workspace:` list.

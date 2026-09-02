@@ -39,6 +39,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
 APP_DIR="app/poltergeist_app"
+APP_ORG="com.lkm"
 PROFILE="release"
 INSTALL=false
 declare -a REQUESTED=()
@@ -141,7 +142,8 @@ ensure_platform() {
   local platform="$1"
   [[ -d "$APP_DIR/$platform" ]] && return 0
   echo "-- platform folder $APP_DIR/$platform missing; generating (flutter create)"
-  ( cd "$APP_DIR" && flutter create --platforms="$platform" --project-name poltergeist_app . )
+  ( cd "$APP_DIR" && flutter create --org "$APP_ORG" \
+      --platforms="$platform" --project-name poltergeist_app . )
 }
 
 # ---------------------------------------------------------------------------
@@ -267,7 +269,7 @@ build_app() {
           rm -rf "$HOME/.local/opt/poltergeist" && mkdir -p "$HOME/.local/opt"
           if cp -R "$out" "$HOME/.local/opt/poltergeist"; then
             INSTALLED="$HOME/.local/opt/poltergeist"
-            record "app: installed -> ~/.local/opt/poltergeist (binary: poltergeist_app)"
+            record "app: installed -> ~/.local/opt/poltergeist (binary: poltergeist)"
           else
             record "app: install FAILED (copy)"; return 1
           fi

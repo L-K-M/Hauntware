@@ -264,10 +264,10 @@ CI, and looks like the beginning of Poltergeist, not a counter demo.
 - `flutter create --org com.lkm app/poltergeist_app` — the `--org` is
   load-bearing: it yields Android id `com.lkm.poltergeist_app`, Apple
   bundle id `com.lkm.poltergeistApp`, and Linux `APPLICATION_ID`
-  `com.lkm.poltergeist_app`; the `.desktop` `StartupWMClass`, however,
-  must be the **binary name** `poltergeist_app` (X11 `WM_CLASS` follows
-  CMake `BINARY_NAME`, not the dotted application id) — kept in sync in
-  `scripts/package-linux.sh` (AGENTS.md §3). Commit the
+  `com.lkm.poltergeist_app`; the packaged build reports X11 `WM_CLASS` as
+  instance `com.lkm.poltergeist_app`, class `Com.lkm.poltergeist_app`, so
+  the `.desktop` `StartupWMClass` must match that case-sensitive class — kept
+  in sync in `scripts/package-linux.sh` (AGENTS.md §3). Commit the
   platform folders. The app is NOT added to the root workspace `members`;
   it path-depends on `packages/poltergeist_core` (AGENTS.md §4).
 - Create the master icon `media-sources/poltergeist-icon.png` (1024×1024,
