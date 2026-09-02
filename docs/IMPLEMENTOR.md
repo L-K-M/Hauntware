@@ -176,11 +176,9 @@ commit SHAs and CI must never upload artifacts embedding the pinned code
   github.com/L-K-M/release-tool) and bumps all version markers in
   lockstep — never hand-edit one of them. `ci.yml` and `release.yml`
   client matrices are kept in lockstep by hand.
-- Platform folders are committed. `scripts/build.sh` silently *regenerates*
-  a missing one via `flutter create` as a deleted-folder fallback — and the
-  regenerated folder loses the committed name/icons/entitlements — so never
-  delete a platform folder and never let that fallback fire on a real
-  build. Only the app directory itself is never auto-created.
+- Platform folders are committed. `scripts/build.sh` fails closed when one
+  is missing because stock regeneration loses the committed identity, icons,
+  and entitlements. Restore a deleted platform folder from Git.
 
 ## When stuck (09 §8)
 

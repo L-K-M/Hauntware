@@ -48,7 +48,9 @@ OUT_DIR="$ROOT/dist"
 APPIMAGE_MODE="required"   # required | best-effort | skip
 PRINT_DEPS=false
 BUNDLE_EXECUTABLE="poltergeist"
-LINUX_STARTUP_WM_CLASS="Com.lkm.poltergeist_app"
+LINUX_APPLICATION_ID="com.lkm.poltergeist_app"
+LINUX_STARTUP_WM_CLASS="${LINUX_APPLICATION_ID^}"
+LINUX_DESKTOP_FILE="$LINUX_APPLICATION_ID.desktop"
 
 usage() {
   awk 'NR==1 && /^#!/ {next} /^#/ {sub(/^# ?/,""); print; next} {exit}' "$SELF"
@@ -325,7 +327,8 @@ exec /usr/lib/poltergeist/$BUNDLE_EXECUTABLE "\$@"
 EOF
 chmod 755 "$DEBROOT/usr/bin/poltergeist"
 
-write_desktop_file "$DEBROOT/usr/share/applications/poltergeist.desktop" "poltergeist"
+# Wayland matches the desktop-file id to GApplication's application id.
+write_desktop_file "$DEBROOT/usr/share/applications/$LINUX_DESKTOP_FILE" "poltergeist"
 install_icons "$DEBROOT/usr"
 
 cat > "$DEBROOT/usr/share/doc/poltergeist/copyright" <<EOF
@@ -418,7 +421,7 @@ build_appimage() {
   rm -rf "${appdir:?}/usr/bin"   # the deb's wrapper hardcodes /usr/lib — dead
                                # weight here; AppRun is the entry point
 
-  write_desktop_file "$appdir/poltergeist.desktop" "AppRun"
+  write_desktop_file "$appdir/$LINUX_DESKTOP_FILE" "AppRun"
   # appimagetool wants the icon named after Icon= at the AppDir root, plus
   # .DirIcon for file managers.
   make_icon "$MASTER_ICON" "$appdir/poltergeist.png" 512 \

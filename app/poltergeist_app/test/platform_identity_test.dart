@@ -8,6 +8,7 @@ const _organization = 'com.lkm';
 const _androidId = '$_organization.poltergeist_app';
 const _appleId = 'com.lkm.poltergeistApp';
 const _linuxBinaryName = 'poltergeist';
+const _linuxDesktopId = 'com.lkm.poltergeist_app';
 const _linuxStartupWmClass = 'Com.lkm.poltergeist_app';
 const _macBundleName = 'Poltergeist.app';
 const _macExecutableName = 'Poltergeist';
@@ -66,21 +67,28 @@ void main() {
 
   test('keeps the Linux desktop entry aligned with WM_CLASS', () {
     expect(
+      '${_linuxDesktopId[0].toUpperCase()}${_linuxDesktopId.substring(1)}',
+      _linuxStartupWmClass,
+    );
+    expect(
       _read('../../scripts/package-linux.sh'),
       allOf(
         contains('BUNDLE_EXECUTABLE="$_linuxBinaryName"'),
-        contains('LINUX_STARTUP_WM_CLASS="$_linuxStartupWmClass"'),
+        contains('LINUX_APPLICATION_ID="$_linuxDesktopId"'),
+        contains(r'LINUX_STARTUP_WM_CLASS="${LINUX_APPLICATION_ID^}"'),
+        contains(r'LINUX_DESKTOP_FILE="$LINUX_APPLICATION_ID.desktop"'),
         contains('StartupWMClass=\$LINUX_STARTUP_WM_CLASS'),
+        contains(r'$LINUX_DESKTOP_FILE'),
       ),
     );
   });
 
-  test('keeps fallback platform generation in the product organization', () {
+  test('fails closed when a committed platform scaffold is missing', () {
     expect(
       _read('../../scripts/build.sh'),
       allOf(
-        contains('APP_ORG="$_organization"'),
-        contains(r'flutter create --org "$APP_ORG"'),
+        contains('platform scaffold is missing'),
+        isNot(contains('flutter create --org')),
       ),
     );
   });
