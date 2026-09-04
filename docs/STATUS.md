@@ -92,6 +92,13 @@ item 4 tracks the remaining M2 slices)._
   round-2 decline of post-await reference checks; transfer revival belongs to
   the future queue, not an untracked lease for a disconnected serverId.
 
+- **2026-09-04 — channel waiters.** The first browse binding now wakes
+  queued browse requests through LRU sharing, even behind transfer waiters.
+  A server rejecting every SFTP open fails requests with the typed open error
+  instead of waiting for an impossible release. Three regressions failed
+  before and pass after the repair (`channel_waiters_test.dart`); 03 §3.2
+  clarifies capacity exhaustion versus unavailable SFTP.
+
 ## Housekeeping
 
 - No server component is planned: bookmark backup uses Séance's sync server

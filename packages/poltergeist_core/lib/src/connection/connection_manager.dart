@@ -451,6 +451,7 @@ class PooledConnectionManager implements ConnectionManager {
     // A block may have landed mid-open (killing every binding), in which
     // case there is nothing to queue behind.
     _checkAcquisition(reference);
+    _failIfStranded(pool);
     return _enqueueWaiter(pool, browse: true, serverId: serverId);
   }
 
@@ -497,6 +498,7 @@ class PooledConnectionManager implements ConnectionManager {
     // At capacity: block until a lease comes back (03 §3.2), unless the
     // requesting session disappeared during an open or growth await.
     _checkAcquisition(reference);
+    _failIfStranded(pool);
     return _enqueueWaiter(pool, browse: false, serverId: serverId);
   }
 
@@ -587,7 +589,15 @@ class PooledConnectionManager implements ConnectionManager {
       final handle = _ChannelHandle(slot: slot, channel: channel, use: use);
       slot.channels.add(handle);
       return handle;
-    } on Exception {
+    } on Exception catch (error) {
+      pool.channelFailure = error is RemoteFileException
+          ? error
+          : RemoteFileException(
+              kind: RemoteFileErrorKind.other,
+              operation: 'open SFTP',
+              message: 'Could not open SFTP on this server: $error',
+              cause: error,
+            );
       // Channel-open failure falls back to the caller's next strategy
       // (idle steal, LRU share, or queue) — never surfaces raw. A transport
       // that died mid-open is evicted, or its corpse keeps occupying a
@@ -608,6 +618,14 @@ class PooledConnectionManager implements ConnectionManager {
     final binding =
         _PaneChannelView(this, pool, clientKey.$1, clientKey.$2, handle);
     pool.browseByClient[clientKey] = binding;
+
+    // Opens queued before any browse binding existed can now share it.
+    // Transfer waiters do not block sharing: no capacity is consumed.
+    for (final waiter in List<_ChannelWaiter>.of(pool.waiters)) {
+      if (!waiter.browse || waiter.completer.isCompleted) continue;
+      pool.waiters.remove(waiter);
+      waiter.completer.complete(pool.browseByClient.values.first._handle);
+    }
     return binding;
   }
 
@@ -941,6 +959,19 @@ class PooledConnectionManager implements ConnectionManager {
     }
   }
 
+  void _failIfStranded(_EndpointPool pool) {
+    if (pool.growth != null) return;
+    for (final slot in pool.transports) {
+      if (slot.pendingOpens != 0) return;
+      if (!slot.transport.isClosed && slot.channels.isNotEmpty) return;
+    }
+
+    // No release can wake these requests; retain the driver's error kind.
+    final failure = pool.channelFailure ?? _disconnectedAcquisition();
+    _failAllWaiters(pool, error: failure);
+    throw failure;
+  }
+
   Future<_ChannelHandle> _enqueueWaiter(_EndpointPool pool,
       {required bool browse, required String serverId}) {
     final waiter = _ChannelWaiter(browse: browse, serverId: serverId);
@@ -1028,10 +1059,11 @@ class PooledConnectionManager implements ConnectionManager {
       ..addAll(remaining);
   }
 
-  void _failAllWaiters(_EndpointPool pool, {String? message}) {
+  void _failAllWaiters(_EndpointPool pool,
+      {String? message, RemoteFileException? error}) {
     for (final waiter in pool.waiters) {
       if (waiter.completer.isCompleted) continue;
-      waiter.completer.completeError(RemoteFileException(
+      waiter.completer.completeError(error ?? RemoteFileException(
         kind: RemoteFileErrorKind.disconnected,
         operation: 'wait for channel',
         message: message ?? 'The connection pool was torn down.',
@@ -1138,6 +1170,7 @@ class _EndpointPool {
   bool interactiveOnly = false;
   bool blocked = false;
   String? blockDetail;
+  RemoteFileException? channelFailure;
 
   int acquisitions = 0;
   Future<void>? firstConnect;
