@@ -117,6 +117,23 @@ void main() {
       // every hit still lands on its own text.
       expect(texts, [for (var i = 4; i < 30; i++) 'line $i']);
     });
+
+    test('a paused scan drops hits a shrunken buffer no longer holds', () {
+      final terminal = _terminal(height: 5, maxLines: 30);
+      for (var i = 0; i < 30; i++) {
+        terminal.write('line $i\r\n');
+      }
+      var lines = 0;
+      final scan = TerminalBufferScan(terminal.buffer, 'line');
+      scan.run(shouldPause: () => ++lines >= 10);
+      // A clear keeps the row numbering but leaves only a screenful.
+      terminal.buffer.clear();
+      final length = terminal.buffer.lines.length;
+      for (final hit in scan.result.hits) {
+        expect(hit.start.y, inInclusiveRange(0, length - 1));
+        expect(hit.end.y, inInclusiveRange(0, length - 1));
+      }
+    });
   });
 
   group('TerminalSearchSession', () {

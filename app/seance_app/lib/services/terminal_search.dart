@@ -124,14 +124,18 @@ class TerminalBufferScan {
   /// What the scan has found so far, in the buffer's current coordinates.
   TerminalSearchResult get result {
     final base = buffer.lines.absoluteStartIndex;
+    final length = buffer.lines.length;
     final hits = <TerminalSearchHit>[];
     for (var i = _found.length - 4; i >= 0; i -= 4) {
       final startRow = _found[i] - base;
-      if (startRow < 0) continue;
+      final endRow = _found[i + 2] - base;
+      // Trimmed off the top, or past the end of a buffer that shrank (a
+      // clear or reset keeps the numbering) while the scan was paused.
+      if (startRow < 0 || endRow >= length) continue;
       hits.add(
         TerminalSearchHit(
           CellOffset(_found[i + 1], startRow),
-          CellOffset(_found[i + 3], _found[i + 2] - base),
+          CellOffset(_found[i + 3], endRow),
         ),
       );
     }
@@ -390,7 +394,9 @@ class TerminalSearchSession extends ChangeNotifier {
   /// [terminalSearchHitLimit]).
   bool get capped => _capped;
 
-  /// The current hit's index in [hits], or null when there are none.
+  /// The current hit's index among the [hitCount] hits, or null when there
+  /// are none. Both count hits whose lines were trimmed since the last
+  /// refresh, until that refresh drops them; [hits] leaves those out.
   int? get currentIndex => _current;
 
   /// Where the hits are now, in buffer order.
