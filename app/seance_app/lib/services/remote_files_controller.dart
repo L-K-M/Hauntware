@@ -117,6 +117,11 @@ class RemoteFilesController extends ChangeNotifier {
   /// [remoteChangedFor].
   final Map<String, RemoteFileEntry?> latestRemoteSnapshots = {};
 
+  /// Uploads of a managed local copy in flight, by remote path, counted per
+  /// caller: the files pane's upload actions and an editor tab's
+  /// save-and-upload can overlap on one copy.
+  final Map<String, int> _localCopyUploads = {};
+
   Future<void> initialize() {
     if (initialized) return Future.value();
     return _initializing ??= _initialize().whenComplete(() {
@@ -983,6 +988,38 @@ class RemoteFilesController extends ChangeNotifier {
 
   File localFile(ManagedRemoteFile copy) =>
       managedFileStore.checkoutFile(copy.localPath);
+
+  /// Whether some surface is uploading [remotePath]'s local copy right now,
+  /// its conflict question included. The files pane's "changed locally"
+  /// prompt stays quiet while this holds: the save that starts an upload
+  /// also trips the checkout watcher, and that dirty edge is the upload's
+  /// own write, not a new edit to ask about.
+  bool isUploadingLocalCopy(String remotePath) =>
+      _localCopyUploads.containsKey(remotePath);
+
+  /// Runs [upload] with [remotePath] reported by [isUploadingLocalCopy].
+  /// The mark is set before [upload] starts, so a watcher reconcile can
+  /// never land between the caller's save and the upload taking over.
+  Future<T> trackLocalCopyUpload<T>(
+    String remotePath,
+    Future<T> Function() upload,
+  ) async {
+    _localCopyUploads.update(
+      remotePath,
+      (count) => count + 1,
+      ifAbsent: () => 1,
+    );
+    try {
+      return await upload();
+    } finally {
+      final remaining = _localCopyUploads[remotePath]! - 1;
+      if (remaining == 0) {
+        _localCopyUploads.remove(remotePath);
+      } else {
+        _localCopyUploads[remotePath] = remaining;
+      }
+    }
+  }
 
   Future<void> uploadLocalCopy(
     ManagedRemoteFile copy, {
