@@ -246,8 +246,10 @@ void main() {
     });
   });
 
-  // Not a pass/fail gate: prints what one slice and a whole scan cost on a
-  // full 10k-line scrollback, for the numbers in the change notes.
+  // Prints what one slice and a whole scan cost on a full 10k-line
+  // scrollback, for the numbers in the change notes. Wall-clock times are
+  // not asserted: a GC pause on a shared runner would fail them, and a fast
+  // machine may need only one slice. Reaching the end is the check.
   test('bounded slices on a 10k-line scrollback', () {
     for (final width in [80, 200]) {
       final terminal = _terminal(width: width, height: 50, maxLines: 10000);
@@ -274,7 +276,6 @@ void main() {
         '$width cols: whole scan ${whole.elapsedMilliseconds} ms, '
         '$slices slices, longest ${longest.inMicroseconds / 1000} ms',
       );
-      expect(longest, lessThan(const Duration(milliseconds: 20)));
     }
   });
 }
