@@ -644,7 +644,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   }) => uploadManagedLocalCopy(
     context,
     widget.controller,
-    widget.controller.localCopies[copy.remotePath] ?? copy,
+    copy,
     notifySuccess: notifySuccess,
   );
 
