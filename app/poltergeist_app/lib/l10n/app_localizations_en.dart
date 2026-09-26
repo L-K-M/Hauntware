@@ -935,6 +935,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'This folder stopped updating automatically. Refresh to see new changes.';
 
   @override
+  String paneNoticeExpandFailed(String name, String reason) {
+    return 'Couldn\'t show what\'s in “$name”: $reason';
+  }
+
+  @override
+  String get paneRowExpand => 'Expand';
+
+  @override
+  String get paneRowCollapse => 'Collapse';
+
+  @override
   String get infoPanelLabel => 'Info';
 
   @override

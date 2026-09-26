@@ -4,6 +4,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/drag_out_controller.dart' show DragOutLeftOut;
 import '../../services/pane_controller.dart';
 import '../panes/drag_out_notice.dart';
+import '../panes/expand_failed_notice.dart';
 
 /// The typed pane truth mapped to its ARB sentences (D20) for the
 /// compact listing — the same mapping the desktop pane view renders, so
@@ -65,6 +66,7 @@ String compactNoticeText(
   AppLocalizations l10n,
   PaneNotice notice, {
   required DragOutLeftOut dragOutLeftOut,
+  ({String name, RemoteFileException error})? expansionFailure,
 }) => switch (notice) {
   PaneNotice.openRemoteUnavailable => l10n.paneNoticeOpenRemoteUnavailable,
   PaneNotice.editLater => l10n.paneNoticeEditLater,
@@ -74,4 +76,5 @@ String compactNoticeText(
   PaneNotice.dragOutRemote => l10n.paneNoticeDragOutRemote,
   PaneNotice.dragOutLeftOut => dragOutLeftOutText(l10n, dragOutLeftOut),
   PaneNotice.watchStopped => l10n.paneNoticeWatchStopped,
+  PaneNotice.expandFailed => expandFailedText(l10n, expansionFailure),
 };

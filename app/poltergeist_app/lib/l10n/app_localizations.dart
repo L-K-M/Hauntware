@@ -1604,6 +1604,24 @@ abstract class AppLocalizations {
   /// **'This folder stopped updating automatically. Refresh to see new changes.'**
   String get paneNoticeWatchStopped;
 
+  /// Transient notice strip (02 §2.5): a folder the user opened in place with its disclosure triangle could not be listed, so it closed again. {name} is the folder's name, {reason} the listing error's sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t show what\'s in “{name}”: {reason}'**
+  String paneNoticeExpandFailed(String name, String reason);
+
+  /// Tooltip and screen-reader action on a folder row's disclosure triangle (02 §2.5): shows the folder's contents in place, indented below it, without opening the folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand'**
+  String get paneRowExpand;
+
+  /// Tooltip and screen-reader action on an expanded folder row's disclosure triangle (02 §2.5): hides the contents shown below it.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse'**
+  String get paneRowCollapse;
+
   /// Accessible name of the Get Info inspector panel (02 §2.6).
   ///
   /// In en, this message translates to:

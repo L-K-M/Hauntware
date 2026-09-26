@@ -37,6 +37,7 @@ import '../../theme/family_hues.dart';
 import '../local_edits_review.dart';
 import '../server_appearance.dart';
 import 'drag_out_notice.dart';
+import 'expand_failed_notice.dart';
 import 'pane_column_header.dart';
 import 'pane_context_menu.dart';
 import 'pane_drop_area.dart';
@@ -564,6 +565,32 @@ class _PaneViewState extends State<PaneView> {
     }
 
     switch (key) {
+      case LogicalKeyboardKey.arrowRight:
+      case LogicalKeyboardKey.arrowLeft:
+        // 02 §2.5: → opens the cursor folder in place (or steps into an
+        // open one), ← closes it (or steps out to its folder). Desktop
+        // rows only; a key with nothing to do keeps its old meaning.
+        // Repeats are consumed without acting, so a held key cannot
+        // drill down a tree the user did not look at.
+        if (_touchRows(context)) return KeyEventResult.ignored;
+        final right =
+            (key == LogicalKeyboardKey.arrowRight) ==
+            (Directionality.of(context) == TextDirection.ltr);
+        final cursor = controller.cursorIndex;
+        final acts =
+            cursor != null &&
+            (right
+                ? controller.disclosureAt(cursor) != PaneDisclosure.none
+                : controller.disclosureAt(cursor) == PaneDisclosure.expanded ||
+                      controller.disclosureAt(cursor) ==
+                          PaneDisclosure.loading ||
+                      controller.rowDepth(cursor) > 0);
+        if (!acts) return KeyEventResult.ignored;
+        if (event is! KeyRepeatEvent) {
+          right ? controller.expandCursor() : controller.collapseCursor();
+          _revealCursor();
+        }
+        return KeyEventResult.handled;
       case LogicalKeyboardKey.arrowDown:
         controller.moveCursorBy(1, update: cursorUpdate);
         _revealCursor();
@@ -926,9 +953,21 @@ class _PaneViewState extends State<PaneView> {
   /// macOS's control-click — retargets an unselected row and opens the
   /// context menu at the pointer (a press inside the selection keeps it
   /// as the menu's subject).
+  /// Presses the disclosure triangle took: its row's own handler, which
+  /// runs after it for the same press, leaves them alone.
+  final Set<int> _disclosurePointers = {};
+
+  void _onDisclosurePointerDown(int index, PointerDownEvent event) {
+    if (event.buttons != kPrimaryMouseButton) return;
+    _disclosurePointers.add(event.pointer);
+    _rowClaimedPointer = event.pointer;
+    widget.controller.toggleExpansionAt(index);
+  }
+
   void _onRowPointerDown(int index, PointerDownEvent event) {
     final controller = widget.controller;
     if (index >= controller.entries.length) return;
+    if (_disclosurePointers.remove(event.pointer)) return;
     _rowClaimedPointer = event.pointer;
     _rowDown = event;
     _rowDrag = null;
@@ -1235,6 +1274,7 @@ class _PaneViewState extends State<PaneView> {
                         widget.controller.startRename();
                       },
                       onListingPointerDown: _onListingPointerDown,
+                      onDisclosurePointerDown: _onDisclosurePointerDown,
                       onDragStarted: widget.dragOut == null
                           ? null
                           : _onRowDragStarted,
@@ -1268,6 +1308,7 @@ class _RowGestures {
     required this.onOpen,
     required this.onRename,
     required this.onListingPointerDown,
+    required this.onDisclosurePointerDown,
     this.onDragStarted,
     this.onDragUpdate,
   });
@@ -1289,6 +1330,11 @@ class _RowGestures {
 
   /// Presses on the listing no row claimed (the empty-area menu).
   final void Function(PointerDownEvent event) onListingPointerDown;
+
+  /// A press on a folder row's disclosure triangle (02 §2.5): toggles
+  /// the folder in place and never selects or opens the row.
+  final void Function(int index, PointerDownEvent event)
+  onDisclosurePointerDown;
 
   /// A row drag began carrying this payload (the avatar's for the whole
   /// gesture); set together with [onDragUpdate].
@@ -1763,7 +1809,14 @@ class _PaneSurface extends StatelessWidget {
     // columns — the metrics the rows themselves lay out with.
     final metrics = PaneColumnMetrics.of(context);
     // The field's border and inset put its text exactly on the label's x.
-    final renameStart = metrics.nameStart - _renameTextOffset;
+    final renameIndex = controller.renameIndex;
+    final renameStart =
+        metrics.nameStart +
+        PaneColumnMetrics.outlineInset(
+          outline: !gestures.touch,
+          depth: renameIndex == null ? 0 : controller.rowDepth(renameIndex),
+        ) -
+        _renameTextOffset;
     final renameEnd = metrics.trailingExtent;
     if (controller.entries.isEmpty) {
       // Never claim emptiness while a load is in flight (02 §2.8's
@@ -1892,8 +1945,17 @@ class _PaneSurface extends StatelessWidget {
   Widget _buildRow(BuildContext context, int index) {
     final highlighted = controller.cursorIndex == index;
     final selected = controller.isRowSelected(index);
+    final disclosure = controller.disclosureAt(index);
     final row = _PaneRow(
       entry: controller.entries[index],
+      outline: !gestures.touch,
+      depth: controller.rowDepth(index),
+      disclosure: disclosure,
+      onDisclosurePointerDown: (event) =>
+          gestures.onDisclosurePointerDown(index, event),
+      onToggleDisclosure: disclosure == PaneDisclosure.none
+          ? null
+          : () => controller.toggleExpansionAt(index),
       highlighted: highlighted,
       // The cursor ring marks the cursor by SHAPE (02 §2.5): needed
       // wherever the tint alone cannot say which row it is — inside a
@@ -1934,9 +1996,11 @@ class _PaneSurface extends StatelessWidget {
     // can outlive it; rows without one stay undraggable.
     final location = controller.location;
     if (location == null) return row;
+    // A multi-selection drags its roots: a row inside a selected folder
+    // travels with the folder (02 §2.5), in-app and out to the OS alike.
     final grabbed =
         controller.isRowSelected(index) && controller.selectedCount > 1
-        ? controller.selectedEntries
+        ? controller.selectedRoots
         : [entry];
     final drag = PaneEntryDrag(
       source: fsLocationForLocation(location),
@@ -2768,6 +2832,11 @@ class _PointerModifiers {
 class _PaneRow extends StatefulWidget {
   const _PaneRow({
     required this.entry,
+    this.outline = false,
+    this.depth = 0,
+    this.disclosure = PaneDisclosure.none,
+    this.onDisclosurePointerDown,
+    this.onToggleDisclosure,
     required this.highlighted,
     required this.cursorRing,
     required this.selected,
@@ -2786,6 +2855,23 @@ class _PaneRow extends StatefulWidget {
   });
 
   final RemoteFileEntry entry;
+
+  /// Whether the row reserves the disclosure column (desktop rows; 02
+  /// §2.5), and how deeply it is nested below the location.
+  final bool outline;
+  final int depth;
+
+  /// The folder's disclosure state; [PaneDisclosure.none] draws no
+  /// triangle, only its column.
+  final PaneDisclosure disclosure;
+
+  /// A press on the triangle (the pane toggles the folder and keeps the
+  /// press from selecting the row).
+  final ValueChanged<PointerDownEvent>? onDisclosurePointerDown;
+
+  /// Assistive tech's Expand/Collapse action; null for rows that do not
+  /// expand.
+  final VoidCallback? onToggleDisclosure;
 
   /// Whether the cursor is on this row.
   final bool highlighted;
@@ -2917,6 +3003,22 @@ class _PaneRowState extends State<_PaneRow> {
           ),
           child: Row(
             children: [
+              if (widget.outline) ...[
+                if (widget.depth > 0)
+                  SizedBox(
+                    width: widget.depth * PaneColumnMetrics.depthIndent,
+                  ),
+                SizedBox(
+                  width: PaneColumnMetrics.disclosureWidth,
+                  child: widget.disclosure == PaneDisclosure.none
+                      ? null
+                      : _DisclosureTriangle(
+                          state: widget.disclosure,
+                          color: secondary,
+                          onPointerDown: widget.onDisclosurePointerDown,
+                        ),
+                ),
+              ],
               Icon(
                 glyph,
                 size: PaneColumnMetrics.glyphSize,
@@ -3024,14 +3126,75 @@ class _PaneRowState extends State<_PaneRow> {
       // cursor is announced selected except in the one state where it
       // is not selected — a toggled-off row.
       selected: widget.selected,
+      // 02 §2.5: an expandable folder announces whether it is open.
+      expanded: switch (widget.disclosure) {
+        PaneDisclosure.none => null,
+        PaneDisclosure.collapsed => false,
+        PaneDisclosure.loading || PaneDisclosure.expanded => true,
+      },
       // §13's open/rename action pair: open rides onTap; rename is a
-      // custom action, absent when the row cannot take one.
+      // custom action, absent when the row cannot take one. Folders
+      // that expand in place add Expand or Collapse.
       customSemanticsActions: {
         if (widget.onRename != null)
           CustomSemanticsAction(label: l10n.fileRenameLabel):
               widget.onRename!,
+        if (widget.onToggleDisclosure != null)
+          CustomSemanticsAction(
+            label: widget.disclosure == PaneDisclosure.collapsed
+                ? l10n.paneRowExpand
+                : l10n.paneRowCollapse,
+          ): widget.onToggleDisclosure!,
       },
       child: content,
+    );
+  }
+}
+
+/// A folder row's disclosure triangle (02 §2.5): points along the text
+/// direction while closed and turns down when open; a small spinner
+/// stands in while the folder's listing is in flight. The press is its
+/// own, reported before the row's (see [_RowGestures]).
+class _DisclosureTriangle extends StatelessWidget {
+  const _DisclosureTriangle({
+    required this.state,
+    required this.color,
+    required this.onPointerDown,
+  });
+
+  final PaneDisclosure state;
+  final Color color;
+  final ValueChanged<PointerDownEvent>? onPointerDown;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final Widget glyph = state == PaneDisclosure.loading
+        ? SizedBox.square(
+            dimension: 10,
+            child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
+          )
+        : AnimatedRotation(
+            turns: state == PaneDisclosure.expanded ? (rtl ? -0.25 : 0.25) : 0,
+            duration: const Duration(milliseconds: 120),
+            child: Icon(
+              rtl ? Icons.arrow_left : Icons.arrow_right,
+              size: PaneColumnMetrics.disclosureWidth,
+              color: color,
+            ),
+          );
+    return Tooltip(
+      message: state == PaneDisclosure.collapsed
+          ? l10n.paneRowExpand
+          : l10n.paneRowCollapse,
+      waitDuration: const Duration(milliseconds: 600),
+      excludeFromSemantics: true,
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: onPointerDown,
+        child: Center(child: glyph),
+      ),
     );
   }
 }
@@ -3545,6 +3708,10 @@ class _NoticeStrip extends StatelessWidget {
                       controller.dragOutLeftOut,
                     ),
                     PaneNotice.watchStopped => l10n.paneNoticeWatchStopped,
+                    PaneNotice.expandFailed => expandFailedText(
+                      l10n,
+                      controller.expansionFailure,
+                    ),
                     null => '',
                   },
                   style: Theme.of(context).textTheme.bodySmall,

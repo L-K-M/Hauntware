@@ -326,6 +326,7 @@ class _CompactListingState extends State<CompactListing> {
           l10n,
           notice,
           dragOutLeftOut: controller.dragOutLeftOut,
+          expansionFailure: controller.expansionFailure,
         ),
         actions: [
           IconButton(

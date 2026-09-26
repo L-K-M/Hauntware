@@ -86,7 +86,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'rows'",
     "'duplicate row identities'",
     "'key'",
+    "'not a row'",
   },
+  // No failure recorded yet renders no sentence (never user copy).
+  'lib/ui/panes/expand_failed_notice.dart': {"''"},
   'lib/main.dart': {
     r"'${supportDirectory.path}${Platform.pathSeparator}settings.json'",
     r"'${supportDirectory.path}${Platform.pathSeparator}bookmarks.json'",

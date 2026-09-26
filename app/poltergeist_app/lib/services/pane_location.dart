@@ -87,6 +87,20 @@ String paneLastSegment(String? path) {
   return label.isEmpty ? parent : label;
 }
 
+/// Whether [path] lies strictly below [ancestor] (02 §2.5's expanded
+/// folders): walks [path]'s parents, so both separator styles and every
+/// root form behave as [paneParentPath] defines them. A path is never
+/// under itself.
+bool panePathIsUnder(String path, String ancestor) {
+  var node = path;
+  while (true) {
+    final parent = paneParentPath(node);
+    if (parent == node) return false;
+    if (parent == ancestor) return true;
+    node = parent;
+  }
+}
+
 /// The parent of [path], keeping every root form its own parent:
 /// navigation up from a volume/server root is a no-op, never a bogus
 /// path. Handles both separator styles: remote paths are POSIX, local
