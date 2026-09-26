@@ -284,11 +284,12 @@ void main() {
   test('withCursor moves cursor and anchor, keeping the selection', () {
     final state = _begin(
       selected: const [2, 4],
-    ).activate(4, SelectionUpdate.toggle);
+    ).activate(3, SelectionUpdate.toggle);
+    expect(state.selectedKeys, {2, 3, 4});
     final moved = state.withCursor(1);
     expect(moved.cursorKey, 1);
     expect(moved.anchorKey, 1);
-    expect(moved.selectedKeys, state.selectedKeys);
+    expect(moved.selectedKeys, {2, 3, 4});
     expect(identical(moved.withCursor(1), moved), isTrue);
     expect(() => state.withCursor(9), throwsArgumentError);
   });

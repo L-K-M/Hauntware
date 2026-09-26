@@ -489,8 +489,9 @@ Poltergeist and Séance are one product family. The contract:
 
 - Icon, column, and cover-flow view modes: 02 §2.2 stands.
 - Multi-window: D39 (it was D13 / D25).
-- Tree disclosure in lists: shipped as its own slice (2026-09-26, owner-
-  directed), specified in 02 §2.5 under "Folders expand in place".
+- Tree disclosure in lists: shipped as its own slice
+  (2026-09-26, owner-directed), specified in 02 §2.5 under
+  "Folders expand in place".
 - Remote free space: this needs `statvfs@openssh.com` exposed through the
   VFS (an upstream Séance PR). Until then remote headers show the item count
   only.

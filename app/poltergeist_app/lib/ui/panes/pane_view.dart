@@ -34,10 +34,10 @@ import '../../services/view_preferences.dart' show PaneViewMode;
 import '../../services/workspace_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/family_hues.dart';
+import '../compact/compact_pane_messages.dart' show expandFailedText;
 import '../local_edits_review.dart';
 import '../server_appearance.dart';
 import 'drag_out_notice.dart';
-import 'expand_failed_notice.dart';
 import 'pane_column_header.dart';
 import 'pane_context_menu.dart';
 import 'pane_drop_area.dart';
@@ -961,6 +961,10 @@ class _PaneViewState extends State<PaneView> {
     if (event.buttons != kPrimaryMouseButton) return;
     _disclosurePointers.add(event.pointer);
     _rowClaimedPointer = event.pointer;
+    // A triangle press is never a click, a drag, or a deferred select.
+    _rowDown = null;
+    _rowDrag = null;
+    _deferredSelect = null;
     widget.controller.toggleExpansionAt(index);
   }
 

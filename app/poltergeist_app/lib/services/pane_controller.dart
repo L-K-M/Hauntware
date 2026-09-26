@@ -557,7 +557,10 @@ class PaneController extends ChangeNotifier {
   /// The folders expanded in place (02 §2.5), keyed by path, and the
   /// location they belong to. They outlive a navigation that is still
   /// in flight, so an Esc-cancel restores the tree as it was; the first
-  /// listing accepted for another location drops them.
+  /// listing accepted for another location drops them. Keyed by path, so
+  /// two rows whose names decode to the same path ([_RowKey]'s one
+  /// collision case) open and close together — an accepted limitation
+  /// until raw-byte names land (STATUS item 13).
   final Map<String, _Expansion> _expansions = {};
   PaneLocation? _expansionOwner;
 
@@ -1062,28 +1065,46 @@ class PaneController extends ChangeNotifier {
       return false;
     }
     final folder = _entries[index];
-    final folderKey = _rowKeys[index];
-    bool inside(_RowKey key) => panePathIsUnder(key.path, folder.path);
-    final foldSelection = _selection.selectedKeys.any(inside);
-    final cursorKey = _selection.cursorKey;
-    final foldCursor = cursorKey != null && inside(cursorKey);
+    final fold = _foldPlan(folder.path);
     _expansions.removeWhere(
       (path, _) => path == folder.path || panePathIsUnder(path, folder.path),
     );
-    final before = _selection;
     _applyEntries(_filteredListing());
-    if (foldSelection) {
+    _applyFold(folder.path, fold);
+    notifyListeners();
+    return true;
+  }
+
+  /// Whether a closing [folder]'s selected rows and cursor must fold
+  /// into it — read while its rows still show, applied by [_applyFold]
+  /// once they are gone. Every path that closes a folder (a collapse, a
+  /// re-list that failed) goes through the pair, so none of them drops
+  /// what the user picked.
+  ({bool selection, bool cursor}) _foldPlan(String folder) {
+    bool inside(_RowKey key) => panePathIsUnder(key.path, folder);
+    final cursorKey = _selection.cursorKey;
+    return (
+      selection: _selection.selectedKeys.any(inside),
+      cursor: cursorKey != null && inside(cursorKey),
+    );
+  }
+
+  void _applyFold(String folder, ({bool selection, bool cursor}) plan) {
+    if (!plan.selection && !plan.cursor) return;
+    final index = _entries.indexWhere((entry) => entry.path == folder);
+    if (index < 0) return;
+    final key = _rowKeys[index];
+    final before = _selection;
+    if (plan.selection) {
       _selection = _selection.withSelectedKeys({
         ..._selection.selectedKeys,
-        folderKey,
+        key,
       });
     }
-    if (foldCursor) _selection = _selection.withCursor(folderKey);
+    if (plan.cursor) _selection = _selection.withCursor(key);
     if (!identical(before, _selection) && !quickSelectActive) {
       _selectionHistory = _selectionHistory.record(before, _selection);
     }
-    notifyListeners();
-    return true;
   }
 
   /// The disclosure triangle: opens a closed folder, closes an open one.
@@ -1155,12 +1176,14 @@ class PaneController extends ChangeNotifier {
         identical(channel, _channel) &&
         identical(_expansions[folder.path], expansion) &&
         load == expansion.loads;
+    var fold = (selection: false, cursor: false);
     try {
       final listed = await channel.listDirectory(folder.path);
       if (!current()) return;
       expansion.children = sortFileEntries(listed);
     } on RemoteFileException catch (error) {
       if (!current()) return;
+      fold = _foldPlan(folder.path);
       _expansions.remove(folder.path);
       if (reportFailure) {
         _expansionFailure = (name: folder.name, error: error);
@@ -1169,6 +1192,7 @@ class PaneController extends ChangeNotifier {
     } on Object catch (error, stackTrace) {
       if (!current()) return;
       _report(error, stackTrace);
+      fold = _foldPlan(folder.path);
       _expansions.remove(folder.path);
       if (reportFailure) {
         _expansionFailure = (
@@ -1181,8 +1205,15 @@ class PaneController extends ChangeNotifier {
     // Rows re-derive only while they are this location's own: an answer
     // landing during another navigation is kept for an Esc-cancel.
     if (_staleRows || _expansionOwner != _location) return;
-    _applyEntries(_filteredListing());
-    _placeExpansionRenameSelect();
+    // Nothing awaits this load: a fault re-deriving the rows is reported
+    // here, not left as an unhandled async error.
+    try {
+      _applyEntries(_filteredListing());
+      _applyFold(folder.path, fold);
+      _placeExpansionRenameSelect();
+    } on Object catch (error, stackTrace) {
+      _report(error, stackTrace);
+    }
     notifyListeners();
   }
 

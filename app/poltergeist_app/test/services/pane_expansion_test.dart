@@ -58,13 +58,12 @@ void main() {
     channel.listings['$_home/.docker'] = [_file('$_home/.docker', 'config')];
     lanes.nextLocalChannel = channel;
     controller = PaneController(paneTabId: 'pane.left', lanes: lanes);
+    addTearDown(controller.dispose);
     await controller.openLocalHome();
     await settle();
     // Binding resets the lens; the screenshots show dotfiles.
     controller.showHidden = true;
   }
-
-  tearDown(() => controller.dispose());
 
   List<String> rows() => [
     for (var i = 0; i < controller.entries.length; i++)
@@ -341,6 +340,9 @@ void main() {
       ]);
       channel.holdNext!.complete();
       await settle();
+      // The cancelled navigation's late answer is dropped.
+      expect(controller.location!.path, _home);
+      expect(controller.disclosureAt(rowOf('.cache')), PaneDisclosure.expanded);
     });
 
     test('a listing that answers after its folder closed is dropped', () async {
@@ -369,7 +371,32 @@ void main() {
       await settle();
       expect(controller.entries[controller.cursorIndex!].name, 'github');
       expect(controller.rowDepth(controller.cursorIndex!), 1);
+      expect(selectedNames(), ['github']);
     });
+
+    test(
+      'a failed re-list folds the rows picked inside into the folder',
+      () async {
+        await openTree();
+        await expand('.cache');
+        controller.setCursorIndex(rowOf('.docker'));
+        controller.setCursorIndex(rowOf('gh'), update: SelectionUpdate.toggle);
+        channel.listingFailures['$_home/.cache'] = const RemoteFileException(
+          kind: RemoteFileErrorKind.permissionDenied,
+          operation: 'list',
+          path: '$_home/.cache',
+          message: 'Permission denied',
+        );
+        controller.refresh();
+        await settle();
+        await settle();
+        expect(rows(), ['.cache', '.docker', 'link', 'notes.txt']);
+        expect(selectedNames(), ['.cache', '.docker']);
+        expect(controller.entries[controller.cursorIndex!].name, '.cache');
+        // A refresh's re-list closes quietly: no notice.
+        expect(controller.notice, isNull);
+      },
+    );
 
     test('a folder that cannot be listed closes with a notice', () async {
       await openTree();

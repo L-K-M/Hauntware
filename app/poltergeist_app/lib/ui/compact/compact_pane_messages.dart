@@ -4,7 +4,6 @@ import '../../l10n/app_localizations.dart';
 import '../../services/drag_out_controller.dart' show DragOutLeftOut;
 import '../../services/pane_controller.dart';
 import '../panes/drag_out_notice.dart';
-import '../panes/expand_failed_notice.dart';
 
 /// The typed pane truth mapped to its ARB sentences (D20) for the
 /// compact listing — the same mapping the desktop pane view renders, so
@@ -50,6 +49,21 @@ String compactFaultText(AppLocalizations l10n, PaneFault fault) =>
       PaneFault.renameTargetGone => l10n.paneFaultRenameTargetGone,
       PaneFault.openFile => l10n.paneFaultOpenFile,
     };
+
+/// The notice strip's sentence for a folder that could not be opened in
+/// place (02 §2.5): which folder, and why. Shared by the desktop pane and
+/// the compact listing.
+String expandFailedText(
+  AppLocalizations l10n,
+  ({String name, RemoteFileException error})? failure,
+) {
+  if (failure == null) return '';
+  final reason = switch (failure.error) {
+    PaneFaultException(:final fault) => compactFaultText(l10n, fault),
+    final error => error.message,
+  };
+  return l10n.paneNoticeExpandFailed(failure.name, reason);
+}
 
 /// A rename session's refusal, as the rename dialog shows it.
 String compactRenameErrorText(
