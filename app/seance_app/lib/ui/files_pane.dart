@@ -125,7 +125,6 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   final ExternalFileOpener _fileOpener = const ExternalFileOpener();
   final TextEditingController _filter = TextEditingController();
   final Set<String> _promptedDirtyCopies = {};
-  final Set<String> _uploadingCopyPaths = {};
 
   @override
   void initState() {
@@ -642,25 +641,12 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   Future<bool> _uploadLocalCopy(
     ManagedRemoteFile copy, {
     bool notifySuccess = true,
-  }) async {
-    copy = widget.controller.localCopies[copy.remotePath] ?? copy;
-    // Keyed on remotePath, not the record's id: a reconcile mid-upload swaps
-    // in a record with a fresh id, and an id-keyed guard would miss the
-    // second call on the swapped record — letting two uploads of the same
-    // file race. No setState: the set is only read as a guard inside
-    // _queueDirtyEditPrompt, which runs on controller-driven rebuilds.
-    _uploadingCopyPaths.add(copy.remotePath);
-    try {
-      return await uploadManagedLocalCopy(
-        context,
-        widget.controller,
-        copy,
-        notifySuccess: notifySuccess,
-      );
-    } finally {
-      _uploadingCopyPaths.remove(copy.remotePath);
-    }
-  }
+  }) => uploadManagedLocalCopy(
+    context,
+    widget.controller,
+    copy,
+    notifySuccess: notifySuccess,
+  );
 
   Future<void> _discardLocalCopy(ManagedRemoteFile copy) async {
     final discard = await _confirm(
@@ -681,7 +667,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       (copy) =>
           copy.dirty &&
           !_promptedDirtyCopies.contains(copy.id) &&
-          !_uploadingCopyPaths.contains(copy.remotePath),
+          !controller.isUploadingLocalCopy(copy.remotePath),
     );
     if (dirty.isEmpty) return;
     final copy = dirty.first;
@@ -694,7 +680,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       final current = controller.localCopies[copy.remotePath];
       if (current == null ||
           !current.dirty ||
-          _uploadingCopyPaths.contains(current.remotePath)) {
+          controller.isUploadingLocalCopy(current.remotePath)) {
         _promptedDirtyCopies.remove(copy.id);
         return;
       }
@@ -1896,12 +1882,33 @@ class _FilesUnavailable extends StatelessWidget {
 
 /// Upload [copy] through [controller], confirming before it overwrites
 /// remote changes that landed after the checkout. Shared by the browser's
-/// upload buttons and the editor tab's save-and-upload.
+/// upload buttons and the editor tab's save-and-upload, so both hold the
+/// controller's in-flight mark that keeps the "changed locally" prompt from
+/// asking about the upload's own save.
 Future<bool> uploadManagedLocalCopy(
   BuildContext context,
   RemoteFilesController controller,
   ManagedRemoteFile copy, {
   bool notifySuccess = true,
+}) {
+  // Keyed on remotePath, not the record's id: a reconcile mid-upload swaps
+  // in a record with a fresh id, and an id-keyed mark would miss it.
+  return controller.trackLocalCopyUpload(
+    copy.remotePath,
+    () => _uploadManagedLocalCopy(
+      context,
+      controller,
+      copy,
+      notifySuccess: notifySuccess,
+    ),
+  );
+}
+
+Future<bool> _uploadManagedLocalCopy(
+  BuildContext context,
+  RemoteFilesController controller,
+  ManagedRemoteFile copy, {
+  required bool notifySuccess,
 }) async {
   // Re-resolve the copy — a reconcile may have swapped in a newer snapshot.
   // When the controller no longer tracks the checkout at all, stop rather
