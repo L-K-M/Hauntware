@@ -115,6 +115,8 @@ class IndexAwareCircularBuffer<T extends IndexedItem> {
   /// Removes all elements from the list.
   void clear() {
     for (var i = 0; i < _length; i++) {
+      // [seance fork] No successor: detaching anchors go with their line.
+      _getChild(i)?.migrateOnEvict(null);
       _dropChild(i);
     }
     _startIndex = 0;

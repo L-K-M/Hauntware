@@ -299,5 +299,30 @@ void main() {
       expect(onScreen.attached, isTrue);
       expect(onScreen.y, buffer.height - 1);
     });
+
+    // A dropped line already reads as unattached; disposal is what lets
+    // go of it. Without it the anchor kept the whole line alive.
+    test('evicted with no successor, they detach all the same', () {
+      final terminal = fullTerminal();
+      final buffer = terminal.buffer;
+      final trimmed = buffer.createAnchor(
+        2,
+        buffer.height - 1,
+        onTrim: AnchorTrimBehavior.detach,
+      );
+      buffer.lines.trimStart(buffer.lines.length);
+      expect(trimmed.attached, isFalse);
+      expect(trimmed.line, isNull);
+
+      final other = fullTerminal().buffer;
+      final cleared = other.createAnchor(
+        2,
+        0,
+        onTrim: AnchorTrimBehavior.detach,
+      );
+      other.clear();
+      expect(cleared.attached, isFalse);
+      expect(cleared.line, isNull);
+    });
   });
 }

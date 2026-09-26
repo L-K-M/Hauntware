@@ -374,11 +374,12 @@ class BufferLine with IndexedItem {
   /// mark this line's text and nothing else, so they go with it.
   @override
   void migrateOnEvict(covariant BufferLine? successor) {
-    if (successor == null) return;
     for (final anchor in _anchors.toList()) {
       switch (anchor.onTrim) {
         case AnchorTrimBehavior.migrate:
-          anchor.reparent(successor, 0);
+          // With no line left to take it, a migrating anchor stays as
+          // upstream left it.
+          if (successor != null) anchor.reparent(successor, 0);
         case AnchorTrimBehavior.detach:
           anchor.dispose();
       }

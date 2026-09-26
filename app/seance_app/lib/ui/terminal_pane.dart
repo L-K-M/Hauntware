@@ -1331,7 +1331,8 @@ class _SessionViewState extends State<_SessionView> {
       case 'selectAll':
         terminalSelectAll(widget.tab);
       case 'find':
-        _openFind();
+        // The tab may have closed while the menu was open.
+        if (mounted) _openFind();
     }
   }
 }

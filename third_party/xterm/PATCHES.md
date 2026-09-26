@@ -429,8 +429,8 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     anchor on a trimmed line migrate to the new oldest line, right for a
     selection and wrong for a search hit, which would collapse onto row 0
     and linger there. `onTrim: AnchorTrimBehavior.detach` disposes the
-    anchor with its line instead (ring-buffer eviction and CSI 3J alike);
-    `migrate` stays the default.
+    anchor with its line instead (ring-buffer eviction, CSI 3J and a whole
+    buffer clear alike, successor or not); `migrate` stays the default.
 
 ### App-layer notes (outside this package)
 
