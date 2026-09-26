@@ -600,9 +600,6 @@ enum _PaneEdge { leading, trailing }
 
 const double _resizeKeyStep = 16;
 
-/// A labelled, keyboard-adjustable divider with the same clamping and
-/// persistence boundary as a pointer drag. Physical arrow direction follows
-/// the divider; assistive increase/decrease follows the owned pane's width.
 /// The one-pixel line between two panes (see [AdaptiveShell.seamWidth]).
 class _Seam extends StatelessWidget {
   const _Seam();
@@ -617,6 +614,9 @@ class _Seam extends StatelessWidget {
   );
 }
 
+/// A labelled, keyboard-adjustable divider with the same clamping and
+/// persistence boundary as a pointer drag. Physical arrow direction follows
+/// the divider; assistive increase/decrease follows the owned pane's width.
 class _ResizeHandle extends StatefulWidget {
   final String label;
   final double width;
