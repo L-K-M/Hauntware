@@ -287,6 +287,7 @@ void main() {
         );
         await tester.pump();
       }
+      expect(field, findsOneWidget, reason: 'the editor loaded its checkout');
 
       await tester.enterText(field.first, 'changed\n');
       await settle(tester);
