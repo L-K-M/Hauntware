@@ -228,6 +228,7 @@ and review status live on the PRs.
 | [#52](https://github.com/L-K-M/Planchette/pull/52) `claude/kind-mendel-urd9v5-ghost` | Q5: `PlanchetteEditor.placeholder` (faint italic, editor face, gone on the first keystroke) and one of five "Start typing. The board is waiting…" lines per untitled tab; opened files show none. Editor 21, app 39 + 2 skipped |
 | [#53](https://github.com/L-K-M/Planchette/pull/53) `claude/kind-mendel-urd9v5-plurals` | Every new document's status bar read `1 lines · 0 bytes`; `documentPosition` now says `1 line`, `1 byte`. Editor 20 |
 | [#54](https://github.com/L-K-M/Planchette/pull/54) `claude/kind-mendel-urd9v5-locks` | B17 (**confirmed**: three of its four lock tests fail on main). The controller keeps the host's lock and each mounted view's lock apart; `editingLocked` reports either and every guard reads it. Each view registers itself, so a same-frame remount under another parent keeps its lock (a review finding on the first version, fixed with a regression test). Editor 24, app 38 + 2 skipped |
+| [#64](https://github.com/L-K-M/Planchette/pull/64) `claude/kind-mendel-urd9v5-export` | A11's HTML half: File › Export as HTML… writes the active buffer, unsaved edits included, as a standalone page in the editor's live syntax theme (one class per token type, whitespace and tabs kept). A pure core `highlightedHtml` renders it, so hosts can export too; the page goes through the store's guarded write, asks before replacing, and never overwrites a document open in a tab. Core 88, app 41 + 2 skipped |
 
 **Overlaps between PRs.** Findings were repeated across parallel review passes — and are addressed by more than one open
 PR. Merge coordination should retain the intended behaviors and acceptance
@@ -490,6 +491,14 @@ Open #8 covers part of this: its dialog total counts the trailing-newline
 line (matching gutter and clamp), out-of-range input clamps, non-digits are
 untypeable (digits-only formatter), and navigation requests editor focus.
 Still open: line:column input, grapheme-column semantics, BOM/CRLF counts.
+
+Two items from #33's review, deferred rather than widening that PR:
+- Go to Line and the find bar can be open together, so one Escape closes
+  only the focused bar. Opening either should close the other.
+- The selection summary counts UTF-16 code units (`selected.length`), so
+  an emoji or a combining sequence counts as two or more characters.
+  Count grapheme clusters (`selected.characters.length`) and share the
+  counting with B8's display columns.
 
 ### FU14. Validate indentation across hosts (after #13/#14/#21/#34/#37 coordination) — M
 Retain tests for forward/reverse multiline selections, tabs/spaces, blank
@@ -1299,6 +1308,10 @@ scroll sync by heading.
 ### A11. Print or export to HTML/PDF with highlighting — M
 Build HTML from the tokens (colors from the syntax theme), then print or
 save through the platform.
+
+HTML export is assigned to #64. Still open: printing and PDF through the
+platform (render the same page, or paint the spans directly), and a
+line-number column in the exported page.
 
 ### A12. Disambiguate equal filenames — S
 After reconciling #11/#35/#43, check whether duplicate basenames still need the
