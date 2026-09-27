@@ -52,8 +52,19 @@ void main() {
   test('non-macOS argv does not require the native document channel', () async {
     final seen = <String>[];
     final intake = OpenDocuments(open: (path) async => seen.add(path));
-    await intake.start(['--flag', '/document.txt'], macOS: false);
-    expect(seen, ['/document.txt']);
+    // A dash-named file is a valid path, not a flag: nothing injects argv
+    // flags on Linux or Windows, so every entry reaches open().
+    await intake.start(['-draft.txt', '/document.txt'], macOS: false);
+    expect(seen, ['-draft.txt', '/document.txt']);
+    intake.dispose();
+  });
+
+  test('macOS argv skips only the Finder process-serial argument', () async {
+    final seen = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async => null);
+    final intake = OpenDocuments(open: (path) async => seen.add(path));
+    await intake.start(['-psn_0_12345', '-draft.txt'], macOS: true);
+    expect(seen, ['-draft.txt']);
     intake.dispose();
   });
   test(

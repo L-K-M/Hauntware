@@ -24,7 +24,12 @@ final class OpenDocuments {
       await accept(pending);
     }
     await accept(
-      arguments.where((argument) => !argument.startsWith('-')).toList(),
+      // The only injected argv entry is macOS Finder's -psn_* process serial;
+      // everything else is a user-supplied path — a file may legitimately be
+      // named "-draft.txt".
+      arguments
+          .where((argument) => !macOS || !argument.startsWith('-psn_'))
+          .toList(),
     );
   }
 
