@@ -2,6 +2,7 @@ name: planchette_core
 description: Shared syntax, search, and guarded UTF-8 document I/O for Planchette.
 version: 0.1.0
 publish_to: none
+resolution: workspace
 environment:
   sdk: '>=3.12.0 <4.0.0'
 dependencies:

@@ -4,7 +4,12 @@ A focused text editor, and the shared editor foundation for
 [Poltergeist](https://github.com/L-K-M/Poltergeist) and
 [Séance](https://github.com/L-K-M/Seance).
 
-Version: 0.1.0
+> [!IMPORTANT]
+> LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
+
+*The pointer that spells it out.*
+
+**Current version:** v<!-- version -->0.1.0<!-- /version --> · [Releases](https://github.com/L-K-M/Planchette/releases)
 
 Planchette edits local UTF-8 text, configuration files, and scripts. Its
 standalone desktop app provides document tabs, Open/New/Save/Save As,

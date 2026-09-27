@@ -51,6 +51,9 @@ case "$target" in
     rm -rf "$destination"
     cp -R "$source" "$destination"
     cp "$root/media-sources/icon.png" "$destination/planchette.png"
+    if [[ "$mode" == release ]]; then
+      "$root/scripts/package-linux.sh" --bundle "$source" --appimage=best-effort
+    fi
     if $install; then
       installed="$HOME/.local/opt/planchette"
       mkdir -p "$HOME/.local/opt" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps"

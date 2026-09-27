@@ -1,9 +1,49 @@
 # Status
 
-The initial shared-editor extraction and standalone desktop app are in
-development. No completed validation is claimed until the implementation
-and host adapters have passed their checks.
+The initial desktop app and shared editor extraction are implemented. The
+ownership boundaries and compatibility policies are documented in
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
-The accepted scope and ownership boundaries are in
-[ARCHITECTURE.md](ARCHITECTURE.md). This file will record package, app,
-consumer, native, and CI results before the first implementation is merged.
+## Implemented
+
+- One tabbed document window with New, Open, Save, Save As, native desktop
+  menus and guarded document/application close.
+- Syntax highlighting including `.env`, literal find/replace, line numbers,
+  selection, undo/redo and document status shared with Poltergeist and Séance.
+- Bounded UTF-8 loading, BOM/EOL metadata, digest conflict checks, protected
+  replacement/rollback and exclusive new-file publication.
+- macOS Finder file-open events and Linux/Windows command-line file intake.
+  Linux desktop entries pass selected files; Windows builds are portable.
+- Desktop CI builds and a release pipeline for macOS, Linux and Windows.
+
+## Verification
+
+Local checks use Flutter 3.47.3 / Dart 3.13.3 on macOS. CI uses Flutter 3.47.2.
+
+- Core: analysis clean, 84 tests passed, including real macOS file publication
+  and deterministic failure/race regressions.
+- Shared editor: analysis clean, 19 controller/view tests passed, including
+  save revisions, callback changes, disposal, find/replace, undo, input
+  composition, editing locks and gutter reparenting.
+- Standalone app: analysis and document/menu/native-intake tests passed;
+  macOS release build and native keyboard/accessibility fixtures passed.
+- Poltergeist adapter: analysis clean, 58 core document/checkout and 90
+  Flutter editor/window/localization/syntax/checkout tests passed. Real-font
+  light/dark before-and-after captures are recorded in its adoption PR.
+- Séance adapter: analysis clean, full Flutter suite passed 1,131 tests with
+  two existing skips using real capture fonts. Reconnect/disconnect callback
+  regressions pass in a subsequent 44-test editor/integration run.
+
+Cross-platform CI and final review results are recorded on the implementation
+and adoption PRs. The local checks above do not claim Windows/Linux runtime
+verification or a published release. No release tag has been created.
+
+## Current limits
+
+The standalone app is desktop-only, uses one tabbed window per process, and
+does not restore documents after application exit. It accepts UTF-8 files up
+to 4 MiB; highlighting stops above 200,000 characters. File conflict guards
+are best-effort checks, not cross-process locks. Mixed line endings follow
+the selected host normalization policy. Android hard-link publication limits
+are documented in the core package; mobile runtime file I/O has not been
+verified locally.
