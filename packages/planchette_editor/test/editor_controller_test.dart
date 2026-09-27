@@ -180,9 +180,9 @@ void main() {
     final revealed = editor.revealRequest;
     editor.toggleWholeWord();
     expect(editor.wholeWord, isTrue);
-    expect(editor.revealRequest, greaterThan(revealed));
+    expect(editor.revealRequest, revealed + 1);
     editor.toggleCaseSensitive();
-    expect(editor.revealRequest, greaterThan(revealed + 1));
+    expect(editor.revealRequest, revealed + 2);
     expect(editor.matches.length, 2);
     editor.replacement.text = 'dog';
     editor.replaceAll();
