@@ -1,6 +1,7 @@
 // Extracted from Poltergeist and Seance; see the repository provenance notes.
 import 'package:flutter/material.dart';
-import 'package:planchette_core/planchette_core.dart' hide findSearchMatches;
+import 'package:planchette_core/planchette_core.dart'
+    hide SearchResult, findSearchMatches, searchText;
 import 'package:planchette_core/planchette_core.dart' as core;
 
 class EditorSyntaxTheme {
@@ -190,12 +191,48 @@ List<TextRange> findSearchMatches(
   String query, {
   bool caseSensitive = false,
   int limit = searchMatchLimit,
-}) => [
-  for (final match in core.findSearchMatches(
+  CaseFolder fold = _defaultCaseFolder,
+}) => searchText(
+  text,
+  query,
+  caseSensitive: caseSensitive,
+  limit: limit,
+  fold: fold,
+).matches;
+
+String _defaultCaseFolder(String value) => value.toLowerCase();
+
+/// A search outcome in Flutter ranges, carrying the case-handling report that
+/// the pure-Dart [core.SearchResult] gives its callers.
+final class SearchResult {
+  const SearchResult({required this.matches, required this.caseFolding});
+
+  final List<TextRange> matches;
+  final CaseFolding caseFolding;
+
+  bool get caseFoldedExactly => caseFolding == CaseFolding.exact;
+}
+
+/// [core.searchText] with Flutter ranges, keeping its case-handling report.
+SearchResult searchText(
+  String text,
+  String query, {
+  bool caseSensitive = false,
+  int limit = searchMatchLimit,
+  CaseFolder fold = _defaultCaseFolder,
+}) {
+  final result = core.searchText(
     text,
     query,
     caseSensitive: caseSensitive,
     limit: limit,
-  ))
-    TextRange(start: match.start, end: match.end),
-];
+    fold: fold,
+  );
+  return SearchResult(
+    matches: [
+      for (final match in result.matches)
+        TextRange(start: match.start, end: match.end),
+    ],
+    caseFolding: result.caseFolding,
+  );
+}

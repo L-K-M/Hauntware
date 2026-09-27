@@ -9,6 +9,8 @@ class EditorStrings {
   String get nextMatch => 'Next match';
   String get closeSearch => 'Close search';
   String get noMatches => 'No matches';
+  String get caseFoldLimited =>
+      'This text cannot be compared without case, so matching was exact.';
   String get showReplace => 'Find and replace';
   String get replaceHint => 'Replace with';
   String get replace => 'Replace';

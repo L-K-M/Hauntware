@@ -389,5 +389,66 @@ void main() {
     test('an empty query has no matches', () {
       expect(findSearchMatches('anything', ''), isEmpty);
     });
+
+    test('reports exact case folding for ordinary text', () {
+      final result = searchText('Die Größe der Straße', 'größe');
+      expect(result.caseFolding, CaseFolding.exact);
+      expect(result.caseFoldedExactly, isTrue);
+      expect(result.matches, [const TextMatch(start: 4, end: 9)]);
+    });
+
+    test('Dart lowercasing preserves length, so the guard is defensive', () {
+      // Every code point folds to the same number of UTF-16 units today. If a
+      // future SDK breaks that, searchText reports it rather than quietly
+      // changing what a case-insensitive search means.
+      for (var rune = 0x80; rune <= 0x2FFFF; rune++) {
+        final value = String.fromCharCode(rune);
+        expect(
+          value.toLowerCase().length,
+          value.length,
+          reason: 'U+${rune.toRadixString(16)} changes length when lowercased',
+        );
+      }
+    });
+
+    test('a length-changing fold is reported and matched exactly', () {
+      // ß uppercases to "SS", which is what a full case fold would expand it
+      // to. Dart's toLowerCase does not do that, so the fold is injected to
+      // reach the path a host with its own folding table would take.
+      String fold(String value) =>
+          value.replaceAll('ß', 'ss').replaceAll('ẞ', 'ss');
+      final result = searchText('Die Straße', 'STRASSE', fold: fold);
+      expect(result.caseFolding, CaseFolding.lengthChanging);
+      expect(result.caseFoldedExactly, isFalse);
+      // Reported as limited, and the match is the exact one — the honest
+      // outcome is "fewer matches than you asked for", not a wrong range.
+      expect(result.matches, isEmpty);
+      expect(searchText('Die Straße', 'Straße', fold: fold).matches, [
+        const TextMatch(start: 4, end: 10),
+      ]);
+    });
+
+    test('a case-sensitive search is never limited', () {
+      final result = searchText(
+        'Die Straße',
+        'STRASSE',
+        caseSensitive: true,
+        fold: (value) => value.replaceAll('ß', 'ss'),
+      );
+      expect(result.caseFolding, CaseFolding.exact);
+      expect(result.matches, isEmpty);
+    });
+
+    test('a length-changing needle is reported too', () {
+      final result = searchText(
+        'plain text',
+        'PLAIN',
+        fold: (value) {
+          if (value == 'PLAIN') return 'plaiin';
+          return value;
+        },
+      );
+      expect(result.caseFolding, CaseFolding.lengthChanging);
+    });
   });
 }

@@ -221,6 +221,7 @@ void main() {
     editor.text.selection = const TextSelection.collapsed(offset: 4);
     expect(editor.caretLineColumn, (2, 3));
   });
+<<<<<<< HEAD
 
   test('a shebang typed into a buffer names its language', () {
     final editor = EditorController(displayPath: 'Untitled 1', initialText: '');
@@ -291,5 +292,45 @@ void main() {
     // keeps it from being widened without a reason.
     editor.text.text = '${'x' * 4096}#!/usr/bin/env python';
     expect(editor.text.language, isNull);
+=======
+  test('a limited case fold is reported instead of hidden', () {
+    // Unicode full folding expands the sharp s to "ss", which changes
+    // length. A host can supply that fold; the editor must then say the
+    // search was not the case-insensitive one the user asked for.
+    String fullFold(String value) =>
+        value.replaceAll('\u00df', 'ss').replaceAll('\u1e9e', 'ss');
+    final editor = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'Die Stra\u00dfe ist breit',
+      caseFolder: fullFold,
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.search.text = 'STRASSE';
+    expect(editor.caseFoldingLimited, isTrue);
+    expect(editor.matches, isEmpty);
+
+    // The default fold preserves length, so nothing is reported.
+    final exact = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'Die Stra\u00dfe ist breit',
+    );
+    addTearDown(exact.dispose);
+    exact.openSearch();
+    exact.search.text = 'STRASSE';
+    expect(exact.caseFoldingLimited, isFalse);
+
+    // Closing the find bar clears the report.
+    final closed = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'x',
+      caseFolder: fullFold,
+    );
+    addTearDown(closed.dispose);
+    closed.openSearch();
+    closed.search.text = 'strasse';
+    closed.closeSearch();
+    expect(closed.caseFoldingLimited, isFalse);
+>>>>>>> origin/fix/case-insensitive-search-reporting
   });
 }

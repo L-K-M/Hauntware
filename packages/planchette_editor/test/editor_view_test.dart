@@ -162,4 +162,36 @@ void main() {
       isTrue,
     );
   });
+  testWidgets('the find bar says when case folding limited the match', (
+    tester,
+  ) async {
+    final c = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'Die Stra\u00dfe ist breit',
+      caseFolder: (value) =>
+          value.replaceAll('\u00df', 'ss').replaceAll('\u1e9e', 'ss'),
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+
+    c.openSearch();
+    c.search.text = 'STRASSE';
+    await tester.pumpAndSettle();
+    expect(c.caseFoldingLimited, isTrue);
+    expect(find.byIcon(Icons.info_outline), findsOneWidget);
+    expect(
+      find.byTooltip(
+        'This text cannot be compared without case, so matching '
+        'was exact.',
+      ),
+      findsOneWidget,
+    );
+
+    // Match case is on, so the search is exact by request and the note goes.
+    c.toggleCaseSensitive();
+    await tester.pumpAndSettle();
+    expect(c.caseFoldingLimited, isFalse);
+    expect(find.byIcon(Icons.info_outline), findsNothing);
+  });
 }
