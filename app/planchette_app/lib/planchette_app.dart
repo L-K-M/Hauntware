@@ -5,31 +5,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
+import 'services/app_settings.dart';
 import 'services/document_workspace.dart';
+import 'services/settings_dialog.dart';
 
 class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
     super.key,
     required this.workspace,
+    required this.settings,
     this.navigatorKey,
     this.onQuit,
-    this.themeMode = ThemeMode.system,
+    this.strings = const ShellStrings(),
   });
 
   final DocumentWorkspace workspace;
+
+  /// The user's choices, and the only place the theme and text size come from.
+  final SettingsController settings;
   final GlobalKey<NavigatorState>? navigatorKey;
   final Future<void> Function()? onQuit;
-  final ThemeMode themeMode;
+  final ShellStrings strings;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Planchette',
-    navigatorKey: navigatorKey,
-    debugShowCheckedModeBanner: false,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
-    themeMode: themeMode,
-    home: _DocumentShell(workspace: workspace, onQuit: onQuit),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: settings,
+    builder: (context, _) => MaterialApp(
+      title: strings.appName,
+      navigatorKey: navigatorKey,
+      debugShowCheckedModeBanner: false,
+      theme: _theme(Brightness.light),
+      darkTheme: _theme(Brightness.dark),
+      themeMode: settings.value.themeMode,
+      home: _DocumentShell(
+        workspace: workspace,
+        settings: settings,
+        onQuit: onQuit,
+        strings: strings,
+      ),
+    ),
   );
 
   ThemeData _theme(Brightness brightness) => ThemeData(
@@ -44,9 +58,16 @@ class PlanchetteApp extends StatelessWidget {
 }
 
 class _DocumentShell extends StatefulWidget {
-  const _DocumentShell({required this.workspace, this.onQuit});
+  const _DocumentShell({
+    required this.workspace,
+    required this.settings,
+    this.onQuit,
+    this.strings = const ShellStrings(),
+  });
   final DocumentWorkspace workspace;
+  final SettingsController settings;
   final Future<void> Function()? onQuit;
+  final ShellStrings strings;
 
   @override
   State<_DocumentShell> createState() => _DocumentShellState();
@@ -54,6 +75,8 @@ class _DocumentShell extends StatefulWidget {
 
 class _DocumentShellState extends State<_DocumentShell> {
   DocumentWorkspace get workspace => widget.workspace;
+  SettingsController get settings => widget.settings;
+  ShellStrings get strings => widget.strings;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   FocusNode? _lastTextFocus;
 
@@ -62,7 +85,35 @@ class _DocumentShellState extends State<_DocumentShell> {
     super.initState();
     workspace.addListener(_changed);
     FocusManager.instance.addListener(_rememberTextFocus);
+    _applySettings();
   }
+
+  /// Push the user's choices into every open buffer, and keep pushing them for
+  /// documents opened later.
+  void _applySettings() {
+    final value = settings.value;
+    for (final tab in workspace.documents) {
+      tab.editor.indent = value.indent;
+    }
+    settings.addListener(_settingsChanged);
+  }
+
+  void _settingsChanged() {
+    final value = settings.value;
+    for (final tab in workspace.documents) {
+      tab.editor.indent = value.indent;
+    }
+    if (mounted) setState(() {});
+  }
+
+  TextStyle get _textStyle => TextStyle(
+    fontFamily: settings.value.fontFamily,
+    fontFamilyFallback: settings.value.fontFamily == null
+        ? const ['monospace', 'Menlo', 'Consolas', 'DejaVu Sans Mono']
+        : const ['monospace'],
+    fontSize: settings.value.fontSize.toDouble(),
+    height: 1.35,
+  );
 
   void _changed() {
     if (mounted) setState(() {});
@@ -127,6 +178,12 @@ class _DocumentShellState extends State<_DocumentShell> {
     _focusAfterFrame(tab);
   }
 
+  void _showSettings() {
+    unawaited(
+      SettingsDialog.show(context, settings: settings, strings: strings),
+    );
+  }
+
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
     if (tabs.isEmpty || workspace.interactionLocked) return;
@@ -156,35 +213,41 @@ class _DocumentShellState extends State<_DocumentShell> {
         !active.editor.isLoading &&
         active.editor.error == null;
     return [
-      _ShellMenu('File', [
+      _ShellMenu(strings.file, [
         _Command(
-          'New',
+          strings.newDocument,
           _new,
           shortcut: _shortcut(LogicalKeyboardKey.keyN),
           enabled: unlocked,
         ),
         _Command(
-          'Open…',
+          strings.openDocument,
           () => unawaited(workspace.openDialog()),
           shortcut: _shortcut(LogicalKeyboardKey.keyO),
           enabled: unlocked,
         ),
         const _Separator(),
         _Command(
-          'Save',
+          strings.save,
           _save,
           shortcut: _shortcut(LogicalKeyboardKey.keyS),
           enabled: ready,
         ),
         _Command(
-          'Save As…',
+          strings.saveAs,
           () => _save(saveAs: true),
           shortcut: _shortcut(LogicalKeyboardKey.keyS, shift: true),
           enabled: ready,
         ),
         const _Separator(),
         _Command(
-          'Close Tab',
+          strings.settings,
+          _showSettings,
+          shortcut: _shortcut(LogicalKeyboardKey.comma),
+          enabled: unlocked,
+        ),
+        _Command(
+          strings.closeTab,
           _close,
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
           enabled: ready,
@@ -192,23 +255,23 @@ class _DocumentShellState extends State<_DocumentShell> {
         if (!mac && widget.onQuit != null) ...[
           const _Separator(),
           _Command(
-            'Quit',
+            strings.quit,
             () => unawaited(widget.onQuit!()),
             shortcut: _shortcut(LogicalKeyboardKey.keyQ),
             enabled: unlocked,
           ),
         ],
       ]),
-      _ShellMenu('Edit', [
+      _ShellMenu(strings.edit, [
         _Command(
-          'Undo',
+          strings.undo,
           () =>
               _textAction(const UndoTextIntent(SelectionChangedCause.keyboard)),
           shortcut: _shortcut(LogicalKeyboardKey.keyZ),
           enabled: ready,
         ),
         _Command(
-          'Redo',
+          strings.redo,
           () =>
               _textAction(const RedoTextIntent(SelectionChangedCause.keyboard)),
           shortcut: _shortcut(LogicalKeyboardKey.keyZ, shift: true),
@@ -216,7 +279,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         ),
         const _Separator(),
         _Command(
-          'Cut',
+          strings.cut,
           () => _textAction(
             const CopySelectionTextIntent.cut(SelectionChangedCause.keyboard),
           ),
@@ -224,13 +287,13 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
         _Command(
-          'Copy',
+          strings.copy,
           () => _textAction(CopySelectionTextIntent.copy),
           shortcut: _shortcut(LogicalKeyboardKey.keyC),
           enabled: ready,
         ),
         _Command(
-          'Paste',
+          strings.paste,
           () => _textAction(
             const PasteTextIntent(SelectionChangedCause.keyboard),
           ),
@@ -238,7 +301,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
         _Command(
-          'Select All',
+          strings.selectAll,
           () => _textAction(
             const SelectAllTextIntent(SelectionChangedCause.keyboard),
           ),
@@ -246,15 +309,15 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
       ]),
-      _ShellMenu('Find', [
+      _ShellMenu(strings.findMenu, [
         _Command(
-          'Find…',
+          strings.find,
           _find,
           shortcut: _shortcut(LogicalKeyboardKey.keyF),
           enabled: ready,
         ),
         _Command(
-          'Replace…',
+          strings.replace,
           () => _find(replace: true),
           shortcut: mac
               ? _shortcut(LogicalKeyboardKey.keyF, alt: true)
@@ -262,7 +325,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
         _Command(
-          'Find Next',
+          strings.findNext,
           () => active?.editor.nextMatch(),
           shortcut: mac
               ? _shortcut(LogicalKeyboardKey.keyG)
@@ -270,7 +333,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
         _Command(
-          'Find Previous',
+          strings.findPrevious,
           () => active?.editor.previousMatch(),
           shortcut: mac
               ? _shortcut(LogicalKeyboardKey.keyG, shift: true)
@@ -278,9 +341,9 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
       ]),
-      _ShellMenu('Window', [
+      _ShellMenu(strings.window, [
         _Command(
-          'Next Tab',
+          strings.nextTab,
           _nextTab,
           shortcut: const SingleActivator(
             LogicalKeyboardKey.tab,
@@ -289,7 +352,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: unlocked && workspace.documents.length > 1,
         ),
         _Command(
-          'Previous Tab',
+          strings.previousTab,
           () => _nextTab(previous: true),
           shortcut: const SingleActivator(
             LogicalKeyboardKey.tab,
@@ -332,7 +395,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   Widget _nativeMenu(List<_ShellMenu> menus, Widget child) => PlatformMenuBar(
     menus: [
       PlatformMenu(
-        label: 'Planchette',
+        label: strings.appName,
         menus: [
           const PlatformProvidedMenuItem(
             type: PlatformProvidedMenuItemType.about,
@@ -352,7 +415,7 @@ class _DocumentShellState extends State<_DocumentShell> {
             ],
           ),
           PlatformMenuItem(
-            label: 'Quit Planchette',
+            label: 'Quit ${strings.appName}',
             shortcut: _shortcut(LogicalKeyboardKey.keyQ),
             onSelected: widget.onQuit == null
                 ? null
@@ -365,7 +428,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           label: menu.label,
           menus: [
             ..._nativeItems(menu.items),
-            if (menu.label == 'Window') ...const [
+            if (menu.label == strings.window) ...const [
               PlatformMenuItemGroup(
                 members: [
                   PlatformProvidedMenuItem(
@@ -423,7 +486,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         for (final entry in menu.items)
           if (entry is _Command &&
               entry.shortcut != null &&
-              menu.label != 'Edit')
+              menu.label != strings.edit)
             entry.shortcut!: () {
               if (entry.enabled) entry.run();
             },
@@ -448,25 +511,25 @@ class _DocumentShellState extends State<_DocumentShell> {
                     children: [
                       Icon(Icons.edit_note_rounded, color: scheme.primary),
                       const SizedBox(width: 8),
-                      const Text(
-                        'Planchette',
+                      Text(
+                        strings.appName,
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(width: 20),
                       IconButton(
-                        tooltip: 'New',
+                        tooltip: strings.newDocument,
                         onPressed: workspace.interactionLocked ? null : _new,
                         icon: const Icon(Icons.add),
                       ),
                       IconButton(
-                        tooltip: 'Open…',
+                        tooltip: strings.openDocument,
                         onPressed: workspace.interactionLocked
                             ? null
                             : () => unawaited(workspace.openDialog()),
                         icon: const Icon(Icons.folder_open_outlined),
                       ),
                       IconButton(
-                        tooltip: 'Save',
+                        tooltip: strings.save,
                         onPressed:
                             active == null ||
                                 active.busy ||
@@ -475,10 +538,17 @@ class _DocumentShellState extends State<_DocumentShell> {
                             : _save,
                         icon: const Icon(Icons.save_outlined),
                       ),
+                      IconButton(
+                        tooltip: strings.settings,
+                        onPressed: workspace.interactionLocked
+                            ? null
+                            : _showSettings,
+                        icon: const Icon(Icons.tune),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          active?.path ?? 'A place for your words.',
+                          active?.path ?? strings.untitledHint,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -543,7 +613,8 @@ class _DocumentShellState extends State<_DocumentShell> {
                                             const SizedBox(width: 4),
                                             IconButton(
                                               key: ValueKey('close-${tab.id}'),
-                                              tooltip: 'Close ${tab.name}',
+                                              tooltip:
+                                                  '${strings.closeTabTooltip} ${tab.name}',
                                               visualDensity:
                                                   VisualDensity.compact,
                                               iconSize: 16,
@@ -583,7 +654,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Dismiss error',
+                          tooltip: strings.dismissError,
                           onPressed: workspace.clearError,
                           icon: const Icon(Icons.close),
                         ),
@@ -604,7 +675,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'Start with a blank page',
+                              strings.newDocumentTitle,
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                             const SizedBox(height: 20),
@@ -613,13 +684,13 @@ class _DocumentShellState extends State<_DocumentShell> {
                               children: [
                                 FilledButton(
                                   onPressed: _new,
-                                  child: const Text('New document'),
+                                  child: Text(strings.newDocumentAction),
                                 ),
                                 const SizedBox(width: 12),
                                 OutlinedButton(
                                   onPressed: () =>
                                       unawaited(workspace.openDialog()),
-                                  child: const Text('Open…'),
+                                  child: Text(strings.openDocumentAction),
                                 ),
                               ],
                             ),
@@ -635,6 +706,8 @@ class _DocumentShellState extends State<_DocumentShell> {
                               controller: tab.editor,
                               isActive: tab == active,
                               editingLocked: workspace.interactionLocked,
+                              indent: settings.value.indent,
+                              textStyle: _textStyle,
                             ),
                         ],
                       ),
@@ -652,6 +725,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   void dispose() {
     workspace.removeListener(_changed);
     FocusManager.instance.removeListener(_rememberTextFocus);
+    settings.removeListener(_settingsChanged);
     super.dispose();
   }
 }

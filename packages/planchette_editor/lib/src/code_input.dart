@@ -15,6 +15,17 @@ final class EditorIndent {
 
   /// What one level of indentation is made of.
   String get unit => usesTabs ? '\t' : ' ' * size.clamp(0, 16);
+
+  // A value type, so that a settings round-trip can compare it.
+  @override
+  bool operator ==(Object other) =>
+      other is EditorIndent && other.usesTabs == usesTabs && other.size == size;
+
+  @override
+  int get hashCode => Object.hash(usesTabs, size);
+
+  @override
+  String toString() => 'EditorIndent(${usesTabs ? 'tabs' : '$size spaces'})';
 }
 
 /// The pair a closer completes, and the closer itself, keyed by opener.

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'planchette_app.dart';
+import 'services/app_settings.dart';
 import 'services/desktop_window.dart';
 import 'services/document_dialogs.dart';
 import 'services/document_store.dart';
@@ -16,6 +17,10 @@ Future<void> main(List<String> arguments) async {
     store: LocalDocumentStore(),
     dialogs: AppDocumentDialogs(navigatorKey),
   );
+  final settings = SettingsController(
+    store: LocalSettingsStore.defaultLocation(),
+  );
+  await settings.load();
   final desktop = DesktopWindow(
     confirmQuit: workspace.confirmQuit,
     onQuitFailed: workspace.quitFailed,
@@ -23,6 +28,7 @@ Future<void> main(List<String> arguments) async {
   runApp(
     PlanchetteApp(
       workspace: workspace,
+      settings: settings,
       navigatorKey: navigatorKey,
       onQuit: desktop.requestQuit,
     ),
