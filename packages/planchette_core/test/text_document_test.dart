@@ -382,10 +382,15 @@ void main() {
       fail('chmod 555 failed: ${restrict.stderr}');
     }
     addTearDown(() async {
-      await Process.run('chmod', [
+      final restore = await Process.run('chmod', [
         originalMode.toRadixString(8),
         directory.path,
       ]);
+      expect(
+        restore.exitCode,
+        0,
+        reason: 'chmod restore failed: ${restore.stderr}',
+      );
     });
 
     await expectLater(

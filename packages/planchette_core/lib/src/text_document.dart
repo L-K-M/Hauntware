@@ -269,18 +269,25 @@ Future<String> _writeTextDocument(
     await _requireRegularFile(file);
     try {
       renameFileWithoutReplacing(file.path, backup.path);
-    } on FileSystemException catch (error) {
-      // A vanished destination means a mid-save conflict; anything else
-      // (permissions, quota) keeps its real OS error instead of being
-      // misreported as concurrent modification.
-      if (error.osError?.errorCode == _errorNoSuchFile) {
-        throw TextDocumentException(
-          'The local copy changed while it was being saved. ${error.message}',
-        );
-      }
-      throw TextDocumentException(
-        'The original file could not be moved aside for replacement. '
-        '${error.osError?.message ?? error.message}',
+    } on FileSystemException catch (error, stackTrace) {
+      // A vanished destination or parent means a mid-save conflict;
+      // anything else (permissions, quota) keeps its real OS error
+      // instead of being misreported as concurrent modification.
+      final code = error.osError?.errorCode;
+      final vanished =
+          code == _errorNoSuchFile ||
+          (Platform.isWindows && code == _errorPathNotFound);
+      Error.throwWithStackTrace(
+        vanished
+            ? TextDocumentException(
+                'The local copy changed while it was being saved. '
+                '${error.osError?.message ?? error.message}',
+              )
+            : TextDocumentException(
+                'The original file could not be moved aside for '
+                'replacement. ${error.osError?.message ?? error.message}',
+              ),
+        stackTrace,
       );
     }
     try {
@@ -347,8 +354,13 @@ String _tooLargeMessage(int maximumBytes) =>
 const _utf8Bom = [0xef, 0xbb, 0xbf];
 
 /// ENOENT on POSIX; ERROR_FILE_NOT_FOUND on Windows. Coincidentally 2 on
-/// both — it marks a file that vanished, not a permission or quota failure.
+/// both — the destination file itself vanished mid-save, not a permission
+/// or quota failure.
 const int _errorNoSuchFile = 2;
+
+/// Windows ERROR_PATH_NOT_FOUND: a parent directory in the path vanished.
+/// POSIX reports the same situation as ENOENT ([_errorNoSuchFile]).
+const int _errorPathNotFound = 3;
 
 bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes.length >= offset + _utf8Bom.length &&
