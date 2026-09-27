@@ -98,6 +98,14 @@ class FakeDialogs implements DocumentDialogs {
     return choiceGate?.future ??
         (choices.isEmpty ? CloseChoice.cancel : choices.removeAt(0));
   }
+
+  bool revert = true;
+  final reverts = <String>[];
+  @override
+  Future<bool> confirmRevert(String name) async {
+    reverts.add(name);
+    return revert;
+  }
 }
 
 void main() {
@@ -135,6 +143,48 @@ void main() {
     await workspace.open(testPath('alias.txt'));
     expect(workspace.documents, [original]);
     expect(original.editor.text.text, 'unsaved');
+  });
+
+  test('revert reloads disk text and clears dirty after confirming', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    await workspace.open(testPath('one.txt'));
+    final tab = workspace.active!;
+    tab.editor.text.text = 'unsaved';
+    store.files[testPath('one.txt')] = document('one.txt', 'disk newer');
+    expect(await workspace.revertTab(tab), isTrue);
+    expect(dialogs.reverts, ['one.txt']);
+    expect(tab.editor.text.text, 'disk newer');
+    expect(tab.editor.isDirty, isFalse);
+  });
+
+  test('a canceled revert keeps the edited buffer', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    await workspace.open(testPath('one.txt'));
+    final tab = workspace.active!;
+    tab.editor.text.text = 'unsaved';
+    store.files[testPath('one.txt')] = document('one.txt', 'disk newer');
+    dialogs.revert = false;
+    expect(await workspace.revertTab(tab), isFalse);
+    expect(tab.editor.text.text, 'unsaved');
+    expect(tab.editor.isDirty, isTrue);
+  });
+
+  test('revert on a clean file-backed tab reloads without prompting', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    await workspace.open(testPath('one.txt'));
+    final tab = workspace.active!;
+    store.files[testPath('one.txt')] = document('one.txt', 'disk newer');
+    expect(await workspace.revertTab(tab), isTrue);
+    expect(dialogs.reverts, isEmpty);
+    expect(tab.editor.text.text, 'disk newer');
+  });
+
+  test('an untitled tab has nothing to revert', () async {
+    final tab = workspace.newDocument()!;
+    tab.editor.text.text = 'draft';
+    expect(await workspace.revertTab(tab), isFalse);
+    expect(dialogs.reverts, isEmpty);
+    expect(tab.editor.text.text, 'draft');
   });
 
   test(

@@ -182,6 +182,11 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyS, shift: true),
           enabled: ready,
         ),
+        _Command(
+          'Revert File',
+          () => unawaited(workspace.revertTab(active!)),
+          enabled: ready && active.path != null,
+        ),
         const _Separator(),
         _Command(
           'Close Tab',

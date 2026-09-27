@@ -12,6 +12,7 @@ abstract interface class DocumentDialogs {
   Future<List<String>> pickOpenFiles();
   Future<String?> pickSavePath(String suggestedName);
   Future<bool> confirmReplace(String path);
+  Future<bool> confirmRevert(String name);
   Future<CloseChoice> chooseClose(String name);
 }
 
@@ -256,6 +257,33 @@ final class DocumentWorkspace extends ChangeNotifier {
       return true;
     } finally {
       _closingTabs.remove(tab);
+    }
+  }
+
+  /// Revert drops unsaved edits and reloads the file from disk. A dirty
+  /// tab asks first — this is the only discard path that never offers
+  /// "save" as an answer, matching Revert in desktop editors.
+  Future<bool> revertTab(DocumentTab tab) async {
+    if (interactionLocked ||
+        tab.busy ||
+        tab.path == null ||
+        !_documents.contains(tab) ||
+        tab.editor.isLoading) {
+      return false;
+    }
+    if (tab.editor.isDirty &&
+        !await _dialog(() => dialogs.confirmRevert(tab.name))) {
+      return false;
+    }
+    if (tab.busy) return false;
+    tab.busy = true;
+    _notify();
+    try {
+      await tab.editor.reload();
+      return true;
+    } finally {
+      tab.busy = false;
+      _notify();
     }
   }
 
