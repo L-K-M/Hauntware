@@ -48,9 +48,21 @@ void main() {
         home: Scaffold(body: PlanchetteEditor(controller: c)),
       ),
     );
-    // MaterialApp animates theme changes; the extension lerps with it.
+    // The dark theme registers no extension, so once the theme animation
+    // settles the editor falls back to its built-in dark palette.
     await tester.pumpAndSettle();
     expect(c.text.theme, same(EditorSyntaxTheme.dark));
+  });
+
+  test('themes with the same colors are equal', () {
+    final copy = EditorSyntaxTheme.dark.copyWith();
+    expect(identical(copy, EditorSyntaxTheme.dark), isFalse);
+    expect(copy, EditorSyntaxTheme.dark);
+    expect(copy.hashCode, EditorSyntaxTheme.dark.hashCode);
+    expect(
+      EditorSyntaxTheme.dark.copyWith(keyword: const Color(0xFF000000)),
+      isNot(EditorSyntaxTheme.dark),
+    );
   });
 
   test('themes interpolate for animated theme changes', () {

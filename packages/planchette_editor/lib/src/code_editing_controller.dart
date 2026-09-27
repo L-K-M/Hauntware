@@ -101,6 +101,34 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     );
   }
 
+  // Value equality, so ThemeData built afresh in a host's build compares
+  // equal and does not restart the theme animation.
+  @override
+  bool operator ==(Object other) =>
+      other is EditorSyntaxTheme &&
+      other.comment == comment &&
+      other.string == string &&
+      other.number == number &&
+      other.keyword == keyword &&
+      other.meta == meta &&
+      other.matchBackground == matchBackground &&
+      other.matchForeground == matchForeground &&
+      other.activeMatchBackground == activeMatchBackground &&
+      other.activeMatchForeground == activeMatchForeground;
+
+  @override
+  int get hashCode => Object.hash(
+    comment,
+    string,
+    number,
+    keyword,
+    meta,
+    matchBackground,
+    matchForeground,
+    activeMatchBackground,
+    activeMatchForeground,
+  );
+
   Color colorFor(SyntaxTokenType type) => switch (type) {
     SyntaxTokenType.comment => comment,
     SyntaxTokenType.string => string,

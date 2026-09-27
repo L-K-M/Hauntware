@@ -44,6 +44,17 @@ void main() {
         contrast(syntax.activeMatchForeground, syntax.activeMatchBackground),
         greaterThanOrEqualTo(4.5),
       );
+      // Ordinary matches are translucent, so check them as composited.
+      for (final background in backgrounds.entries) {
+        expect(
+          contrast(
+            syntax.matchForeground,
+            Color.alphaBlend(syntax.matchBackground, background.value),
+          ),
+          greaterThanOrEqualTo(4.5),
+          reason: 'match text over ${background.key}',
+        );
+      }
     });
   }
 }
