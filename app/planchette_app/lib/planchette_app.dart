@@ -7,6 +7,18 @@ import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace.dart';
 
+/// Public so tests can measure the syntax theme against the surface the editor
+/// is actually painted on, rather than a copy of the seed color.
+ThemeData planchetteTheme(Brightness brightness) => ThemeData(
+  brightness: brightness,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: const Color(0xff245b5c),
+    brightness: brightness,
+  ),
+  useMaterial3: true,
+  visualDensity: VisualDensity.compact,
+);
+
 class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
     super.key,
@@ -26,20 +38,10 @@ class PlanchetteApp extends StatelessWidget {
     title: 'Planchette',
     navigatorKey: navigatorKey,
     debugShowCheckedModeBanner: false,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
+    theme: planchetteTheme(Brightness.light),
+    darkTheme: planchetteTheme(Brightness.dark),
     themeMode: themeMode,
     home: _DocumentShell(workspace: workspace, onQuit: onQuit),
-  );
-
-  ThemeData _theme(Brightness brightness) => ThemeData(
-    brightness: brightness,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xff245b5c),
-      brightness: brightness,
-    ),
-    useMaterial3: true,
-    visualDensity: VisualDensity.compact,
   );
 }
 
