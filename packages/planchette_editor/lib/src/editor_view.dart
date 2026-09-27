@@ -124,6 +124,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     }
   }
 
+  /// Only the document field comments code; in the find bar the chord must
+  /// not silently edit the buffer behind it.
+  void _toggleComment() {
+    if (_locked || !c.editorFocus.hasFocus) return;
+    c.text.toggleComment();
+  }
+
   void _revealMatch() {
     if (!c.scroll.hasClients) return;
     if (c.activeMatch < 0 || c.activeMatch >= c.matches.length) return;
@@ -197,6 +204,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             c.previousMatch,
+        const SingleActivator(LogicalKeyboardKey.slash, meta: true):
+            _toggleComment,
+        const SingleActivator(LogicalKeyboardKey.slash, control: true):
+            _toggleComment,
         if (c.searchOpen)
           const SingleActivator(LogicalKeyboardKey.escape): c.closeSearch,
       },

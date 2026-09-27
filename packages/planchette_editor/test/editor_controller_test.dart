@@ -210,6 +210,59 @@ void main() {
       expect(editor.canPublish, isFalse);
     },
   );
+  test('toggle comment marks then lifts a single caret line', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'a = 1\nb = 2\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 2);
+    editor.text.toggleComment();
+    expect(editor.text.text, '# a = 1\nb = 2\n');
+    expect(editor.text.selection.extentOffset, 4);
+    editor.text.toggleComment();
+    expect(editor.text.text, 'a = 1\nb = 2\n');
+    expect(editor.text.selection.extentOffset, 2);
+  });
+  test('toggle comment preserves indent and skips blank lines', () {
+    final editor = EditorController(
+      displayPath: 'x.dart',
+      initialText: 'void f() {\n  int a;\n\n  int b;\n}',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 31,
+    );
+    editor.text.toggleComment();
+    expect(
+      editor.text.text,
+      '// void f() {\n  // int a;\n\n  // int b;\n// }',
+    );
+  });
+  test('toggle comment lifts marker and one space per line', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: '# one\n  # two\n#three\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 21,
+    );
+    editor.text.toggleComment();
+    expect(editor.text.text, 'one\n  two\nthree\n');
+  });
+  test('toggle comment is a no-op without a line comment marker', () {
+    final editor = EditorController(
+      displayPath: 'x.json',
+      initialText: '{"a": 1}',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 1);
+    editor.text.toggleComment();
+    expect(editor.text.text, '{"a": 1}');
+  });
   test('statistics count UTF-8 and trailing empty lines', () {
     final editor = EditorController(
       displayPath: 'test',

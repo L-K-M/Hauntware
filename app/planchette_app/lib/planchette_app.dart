@@ -245,6 +245,13 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyA),
           enabled: ready,
         ),
+        const _Separator(),
+        _Command(
+          'Toggle Comment',
+          () => active?.editor.text.toggleComment(),
+          shortcut: _shortcut(LogicalKeyboardKey.slash),
+          enabled: ready,
+        ),
       ]),
       _ShellMenu('Find', [
         _Command(

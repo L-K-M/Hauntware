@@ -139,6 +139,115 @@ class CodeEditingController extends TextEditingController {
     notifyListeners();
   }
 
+  /// Toggles the language's first line-comment marker on the touched lines.
+  /// When every non-blank line already carries it after its indent, the
+  /// marker (and one following space) is lifted; otherwise it is inserted
+  /// at each line's first non-whitespace position. Blank lines inside a
+  /// selection stay untouched; a collapsed caret comments even a blank line.
+  void toggleComment() {
+    final markers = language?.lineComments;
+    if (markers == null || markers.isEmpty || !selection.isValid) return;
+    final marker = markers.first;
+    final source = text;
+    final sel = selection;
+    final starts = lineStartOffsets(source);
+    final lastTouched = sel.isCollapsed ? sel.start : sel.end - 1;
+    var first = 0;
+    var last = starts.length - 1;
+    for (var i = 0; i < starts.length; i++) {
+      if (starts[i] <= sel.start) first = i;
+      if (starts[i] <= lastTouched) last = i;
+    }
+
+    // Every non-blank touched line already commented → uncomment them all.
+    var uncomment = true;
+    var sawLine = false;
+    for (var i = first; i <= last; i++) {
+      final content = _lineContent(source, starts, i);
+      if (content.isEmpty) continue;
+      sawLine = true;
+      if (!content.substring(_indentWidth(content)).startsWith(marker)) {
+        uncomment = false;
+        break;
+      }
+    }
+    if (!sawLine) {
+      if (!sel.isCollapsed) return;
+      // A caret on a blank line comments it rather than doing nothing.
+      uncomment = false;
+    }
+
+    final head = source.substring(0, starts[first]);
+    final lastEnd = last + 1 < starts.length
+        ? starts[last + 1] - 1
+        : source.length;
+    final buffer = StringBuffer(head);
+    var delta = 0;
+    var caret = sel.start;
+    var changed = false;
+    for (var i = first; i <= last; i++) {
+      final original = _lineContent(source, starts, i);
+      var line = original;
+      final ws = _indentWidth(line);
+      var removed = 0;
+      var stripEnd = ws;
+      if (uncomment) {
+        if (line.substring(ws).startsWith(marker)) {
+          stripEnd = ws + marker.length;
+          if (stripEnd < line.length && line[stripEnd] == ' ') stripEnd++;
+          removed = stripEnd - ws;
+          line = line.substring(0, ws) + line.substring(stripEnd);
+        }
+      } else if (line.isNotEmpty || first == last) {
+        line = '${line.substring(0, ws)}$marker ${line.substring(ws)}';
+      }
+      changed = changed || line != original;
+      delta += line.length - original.length;
+      if (sel.isCollapsed) {
+        final col = sel.start - starts[i];
+        if (uncomment && removed > 0) {
+          if (col >= stripEnd) {
+            caret = starts[i] + col - removed;
+          } else if (col > ws) {
+            caret = starts[i] + ws;
+          }
+        } else if (!uncomment && line != original && col >= ws) {
+          caret = starts[i] + col + marker.length + 1;
+        }
+      }
+      buffer.write(line);
+      if (i < last) buffer.write('\n');
+    }
+    if (!changed) return;
+    buffer.write(source.substring(lastEnd));
+    value = TextEditingValue(
+      text: buffer.toString(),
+      selection: sel.isCollapsed
+          ? TextSelection.collapsed(offset: caret)
+          : TextSelection(
+              baseOffset: starts[first],
+              extentOffset: lastEnd + delta,
+            ),
+    );
+  }
+
+  /// A touched line's content without its trailing newline.
+  String _lineContent(String source, List<int> starts, int index) {
+    final end = index + 1 < starts.length
+        ? starts[index + 1] - 1
+        : source.length;
+    return source.substring(starts[index], end);
+  }
+
+  static int _indentWidth(String line) {
+    var width = 0;
+    while (width < line.length &&
+        (line[width] == ' ' || line[width] == '\t')) {
+      width++;
+    }
+    return width;
+  }
+
   List<SyntaxToken> _tokensFor(String text) {
     final language = this.language;
     if (language == null || text.length > syntaxHighlightingMaxChars) {
