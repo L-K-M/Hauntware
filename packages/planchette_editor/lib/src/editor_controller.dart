@@ -84,6 +84,7 @@ class EditorController extends ChangeNotifier {
   int _activeMatch = -1;
   int _revision = 0;
   int _revealRequest = 0;
+  int _lastCaretOffset = 0;
   String _lastText = '';
   String? _lastQuery;
   String _languageProbe = '';
@@ -144,8 +145,10 @@ class EditorController extends ChangeNotifier {
 
   (int, int) get caretLineColumn {
     final selection = text.selection;
-    if (!selection.isValid) return (1, 1);
-    final offset = selection.extentOffset.clamp(0, text.text.length);
+    // An invalid selection means the caret was elsewhere — remember it
+    // instead of reporting a plausible-looking (1, 1).
+    if (selection.isValid) _lastCaretOffset = selection.extentOffset;
+    final offset = _lastCaretOffset.clamp(0, text.text.length);
     final starts = lineStarts;
     var lo = 0;
     var hi = starts.length - 1;

@@ -332,4 +332,16 @@ void main() {
     closed.closeSearch();
     expect(closed.caseFoldingLimited, isFalse);
   });
+
+  test('an invalid selection keeps the last caret position', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 5);
+    expect(editor.caretLineColumn, (2, 2));
+    editor.text.selection = const TextSelection.collapsed(offset: -1);
+    expect(editor.caretLineColumn, (2, 2));
+  });
 }
