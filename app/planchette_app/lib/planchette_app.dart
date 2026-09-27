@@ -155,6 +155,8 @@ class _DocumentShellState extends State<_DocumentShell> {
         !active.busy &&
         !active.editor.isLoading &&
         active.editor.error == null;
+    // A composing input method or a host lock refuses line edits too.
+    final lineCommands = ready && active.editor.canEditText;
     return [
       _ShellMenu('File', [
         _Command(
@@ -250,7 +252,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           'Duplicate Line',
           () => active?.editor.duplicateLines(),
           shortcut: _shortcut(LogicalKeyboardKey.keyD, shift: true),
-          enabled: ready,
+          enabled: lineCommands,
         ),
         _Command(
           'Move Line Up',
@@ -259,7 +261,7 @@ class _DocumentShellState extends State<_DocumentShell> {
             LogicalKeyboardKey.arrowUp,
             alt: true,
           ),
-          enabled: ready,
+          enabled: lineCommands,
         ),
         _Command(
           'Move Line Down',
@@ -268,19 +270,19 @@ class _DocumentShellState extends State<_DocumentShell> {
             LogicalKeyboardKey.arrowDown,
             alt: true,
           ),
-          enabled: ready,
+          enabled: lineCommands,
         ),
         _Command(
           'Delete Line',
           () => active?.editor.deleteLines(),
           shortcut: _shortcut(LogicalKeyboardKey.keyK, shift: true),
-          enabled: ready,
+          enabled: lineCommands,
         ),
         _Command(
           'Join Lines',
           () => active?.editor.joinLines(),
           shortcut: _shortcut(LogicalKeyboardKey.keyJ),
-          enabled: ready,
+          enabled: lineCommands,
         ),
       ]),
       _ShellMenu('Find', [

@@ -93,6 +93,15 @@ void main() {
     expect(editor.text.selection, const TextSelection.collapsed(offset: 2));
   }, variant: desktop);
 
+  testWidgets('moving the last line down consumes its key', (tester) async {
+    final editor = await pumpEditor(tester, 'one\ntwo', caret: 6);
+
+    await press(tester, LogicalKeyboardKey.arrowDown, alt: true);
+
+    expect(editor.text.text, 'one\ntwo');
+    expect(editor.text.selection, const TextSelection.collapsed(offset: 6));
+  }, variant: desktop);
+
   testWidgets('a locked document leaves the keys to the text field', (
     tester,
   ) async {
@@ -120,6 +129,7 @@ void main() {
     await press(tester, LogicalKeyboardKey.arrowUp, alt: true);
 
     expect(editor.text.text, 'one\ntwo');
+    expect(editor.searchFocus.hasFocus, isTrue);
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 
   test('an input method composition blocks line commands', () {
@@ -163,6 +173,8 @@ void main() {
 
   testWidgets('a line command can be undone', (tester) async {
     final editor = await pumpEditor(tester, 'one\ntwo', caret: 1);
+    // Flutter's UndoHistory records a value only after 500 ms without
+    // changes, so each pump settles one entry: the loaded text, then the move.
     await tester.pump(const Duration(seconds: 1));
 
     await press(tester, LogicalKeyboardKey.arrowDown, alt: true);
