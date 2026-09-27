@@ -25,14 +25,14 @@ Local checks use Flutter 3.47.3 / Dart 3.13.3 on macOS. CI uses Flutter 3.47.2.
 - Shared editor: analysis clean, 19 controller/view tests passed, including
   save revisions, callback changes, disposal, find/replace, undo, input
   composition, editing locks and gutter reparenting.
-- Standalone app: analysis and document/menu/native-intake tests passed;
+- Standalone app: analysis clean and 40 document/menu/native-intake tests passed;
   macOS release build and native keyboard/accessibility fixtures passed.
+  Save As casing checks also run on case-insensitive temporary volumes.
 - Poltergeist adapter: analysis clean, 58 core document/checkout and 90
   Flutter editor/window/localization/syntax/checkout tests passed. Real-font
   light/dark before-and-after captures are recorded in its adoption PR.
-- Séance adapter: analysis clean, full Flutter suite passed 1,131 tests with
-  two existing skips using real capture fonts. Reconnect/disconnect callback
-  regressions pass in a subsequent 44-test editor/integration run.
+- Séance adapter: analysis clean, full Flutter suite passed 1,133 tests with
+  two existing skips against the Git packages, using real capture fonts.
 
 Cross-platform CI and final review results are recorded on the implementation
 and adoption PRs. The local checks above do not claim Windows/Linux runtime

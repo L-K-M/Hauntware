@@ -23,9 +23,26 @@ final class LocalDocumentStore implements DocumentStore {
 
   @override
   Future<String> canonicalSavePath(String path) async {
-    // Resolve directory aliases without following the final component: the
-    // latter still must pass the regular-file/exclusive-create safety checks.
     final absolute = paths.normalize(paths.absolute(path));
+    final type = await FileSystemEntity.type(absolute, followLinks: false);
+    if (type == FileSystemEntityType.file) {
+      // An existing target's actual spelling matters on case-insensitive
+      // volumes: a case variant must retain its open tab and digest identity.
+      final canonical = await File(absolute).resolveSymbolicLinks();
+      if (await FileSystemEntity.type(absolute, followLinks: false) !=
+          FileSystemEntityType.file) {
+        throw FileSystemException('The save destination changed.', path);
+      }
+      return canonical;
+    }
+    if (type != FileSystemEntityType.notFound) {
+      throw FileSystemException(
+        'Choose a regular file as the destination.',
+        path,
+      );
+    }
+    // New files have no final component to resolve. Retain the chosen name
+    // while fixing directory aliases before exclusive creation.
     final parent = await Directory(
       paths.dirname(absolute),
     ).resolveSymbolicLinks();

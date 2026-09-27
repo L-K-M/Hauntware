@@ -433,4 +433,99 @@ void main() {
       expect(memory.writes, isEmpty);
     },
   );
+  test('case-variant Save As cannot overwrite another open tab', () async {
+    final directory = await Directory.systemTemp.createTemp('planchette-case-');
+    addTearDown(() => directory.delete(recursive: true));
+    final file = await File(
+      paths.join(directory.path, 'README.md'),
+    ).writeAsString('on disk');
+    final variant = File(paths.join(directory.path, 'readme.MD'));
+    if (!await variant.exists()) {
+      markTestSkipped('The temporary volume is case-sensitive.');
+      return;
+    }
+    expect(await FileSystemEntity.identical(file.path, variant.path), isTrue);
+    final local = DocumentWorkspace(
+      store: LocalDocumentStore(),
+      dialogs: dialogs,
+    );
+    addTearDown(local.dispose);
+    await local.open(file.path);
+    final original = local.active!..editor.text.text = 'unsaved original';
+    final replacement = local.newDocument()!..editor.text.text = 'replacement';
+    dialogs.savePath = variant.path;
+    expect(await local.save(replacement, saveAs: true), isFalse);
+    expect(await file.readAsString(), 'on disk');
+    expect(original.editor.text.text, 'unsaved original');
+    expect(replacement.path, isNull);
+  });
+
+  test(
+    'case-variant Save As retains the original external-change baseline',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-case-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = await File(
+        paths.join(directory.path, 'README.md'),
+      ).writeAsString('baseline');
+      final variant = File(paths.join(directory.path, 'readme.MD'));
+      if (!await variant.exists()) {
+        markTestSkipped('The temporary volume is case-sensitive.');
+        return;
+      }
+      expect(await FileSystemEntity.identical(file.path, variant.path), isTrue);
+      final local = DocumentWorkspace(
+        store: LocalDocumentStore(),
+        dialogs: dialogs,
+      );
+      addTearDown(local.dispose);
+      await local.open(file.path);
+      final tab = local.active!..editor.text.text = 'local edit';
+      final baseline = tab.baseline!.sha256;
+      await file.writeAsString('external edit');
+      dialogs.savePath = variant.path;
+      expect(await local.save(tab, saveAs: true), isFalse);
+      expect(await file.readAsString(), 'external edit');
+      expect(tab.baseline!.sha256, baseline);
+      expect(tab.editor.text.text, 'local edit');
+      expect(tab.editor.isDirty, isTrue);
+    },
+  );
+  test(
+    'Save As continues to refuse a final symbolic-link destination',
+    () async {
+      if (Platform.isWindows) {
+        markTestSkipped(
+          'Creating Windows links requires developer privileges.',
+        );
+        return;
+      }
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-final-link-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final target = await File(
+        paths.join(directory.path, 'target.txt'),
+      ).writeAsString('target');
+      final link = await Link(
+        paths.join(directory.path, 'link.txt'),
+      ).create(target.path);
+      final local = DocumentWorkspace(
+        store: LocalDocumentStore(),
+        dialogs: dialogs,
+      );
+      addTearDown(local.dispose);
+      final tab = local.newDocument()!..editor.text.text = 'replacement';
+      dialogs.savePath = link.path;
+      expect(await local.save(tab, saveAs: true), isFalse);
+      expect(await target.readAsString(), 'target');
+      expect(
+        await FileSystemEntity.type(link.path, followLinks: false),
+        FileSystemEntityType.link,
+      );
+      expect(tab.path, isNull);
+    },
+  );
 }

@@ -90,6 +90,10 @@ jobs:
       - name: Build
         working-directory: app/planchette_app
         run: flutter build ${{ matrix.target }} --release
+      - name: Native-platform app regressions
+        if: matrix.target != 'linux'
+        working-directory: app/planchette_app
+        run: flutter test --no-pub
       - name: Linux packages
         if: matrix.target == 'linux'
         run: scripts/package-linux.sh --appimage=required

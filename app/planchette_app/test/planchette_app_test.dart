@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +7,7 @@ import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
 import 'services/document_workspace_test.dart'
-    show MemoryDocuments, FakeDialogs, testPath;
+    show MemoryDocuments, FakeDialogs, document, testPath;
 
 void main() {
   late MemoryDocuments store;
@@ -101,6 +100,33 @@ void main() {
       await chord(tester, LogicalKeyboardKey.keyN);
       expect(workspace.documents.length, 2);
       expect(workspace.active, isNot(first));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'New and Open shortcuts remain available after closing the last tab',
+    (tester) async {
+      workspace.newDocument();
+      store.files[testPath('reopen.txt')] = document('reopen.txt', 'on disk');
+      dialogs.openPaths = [testPath('reopen.txt')];
+      await mount(tester);
+
+      await chord(tester, LogicalKeyboardKey.keyW);
+      expect(workspace.documents, isEmpty);
+      await chord(tester, LogicalKeyboardKey.keyN);
+      expect(workspace.documents, hasLength(1));
+
+      await chord(tester, LogicalKeyboardKey.keyW);
+      expect(workspace.documents, isEmpty);
+      await chord(tester, LogicalKeyboardKey.keyO);
+      expect(workspace.documents, hasLength(1));
+      expect(workspace.active!.editor.text.text, 'on disk');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

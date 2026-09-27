@@ -430,211 +430,217 @@ class _DocumentShellState extends State<_DocumentShell> {
     };
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
-      child: Scaffold(
-        body: Column(
-          children: [
-            if (!mac) _menuBar(menus),
-            Material(
-              color: scheme.surfaceContainerLow,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_note_rounded, color: scheme.primary),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Planchette',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(width: 20),
-                    IconButton(
-                      tooltip: 'New',
-                      onPressed: workspace.interactionLocked ? null : _new,
-                      icon: const Icon(Icons.add),
-                    ),
-                    IconButton(
-                      tooltip: 'Open…',
-                      onPressed: workspace.interactionLocked
-                          ? null
-                          : () => unawaited(workspace.openDialog()),
-                      icon: const Icon(Icons.folder_open_outlined),
-                    ),
-                    IconButton(
-                      tooltip: 'Save',
-                      onPressed:
-                          active == null ||
-                              active.busy ||
-                              workspace.interactionLocked
-                          ? null
-                          : _save,
-                      icon: const Icon(Icons.save_outlined),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        active?.path ?? 'A place for your words.',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: scheme.onSurfaceVariant,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    if (active?.busy == true)
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            if (tabs.isNotEmpty)
+      // Keep focus below the shortcuts when the final editor is disposed.
+      child: FocusScope(
+        autofocus: true,
+        child: Scaffold(
+          body: Column(
+            children: [
+              if (!mac) _menuBar(menus),
               Material(
                 color: scheme.surfaceContainerLow,
-                child: SizedBox(
-                  height: 40,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 8),
-                        for (final tab in tabs)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 4),
-                            child: Tooltip(
-                              message: tab.path ?? tab.name,
-                              child: Semantics(
-                                selected: tab == active,
-                                child: Material(
-                                  color: tab == active
-                                      ? scheme.surface
-                                      : Colors.transparent,
-                                  borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(8),
-                                  ),
-                                  child: InkWell(
-                                    onTap: workspace.interactionLocked
-                                        ? null
-                                        : () => _select(tab),
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(left: 14),
-                                      child: Row(
-                                        children: [
-                                          Text(
-                                            '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: tab == active
-                                                  ? FontWeight.w600
-                                                  : FontWeight.normal,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_note_rounded, color: scheme.primary),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Planchette',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 20),
+                      IconButton(
+                        tooltip: 'New',
+                        onPressed: workspace.interactionLocked ? null : _new,
+                        icon: const Icon(Icons.add),
+                      ),
+                      IconButton(
+                        tooltip: 'Open…',
+                        onPressed: workspace.interactionLocked
+                            ? null
+                            : () => unawaited(workspace.openDialog()),
+                        icon: const Icon(Icons.folder_open_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Save',
+                        onPressed:
+                            active == null ||
+                                active.busy ||
+                                workspace.interactionLocked
+                            ? null
+                            : _save,
+                        icon: const Icon(Icons.save_outlined),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          active?.path ?? 'A place for your words.',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      if (active?.busy == true)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (tabs.isNotEmpty)
+                Material(
+                  color: scheme.surfaceContainerLow,
+                  child: SizedBox(
+                    height: 40,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 8),
+                          for (final tab in tabs)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Tooltip(
+                                message: tab.path ?? tab.name,
+                                child: Semantics(
+                                  selected: tab == active,
+                                  child: Material(
+                                    color: tab == active
+                                        ? scheme.surface
+                                        : Colors.transparent,
+                                    borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(8),
+                                    ),
+                                    child: InkWell(
+                                      onTap: workspace.interactionLocked
+                                          ? null
+                                          : () => _select(tab),
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 14,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Text(
+                                              '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: tab == active
+                                                    ? FontWeight.w600
+                                                    : FontWeight.normal,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          IconButton(
-                                            key: ValueKey('close-${tab.id}'),
-                                            tooltip: 'Close ${tab.name}',
-                                            visualDensity:
-                                                VisualDensity.compact,
-                                            iconSize: 16,
-                                            onPressed:
-                                                workspace.interactionLocked ||
-                                                    tab.busy
-                                                ? null
-                                                : () => unawaited(
-                                                    workspace.closeTab(tab),
-                                                  ),
-                                            icon: const Icon(Icons.close),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 4),
+                                            IconButton(
+                                              key: ValueKey('close-${tab.id}'),
+                                              tooltip: 'Close ${tab.name}',
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              iconSize: 16,
+                                              onPressed:
+                                                  workspace.interactionLocked ||
+                                                      tab.busy
+                                                  ? null
+                                                  : () => unawaited(
+                                                      workspace.closeTab(tab),
+                                                    ),
+                                              icon: const Icon(Icons.close),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            if (workspace.error case final error?)
-              Material(
-                color: scheme.errorContainer,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          error,
-                          style: TextStyle(color: scheme.onErrorContainer),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Dismiss error',
-                        onPressed: workspace.clearError,
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            Expanded(
-              child: tabs.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.description_outlined,
-                            size: 48,
-                            color: scheme.primary,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Start with a blank page',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              FilledButton(
-                                onPressed: _new,
-                                child: const Text('New document'),
-                              ),
-                              const SizedBox(width: 12),
-                              OutlinedButton(
-                                onPressed: () =>
-                                    unawaited(workspace.openDialog()),
-                                child: const Text('Open…'),
-                              ),
-                            ],
-                          ),
                         ],
                       ),
-                    )
-                  : IndexedStack(
-                      index: tabs.indexOf(active!),
+                    ),
+                  ),
+                ),
+              if (workspace.error case final error?)
+                Material(
+                  color: scheme.errorContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Row(
                       children: [
-                        for (final tab in tabs)
-                          PlanchetteEditor(
-                            key: ValueKey(tab.id),
-                            controller: tab.editor,
-                            isActive: tab == active,
-                            editingLocked: workspace.interactionLocked,
+                        Expanded(
+                          child: Text(
+                            error,
+                            style: TextStyle(color: scheme.onErrorContainer),
                           ),
+                        ),
+                        IconButton(
+                          tooltip: 'Dismiss error',
+                          onPressed: workspace.clearError,
+                          icon: const Icon(Icons.close),
+                        ),
                       ],
                     ),
-            ),
-          ],
+                  ),
+                ),
+              Expanded(
+                child: tabs.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.description_outlined,
+                              size: 48,
+                              color: scheme.primary,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Start with a blank page',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                FilledButton(
+                                  onPressed: _new,
+                                  child: const Text('New document'),
+                                ),
+                                const SizedBox(width: 12),
+                                OutlinedButton(
+                                  onPressed: () =>
+                                      unawaited(workspace.openDialog()),
+                                  child: const Text('Open…'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )
+                    : IndexedStack(
+                        index: tabs.indexOf(active!),
+                        children: [
+                          for (final tab in tabs)
+                            PlanchetteEditor(
+                              key: ValueKey(tab.id),
+                              controller: tab.editor,
+                              isActive: tab == active,
+                              editingLocked: workspace.interactionLocked,
+                            ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
