@@ -35,19 +35,23 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       FlutterDesktopGetDpiForMonitor(
           ::MonitorFromRect(&work_area, MONITOR_DEFAULTTONEAREST)) /
       96.0;
-  Win32Window::Point origin(
-      static_cast<int>(
-          (work_area.left +
-           (work_area.right - work_area.left -
-            static_cast<LONG>(size.width * scale_factor)) /
-               2) /
-          scale_factor),
-      static_cast<int>(
-          (work_area.top +
-           (work_area.bottom - work_area.top -
-            static_cast<LONG>(size.height * scale_factor)) /
-               2) /
-          scale_factor));
+  const int scaled_width = static_cast<int>(size.width * scale_factor);
+  const int scaled_height = static_cast<int>(size.height * scale_factor);
+  const int window_x = static_cast<int>(
+      (work_area.left +
+       (work_area.right - work_area.left - scaled_width) / 2) /
+      scale_factor);
+  const int window_y = static_cast<int>(
+      (work_area.top +
+       (work_area.bottom - work_area.top - scaled_height) / 2) /
+      scale_factor);
+  // Point is unsigned: when the window is larger than the work area
+  // (125%+ DPI, small panels) the centered offset goes negative and would
+  // wrap — clamp to the work area edge instead of spawning off-screen.
+  const int edge_x = static_cast<int>(work_area.left / scale_factor);
+  const int edge_y = static_cast<int>(work_area.top / scale_factor);
+  Win32Window::Point origin(window_x > edge_x ? window_x : edge_x,
+                            window_y > edge_y ? window_y : edge_y);
   if (!window.Create(L"Planchette", origin, size)) {
     return EXIT_FAILURE;
   }
