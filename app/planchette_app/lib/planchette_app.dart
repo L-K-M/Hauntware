@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace.dart';
+import 'widgets/tab_strip.dart';
 
 class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
@@ -126,6 +127,19 @@ class _DocumentShellState extends State<_DocumentShell> {
     workspace.select(tab);
     _focusAfterFrame(tab);
   }
+
+  /// Cmd/Ctrl+1…8 select that tab and 9 the last one, as in browsers.
+  void _selectNumbered(int number) {
+    final tabs = workspace.documents;
+    if (tabs.isEmpty || workspace.interactionLocked) return;
+    if (number == 9) {
+      _select(tabs.last);
+    } else if (number <= tabs.length) {
+      _select(tabs[number - 1]);
+    }
+  }
+
+  String _keyLabel(String key) => mac ? '⌘$key' : 'Ctrl+$key';
 
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
@@ -427,6 +441,8 @@ class _DocumentShellState extends State<_DocumentShell> {
             entry.shortcut!: () {
               if (entry.enabled) entry.run();
             },
+      for (var number = 1; number <= 9; number++)
+        _shortcut(_digits[number]): () => _selectNumbered(number),
     };
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
@@ -435,140 +451,39 @@ class _DocumentShellState extends State<_DocumentShell> {
         autofocus: true,
         child: Scaffold(
           body: Column(
+            // Chrome rows span the window and start at the leading edge;
+            // a centered column floated the menu bar mid-window.
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (!mac) _menuBar(menus),
-              Material(
-                color: scheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_note_rounded, color: scheme.primary),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Planchette',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 20),
-                      IconButton(
-                        tooltip: 'New',
-                        onPressed: workspace.interactionLocked ? null : _new,
-                        icon: const Icon(Icons.add),
-                      ),
-                      IconButton(
-                        tooltip: 'Open…',
-                        onPressed: workspace.interactionLocked
-                            ? null
-                            : () => unawaited(workspace.openDialog()),
-                        icon: const Icon(Icons.folder_open_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Save',
-                        onPressed:
-                            active == null ||
-                                active.busy ||
-                                workspace.interactionLocked
-                            ? null
-                            : _save,
-                        icon: const Icon(Icons.save_outlined),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          active?.path ?? 'A place for your words.',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: scheme.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      if (active?.busy == true)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              if (tabs.isNotEmpty)
-                Material(
-                  color: scheme.surfaceContainerLow,
-                  child: SizedBox(
-                    height: 40,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 8),
-                          for (final tab in tabs)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Tooltip(
-                                message: tab.path ?? tab.name,
-                                child: Semantics(
-                                  selected: tab == active,
-                                  child: Material(
-                                    color: tab == active
-                                        ? scheme.surface
-                                        : Colors.transparent,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(8),
-                                    ),
-                                    child: InkWell(
-                                      onTap: workspace.interactionLocked
-                                          ? null
-                                          : () => _select(tab),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 14,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Text(
-                                              '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: tab == active
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            IconButton(
-                                              key: ValueKey('close-${tab.id}'),
-                                              tooltip: 'Close ${tab.name}',
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              iconSize: 16,
-                                              onPressed:
-                                                  workspace.interactionLocked ||
-                                                      tab.busy
-                                                  ? null
-                                                  : () => unawaited(
-                                                      workspace.closeTab(tab),
-                                                    ),
-                                              icon: const Icon(Icons.close),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+              TabStrip(
+                tabs: [
+                  for (final tab in tabs)
+                    (
+                      id: tab.id,
+                      name: tab.name,
+                      tooltip: tab.path ?? tab.name,
+                      dirty: tab.editor.isDirty,
+                      closable: !tab.busy,
                     ),
-                  ),
+                ],
+                activeId: active?.id,
+                enabled: !workspace.interactionLocked,
+                busy: active?.busy == true,
+                onSelect: (id) => _select(tabs.firstWhere((t) => t.id == id)),
+                onClose: (id) => unawaited(
+                  workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
                 ),
+                onNew: _new,
+                onOpen: () => unawaited(workspace.openDialog()),
+                onSave:
+                    active == null || active.busy || workspace.interactionLocked
+                    ? null
+                    : _save,
+                newTooltip: 'New (${_keyLabel('N')})',
+                openTooltip: 'Open… (${_keyLabel('O')})',
+                saveTooltip: 'Save (${_keyLabel('S')})',
+              ),
               if (workspace.error case final error?)
                 Material(
                   color: scheme.errorContainer,
@@ -655,6 +570,19 @@ class _DocumentShellState extends State<_DocumentShell> {
     super.dispose();
   }
 }
+
+const _digits = [
+  LogicalKeyboardKey.digit0,
+  LogicalKeyboardKey.digit1,
+  LogicalKeyboardKey.digit2,
+  LogicalKeyboardKey.digit3,
+  LogicalKeyboardKey.digit4,
+  LogicalKeyboardKey.digit5,
+  LogicalKeyboardKey.digit6,
+  LogicalKeyboardKey.digit7,
+  LogicalKeyboardKey.digit8,
+  LogicalKeyboardKey.digit9,
+];
 
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);

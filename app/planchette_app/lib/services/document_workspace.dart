@@ -76,7 +76,8 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   DocumentTab _makeTab({String? path, String? initialText}) {
     final id = _nextId++;
-    final tab = DocumentTab._(id, 'Untitled $id')..path = path;
+    final tab = DocumentTab._(id, path == null ? _freeUntitledName() : '')
+      ..path = path;
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,
@@ -110,6 +111,19 @@ final class DocumentWorkspace extends ChangeNotifier {
   }
 
   final Map<DocumentTab, ({String path, String? digest})> _saveTargets = {};
+
+  /// "Untitled", then "Untitled 2" and so on, reusing the lowest number no
+  /// unsaved document currently shows.
+  String _freeUntitledName() {
+    final used = {
+      for (final tab in _documents)
+        if (tab.path == null) tab.untitledName,
+    };
+    for (var number = 1; ; number++) {
+      final name = number == 1 ? 'Untitled' : 'Untitled $number';
+      if (!used.contains(name)) return name;
+    }
+  }
 
   void select(DocumentTab tab) {
     if (interactionLocked || !_documents.contains(tab)) return;
