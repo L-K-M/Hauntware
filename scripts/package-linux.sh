@@ -219,7 +219,7 @@ fi
 floor_of() {  # $1 = objdump tag prefix (e.g. GLIBC_), max across all ELFs
   # sort -Vu is version-aware (2.14 > 2.9); trust it instead of re-comparing.
   # `|| true`: grep exits 1 when a file references none of the tags, and
-  # pipefail would turn that into a failure of the whole function. A failed
+  # `set -e` would turn that into an abort mid-loop. A failed
   # or empty objdump run instead means a bad ELF — die rather than let the
   # floor silently drop. The loop must accumulate, not pipe: inside a
   # pipeline it runs in a subshell whose exit cannot abort the script.
