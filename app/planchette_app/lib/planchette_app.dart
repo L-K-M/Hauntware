@@ -477,13 +477,27 @@ class _DocumentShellState extends State<_DocumentShell> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          active?.path ?? 'A place for your words.',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: scheme.onSurfaceVariant,
-                            fontSize: 12,
+                        // A full path is more useful than a bare name here —
+                        // which directory is open is worth knowing — but it
+                        // truncates on narrow windows, so the tooltip carries
+                        // the whole thing.
+                        child: Tooltip(
+                          message: active?.path ?? '',
+                          child: Text(
+                            // `path` and `name` are null or non-empty by
+                            // construction: `name` is 'Untitled <id>' or
+                            // basename of a normalised path, and a directory
+                            // can never become a document path.
+                            active?.path ??
+                                active?.name ??
+                                'A place for your words.',
+                            key: const ValueKey('active-document-label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: scheme.onSurfaceVariant,
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ),
