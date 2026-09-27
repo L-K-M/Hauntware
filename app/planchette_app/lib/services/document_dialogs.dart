@@ -53,6 +53,46 @@ final class AppDocumentDialogs implements DocumentDialogs {
   }
 
   @override
+  Future<BulkCloseChoice> chooseBulkClose(int count) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return BulkCloseChoice.cancel;
+    return await showDialog<BulkCloseChoice>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              count == 1
+                  ? 'Save changes to 1 document?'
+                  : 'Save changes to $count documents?',
+            ),
+            content: Text(
+              count == 1
+                  ? 'Your changes will be lost if you close without saving.'
+                  : 'Your changes will be lost if you close without saving '
+                        'any of them.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context, BulkCloseChoice.discardAll),
+                child: const Text('Don’t Save'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, BulkCloseChoice.cancel),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                autofocus: true,
+                onPressed: () =>
+                    Navigator.pop(context, BulkCloseChoice.saveAll),
+                child: const Text('Save All'),
+              ),
+            ],
+          ),
+        ) ??
+        BulkCloseChoice.cancel;
+  }
+
+  @override
   Future<CloseChoice> chooseClose(String name) async {
     final context = navigatorKey.currentContext;
     if (context == null) return CloseChoice.cancel;

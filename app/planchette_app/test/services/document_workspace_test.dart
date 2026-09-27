@@ -84,6 +84,8 @@ class FakeDialogs implements DocumentDialogs {
   bool replace = true;
   final choices = <CloseChoice>[];
   final asked = <String>[];
+  final bulkCounts = <int>[];
+  BulkCloseChoice bulkChoice = BulkCloseChoice.saveAll;
   Completer<CloseChoice>? choiceGate;
   Future<void> Function()? beforeReplace;
 
@@ -95,6 +97,12 @@ class FakeDialogs implements DocumentDialogs {
   Future<bool> confirmReplace(String path) async {
     await beforeReplace?.call();
     return replace;
+  }
+
+  @override
+  Future<BulkCloseChoice> chooseBulkClose(int count) async {
+    bulkCounts.add(count);
+    return bulkChoice;
   }
 
   @override
@@ -116,6 +124,14 @@ void main() {
     workspace = DocumentWorkspace(store: store, dialogs: dialogs);
   });
   tearDown(() => workspace.dispose());
+
+  /// Opens the seeded one.txt fixture and returns its tab, saving each test
+  /// from repeating the same three lines.
+  Future<DocumentTab> openOne() async {
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    await workspace.open(testPath('one.txt'));
+    return workspace.active!;
+  }
 
   test('new documents retain independent text and find state', () {
     final first = workspace.newDocument()!;
@@ -457,17 +473,75 @@ void main() {
     () async {
       final first = workspace.newDocument()!..editor.text.text = 'first';
       final second = workspace.newDocument()!..editor.text.text = 'second';
-      dialogs.choices.addAll([CloseChoice.discard, CloseChoice.cancel]);
+      dialogs.bulkChoice = BulkCloseChoice.cancel;
       final one = workspace.confirmQuit();
       final two = workspace.confirmQuit();
       expect(identical(one, two), isTrue);
       expect(await one, isFalse);
       expect(await two, isFalse);
-      expect(dialogs.asked, [first.name, second.name]);
+      expect(dialogs.bulkCounts, [2]);
       expect(workspace.documents, [first, second]);
       expect(workspace.interactionLocked, isFalse);
     },
   );
+
+  test(
+    'quit with several dirty documents saves all of them from one question',
+    () async {
+      store.files[testPath('one.txt')] = document('one.txt', 'one');
+      store.files[testPath('two.txt')] = document('two.txt', 'two');
+      final one = await openOne();
+      await workspace.open(testPath('two.txt'));
+      final two = workspace.active!;
+      one.editor.text.text = 'edited one';
+      two.editor.text.text = 'edited two';
+      dialogs.bulkChoice = BulkCloseChoice.saveAll;
+      expect(await workspace.confirmQuit(), isTrue);
+      expect(dialogs.asked, isEmpty);
+      expect(store.files[testPath('one.txt')]!.text, 'edited one');
+      expect(store.files[testPath('two.txt')]!.text, 'edited two');
+      expect(workspace.interactionLocked, isTrue);
+    },
+  );
+
+  test(
+    'quit with several dirty documents can discard all of them at once',
+    () async {
+      store.files[testPath('one.txt')] = document('one.txt', 'one');
+      store.files[testPath('two.txt')] = document('two.txt', 'two');
+      final one = await openOne();
+      await workspace.open(testPath('two.txt'));
+      one.editor.text.text = 'dropped';
+      workspace.active!.editor.text.text = 'dropped too';
+      dialogs.bulkChoice = BulkCloseChoice.discardAll;
+      expect(await workspace.confirmQuit(), isTrue);
+    expect(store.writes, isEmpty);
+    expect(store.files[testPath('one.txt')]!.text, 'disk');
+    },
+  );
+
+  test('a failed bulk save aborts the quit and keeps every document', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'one');
+    store.files[testPath('two.txt')] = document('two.txt', 'two');
+    final one = await openOne();
+    await workspace.open(testPath('two.txt'));
+    one.editor.text.text = 'edited one';
+    workspace.active!.editor.text.text = 'edited two';
+    store.writeError = const FileSystemException('Disk full');
+    dialogs.bulkChoice = BulkCloseChoice.saveAll;
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.documents, hasLength(2));
+    expect(one.editor.isDirty, isTrue);
+    expect(workspace.interactionLocked, isFalse);
+  });
+
+  test('a single dirty document still gets its own close question', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'only one';
+    dialogs.choices.add(CloseChoice.discard);
+    expect(await workspace.confirmQuit(), isTrue);
+    expect(dialogs.bulkCounts, isEmpty);
+    expect(dialogs.asked, [tab.name]);
+  });
 
   test('quit Save persists while editing stays locked', () async {
     final tab = workspace.newDocument()!
