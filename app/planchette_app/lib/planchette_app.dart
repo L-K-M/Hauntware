@@ -32,15 +32,80 @@ class PlanchetteApp extends StatelessWidget {
     home: _DocumentShell(workspace: workspace, onQuit: onQuit),
   );
 
-  ThemeData _theme(Brightness brightness) => ThemeData(
-    brightness: brightness,
-    colorScheme: ColorScheme.fromSeed(
+  ThemeData _theme(Brightness brightness) {
+    final scheme = ColorScheme.fromSeed(
       seedColor: const Color(0xff245b5c),
       brightness: brightness,
-    ),
-    useMaterial3: true,
-    visualDensity: VisualDensity.compact,
-  );
+    );
+    // Planchette means a little slate, so the seed is pushed towards the
+    // neutral blue-greys an editor wants behind text and the accent is
+    // reserved for the things that need attention: the caret line, the dirty
+    // marker, the active search match.
+    final surface = scheme.surface;
+    return ThemeData(
+      colorScheme: scheme,
+      useMaterial3: true,
+      visualDensity: VisualDensity.compact,
+      scaffoldBackgroundColor: surface,
+      // Stock M3 dialogs float in a lot of roundness and shadow. A text
+      // editor wants a compact, flat confirmation.
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        titleTextStyle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurface,
+        ),
+        contentTextStyle: TextStyle(fontSize: 13, color: scheme.onSurface),
+      ),
+      // A desktop tooltip should arrive at once and stay small.
+      tooltipTheme: TooltipThemeData(
+        waitDuration: const Duration(milliseconds: 400),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        textStyle: TextStyle(fontSize: 12, color: scheme.onInverseSurface),
+        decoration: BoxDecoration(
+          color: scheme.inverseSurface,
+          borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+      // A persistent thin scrollbar. A programmer scrolls a lot and the
+      // default thick one arrives and disappears.
+      scrollbarTheme: ScrollbarThemeData(
+        thumbVisibility: const WidgetStatePropertyAll(true),
+        trackVisibility: const WidgetStatePropertyAll(false),
+        thickness: const WidgetStatePropertyAll(7),
+        radius: const Radius.circular(4),
+        thumbColor: WidgetStatePropertyAll(
+          scheme.onSurfaceVariant.withValues(alpha: 0.45),
+        ),
+        interactive: true,
+      ),
+      // The stock menu bar has no baseline rule and floats; a menu bar is a
+      // strip with a bottom edge.
+      menuBarTheme: MenuBarThemeData(
+        style: MenuStyle(
+          elevation: const WidgetStatePropertyAll(0),
+          backgroundColor: WidgetStatePropertyAll(scheme.surfaceContainerHigh),
+          shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          side: WidgetStatePropertyAll(
+            BorderSide(color: scheme.outlineVariant),
+          ),
+        ),
+      ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          side: WidgetStatePropertyAll(
+            BorderSide(color: scheme.outlineVariant),
+          ),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          ),
+          maximumSize: const WidgetStatePropertyAll(Size(320, 480)),
+        ),
+      ),
+    );
+  }
 }
 
 class _DocumentShell extends StatefulWidget {
@@ -435,136 +500,52 @@ class _DocumentShellState extends State<_DocumentShell> {
         autofocus: true,
         child: Scaffold(
           body: Column(
+            // A Column centres its children across the cross axis by default,
+            // which put the menu bar and the tab strip in the middle of the
+            // window: both shrink-wrap their content, so both were measured
+            // floating in the centre instead of sitting against the left edge
+            // where every other desktop application puts them.
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (!mac) _menuBar(menus),
-              Material(
-                color: scheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_note_rounded, color: scheme.primary),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Planchette',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 20),
-                      IconButton(
-                        tooltip: 'New',
-                        onPressed: workspace.interactionLocked ? null : _new,
-                        icon: const Icon(Icons.add),
-                      ),
-                      IconButton(
-                        tooltip: 'Open…',
-                        onPressed: workspace.interactionLocked
-                            ? null
-                            : () => unawaited(workspace.openDialog()),
-                        icon: const Icon(Icons.folder_open_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Save',
-                        onPressed:
-                            active == null ||
-                                active.busy ||
-                                workspace.interactionLocked
-                            ? null
-                            : _save,
-                        icon: const Icon(Icons.save_outlined),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          active?.path ?? 'A place for your words.',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: scheme.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      if (active?.busy == true)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
+              // New, Open and Save all live in the File menu with their
+              // shortcuts, the path is in the tab and the window title, and the
+              // status bar already says when a save is running. A toolbar
+              // repeating all of it cost 52 rows of the window to say nothing
+              // that was not already one keystroke away.
               if (tabs.isNotEmpty)
                 Material(
-                  color: scheme.surfaceContainerLow,
+                  color: scheme.surfaceContainerHigh,
                   child: SizedBox(
-                    height: 40,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 8),
-                          for (final tab in tabs)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Tooltip(
-                                message: tab.path ?? tab.name,
-                                child: Semantics(
+                    height: _tabStripHeight,
+                    // The tabs scroll rather than shrink. The behaviour below
+                    // keeps a scrollbar or an overscroll glow out of the row
+                    // that holds the close buttons.
+                    child: ScrollConfiguration(
+                      behavior: const _TabStripScroll(),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const ClampingScrollPhysics(),
+                        child: Row(
+                          children: [
+                            const SizedBox(width: 8),
+                            for (final tab in tabs)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: _Tab(
+                                  tab: tab,
                                   selected: tab == active,
-                                  child: Material(
-                                    color: tab == active
-                                        ? scheme.surface
-                                        : Colors.transparent,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(8),
-                                    ),
-                                    child: InkWell(
-                                      onTap: workspace.interactionLocked
-                                          ? null
-                                          : () => _select(tab),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 14,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Text(
-                                              '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: tab == active
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            IconButton(
-                                              key: ValueKey('close-${tab.id}'),
-                                              tooltip: 'Close ${tab.name}',
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              iconSize: 16,
-                                              onPressed:
-                                                  workspace.interactionLocked ||
-                                                      tab.busy
-                                                  ? null
-                                                  : () => unawaited(
-                                                      workspace.closeTab(tab),
-                                                    ),
-                                              icon: const Icon(Icons.close),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                                  closeEnabled:
+                                      !workspace.interactionLocked && !tab.busy,
+                                  scheme: scheme,
+                                  onSelect: () => _select(tab),
+                                  onClose: () =>
+                                      unawaited(workspace.closeTab(tab)),
                                 ),
                               ),
-                            ),
-                        ],
+                            const SizedBox(width: 8),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -593,38 +574,10 @@ class _DocumentShellState extends State<_DocumentShell> {
                 ),
               Expanded(
                 child: tabs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.description_outlined,
-                              size: 48,
-                              color: scheme.primary,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Start with a blank page',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                FilledButton(
-                                  onPressed: _new,
-                                  child: const Text('New document'),
-                                ),
-                                const SizedBox(width: 12),
-                                OutlinedButton(
-                                  onPressed: () =>
-                                      unawaited(workspace.openDialog()),
-                                  child: const Text('Open…'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                    ? _EmptyState(
+                        locked: workspace.interactionLocked,
+                        onNew: _new,
+                        onOpen: () => unawaited(workspace.openDialog()),
                       )
                     : IndexedStack(
                         index: tabs.indexOf(active!),
@@ -654,6 +607,192 @@ class _DocumentShellState extends State<_DocumentShell> {
     FocusManager.instance.removeListener(_rememberTextFocus);
     super.dispose();
   }
+}
+
+/// What the window shows before anything is open. It is the launch state, so it
+/// carries the two things worth doing and the shortcut for each rather than a
+/// picture on its own.
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.locked,
+    required this.onNew,
+    required this.onOpen,
+  });
+
+  final bool locked;
+  final VoidCallback onNew;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mac = defaultTargetPlatform == TargetPlatform.macOS;
+    String shortcut(LogicalKeyboardKey key) =>
+        '${mac ? '⌘' : 'Ctrl+'}${key.keyLabel}';
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.description_outlined,
+            size: 44,
+            color: theme.colorScheme.primary.withValues(alpha: 0.7),
+          ),
+          const SizedBox(height: 18),
+          Text('Start with a blank page', style: theme.textTheme.titleLarge),
+          const SizedBox(height: 6),
+          Text(
+            'Planchette edits local UTF-8 text',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 22),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FilledButton(
+                onPressed: locked ? null : onNew,
+                child: const Text('New document'),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton(
+                onPressed: locked ? null : onOpen,
+                child: const Text('Open…'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          DefaultTextStyle(
+            style: (theme.textTheme.labelSmall ?? const TextStyle(fontSize: 11))
+                .copyWith(color: theme.colorScheme.onSurfaceVariant),
+            child: Wrap(
+              spacing: 18,
+              children: [
+                Text('${shortcut(LogicalKeyboardKey.keyN)}  new'),
+                Text('${shortcut(LogicalKeyboardKey.keyO)}  open'),
+                Text('${shortcut(LogicalKeyboardKey.keyF)}  find'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Rows a tab occupies. The close button is an icon rather than a glyph, and
+/// the row is fixed so a strip full of long names still lines up.
+const double _tabStripHeight = 36.0;
+
+/// One document tab.
+///
+/// The dirty marker is an icon rather than a bullet character so it does not
+/// depend on the UI font carrying U+25CF, and the whole tab carries no
+/// tooltip: a tooltip on the tab and another on its close button meant two
+/// appeared at once when hovering the button.
+class _Tab extends StatelessWidget {
+  const _Tab({
+    required this.tab,
+    required this.selected,
+    required this.closeEnabled,
+    required this.scheme,
+    required this.onSelect,
+    required this.onClose,
+  });
+
+  final DocumentTab tab;
+  final bool selected;
+  final bool closeEnabled;
+  final ColorScheme scheme;
+  final VoidCallback onSelect;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = const BorderRadius.vertical(top: Radius.circular(8));
+    return Tooltip(
+      message: tab.path ?? tab.name,
+      child: Semantics(
+        selected: selected,
+        button: true,
+        child: Material(
+          color: selected ? scheme.surface : Colors.transparent,
+          borderRadius: radius,
+          // Without this the ink splash of a press paints a square over the
+          // rounded top corners.
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onSelect,
+            borderRadius: radius,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 12, right: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (tab.editor.isDirty)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(Icons.circle, size: 7, color: scheme.primary),
+                    ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      tab.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  IconButton(
+                    key: ValueKey('close-${tab.id}'),
+                    tooltip: 'Close ${tab.name}',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    iconSize: 14,
+                    onPressed: closeEnabled ? onClose : null,
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A horizontal tab strip must not grow a scrollbar or flash an overscroll
+/// glow: either eats into the row holding the close buttons, and once there
+/// are more tabs than fit, the last one would be clipped by the bar. The
+/// wheel and a drag already scroll it.
+class _TabStripScroll extends ScrollBehavior {
+  const _TabStripScroll();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) => child;
 }
 
 class _ShellMenu {

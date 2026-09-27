@@ -34,6 +34,10 @@ void main() {
       PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
     );
     await tester.pumpAndSettle();
+    // Unmount before the workspace is disposed, which the outer tearDown does.
+    // Disposing a FocusNode that is still attached to the focus tree schedules
+    // a focus change that then lands after the binding is gone.
+    addTearDown(() => tester.pumpWidget(const SizedBox.shrink()));
   }
 
   Future<void> chord(
@@ -225,4 +229,108 @@ void main() {
     },
     variant: const TargetPlatformVariant({TargetPlatform.macOS}),
   );
+  testWidgets('the menu bar is flush left, not centred', (tester) async {
+    workspace.newDocument();
+    await mount(tester);
+
+    final bar = tester.getRect(find.byType(MenuBar));
+    final window = tester.getRect(find.byType(PlanchetteApp));
+
+    // A Column centres its children across the cross axis, which used to put
+    // the menu bar in the middle of the window because it shrink-wraps.
+    expect(bar.left, moreOrLessEquals(window.left, epsilon: 0.01));
+    expect(bar.width, moreOrLessEquals(window.width, epsilon: 0.01));
+  });
+
+  testWidgets('the first tab starts at the left edge', (tester) async {
+    for (var i = 0; i < 3; i++) {
+      workspace.newDocument();
+    }
+    await mount(tester);
+
+    final strip = tester.getRect(find.byType(MenuBar));
+    final tab = tester.getRect(find.text('Untitled 1'));
+    final window = tester.getRect(find.byType(PlanchetteApp));
+
+    expect(strip.left, moreOrLessEquals(window.left, epsilon: 0.01));
+    // The 8px strip inset plus the tab's own 12px, not 400px of centring.
+    expect(tab.left, lessThan(32));
+  });
+
+  testWidgets('no toolbar duplicates the File menu', (tester) async {
+    workspace.newDocument();
+    await mount(tester);
+
+    expect(find.byIcon(Icons.folder_open_outlined), findsNothing);
+    expect(find.byIcon(Icons.save_outlined), findsNothing);
+    expect(find.byIcon(Icons.add), findsNothing);
+    expect(find.text('Planchette'), findsNothing);
+  });
+
+  testWidgets('an untitled document is not called a place for words', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    await mount(tester);
+
+    expect(find.text('A place for your words.'), findsNothing);
+  });
+
+  testWidgets('the editor offers a scrollbar to drag', (tester) async {
+    final tab = workspace.newDocument()!;
+    await mount(tester);
+    tab.editor.text.text = List.generate(4000, (i) => 'line $i').join('\n');
+    await tester.pumpAndSettle();
+
+    // The field's own scrollable never gets a scrollbar, so the editor has to
+    // supply one and drive it from the document's own controller.
+    final scrollbars = tester
+        .widgetList<Scrollbar>(find.byType(Scrollbar))
+        .toList();
+    expect(
+      scrollbars.where((bar) => identical(bar.controller, tab.editor.scroll)),
+      isNotEmpty,
+    );
+    expect(tab.editor.scroll.position.maxScrollExtent, greaterThan(0));
+  });
+
+  testWidgets('the status bar starts where the text starts', (tester) async {
+    final tab = workspace.newDocument()!;
+    await mount(tester);
+    await tester.enterText(editorField(tab), 'one\ntwo');
+    await tester.pumpAndSettle();
+
+    final gutter = tester.getRect(
+      find.byKey(const ValueKey('editor-line-gutter')),
+    );
+    final position = tester.getRect(find.textContaining('Ln 2, Col 4'));
+    final document = tester.getRect(
+      find.byKey(const ValueKey('planchette.document')),
+    );
+
+    // The document's text starts after the gutter and the 14px content pad.
+    final textEdge = document.left + 14;
+    expect(gutter.left, lessThan(textEdge));
+    expect(position.left, moreOrLessEquals(textEdge, epsilon: 1.0));
+
+    // Let the pending focus change land while the tree is still mounted, so
+    // the binding does not see it after disposal.
+    await tester.pump();
+  });
+
+  testWidgets('an empty workspace offers New and Open, enabled', (
+    tester,
+  ) async {
+    await mount(tester);
+
+    expect(find.text('Start with a blank page'), findsOneWidget);
+    final newButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'New document'),
+    );
+    final openButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Open…'),
+    );
+    expect(newButton.onPressed, isNotNull);
+    expect(openButton.onPressed, isNotNull);
+  });
 }

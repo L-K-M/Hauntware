@@ -31,7 +31,7 @@ Future<void> main(List<String> arguments) async {
   workspace.addListener(() => desktop.setTitle(workspace.windowTitle));
   final intake = OpenDocuments(open: workspace.open);
   await intake.start(arguments, macOS: Platform.isMacOS);
-  if (workspace.documents.isEmpty && workspace.error == null) {
-    workspace.newDocument();
-  }
+  // Launching into the shell's empty state rather than a blank buffer. That
+  // screen is the only place New and Open are offered, and an untitled
+  // document with nothing in it answers neither.
 }

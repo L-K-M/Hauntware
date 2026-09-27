@@ -23,6 +23,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.editingLocked = false,
     this.showLineNumbers = true,
     this.showStatus = true,
+    this.showScrollbar = true,
     this.banner,
     this.statusBuilder,
   });
@@ -35,6 +36,11 @@ class PlanchetteEditor extends StatefulWidget {
   final bool editingLocked;
   final bool showLineNumbers;
   final bool showStatus;
+
+  /// Whether the editor's scrollbar is always on. A document long enough to
+  /// lose the caret in it needs one; a host with its own scroll affordance
+  /// does not.
+  final bool showScrollbar;
   final Widget? banner;
   final Widget Function(BuildContext context, EditorController controller)?
   statusBuilder;
@@ -202,6 +208,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
 
   @override
   Widget build(BuildContext context) {
+    // The gutter's width depends only on the digit count and the font, not on
+    // how much room the window has, so it is measured once per build and
+    // shared with the status bar rather than re-measured inside a
+    // LayoutBuilder that the status bar builds before.
+    final scaler = MediaQuery.textScalerOf(context);
+    final gutterWidth = widget.showLineNumbers ? _measureGutter(scaler) : 0.0;
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
@@ -236,13 +248,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         children: [
           if (widget.banner != null) widget.banner!,
           if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
-          Expanded(child: _body()),
+          Expanded(child: _body(gutterWidth, scaler)),
           if (widget.showStatus && !c.isLoading && c.error == null) ...[
             const Divider(height: 1),
             SafeArea(
               top: false,
               child:
-                  widget.statusBuilder?.call(context, c) ?? _statusBar(context),
+                  widget.statusBuilder?.call(context, c) ??
+                  _statusBar(context, gutterWidth),
             ),
           ],
         ],
@@ -262,129 +275,166 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             c.matches.length,
             capped: c.matches.length >= searchMatchLimit,
           );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: c.search,
-                  focusNode: c.searchFocus,
-                  autofocus: true,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  style: theme.textTheme.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: strings.findHint,
-                    isDense: true,
-                    border: InputBorder.none,
-                  ),
-                  onSubmitted: (_) {
-                    if (HardwareKeyboard.instance.isShiftPressed) {
-                      c.previousMatch();
-                    } else {
-                      c.nextMatch();
-                    }
-                    c.searchFocus.requestFocus();
-                  },
-                ),
-              ),
-              ExcludeFocus(
-                child: Row(
-                  children: [
-                    if (counter.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(counter, style: theme.textTheme.labelSmall),
-                      ),
-                    IconButton(
-                      tooltip: strings.matchCase,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.toggleCaseSensitive,
-                      icon: Text(
-                        'Aa',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: c.caseSensitive
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: strings.previousMatch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.matches.isEmpty ? null : c.previousMatch,
-                      icon: const Icon(Icons.keyboard_arrow_up),
-                    ),
-                    IconButton(
-                      tooltip: strings.nextMatch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.matches.isEmpty ? null : c.nextMatch,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                    ),
-                    IconButton(
-                      tooltip: strings.showReplace,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.toggleReplace,
-                      icon: const Icon(Icons.find_replace),
-                    ),
-                    IconButton(
-                      tooltip: strings.closeSearch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.closeSearch,
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (c.replaceOpen)
+    return ColoredBox(
+      // The bar needs its own surface. Without one the fields sit straight on
+      // whatever is behind them, and in a dark theme "Find in file" was bare
+      // text with a caret and nothing that said it was an input.
+      color: theme.colorScheme.surfaceContainerHigh,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Column(
+          children: [
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: c.replacement,
-                    focusNode: c.replacementFocus,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: InputDecoration(
-                      hintText: strings.replaceHint,
-                      isDense: true,
-                      border: InputBorder.none,
-                    ),
-                    onSubmitted: (_) => c.replaceCurrent(),
+                  child: _searchField(
+                    context,
+                    controller: c.search,
+                    focusNode: c.searchFocus,
+                    hint: strings.findHint,
+                    autofocus: true,
+                    onSubmitted: (_) {
+                      if (HardwareKeyboard.instance.isShiftPressed) {
+                        c.previousMatch();
+                      } else {
+                        c.nextMatch();
+                      }
+                      c.searchFocus.requestFocus();
+                    },
                   ),
                 ),
                 ExcludeFocus(
                   child: Row(
                     children: [
-                      TextButton(
-                        onPressed: _locked || c.isBusy || c.matches.isEmpty
-                            ? null
-                            : c.replaceCurrent,
-                        child: Text(strings.replace),
+                      if (counter.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            counter,
+                            style: theme.textTheme.labelSmall,
+                          ),
+                        ),
+                      IconButton(
+                        tooltip: strings.matchCase,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: c.toggleCaseSensitive,
+                        icon: Text(
+                          'Aa',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: c.caseSensitive
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
-                      TextButton(
-                        onPressed: _locked || c.isBusy || c.matches.isEmpty
-                            ? null
-                            : c.replaceAll,
-                        child: Text(strings.replaceAll),
+                      IconButton(
+                        tooltip: strings.previousMatch,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: c.matches.isEmpty ? null : c.previousMatch,
+                        icon: const Icon(Icons.keyboard_arrow_up),
+                      ),
+                      IconButton(
+                        tooltip: strings.nextMatch,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: c.matches.isEmpty ? null : c.nextMatch,
+                        icon: const Icon(Icons.keyboard_arrow_down),
+                      ),
+                      IconButton(
+                        tooltip: strings.showReplace,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: c.toggleReplace,
+                        icon: const Icon(Icons.find_replace),
+                      ),
+                      IconButton(
+                        tooltip: strings.closeSearch,
+                        visualDensity: VisualDensity.compact,
+                        onPressed: c.closeSearch,
+                        icon: const Icon(Icons.close),
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-        ],
+            if (c.replaceOpen)
+              Row(
+                children: [
+                  Expanded(
+                    child: _searchField(
+                      context,
+                      controller: c.replacement,
+                      focusNode: c.replacementFocus,
+                      hint: strings.replaceHint,
+                      autofocus: false,
+                      onSubmitted: (_) => c.replaceCurrent(),
+                    ),
+                  ),
+                  ExcludeFocus(
+                    child: Row(
+                      children: [
+                        TextButton(
+                          onPressed: _locked || c.isBusy || c.matches.isEmpty
+                              ? null
+                              : c.replaceCurrent,
+                          child: Text(strings.replace),
+                        ),
+                        TextButton(
+                          onPressed: _locked || c.isBusy || c.matches.isEmpty
+                              ? null
+                              : c.replaceAll,
+                          child: Text(strings.replaceAll),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _statusBar(BuildContext context) {
+  /// A find or replace field. It keeps an outline so it reads as an input
+  /// rather than as a label, and it uses the editor's monospace face so a
+  /// pattern is shaped the way it will match.
+  Widget _searchField(
+    BuildContext context, {
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String hint,
+    required bool autofocus,
+    required ValueChanged<String> onSubmitted,
+  }) {
+    final theme = Theme.of(context);
+    return TextField(
+      controller: controller,
+      focusNode: focusNode,
+      autofocus: autofocus,
+      autocorrect: false,
+      enableSuggestions: false,
+      style: _style.copyWith(fontSize: 13),
+      decoration: InputDecoration(
+        hintText: hint,
+        isDense: true,
+        filled: true,
+        fillColor: theme.colorScheme.surface,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: theme.dividerColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(6),
+          borderSide: BorderSide(color: theme.dividerColor),
+        ),
+      ),
+      onSubmitted: onSubmitted,
+    );
+  }
+
+  Widget _statusBar(BuildContext context, double gutterWidth) {
     final (line, column) = c.caretLineColumn;
     final document = c.document;
     final status = [
@@ -397,7 +447,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       if (!c.highlightingEnabled) widget.strings.largeFile,
     ];
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      // The caret's left edge is where the text starts, so the position
+      // readout starts there too rather than under the line numbers.
+      padding: EdgeInsets.fromLTRB(gutterWidth + _padding, 6, 12, 6),
       child: Row(
         children: [
           Expanded(
@@ -426,7 +478,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     );
   }
 
-  Widget _body() {
+  Widget _body(double gutterWidth, TextScaler scaler) {
     if (c.isLoading) return const Center(child: CircularProgressIndicator());
     if (c.error != null) {
       return Center(
@@ -445,10 +497,6 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final scaler = MediaQuery.textScalerOf(context);
-        final gutterWidth = widget.showLineNumbers
-            ? _measureGutter(scaler)
-            : 0.0;
         _textWidth = constraints.maxWidth - gutterWidth - 2 * _padding;
         if (widget.showLineNumbers) _ensureGutterLayout(_textWidth!, scaler);
         final theme = Theme.of(context);
@@ -481,38 +529,45 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   ),
                 ),
               Expanded(
-                child: Actions(
-                  actions: {
-                    if (_locked) ...{
-                      UndoTextIntent: CallbackAction<UndoTextIntent>(
-                        onInvoke: (_) => null,
-                      ),
-                      RedoTextIntent: CallbackAction<RedoTextIntent>(
-                        onInvoke: (_) => null,
-                      ),
+                // The field's own scrollable never gets a Scrollbar of its own,
+                // so without this a 10,000 line document gives no indication
+                // of where the caret is in it and nothing to drag.
+                child: Scrollbar(
+                  controller: c.scroll,
+                  thumbVisibility: widget.showScrollbar,
+                  child: Actions(
+                    actions: {
+                      if (_locked) ...{
+                        UndoTextIntent: CallbackAction<UndoTextIntent>(
+                          onInvoke: (_) => null,
+                        ),
+                        RedoTextIntent: CallbackAction<RedoTextIntent>(
+                          onInvoke: (_) => null,
+                        ),
+                      },
                     },
-                  },
-                  child: TextField(
-                    key: const ValueKey('planchette.document'),
-                    controller: c.text,
-                    undoController: c.undoController,
-                    readOnly: _locked,
-                    focusNode: c.editorFocus,
-                    scrollController: c.scroll,
-                    autofocus: widget.isActive,
-                    expands: true,
-                    maxLines: null,
-                    minLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textAlignVertical: TextAlignVertical.top,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    smartDashesType: SmartDashesType.disabled,
-                    smartQuotesType: SmartQuotesType.disabled,
-                    style: _style,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.all(_padding),
+                    child: TextField(
+                      key: const ValueKey('planchette.document'),
+                      controller: c.text,
+                      undoController: c.undoController,
+                      readOnly: _locked,
+                      focusNode: c.editorFocus,
+                      scrollController: c.scroll,
+                      autofocus: widget.isActive,
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textAlignVertical: TextAlignVertical.top,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      style: _style,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(_padding),
+                      ),
                     ),
                   ),
                 ),

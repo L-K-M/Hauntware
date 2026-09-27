@@ -7,7 +7,8 @@ ownership boundaries and compatibility policies are documented in
 ## Implemented
 
 - One tabbed document window with New, Open, Save, Save As, native desktop
-  menus and guarded document/application close.
+  menus and guarded document/application close. The launch state is the empty
+  state, which offers New and Open with their shortcuts.
 - Syntax highlighting including `.env`, literal find/replace, line numbers,
   selection, undo/redo and document status shared with Poltergeist and Séance.
 - Bounded UTF-8 loading, BOM/EOL metadata, digest conflict checks, protected
