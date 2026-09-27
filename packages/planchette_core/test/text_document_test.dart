@@ -31,6 +31,24 @@ void main() {
     expect(await directory.list().length, 1);
   });
 
+  test(
+    'the dominant line ending wins; ties and lone CRs count as LF',
+    () async {
+      Future<LineEnding> endingOf(String text) async {
+        await file.writeAsString(text);
+        return (await loadTextDocument(file)).lineEnding;
+      }
+
+      expect(await endingOf('a\r\nb\r\nc\n'), LineEnding.crlf);
+      expect(await endingOf('a\r\nb\nc\n'), LineEnding.lf);
+      expect(await endingOf('a\r\nb\n'), LineEnding.lf, reason: 'a tie');
+      expect(await endingOf('\r\n\r\n'), LineEnding.crlf);
+      expect(await endingOf('\n\r\n'), LineEnding.lf, reason: 'a tie');
+      expect(await endingOf('a\rb\r\n'), LineEnding.crlf);
+      expect(await endingOf('single line'), LineEnding.lf);
+    },
+  );
+
   test('preserves a UTF-8 BOM and CRLF line endings byte-for-byte', () async {
     await file.writeAsBytes([0xef, 0xbb, 0xbf, ...'one\r\ntwo\r\n'.codeUnits]);
     final document = await loadTextDocument(file);
