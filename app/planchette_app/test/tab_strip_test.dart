@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
+import 'package:planchette_app/widgets/tab_strip.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs;
@@ -34,16 +35,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  test('untitled documents reuse the lowest free number', () {
+  test('untitled documents reuse the lowest free number', () async {
     final first = workspace.newDocument()!;
     final second = workspace.newDocument()!;
     expect([first.name, second.name], ['Untitled', 'Untitled 2']);
     workspace.select(first);
     // Closing a clean tab needs no dialog.
-    return workspace.closeTab(first).then((_) {
-      expect(workspace.newDocument()!.name, 'Untitled');
-      expect(workspace.newDocument()!.name, 'Untitled 3');
-    });
+    await workspace.closeTab(first);
+    expect(workspace.newDocument()!.name, 'Untitled');
+    expect(workspace.newDocument()!.name, 'Untitled 3');
   });
 
   testWidgets(
@@ -131,6 +131,90 @@ void main() {
     await chord(tester, LogicalKeyboardKey.digit1);
     final first = tester.getRect(find.text('Untitled'));
     expect(first.left, greaterThanOrEqualTo(0));
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('tabs are buttons a screen reader can press and close', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final first = workspace.newDocument()!;
+    workspace.newDocument();
+    await mount(tester);
+
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Untitled')),
+      isSemantics(isButton: true, hasTapAction: true, isSelected: false),
+    );
+    tester.semantics.tap(find.semantics.byLabel('Untitled'));
+    await tester.pumpAndSettle();
+    expect(workspace.active, first);
+
+    // An icon button is announced through its tooltip.
+    tester.semantics.tap(
+      find.semantics.byPredicate((node) => node.tooltip == 'Close Untitled'),
+    );
+    await tester.pumpAndSettle();
+    expect(workspace.documents.contains(first), isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    semantics.dispose();
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('a focused tab opens with Enter and shows a focus ring', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    final second = workspace.newDocument()!;
+    workspace.select(workspace.documents.first);
+    await mount(tester);
+    FocusManager.instance.highlightStrategy =
+        FocusHighlightStrategy.alwaysTraditional;
+    addTearDown(
+      () => FocusManager.instance.highlightStrategy =
+          FocusHighlightStrategy.automatic,
+    );
+
+    Focus.of(tester.element(find.text('Untitled 2'))).requestFocus();
+    await tester.pumpAndSettle();
+    final tab = tester.widget<AnimatedContainer>(
+      find.ancestor(
+        of: find.text('Untitled 2'),
+        matching: find.byType(AnimatedContainer),
+      ),
+    );
+    expect(tab.foregroundDecoration, isNotNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(workspace.active, second);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('wheel and swipe each scroll the strip once', (tester) async {
+    for (var i = 0; i < 30; i++) {
+      workspace.newDocument();
+    }
+    workspace.select(workspace.documents.first);
+    await mount(tester, width: 700);
+    final position = tester
+        .state<ScrollableState>(
+          find.descendant(
+            of: find.byType(TabStrip),
+            matching: find.byType(Scrollable),
+          ),
+        )
+        .position;
+    expect(position.pixels, 0);
+
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(
+      pointer.hover(tester.getCenter(find.text('Untitled 3'))),
+    );
+    await tester.sendEventToBinding(pointer.scroll(const Offset(100, 0)));
+    await tester.pump();
+    expect(position.pixels, 100);
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, 50)));
+    await tester.pump();
+    expect(position.pixels, 150);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 }

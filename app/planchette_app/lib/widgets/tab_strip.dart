@@ -106,20 +106,26 @@ class _TabStripState extends State<TabStrip> {
           children: [
             Expanded(
               child: Listener(
-                // A vertical wheel scrolls the horizontal strip.
+                // A vertical wheel scrolls the horizontal strip. The resolver
+                // hands each event to one handler, and the scroll view below
+                // registers first whenever it scrolls itself (horizontal
+                // swipes, Shift+wheel), so no delta is applied twice.
                 onPointerSignal: (event) {
-                  if (event is! PointerScrollEvent || !_scroll.hasClients) {
-                    return;
-                  }
-                  final delta = event.scrollDelta.dy != 0
-                      ? event.scrollDelta.dy
-                      : event.scrollDelta.dx;
-                  final position = _scroll.position;
-                  _scroll.jumpTo(
-                    (position.pixels + delta).clamp(
-                      position.minScrollExtent,
-                      position.maxScrollExtent,
-                    ),
+                  if (event is! PointerScrollEvent) return;
+                  GestureBinding.instance.pointerSignalResolver.register(
+                    event,
+                    (event) {
+                      final delta =
+                          (event as PointerScrollEvent).scrollDelta.dy;
+                      if (delta == 0 || !_scroll.hasClients) return;
+                      final position = _scroll.position;
+                      _scroll.jumpTo(
+                        (position.pixels + delta).clamp(
+                          position.minScrollExtent,
+                          position.maxScrollExtent,
+                        ),
+                      );
+                    },
                   );
                 },
                 child: SingleChildScrollView(
@@ -205,6 +211,7 @@ class _Tab extends StatefulWidget {
 
 class _TabState extends State<_Tab> {
   bool _hovered = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -239,70 +246,98 @@ class _TabState extends State<_Tab> {
             )
           : null,
     );
+    // The tab is one button for assistive technology, labelled here; its
+    // close button stays a separate node so it can be found and pressed.
     return Semantics(
       selected: widget.active,
       button: true,
       label: item.dirty ? '${item.name}, unsaved changes' : item.name,
-      excludeSemantics: true,
-      child: Tooltip(
-        message: item.tooltip,
-        waitDuration: const Duration(milliseconds: 600),
-        child: MouseRegion(
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: Listener(
-            onPointerDown: (event) {
-              if (event.buttons == kMiddleMouseButton && canClose) {
-                widget.onClose();
-              }
+      onTap: widget.enabled ? widget.onSelect : null,
+      child: FocusableActionDetector(
+        enabled: widget.enabled,
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onSelect();
+              return null;
             },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.enabled ? widget.onSelect : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                constraints: const BoxConstraints(minWidth: 96, maxWidth: 220),
-                padding: const EdgeInsets.only(left: 12, right: 4),
-                decoration: BoxDecoration(
-                  color: widget.active
-                      ? scheme.surface
-                      : _hovered
-                      ? scheme.surfaceContainerHighest
-                      : Colors.transparent,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(8),
+          ),
+        },
+        onShowFocusHighlight: (focused) => setState(() => _focused = focused),
+        child: Tooltip(
+          message: item.tooltip,
+          waitDuration: const Duration(milliseconds: 600),
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _hovered = true),
+            onExit: (_) => setState(() => _hovered = false),
+            child: Listener(
+              onPointerDown: (event) {
+                if (event.buttons == kMiddleMouseButton && canClose) {
+                  widget.onClose();
+                }
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.enabled ? widget.onSelect : null,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  constraints: const BoxConstraints(
+                    minWidth: 96,
+                    maxWidth: 220,
                   ),
-                  border: Border(
-                    top: BorderSide(
-                      width: 2,
-                      color: widget.active
-                          ? scheme.primary
-                          : Colors.transparent,
+                  padding: const EdgeInsets.only(left: 12, right: 4),
+                  decoration: BoxDecoration(
+                    color: widget.active
+                        ? scheme.surface
+                        : _hovered
+                        ? scheme.surfaceContainerHighest
+                        : Colors.transparent,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(8),
                     ),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        item.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 13,
-                          fontWeight: widget.active
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                          color: widget.active
-                              ? scheme.onSurface
-                              : scheme.onSurfaceVariant,
-                        ),
+                    border: Border(
+                      top: BorderSide(
+                        width: 2,
+                        color: widget.active
+                            ? scheme.primary
+                            : Colors.transparent,
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    trailing,
-                  ],
+                  ),
+                  foregroundDecoration: _focused
+                      ? BoxDecoration(
+                          border: Border.all(color: scheme.primary, width: 2),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(8),
+                          ),
+                        )
+                      : null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        // Announced through the tab's own label above.
+                        child: ExcludeSemantics(
+                          child: Text(
+                            item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontSize: 13,
+                              fontWeight: widget.active
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                              color: widget.active
+                                  ? scheme.onSurface
+                                  : scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      trailing,
+                    ],
+                  ),
                 ),
               ),
             ),
