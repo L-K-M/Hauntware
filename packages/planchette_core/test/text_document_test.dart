@@ -370,6 +370,30 @@ void main() {
       ),
     );
   });
+
+  test('an unwritable folder fails the save with an actionable error', () async {
+    if (!Platform.isLinux && !Platform.isMacOS) return;
+    await Process.run('chmod', ['555', directory.path]);
+    addTearDown(() async {
+      await Process.run('chmod', ['755', directory.path]);
+    });
+
+    await expectLater(
+      _save(file, 'edit\n'),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          startsWith(
+            'A temporary file could not be created beside the document.',
+          ),
+        ),
+      ),
+    );
+    // The guarded path refuses before renaming: the original stays intact.
+    expect(await file.readAsString(), 'one\ntwo\n');
+    expect(await directory.list().length, 1);
+  });
 }
 
 Future<String> _loadText(

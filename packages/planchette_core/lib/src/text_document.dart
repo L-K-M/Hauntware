@@ -230,7 +230,16 @@ Future<String> _writeTextDocument(
   RandomAccessFile? handle;
   var retainTemporary = false;
   try {
-    await temporary.create(exclusive: true);
+    try {
+      await temporary.create(exclusive: true);
+    } on FileSystemException catch (error) {
+      // The guarded design needs a sibling staging file, so an unwritable
+      // folder blocks every save; name the actionable cause, not the syscall.
+      throw TextDocumentException(
+        'A temporary file could not be created beside the document. '
+        'Check that its folder is writable. ${error.message}',
+      );
+    }
     setFilePermissions(temporary.path, 0x180); // 0600, before any plaintext.
     handle = await temporary.open(mode: FileMode.writeOnly);
     await handle.writeFrom(bytes);
@@ -254,7 +263,15 @@ Future<String> _writeTextDocument(
     }
 
     await _requireRegularFile(file);
-    renameFileWithoutReplacing(file.path, backup.path);
+    try {
+      renameFileWithoutReplacing(file.path, backup.path);
+    } on FileSystemException catch (error) {
+      // The destination vanished or changed between the type check and the
+      // backup rename; surface that as a save conflict, not a raw OS error.
+      throw TextDocumentException(
+        'The local copy changed while it was being saved. ${error.message}',
+      );
+    }
     try {
       await observeBackup?.call(backup);
       await _requireRegularFile(backup);
