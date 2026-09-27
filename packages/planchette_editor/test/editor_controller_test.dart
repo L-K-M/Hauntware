@@ -171,11 +171,25 @@ void main() {
   test('restored snapshots read dirty against the saved revision', () {
     final editor = EditorController(displayPath: 'test', initialText: '');
     addTearDown(editor.dispose);
-    editor.restoreSnapshot('edited', savedText: 'saved', selectionOffset: 3);
+    editor.restoreSnapshot(
+      'edited',
+      savedText: 'saved',
+      selection: const TextSelection(baseOffset: 5, extentOffset: 2),
+    );
     expect(editor.text.text, 'edited');
     expect(editor.isDirty, isTrue);
-    expect(editor.text.selection, const TextSelection.collapsed(offset: 3));
-    editor.restoreSnapshot('saved', savedText: 'saved', selectionOffset: 99);
+    expect(
+      editor.text.selection,
+      const TextSelection(baseOffset: 5, extentOffset: 2),
+    );
+    // The restore itself is not undoable.
+    editor.undoController.undo();
+    expect(editor.text.text, 'edited');
+    editor.restoreSnapshot(
+      'saved',
+      savedText: 'saved',
+      selection: const TextSelection.collapsed(offset: 99),
+    );
     expect(editor.isDirty, isFalse);
     expect(editor.text.selection, const TextSelection.collapsed(offset: 5));
   });

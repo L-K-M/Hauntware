@@ -245,6 +245,9 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
     variant: const TargetPlatformVariant({
+      // macOS uses native menus and meta modifiers; the shell
+      // registers the same command there, but this control-chord test
+      // cannot drive it.
       TargetPlatform.linux,
       TargetPlatform.windows,
     }),

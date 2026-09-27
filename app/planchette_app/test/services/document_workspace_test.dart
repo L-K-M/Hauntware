@@ -326,7 +326,10 @@ void main() {
     await workspace.open(testPath('notes.txt'));
     final tab = workspace.active!
       ..editor.text.text = 'on disk edited'
-      ..editor.text.selection = const TextSelection.collapsed(offset: 4);
+      ..editor.text.selection = const TextSelection(
+        baseOffset: 8,
+        extentOffset: 4,
+      );
     dialogs.choices.add(CloseChoice.discard);
     expect(await workspace.closeTab(tab), isTrue);
     expect(workspace.documents, isEmpty);
@@ -339,13 +342,40 @@ void main() {
     expect(reopened.editor.isDirty, isTrue);
     expect(
       reopened.editor.text.selection,
-      const TextSelection.collapsed(offset: 4),
+      const TextSelection(baseOffset: 8, extentOffset: 4),
     );
     expect(workspace.reopenLastClosed(), isNull);
 
     expect(await workspace.save(reopened), isTrue);
     expect(store.files[testPath('notes.txt')]!.text, 'on disk edited');
     expect(reopened.editor.isDirty, isFalse);
+  });
+
+  test('a cancelled close does not enqueue a reopen snapshot', () async {
+    store.files[testPath('keep.txt')] = document('keep.txt', 'body');
+    await workspace.open(testPath('keep.txt'));
+    final tab = workspace.active!..editor.text.text = 'body edited';
+    dialogs.choices.add(CloseChoice.cancel);
+    expect(await workspace.closeTab(tab), isFalse);
+    expect(workspace.canReopenClosed, isFalse);
+    expect(workspace.reopenLastClosed(), isNull);
+  });
+
+  test('reopen flags a conflict when the file changed while closed', () async {
+    store.files[testPath('moved.txt')] = document('moved.txt', 'v1');
+    await workspace.open(testPath('moved.txt'));
+    final tab = workspace.active!..editor.text.text = 'local edit';
+    dialogs.choices.add(CloseChoice.discard);
+    expect(await workspace.closeTab(tab), isTrue);
+    store.files[testPath('moved.txt')] = document(
+      'moved.txt',
+      'changed on disk',
+      digest: 'external',
+    );
+    final reopened = workspace.reopenLastClosed()!;
+    expect(await workspace.save(reopened), isFalse);
+    expect(store.files[testPath('moved.txt')]!.text, 'changed on disk');
+    expect(reopened.editor.isDirty, isTrue);
   });
 
   test('reopen of a clean tab is clean and defers to an open path', () async {

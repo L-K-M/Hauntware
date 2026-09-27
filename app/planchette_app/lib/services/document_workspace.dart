@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -41,13 +42,13 @@ final class _ClosedDocument {
     required this.text,
     required this.path,
     required this.baseline,
-    required this.selectionOffset,
+    required this.selection,
   });
 
   final String text;
   final String? path;
   final TextDocument? baseline;
-  final int selectionOffset;
+  final TextSelection selection;
 }
 
 final class DocumentWorkspace extends ChangeNotifier {
@@ -278,7 +279,7 @@ final class DocumentWorkspace extends ChangeNotifier {
           text: tab.editor.text.text,
           path: tab.path,
           baseline: tab.baseline,
-          selectionOffset: tab.editor.text.selection.start,
+          selection: tab.editor.text.selection,
         ),
       );
       while (_recentlyClosed.length > recentlyClosedCapacity) {
@@ -312,7 +313,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     tab.editor.restoreSnapshot(
       snapshot.text,
       savedText: snapshot.baseline?.text ?? '',
-      selectionOffset: snapshot.selectionOffset,
+      selection: snapshot.selection,
     );
     _documents.add(tab);
     _active = tab;
