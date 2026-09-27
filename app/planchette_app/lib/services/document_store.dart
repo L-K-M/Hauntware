@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as paths;
@@ -18,8 +19,16 @@ abstract interface class DocumentStore {
 
 final class LocalDocumentStore implements DocumentStore {
   @override
-  Future<TextDocument> load(String path) =>
-      loadTextDocument(File(path), symlinkPolicy: SymlinkPolicy.resolveOnce);
+  Future<TextDocument> load(String path) async {
+    final document = await loadTextDocument(
+      File(path),
+      symlinkPolicy: SymlinkPolicy.resolveOnce,
+    );
+    // A crash on save leaves .planchette-* recovery litter next to the
+    // document; sweep it once the retention window passes.
+    unawaited(sweepTextDocumentLeftovers(document.file));
+    return document;
+  }
 
   @override
   Future<String> canonicalSavePath(String path) async {

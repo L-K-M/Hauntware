@@ -370,6 +370,61 @@ void main() {
       ),
     );
   });
+
+  group('sweepTextDocumentLeftovers', () {
+    const uuid = '550e8400-e29b-41d4-a716-446655440000';
+
+    File leftover(String suffix) =>
+        File('${file.path}.planchette-$uuid.$suffix');
+
+    test('deletes only leftovers past the retention window', () async {
+      final edit = await leftover('edit').writeAsString('partial');
+      final backup = await leftover('backup').writeAsString('old copy');
+
+      expect(
+        await sweepTextDocumentLeftovers(
+          file,
+          olderThan: const Duration(days: 365),
+        ),
+        0,
+      );
+      expect(await edit.exists(), isTrue);
+      expect(await backup.exists(), isTrue);
+
+      expect(
+        await sweepTextDocumentLeftovers(
+          file,
+          olderThan: Duration.zero,
+        ),
+        2,
+      );
+      expect(await edit.exists(), isFalse);
+      expect(await backup.exists(), isFalse);
+      expect(await file.exists(), isTrue);
+    });
+
+    test('ignores unrelated names, directories, and missing parents', () async {
+      await File('${file.path}.planchette-notauuid.edit').create();
+      await File('${file.path}.planchette-$uuid.editx').create();
+      await Directory(
+        '${file.path}.planchette-$uuid.edit',
+      ).create();
+
+      expect(
+        await sweepTextDocumentLeftovers(file, olderThan: Duration.zero),
+        0,
+      );
+      expect(
+        await sweepTextDocumentLeftovers(
+          File('${directory.path}/missing/config.txt'),
+          olderThan: Duration.zero,
+        ),
+        0,
+      );
+      // Only the document itself remains alongside the untouched files.
+      expect(await directory.list().length, 4);
+    });
+  });
 }
 
 Future<String> _loadText(

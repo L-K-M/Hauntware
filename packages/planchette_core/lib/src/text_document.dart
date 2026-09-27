@@ -140,6 +140,48 @@ Future<TextDocument> loadTextDocument(
   );
 }
 
+/// Removes write leftovers — `<name><prefix>-<uuid>.edit` / `.backup`
+/// siblings — older than [olderThan] from [file]'s directory. An
+/// interrupted save leaves one on purpose as recovery data; after the
+/// retention window it is litter.
+///
+/// The sweep keys on `changed`, not `modified`: a `.backup` is a rename of
+/// the previous file and inherits its often-ancient mtime, so mtime would
+/// delete a recovery file moments after the failed save created it. The
+/// `changed` stamp instead records when the rename made it a leftover.
+/// Anything unreadable or undeletable is skipped — a sweep must never be
+/// able to break the load or save that triggered it.
+Future<int> sweepTextDocumentLeftovers(
+  File file, {
+  Duration olderThan = const Duration(days: 7),
+  String temporaryPrefix = '.planchette',
+}) async {
+  final pattern = RegExp(
+    '${RegExp.escape(temporaryPrefix)}-'
+    '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+    '[0-9a-fA-F]{12}\\.(edit|backup)\$',
+  );
+  final cutoff = DateTime.now().subtract(olderThan);
+  var removed = 0;
+  try {
+    await for (final entity in file.parent.list()) {
+      if (entity is! File) continue;
+      if (!pattern.hasMatch(entity.path)) continue;
+      try {
+        if ((await entity.stat()).changed.isAfter(cutoff)) continue;
+        await entity.delete();
+        removed++;
+      } on FileSystemException {
+        continue;
+      }
+    }
+  } on FileSystemException {
+    // The directory itself is unreadable or vanished mid-list; there is
+    // nothing actionable to sweep.
+  }
+  return removed;
+}
+
 /// Replaces an existing regular file only when its digest still matches.
 /// Temporary plaintext is owner-only on POSIX before the first write. The
 /// original mode is restored before publication; a failed publication restores
