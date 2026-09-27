@@ -635,6 +635,9 @@ class _DocumentShellState extends State<_DocumentShell> {
                               controller: tab.editor,
                               isActive: tab == active,
                               editingLocked: workspace.interactionLocked,
+                              placeholder: tab.path == null
+                                  ? ghostLineFor(tab.id)
+                                  : null,
                             ),
                         ],
                       ),
@@ -655,6 +658,21 @@ class _DocumentShellState extends State<_DocumentShell> {
     super.dispose();
   }
 }
+
+/// What an empty untitled document says until the first keystroke. Each line
+/// leads with the instruction, which is what a screen reader announces first;
+/// the rest is the board talking.
+const _ghostLines = [
+  'Start typing. The spirits are listening…',
+  'Start typing. The board is waiting…',
+  'Start typing. Something wants to be written…',
+  'Start typing. Rest a finger on the planchette…',
+  'Start typing. Ask, and it will answer…',
+];
+
+/// The ghost line for a tab: fixed for that tab, different for the next.
+@visibleForTesting
+String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
 
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);

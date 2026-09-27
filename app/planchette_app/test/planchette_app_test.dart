@@ -157,6 +157,29 @@ void main() {
     }),
   );
 
+  testWidgets('untitled documents get a ghost line, opened files do not', (
+    tester,
+  ) async {
+    final first = workspace.newDocument()!;
+    store.files[testPath('empty.txt')] = document('empty.txt', '');
+    await mount(tester);
+    TextField field(DocumentTab tab) =>
+        tester.widget<TextField>(editorField(tab));
+
+    expect(field(first).decoration!.hintText, ghostLineFor(first.id));
+    expect(ghostLineFor(first.id), startsWith('Start typing.'));
+    final second = workspace.newDocument()!;
+    await tester.pumpAndSettle();
+    expect(field(second).decoration!.hintText, ghostLineFor(second.id));
+    expect(ghostLineFor(second.id), isNot(ghostLineFor(first.id)));
+
+    await workspace.open(testPath('empty.txt'));
+    await tester.pumpAndSettle();
+    expect(field(workspace.active!).decoration!.hintText, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {

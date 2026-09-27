@@ -25,6 +25,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.showStatus = true,
     this.banner,
     this.statusBuilder,
+    this.placeholder,
   });
 
   final EditorController controller;
@@ -38,6 +39,10 @@ class PlanchetteEditor extends StatefulWidget {
   final Widget? banner;
   final Widget Function(BuildContext context, EditorController controller)?
   statusBuilder;
+
+  /// Faint text shown while the document is empty; it goes on the first
+  /// keystroke. Screen readers announce it as the field's hint.
+  final String? placeholder;
 
   @override
   State<PlanchetteEditor> createState() => _PlanchetteEditorState();
@@ -476,9 +481,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     smartDashesType: SmartDashesType.disabled,
                     smartQuotesType: SmartQuotesType.disabled,
                     style: _style,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.all(_padding),
+                      contentPadding: const EdgeInsets.all(_padding),
+                      hintText: widget.placeholder,
+                      hintStyle: _style.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.6,
+                        ),
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ),
                 ),
