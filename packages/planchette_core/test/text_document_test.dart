@@ -373,13 +373,15 @@ void main() {
 
   test('a save containing NUL refuses before touching the original', () async {
     const expected = 'binary \u0000 content\n';
+    // The CRLF folds under default normalization, so 'code unit 6' pins the
+    // reported offset to the caller's input text, not the normalized bytes.
     await expectLater(
-      _save(file, 'safe \u0000 edit\n', expectedSha256: 'ignored'),
+      _save(file, 'safe\r\n\u0000 edit\n', expectedSha256: 'ignored'),
       throwsA(
         isA<TextDocumentException>().having(
           (error) => error.message,
           'message',
-          contains('NUL'),
+          allOf(contains('NUL'), contains('code unit 6')),
         ),
       ),
     );
