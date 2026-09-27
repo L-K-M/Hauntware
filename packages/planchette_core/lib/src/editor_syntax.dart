@@ -9,6 +9,8 @@
 /// cannot consume later lines.
 library;
 
+import 'dart:collection';
+
 part 'dotenv_syntax.dart';
 
 /// Above this size the editor skips syntax highlighting (and the precise
@@ -50,6 +52,17 @@ class SyntaxLanguage {
   final Set<String> keywords;
   final bool caseInsensitiveKeywords;
 
+  /// The set the scanner consults per identifier. Case-insensitive
+  /// languages get an ASCII-fold-equality set so lookup needs no
+  /// per-word `toLowerCase` allocation. All case-insensitive keyword
+  /// lists are ASCII-only, so ASCII folding is equivalent there.
+  late final Set<String> _keywordLookup = caseInsensitiveKeywords
+      ? (LinkedHashSet<String>(
+            equals: _asciiIgnoreCaseEqual,
+            hashCode: _asciiLowerHash,
+          )..addAll(keywords))
+      : keywords;
+
   /// Markers that start a comment running to the end of the line.
   final List<String> lineComments;
 
@@ -85,7 +98,7 @@ class SyntaxLanguage {
   /// highlighting — digits in text are content, not literals.
   final bool highlightNumbers;
 
-  const SyntaxLanguage({
+  SyntaxLanguage({
     required this.id,
     this.keywords = const {},
     this.caseInsensitiveKeywords = false,
@@ -105,7 +118,7 @@ class SyntaxLanguage {
 /// the files edited over SFTP are overwhelmingly configs and scripts.
 class SyntaxLanguages {
   /// Dotenv's value boundaries require the dedicated assignment scanner.
-  static const dotenv = SyntaxLanguage(id: 'dotenv', highlightNumbers: false);
+  static final dotenv = SyntaxLanguage(id: 'dotenv', highlightNumbers: false);
 
   static final shell = SyntaxLanguage(
     id: 'shell',
@@ -932,6 +945,27 @@ bool _isIdentPart(int c) => _isIdentStart(c) || (c >= 0x30 && c <= 0x39);
 
 bool _isDigit(int c) => c >= 0x30 && c <= 0x39;
 
+int _asciiLowerAt(String s, int i) {
+  final c = s.codeUnitAt(i);
+  return (c >= 0x41 && c <= 0x5a) ? c + 0x20 : c;
+}
+
+bool _asciiIgnoreCaseEqual(String a, String b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (_asciiLowerAt(a, i) != _asciiLowerAt(b, i)) return false;
+  }
+  return true;
+}
+
+int _asciiLowerHash(String s) {
+  var hash = 0;
+  for (var i = 0; i < s.length; i++) {
+    hash = (hash * 31 + _asciiLowerAt(s, i)) & 0x3fffffff;
+  }
+  return hash;
+}
+
 /// Scan [text] into non-overlapping, ordered [SyntaxToken]s.
 List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
   if (language.id == 'dotenv') return _tokenizeDotenv(text);
@@ -999,9 +1033,7 @@ List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
         end++;
       }
       final word = text.substring(i, end);
-      final isKeyword = language.caseInsensitiveKeywords
-          ? language.keywords.contains(word.toLowerCase())
-          : language.keywords.contains(word);
+      final isKeyword = language._keywordLookup.contains(word);
       if (isKeyword) {
         tokens.add(SyntaxToken(i, end, SyntaxTokenType.keyword));
       }
