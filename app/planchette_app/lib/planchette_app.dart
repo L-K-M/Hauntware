@@ -857,16 +857,21 @@ class _DocumentShellState extends State<_DocumentShell> {
 /// The paths a drop carried.
 ///
 /// A desktop drop delivers `text/uri-list`: one `file:` URI per line, CRLF
-/// separated, with comment lines beginning `//` that a file manager is free to
-/// include and that mean nothing as a path. Percent escapes are decoded, and a
-/// line that is already a plain path — which is what a test or a hand-made drop
-/// carries — is passed through. A URI is not the same thing as a path, so
-/// splitting on newlines alone produces names no file matches.
+/// separated, with comment lines that mean nothing as a path. RFC 2483 marks
+/// those with `#`; some file managers send `//` instead, so both are skipped.
+/// Percent escapes are decoded, and a line that is already a plain path —
+/// which is what a test or a hand-made drop carries — is passed through. A URI
+/// is not the same thing as a path, so splitting on newlines alone produces
+/// names no file matches.
 List<String> droppedPaths(String data) {
   final paths = <String>[];
   for (final line in data.split('\n')) {
     final entry = line.trim();
-    if (entry.isEmpty || entry.startsWith('//')) continue;
+    // RFC 2483 gives `text/uri-list` a number sign for comments. Some file
+    // managers send `//` instead, and both are seen in the wild, so both go.
+    if (entry.isEmpty || entry.startsWith('#') || entry.startsWith('//')) {
+      continue;
+    }
     if (!entry.startsWith('file:')) {
       paths.add(entry);
       continue;

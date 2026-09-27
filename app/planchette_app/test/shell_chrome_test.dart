@@ -244,4 +244,16 @@ void main() {
   test('a payload of only comments opens nothing', () {
     expect(droppedPaths('//a comment\r\n//another\r\n'), isEmpty);
   });
+
+  test('comment lines are skipped whichever marker is used', () {
+    // RFC 2483 marks comments in text/uri-list with a number sign; some file
+    // managers send two slashes. A real comment must not become a file to open.
+    expect(droppedPaths('#rfc comment\r\nfile:///home/me/one.txt'), [
+      '/home/me/one.txt',
+    ]);
+    expect(droppedPaths('//practical comment\r\nfile:///home/me/one.txt'), [
+      '/home/me/one.txt',
+    ]);
+    expect(droppedPaths('#a\r\n//b\r\n'), isEmpty);
+  });
 }
