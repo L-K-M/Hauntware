@@ -8,6 +8,8 @@ ownership boundaries and compatibility policies are documented in
 
 - One tabbed document window with New, Open, Save, Save As, native desktop
   menus and guarded document/application close.
+- Tab and Shift+Tab indent the selection the way the file already indents, and
+  the View menu toggles word wrap, which is off by default for code.
 - Syntax highlighting including `.env`, literal find/replace, line numbers,
   selection, undo/redo and document status shared with Poltergeist and Séance.
 - Bounded UTF-8 loading, BOM/EOL metadata, digest conflict checks, protected
@@ -42,7 +44,11 @@ verification or a published release. No release tag has been created.
 
 The standalone app is desktop-only, uses one tabbed window per process, and
 does not restore documents after application exit. It accepts UTF-8 files up
-to 4 MiB; highlighting stops above 200,000 characters. File conflict guards
+to 4 MiB; highlighting stops above 32 KiB, above which the status bar reads
+`Large file`. The editing surface is a single-paragraph `TextField`, so cost
+per keystroke still grows with file size: a plain 800 KB document takes a few
+hundred milliseconds per keystroke in the Flutter test harness and would need
+a viewport-limited surface to improve. File conflict guards
 are best-effort checks, not cross-process locks. Mixed line endings follow
 the selected host normalization policy. Android hard-link publication limits
 are documented in the core package; mobile runtime file I/O has not been

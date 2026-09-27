@@ -48,10 +48,10 @@ host adapters, and file-safety contracts. [Status](docs/STATUS.md) records the
 checks actually completed and current limitations.
 
 The editor accepts UTF-8 files up to 4 MiB. Syntax highlighting is disabled
-above 200,000 characters to keep editing responsive. It preserves UTF-8 BOM
-and dominant line-ending metadata; it does not preserve each mixed line
-ending independently. External-change guards are best-effort filesystem
-checks, not a lock on other programs.
+above 32 KiB to keep typing responsive; the status bar says `Large file` when
+that happens. It preserves UTF-8 BOM and dominant line-ending metadata; it
+does not preserve each mixed line ending independently. External-change guards
+are best-effort filesystem checks, not a lock on other programs.
 
 ## License
 

@@ -11,10 +11,20 @@ library;
 
 part 'dotenv_syntax.dart';
 
-/// Above this size the editor skips syntax highlighting (and the precise
-/// scroll-to-match layout): tokenizing stays linear, but building and painting
-/// hundreds of thousands of spans per frame does not.
-const int syntaxHighlightingMaxChars = 200 * 1000;
+/// Above this size the editor skips syntax highlighting.
+///
+/// The editor surface is a single Flutter `TextField`, so the paragraph layout
+/// runs over one span per token on every keystroke. Measured on a 2,000-line
+/// JSON document (79 KB, 12,001 spans) in the Flutter test harness: building
+/// the span tree took 11 ms and laying that paragraph out took 70 ms, and the
+/// field's own layout of the same spans dominated a ~410 ms keystroke. The
+/// plain-text floor for the same size was ~35 ms, so highlighting cost roughly
+/// an order of magnitude. This cap sits where the highlighted cost stops
+/// dominating the frame budget; beyond it, editing stays at the plain floor.
+///
+/// Raising it again needs an editor surface that lays out only the visible
+/// lines, not a bigger constant here.
+const int syntaxHighlightingMaxChars = 32 * 1024;
 
 /// Search stops counting matches here; the find bar shows "1000+" instead of
 /// building an unbounded highlight list for a one-letter query in a huge file.

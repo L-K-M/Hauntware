@@ -47,7 +47,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   static const _padding = 14.0;
   static const _gutterInset = 8.0;
   final _gutterRepaint = ValueNotifier<int>(0);
+  final TextPainter _gutterPainter = TextPainter(
+    textDirection: TextDirection.ltr,
+  );
   List<double> _gutterTops = const [0];
+  int _gutterLines = -1;
+  double? _gutterLineHeight;
+  bool? _gutterWrapped;
   String? _gutterText;
   double? _gutterWidth;
   TextScaler? _gutterScaler;
@@ -86,6 +92,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       c.addListener(_changed);
       _lastReveal = -1;
       _gutterText = null;
+      _gutterLines = -1;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) c.initialize();
       });
@@ -128,27 +135,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     if (!c.scroll.hasClients) return;
     if (c.activeMatch < 0 || c.activeMatch >= c.matches.length) return;
     final match = c.matches[c.activeMatch];
-    double dy;
-    if (c.text.text.length <= syntaxHighlightingMaxChars &&
-        _textWidth != null) {
-      final prefix = c.text.text.substring(0, match.start);
-      final painter = TextPainter(
-        text: TextSpan(text: prefix, style: _style),
-        textDirection: TextDirection.ltr,
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout(maxWidth: _textWidth! > 1 ? _textWidth! : 1);
-      dy = painter
-          .getOffsetForCaret(TextPosition(offset: prefix.length), Rect.zero)
-          .dy;
-      painter.dispose();
-    } else {
-      final line =
-          c.lineStarts.takeWhile((offset) => offset <= match.start).length - 1;
-      dy =
-          line *
-          MediaQuery.textScalerOf(context).scale(_style.fontSize!) *
-          _style.height!;
-    }
+    final dy = _rowTopFor(match.start) ?? _measuredTopFor(match.start);
+    if (dy == null) return;
     final position = c.scroll.positions.last;
     final target = (dy + _padding - position.viewportDimension / 3).clamp(
       0.0,
@@ -161,10 +149,51 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     );
   }
 
+  /// The cached gutter already knows where every logical line begins, so a
+  /// reveal normally costs a binary search rather than a fresh layout.
+  double? _rowTopFor(int offset) {
+    final tops = _gutterTops;
+    if (tops.length != c.lineStarts.length) return null;
+    final starts = c.lineStarts;
+    var lo = 0;
+    var hi = starts.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi + 1) >> 1;
+      if (starts[mid] <= offset) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return tops[lo];
+  }
+
+  /// Fallback for a document whose rows and logical lines disagree, which only
+  /// happens once a long line has soft-wrapped.
+  double? _measuredTopFor(int offset) {
+    if (c.text.text.length > syntaxHighlightingMaxChars || _textWidth == null) {
+      final line = c.lineStarts.indexWhere((start) => start > offset) - 1;
+      return line *
+          MediaQuery.textScalerOf(context).scale(_style.fontSize!) *
+          _style.height!;
+    }
+    final prefix = c.text.text.substring(0, offset);
+    _gutterPainter
+      ..textScaler = MediaQuery.textScalerOf(context)
+      ..text = TextSpan(text: prefix, style: _style);
+    _gutterPainter.layout(maxWidth: _textWidth! > 1 ? _textWidth! : 1);
+    final dy = _gutterPainter
+        .getOffsetForCaret(TextPosition(offset: prefix.length), Rect.zero)
+        .dy;
+    _gutterPainter.text = const TextSpan(text: '');
+    return dy;
+  }
+
   @override
   void dispose() {
     c.removeListener(_changed);
     _gutterRepaint.dispose();
+    _gutterPainter.dispose();
     super.dispose();
   }
 
@@ -360,7 +389,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       if (c.isDirty) widget.strings.unsaved,
       document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
       document?.hasUtf8Bom == true ? 'UTF-8 BOM' : 'UTF-8',
-      if (c.text.language case final language?) language.id,
+      if (c.text.language case final language? when c.highlightingEnabled)
+        language.id,
+      if (!c.highlightingEnabled) widget.strings.largeFile,
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -505,37 +536,89 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   }
 
   void _ensureGutterLayout(double width, TextScaler scaler) {
+    final lineHeight = scaler.scale(_style.fontSize!) * _style.height!;
+    final lineCount = c.lineStarts.length;
+
+    if (!c.softWrap) {
+      // Without folding, one logical line is exactly one row, so the tops fall
+      // out of the line count and the row height. Laying the whole document
+      // out to measure that cost about 120 ms per keystroke on a 200 KB file,
+      // and a keystroke inside a line cannot change the answer anyway.
+      if (_gutterLines == lineCount &&
+          _gutterLineHeight == lineHeight &&
+          _gutterWrapped == false) {
+        return;
+      }
+      _gutterTops = _uniformTops(lineCount, lineHeight);
+      _rememberGutter(lineCount, lineHeight, folded: false);
+      return;
+    }
+
     if (identical(_gutterText, c.text.text) &&
         _gutterWidth == width &&
         _gutterScaler == scaler &&
-        _gutterStyle == _style) {
+        _gutterStyle == _style &&
+        _gutterWrapped == true) {
       return;
     }
-    final lineHeight = scaler.scale(_style.fontSize!) * _style.height!;
-    if (c.text.text.length <= syntaxHighlightingMaxChars) {
-      final painter = TextPainter(
-        text: c.text.buildTextSpan(
-          context: context,
-          style: _style,
-          withComposing: false,
-        ),
-        textDirection: TextDirection.ltr,
-        textScaler: scaler,
-      )..layout(maxWidth: width > 1 ? width : 1);
-      _gutterTops = [
-        for (final offset in c.lineStarts)
-          painter.getOffsetForCaret(TextPosition(offset: offset), Rect.zero).dy,
-      ];
-      painter.dispose();
-    } else {
-      _gutterTops = [
-        for (var i = 0; i < c.lineStarts.length; i++) i * lineHeight,
-      ];
-    }
+    _gutterTops = _foldedTops(width, lineCount, lineHeight);
     _gutterText = c.text.text;
     _gutterWidth = width;
     _gutterScaler = scaler;
     _gutterStyle = _style;
+    _rememberGutter(lineCount, lineHeight, folded: true);
+  }
+
+  void _rememberGutter(
+    int lineCount,
+    double lineHeight, {
+    required bool folded,
+  }) {
+    _gutterLines = lineCount;
+    _gutterLineHeight = lineHeight;
+    _gutterWrapped = folded;
+  }
+
+  List<double> _uniformTops(int lineCount, double lineHeight) => [
+    for (var i = 0; i < lineCount; i++) i * lineHeight,
+  ];
+
+  /// Where each logical line begins when folding may have merged or split
+  /// rows. One `computeLineMetrics` call answers the common case an order of
+  /// magnitude faster than a caret lookup per line; only a document that
+  /// actually folded needs the per-line path.
+  List<double> _foldedTops(double width, int lineCount, double lineHeight) {
+    if (c.text.text.length > syntaxHighlightingMaxChars) {
+      return _uniformTops(lineCount, lineHeight);
+    }
+    _gutterPainter
+      ..textScaler = MediaQuery.textScalerOf(context)
+      ..text = c.text.buildTextSpan(
+        context: context,
+        style: _style,
+        withComposing: false,
+      )
+      ..layout(maxWidth: width > 1 ? width : 1);
+    final rows = _gutterPainter.computeLineMetrics();
+    if (rows.length == lineCount) {
+      _gutterPainter.text = const TextSpan(text: '');
+      // LineMetrics reports each row's own height rather than its offset, so
+      // the tops are a running sum — plain arithmetic over the same rows the
+      // single call already produced.
+      final tops = <double>[];
+      var top = 0.0;
+      for (final row in rows) {
+        tops.add(top);
+        top += row.height;
+      }
+      return tops;
+    }
+    return [
+      for (final offset in c.lineStarts)
+        _gutterPainter
+            .getOffsetForCaret(TextPosition(offset: offset), Rect.zero)
+            .dy,
+    ];
   }
 }
 

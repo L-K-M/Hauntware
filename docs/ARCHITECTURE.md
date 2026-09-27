@@ -35,7 +35,8 @@ remote state stay in their applications.
 ## File handling
 
 The editor remains a bounded UTF-8 text editor: a 4 MiB file limit and a
-200,000-character highlighting limit. BOM and dominant line-ending metadata
+32 KiB highlighting limit, the point past which one span per token stops
+fitting a keystroke's frame budget. BOM and dominant line-ending metadata
 survive saves; mixed line endings are normalized according to the existing
 document policy, rather than claimed to be preserved individually.
 

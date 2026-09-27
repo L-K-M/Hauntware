@@ -65,6 +65,10 @@ class EditorSyntaxTheme {
 /// Flatten syntax [tokens] and search [matches] into styled spans. Both
 /// inputs are ordered and internally non-overlapping; a search hit overlaying
 /// a token keeps the token's color and adds the hit background.
+///
+/// One `TextStyle` per token type is built up front and shared by every span,
+/// because a highlighted document produces thousands of spans per frame and a
+/// fresh `TextStyle` for each one is pure garbage.
 List<InlineSpan> buildHighlightedSpans({
   required String text,
   required List<SyntaxToken> tokens,
@@ -72,6 +76,10 @@ List<InlineSpan> buildHighlightedSpans({
   required int activeMatchIndex,
   required EditorSyntaxTheme theme,
 }) {
+  final tokenStyles = [
+    for (final type in SyntaxTokenType.values)
+      TextStyle(color: theme.colorFor(type)),
+  ];
   final spans = <InlineSpan>[];
   final n = text.length;
   var position = 0;
@@ -91,8 +99,7 @@ List<InlineSpan> buildHighlightedSpans({
     var end = n;
     if (token != null) end = end.clamp(0, inToken ? token.end : token.start);
     if (match != null) end = end.clamp(0, inMatch ? match.end : match.start);
-    TextStyle? style;
-    if (inToken) style = TextStyle(color: theme.colorFor(token.type));
+    TextStyle? style = inToken ? tokenStyles[token.type.index] : null;
     if (inMatch) {
       final active = matchIndex == activeMatchIndex;
       style = (style ?? const TextStyle()).copyWith(

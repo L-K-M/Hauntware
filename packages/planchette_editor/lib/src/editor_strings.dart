@@ -14,6 +14,7 @@ class EditorStrings {
   String get replace => 'Replace';
   String get replaceAll => 'Replace all';
   String get unsaved => 'Unsaved edits';
+  String get largeFile => 'Large file';
   String get saving => 'Saving…';
   String matchCount(int current, int total, {bool capped = false}) =>
       '$current/$total${capped ? '+' : ''}';

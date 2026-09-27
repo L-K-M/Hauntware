@@ -61,6 +61,7 @@ class EditorController extends ChangeNotifier {
   bool _saving = false;
   bool _disposed = false;
   bool _editingLocked = false;
+  bool _softWrap = false;
   bool _searchOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
@@ -102,6 +103,22 @@ class EditorController extends ChangeNotifier {
   bool get editingLocked => _editingLocked;
   set editingLocked(bool value) => setEditingLocked(value);
 
+  /// Whether long lines fold or scroll sideways. Off by default: code is read
+  /// by structure, and folding a long line hides the rest of the statement
+  /// while the line number stays on the row the eye expects.
+  bool get softWrap => _softWrap;
+
+  /// Soft wrap is a view concern, so it follows the same rule as the edit lock:
+  /// the view applies it during build without notifying its ancestors, and
+  /// hosts that toggle it from outside use the notifying setter.
+  set softWrap(bool value) => setSoftWrap(value);
+
+  void setSoftWrap(bool value, {bool notify = true}) {
+    if (_softWrap == value) return;
+    _softWrap = value;
+    if (notify) _notify();
+  }
+
   /// The view applies configuration during its build without notifying its
   /// ancestors; hosts changing the lock directly use the notifying setter.
   void setEditingLocked(bool value, {bool notify = true}) {
@@ -119,6 +136,12 @@ class EditorController extends ChangeNotifier {
     _updateMetrics();
     return _bytes;
   }
+
+  /// Whether the buffer is small enough to highlight. Above the cap the editor
+  /// still edits at its plain-text speed, and the status bar says so rather
+  /// than leaving the missing colours unexplained.
+  bool get highlightingEnabled =>
+      text.text.length <= syntaxHighlightingMaxChars;
 
   (int, int) get caretLineColumn {
     final selection = text.selection;
