@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as paths;
 import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -80,11 +81,27 @@ class _DocumentShellState extends State<_DocumentShell> {
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   FocusNode? _lastTextFocus;
 
+  /// The selected tab, so choosing one by menu or shortcut can scroll it into
+  /// view. Without it, opening twenty files and switching with the Window menu
+  /// leaves the tab you just chose somewhere off to the side.
+  final GlobalKey _activeTabKey = GlobalKey(
+    debugLabel: 'planchette.active-tab',
+  );
+
+  /// The tab last brought into view, so only a change of selection scrolls.
+  DocumentTab? _revealedTab;
+
   @override
   void initState() {
     super.initState();
     workspace.addListener(_changed);
     FocusManager.instance.addListener(_rememberTextFocus);
+    // The tab that was already active when the window opened is at the end of
+    // the strip after a session restore or a command-line open, and is just as
+    // off-screen as one chosen later.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _revealSelectedTab();
+    });
     _applySettings();
   }
 
@@ -116,6 +133,10 @@ class _DocumentShellState extends State<_DocumentShell> {
   );
 
   void _changed() {
+    if (workspace.active != _revealedTab) {
+      _revealedTab = workspace.active;
+      _revealSelectedTab();
+    }
     if (mounted) setState(() {});
   }
 
@@ -176,6 +197,21 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _select(DocumentTab tab) {
     workspace.select(tab);
     _focusAfterFrame(tab);
+  }
+
+  void _revealSelectedTab() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final tabContext = _activeTabKey.currentContext;
+      if (!mounted || tabContext == null) return;
+      unawaited(
+        Scrollable.ensureVisible(
+          tabContext,
+          alignment: 0.5,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+        ),
+      );
+    });
   }
 
   void _showSettings() {
@@ -496,229 +532,299 @@ class _DocumentShellState extends State<_DocumentShell> {
       // Keep focus below the shortcuts when the final editor is disposed.
       child: FocusScope(
         autofocus: true,
-        child: Scaffold(
-          body: Column(
-            children: [
-              if (!mac) _menuBar(menus),
-              Material(
-                color: scheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_note_rounded, color: scheme.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        strings.appName,
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 20),
-                      IconButton(
-                        tooltip: strings.newDocument,
-                        onPressed: workspace.interactionLocked ? null : _new,
-                        icon: const Icon(Icons.add),
-                      ),
-                      IconButton(
-                        tooltip: strings.openDocument,
-                        onPressed: workspace.interactionLocked
-                            ? null
-                            : () => unawaited(workspace.openDialog()),
-                        icon: const Icon(Icons.folder_open_outlined),
-                      ),
-                      IconButton(
-                        tooltip: strings.save,
-                        onPressed:
-                            active == null ||
-                                active.busy ||
-                                workspace.interactionLocked
-                            ? null
-                            : _save,
-                        icon: const Icon(Icons.save_outlined),
-                      ),
-                      IconButton(
-                        tooltip: strings.settings,
-                        onPressed: workspace.interactionLocked
-                            ? null
-                            : _showSettings,
-                        icon: const Icon(Icons.tune),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          active?.path ?? strings.untitledHint,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: scheme.onSurfaceVariant,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      if (active?.busy == true)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              if (tabs.isNotEmpty)
-                Material(
-                  color: scheme.surfaceContainerLow,
-                  child: SizedBox(
-                    height: 40,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 8),
-                          for (final tab in tabs)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Tooltip(
-                                message: tab.path ?? tab.name,
-                                child: Semantics(
-                                  selected: tab == active,
-                                  child: Material(
-                                    color: tab == active
-                                        ? scheme.surface
-                                        : Colors.transparent,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(8),
-                                    ),
-                                    child: InkWell(
-                                      onTap: workspace.interactionLocked
-                                          ? null
-                                          : () => _select(tab),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 14,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Text(
-                                              '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: tab == active
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            IconButton(
-                                              key: ValueKey('close-${tab.id}'),
-                                              tooltip:
-                                                  '${strings.closeTabTooltip} ${tab.name}',
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              iconSize: 16,
-                                              onPressed:
-                                                  workspace.interactionLocked ||
-                                                      tab.busy
-                                                  ? null
-                                                  : () => unawaited(
-                                                      workspace.closeTab(tab),
-                                                    ),
-                                              icon: const Icon(Icons.close),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              if (workspace.error case final error?)
-                Material(
-                  color: scheme.errorContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            error,
-                            style: TextStyle(color: scheme.onErrorContainer),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: strings.dismissError,
-                          onPressed: workspace.clearError,
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: tabs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.description_outlined,
-                              size: 48,
-                              color: scheme.primary,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              strings.newDocumentTitle,
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                FilledButton(
-                                  onPressed: _new,
-                                  child: Text(strings.newDocumentAction),
-                                ),
-                                const SizedBox(width: 12),
-                                OutlinedButton(
-                                  onPressed: () =>
-                                      unawaited(workspace.openDialog()),
-                                  child: Text(strings.openDocumentAction),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      )
-                    : IndexedStack(
-                        index: tabs.indexOf(active!),
-                        children: [
-                          for (final tab in tabs)
-                            PlanchetteEditor(
-                              key: ValueKey(tab.id),
-                              controller: tab.editor,
-                              isActive: tab == active,
-                              editingLocked: workspace.interactionLocked,
-                              indent: settings.value.indent,
-                              textStyle: _textStyle,
-                            ),
-                        ],
-                      ),
-              ),
-            ],
+        child: DragTarget<String>(
+          onWillAcceptWithDetails: (details) => !workspace.interactionLocked,
+          onAcceptWithDetails: (details) {
+            for (final path in droppedPaths(details.data)) {
+              unawaited(workspace.open(path));
+            }
+          },
+          builder: (context, candidate, rejected) => _shell(
+            context: context,
+            menus: menus,
+            tabs: tabs,
+            active: active,
+            scheme: scheme,
+            dropping: candidate.isNotEmpty,
           ),
         ),
       ),
     );
     if (mac) body = _nativeMenu(menus, body);
     return body;
+  }
+
+  /// The window's contents.
+  ///
+  /// One strip holds the commands, the tabs and the document's own name, rather
+  /// than a header above a tab bar. The two rows said the same thing twice — the
+  /// header showed the active path and the tab below it showed the same
+  /// basename — and cost about 130 pixels before the first character of the
+  /// document.
+  Widget _shell({
+    required BuildContext context,
+    required List<_ShellMenu> menus,
+    required List<DocumentTab> tabs,
+    required DocumentTab? active,
+    required ColorScheme scheme,
+    required bool dropping,
+  }) => Scaffold(
+    body: Stack(
+      children: [
+        Column(
+          children: [
+            if (!mac) _menuBar(menus),
+            _chrome(
+              tabs: tabs,
+              active: active,
+              scheme: scheme,
+              dropping: dropping,
+            ),
+            Expanded(
+              child: tabs.isEmpty
+                  ? _emptyState(active: active, dropping: dropping)
+                  : IndexedStack(
+                      index: tabs.indexOf(active!),
+                      children: [
+                        for (final tab in tabs)
+                          PlanchetteEditor(
+                            key: ValueKey(tab.id),
+                            controller: tab.editor,
+                            isActive: tab == active,
+                            editingLocked: workspace.interactionLocked,
+                            indent: settings.value.indent,
+                            textStyle: _textStyle,
+                          ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+        // An error is an overlay rather than a row, so a failed save does not
+        // shove the document down and then pull it back up.
+        if (workspace.error case final error?)
+          Positioned(
+            left: 12,
+            right: 12,
+            top: 12,
+            child: _ErrorBanner(
+              message: error,
+              onDismiss: workspace.clearError,
+            ),
+          ),
+      ],
+    ),
+  );
+
+  /// The single strip: commands, then the tabs, then the document's name.
+  Widget _chrome({
+    required List<DocumentTab> tabs,
+    required DocumentTab? active,
+    required ColorScheme scheme,
+    required bool dropping,
+  }) {
+    final locked = workspace.interactionLocked;
+    return Material(
+      key: const ValueKey('planchette.chrome'),
+      color: dropping ? scheme.primaryContainer : scheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(6, 4, 12, 4),
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: strings.newDocument,
+              onPressed: locked ? null : _new,
+              icon: const Icon(Icons.add),
+            ),
+            IconButton(
+              tooltip: strings.openDocument,
+              onPressed: locked
+                  ? null
+                  : () => unawaited(workspace.openDialog()),
+              icon: const Icon(Icons.folder_open_outlined),
+            ),
+            IconButton(
+              tooltip: strings.save,
+              onPressed: active == null || active.busy || locked ? null : _save,
+              icon: const Icon(Icons.save_outlined),
+            ),
+            IconButton(
+              tooltip: strings.settings,
+              onPressed: locked ? null : _showSettings,
+              icon: const Icon(Icons.tune),
+            ),
+            const SizedBox(width: 8),
+            if (tabs.isEmpty)
+              Expanded(
+                child: Text(
+                  strings.untitledHint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              )
+            else ...[
+              Expanded(
+                child: _tabStrip(tabs: tabs, active: active),
+              ),
+              const SizedBox(width: 12),
+              // The tab already names the document; this is the directory, which
+              // is the part a basename cannot carry.
+              if (active?.path != null)
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: Text(
+                    paths.dirname(active!.path!),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+            if (active?.busy == true)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The scrolling tabs.
+  Widget _tabStrip({
+    required List<DocumentTab> tabs,
+    required DocumentTab? active,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      key: const ValueKey('planchette.tabs'),
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final tab in tabs)
+            _tab(tab: tab, selected: tab == active, scheme: scheme),
+        ],
+      ),
+    );
+  }
+
+  Widget _tab({
+    required DocumentTab tab,
+    required bool selected,
+    required ColorScheme scheme,
+  }) {
+    final locked = workspace.interactionLocked;
+    final label = Text(
+      tab.name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 13,
+        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(right: 2),
+      child: Tooltip(
+        message: tab.path ?? tab.name,
+        child: Semantics(
+          selected: selected,
+          child: Material(
+            color: selected ? scheme.surface : Colors.transparent,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+            child: InkWell(
+              key: selected ? _activeTabKey : null,
+              onTap: locked ? null : () => _select(tab),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8, right: 2),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // A fixed slot, so a tab does not change width the moment it
+                    // becomes dirty — which it used to, twice per save.
+                    SizedBox(
+                      width: 10,
+                      child: tab.editor.isDirty
+                          ? Icon(
+                              Icons.circle,
+                              key: const ValueKey('planchette.dirty'),
+                              size: 7,
+                              color: scheme.primary,
+                            )
+                          : null,
+                    ),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 180),
+                      child: label,
+                    ),
+                    IconButton(
+                      key: ValueKey('close-${tab.id}'),
+                      tooltip: '${strings.closeTabTooltip} ${tab.name}',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 15,
+                      onPressed: locked || tab.busy
+                          ? null
+                          : () => unawaited(workspace.closeTab(tab)),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState({required DocumentTab? active, required bool dropping}) {
+    final theme = Theme.of(context);
+    return Stack(
+      children: [
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                dropping ? Icons.file_download : Icons.description_outlined,
+                size: 48,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                dropping ? 'Drop a file to open it' : strings.newDocumentTitle,
+                style: theme.textTheme.titleLarge,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton(
+                    onPressed: _new,
+                    child: Text(strings.newDocumentAction),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton(
+                    onPressed: () => unawaited(workspace.openDialog()),
+                    child: Text(strings.openDocumentAction),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -729,6 +835,17 @@ class _DocumentShellState extends State<_DocumentShell> {
     super.dispose();
   }
 }
+
+/// The paths a drop carried.
+///
+/// A desktop drop delivers one path per line for several files and a single
+/// path for one, so both shapes arrive here and neither is worth special
+/// casing at the call site. Blank lines are dropped, and surrounding
+/// whitespace trimmed, because a file manager will happily quote a name.
+List<String> droppedPaths(String data) => [
+  for (final line in data.split('\n'))
+    if (line.trim().isNotEmpty) line.trim(),
+];
 
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);
@@ -750,4 +867,42 @@ final class _Command extends _MenuEntry {
   final VoidCallback run;
   final SingleActivator? shortcut;
   final bool enabled;
+}
+
+/// A dismissible message over the document, rather than a row that reflows it.
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message, required this.onDismiss});
+
+  final String message;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      elevation: 6,
+      borderRadius: BorderRadius.circular(8),
+      color: scheme.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 16, top: 4, bottom: 4, right: 4),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, size: 18, color: scheme.onErrorContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: scheme.onErrorContainer),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Dismiss error',
+              onPressed: onDismiss,
+              icon: const Icon(Icons.close, size: 18),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
