@@ -686,7 +686,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     TextScaler scaler,
   ) {
     if (last < first) return const [];
-    final maxLinePx = scaler.scale(_style.fontSize! * 1.5);
+    // Spacing fields count toward per-unit advance too: today both are
+    // unset, but the bound must stay honest if _style ever gains them.
+    final maxLinePx =
+        scaler.scale(_style.fontSize! * 1.5) +
+        math.max(_style.letterSpacing ?? 0, 0) +
+        math.max(_style.wordSpacing ?? 0, 0);
     final painter = TextPainter(
       textDirection: TextDirection.ltr,
       textScaler: scaler,
@@ -695,16 +700,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     try {
       for (var i = first; i <= last; i++) {
         final start = starts[i];
-        final end = i + 1 < starts.length
-            ? starts[i + 1] - 1
-            : text.length;
+        final end = i + 1 < starts.length ? starts[i + 1] - 1 : text.length;
         final len = end - start;
         if (len * maxLinePx <= width) continue;
         painter
-          ..text = TextSpan(
-            text: text.substring(start, end),
-            style: _style,
-          )
+          ..text = TextSpan(text: text.substring(start, end), style: _style)
           ..layout(maxWidth: width > 1 ? width : 1);
         heights[i - first] = painter.height;
       }
