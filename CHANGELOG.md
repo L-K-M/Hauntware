@@ -7,7 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
-- Syntax highlighting now stops above 32 KiB instead of 200,000 characters.
+- Syntax highlighting now stops above 32,768 characters instead of
+  200,000. The count is characters, not bytes, unlike the 4 MiB file limit.
   The editor surface lays out one span per token on every keystroke, and that
   cost was roughly an order of magnitude over the plain-text path; the status
   bar reads `Large file` when highlighting is off. Widening the limit needs an

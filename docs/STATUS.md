@@ -42,7 +42,8 @@ verification or a published release. No release tag has been created.
 
 The standalone app is desktop-only, uses one tabbed window per process, and
 does not restore documents after application exit. It accepts UTF-8 files up
-to 4 MiB; highlighting stops above 32 KiB, above which the status bar reads
+to 4 MiB in bytes; highlighting stops above 32,768 characters, above which
+the status bar reads
 `Large file`. The editing surface is a single-paragraph `TextField`, so cost
 per keystroke still grows with file size: a plain 800 KB document takes a few
 hundred milliseconds per keystroke in the Flutter test harness and would need
