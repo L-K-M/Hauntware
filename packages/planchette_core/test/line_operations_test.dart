@@ -123,6 +123,12 @@ void main() {
       expect(run(deleteLines, '|'), 'null');
     });
 
+    test('never lands inside a character that takes two code units', () {
+      expect(run(deleteLines, 'abc|\nab😀xy'), 'ab|😀xy');
+      expect(run(deleteLines, 'ab|c\nab😀xy'), 'ab|😀xy');
+      expect(run(deleteLines, 'abcd|\nab😀xy'), 'ab😀|xy');
+    });
+
     test('removes every touched line', () {
       expect(run(deleteLines, 'a\nb[c\nd]e\nf'), 'a\nf|');
       expect(run(deleteLines, 'a\n[b\n]c'), 'a\n|c');

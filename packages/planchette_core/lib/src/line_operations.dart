@@ -98,7 +98,14 @@ LineEdit? deleteLines(String text, int base, int extent) {
   }
   final result = text.replaceRange(from, to, '');
   final start = _lineStart(result, from);
-  final caret = math.min(start + column, _lineEnd(result, start));
+  var caret = math.min(start + column, _lineEnd(result, start));
+  // The column came from another line and may fall inside a character
+  // there; never leave the caret between the halves of a surrogate pair.
+  if (caret > start &&
+      caret < result.length &&
+      _isLowSurrogate(result.codeUnitAt(caret))) {
+    caret--;
+  }
   return LineEdit(result, caret, caret);
 }
 
@@ -166,6 +173,8 @@ const _space = 0x20;
 const _tab = 0x09;
 
 bool _isIndent(int unit) => unit == _space || unit == _tab;
+
+bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
 
 /// The touched lines as one range: from the first line's start to the last
 /// line's end, excluding its line break.

@@ -114,6 +114,11 @@ void main() {
 
     expect(editor.canEditText, isFalse);
     await press(tester, LogicalKeyboardKey.arrowUp, alt: true);
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      // The disabled action leaves Option+Up to the field, which moves the
+      // caret to the start of its line.
+      expect(editor.text.selection, const TextSelection.collapsed(offset: 4));
+    }
     await press(tester, LogicalKeyboardKey.keyK, primary: true, shift: true);
 
     expect(editor.text.text, 'one\ntwo');
