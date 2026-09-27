@@ -2122,6 +2122,7 @@ Merged work from both reviews. Residuals stay as active entries above.
 | PGE-03 | [#213](https://github.com/L-K-M/Poltergeist/pull/213) | Merged | Shared file/parent flush ordering before deleting a local cross-volume trash source; originals preserved on reported flush failure | PGE-03a (non-Linux and remote durability, remote-cancel regression) |
 | P2-02, P2-03 | [#216](https://github.com/L-K-M/Poltergeist/pull/216) | Merged | Mirror never deletes beneath a symlink on either side; a replaced directory subsumes its destination-only descendants (05 §3, §6 rule 4); engine now agrees with the rsync exporter | P2-02a hazard counterpart, P2-02b scan-error prefix, P2-02c plan-view label, P2-03a one-way source dir, P2-03b app override verbs |
 | P2-05 | [#217](https://github.com/L-K-M/Poltergeist/pull/217) | Merged | Compaction only when reclaimable bytes pay for the rewrite | P2-09 (with duplicate history rows), P2-05a memory, P2-05b failing rewrite backoff |
+| P2-06 | [#230](https://github.com/L-K-M/Poltergeist/pull/230) | Merged | Task-lifetime destination ownership across case and normalization aliases; durable claims and per-container probes prevent destructive overwrite | PGE-03a (non-Linux and remote durability) |
 
 ### Review record for the sibling review's merged PRs
 
