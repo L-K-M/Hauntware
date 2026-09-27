@@ -515,8 +515,8 @@ void main() {
       workspace.active!.editor.text.text = 'dropped too';
       dialogs.bulkChoice = BulkCloseChoice.discardAll;
       expect(await workspace.confirmQuit(), isTrue);
-    expect(store.writes, isEmpty);
-    expect(store.files[testPath('one.txt')]!.text, 'disk');
+      expect(store.writes, isEmpty);
+      expect(store.files[testPath('one.txt')]!.text, 'disk');
     },
   );
 
@@ -532,6 +532,9 @@ void main() {
     expect(await workspace.confirmQuit(), isFalse);
     expect(workspace.documents, hasLength(2));
     expect(one.editor.isDirty, isTrue);
+    // The failure names the file that could not be written.
+    expect(workspace.error, contains(one.name));
+    expect(workspace.error, contains('Disk full'));
     expect(workspace.interactionLocked, isFalse);
   });
 
@@ -541,6 +544,27 @@ void main() {
     expect(await workspace.confirmQuit(), isTrue);
     expect(dialogs.bulkCounts, isEmpty);
     expect(dialogs.asked, [tab.name]);
+  });
+
+  test('two tabs with one dirty still ask per file', () async {
+    await openOne();
+    final scratch = workspace.newDocument()!..editor.text.text = 'scratch';
+    dialogs.choices.add(CloseChoice.discard);
+    expect(await workspace.confirmQuit(), isTrue);
+    expect(dialogs.bulkCounts, isEmpty);
+    expect(dialogs.asked, [scratch.name]);
+  });
+
+  test('Save All with a canceled destination aborts the quit', () async {
+    final first = workspace.newDocument()!..editor.text.text = 'first';
+    final second = workspace.newDocument()!..editor.text.text = 'second';
+    dialogs.bulkChoice = BulkCloseChoice.saveAll;
+    dialogs.savePath = null;
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.documents, [first, second]);
+    expect(first.editor.isDirty, isTrue);
+    expect(second.editor.isDirty, isTrue);
+    expect(workspace.interactionLocked, isFalse);
   });
 
   test('quit Save persists while editing stays locked', () async {

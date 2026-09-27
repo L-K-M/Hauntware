@@ -389,15 +389,19 @@ final class DocumentWorkspace extends ChangeNotifier {
         final choice = await _dialog(
           () => dialogs.chooseBulkClose(unsaved.length),
         );
-        if (choice == BulkCloseChoice.cancel) return false;
-        if (choice == BulkCloseChoice.saveAll) {
-          for (final tab in unsaved) {
-            final saved = await _save(
-              tab,
-              access: EditorSaveAccess.confirmedClose,
-            );
-            if (!saved || tab.editor.isDirty) return false;
-          }
+        switch (choice) {
+          case BulkCloseChoice.cancel:
+            return false;
+          case BulkCloseChoice.saveAll:
+            for (final tab in unsaved) {
+              final saved = await _save(
+                tab,
+                access: EditorSaveAccess.confirmedClose,
+              );
+              if (!saved || tab.editor.isDirty) return false;
+            }
+          case BulkCloseChoice.discardAll:
+            break;
         }
       } else {
         for (final tab in List.of(_documents)) {

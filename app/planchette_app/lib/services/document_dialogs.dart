@@ -59,16 +59,10 @@ final class AppDocumentDialogs implements DocumentDialogs {
     return await showDialog<BulkCloseChoice>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text(
-              count == 1
-                  ? 'Save changes to 1 document?'
-                  : 'Save changes to $count documents?',
-            ),
-            content: Text(
-              count == 1
-                  ? 'Your changes will be lost if you close without saving.'
-                  : 'Your changes will be lost if you close without saving '
-                        'any of them.',
+            title: Text('Save changes to $count documents?'),
+            content: const Text(
+              'Your changes will be lost if you close without saving any of '
+              'them.',
             ),
             actions: [
               TextButton(
