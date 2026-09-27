@@ -24,7 +24,6 @@ class PlanchetteEditor extends StatefulWidget {
     this.editingLocked = false,
     this.showLineNumbers = true,
     this.showStatus = true,
-    this.indent = const EditorIndent(),
     this.banner,
     this.statusBuilder,
   });
@@ -37,11 +36,6 @@ class PlanchetteEditor extends StatefulWidget {
   final bool editingLocked;
   final bool showLineNumbers;
   final bool showStatus;
-
-  /// One indent level for Tab, Shift+Tab and automatic indentation. The
-  /// controller keeps its own copy, which is what the buffer edits read; a host
-  /// that changes this for a live document sets both.
-  final EditorIndent indent;
   final Widget? banner;
   final Widget Function(BuildContext context, EditorController controller)?
   statusBuilder;
@@ -231,12 +225,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     );
   }
 
+  // The controller's indent, not a copy on this widget: the automatic indent
+  // after Enter reads the controller, and Tab that read a different one would
+  // indent one way and auto-indent another.
   void _indent() {
-    c.text.value = indentSelection(c.text.value, unit: widget.indent.unit);
+    c.text.value = indentSelection(c.text.value, unit: c.indent.unit);
   }
 
   void _dedent() {
-    c.text.value = dedentSelection(c.text.value, unit: widget.indent.unit);
+    c.text.value = dedentSelection(c.text.value, unit: c.indent.unit);
   }
 
   Widget _searchBar(BuildContext context) {
