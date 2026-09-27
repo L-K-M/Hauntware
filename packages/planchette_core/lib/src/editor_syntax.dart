@@ -1188,11 +1188,17 @@ final class SearchResult {
 
 /// Folds one side of a case-insensitive comparison.
 ///
-/// A fold that preserves the document's length is applied as-is, and can fix
-/// case differences [String.toLowerCase] misses while keeping match offsets
-/// valid — Greek final sigma (`toLowerCase` maps `Σ` to `σ` and never to the
-/// final `ς` a Greek word actually ends with), a locale's dotted and dotless
-/// i, canonical Cherokee forms. Injectable so that path is testable at all.
+/// A fold that preserves the document's length — and is *index-wise*, its
+/// output character at position *i* standing for the input character at *i* —
+/// is applied as-is, and can fix case differences [String.toLowerCase] misses
+/// while keeping match offsets valid: Greek final sigma (`toLowerCase` maps `Σ`
+/// to `σ` and never to the final `ς` a Greek word actually ends with), a
+/// locale's dotted and dotless i, canonical Cherokee forms.
+///
+/// Both halves are required. Length alone is not enough: a length-preserving
+/// fold that reorders or depends on surrounding context would satisfy the
+/// length check and return confidently wrong ranges. Injectable so the
+/// guarded paths are testable at all.
 ///
 /// A fold that *changes* the length cannot be used on a document: matches are
 /// located in the folded text, so their offsets would address the wrong

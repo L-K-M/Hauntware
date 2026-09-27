@@ -411,7 +411,9 @@ void main() {
       }
     });
 
-    test('a length-changing fold is reported and matched exactly', () {
+    // The document side of the guard. Paired with 'a length-changing query is
+    // still folded' below, which is the side that must NOT report limited.
+    test('a length-changing document is reported and matched exactly', () {
       // ß uppercases to "SS", which is what a full case fold would expand it
       // to. Dart's toLowerCase does not do that, so the fold is injected to
       // reach the path a host with its own folding table would take.
