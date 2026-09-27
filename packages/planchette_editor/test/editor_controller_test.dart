@@ -344,4 +344,28 @@ void main() {
     editor.text.selection = const TextSelection.collapsed(offset: -1);
     expect(editor.caretLineColumn, (2, 2));
   });
+
+  test('an invalid selection before any valid one reports the start', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: -1);
+    expect(editor.caretLineColumn, (1, 1));
+  });
+
+  test('replaced text invalidates the remembered caret position', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 5);
+    expect(editor.caretLineColumn, (2, 2));
+    // Assigning `text` installs an invalid selection; the remembered offset
+    // must not leak into the new document.
+    editor.text.text = 'different\ncontent\nhere';
+    expect(editor.caretLineColumn, (1, 1));
+  });
 }

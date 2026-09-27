@@ -85,6 +85,7 @@ class EditorController extends ChangeNotifier {
   int _revision = 0;
   int _revealRequest = 0;
   int _lastCaretOffset = 0;
+  String _lastCaretText = '';
   String _lastText = '';
   String? _lastQuery;
   String _languageProbe = '';
@@ -144,10 +145,8 @@ class EditorController extends ChangeNotifier {
   }
 
   (int, int) get caretLineColumn {
-    final selection = text.selection;
-    // An invalid selection means the caret was elsewhere — remember it
-    // instead of reporting a plausible-looking (1, 1).
-    if (selection.isValid) _lastCaretOffset = selection.extentOffset;
+    // An invalid selection means the caret was elsewhere — report the last
+    // one _textChanged observed instead of a plausible-looking (1, 1).
     final offset = _lastCaretOffset.clamp(0, text.text.length);
     final starts = lineStarts;
     var lo = 0;
@@ -261,7 +260,17 @@ class EditorController extends ChangeNotifier {
   }
 
   void _textChanged() {
-    if (_updatingSearch || _disposed) return;
+    if (_disposed) return;
+    if (text.selection.isValid) {
+      _lastCaretOffset = text.selection.extentOffset;
+      _lastCaretText = text.text;
+    } else if (text.text != _lastCaretText) {
+      // The document changed under an invalid selection (e.g. a wholesale
+      // replace) — the remembered offset is meaningless in the new text.
+      _lastCaretOffset = 0;
+      _lastCaretText = text.text;
+    }
+    if (_updatingSearch) return;
     if (text.text != _lastText) {
       _lastText = text.text;
       _revision++;
