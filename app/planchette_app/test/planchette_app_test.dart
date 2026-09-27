@@ -261,6 +261,32 @@ void main() {
   );
 
   testWidgets(
+    'collapsing replace does not steal focus it no longer holds',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+      final editor = workspace.active!.editor;
+      editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      // The field was the last focused node, but focus moved on before the
+      // collapse — a host may share the focus scope, so nothing is stolen.
+      editor.replacementFocus.unfocus();
+      await tester.pumpAndSettle();
+      editor.toggleReplace();
+      await tester.pumpAndSettle();
+      expect(editor.searchFocus.hasFocus, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!
