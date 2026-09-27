@@ -133,14 +133,6 @@ focus leaves the document.
 
 ## 3. Bugs
 
-### B1. Case-insensitive search can silently become case-sensitive — S (read)
-`findSearchMatches` (`packages/planchette_core/lib/src/editor_syntax.dart`)
-lowercases the whole text and falls back to a case-sensitive search when
-the length changes. One `İ` (U+0130) anywhere triggers that, while the UI
-still shows "Match case" off. **Plan:** compare per candidate with a
-case-folded needle, or map offsets through a per-code-unit fold. **Done
-when** a test with `İ` in the text finds `abc` in `ABC`.
-
 ### B2. Backslash-newline continues "single-line" strings — S (read)
 `_scanString` skips two code units after `\`, so `"abc\` followed by a
 newline keeps the string open onto the next line. That's correct for
@@ -474,6 +466,14 @@ keep working with no tab open, as covered by the existing test.
   text to open it.
 
 ## 10. Process and documentation
+
+- **D0. Checked and dropped.** The initial review suspected that one `İ`
+  in a document would make case-insensitive search case-sensitive,
+  because `findSearchMatches` falls back when lowercasing changes the
+  length. That can't happen on Planchette's targets: on the Dart VM,
+  `toLowerCase` uses simple case mapping and changes the length of no
+  code point (all 1.1M were checked; `İ` → `i`). It would only matter
+  for a web build, where JavaScript applies full mappings.
 
 - **D1. CHANGELOG.** None of the eight PRs edits `CHANGELOG.md`, to avoid
   eight-way conflicts. After merging, add one "Unreleased" entry per
