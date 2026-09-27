@@ -363,13 +363,16 @@ void main() {
     await _setReadOnly(file, true);
     try {
       expect(await isTextDocumentWriteProtected(file), isTrue);
-      if (Platform.isWindows) return;
       // Replacement renames a sibling into place, so only the directory's
-      // permission is checked; this is why hosts must ask first.
+      // permission is checked; this is why hosts must ask first. The file
+      // stays read-only, and no backup is left behind, on every platform.
       final document = await loadTextDocument(file);
       await _save(file, 'edit\n', expectedSha256: document.sha256);
       expect(await file.readAsString(), 'edit\n');
       expect(await isTextDocumentWriteProtected(file), isTrue);
+      expect(directory.listSync().map((entry) => entry.uri.pathSegments.last), [
+        'config.txt',
+      ]);
     } finally {
       await _setReadOnly(file, false);
     }

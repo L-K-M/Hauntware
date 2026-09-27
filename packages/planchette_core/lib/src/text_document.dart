@@ -81,7 +81,8 @@ Future<File> resolveTextDocumentTarget(
 /// Whether [file] is marked read-only: no write permission for anyone on
 /// POSIX, or the read-only attribute on Windows, which Dart reports the same
 /// way. A save replaces the document through a sibling and restores its
-/// mode, so the file's own permission never stops a save; hosts ask this to
+/// mode (on Windows, the attribute), so the file's own permission never
+/// stops a save; hosts ask this to
 /// warn before replacing a file someone deliberately protected. Ownership is
 /// not considered: a file only its owner may write reads as unprotected.
 Future<bool> isTextDocumentWriteProtected(File file) async {
@@ -244,6 +245,7 @@ Future<String> _writeTextDocument(
   );
   RandomAccessFile? handle;
   var retainTemporary = false;
+  var windowsReadOnly = false;
   try {
     await temporary.create(exclusive: true);
     setFilePermissions(temporary.path, 0x180); // 0600, before any plaintext.
@@ -281,6 +283,8 @@ Future<String> _writeTextDocument(
       }
       final stat = await backup.stat();
       setFilePermissions(temporary.path, stat.mode & 0x1ff);
+      windowsReadOnly =
+          Platform.isWindows && stat.mode & _writePermissionBits == 0;
       renameFileWithoutReplacing(temporary.path, file.path);
     } catch (error) {
       if (error is HardLinkCleanupException) retainTemporary = true;
@@ -296,6 +300,7 @@ Future<String> _writeTextDocument(
       }
       rethrow;
     }
+    if (windowsReadOnly) _keepWindowsReadOnly(file, backup);
     try {
       await backup.delete();
     } on FileSystemException {
@@ -306,6 +311,24 @@ Future<String> _writeTextDocument(
   } finally {
     await handle?.close();
     if (!retainTemporary && await temporary.exists()) await temporary.delete();
+  }
+}
+
+/// Windows has no mode bits to restore, so a read-only original's attribute
+/// goes back on the new file, and comes off the backup, which could not be
+/// deleted otherwise. The new file is already committed: a failure here
+/// leaves the attribute off or the backup in place rather than reporting a
+/// failed save.
+void _keepWindowsReadOnly(File file, File backup) {
+  try {
+    setWindowsReadOnly(file.path, readOnly: true);
+  } on FileSystemException {
+    // The saved text stands; only the attribute is lost.
+  }
+  try {
+    setWindowsReadOnly(backup.path, readOnly: false);
+  } on FileSystemException {
+    // The backup delete below then fails and keeps the recovery sibling.
   }
 }
 
