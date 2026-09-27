@@ -28,6 +28,16 @@ change, and how to know it is done. Read [AGENTS.md](AGENTS.md) first.
   The latest inherited report also gives 84/19/38 (two app skips) at `e974cde`.
   Its combined Flutter 3.47.2 / Dart 3.13.4 label needs provenance checking:
   this session used bundled Dart 3.13.2 and standalone Dart 3.13.4 separately.
+- A **second 2026-09-27 pass** (this document's second merge) wrote a fresh
+  review at `797deb9` (no code changed for it), implemented nine small PRs from
+  it (#55/#56/#76/#77/#79/#81/#83/#85/#87, all `planchette/*`), and merged that
+  review's findings into this document. §12 maps every finding from that pass to
+  its disposition so nothing was dropped. Baselines: `797deb9` for #55/#56 and
+  `1fea9ec` for the rest; suites green per the §1 tables. The open-PR list was
+  read to avoid collisions; no other worker's diff was read. That pass added
+  B35, B36, P9 and Q28, and it independently found B34's territory, B25's
+  readiness half and the B15/B20 fixes that an earlier pass already had in
+  review — those overlaps are recorded rather than duplicated.
 - Measurement provenance is local to each table/probe. The newer inherited
   keystroke table uses a non-AOT `flutter test` harness; #39 reports file-load
   time/memory, and #5 uses standalone Dart tokenization timings. Do not label
@@ -60,6 +70,7 @@ change, and how to know it is done. Read [AGENTS.md](AGENTS.md) first.
 9. [Delightful and quirky ideas](#9-delightful-and-quirky-ideas)
 10. [Process and documentation](#10-process-and-documentation)
 11. [Review and verification ledger](#11-review-and-verification-ledger)
+12. [2026-09-27 fresh pass: disposition map](#12-2026-09-27-fresh-pass-disposition-map)
 
 ---
 
@@ -77,7 +88,8 @@ probes. Preserve their tested contracts, with the limits below:
 - Save As onto the current path still uses the conflict guard.
 - Its BOM/CRLF fixture round-trips `[EF BB BF] a CRLF b CRLF c CRLF`.
 - Loading NUL rejects binary content; missing, directory and unresolvable
-  paths have explicit failures. Save/load NUL asymmetry remains B20.
+  paths have explicit failures. The save-side NUL asymmetry (B20) is closed in
+  review by #57 and #79 — pick one, and keep the load rule unchanged.
 - Discard decisions are revision-checked; a native-menu save during a pending
   dialog is rechecked; failed native window destruction releases workspace
   locks. Preserve `_confirmTab` and `EditorSaveResult` contracts.
@@ -103,11 +115,12 @@ review. Do not duplicate their implementation. If a PR closes unmerged,
 restore its outstanding work to the backlog. Twenty-nine records below are
 inherited from those main-branch documents; their statuses and claims were not independently
 checked. Four additional PRs were implemented and monitored in an earlier session,
-seven more in the 2026-09-27 review pass, and six more later the same day.
+seven more in the 2026-09-27 review pass, six more later the same day, and
+nine more in the parallel 2026-09-27 second pass.
 The newer inherited source warns that more parallel PRs may exist. This is
 not a complete ownership registry; refresh coordination from authorized
-repository records before duplicating work. This session did not list or
-inspect other workers' PRs.
+repository records before duplicating work. The second pass listed the open
+PRs to avoid colliding with them but did not read their diffs.
 
 ### Verified in this session
 
@@ -179,6 +192,31 @@ away from the inherited PR territories; all six touch only `main`'s own
 | [#82](https://github.com/L-K-M/Planchette/pull/82), `feat/reopen-tab-flash` | B16: opening a document the workspace already holds (same path, or a link resolving onto one) activates its tab and nothing else happened. `DocumentTab.flashRequest` plus a new `_TabChip` answer with a 700 ms pulse, skipped when animation is disabled. Activation itself is unchanged. | Open; all CI checks green. The GLM reviewer job failed after 1m14s, so there is **no** review of record. |
 | [#84](https://github.com/L-K-M/Planchette/pull/84), `fix/first-line-language-detect` | E12: detection ran only on load and on a path change, so a shebang typed into a new buffer — or into any extensionless file — left the document plain text with no way to make the tokenizer look again. `_refreshLanguage` re-recognises when a **bounded** 4 KiB lead changes, so the check never joins the per-keystroke whole-document scans P1 is about. Five tests, including one that pins the bound. | Open at `94d88f8`; CI green. Round 1's redundant-assignment finding applied; the guard is not observable from outside, which the reply states rather than faking. |
 | [#86](https://github.com/L-K-M/Planchette/pull/86), `fix/case-insensitive-search-reporting` | B31: the length guard in `findSearchMatches` is **unreachable** (see the entry) and silently changed what a case-insensitive search meant when it did fire. `searchText` now reports `CaseFolding`; the fold is injectable, so the limited path is reachable and tested instead of defensive; the find bar says so; hosts can read it. | Open at `0cb9a74`; all CI checks green. Review pending. |
+### Implemented and monitored in the 2026-09-27 second pass
+
+Nine small PRs (`planchette/*`) from the fresh review in §12. Each was
+implemented with its regression written first and observed failing, verified
+locally on Flutter 3.47.2 / Dart 3.13.2 (`analyze` clean, suites green as
+listed, two app filesystem skips expected), monitored through GLM rounds and
+left open for the owner's review and merging. They were kept to one behavior
+each so they do not entangle with the other open PRs. Merge conflicts to expect:
+#55 and #79 cover ground an inherited PR (#59, #57) also claims; #76 and #77
+edit the same save/close region of `document_workspace.dart` (merge #76 first);
+#81 and #87 both move the app's theme builder out of `PlanchetteApp` to the same
+top-level `planchetteTheme` (merge one, take the other's). None of these
+overlaps logically.
+
+| PR / branch | Change and proof | Latest recorded status |
+|---|---|---|
+| [#55](https://github.com/L-K-M/Planchette/pull/55), `planchette/aggregate-open-errors` | B15 (app-layer half): `openDialog` collects every failed path and reports one message with the count and each file's error instead of keeping only the last; a single failure keeps the old shape. Two regressions (consecutive failures, mixed success/failure) failed first. App 43 + 2 skipped. | Open; round 1 reported zero actionable suggestions. |
+| [#56](https://github.com/L-K-M/Planchette/pull/56), `planchette/reuse-pristine-untitled-tab` | B23: opening a file reuses the empty untitled tab it replaces. One `_dropPristine` helper runs on every branch that activates a tab, including the already-open and symlink-duplicate paths, and only the *previously active* untouched tab qualifies; a failed open keeps it. Four regressions; the scoping test passes without the fix on purpose. App 46 + 2 skipped. | Open at `f3ca652`; round 1 (real leak on the duplicate paths, missing scoping test) addressed. Round 2 raised one speculative guard; declined with the aliasing proof, second consecutive minor-only round, so minor nits are closed here. |
+| [#76](https://github.com/L-K-M/Planchette/pull/76), `planchette/serialize-saves` | B12: saves for one tab run in request order. `putIfAbsent` deduplicated, so a Save As during a save wrote nothing to the chosen path while the old path reported success, and a Save after an edit wrote the older text. Each request chains behind the in-flight save and re-reads the slot after every wait, so queued saves cannot race. The test store detects overlapping writes. Five regressions; the race test failed first. App 43 + 2 skipped. | Open at `a2ea266`; round 1's major concurrency finding confirmed and fixed. |
+| [#77](https://github.com/L-K-M/Planchette/pull/77), `planchette/explain-quit-during-save` | B11: a quit refused because a save, open, close or dialog is in flight named what to wait for instead of silently doing nothing, and the notice clears itself when that work finishes. A real failure is never cleared. Three regressions; the stale-notice test failed first. App 43 + 2 skipped. | Open at `305b300`; round 1 (stale notice, incomplete wording) addressed. The GLM job timed out once on this revision and was re-run; the code checks are green. |
+| [#79](https://github.com/L-K-M/Planchette/pull/79), `planchette/refuse-nul-on-save` | B20 (independent second fix, alongside #57's offset-reporting version): the write path refuses a NUL byte with its own message, checked on the caller's text before the normalization pass. The load message stays as it was. Two regressions: the original bytes survive and no file is created. Core 86. | Open at `9429f8d`; round 1's fail-fast finding accepted. |
+| [#81](https://github.com/L-K-M/Planchette/pull/81), `planchette/theme-contrast-test` | V3/V6a: a measured contrast gate for the shipped palette — every token against the surface the editor sits on, and both match-highlight pairs, in light and dark, at the WCAG AA body-text ratio. It caught the one real failure (white on the light active match, 4.11:1), fixed to 5.06:1 with `#377A69`. The app theme builder became public so the test measures the real surface. App 52 + 2 skipped. | Open at `0e57a61`; round 1 (WCAG 2.1 cutoff, foreground composited over the highlight, Scaffold-derived backdrop) all accepted. |
+| [#83](https://github.com/L-K-M/Planchette/pull/83), `planchette/quit-bulk-save` | A7 (quit half): several unsaved documents now share one Don't Save / Cancel / Save All question instead of a queue of per-file dialogs, with an exhaustive `switch` so a new answer cannot fall through to discarding edits. One dirty document keeps its file-named prompt. Six regressions including the several-tabs-one-dirty boundary and a cancelled destination. App 44 + 2 skipped. | Open at `b98c364`; round 1 (exhaustive switch, boundary tests, formatting drift, dead copy) all addressed. The GLM job timed out once and was re-run. |
+| [#85](https://github.com/L-K-M/Planchette/pull/85), `planchette/find-past-cap` | B19: Find Next and Find Previous page past the 1,000-match highlight window in both directions and wrap at the ends of the document, so every occurrence is reachable instead of only the first page. Core `findSearchMatches` gains `start`/`reverse` (null means the whole haystack, so every existing caller is unchanged). Seven new tests across core and the controller. Core 87, editor 22. | Open at `900d2d9`; CI green, first review in progress at the time of writing. |
+| [#87](https://github.com/L-K-M/Planchette/pull/87), `planchette/window-backdrop` | V14: the native window is created on the surface the app is about to paint, so a dark launch no longer flashes the platform's white default. `DesktopWindow.windowOptions` is public so the geometry and backdrop are assertable. Two tests. App 40 + 2 skipped. Verified on Linux only; the macOS/Windows visual result is unverified. | Open; CI green, review pending at the time of writing. |
 
 ### Inherited PR records
 
@@ -626,7 +664,12 @@ and test it. Current disposal ignores late completion; it does not cancel
 the underlying file I/O. Do not claim cancellation without implementing it.
 **In review at #60:** the menu now follows the ×'s `!busy` rule — loading
 and load-error tabs close, in-flight saves still refuse — with a widget
-test closing a tab mid-load.
+test closing a tab mid-load. Still open once #60 lands: a load that fails
+*after* its tab was closed leaves `workspace.error` naming a tab that is no
+longer open. Decide whether the message should be dropped with the tab or kept
+as a plain "Could not open X" fact, and pin it with a test rather than
+assuming the `_documents.contains(tab)` check covers the window between the
+error assignment and `_remove`.
 
 ### B6. Multi-open error aggregation moved to B15
 The earlier backlog used B6; B15 is the consolidated task. Do not implement twice.
@@ -678,6 +721,13 @@ when preserving a documented retention cutoff.
 false as doing nothing. Reproduce Cmd+Q during a gated save. Queue quit until
 settled or show a saving notice with Cancel; retain one decision path for
 `onWindowClose` and `AppExitListener`, and rerun dirty-revision guards.
+**Done in #77** (message rather than queueing, which also avoids hanging a quit
+on a slow write): both refusal paths name what to wait for, the notice clears
+itself when the save, open or close it described finishes, and a real failure
+is left for the user to dismiss. Tests cover a gated save, a gated open, and a
+save that fails after the refusal. Still open: whether a quit should *wait*
+instead of refusing (product decision), and the same treatment for a refused
+`closeTab`.
 
 ### B12. Serialize Save As requested during Save — M (inherited read)
 `DocumentWorkspace._save` deduplicates per tab, so Save As during Save may
@@ -685,6 +735,14 @@ return the existing future without opening its dialog. Reproduce with a gated
 store; queue the differing intent or explain why it is unavailable. The
 source's alternative map key `(tab, saveAs)` is insufficient if it permits
 concurrent writes: preserve per-tab serialization, identity and dirty baselines.
+**Done in #76** as a chain, not a second map key: each request waits for the
+in-flight save, re-reads the slot afterwards (two callers waiting on the same
+save would otherwise run concurrently) and then claims it. Regression tests
+cover a Save As and a plain Save issued during one gated write, including an
+overlap detector in the fake store. `putIfAbsent`-with-`(tab, saveAs)` was
+correctly rejected as a concurrency hazard. Related and still open: B18's
+identity reservation, and A7's File › Save All, which should reuse this
+serialization.
 
 ### B13. Focus disposal ordering — S (investigate inherited test failure)
 The newer report observed `A FocusManager was used after being disposed`
@@ -707,7 +765,10 @@ branch only; re-apply if #57 closes unmerged).
 ### B15. Only the last error survives a multi-file open — S (read)
 `DocumentWorkspace.openDialog` overwrites `error` for each failing file.
 Collect the failures and show "2 files could not be opened: a.bin (binary),
-b.txt (not UTF-8)". **In review at #59** with that exact aggregated shape.
+b.txt (not UTF-8)". **In review twice:** #59 (app layer, count plus every
+failed name) and #55, an independent app-layer implementation that reports the
+count and each file's error while keeping the single-failure message shape.
+Pick one at merge time; they cover the same behavior.
 
 ### B16. Opening a file that is already open should flash its tab — assigned to #82
 **In review at #82.** Both reuse paths bump `DocumentTab.flashRequest` and a
@@ -748,6 +809,15 @@ exact-cap display and replacement counts with bounded memory. E5 and P5
 must share these semantics instead of introducing another search model.
 Whole-word mode (#12) flows into both navigation and Replace All; keep the
 mode shared so the cap never silently bounds replacement.
+**Navigation done in #85:** stepping off either end of the window queries the
+next page in that direction, adopting it as the highlighted set, and the ends
+of the document wrap to the first and last page. Tests cover 1,003 occurrences
+in both directions plus the sub-cap wrap. `findSearchMatches` gained
+`start`/`reverse` for this, defaulting to the whole haystack. **Still open
+here:** an honest total count. The counter reports the visible window, so
+"1/1000+" repeats per page; a real total needs a counting scan per query
+(weigh against E10b's debounce), and B21's preview semantics should be settled
+in the same pass.
 
 ### B20. Align input and output text policies — S (confirmed this session)
 Core writing accepts NUL but loading rejects it as binary
@@ -755,10 +825,12 @@ Core writing accepts NUL but loading rejects it as binary
 a file that cannot reopen. Decide whether to reject NUL on save or support
 it on load; give a precise error before publication. Test create/save and
 round trips, preserving original bytes when rejecting an edit.
-**In review at #57:** save/create reject NUL before publication with the
-first offset named; load and write share `_firstNulIndex` so the binary
-rule cannot drift. Wider "non-UTF-8 input" policy remains undecided — this
-closes only the NUL hole.
+**In review twice:** #57 (save/create reject NUL before publication with the
+first offset named; load and write share `_firstNulIndex` so the binary rule
+cannot drift) and #79, an independent fix with its own message that also
+checks before the normalization pass rather than after it. Merge one, or
+combine the shared predicate with #79's cheaper placement. Wider "non-UTF-8
+input" policy remains undecided — this closes only the NUL hole.
 
 ### B21. Define find preview and caret behavior — S (read)
 Typing a query highlights/reveals a hit without selecting it; Escape returns
@@ -783,6 +855,12 @@ Repeated New creates empty buffers; name reuse in #35 is a separate behavior.
 If the active tab is untitled, empty and clean, optionally focus it instead.
 Keep this a product choice: tests must preserve deliberately separate buffers,
 dirty/undo history and expected New semantics.
+**Done in #56** as "open into it", not "focus it": the empty untitled tab the
+file replaces is closed, but only when it is the previously active tab and
+still unnamed, empty, clean and not busy, so background scratch tabs, edited
+buffers and a failed open are all untouched. The accepted trade-off is that a
+tab which was typed into and emptied again loses its undo tail; that is
+documented on the predicate and reversing it would strand tabs.
 
 ### B24. Harden workspace tab transitions — S (read)
 `_nextTab` force-unwraps `workspace.active` after checking only that the tab
@@ -916,6 +994,24 @@ Note the interaction with #78: that PR disables Save for a loading tab
 precisely because the workspace refuses it. B34 is the same "the shell offers
 something the workspace silently refuses" family, on the close path.
 Coordinate so the two end up with one readiness story.
+### B35. A CR-only file is silently rewritten as LF — S (read, 2026-09-27)
+`_foldToLf` maps a lone `\r` to `\n` on load and `LineEnding` only records LF
+versus CRLF, so a classic-Mac CR file opens fine and saves back as LF with no
+trace of the conversion. The normalization itself is intentional and pinned by
+`a lone-CR file votes LF and normalizes to LF on save`; what is missing is
+telling the user. Either report the conversion once at load (status-bar
+notice, like #26's disk-change notice) or preserve CR as a third `LineEnding`
+value with round-trip tests. Decide before A9 changes encoding policy: do not
+let a hidden third state leak into a reopened file's bytes.
+
+### B36. Toolbar path label has no copy-path action — S (read, 2026-09-27)
+The header's path label is a dim 12px `onSurfaceVariant` with no action
+attached: it cannot be copied, and it is the only place the full path is
+visible. FU5 already owns Copy Path in the tab menu, so wire that action to
+the header label rather than inventing a second one, and keep the tooltip
+with the untruncated path. (The rest of that pass's finding — the toolbar and
+the menus disagreeing about when Save is available — is B25's first half and
+is in review at #78.)
 
 ## 4. Performance
 
@@ -1121,6 +1217,16 @@ case-insensitive scan, or a small `HashMap` lookup. Low impact but free.
 Also from that pass: `loadTextDocument` runs three digest passes plus a
 stat, a UTF-8 decode, two EOL passes and a fold on the caller isolate —
 already owned by P4/FU12/P7, confirmed here.
+
+### P9. Status metrics are recomputed per notification — S (read, 2026-09-27)
+`caretLineColumn` walks `lineStarts` (cached per text instance, good) but the
+byte count walks the whole document per call, and the status bar reads both on
+every controller notification. Cheap individually, constant per keystroke.
+Compute one metrics record per text revision and let the status bar read
+fields from it, so a keystroke costs one pass rather than several. Fold in the
+same change if P1's notification pruning lands, and measure with the
+keystroke harness rather than by inspection — this is a micro-optimization and
+must not be sold as a fix for P1.
 
 ## 5. Editing features
 
@@ -1384,6 +1490,11 @@ reuse identity resolution and keep this distinct from A6's command list.
 **Still open:** recently used commands first; commands that take an
 argument (typing `:42` for Go to Line after #33, or a file name for A5's
 Quick Open in the same field with a prefix); a keyboard shortcut reference.
+The shortcut reference is worth doing on its own even if #50 slips: the
+bindings live in two places (the editor's `CallbackShortcuts` and the shell
+menus) and nothing documents them, so Help › Keyboard Shortcuts needs to
+derive from a shared table rather than be hand-written, or it will drift
+within one release. Table first, dialog second.
 **Ranking fix (from #50's review):** menu-name matches rank below label
 matches through a sentinel score of -1, but a scattered label match can
 score -1 or lower (each gap costs up to 3 against a base of 1; `ln` in
@@ -1410,10 +1521,18 @@ rather than bare paths: a 10-deep stack keeps text, save identity, full
 selection (with affinity) and dirty state, restored without a disk
 round-trip; a path reopened meanwhile is selected instead of duplicated;
 the save conflict guard still fires on stale baselines; cancelled closes
-enqueue nothing; the restore writes outside undo history. This supersedes
-the no-recovery constraint above for closed tabs — recovery is real and
+enqueue nothing; the restore writes outside undo history. This supersedes the
+no-recovery constraint above for closed tabs — recovery is real and
 conflict-guarded. What stays open here: Save All / Discard All in the quit
 prompt with partial-success reporting.
+**Quit half done in #83:** several unsaved documents now share one
+Don't Save / Cancel / Save All question instead of a queue of per-file
+dialogs, handled by an exhaustive switch, and one dirty document keeps its
+file-named prompt. A failing save aborts the quit and the error names the
+document. **Still open here:** a File › Save All command with aggregated
+partial failures (the B15 shape), and reporting which documents a bulk
+"Save All" actually wrote when only some succeeded — #83's behavior is
+all-or-nothing.
 
 ### A8. Remember window size, position and maximized state — S
 Store them in settings (A1). Restore them before `waitUntilReadyToShow`,
@@ -1569,6 +1688,17 @@ Recheck the merged #41 values before treating this baseline contrast gap as open
 The latest report says #41 adds AA-checked colors but no permanent contrast
 regression. Verify that coverage; retain tests against surface and current-line
 band so later token/theme changes cannot reintroduce the measured 4.11:1 pair.
+**Partly done in #81, independently of #41:** a permanent contrast gate for the
+palette that is actually shipped now — every token against the surface the
+editor sits on, and both match-highlight pairs, in light and dark, at the WCAG
+AA body-text ratio of 4.5:1. It found the same 4.11:1 light active-match pair
+and moved its background to `#377A69` (5.06:1); every other pair already
+passed (dark tokens 7.11–10.93, light tokens 5.04–6.73, dark active match
+10.91). The app theme builder is public so the test measures the real
+backdrop. Still open: re-run the same gate against #41's curated themes and
+host overrides, add the current-line band and the selection colors the
+inherited report asks for, and keep the formula as a floor — real-font and
+native inspection still required.
 
 ### V4. Search bar polish — S
 #36 reports field surfaces/outlines/fills/monospace; #44 reports a magnifier,
@@ -1604,6 +1734,8 @@ errors accessibly. Never hide an unrelated failure with a generic success.
 ### V6a. Active-search AA contrast consolidated in V3
 Keep the baseline 4.11:1 finding, extra inherited measurements and proposed
 background in V3; verify #41 before a separate fix. Do not duplicate the task.
+#81 shipped the gate and the light-pair fix for the current palette; #41's
+candidate background was not adopted, and the task lives in V3.
 
 ### V7. Scroll past the end — M (not S)
 The last line sits at the bottom edge. **Bottom `contentPadding` does not
@@ -1661,6 +1793,12 @@ The latest report says DesktopWindow never sets native background color.
 Reproduce Windows/Linux dark launch, set the intended surface before show if
 needed, and coordinate hidden-until-ready startup with B4. Test light/dark and
 settings load timing before assuming one color suits every initial frame.
+**Done in #87** for the app's own themes: the window is created on
+`scaffoldBackgroundColor` for the brightness the app will follow, so neither
+theme flashes the wrong color. `DesktopWindow.windowOptions` is public, which
+also makes the geometry assertable and pairs with D0d's single size authority.
+Verified on Linux only — the macOS and Windows first-frame result is unverified,
+and a host-supplied theme injected after startup is out of scope.
 
 ### V15. Define the tab strip container — S (inherited idea)
 After #35/#36/#43 integration, compare a subtle inset border or baseline rule
@@ -1772,7 +1910,11 @@ feedback must remain quiet and usable without animation or thematic copy.
   coordinate E10/FU13 so units stay UTF-8 bytes.
 - **Q23. Local edit timeline.** Scrub session-only undo-stack snapshots with
   timestamps per file. No persistence in v1; design per-hunk restore like
-  Q15 before promising more.
+  Q15 before promising more. Cheapest first step, independent of the scrubber:
+  reflect `canUndo`/`canRedo` in the Edit menu (they are currently always
+  enabled when the editor is ready) and show a step count, so the user can see
+  what is recoverable. `UndoHistoryController` is public on the controller, so
+  this needs no framework history API.
 - **Q24. Daily word-goal candle.** An optional, subtle progress marker for
   writing goals. Off by default; never thematic pressure or sound.
 - **Q25. Shebang wake-up.** E12 turns typing `#!/usr/bin/env …` into the
@@ -1789,6 +1931,13 @@ feedback must remain quiet and usable without animation or thematic copy.
   GOODBYE semantics already exist implicitly. Keep the copy plain (thematic
   text stays out of errors) but a tiny planchette glyph in the dialog
   corner is a quiet nod — optional art, removable in one line.
+- **Q28. Hex peek for a rejected file.** When the loader refuses a file as
+  binary, show its first bytes as hex in the error instead of leaving a wall.
+  Distinct from Q22, which peeks at the caret inside a loaded document: this
+  is about the file the user cannot open. Needs a bounded read that never
+  loads the whole file, a cap on bytes shown, and an explicit action on the
+  error banner (V6) rather than a dialog the editor raises itself. Report the
+  same bytes the loader refused on, so the two can never disagree.
 
 ## 10. Process and documentation
 
@@ -1882,6 +2031,14 @@ feedback must remain quiet and usable without animation or thematic copy.
   disabled commands do not consume keys they cannot act on. Unmount test
   widgets before disposing attached workspace nodes; do not misdiagnose a
   failed-assertion teardown trace as an application bug (B13).
+  **Write the focus contract down before adding a surface.** A fresh pass
+  re-found that focus is a web across two owners — the shell's
+  `_rememberTextFocus`/`_textAction`/`_focusAfterFrame` and the editor view's
+  `didUpdateWidget` autofocus plus `closeSearch` refocus — with a frame-timing
+  race on tab switches (B33) and no written rule. Every new overlay must state
+  four things in its own PR: where focus was, where it goes on open, on confirm
+  and on cancel, and what Escape does. Put that sentence in the PR description
+  and in the test name; do not discover it from a bug report.
 - **D5a. A native Linux harness works in the dev container.** Install
   `libgtk-3-dev x11-utils xdotool imagemagick`, run `flutter build linux`,
   start `Xvfb :96 -screen 0 1400x900x24`, launch the bundle with a file,
@@ -2145,3 +2302,118 @@ inspected.
   `planchette_app.dart` and `document_workspace.dart`. The integration branch
   is `integration/check-all` if it is wanted; it is not proposed for `main`,
   because each PR must land on its own review.
+- **2026-09-27 second pass (#55/#56/#76/#77/#79/#81/#83/#85/#87):** written
+  from a fresh review at `797deb9` with no code changed for the review itself.
+  Suites green per PR (core 86–87, editor 22, app 40–52 with two
+  case-insensitive-volume skips), all analyses clean on Flutter 3.47.2 /
+  Dart 3.13.2 on Linux. Rounds, in order of the findings' weight:
+  - #56 round 1 found a real leak (the pristine-tab cleanup was skipped on the
+    already-open and symlink-duplicate paths) plus a missing scoping test; both
+    fixed in `f3ca652`. Round 2's speculative `identical` guard was declined
+    with the aliasing proof — the predicate and its test own the invariant —
+    which made two consecutive minor-only rounds, so minor nits are closed.
+  - #76 round 1's major finding was correct: the first chain read the
+    in-flight future once, so two requests arriving during the same write both
+    started. Fixed by re-reading the slot after every wait (`a2ea266`), with a
+    regression that fails on overlap and pins request order.
+  - #77 round 1's outside-diff finding was correct and the tests had been
+    hiding it by clearing the error by hand. Refusals are named constants now
+    and clear themselves when the work finishes; a real failure is not cleared
+    (`305b300`).
+  - #79 round 1 accepted: check NUL before the normalization pass, and the
+    single write choke point verified (`9429f8d`).
+  - #81 round 1 accepted all three: the WCAG 2.1 sRGB cutoff, the match
+    foreground composited over the highlight rather than the bare surface, and
+    the backdrop read from the Scaffold the editor sits in (`0e57a61`).
+  - #83 round 1 accepted: an exhaustive switch over the bulk-close answer
+    (a new variant would otherwise have discarded every edit), the
+    several-tabs-one-dirty boundary, a cancelled-destination test, the
+    formatting drift, and removal of the unreachable `count == 1` copy
+    (`b98c364`).
+  Two reviewer jobs timed out on their first run (#77, #83) and were re-run
+  from the same revision; treat a timeout as a missing review, never as a pass.
+  #55 reported zero actionable suggestions on its only round. #85 and #87 had
+  not completed a round when this section was written.
+
+## 12. 2026-09-27 fresh pass: disposition map
+
+The second pass reviewed the tree at `797deb9` from scratch and wrote down
+findings without looking at ANALYSIS.md or any PR, then merged them here. This
+map is the audit trail: every finding from that pass, and where it ended up.
+Nothing was dropped, and nothing was implemented twice. It also read the open
+PR list to avoid collisions, so where a row names an inherited PR, check that
+PR's current state: the parallel pass's #75/#78/#80/#82/#84/#86 were merged
+into `main` at `71d5778` after this map was written, which resolves the
+tab-strip, header-label, readiness and close-feedback rows.
+
+| Finding from the fresh pass | Disposition |
+|---|---|
+| 1.1 Multi-file open keeps only the last error | B15, in review at #55 (and #59) |
+| 1.2 Pristine untitled tab never reused | B23, done in #56 |
+| 1.3 Find navigation stops at the paint cap | B19, navigation done in #85; honest total count still open |
+| 1.4 Save/Save-As had no serialization | B12, done in #76 |
+| 1.5 Quit during save silently refuses | B11, done in #77 |
+| 1.6 CR-only line endings vanish without a trace | New B35 |
+| 1.7 NUL policy is asymmetric | B20, in review at #79 (and #57) |
+| 1.8 Tab key leaves the editor | Already owned by #14/#21/#34; the fresh pass independently confirmed Tab did nothing and Enter/Backspace did not continue or remove indentation — verify after those merge, do not duplicate |
+| 1.9 Close during load can strand `_error` on a removed tab | Appended to B5; #60 owns the close rule, and the parallel pass's B34 covers the related mid-load close |
+| 1.10 `isDirty` is O(n) per call, called per keystroke | P1 / #17 (inherited) |
+| 2.1 Shell rebuilds on every keystroke | P1 / #17 |
+| 2.2 `IndexedStack` keeps every tab alive | P2, P3 |
+| 2.3 Gutter lays out the whole document per edit | P1, FU2, FU9; #22/#27/#28 own it |
+| 2.4 Find re-scans the buffer per query keystroke | E10b, P1, B28 |
+| 2.5 `_revealMatch` builds a full-prefix painter | FU2 (one reveal path) |
+| 2.6 Highlight span count is unbounded within the cap | P1, P3 |
+| 2.7 File I/O is synchronous on the UI isolate | P4, FU12, #39 |
+| 2.8 `byteCount` walks the document per status read | New P9 |
+| 3.1 Go to Line | #8/#29 (inherited) |
+| 3.2 Zoom | #9/#25/#30 (inherited) |
+| 3.3 Whole-word / regex search | E5; #12 whole-word, #44 regex |
+| 3.4 Reopen Closed Tab | A7, #18 (inherited) |
+| 3.5 Comment toggle, line ops, bracket pair, bracket match | E1–E4; #23/#47/#34/#73 |
+| 3.6 Word wrap toggle | E6 |
+| 3.7 Visible whitespace / indent guides | E7 |
+| 3.8 Session restore / hot exit | A2, Q17 |
+| 3.9 Open Recent, richer empty state | A3, V11 |
+| 3.10 Quick Open / command palette | A5, A6 |
+| 3.11 Save All, dirty-tab overview | A7, quit half done in #83 |
+| 3.12 Status-bar actions | E10, V5, Q12 |
+| 3.13 Indentation status and per-language config | A1, E10a |
+| 3.14 Reload change detection | FU10, #26/#38 |
+| 3.15 Trim/final newline, outline, minimap | E9, E11, P3/Q7 |
+| 4.1 No contrast audit in-tree | V3, gate + light fix in #81 |
+| 4.2 Tab strip affordances | FU5, V15, #42/#66 |
+| 4.3 Toolbar duplicates the menu; two truths for Save | B25 first half, fixed by #78 (merged into main at `71d5778`); the copy-path part is new B36 |
+| 4.4 Search bar density | V4, #10/#36/#44 |
+| 4.5 Status bar is two cramped texts | V5, FU13 |
+| 4.6 Error banner has no action | V6 |
+| 4.7 Generic empty state | V11, A3 |
+| 4.8 White flash before first paint | V14, done in #87 |
+| 4.9 UI font vs buffer typography | V13, V9 |
+| 4.10 Icons unverified at small sizes | V12 |
+| 5.1 Fragile focus discipline | D4 (focus contract now required in the PR) |
+| 5.2 No keyboard cheatsheet | A6 (shared table first) |
+| 5.3 Find UX papercuts | V4, B19, B21, E5 |
+| 5.4 Undo granularity and no menu state | Q23 (cheapest step) |
+| 5.5 Silent save feedback | Q6, Q26 |
+| 5.6 No drag-and-drop file intake | A4, #43 |
+| 5.7 No single instance on Linux/Windows | I1 |
+| 6.1 One seed color, generic theming | V1, #41 |
+| 6.2 Spend delight on micro-interactions | §9, with the reduced-motion rule |
+| 6.3 Dark mode is the primary mode | V1, V3 |
+| 7.1 "Ouija" palette | A6 |
+| 7.2 Typewriter scroll mode | Q20 |
+| 7.3 Zen mode | Q3 |
+| 7.4 "Spirit" autosave drafts | A2, Q17 |
+| 7.5 Selection analytics in the status bar | Q12 |
+| 7.6 Match ticks in a slim scrollbar map | Q7, P3 |
+| 7.7 Hex peek for binary rejects | New Q28 |
+| 7.8 Scratchpad tab | Q17 |
+| 7.9 Undo-history depth indicator | Q23 |
+| 7.10 Typing soundscape | Rejected on purpose: sound in a programmer's editor is a bug. Kept so a later pass does not file it. |
+
+Two findings the pass deliberately did **not** turn into work: the visual and
+layout items in its §4 were read from source, never seen on screen (no native
+session), and its performance claims were inherited rather than re-profiled —
+both are labeled as such above and in P1, and neither may be presented as
+measured on this baseline.
