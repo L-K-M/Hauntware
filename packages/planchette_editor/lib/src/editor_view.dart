@@ -126,12 +126,18 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
 
   void _revealMatch() {
     if (!c.scroll.hasClients) return;
-    if (c.activeMatch < 0 || c.activeMatch >= c.matches.length) return;
-    final match = c.matches[c.activeMatch];
+    final int revealOffset;
+    if (c.activeMatch >= 0 && c.activeMatch < c.matches.length) {
+      revealOffset = c.matches[c.activeMatch].start;
+    } else {
+      final selection = c.text.selection;
+      if (!selection.isValid) return;
+      revealOffset = selection.extentOffset.clamp(0, c.text.text.length).toInt();
+    }
     double dy;
     if (c.text.text.length <= syntaxHighlightingMaxChars &&
         _textWidth != null) {
-      final prefix = c.text.text.substring(0, match.start);
+      final prefix = c.text.text.substring(0, revealOffset);
       final painter = TextPainter(
         text: TextSpan(text: prefix, style: _style),
         textDirection: TextDirection.ltr,
@@ -143,7 +149,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       painter.dispose();
     } else {
       final line =
-          c.lineStarts.takeWhile((offset) => offset <= match.start).length - 1;
+          c.lineStarts.takeWhile((offset) => offset <= revealOffset).length - 1;
       dy =
           line *
           MediaQuery.textScalerOf(context).scale(_style.fontSize!) *

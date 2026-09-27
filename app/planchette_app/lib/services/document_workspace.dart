@@ -13,6 +13,7 @@ abstract interface class DocumentDialogs {
   Future<String?> pickSavePath(String suggestedName);
   Future<bool> confirmReplace(String path);
   Future<CloseChoice> chooseClose(String name);
+  Future<int?> askLineNumber(int maximumLine);
 }
 
 /// One controller survives tab switches, retaining undo, selection, find and
@@ -72,6 +73,23 @@ final class DocumentWorkspace extends ChangeNotifier {
     _active = tab;
     _notify();
     return tab;
+  }
+
+  /// Ask for a line number and move the caret there. A canceled or invalid
+  /// answer leaves the document untouched.
+  Future<void> gotoLine(DocumentTab tab) async {
+    if (interactionLocked ||
+        !_documents.contains(tab) ||
+        tab.editor.isLoading ||
+        tab.editor.error != null) {
+      return;
+    }
+    _active = tab;
+    _notify();
+    final maximumLine = tab.editor.lineStarts.length;
+    final line = await _dialog(() => dialogs.askLineNumber(maximumLine));
+    if (_disposed || !_documents.contains(tab)) return;
+    if (line != null && line >= 1) tab.editor.gotoLine(line);
   }
 
   DocumentTab _makeTab({String? path, String? initialText}) {

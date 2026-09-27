@@ -360,6 +360,17 @@ class EditorController extends ChangeNotifier {
 
   void nextMatch() => _stepMatch(1);
   void previousMatch() => _stepMatch(-1);
+
+  /// Move the caret to the start of 1-based [line], clamped to the document,
+  /// and ask the view to reveal it.
+  void gotoLine(int line) {
+    if (_loading || _error != null) return;
+    final starts = lineStarts;
+    final index = (line - 1).clamp(0, starts.length - 1).toInt();
+    text.selection = TextSelection.collapsed(offset: starts[index]);
+    _revealRequest++;
+    _notify();
+  }
   void _stepMatch(int delta) {
     if (_matches.isEmpty) return;
     _activeMatch = (_activeMatch + delta + _matches.length) % _matches.length;

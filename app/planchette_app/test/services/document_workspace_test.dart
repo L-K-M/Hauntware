@@ -77,8 +77,10 @@ class FakeDialogs implements DocumentDialogs {
   List<String> openPaths = [];
   String? savePath;
   bool replace = true;
+  int? lineNumber;
   final choices = <CloseChoice>[];
   final asked = <String>[];
+  final askedLineMaximums = <int>[];
   Completer<CloseChoice>? choiceGate;
   Future<void> Function()? beforeReplace;
 
@@ -90,6 +92,12 @@ class FakeDialogs implements DocumentDialogs {
   Future<bool> confirmReplace(String path) async {
     await beforeReplace?.call();
     return replace;
+  }
+
+  @override
+  Future<int?> askLineNumber(int maximumLine) async {
+    askedLineMaximums.add(maximumLine);
+    return lineNumber;
   }
 
   @override
@@ -528,4 +536,32 @@ void main() {
       expect(tab.path, isNull);
     },
   );
+
+  test('gotoLine asks with the document line count and moves the caret',
+      () async {
+    final tab = workspace.newDocument()!;
+    tab.editor.text.text = 'one\ntwo\nthree';
+    dialogs.lineNumber = 3;
+    await workspace.gotoLine(tab);
+    expect(dialogs.askedLineMaximums, [3]);
+    expect(tab.editor.caretLineColumn, (3, 1));
+
+    dialogs.lineNumber = null;
+    await workspace.gotoLine(tab);
+    expect(tab.editor.caretLineColumn, (3, 1));
+  });
+
+  test('gotoLine is refused while interaction is locked', () async {
+    final tab = workspace.newDocument()!;
+    final gate = Completer<CloseChoice>();
+    dialogs.choiceGate = gate;
+    final second = workspace.newDocument()!..editor.text.text = 'unsaved';
+    unawaited(workspace.closeTab(second));
+    await Future<void>.delayed(Duration.zero);
+    expect(workspace.interactionLocked, isTrue);
+    await workspace.gotoLine(tab);
+    expect(dialogs.askedLineMaximums, isEmpty);
+    gate.complete(CloseChoice.cancel);
+    await Future<void>.delayed(Duration.zero);
+  });
 }

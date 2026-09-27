@@ -14,6 +14,8 @@ TextDocument document(String text) => TextDocument(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  _gotoLineTests();
+  _gotoLineRevealTests();
   test(
     'save retains new edits and updates the next conflict baseline',
     () async {
@@ -220,5 +222,62 @@ void main() {
     expect(editor.lineStarts, [0, 2, 5]);
     editor.text.selection = const TextSelection.collapsed(offset: 4);
     expect(editor.caretLineColumn, (2, 3));
+  });
+}
+
+void _gotoLineTests() {
+  group('gotoLine', () {
+    test('moves the caret to the line start and requests a reveal', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo\nthree',
+      );
+      addTearDown(editor.dispose);
+      final before = editor.revealRequest;
+      editor.gotoLine(3);
+      expect(editor.text.selection.extentOffset, 8);
+      expect(editor.caretLineColumn, (3, 1));
+      expect(editor.revealRequest, greaterThan(before));
+    });
+
+    test('clamps out-of-range lines into the document', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo\n',
+      );
+      addTearDown(editor.dispose);
+      editor.gotoLine(99);
+      expect(editor.caretLineColumn.$1, 3);
+      editor.gotoLine(0);
+      expect(editor.caretLineColumn, (1, 1));
+    });
+  });
+}
+
+
+void _gotoLineRevealTests() {
+  testWidgets('gotoLine scrolls the caret line into view', (tester) async {
+    final lines = List.generate(120, (i) => 'line ${i + 1}');
+    final editor = EditorController(
+      displayPath: 'notes.txt',
+      initialText: lines.join('\n'),
+    );
+    addTearDown(editor.dispose);
+    await tester.binding.setSurfaceSize(const Size(300, 200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlanchetteEditor(controller: editor, showStatus: false),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(editor.scroll.hasClients, isTrue);
+    expect(editor.scroll.offset, 0);
+    editor.gotoLine(100);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(editor.scroll.offset, greaterThan(0));
   });
 }

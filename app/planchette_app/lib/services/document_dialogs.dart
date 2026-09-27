@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as paths;
 
 import 'document_workspace.dart';
@@ -81,5 +82,44 @@ final class AppDocumentDialogs implements DocumentDialogs {
           ),
         ) ??
         CloseChoice.cancel;
+  }
+
+  @override
+  Future<int?> askLineNumber(int maximumLine) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return null;
+    final input = TextEditingController();
+    final result = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Go to Line'),
+        content: TextField(
+          controller: input,
+          autofocus: true,
+          autocorrect: false,
+          enableSuggestions: false,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            hintText: 'Line number (1–$maximumLine)',
+          ),
+          onSubmitted: (value) =>
+              Navigator.pop(dialogContext, int.tryParse(value)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, null),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, int.tryParse(input.text)),
+            child: const Text('Go'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+    return result;
   }
 }

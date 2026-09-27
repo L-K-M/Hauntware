@@ -87,6 +87,20 @@ void main() {
     }),
   );
 
+  testWidgets('control+L asks for a line and moves the caret', (tester) async {
+    final tab = workspace.newDocument()!;
+    await mount(tester);
+    await tester.enterText(editorField(tab), 'one\ntwo\nthree');
+    await tester.pumpAndSettle();
+    dialogs.lineNumber = 3;
+    await chord(tester, LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(dialogs.askedLineMaximums, [3]);
+    expect(tab.editor.caretLineColumn, (3, 1));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets(
     'document shortcuts save the active tab and create another',
     (tester) async {
