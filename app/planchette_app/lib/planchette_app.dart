@@ -117,7 +117,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _focusAfterFrame(DocumentTab tab) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && workspace.active == tab && !workspace.interactionLocked) {
-        tab.editor.editorFocus.requestFocus();
+        tab.editor.restoreFocus();
       }
     });
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart' hide findSearchMatches;
 
@@ -32,6 +34,11 @@ class EditorController extends ChangeNotifier {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
+    for (final node in [editorFocus, searchFocus, replacementFocus]) {
+      node.addListener(() {
+        if (node.hasFocus) _focusMemory = node;
+      });
+    }
     if (initialText != null) {
       _installText(initialText);
     } else {
@@ -53,6 +60,19 @@ class EditorController extends ChangeNotifier {
   final scroll = ScrollController();
   final undoController = UndoHistoryController();
 
+  /// The node to focus when this editor's tab becomes active. Deactivation
+  /// unfocuses all three, so remembering the last-focused node lets a tab
+  /// switch restore a focused find field instead of always the document.
+  FocusNode get focusTarget => _focusMemory ?? editorFocus;
+
+  /// Restores [focusTarget] after the frame's focus bookkeeping settles.
+  /// A same-frame `unfocus` marks the enclosing scope for focus and would
+  /// overwrite a request issued right now — last mark wins.
+  void restoreFocus() {
+    final target = focusTarget;
+    scheduleMicrotask(target.requestFocus);
+  }
+
   TextDocument? _document;
   String _displayPath;
   String _savedText = '';
@@ -67,6 +87,7 @@ class EditorController extends ChangeNotifier {
   bool _updatingSearch = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
+  FocusNode? _focusMemory;
   int _revision = 0;
   int _revealRequest = 0;
   String _lastText = '';

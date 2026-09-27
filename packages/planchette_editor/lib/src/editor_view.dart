@@ -98,9 +98,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (widget.isActive) {
-          if (!c.searchFocus.hasFocus && !c.replacementFocus.hasFocus) {
-            c.editorFocus.requestFocus();
-          }
+          c.restoreFocus();
         } else {
           c.editorFocus.unfocus();
           c.searchFocus.unfocus();
