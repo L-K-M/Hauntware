@@ -56,10 +56,20 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   int _lastReveal = -1;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
-  // The platform default is the base so partial host styles (a size, a
-  // color) keep a real monospace family; merge only applies non-null fields.
-  TextStyle get _style =>
-      EditorTypography.monospace(defaultTargetPlatform).merge(widget.textStyle);
+  // A partial host style (a size or color without a family) still needs a
+  // real monospace family; a host that names its own family owns its
+  // typography and does not inherit the monospace fallback chain.
+  TextStyle get _style {
+    final host = widget.textStyle;
+    final base =
+        host?.fontFamily == null
+            ? EditorTypography.monospace(defaultTargetPlatform)
+            : const TextStyle(
+              fontSize: EditorTypography.defaultFontSize,
+              height: EditorTypography.defaultLineHeight,
+            );
+    return base.merge(host);
+  }
   bool get _locked => widget.editingLocked || c.editingLocked;
 
   @override

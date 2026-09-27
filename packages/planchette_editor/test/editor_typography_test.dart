@@ -107,5 +107,7 @@ void main() {
     );
     expect(field.style!.fontFamily, 'HostMono');
     expect(field.style!.fontSize, 16);
+    // An explicit family owns the typography: no monospace fallback chain.
+    expect(field.style!.fontFamilyFallback, isNull);
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 }
