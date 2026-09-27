@@ -46,6 +46,7 @@ sections below. The problem statements live in the PR descriptions.
 | [L-K-M/Planchette#30](https://github.com/L-K-M/Planchette/pull/30) | `fontFamily: 'monospace'` is Courier on Apple and likely proportional on Windows (**read**). Adds a per-platform monospace stack and View › Zoom In/Out/Actual Size |
 | [L-K-M/Planchette#31](https://github.com/L-K-M/Planchette/pull/31) | Rust lifetimes swallowed lines as strings (**confirmed**), Go raw strings, backslashes in shell/SQL/YAML single quotes, JSON/YAML keys, C preprocessor, Rust attributes, Python decorators, and a diff/patch language |
 | [L-K-M/Planchette#33](https://github.com/L-K-M/Planchette/pull/33) | Go to Line (Cmd+L / Ctrl+G, and a clickable status position). Find shortcuts per platform: Ctrl chords no longer shadow macOS text bindings. Status shows the on-disk byte count (CRLF + BOM), language display names and a selection summary |
+| [L-K-M/Planchette#39](https://github.com/L-K-M/Planchette/pull/39) | Loading a 3.9 MB file cost about 450 ms on the UI isolate (**confirmed**, measured). Byte buffers instead of `List<int>`, and a loop instead of two regexes for the line-ending census: load 453 → 178 ms, peak memory 124 → 37 MB |
 | [L-K-M/Planchette#35](https://github.com/L-K-M/Planchette/pull/35) | The Linux/Windows menu bar and tab strip were centered mid-window (**confirmed**). Merges the toolbar into one tab strip with a dirty dot and close on hover, middle-click close, Cmd/Ctrl+1…9, the active tab kept in view, wheel scrolling, and "Untitled"/"Untitled 2" naming |
 
 **Merge-order notes.** All eight branches start from `d53f416`. These pairs
@@ -205,12 +206,15 @@ ceilings and enable minimap, folding and true tab stops. It's a big
 project: prototype behind a flag in `planchette_editor`, keeping
 `EditorController`'s API.
 
-### P4. Load and save memory — S (read)
-`loadTextDocument` builds a growable boxed `List<int>` (8 bytes per
-byte), and `_writeTextDocument` spreads `utf8.encode(...)` into
-`List<int>` the same way. Use `BytesBuilder(copy: false)` and
-`Uint8List`. **Done when** the tests are green and a 4 MiB load no
-longer allocates about 32 MB.
+### P4. Load and save off the UI isolate — M
+After #39, opening a 3.9 MB file still costs about 180 ms of CPU on the
+UI isolate: three SHA-256 passes (about 50 ms each in AOT), the UTF-8
+decode, and line-ending folding. **Plan:** run the pure steps (hash,
+decode, census, fold, and encode on save) in `Isolate.run` inside
+`planchette_core`. Keep the file I/O and the digest ordering exactly as
+they are, since the safety tests inject `sha256Of`. **Done when**
+opening a 4 MiB file leaves the UI isolate responsive (no frame over
+16 ms in a profile build), and all document-safety tests pass unchanged.
 
 ## 5. Editing features
 
