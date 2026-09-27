@@ -269,7 +269,63 @@ void main() {
       expect(editor.text.language, isNull, reason: partial);
     }
     editor.text.text = '#!/usr/bin/env python\n';
-    expect(editor.text.language, SyntaxLanguages.python);
+    // `same`, not `equals`: the controller's per-keystroke guard compares
+    // languages with `identical`, so the canonicality of these instances is
+    // the thing under test, not their value.
+    expect(editor.text.language, same(SyntaxLanguages.python));
+  });
+
+  test('language detection returns canonical instances', () {
+    // The guard in EditorController._applyLanguage is `identical`, so a
+    // recogniser that started building a fresh SyntaxLanguage per call would
+    // silently turn the guard into an always-assign. Nothing enforces
+    // canonicality, so pin it here, where a change to it would be visible.
+    const paths = [
+      'a.py',
+      'a.js',
+      'a.sh',
+      'a.rb',
+      'a.lua',
+      'a.pl',
+      'a.sql',
+      'a.xml',
+      'a.yaml',
+      'a.ini',
+      'a.json',
+      'a.md',
+      'a.css',
+      '.env',
+      'Dockerfile.dev',
+      'Makefile',
+    ];
+    // Every member of `SyntaxLanguages`, which is the whole canonical set:
+    // `syntaxLanguageFor` resolves through `_languageById` and these.
+    final canonical = {
+      SyntaxLanguages.dotenv,
+      SyntaxLanguages.shell,
+      SyntaxLanguages.python,
+      SyntaxLanguages.javascript,
+      SyntaxLanguages.dart,
+      SyntaxLanguages.json,
+      SyntaxLanguages.yaml,
+      SyntaxLanguages.ini,
+      SyntaxLanguages.dockerfile,
+      SyntaxLanguages.sql,
+      SyntaxLanguages.xml,
+      SyntaxLanguages.markdown,
+      SyntaxLanguages.css,
+      SyntaxLanguages.ruby,
+      SyntaxLanguages.perl,
+      SyntaxLanguages.lua,
+      SyntaxLanguages.cFamily,
+    };
+    for (final path in paths) {
+      final language = syntaxLanguageFor(path);
+      expect(language, isNotNull, reason: path);
+      expect(canonical, contains(same(language)), reason: path);
+      // And the same answer twice, so a cache-free rebuild cannot pass.
+      expect(syntaxLanguageFor(path), same(language), reason: path);
+    }
   });
 
   test('edits away from the first line leave the language alone', () {
