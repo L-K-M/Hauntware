@@ -5,118 +5,118 @@ Each open item is written so that an agent can pick it up without
 rediscovering the context: why it matters, where the code is, what to
 change, and how to know it is done. Read [AGENTS.md](AGENTS.md) first.
 
-- Baselines reviewed: `main` at `d53f416`, again at `a580387`, and again
-  at `e974cde` (2026-09-27). Toolchain: Flutter 3.47.2 / Dart 3.13.4. At
-  `d53f416` and at `e974cde`: core 84 tests, the editor 19 and the app 38
-  (2 skipped), all green.
-- **All timing numbers in this document are milliseconds per keystroke in
-  the `flutter test` harness**, which runs Dart in the VM without AOT. A
-  release build is several times faster; the *scaling* is what carries over.
-  Anything quoted as a measurement was taken on the same machine back to
-  back against `main`, not compared across sessions.
-- Evidence labels: **confirmed** means reproduced with a test or probe.
-  **Read** means found by reading code or Flutter/Skia sources but not
-  observed on a real desktop. **Idea** means a suggestion.
+- Consolidated 2026-09-27 from the existing backlogs at `e6bd9ba`, `f4c1f46` and `87caa35` and this
+  session's review of `e7ec67f`. The inherited reviews cite `d53f416`, `a580387` and `e974cde`; `d53f416`
+  also integrated the new icon. Other workers' PRs were not inspected.
+- This session: Flutter 3.47.2 / Dart 3.13.2 on Linux; baseline analyses
+  passed with 84 core, 19 editor and 38 app tests. Two case-insensitive
+  filesystem tests skipped on the local volume. Core performance probes
+  used standalone Dart 3.13.4. Inherited baseline results report the same
+  test counts at `d53f416`; those results were not independently rerun here.
+
+  The latest inherited report also gives 84/19/38 (two app skips) at `e974cde`.
+  Its combined Flutter 3.47.2 / Dart 3.13.4 label needs provenance checking:
+  this session used bundled Dart 3.13.2 and standalone Dart 3.13.4 separately.
+- Measurement provenance is local to each table/probe. The newer inherited
+  keystroke table uses a non-AOT `flutter test` harness; #39 reports file-load
+  time/memory, and #5 uses standalone Dart tokenization timings. Do not label
+  all timings keystroke costs or infer a fixed release-build speedup.
+- Evidence labels: **confirmed** means a reproduced test/probe;
+  **read** means source-based evidence; **investigate** needs reproduction;
+  **idea** is a proposal. **Inherited** marks another review's report,
+  preserved without independently verifying its PR, implementation or timings.
+  Source locations refer to the reviewed baselines and may move after merges.
 - Effort: S (under an hour), M (half a day), L (days). Risk is the chance
   of regressions in hosts (Poltergeist, Séance) or native behavior.
-- When you finish an item, delete it here in the same PR, and add a
-  CHANGELOG line. An item that is *mostly* done by a PR keeps its
-  heading and its "still open" list, so the next agent does not
-  re-derive what is left.
-
-**How to get a toolchain in a fresh container.** Neither Dart nor Flutter is
-installed. The dev container has no `unzip` and no `xz`, so extract with
-Python rather than `unzip`/`tar`:
-
-```sh
-mkdir -p ~/sdk && cd ~/sdk
-curl -sSL -o dart.zip https://storage.googleapis.com/dart-archive/channels/stable/release/latest/sdk/dartsdk-linux-x64-release.zip
-python3 -c "import zipfile; zipfile.ZipFile('dart.zip').extractall('.')"
-export PATH=~/sdk/dart-sdk/bin:$PATH
-
-curl -sSL -o flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.2-stable.tar.xz
-python3 -c "import tarfile; tarfile.open('flutter.tar.xz').extractall('.')"
-export PATH=~/sdk/flutter/bin:$PATH   # after ~3 min
-```
-
-Pin 3.47.2 or newer: the editor's pubspec requires `>=3.47.2`, so a 3.47.1
-SDK fails to resolve and the error names the version rather than the cause.
-Then:
-
-```sh
-(cd packages/planchette_core && dart pub get && dart analyze && dart test)
-(cd packages/planchette_editor && flutter pub get && flutter analyze && flutter test)
-(cd app/planchette_app && flutter pub get && flutter analyze && flutter test)
-```
+- Preserve guarded writes, explicit conflicts, BOM/EOL metadata, dirty-close
+  guards, saved-revision tracking, per-tab undo/search, injected host themes
+  and strings, and the app → editor → core dependency boundary.
+- Remove an item once merged, retaining unresolved limits and useful
+  acceptance criteria. Open PRs stay listed to prevent duplicate work;
+  record merged behavior in CHANGELOG and STATUS as described in D1/D2.
 
 ## Contents
 
-0. [Do not regress this](#0-do-not-regress-this)
+0. [Preserve existing contracts](#0-preserve-existing-contracts)
 1. [In review](#1-in-review): findings already addressed by open PRs
 2. [Follow-ups to the open PRs](#2-follow-ups-to-the-open-prs)
 3. [Bugs](#3-bugs)
-4. [Performance](#4-performance), including a **measured dead end** worth
-   reading before starting on the metrics
+4. [Performance](#4-performance)
 5. [Editing features](#5-editing-features)
 6. [App features](#6-app-features)
 7. [Platform integration](#7-platform-integration)
 8. [Visual design and theming](#8-visual-design-and-theming)
 9. [Delightful and quirky ideas](#9-delightful-and-quirky-ideas)
 10. [Process and documentation](#10-process-and-documentation)
+11. [Review and verification ledger](#11-review-and-verification-ledger)
 
 ---
 
-## 0. Do not regress this
+## 0. Preserve existing contracts
 
-Almost everything below is additive. This part is not. It was measured
-rather than assumed, so read it before "simplifying" any of it.
+The newer inherited review reports direct `LocalDocumentStore`/temporary-file
+probes. Preserve their tested contracts, with the limits below:
 
-**The file-safety core is the strongest part of this repository and it
-holds up.** Tested directly against `LocalDocumentStore` and the temp
-directory:
+- Tested load/edit/save/reload fixtures retain expected bytes and digests.
+  This does not promise byte-for-byte mixed-EOL preservation: documented
+  normalization still applies.
+- Its stale-digest fixture preserves the other writer's bytes without leaking
+  siblings. Concurrent publication/rollback failures may intentionally retain
+  recovery files and must continue reporting their exact paths.
+- Save As onto the current path still uses the conflict guard.
+- Its BOM/CRLF fixture round-trips `[EF BB BF] a CRLF b CRLF c CRLF`.
+- Loading NUL rejects binary content; missing, directory and unresolvable
+  paths have explicit failures. Save/load NUL asymmetry remains B20.
+- Discard decisions are revision-checked; a native-menu save during a pending
+  dialog is rechecked; failed native window destruction releases workspace
+  locks. Preserve `_confirmTab` and `EditorSaveResult` contracts.
 
-- A load / edit / save / reload round trip preserves the bytes and the digest.
-- A stale digest is refused with a plain-language message, the on-disk file
-  is left exactly as the other writer left it, and no `.planchette-*`
-  sibling leaks.
-- A `Save As` onto the current path still goes through the conflict guard
-  rather than bypassing it.
-- BOM and CRLF survive a save byte for byte: `[EF BB BF] a CRLF b CRLF c CRLF`.
-- A file with a NUL byte is rejected as binary; a missing file, a directory
-  and an unresolvable path each produce their own message.
+The inherited source also describes token memoization, a Listenable-driven
+gutter and `revealRequest` as useful boundaries. Identity caching helps
+unchanged text; it cannot eliminate the cost of changed buffers. Its #28
+cost findings are preserved in P1 without concluding every performance issue
+is merely a constant choice.
 
-**The dirty-close machinery is careful**: a discard decision is
-revision-checked, a save begun from a native menu while a dialog was pending
-is re-checked, and a failed native window destruction does not leave the
-workspace locked. Do not "simplify" `_confirmTab` or `EditorSaveResult`.
-
-**The performance architecture is right; the constants were wrong.**
-`CodeEditingController` memoizes tokenization, the gutter repaints through a
-`Listenable` rather than a rebuild, and `EditorController` owns a
-`revealRequest` counter so the view can act on a reveal without the
-controller knowing anything about scrolling. #28's problem was that the
-memoization keyed on `identical(text)`, which is always false after an edit
-because every edit produces a fresh `String` — not that the design was
-wrong.
-
-**The tests are the asset.** 84 / 22 / 45 at the second baseline, all green,
-and the file-safety regressions include real publication, rollback and
-race cases. Any change to `planchette_core`'s write path needs a new test
-before it needs a refactor.
+It reports 84 core / 22 editor / 45 app tests at a second `a580387` baseline.
+That revision/worktree attribution is unresolved: this session observed
+84/19/38 and main's intervening changes were icons/docs. Do not present the
+84/22/45 report as independently verified main results. Preserve real
+publication, rollback, race and dirty-close regressions before write-path work.
 
 ---
 
 ## 1. In review
 
-These findings have PRs open against `main`, left for the owner's review.
-If a PR is closed without merging, move its findings back into the
-sections below. The problem statements live in the PR descriptions, and
-are summarized in the table.
+These findings have open PR records against `main`, left for the owner's
+review. Do not duplicate their implementation. If a PR closes unmerged,
+restore its outstanding work to the backlog. Twenty-nine records below are
+inherited from those main-branch documents; their statuses and claims were not independently
+checked. Four additional PRs were implemented and monitored in this session.
+The newer inherited source warns that more parallel PRs may exist. This is
+not a complete ownership registry; refresh coordination from authorized
+repository records before duplicating work. This session did not list or
+inspect other workers' PRs.
 
-The table was accurate when this document was last updated. **More PRs
-have been opened since, by other agents working in parallel, and are not
-listed.** Run `gh pr list` before assuming an item below is unstarted;
-several backlog entries here are also covered by an unlisted PR.
+### Verified in this session
+
+| PR / branch | Change and proof | Latest recorded status |
+|---|---|---|
+| [#5](https://github.com/L-K-M/Planchette/pull/5), `codex/css-tokenizer-bound-20260927` | Bound CSS property candidate starts. A 20k colonless identifier fell from 7.456s to about 31ms; 200k took about 27ms after warmup, on Linux/Dart 3.13.4. Regression failed first; 86 core tests and analysis pass. Custom/vendor properties and comment/string precedence retained. | Open at `91ad93c`; all CI passed; two fresh GLM reviews on the same revision, no applicable important findings. |
+| [#6](https://github.com/L-K-M/Planchette/pull/6), `codex/long-filenames-20260927` | A valid 234-byte filename could not save because recovery suffixes exceeded component limits. Bound recovery names to 255 UTF-8 bytes without splitting Unicode. Eight tests cover 255-byte ASCII/emoji names, three host prefixes, rollback, retained backups, relative paths and oversized prefixes. Four original regressions plus the relative-path regression failed first; 92 core tests and analysis pass. | Open at `2437ee7`; all CI passed; two GLM rounds without important findings. |
+| [#10](https://github.com/L-K-M/Planchette/pull/10), `codex/search-accessibility-20260927` | Keyboard-accessible search controls and selected semantics; adaptive narrow/scaled layouts. Six original regressions failed first, followed by a regression for input-connection retention during resize. Nine new tests; editor 28/app 38 tests pass, two app filesystem skips. Real-font captures inspected. | Open at `718fa21`; all CI passed; three GLM reviews, last two without confirmed important findings. Final same-revision review was fresh, not cached. |
+| [#11](https://github.com/L-K-M/Planchette/pull/11), `codex/visible-tabs-20260927` | Bounded labels retain close/dirty controls and full-path tooltips; active tabs reveal after selection, resize and scaling. Also fixes a reproduced focus race when switching to an earlier tab. App 42/editor 19 tests pass, two app filesystem skips. Real-font light/dark captures inspected. | Open at `d72013d`; all CI passed; two fresh GLM rounds without important findings. Overlaps inherited #35/#36/#43; coordinate before merging. |
+
+Combined proof for these four PRs: their diffs apply together without conflicts;
+all three analyses pass; 94 core, 28 editor and 42 app tests pass, with two
+case-insensitive filesystem skips. This does not test combinations with the
+twenty-nine inherited PRs. Local captures covered search at 320/360/800px and the app
+at 640×400 in light/dark. No hands-on native macOS/Windows visual session.
+Original CSS probes also measured 1k=31ms, 5k=744ms and 10k=2.80s before fixing.
+
+### Inherited PR records
+
+The evidence labels and measurements in this table belong to the inherited
+review. They are retained as reports, not claimed as this session's results.
 
 | PR | Addresses |
 |---|---|
@@ -131,15 +131,16 @@ several backlog entries here are also covered by an unlisted PR.
 | [L-K-M/Planchette#41](https://github.com/L-K-M/Planchette/pull/41) | Curated Parchment (light) and Séance (dark) themes with AA-checked syntax colors and a warm selection color. `EditorSyntaxTheme` becomes a `ThemeExtension` hosts can set once |
 | [L-K-M/Planchette#35](https://github.com/L-K-M/Planchette/pull/35) | The Linux/Windows menu bar and tab strip were centered mid-window (**confirmed**). Merges the toolbar into one tab strip with a dirty dot and close on hover, middle-click close, Cmd/Ctrl+1…9, the active tab kept in view, wheel scrolling, and "Untitled"/"Untitled 2" naming |
 
-From the second review pass, on three further branches:
+The newer inherited review adds three branch records and the overlap table
+below. Their implementation and test claims remain unverified here:
 
 | PR | Addresses |
 |---|---|
 | [#21](https://github.com/L-K-M/Planchette/pull/21) `fix/review-correctness` | **Tab could not be typed at all** (**confirmed**): the document is a bare `TextField`, so Flutter routed Tab to focus traversal, and pressing it moved focus out of the editor and inserted nothing. Adds `insertIndent` / `removeIndent` / `measureIndentation` to `planchette_core`, Tab and Shift+Tab in the editor matching the file's own tabs or spaces, and padding to the next tab stop when the caret follows code. Also: **Find Next was a dead key whenever the find bar was closed** (**confirmed** — `F3` after Escape did nothing), now reopens the bar with the remembered query; **a missing or unresolvable file surfaced as a raw `PathNotFoundException` naming the syscall and errno**; the toolbar printed the empty state's marketing line next to any untitled document; and opening three files made the next new document "Untitled 4". Core 113 tests, editor 31, app 39 + 2 skipped |
-| [#28](https://github.com/L-K-M/Planchette/pull/28) `perf/keystroke-cost` | **The gutter re-laid out the whole document on every keystroke and then asked for one caret offset per line** (**confirmed**: 59.0 ms layout + 124.3 ms of `getOffsetForCaret` for 5,001 lines, against 9.1 ms for a single `computeLineMetrics`). One metrics call replaces the caret loop; revealing a match reads the cached tops instead of measuring. **Highlighting cost roughly an order of magnitude over the plain floor** (79 KB JSON: 12,001 spans, 11 ms to build the tree, 70 ms to lay it out, against 35 ms plain), so the cap moves from 200,000 characters to 32 KiB and the status bar says `Large file` instead of silently dropping colours. See P1 and P3 for what is left |
-| [#36](https://github.com/L-K-M/Planchette/pull/36) `ui/window-chrome` | **The menu bar and tab strip were drawn in the middle of the window** (**confirmed**: a `Column` centres its children across the cross axis and both shrink-wrap — the `MenuBar` measured x 537–863 in a 1400 px window, the first tab label started at x 426). **The 52-row toolbar repeated the File menu, the tab and the window title** — 132 rows of chrome before the first character, 23% of a 900 px window. The empty state is now the launch state, so the only screen offering New and Open is reachable. The find and replace fields had no outline, no fill and no surface (bare text with a caret in dark mode); **the editor had no scrollbar at all**; the status bar's readout started under the line numbers instead of under the text; two tooltips appeared at once on a tab; a tab's ink splash painted a square over its rounded corners; the dirty marker was a bullet character depending on the UI font; a horizontal scrollbar in a 40 px strip would have clipped the last close button. Plus a real `ThemeData` (flat dialogs, fast square tooltips, thin always-visible scrollbar, menu bar with a baseline rule). Core 84, editor 22, app 45 + 2 skipped |
+| [#28](https://github.com/L-K-M/Planchette/pull/28) `perf/keystroke-cost` | **The gutter re-laid out the whole document on every keystroke and then asked for one caret offset per line** (**confirmed**: 59.0 ms layout + 124.3 ms of `getOffsetForCaret` for 5,001 lines, against 9.1 ms for a single `computeLineMetrics`). One metrics call replaces the caret loop; revealing a match reads the cached tops instead of measuring. **Highlighting added substantial cost over plain text** (79 KB JSON: 12,001 spans, 11 ms to build the tree, 70 ms to lay it out, against 35 ms plain), so the cap moves from 200,000 characters to 32 KiB and the status bar says `Large file` instead of silently dropping colours. See P1 and P3 for what is left |
+| [#36](https://github.com/L-K-M/Planchette/pull/36) `ui/window-chrome` | **The menu bar and tab strip were drawn in the middle of the window** (**confirmed**: a `Column` centres its children across the cross axis and both shrink-wrap — the `MenuBar` measured x 537–863 in a 1400 px window, the first tab label started at x 426). **The toolbar repeated the File menu, the tab and the window title.** The source reports 52 logical pixels for the toolbar and 132 before the first character (14.7% of a 900 px window); its stated 23% needs a different denominator and is not supported by these measurements. The empty state is now the launch state, so the only screen offering New and Open is reachable. The find and replace fields had no outline, no fill and no surface (bare text with a caret in dark mode); **the editor had no scrollbar at all**; the status bar's readout started under the line numbers instead of under the text; two tooltips appeared at once on a tab; a tab's ink splash painted a square over its rounded corners; the dirty marker was a bullet character depending on the UI font; a horizontal scrollbar in a 40 px strip would have clipped the last close button. Plus a real `ThemeData` (flat dialogs, fast square tooltips, thin always-visible scrollbar, menu bar with a baseline rule). Core 84, editor 22, app 45 + 2 skipped |
 
-From a third review pass, on these branches:
+Further inherited PR records, not inspected or independently verified here:
 
 | PR | Addresses |
 |---|---|
@@ -152,58 +153,51 @@ From a third review pass, on these branches:
 | [#25](https://github.com/L-K-M/Planchette/pull/25) `feat/font-zoom` | The zoom half of #30: Ctrl+=/-/0 and a View menu, folded into the text style so the gutter and reveal painter scale consistently |
 | [#32](https://github.com/L-K-M/Planchette/pull/32) `fix/gutter-wrap-drift` | Same gutter finding as #22/#28 (**confirmed**). Exact per-line measured heights at every document size, with unchanged prefix/suffix heights spliced back after edits and a full-measurement fallback |
 | [#38](https://github.com/L-K-M/Planchette/pull/38) `feat/revert-file` | The Revert command from #26 alone: File › Revert File on file-backed tabs, prompting only when dirty |
-| [#40](https://github.com/L-K-M/Planchette/pull/40) `fix/temp-leftover-sweep` | The delete half of B10: sweeps `.planchette-<uuid>.edit`/`.backup` siblings older than 7 days when a document opens, keyed on `changed` — a `.backup` inherits the old file's mtime, so `modified` could call a fresh recovery file ancient. B10 keeps the restore half |
+| [#40](https://github.com/L-K-M/Planchette/pull/40) `fix/temp-leftover-sweep` | Reports an age-based deletion approach to B10: sweeps `.planchette-<uuid>.edit`/`.backup` siblings older than 7 days when a document opens, keyed on `changed` — a `.backup` inherits the old file's mtime, so `modified` could call a fresh recovery file ancient. B10 retains ownership/recovery safeguards; age-only deletion is not accepted as safe |
 | [#42](https://github.com/L-K-M/Planchette/pull/42) `feat/tab-close-others` | Middle-click closes a tab; right-click offers Close / Close Others / Close All Tabs, each still running the per-tab consent decision with Cancel stopping the sweep. Covers part of A7 and the context-menu part of FU5 |
 
-From a fourth review pass, on a stacked chain. **These five are one chain, not
-five independent PRs:** #34 is based on `main`, #37 on #34, #43 on #37, and
-#44 on #27. #27 is independent of the other four. Merge in this order —
-**#27, #34, #37, #43** — and #44 either side of #27. They were developed in
-parallel by one agent, so the later ones are written against the earlier ones'
-APIs and their tests are green against them, not against `main`.
+From the fourth inherited pass. Its ancestry description is internally
+inconsistent: it calls these five one chain, but reports #34 based on main,
+#37 on #34, #43 on #37, #27 independent, and #44 based on #27. It also says
+#44 can merge either side of #27. Do not adopt that order. Verify actual
+ancestry/base dependencies before integration; tests reportedly include stacked
+changes and are not proof each PR works alone against main.
 
 | PR | Addresses |
 |---|---|
-| [#27](https://github.com/L-K-M/Planchette/pull/27) `perf/gutter-window` | **A keystroke in a file of any size cost 173 ms** (**confirmed**, 122,161-character document, JIT warmed, same machine, back to back: 173 ms → 36 ms; a bare `TextField` over the same text is 34 ms, so the editor's own overhead went 145 ms → 2 ms). `_ensureGutterLayout` laid out the *whole* document plus one `getOffsetForCaret` per line on every text change — 139 ms and 104 ms of the 173. A viewport can only show a few dozen rows, so it now measures a prefix (viewport + 64 rows) and extrapolates past it, and passes the previous prefix back as a floor so scrolling lays out progressively larger prefixes a logarithmic number of times. Revealing a search match was laying the document out a *second* time for the same answer. See P1's dead-end box for what this pass learned about the other terms. Also fixes a one-row drift in the extrapolated tail, reported by the reviewer |
+| [#27](https://github.com/L-K-M/Planchette/pull/27) `perf/gutter-window` | Reports warmed JIT keystrokes on one 122,161-character fixture improving 173→36ms; bare TextField was 34ms. This does not establish an any-size bound. The stated 145→2ms editor overhead is inconsistent with 173−34=139; separate layout/caret probes report 139ms and 104ms and cannot be added as components of the 173ms total. Measures a viewport prefix plus 64 rows, extrapolates the rest and reuses the prior prefix as a floor during scrolling; reports logarithmically many prefix expansions, shared find-reveal geometry and a corrected one-row extrapolation drift. Compare alternatives in FU9 and retain P1’s abandoned-prototype measurements. |
 | [#34](https://github.com/L-K-M/Planchette/pull/34) `feat/code-style-input` | **Tab did nothing in the document** (**confirmed** by probe: the text was unchanged *and* focus was unchanged, so it was swallowed rather than traversing). Enter did not carry indentation. Brackets did not pair. Adds Tab/Shift+Tab, Enter-keeps-indentation with a block-opener rule, and bracket/quote pairing with type-over. Covers E3, E10a and the Tab half of the focus bug. Core 98, editor 45, app 40 |
-| [#37](https://github.com/L-K-M/Planchette/pull/37) `feat/settings` | **Every adjustable thing was a compile-time constant** — theme pinned to `ThemeMode.system` in `main.dart`, font size to 14, font family to `'monospace'`, and no indent at all. A settings file, a controller over it, a live-preview preferences dialog, and the shell's hardcoded English extracted to `ShellStrings` (see D0e). Covers A1 and part of FU4. App 72 |
-| [#43](https://github.com/L-K-M/Planchette/pull/43) `feat/shell-chrome` | **~130 px of chrome before the first character, in rows that repeated each other** (**confirmed**). The dirty marker was a `'● '` prefixed onto the tab's *label string*, so every tab changed width the moment it was edited and again when saved; the error banner was a row spliced into the column, so a failed save moved the document; tabs were basename-only, so ten `index.js` files looked identical; the strip never scrolled the active tab into view; nothing handled a dropped file. One strip, a fixed-width dirty slot, the directory beside the tabs, the error as an overlay, active-tab reveal on every selection change, and a drop target. Covers A4, the stable-dirty-dot part of the chrome, and V6's placement |
+| [#37](https://github.com/L-K-M/Planchette/pull/37) `feat/settings` | **Every adjustable thing was a compile-time constant** — theme pinned to `ThemeMode.system` in `main.dart`, font size to 14, font family to `'monospace'`, and no indent at all. A settings file, a controller over it, a live-preview preferences dialog, and the shell's hardcoded English extracted to `ShellStrings`. Covers A1 and part of FU4. App 72 |
+| [#43](https://github.com/L-K-M/Planchette/pull/43) `feat/shell-chrome` | **~130 px of chrome before the first character, in rows that repeated each other** (**confirmed**). The dirty marker was a `'● '` prefixed onto the tab's *label string*, so every tab changed width the moment it was edited and again when saved; the error banner was a row spliced into the column, so a failed save moved the document; tabs were basename-only, so ten `index.js` files looked identical; the strip never scrolled the active tab into view; nothing handled a dropped file. One strip, a fixed-width dirty slot, the directory beside the tabs, the error as an overlay, active-tab reveal on every selection change, and a drop target. Reports work toward A4 (native drop verification remains), the stable dirty slot, and V6's placement |
 | [#44](https://github.com/L-K-M/Planchette/pull/44) `feat/find-query` | **The find bar matched plain text and nothing else**, and a mistyped pattern was indistinguishable from no match. Adds a `.*` toggle, `planchette_core.FindQuery` with compile-once, a visible pattern error, zero-width-match handling, field chrome, and a selection word/character count in the status bar. Covers the regex half of E5, the field part of V4, and the selection-summary half of E10b. Core 94, editor 41, app 40 |
 
-**Overlaps between PRs.** These findings were found independently — by the
-review passes working in parallel — and are addressed by more than one open
-PR. Whoever merges second should keep the union rather than resolve in
-favour of one side:
+**Overlaps between PRs.** Findings were repeated across parallel review passes — and are addressed by more than one open
+PR. Merge coordination should retain the intended behaviors and acceptance
+tests, not blindly combine competing implementations:
 
-| finding | PRs | what each does |
+| Finding | Reported PRs | Integration requirement |
 |---|---|---|
-| Tab moves focus out of the editor | #14, #21, #13 | #14 adds an `EditorTabKeyBehavior` and line-editing keys. #21 puts the indentation rules in `planchette_core` as pure functions, matches the file's own tab or space convention, pads to the next tab stop, and leaves Tab to focus traversal while the editor is read-only. #13 keeps the fix in the editor package and preserves backward selection direction |
-| The gutter re-measures the document per edit | #22, #28, #32 | #22 moves the numbers into a decorations render object and adds a current-line band. #28 keeps the existing painter and replaces its per-line caret loop with one `computeLineMetrics` call. #32 keeps per-line measured heights in a cache and splices unchanged regions on edit. All change `_ensureGutterLayout`; the union is one measurement path plus a band |
-| Go to Line | #33, #16 | #33 adds a clickable status position and per-platform find chords. #16 is the dialog and reveal plumbing alone |
-| Font zoom | #30, #25 | #30 adds the platform monospace stack and Actual Size. #25 folds the scale into the text style so gutter metrics and the reveal painter stay consistent |
-| Revert to disk | #26, #38 | #26 adds on-focus change detection, recreate-on-save and the Reload/Keep Mine notice. #38 is the File-menu command alone |
-| Centered menu bar and tab strip | #35, #36 | #35 folds the toolbar into the tab strip and adds tab commands. #36 removes the toolbar outright, fixes the `Column` alignment, and reworks the tab and status rows. #35's tab-strip features and #36's row geometry should both survive |
-| Untitled document naming | #35, #21 | #35 reuses "Untitled 1" for a fresh buffer. #21 gives untitled documents a counter separate from the tab identity counter |
-| Search and status rows | #33, #36 | #33 makes the status position clickable and adds language display names. #36 aligns the status bar's leading edge to the text column and stops claiming a language for a file too large to highlight |
-| Error text | #26, #21 | #26 maps disk-change failures. #21 maps a missing or unresolvable path in the core so hosts get it too |
-| Tab moved focus out of the editor | + #34, #21 | #34 is the fourth independent arrival at this bug. It differs from the others in that it accepts the change the platform already made rather than intercepting a key, and it takes a language predicate rather than a heuristic. Whichever merges second: keep #34's "single character at a caret" guard, because it is the only one of the four that states what it will *not* touch |
-| The gutter re-measures the document per edit | + #27, #22, #28, #32 | **Four independent arrivals, and they are not the same fix.** #27 measures a *viewport-sized prefix* and extrapolates the rest from the paragraph's preferred line height; #22 moves the numbers into a decorations render object; #28 replaces the per-line caret loop with one `computeLineMetrics`; #32 caches per-line measured heights and splices unchanged regions. #27 and #32 are the closest — both keep the existing painter. #27's extrapolation is O(lines) per edit where #32's splice is O(changed region), so **#32 is the better answer if only one survives**; #27's contribution to keep either way is the single measurement path shared with the find-reveal, which was laying the document out a second time for an answer the gutter already had |
-| Centered menu bar and tab strip | + #43, #35, #36 | #43 removes the header row entirely and folds the commands, the tabs and the document's directory into one strip. #35 folds the toolbar into the tab strip and adds tab commands; #36 removes the toolbar and fixes the `Column` alignment. **#36's geometry fixes are orthogonal to #43's layout** and should survive whichever merges; #35's tab commands and #43's dirty slot are the parts to keep from each |
-| Error banner | + #43, #36, #21, #26 | #43 makes the banner an overlay so a failed save cannot move the document — a placement change only. #36's error-copy work and #21's and #26's error mapping are independent and should all survive. #43 does not touch the copy |
-| Search bar and status rows | + #44, #33, #36 | #44 adds the pattern toggle, the field chrome and the selection count; #33 makes the status position clickable and adds language display names; #36 aligns the status bar's leading edge. The three touch adjacent lines in the same two widgets — resolve by keeping all three features |
-| Indentation and its settings | + #37, #34, #14, #21, #13 | Five independent arrivals. #34 owns the buffer behaviour and the `EditorIndent` value; #37 owns persistence and the preferences UI. **#37 changed `PlanchetteApp`'s constructor** (a required `SettingsController` replaces a test-only `themeMode`), so it conflicts with any PR that constructs the app; it also added `==` to `EditorIndent`, which #34 needed for a settings round-trip to compare equal at all |
+| Indentation/input | #13/#14/#21/#34/#37 | #13 preserves backward selections; #14 adds key modes and line edits; #21 supplies core transforms, detected convention, true input stops and read-only traversal. #34 reacts to platform text edits through `EditorIndent` and a language predicate; preserve its narrow-edit guard and explicitly test paste/IME/undo. #37 persists indent settings and reportedly adds equality for round trips. Reconcile one core edit model. |
+| Gutter geometry | #22/#27/#28/#32 | #22 adds a decorations render object/current-line band; #28 uses one `computeLineMetrics`; #32 splices cached per-line heights; #27 measures a viewport prefix, extrapolates the tail and shares reveal geometry. The source prefers #32 over #27 based on reported O(changed-region) versus O(lines) work; that ignores possible affix/layout/cache costs, so benchmark correctness and complete workloads before choosing. Keep one geometry owner. |
+| Go to Line | #16/#33 | Preserve #16’s dialog/error clearing and #33’s clickable status/platform find chords. |
+| Font zoom | #25/#30/#37 | #25 scales text style with gutter/reveal; #30 adds platform monospace and Actual Size; #37 persists preferences. Reconcile shortcuts, scale and storage. |
+| Revert | #26/#38/#19 | #38 adds the File command; #26 reports disk notices/recreate-on-save; #19 fixes load-boundary undo. Preserve all safety/lifetime behavior. |
+| Tabs/chrome | #11/#35/#36/#43 | Retain #11’s focus/visibility tests, #35’s tab commands, #36’s row geometry/ThemeData and #43’s fixed dirty slot/directory display. #43 removes the header; geometry improvements still need validation in the chosen layout. |
+| Untitled names | #21/#35 | Preserve separate counter semantics and decide name reuse. Empty-tab reuse remains B23. |
+| Search/status | #10/#33/#36/#44 | Keep #10’s keyboard/IME/responsive guarantees, #33’s clickable position/display names, #36’s surfaces/alignment and #44’s regex errors/selection counts. |
+| Error presentation | #21/#26/#36/#43 | Preserve core missing-path errors, disk-change mapping and user-facing copy; #43 reports an overlay preventing document movement. Placement must not obscure input or silence accessibility. |
+| Tab context actions | #35/#42 | #42 reports middle-click and Close/Close Others/Close All, with Cancel stopping consent traversal. Retain remaining FU5 actions. |
 
-**Merge-order notes.** Every branch listed above starts from `d53f416`.
-These pairs touch nearby lines and will need a small conflict resolution for
-whichever merges second:
+**Inherited merge-order notes.** Earlier sources report branches based on `d53f416`; the latest source
+adds the inconsistent stack claims above. Predicted conflicts/clean merges are not verified here; check actual integration and preserve each behavior:
 
 - #14 and #33 both edit the status list in `editor_view.dart`. Keep both
   the indentation segment and the language display name.
 - #30 and #33 both add to the app's Find/View menus in
   `planchette_app.dart`.
 - #41 changes the app's `_theme` and the editor's syntax-theme lookup.
-  It overlaps nothing else, but re-check #22's current-line band on the
-  new surfaces after both merge.
+  The source predicted no other conflict; verify against #36's theme
+  work too, and re-check #22's current-line band on the new surfaces.
 - #22, #30 and #33 touch other parts of `editor_view.dart`, as do #26,
   #30, #33 and #35 in `planchette_app.dart`. Their hunks are separated, so
   expect clean merges, but re-run all three test suites after each merge.
@@ -217,26 +211,37 @@ whichever merges second:
   will conflict with #26, #30, #33 and #35. #36 removes the toolbar and the
   File-menu duplicates; those PRs' new menu items must be re-added to
   `_menus()` rather than dropped with the toolbar.
-- **#43 rewrites the same region #36 does**, so those two will conflict
-  hardest. #43 keeps `_menus()` and adds a Settings entry to it, so #43 is
-  the smaller diff of the two against `main`; #36's geometry fixes and real
-  `ThemeData` are the parts worth carrying across.
-- #37 changes the `PlanchetteApp` constructor and `main.dart`, so it
-  conflicts with every PR that mounts the app in a test. The resolution is
-  mechanical: construct a `SettingsController` over a `MemorySettings`
-  double and pass it, instead of the old `themeMode` argument.
-- #27 and #44 both edit `editor_view.dart`'s gutter and status
-  neighbourhood and are already in that order on the same branch, so they
-  merge cleanly as a pair. #22, #28 and #32 also change
-  `_ensureGutterLayout`; see the overlaps table for which of those to keep.
-- #27's `line_tops.dart` is deliberately **not** exported from
-  `planchette_editor.dart`, so it adds no public API. If a host ends up
-  wanting it for its own gutter, that is a one-line export change — but do
-  not export it speculatively.
+
+- #43 rewrites the same shell region as #36, preserves `_menus()` and adds
+  Settings. Keep menu commands, geometry and theme behavior, not whichever
+  hunk happens to merge last; reported relative diff sizes are not proof of fit.
+- #37 reportedly replaces the app's test-only `themeMode` constructor argument
+  with required `SettingsController`; app fixtures may need a `MemorySettings`
+  double. Check the final API and preserve theme-test coverage.
+- #27/#44 are reported stacked and textually compatible, but verify ancestry
+  and run combined suites. #27's `line_tops.dart` intentionally remains private;
+  exporting it is an API decision, not incidental merge cleanup.
+
+**Additional coordination.** #11 and inherited #35/#36/#43 change tabs and chrome.
+Reconcile their behavior; #11 and #35 both change active-tab
+visibility. Select and reconcile their final behavior before merging both;
+retain #11's earlier-tab focus regression, long-name/close-button visibility,
+resize/scaling and undo/search tests. This session did not inspect #35.
+#5 and inherited #31 both touch syntax code; #6 and inherited #21/#39 touch document
+I/O; #10 and inherited #14/#21/#22/#28/#30/#33/#34/#36/#44 touch the shared surface. Re-run affected
+tests after actual integration, not just textual conflict resolution.
+
+**Next work.** Address independent lock ownership (B17) and measure editing
+frames (P1). For geometry, reload, navigation, indentation, shell notifications,
+fonts and status, validate the assigned PRs through FU9–FU15 instead of opening
+duplicate feature implementations. Curated palettes are assigned to #41;
+settings are assigned to #37; missing preferences remain V1/A1 follow-up work.
 
 ## 2. Follow-ups to the open PRs
 
-Do these after the named PRs merge.
+Do these after the named PRs merge. FU1–FU8 originated in the inherited review;
+API names there describe its reported PR implementations and need checking
+against merged code. Later entries preserve this session's acceptance cases.
 
 ### FU1. Re-detect indentation on revert (after #14 and #26) — S
 `EditorController.revertTo` (#26) installs disk text without calling
@@ -263,15 +268,19 @@ range. `RenderEditable.text =` then short-circuits on `identical`.
 **Done when** a test shows two consecutive selection-only builds return
 the identical span, and a text or theme change returns a new one.
 
-### FU4. Persist zoom and other view settings (after #30) — M
-Zoom resets on every launch. See A1 (settings store). Store the zoom
-index, and restore and clamp it on startup.
+### FU4. Validate persisted zoom/view settings (after #25/#30/#37) — M
+Baseline zoom resets on launch; #37 reports persisted font size. Reconcile
+that representation with #25/#30 zoom steps, restore/clamp on startup, and
+verify Actual Size and live preview. Remaining settings are A1. Verify
+platform shortcuts/reset,
+system text scaling, selection, undo, scroll anchor and gutter/reveal geometry.
 
-### FU5. Tab strip context menu and more tab keys (after #30 and #35) — M
-Planned in #35 but not built there; #42 added the right-click menu with
-Close / Close Others / Close All Tabs, so what remains is:
-- Extend the menu: Close to the Right, Copy Path, Reveal in
-  Finder/Explorer/Files.
+### FU5. Remaining tab actions and keys (after #30/#35/#42) — M
+#42 reports a right-click menu with Close, Close Others and Close All Tabs,
+plus middle-click close. Verify dirty consent and Cancel stopping the sweep.
+Remaining menu actions: Close to the Right, Copy Path, Reveal in
+Finder/Explorer/Files.
+
 - Drag to reorder.
 - Aliases through `_Command.aliases` from #30: Ctrl+PageDown/PageUp for
   next/previous tab on Windows/Linux, and Cmd+Shift+] / [ on macOS.
@@ -288,6 +297,9 @@ service, not in the widget.
   N×`#`, then `"`, closed by `"` + N×`#`.
 - **TOML**: own entry. `[table]` and `[[array]]` headers as meta,
   `key =` as meta, `"""`/`'''` multiline strings, dates as numbers.
+- **JSONC**: the reviewed baseline maps `.jsonc` to strict JSON without
+  comment rules (`editor_syntax.dart:823`). Check #31 after merge, then add
+  a separate JSONC entry if still missing; test quoted comment delimiters.
 - **More languages**: TypeScript-only keywords (`interface`,
   `implements`, `declare`, `keyof`, `readonly`, `satisfies`), Kotlin
   and Swift keyword sets, PowerShell, Batch, HCL/Terraform, CMake, Nix.
@@ -306,19 +318,118 @@ the document. **Plan:** add Ctrl+M (VS Code's "Toggle Tab Key Moves
 Focus"), or Escape followed by Tab, to move focus once. Add a test that
 focus leaves the document.
 
+### FU9. Validate one editor geometry contract (after #22/#27/#28/#32, #25/#30 and #16/#33) — M
+The baseline uses a parallel TextPainter below 200k characters and an
+unwrapped approximation above it, although TextField still wraps
+(`editor_view.dart:126-165,505-545`, **read**). Prefix-only search layout can
+also wrap a partial word differently. Below the cutoff, the parallel painter
+uses a different width from RenderEditable's caret reservation, introducing
+another wrap mismatch. #22 reports addressing the owner.
+#27/#28/#32 report competing prefix, metrics and cache changes; reconcile
+their geometry first. Include tail extrapolation, distant search and edits
+before/inside/after cached regions, not only the first viewport.
+Verify actual RenderEditable geometry for 199,999/200,001 characters, long
+wrapped lines, tabs, Unicode, custom fonts, scaling, resize and matches near
+wrap boundaries. Include Go to Line and zoom; combine with FU2. Do not merely
+raise the highlighting cap or add another independent layout calculation.
+Also test the actual merged cap: the newer source calls #28's cap "32 KiB";
+verify whether it counts bytes or UTF-16 units before changing documentation.
+
+### FU10. Verify safe reload and conflict recovery (after #19/#26/#38) — M
+Baseline reopening selects the stale existing tab, despite save conflicts
+advising a reopen (`document_workspace.dart:147`). The inherited PR reports
+Reload/Keep Mine, Revert and disk-change handling; do not implement them twice.
+Test clean/dirty/deleted files, cancel, repeated changes, focus return and
+Save As identity changes. Verify a diff or Save a Copy escape route remains
+available when changes cannot safely be reconciled.
+
+Baseline failed reload sets the fatal initial-load error, hides existing text
+and disables save (`editor_controller.dart:153-168`, `editor_view.dart:396`,
+**read**). Verify #26 retains the previous text, selection and undo until a
+reload succeeds; preserve copy/recovery access, retry and disposal behavior.
+If this case remains broken, reproduce it before a focused follow-up fix.
+
+#19 reports replacing the editing controller on text installation to sever
+Flutter UndoHistory across loads, retaining retired controllers until safe
+parent disposal. Test load/reload/blank install after focused edits: Undo must
+not resurrect the previous document. Preserve listener detachment and
+mid-frame lifetime safety; profile accumulation after many reloads.
+
+### FU11. Verify bounded shell notifications (after #17) — M
+Baseline editor notifications fan out through `DocumentWorkspace._notify`,
+loop all tabs, rebuild the shell/IndexedStack and resend the native title
+(`document_workspace.dart:108,358`, `main.dart:31`, **read**). #17 reports a fix.
+Profile holding arrow keys with 1/10/50 tabs. Measure build/title/menu-call
+reduction and retain dirty markers, busy/lock state and per-tab undo/search.
+Selection painting should remain local; avoid unmounting Flutter undo owners.
+
+### FU12. Bound file work after buffer optimization (after #39) — M
+#39 reports replacing generic integer buffers and optimizing the EOL census.
+Keep those assigned changes separate from remaining safety/performance work:
+digest passes can read beyond the initial byte bound when a file grows.
+Reproduce concurrent growth and bound each pass while preserving snapshot
+checks and the injectable digest order. No claim of an atomic snapshot.
+
+Saving normalizes and encodes before rejecting oversized output
+(`text_document.dart:213-217`). Preflight with `utf8EncodedLength`, accounting
+for BOM and CRLF expansion, before large allocations. Test preserved original
+bytes after rejection. Coordinate remaining CPU offload with P4 and replacement
+preflight with P5; remeasure the inherited #39 results before further tuning.
+
+### FU13. Validate navigation and status semantics (after #33) — M
+#33 reports Go to Line, platform find shortcuts, encoded byte counts, language
+names and selection status. Verify empty files, trailing newline, Unicode,
+wrapped lines, Escape, out-of-range input, both platforms' shortcuts and focus
+restoration without changing undo. Check whether line:column input is covered
+before planning an extension; specify clamping/rejection explicitly.
+Distinguish UTF-16 offsets from user-facing grapheme columns, and verify
+on-disk counts for BOM/CRLF and selection counts for combining characters.
+Keep format/status controls in E10 and native menu ownership in the app.
+
+### FU14. Validate indentation across hosts (after #13/#14/#21/#34/#37 coordination) — M
+Retain tests for forward/reverse multiline selections, tabs/spaces, blank
+lines, one-step undo, editing locks and a documented indentation policy.
+Hardware Enter, mobile newline edits, IME composition and accessibility
+traversal are separate paths; combine this with FU1/FU7/FU8 rather than
+reimplementing indentation. Verify rendered tabs and true-stop limits (E8).
+
+### FU15. Reconcile tab and chrome behavior (after #11/#35/#36/#43 coordination) — M
+The inherited #35/#36/#43 chrome changes overlap #11's visibility fix.
+Retain the earlier-tab focus-race regression, keyboard navigation, long labels, visible dirty/close
+controls, full-path tooltips, resize/scaling and per-tab undo/search.
+Compare the final chrome at 640×400 and 1080×760, light/dark, 100%/200% scale;
+keep Open/New/Save discoverable and use a quiet active-tab indicator.
+Optional compact/focus styling belongs with Q3, not another toolbar rewrite.
+
+### FU16. Validate language fixes without duplicating #31 — S
+This session reproduced shell single-quote backslashes swallowing the comment
+in `echo 'C:\' # note`; #31 reports fixing those escape rules. Retain that
+regression after merge, including SQL/YAML variants reported by the inherited
+review. JSONC and other remaining dialect work are in FU6; escaped-newline
+policy remains B2 unless the merged implementation already resolves it.
+
+### FU17. Adopt merged shared changes in both hosts — M
+After reviewed shared changes merge here, pin core/editor to the same revision
+in Poltergeist and Séance, update locks, and run editor/save/close tests plus
+narrow/mobile layouts. Do not copy the shared implementation. For #6, inspect
+host cleanup matching: recovery names preserve host prefixes/suffixes but may
+truncate original basenames. Rollback errors identify exact retained backups;
+filesystems with component limits below 255 bytes can still reject names.
+
 ## 3. Bugs
 
 ### B2. Backslash-newline continues "single-line" strings — S (read)
 `_scanString` skips two code units after `\`, so `"abc\` followed by a
 newline keeps the string open onto the next line. That's correct for
 C-family and shell continuations but not for JSON, INI or YAML.
-**Plan:** add a per-language `lineContinuation` flag, and never let an
-escape consume `\n` when it is false.
+Check the merged #31 behavior before another change. **Plan:** use an explicit
+per-language continuation policy, and never let an escape consume `\n` when
+continuation is disallowed. Keep shell/C continuation behavior covered.
 
 ### B3. Saving a read-only file overwrites it silently — S (read)
 Replacement renames a sibling into place and restores the old mode bits,
 so a `0444` file in a writable directory saves without warning.
-**Plan:** check `stat.mode & 0o222` (POSIX) or the read-only attribute
+**Plan:** inspect POSIX write-permission bits (octal 0222) or the read-only attribute
 (Windows) at load time. Show a read-only marker in the tab and status bar,
 and ask before saving ("Save anyway" / "Save As…").
 
@@ -332,152 +443,146 @@ make the native sizes match 1080×760, or keep the window hidden until
 
 ### B5. Close button vs Close Tab during load — S (read)
 Close Tab in the menu requires `!isLoading` (`ready`), while the tab's ×
-only checks `busy`. Pick one rule (probably allow closing a loading
-tab, which cancels the load) and test it.
+only checks `busy`. Pick one rule, probably allowing a loading tab to close,
+and test it. Current disposal ignores late completion; it does not cancel
+the underlying file I/O. Do not claim cancellation without implementing it.
 
-### B7. Multiple carets — L (structural, the largest single gap)
-There is exactly one caret. Every serious code editor's defining feature is
-absent, and `EditorController` already owns the selection plumbing
-(`revealRequest`, `lineStarts`, a `CodeEditingController`) so most of the
-groundwork is there. **Plan:** carry a `List<TextSelection>` instead of one
-selection, add `Cmd/Ctrl+D` (add next occurrence), `Cmd/Ctrl+Alt+↑/↓` (add
-above/below) and `Escape` (collapse to one). Editing operations — indent,
-dedent, comment toggle, replace — must apply to every caret in one pass, so
-do this *after* E1 and E2 have pure core transforms that can take a list.
-**Done when** three carets can be typed into at once and one undo removes
-the lot.
+### B6. Multi-open error aggregation moved to B15
+The earlier backlog used B6; B15 is the consolidated task. Do not implement twice.
 
-### B8. The status bar's column number lies about tabs and wide characters — M (confirmed)
-`EditorController.caretLineColumn` counts UTF-16 code units, so a tab counts
-as 1 and a surrogate pair as 2. Confirmed: with the text `"\tindented"`, the
-caret at offset 4 reports **Col 5** while sitting at visual column 9 under an
-8-wide tab stop. A CJK character is off the same way. A programmer reads the
-column off the ruler and compares it to what the editor shows. **Plan:**
-count display columns — a tab advances to the next multiple of the tab
-width, East Asian wide and emoji count 2 — in a pure core function beside
-`lineStartOffsets`, and unit-test it against the same strings.
+### B7. Multiple carets — L (inherited structural proposal)
+Support a list of selections, add-next-occurrence (proposed Cmd/Ctrl+D),
+add-above/below (proposed Cmd/Ctrl+Alt+↑/↓), and Escape to collapse to one.
+After E1/E2 expose reusable core edits, apply indent/dedent/comment/replace
+to all carets in one pass with one undo. Acceptance: three carets type together
+and one undo removes the edit. Existing selection/reveal plumbing helps, but
+does not establish that IME, accessibility and rendering are solved; coordinate P3.
 
-### B9. `Ctrl+Tab` is taken from the desktop — S (read)
-`Window › Next Tab` is bound to `Ctrl+Tab` / `Ctrl+Shift+Tab`
-(`planchette_app.dart`). On Windows and most Linux desktops that chord
-switches *applications*, so the editor swallows a system shortcut to change
-tabs. **Plan:** use `Ctrl+PageDown` / `Ctrl+PageUp` (VS Code) and
-`Cmd+Shift+]` / `[` on macOS. #30 already adds platform-correct aliases
-through `_Command.aliases`; reuse that.
+### B8. Specify display-column semantics — M (inherited finding)
+`caretLineColumn` counts UTF-16 units, not tab-expanded/display columns;
+surrogate pairs count two. The newer source reports `"\tindented"` at offset 4
+as Col 5 versus visual column 9 under eight-wide tabs. That visual number
+needs reproduction: ordinary eight-column expansion would yield column 12.
+Define grapheme versus display-column policy and test tabs, CJK, emoji and
+combining sequences against actual rendering/indent settings. A core helper
+may count tab stops and wide characters; do not assume every font/glyph has
+the proposed fixed width. Coordinate FU13/#33's already-assigned status work.
 
-### B10. Offer recovery for a lone save sibling — S
-The delete half landed in #40: `.planchette-<uuid>.edit`/`.backup`
-siblings older than 7 days are swept when a document opens, keyed on
-`changed` — keep that cutoff, a `.backup` inherits the old file's mtime
-so `modified` cannot date the leftover. What is left: a lone `.backup`
-still holds the previous file content after a mid-save crash. When an
-opened document has one, offer to restore it rather than letting the
-sweep discard it — restore beats delete for the recovery case the
-format exists for.
+### B9. Additional tab-key aliases — S (inherited proposal, not a confirmed bug)
+The incoming source claims Ctrl+Tab switches desktop applications; that is
+not the Windows/Linux default, which uses Alt+Tab. Retain working Ctrl+Tab
+navigation. Optional Ctrl+PageDown/PageUp and Cmd+Shift+]/[ aliases are already
+FU5/#30 work; check actual platform/user binding conflicts rather than removing
+a useful shortcut based on that claim.
 
-### B11. Quit during a save is refused with no explanation — S (read)
-`_confirmQuit` returns false when any tab is busy or saving
-(`document_workspace.dart`), and `DesktopWindow.requestQuit` treats a false
-as "do nothing". The user presses Cmd+Q during a large save and the window
-simply does not move. **Plan:** queue the quit and run it when the save
-settles, or show "A document is still saving" with a Cancel. It must stay
-correct against `onWindowClose` and `AppExitListener`, which both route
-through the same decision.
+### B10. Recover orphaned save siblings safely — M (inherited finding)
+The standalone app lacks the host recovery sweeps described in ARCHITECTURE.
+A crash can leave `.planchette-<uuid>.edit`/`.backup` plaintext siblings.
+Integrate with A2's journal and known document directories; preserve #6's
+truncated-name rules. The source proposed scanning siblings older than a day
+or the current process, but age alone does not prove another process abandoned
+them. Require ownership/conflict checks and explicit recovery/removal choice;
+never automatically restore a lone backup over a destination or delete another
+writer's active file. Test forced crashes, missing targets and two processes.
 
-### B12. `Save As` is silently dropped while a plain `Save` is in flight — S (read)
-`DocumentWorkspace._save` dedupes per tab, so a second call returns the
-in-flight future. A `Save As` issued while a plain `Save` is running is
-discarded without a word, and the user has to press it again. **Plan:** key
-the in-flight map on `(tab, saveAs)`, or queue the Save As behind the save
-and run it when the first settles.
+The latest source reports #40 deleting siblings older than seven days on open,
+using `changed` because backups inherit the old mtime. Treat that as assigned
+but unverified and insufficient for safe deletion: age/ctime do not establish
+abandonment, and platform timestamp meaning differs. Offer recovery before
+cleanup, retain lone backups, and require ownership/conflict evidence even
+when preserving a documented retention cutoff.
 
-### B13. Disposing a controller with an attached FocusNode schedules work on a dead FocusManager — S (confirmed)
-`EditorController.dispose` disposes `editorFocus`, `searchFocus` and
-`replacementFocus` while they may still be attached to the focus tree
-(`closeTab` does exactly this while the tab is still in the `IndexedStack`).
-Disposing an attached `FocusNode` calls `unfocus`, which schedules a
-microtask on `FocusManager.instance` — so the focus change lands after
-whatever tore the tree down. Hit as a real test failure:
-`A FocusManager was used after being disposed`. **Plan:** have
-`PlanchetteEditorState.dispose` unfocus its nodes first, and/or have
-`DocumentWorkspace._remove` remove the tab from the list before disposing the
-controller so the view is already unmounted. **Done when** closing the
-active tab while it holds focus does not warn.
+### B11. Explain or defer quit during saving — S (inherited read)
+`_confirmQuit` returns false while a tab is busy/saving, and the window treats
+false as doing nothing. Reproduce Cmd+Q during a gated save. Queue quit until
+settled or show a saving notice with Cancel; retain one decision path for
+`onWindowClose` and `AppExitListener`, and rerun dirty-revision guards.
 
-### B14. Magic numbers where the repo's rules want constants — S (read)
-`setFilePermissions(temporary.path, 0x180)` for 0600 and
-`stat.mode & 0x1ff` for 0777 in `text_document.dart`, with the meaning in a
-trailing comment. `AGENTS.md` asks for descriptive constants. **Plan:** a
-`_ownerOnlyMode` and a `_permissionBits` const, or `package:ffi`'s
-constants if they cover it.
+### B12. Serialize Save As requested during Save — M (inherited read)
+`DocumentWorkspace._save` deduplicates per tab, so Save As during Save may
+return the existing future without opening its dialog. Reproduce with a gated
+store; queue the differing intent or explain why it is unavailable. The
+source's alternative map key `(tab, saveAs)` is insufficient if it permits
+concurrent writes: preserve per-tab serialization, identity and dirty baselines.
 
-### B15. `DesktopWindow` is never disposed — S (read)
-`main()` builds a `DesktopWindow`, hands it to `PlanchetteApp`, and drops the
-reference. `windowManager.removeListener` and `AppLifecycleListener.dispose`
-never run. Harmless for a single-window app that quits, but the hosts mirror
-this file, and the leak grows with every window. **Plan:** own the
-`DesktopWindow` in a `State`ful root so `dispose` runs, or have `PlanchetteApp`
-take it as a disposable collaborator.
+### B13. Focus disposal ordering — S (investigate inherited test failure)
+The newer report observed `A FocusManager was used after being disposed`
+with attached editor/search/replacement nodes. This session also saw that
+trace during teardown after an earlier failed assertion skipped widget cleanup;
+the passing app suite and desktop CI do not establish a runtime close-tab bug.
+First isolate a focused close/disposal reproduction. `_remove` already removes
+the list entry before disposing, which does not synchronously unmount widgets.
+Validate detach/unmount/controller ownership before changing order or proposing
+unfocus calls; active-tab close should produce no warning or lost focus state.
 
-### B16. `Cmd/Ctrl+N` stacks empty untitled buffers — S (read)
-`newDocument` always creates a tab, so pressing it four times gives four
-`Untitled 1…4` buffers with nothing in them. #35 reuses the name; the reuse
-of the *tab* is separate. **Plan:** if the active document is untitled, empty
-and not dirty, focus it instead of creating another.
+### B14. Name file-permission constants during related work — S (inherited read)
+Replace meaningful POSIX `0x180` (0600) and `0x1ff` (0777 mask) with descriptive
+constants such as `_ownerOnlyMode` and `_permissionBits`, or existing standard
+definitions when available. Keep this optional cleanup scoped to file-operation
+work and preserve mode/privacy tests; it is not a correctness blocker.
 
-### B17. Only the last error survives a multi-file open — S (read)
+### B15. Only the last error survives a multi-file open — S (read)
 `DocumentWorkspace.openDialog` overwrites `error` for each failing file.
 Collect the failures and show "2 files could not be opened: a.bin (binary),
 b.txt (not UTF-8)".
 
-### B18. Opening a file that is already open should flash its tab — S (idea)
+### B16. Opening a file that is already open should flash its tab — S (idea)
 Today the existing tab is simply activated. Add a short highlight
 animation on that tab so it's clear why nothing new appeared.
+Keep it optional and respect reduced motion; activation must work without it.
 
-### B19. Save As can slip the open-tab check while a sibling is loading — S (read)
-`DocumentWorkspace._findPath` canonicalizes the target and compares it
-against `tab.path`, but a tab's `path` is only set after its load
-finishes. A Save As aimed at a still-loading tab's unresolved alias can
-miss the check. The digest guard still refuses a true collision at
-write time, so the worst case is a confusing error rather than lost
-data — recheck `_documents` once the pending load lands.
+### B17. Preserve independently owned editing locks — M (read, high priority)
+`editor_view.dart:67,93` copies the widget's default false into the controller
+on mount/update, although package guidance also permits hosts to set the
+controller lock. An unrelated rebuild can remove that independently owned
+lock; app hosts currently mirror it, masking the shared-package defect.
+Combine widget/controller lock ownership explicitly. Test pre-mount locks,
+rebuilds, controller swaps, replace/undo/save and confirmed-close saving.
 
-### B20. The load path hashes the file three times, and one of them is provably redundant — S (confirmed)
-`loadTextDocument` computes a `before` digest by streaming the whole file,
-then streams it again into `bytes`, then computes an `after` digest by
-streaming it a third time. Measured SHA-256 cost is 66 ms per 3 MB, so a
-4 MiB file pays about 200 ms of hashing plus two extra full reads.
+### B18. Reserve Save As identities during async work — M (investigate, high priority)
+`document_workspace.dart` checks ownership before async digest, confirmation
+and write operations. Native Open during a pending save may create two tabs
+for one target. Reproduce with a gated fake store, aliases and native-open
+events. Reserve resolved identities until completion or reconcile without
+discarding dirty buffers; do not change the identity after a failed save.
 
-The `before` digest buys nothing. The check that already exists —
-`crypto.sha256.convert(bytes) != after` — detects any change during the
-read, and detects it *more* strictly, because it compares the bytes
-actually returned rather than a separate pass over the path. `before` is
-only used in `before != after`, which the byte comparison already implies.
+The latest inherited B19 reports a related loading-tab alias gap: `tab.path`
+is assigned only when load completes, so `_findPath` may miss it. Test pending
+load aliases as well as pending saves; the claimed digest protection against
+all collisions needs proof rather than assuming only a confusing error.
 
-**Plan:** drop `before` and the first read. The safety tests in
-`document_safety_test.dart` must pass unchanged; the `sha256Of` hook the
-tests inject is what makes the mid-read-change case observable, so keep it.
+### B19. Navigate beyond the 1,000-hit painting cap — M (read)
+`editor_controller.dart:335,363,399` navigates stored hits only, while Replace
+All changes all matches. Separate bounded highlights from next/previous
+discovery and full counts. Test more than 1,000 hits, caret near EOF, wraparound,
+exact-cap display and replacement counts with bounded memory. E5 and P5
+must share these semantics instead of introducing another search model.
 
-### B21. The save path re-reads the temporary it just wrote — S (confirmed)
-`_writeTextDocument` writes `bytes`, then calls `textDocumentSha256(temporary)`,
-which streams the file back in to hash it. The bytes are already in memory.
-Hash the list instead: `crypto.sha256.convert(bytes).toString()`. Same digest,
-one fewer read, on every save and on every create.
+### B20. Align input and output text policies — S (confirmed this session)
+Core writing accepts NUL but loading rejects it as binary
+(`text_document.dart:127,216`). A successful create was reproduced producing
+a file that cannot reopen. Decide whether to reject NUL on save or support
+it on load; give a precise error before publication. Test create/save and
+round trips, preserving original bytes when rejecting an edit.
 
-### B22. Line-ending normalization is three full string allocations — S (confirmed)
-`_normalizeLineEndings` runs `_foldToLf` — two `replaceAll` passes over the
-whole buffer — and then possibly a third `replaceAll('\n', '\r\n')`. Measured
-28 ms per save on 3 M characters. The common case, a buffer that is already LF
-and a target of LF, still copies the document twice for no reason. A single
-pass appending into a `StringBuffer`, with an early return when the buffer
-already matches, fixes it.
+### B21. Define find preview and caret behavior — S (read)
+Typing a query highlights/reveals a hit without selecting it; Escape returns
+to the old caret and the first Enter skips that highlighted result. Reproduce
+with a unique distant marker. Define preview versus committed navigation,
+preferably selecting the active result without stealing query focus, while
+preserving ordinary Escape semantics and replacement/undo behavior.
 
-### B23. A dropped path starting with `-` is silently discarded — S (read)
-`OpenDocuments.start` passes `arguments.where((a) => !a.startsWith('-'))` to
-the opener. A file literally named `-draft.txt`, opened from a command line or
-a desktop entry, is dropped without a word. Filter the flags out by name
-against the known set instead of by prefix. macOS Finder events come through a
-different path and are unaffected.
+### B22. Give DesktopWindow an explicit lifetime — S (inherited read)
+The latest source reports `main()` creates DesktopWindow without disposing
+its window-manager listener or AppLifecycleListener. Verify ownership on root
+unmount and future multi-window flows, then dispose through the owning root
+or app collaborator. Do not assume local usage proves a leak in sibling hosts.
+
+### B23. Consider reusing an untouched untitled tab — S (inherited idea)
+Repeated New creates empty buffers; name reuse in #35 is a separate behavior.
+If the active tab is untitled, empty and clean, optionally focus it instead.
+Keep this a product choice: tests must preserve deliberately separate buffers,
+dirty/undo history and expected New semantics.
 
 ## 4. Performance
 
@@ -485,41 +590,53 @@ different path and are unaffected.
 Every edit re-tokenizes the whole text on the UI thread (including the
 regex meta pass), rebuilds all spans, relays out the whole paragraph,
 recomputes `lineStartOffsets`, and recounts UTF-8 bytes. With find open,
-it also lowercases and re-searches the whole document. The highlighting cap
-exists because of this; #28 lowered it from 200,000 characters to 32 KiB,
-which trades colours for responsiveness above that size. The cap is a
-band-aid, not a fix.
+it also lowercases and re-searches the whole document. The 200,000-char
+highlighting cap exists because of this.
+The newer inherited report says #28 lowers that cap to "32 KiB" and adds a
+Large file status. This is a reported branch change, not verified main behavior;
+retain the responsiveness/color tradeoff and check actual units at integration.
 
-Measured, per keystroke, in the harness:
+Measure before choosing structural work. In profile mode, cover
+10k/200k/4 MiB buffers, newline-heavy/single-line text, 1/10/50 tabs,
+search on/off, paste, undo, scroll and resize. Record p50/p95 frames, peak
+memory, platform and fonts. Highlighting is skipped above its cap, but
+other whole-buffer work remains. #5 addresses the measured quadratic CSS
+case; FU3/FU11 track assigned caching/notification follow-ups.
 
-| document | cost | where |
+Inherited #28 measurements, reported per keystroke in a non-AOT `flutter test`
+harness, back-to-back against its local baseline. They were not reproduced here
+and are not release-frame predictions or comparable to #5's standalone scan:
+
+| Fixture | Reported time | Reported owner |
 |---|---|---|
-| 380 KB text | **12.1 ms** | `lineStartOffsets` + `utf8EncodedLength` in `_updateMetrics`, recomputed on every text change and read by the status bar every frame |
-| 380 KB text, find open | **175 ms** | `findSearchMatches` lowercases the entire haystack per query keystroke, then `setSearchMatches` forces a full span relayout with up to 1,000 match spans |
-| 79 KB JSON | ~95 ms | 12,001 spans: 11 ms to build, 70 ms to lay out, against a 35 ms plain floor |
-| 787 KB text | ~330 ms | Flutter's own single-paragraph `TextField` layout. **This is the floor for this architecture** and #28 changed nothing here |
+| 380 KB text | 12.1ms | `lineStartOffsets` + `utf8EncodedLength` in `_updateMetrics` |
+| 380 KB text, find open | 175ms | Whole-haystack lowercase/search plus relayout of up to 1,000 match spans |
+| 79 KB JSON | about 95ms | 12,001 spans: 11ms tree build, 70ms layout; about 35ms plain-text comparison |
+| 787 KB plain text | about 330ms | Single-paragraph TextField layout remained after #28 |
 
-Short-term steps, each S–M:
+The source also measured 5,001-line gutter work at 59.0ms layout plus 124.3ms
+for per-line `getOffsetForCaret`, versus 9.1ms for one `computeLineMetrics`.
+Treat these as fixture-specific costs, not an immutable architecture floor.
+
+Candidate steps after profiling, each S–M:
 1. Incremental tokenization. Store the scanner state at each line start
    (inside a block comment or multiline string, or not). On an edit,
    re-tokenize from the edited line until the state converges with the
-   previous run, and splice the token list. A common-prefix/suffix scan is
-   cheap enough to find the edit first.
-2. Cache the lowercased haystack per text instance in `EditorController`,
-   and debounce the query by one frame. This is the single biggest cheap win
-   in the table above.
-3. **Do not make the line-start and byte metrics incremental.** This was
-   built and measured, and it is a dead end — see the box below. Take the
-   "lazily, at most once per frame" half instead, which is most of the win
-   for none of the risk.
-4. Compare a monotonic revision counter against the revision recorded at the
-   last save instead of comparing the whole buffer in `isDirty`. It is read
-   by the tab label, the status bar, the window title and twice by
-   `_menus()`, so on a large file that is several full-buffer scans a frame.
+   previous run, and splice the token list. Measure a common-prefix/suffix scan
+   as one way to locate the edit rather than assuming it is always cheap.
+2. Cache the lowercased haystack per text instance in `EditorController`;
+   evaluate one-frame query debounce while preserving immediate navigation.
+3. Prefer lazy/once-per-frame metrics first. The latest inherited affix-scan
+   prototype below regressed mid-buffer edits; do not repeat it without a
+   measured improvement. This does not rule out every incremental design.
+4. After #17, verify cached dirty state across tabs/status/title/menu reads.
+   The source proposes comparing revision counters; a monotonic edit counter
+   alone breaks clean-after-undo. Preserve undo-to-saved and saved-revision
+   semantics before choosing a history checkpoint or cached comparison.
 
 Long-term: see P3.
 
-> **Measured dead end: incremental document metrics.** An earlier pass of this
+> **Inherited abandoned prototype: incremental document metrics.** Another
 > review implemented a `TextMetrics` in `planchette_core` that took the edit
 > range from a pair of `TextEditingValue`s, found the shared prefix and suffix,
 > and spliced the line-start list. The merge arithmetic is the hard part and it
@@ -558,18 +675,20 @@ Long-term: see P3.
 > *more per element* than the character scan it was meant to replace — the
 > first working version measured **10.3 ms per keystroke for appends and
 > 24.2 ms for mid-buffer inserts, against 12.3 ms for the full scan it was
-> replacing.** Even a perfect implementation cannot avoid the 3.5 ms
+> replacing.** That affix-verifying implementation incurred the 3.5 ms
 > `memcmp` that verifying the shared tail requires. A `Uint32List` would
 > make the shift 0.6 ms, and then you are maintaining a bespoke piece table
-> with a 4 GiB offset ceiling and a fallback path, to save 9 ms on a 3 MB
-> file — in a package three applications depend on.
+> with 32-bit offsets and a fallback path. The source describes a 4 GiB ceiling,
+> but String offsets count UTF-16 units, not bytes. Its projected savings were
+> about 9ms on that 3MB fixture, with added shared-package maintenance cost.
 >
-> **The actual measurement that settles it: on a 122,161-character document the
-> whole per-keystroke cost is 173 ms, of which the metrics are 2 ms.** They are
-> 1% of the problem. The gutter was 145 ms. Spending effort on the metrics
-> would have been spending 99% of the effort on 1% of the cost. Take the
-> scheduling fix — recompute at most once per frame, off the keystroke — and
-> leave the arithmetic alone. The branch was abandoned, not merged.
+> On its 122,161-character fixture, the report puts metrics at 2ms of a
+> 173ms keystroke and attributes most cost to the gutter. Its reported 145ms
+> overhead disagrees with the 34ms bare-field comparison (139ms difference);
+> separate component probes do not sum to the total. Treat this as evidence
+> to profile the dominant term, not proof of a universal 1% metric cost.
+> The branch was abandoned. Scheduling at most once per frame is the next
+> candidate, provided status/save consumers receive current values.
 >
 > The transferable lesson: **measure which term dominates before optimizing
 > one.** The gutter looked like "the highlighting cap", the metrics looked like
@@ -579,66 +698,106 @@ Long-term: see P3.
 ### P2. `IndexedStack` lays out every tab — M (read, Flutter source)
 `RenderIndexedStack` lays out all children and paints one. Resizing the
 window relays out every open document's full text. **Plan:** keep
-inactive editors out of layout, for example
-`Visibility(visible: false, maintainState: true)` or `Offstage`, and
-verify that undo history survives tab switches. The existing test "tab
-switches retain undo, selection and search state" must stay green.
+inactive editors out of layout only after measuring 1/10/50-tab resize
+and retained memory. `Offstage` still lays out its child; a state-preserving
+`Visibility` using it is not proof of layout avoidance. Prototype real layout
+skipping without losing Flutter-owned undo, selection, scroll or search state.
+Instrument layout counts and retain the existing test "tab switches retain
+undo, selection and search state". Do not remove mounted owners speculatively.
 
 ### P3. A virtualized editor surface — L (idea)
 The `TextField` approach bounds document size and responsiveness. A
 line-based editor (render only visible lines, keep a piece table or rope,
-own the caret, selection and IME client) would remove the 32 KiB highlight
-cap and the 4 MiB ceiling, and would enable minimap, folding, true tab
-stops, multi-caret and a word-wrap toggle. It is also the prerequisite for
-E6 and Q7, and #28 documents that raising the cap is blocked on it. It's a
-big project: prototype behind a flag in `planchette_editor`, keeping
+own the caret, selection and IME client) could raise the 200k and 4 MiB
+ceilings and enable minimap, folding and true tab stops. It's a big
+project: prototype behind a flag in `planchette_editor`, keeping
 `EditorController`'s API.
-
-**Flutter 3.47 has no way to turn soft wrap off** on `TextField` or
-`EditableText` — there is no `softWrap` parameter on either, confirmed
-against the SDK sources. That is why E6 exists as it does, and why #28's
-first push (which assumed wrapping could be disabled, and shipped a gutter
-that assumed uniform rows while the text was in fact folding) had to be
-corrected. A surface that owns its rows is the only way out.
+Treat removing those limits as a measured acceptance target, not an automatic
+consequence. Folding, multicursor, project-wide search and LSP require separate
+design after document/layout foundations are stable; avoid building a plugin
+framework merely to support a small command palette.
+The newer inherited review reports that Flutter 3.47 TextField/EditableText
+have no `softWrap` parameter, and an inert flag in #28's first draft left
+wrapped text paired with incorrect uniform-row gutter geometry. Verify API
+availability (D6) and actual layout. Absence of that parameter does not by
+itself rule out a measured horizontal-constraint prototype for E6; do not
+declare a custom surface the only possible no-wrap approach without testing.
 
 ### P4. Load and save off the UI isolate — M
-After #39, opening a 3.9 MB file still costs about 180 ms of CPU on the UI
-isolate: three SHA-256 passes (about 50 ms each in AOT), the UTF-8 decode,
-and line-ending folding. **Plan:** run the pure steps (hash, decode, census,
-fold, and encode on save) in `Isolate.run` inside `planchette_core`. Keep
-the file I/O and the digest ordering exactly as they are, since the safety
-tests inject `sha256Of`. **Done when** opening a 4 MiB file leaves the UI
-isolate responsive (no frame over 16 ms in a profile build), and all
-document-safety tests pass unchanged.
+The inherited #39 follow-up reports about 180 ms of CPU to open 3.9 MB on the
+UI isolate: three SHA-256 passes (about 50 ms each in AOT), the UTF-8
+decode, and line-ending folding. **Plan:** run the pure steps (hash,
+decode, census, fold, and encode on save) in `Isolate.run` inside
+`planchette_core`. Keep the file I/O and the digest ordering exactly as
+they are, since the safety tests inject `sha256Of`. **Done when**
+opening a 4 MiB file leaves the UI isolate responsive (no frame over
+16 ms in a profile build), and all document-safety tests pass unchanged.
+These timings were not reproduced in this session. Remeasure the merged code,
+including isolate transfer/startup cost, before adopting the proposed offload;
+retain best-effort race guards and coordinate bounded passes with FU12.
 
-### P5. `replaceAll` materialises one match object per occurrence — S (read)
-`EditorController.replaceAll` calls `findSearchMatches(..., limit:
-source.length + 1)`, so a one-character query over a large document builds
-tens of thousands of `TextMatch` objects plus a `StringBuffer` for the whole
-result. Measured at 14 ms for a 769 KB document, which is survivable, but
-the limit exists for a reason and this path bypasses it. **Plan:** stream
-matches and splice, or cap and ask. `core.findSearchMatches` should grow a
-callback form so the caller never materializes the list.
 
-### P6. The gutter allocates per painted line — S (read)
-`_LineNumberGutterPainter.paint` creates one `TextPainter` and then calls
-`layout()` for every visible line — roughly 50 paragraph layouts a frame
-while scrolling — plus a fresh `Paint()` for the divider. **Plan:** cache
-`ui.Paragraph`s for the line numbers, or one `TextPainter` over a
-pre-measured digit atlas, and hoist the divider's `Paint`.
+The latest inherited B20 proposes removing the pre-read digest, reporting
+66ms per 3MB hash and about 200ms per 4MiB open. Its D14 simultaneously says
+to retain the guarded passes. These are conflicting proposals, not a proven
+redundancy: a file changing from the initial version to the bytes read can
+satisfy bytes == after while before differs. Define the promised snapshot
+window and preserve injected `sha256Of` race tests before eliminating a pass.
+
+Inherited B21 proposes hashing in-memory output instead of re-reading the
+staging file on save/create. That removes an I/O pass but does not verify the
+actual staged bytes against interference or corruption. Compare guarantees
+and fault-injection coverage first; do not weaken guarded publication solely
+because nominal digests match.
+
+### P5. Stream Replace All and preflight expansion — M (read)
+`editor_controller.dart:399` allocates an uncapped match list before constructing
+output; a one-character query near 4 MiB can allocate millions of ranges.
+Use a shared iterator/replacement plan, preflight encoded output size, then
+commit one undoable edit. Test shrinking/expanding replacement, no self-rematching,
+cap-crossing input, Unicode offsets and peak allocation. Coordinate B19/E5/FU12.
+The newer inherited source reports 14ms for Replace All on 769 KB, with
+`limit: source.length + 1`; its suggested callback form is one streaming option.
+Remeasure allocation/time after integration. If an operation limit is introduced,
+make it explicit rather than silently replacing only highlighted matches.
+
+### P6. Profile per-line gutter allocation (after #22/#28) — S (inherited read)
+The incoming source reports one TextPainter layout per visible line in
+`_LineNumberGutterPainter.paint` (roughly 50 layouts per scroll frame), plus a
+new divider Paint. Check the reconciled rendering owner before optimizing.
+Candidates: cache line-number paragraphs or a measured digit atlas, and reuse
+divider paint. Measure scrolling and invalidate for font/scale/style changes;
+do not introduce a second geometry model alongside FU2/FU9.
+
+### P7. Reduce line-ending normalization allocations — S (inherited probe)
+The latest report measures 28ms on 3M characters across `_foldToLf`'s two
+replace passes and a possible LF→CRLF pass. It claims even unchanged LF is
+copied twice; verify actual Dart allocation behavior. Benchmark an early return
+for already-normalized input and a single-pass builder against mixed CR/LF,
+CRLF, empty input and target conventions. Preserve the documented mixed-EOL
+normalization contract and coordinate #39/FU12/P4.
 
 ## 5. Editing features
+
+### E1. Validate comment toggle; extend block-only languages — after #23
+#23 reports Ctrl+/ line-comment toggling from `lineComments`, preserving
+indentation, skipping blank/whitespace-only lines, caret and both selection
+directions. Verify Cmd on macOS, editing locks, one-step undo and IME.
+Remaining: CSS/XML and other block-only languages need selection wrapping;
+languages without either comment form need explicit behavior. For mixed
+commented/uncommented lines, define minimum-indent insertion consistently.
+Keep transforms in core and reuse the reconciled edit type from E2.
 
 ### E2. Line operations — S each
 Duplicate line or selection (Cmd/Ctrl+Shift+D), move line up/down
 (Alt+↑/↓), delete line (Cmd/Ctrl+Shift+K), join lines (Cmd/Ctrl+J).
-Write pure core transforms returning text and selection. #21 landed the
-shape: a `TextEdit` with `text`, `start` and `end` in `planchette_core`, the
-same class `insertIndent` and `removeIndent` return, so line operations
-should return that too rather than inventing a second shape.
+Write pure core transforms returning text and selection. The older inherited
+#14 plan names `IndentEdit`; the newer #21 record reports `TextEdit` with
+`text`, `start` and `end`, returned by `insertIndent`/`removeIndent`. Reconcile
+the two PRs and reuse the resulting shared type rather than inventing another.
 
-### E3. Auto-close brackets and quotes — mostly done in #34
-**Landed in #34:** `( [ { " ' \`` insert their closer with the caret between;
+### E3. Auto-close brackets and quotes — partly assigned to #34
+**Inherited #34 report:** `( [ { " ' \`` insert their closer with the caret between;
 typing the closer again takes back the character the platform inserted and
 steps over the pair; a closer with something *else* after it is a real bracket
 and is inserted as one; Markdown is excluded, because its brackets are content;
@@ -649,26 +808,26 @@ a locked editor does not pair.
 - **Enter and the bracket keys are not intercepted as shortcuts.** They reach
   the buffer through the platform's text input, so #34 runs on the change the
   platform already made, and accepts it only when it is *a single character
-  inserted at a collapsed caret*. A paste, an IME composition, an undo and a
-  replaced selection all arrive as more than that and are left exactly as they
-  came. That constraint is what keeps this from rewriting text the user did not
-  type, and it is the part to preserve if this is extended.
+  inserted at a collapsed caret*. The source claims this excludes paste, IME, undo and selection replacement,
+  but single-character paste/composition/undo can satisfy that shape. Preserve
+  the intended policy and add event-specific regressions before relying on it.
 - **A language gate, not a heuristic.** Pairing is decided by
   `pairsBrackets(language)`, which is "not null and not Markdown". Extending it
   to more prose formats is a one-line change to that predicate.
 
 **Still open from this item:** Backspace between an empty pair deleting both;
 respecting string and comment context with the tokenizer rather than only the
-character after the caret; a setting to turn it off. All three are worth doing
-together — the third is a `bool` on `EditorController` beside `indent`.
+character after the caret; a setting to turn it off. Test whitespace/end-of-line
+insertion boundaries. Coordinate with #37 preferences and the shared host API;
+do not widen controller state without a consumer and compatibility review.
 
 ### E4. Bracket-match highlight — M
 When the caret touches a bracket, find its partner (skipping strings and
 comments via tokens) and paint both backgrounds. The decorations render
 object from #22 can paint them.
 
-### E5. Search options — regular expression done in #44
-**Landed in #44:** a `.*` toggle beside the existing `Aa` button, a
+### E5. Search options — regular expressions assigned to #44
+**Inherited #44 report:** a `.*` toggle beside the existing `Aa` button, a
 `planchette_core.FindQuery` that compiles the pattern once, and — the part
 worth keeping — **a pattern that does not compile says so in the match counter
 in the error colour**, rather than reporting "No matches", which is
@@ -687,12 +846,20 @@ pattern will not compile.
 occurrences of the selected word; capture groups in the replacement (the
 current `replaceAll` substitutes a literal string, so `$1` is written out
 rather than expanded — a real trap now that patterns exist).
+Keep literal mode the default and bound expensive patterns. Specify Unicode
+word boundaries and zero-width replacement behavior. Preview affected count
+and a small sample before Replace All, especially beyond the painting cap
+(B19/P5). Preserve #10 keyboard/localization/IME and responsive input connections.
+The 1,000-hit painting cap must not silently bound actual replacement.
 
 ### E6. Word wrap toggle — M
 The `TextField` always soft-wraps. No-wrap needs a horizontally
 scrollable field of intrinsic width (a `SingleChildScrollView` plus
 `IntrinsicWidth`, or a very wide constraint), and the gutter must follow
 vertical scroll only. Consider doing this with P3 instead.
+Profile long-line intrinsic measurement before choosing that layout. Preserve
+actual gutter/reveal geometry, scroll anchor, selection and undo; zoom is
+already assigned to #30, with persistence/validation in FU4.
 
 ### E7. Visible whitespace and indent guides — M
 Paint dots for spaces and arrows for tabs in the selection or all text,
@@ -704,50 +871,52 @@ and thin vertical guides per indent level. The decorations painter from
 the next multiple of the tab width. That needs per-tab measurement of
 the preceding column (monospace makes this arithmetic) and a
 letter-spacing value per tab.
+The newer #21 record reports padding typed indentation to the next stop.
+Verify that separately from rendering existing literal tabs before another fix.
 
 ### E9. Trim trailing whitespace and final newline — S
 Settings: "Trim trailing whitespace on save" and "Ensure final newline".
 Honor `.editorconfig` if present (see A1).
 
-### E10a. Enter does not keep indentation — done in #34
-**Landed in #34,** alongside Tab/Shift+Tab. The pure transform is in
-`planchette_core` as `indentForNewLine`, next to `leadingWhitespace` and
-`indentRange`, so FU7 can reuse it for the soft-keyboard case.
+### E10a. Validate assigned auto-indent — after #14/#21/#34
+#34 reports `indentForNewLine`, `leadingWhitespace` and `indentRange` in core,
+with a language-gated block-opener rule. Its colon policy includes YAML, INI,
+dotenv, XML, Markdown and CSS, but excludes punctuation cases such as Dart's
+`var x:`; the source names a const language set in `code_input.dart`.
+Verify that policy against real language syntax before extending it. Preserve
+FU7 mobile input and FU14 locks/selection/undo tests. #14 reports Backspace
+removes a level; reconcile that behavior with #34 rather than losing it.
 
-One judgement call inside it: a trailing **colon** indents the next line for the
-line-oriented families (YAML, INI, dotenv, XML, Markdown, CSS) and not for
-languages where a colon is punctuation — so `services:` in a compose file opens
-a block and `var x:` in Dart does not. That list is a single `const Set<String>`
-in `code_input.dart` and is the most likely thing an owner would want to
-change.
-
-**Still open from this item:** Backspace removing a level, which #14 covers.
-Take whichever of #14 and #34 merges second and keep both.
-
-### E10b. Search debounce and a selection summary — S
-`findSearchMatches` runs synchronously on every query keystroke (P1 step 2).
-Debounce it by a frame and show "N selected" in the status bar, replacing
-the byte count, which no programmer reads.
+### E10b. Search debounce and selection status — see P1/FU13
+Evaluate one-frame query debounce with P1's measurements. #33/#44 report
+selection status, so reconcile it after merge; #44 reports word/character counts. The incoming proposal to replace
+byte count with "N selected" is a presentation choice, not proof that encoded
+size is useless; retain discoverability of both where space permits.
 
 ### E10. Change line endings, indentation and language from the status bar — M
 Make the status segments into menus:
 - LF / CRLF converts the document on the next save.
 - Spaces / Tabs sets `indentation`, with "Convert indentation".
 - The language picker sets the language explicitly.
+- BOM is an explicit file-format choice; show its effect on encoded size.
 
 The status row lives in the shared editor, so do this through
 `statusBuilder` or new callbacks, not app-only code.
+Separate manual language override from autodetection: untitled files need a
+choice, and shebang edits should update detection without resetting text.
+Warn before mixed-EOL normalization. Test Save As, reload, dirty/undo semantics,
+changed shebangs, Unicode and narrow status layouts. Add format tooltips;
+#33 already owns encoded-byte and selection status changes (FU13).
 
 ## 6. App features
 
-### A1. Settings store — mostly done in #37 (enables FU4, E9, A3, A4)
-**Landed in #37:** an `AppSettings` value, a `SettingsStore` interface with
+### A1. Settings store — partly assigned to #37 (enables FU4, E9, A3, A4)
+**Inherited #37 report:** an `AppSettings` value, a `SettingsStore` interface with
 `LocalSettingsStore` and a test double following `DocumentStore`, a
 `SettingsController`, and a preferences dialog for theme mode, font size and
 indentation.
 
-Two decisions in #37 worth keeping whatever else is added, because the next
-settings will otherwise be added the naive way and break them:
+Preserve these reported contracts when adding settings:
 
 - **Read defensively, field by field.** `AppSettings.fromJson` falls back per
   field, so a hand-edited value costs that value and not the file. Font size is
@@ -762,68 +931,93 @@ settings will otherwise be added the naive way and break them:
 
 **Still open:** the settings #37 does not carry. Font family, trim and
 final-newline rules, current-line band, line numbers, status-bar contents and
-restore-session. The store, the controller and the dialog all take new fields
-without structural change.
+restore-session. Extend the existing value/store/controller/dialog rather than adding a
+parallel persistence system.
 
-**Deviation from this item's advice:** #37 computes the per-user configuration
-path from the environment rather than adding `path_provider`. Worth keeping —
-it is a new dependency in an app whose AGENTS.md warns about
-`file_picker` ≥11 and AGP 9, and the path is three branches.
+The source reports environment-derived per-user paths instead of
+`path_provider`. Its unrelated file_picker/AGP example does not establish that
+choice is safer. Verify Windows/macOS/Linux paths, missing environment values,
+permissions and sandbox expectations before retaining the dependency decision.
+The app owns persistence; hosts inject preferences. Keep unsaved buffer text
+out of ordinary settings, and make failed preference writes explicit.
 
-### A2. Session restore and hot exit — L
+### A2. Session restore and hot exit — L, high priority
 Reopen the last session's files, and restore unsaved untitled buffers and
 unsaved edits after a quit or crash. Journal dirty buffers to the app
 support directory on idle, with owner-only permissions, and clear the
 journal on save or close. It must survive a failed save and must not
 resurrect discarded edits.
+Separate saved-path/active-tab/caret/scroll restoration from protected dirty
+buffer recovery. Two-rename saves may leave a missing target or recovery
+siblings; journal interrupted publication as well as unsaved text. Offer a
+preview/choice and never overwrite disk automatically during recovery.
+Test forced termination at each save phase, stale journals, concurrent
+processes, missing files, private content, cleanup and newer unsaved revisions.
 
 ### A3. Open Recent and a recent list in the empty state — M
 Keep the last 20 paths in settings. Show them in File › Open Recent (on
 macOS, prefer `NSDocumentController`'s recents) and in the empty state.
-Remove entries whose files are gone. While the list is there, also
-remember the last directory used per file type and pass it as
-`FilePicker.saveFile`'s `initialDirectory` — today every Save As starts in
-the document's own directory or nowhere at all.
+Remove entries whose files are gone.
+Allow removal/clearing for privacy; handle moved or temporarily unavailable
+paths explicitly rather than silently reopening the wrong identity.
 
-### A4. Drag and drop files onto the window — done in #43, without the plugin
-**Landed in #43:** a `DragTarget<String>` around the shell, opening each
-dropped path through `DocumentWorkspace.open`, refusing the drop while
-`interactionLocked`, and turning the chrome strip the primary colour while a
-drag is over it. It uses Flutter's own `DragTarget` rather than the
-`desktop_drop` plugin this item originally suggested — so **no runner
-registrants change and Linux packaging is unaffected**, which is the whole
-risk this item carried.
+The latest source also proposes remembering the last Save As directory per
+file type and supplying `FilePicker.saveFile(initialDirectory: ...)`. Define
+precedence against the current document directory and preserve privacy clearing.
 
-The payload is newline-separated, because that is what a desktop drop delivers
-for several files and for one; `droppedPaths` is public and tested directly.
+### A4. Verify native file-drop intake after #43 — M
+#43 reports a `DragTarget<String>` around the shell, newline-separated path
+parsing via public `droppedPaths`, lock rejection and primary-color drag chrome,
+without new runner registrants. That wiring does not establish OS file-drop
+support: Flutter in-app drag targets need a native intake bridge for desktop
+file-manager payloads. Verify actual supported platforms before calling this done.
+The newline payload claim also needs an explicit source/encoding contract;
+filenames themselves can contain newlines on Unix.
 
-**Read D0e before adding coverage here:** Flutter's `DragTarget` cannot be
-driven from a widget test. #43 asserts the wiring and the payload parsing and
-says plainly that the drop itself needs a real desktop run.
+Test real Finder/Explorer/Linux drops, multiple files, spaces/Unicode, partial
+errors, aliases and pending operations through workspace/OpenDocuments guards.
+If a native bridge/plugin is needed, validate all runner registrations and Linux
+packaging. D0e records the inherited widget-test difficulty without claiming
+Flutter drags are categorically untestable. Do not advertise drop support until
+the native flow works.
 
 ### A5. Quick Open (Cmd/Ctrl+P) — M
 A fuzzy list over recent files and the active file's directory. Enter
 opens, and Esc returns to the editor.
+Offer an open-tabs mode with distinguishing path suffixes and dirty state;
+reuse identity resolution and keep this distinct from A6's command list.
 
 ### A6. Command palette (Cmd/Ctrl+Shift+P) — S–M
 The shell already models menus as `_ShellMenu` / `_Command`. List every
 enabled command with its shortcut, filter by fuzzy match, and run it on
 Enter.
+Use the same command registry for menus, shortcuts and palette so enabled
+states agree. Test ranking, keyboard navigation, empty results, modal/editing
+locks and focus restoration. No plugin framework is required.
 
 ### A7. Save All and Reopen Closed Tab — S each
-Close Others and Close All landed with #42, with the consent decision
-still per tab. Reopen Closed Tab (Cmd/Ctrl+Shift+T) keeps a stack of
-recently closed paths. The quit prompt should list the dirty files,
-with "Save All" and "Discard All" buttons instead of one dialog per tab.
+#42 reports Close Others/Close All with per-tab consent and Cancel stopping
+the sweep; verify through FU5 rather than opening duplicate close features.
+Reopen Closed Tab (Cmd/Ctrl+Shift+T) keeps a stack of recently closed
+paths. The quit prompt should list the dirty files, with "Save All" and
+"Discard All" buttons instead of one dialog per tab.
+Reuse existing guards, report partial success and stop safely on cancel.
+Do not promise recovery of discarded text merely because its path is in
+history. Tab menus, Copy Path and reveal actions belong to FU5's app service.
 
 ### A8. Remember window size, position and maximized state — S
 Store them in settings (A1). Restore them before `waitUntilReadyToShow`,
 clamped to a visible display.
+Test removed monitors, high DPI, maximized state and startup jump behavior (B4).
 
 ### A9. Encodings — M
 Only strict UTF-8 is accepted. Detect UTF-16 LE/BE by BOM, and offer
 "Reopen with Encoding…" for Latin-1/CP1252. Save in the document's
 encoding. Keep the 4 MiB limit in bytes, and update ARCHITECTURE.md.
+Start with BOM-marked UTF-16 only with lossless round-trip fixtures and endian
+metadata; reject malformed input. Latin-1/CP1252 reopening must be an explicit
+choice, never an automatic guess that silently rewrites bytes. Report precise
+unsupported-encoding diagnostics and preserve content on failed conversion.
 
 ### A10. Markdown preview — M
 A split view for `.md` using `flutter_markdown` or a small renderer, with
@@ -832,6 +1026,14 @@ scroll sync by heading.
 ### A11. Print or export to HTML/PDF with highlighting — M
 Build HTML from the tokens (colors from the syntax theme), then print or
 save through the platform.
+
+### A12. Disambiguate equal filenames — S
+After reconciling #11/#35/#43, check whether duplicate basenames still need the
+shortest distinguishing parent suffix. Retain full-path tooltip and accessible
+label. Test aliases, equal names in different directories, case-sensitive
+volumes, long paths and rename/Save As without losing active-tab visibility.
+
+#43's directory beside the strip does not prove each duplicate tab is distinct.
 
 ## 7. Platform integration
 
@@ -845,6 +1047,17 @@ while Planchette runs starts a second window.
 - **Windows**: use a named mutex, and `WM_COPYDATA` to the existing
   window.
 
+First add a tested CLI parser: the baseline ignores every dash-prefixed
+argument and lacks `--`, line/column targets and `--wait`. Document shell
+invocation/options and launcher installation. Preserve spaces, Unicode and
+filenames beginning with `-`; define forwarding/wait lifetime before changing
+process ownership. Native intake must still pass workspace/modal guards.
+
+The latest inherited B23 specifically identifies `OpenDocuments.start` filtering
+all `startsWith('-')` arguments, including `-draft.txt`. Parse only known flags
+and support `--`; Finder events use a separate path. Add direct regression
+coverage before changing that parser.
+
 ### I2. macOS document affordances — S–M
 Set `NSWindow.isDocumentEdited` (the dot in the close button) instead of
 a "●" title prefix, and `representedURL` for the proxy icon. Add
@@ -852,12 +1065,19 @@ a "●" title prefix, and `representedURL` for the proxy icon. Add
 (`Makefile`, `.env`) offer Planchette in Open With
 (`macos/Runner/Info.plist`).
 
-### I3. Save-time metadata — M, risk: medium
-Saving swaps inodes, so hard links, xattrs, ACLs, Finder tags and
-creation dates are lost. Only mode bits are restored
-(`text_document.dart`). Option: copy xattrs on macOS and Linux (via
+### I3. Save-time metadata — M, high priority, risk: medium
+Saving replaces the inode and copies permission bits only
+(`text_document.dart:267-269`). This session reproduced a Linux
+`user.planchette-test` xattr disappearing after save. The inherited review
+also identifies hard-link identity, ACLs, Finder tags and creation dates;
+ownership/group and Windows custom DACLs need an explicit policy and native
+verification. Other hard links continue pointing at the old inode rather
+than becoming aliases of the replacement. Windows/macOS effects were not
+runtime-verified here. Option: copy xattrs on macOS and Linux (via
 `listxattr`/`getxattr`/`setxattr` FFI) before the rename. Document which
-metadata survives in ARCHITECTURE.md.
+metadata survives in ARCHITECTURE.md. Implement native mechanics in the
+file-operation layer and specify failure behavior before publication.
+Test restricted access and retained metadata, not just ordinary mode bits.
 
 ### I4. Directory write permission — S
 A writable file in a read-only directory can't be saved, because the
@@ -869,60 +1089,86 @@ Core messages say "the local copy", which is Poltergeist/Séance
 vocabulary. Make the messages injectable (like `EditorStrings`), or use
 neutral wording, and check both hosts' error adapters first.
 
+### I6. Linux header title synchronization — S (investigate)
+`linux/runner/my_application.cc:48` sets a GtkHeaderBar title, while the window
+plugin changes GtkWindow title. Verify filename/dirty updates on GNOME/Wayland
+before changing native code. Cover both header-bar and traditional decorations.
+
 ## 8. Visual design and theming
 
+### V1. Verify curated themes and expose preferences (after #41) — M
+#41 now reports Parchment/Séance palettes, AA syntax colors, warm selection
+and an `EditorSyntaxTheme` ThemeExtension. Do not duplicate that implementation.
+Verify persisted System/Light/Dark choices through A1; the reviewed baseline
+followed system teal Material defaults without a user-facing selector.
+Planchette is named after the Ouija pointer, and its icon leans into
+that. Preserve the inherited palette design while checking #41's final values:
+- **Parchment** (light): paper `#F7F1E3`, ink `#2B2522`, sepia comments,
+  oxblood keywords, brass numbers, verdigris strings.
+- **Séance** (dark): candle-lit `#1B1716`, warm off-white text, ember
+  keywords, brass numbers, moss strings, smoke comments.
+
+Every token color needs AA contrast (4.5:1) against the background and
+the current-line band. Add a contrast test in the editor package.
+Warm-paper and midnight variants are optional alternatives, not additional
+required palettes. Keep token meanings consistent, and distinguish selection,
+focus and dirty state without relying on hue alone. Respect high contrast.
+
 ### V2. More token classes — M, risk: medium
-A follow-up to #41.
+A follow-up to #41, retaining its host theme-injection contract.
 Five classes (comment, string, number, keyword, meta) limit themes. Add
 `type` (capitalized identifiers in C-family, Dart, Swift, Kotlin and
 Rust), `function` (an identifier before `(`), and `constant`.
 `SyntaxTokenType` is used by hosts, so coordinate the enum change or add
 optional theme fields with defaults.
 
-### V4. Search bar polish — partly done in #44
-**Landed in #44:** the find field had **no border, no icon and no clear
-button** — `isDense: true, border: InputBorder.none` and nothing else — so the
-query floated in the toolbar with nothing saying it was something to type into,
-in a dialog that renders boxed `TextField`s everywhere else in the same file.
-It has a box, a magnifier and a clear button now.
+### V3. Verify selection and active-search contrast (after #41) — S
+The baseline Material selection (primary at 40%) was described as muddy teal;
+#41 reports a warm replacement. Verify app/editor selection and host overrides
+after merge rather than implementing the same theme change again.
+This session calculated light active-match white on `#3D8A78` at 4.11:1;
+dark `#10181A` on `#8AD8C8` is 10.91:1 (`EditorSyntaxTheme`). Set an explicit
+normal-text contrast target, then adjust the light foreground/background.
+Test active/inactive hits over every token, actual app surfaces and system
+high contrast. Formula checks do not replace real-font/native inspection.
+The newer inherited measurements report other-token ranges of light
+5.29–7.06:1 and dark 7.09–10.91:1, and propose `#2F6E5E` for the light active
+background. Those extra measurements/candidate were not verified here.
+Recheck the merged #41 values before treating this baseline contrast gap as open.
 
-**Still open from this item** (#36's surface and fill are in the other branch,
-so the two will need reconciling): the match count as a chip rather than loose
-text — #44 gives it the error colour but it is still loose text; the two fields
-sharing one bordered group instead of two separate boxes; the bar spanning only
-as much width as it needs.
+The latest report says #41 adds AA-checked colors but no permanent contrast
+regression. Verify that coverage; retain tests against surface and current-line
+band so later token/theme changes cannot reintroduce the measured 4.11:1 pair.
+
+### V4. Search bar polish — S
+#36 reports field surfaces/outlines/fills/monospace; #44 reports a magnifier,
+clear button, boxed query field and error-colored counter. After reconciling
+#10/#36/#44, verify the existing count-chip behavior; remaining ideas are one shared
+bordered field group and content-sized width. The earlier compact/floating or
+tinted-panel suggestion is an alternative style, not another required rewrite.
+Preserve #10's responsive keyboard-accessible controls,
+selected semantics, focus and live input connection while changing appearance.
 
 ### V5. Status bar segments — S
-#36 aligned the leading edge with the text column and stopped claiming a
-language for a file too large to highlight. After #33, turn the "·"-joined
-text into distinct, clickable segments (see E10) and show "Unsaved" as a
-dot. The language id is still a raw value — `shell`, `c-family`, `dotenv` —
-and `c-family` is an internal grouping that means nothing to a reader;
-#33 adds display names.
+The newer #36 record reports aligning status with the text column and avoiding
+language claims for unhighlighted large files. #33 reports display names for
+raw IDs such as `shell`, `c-family` and `dotenv`. After their integration,
+turn the "·"-joined text into distinct, clickable segments
+(see E10), and show "Unsaved" as a dot.
 
 ### V6. Error banner with actions — S
-#21 stopped `FileSystemException` and errno text reaching the user for a
-missing or unresolvable path, in the core so both hosts get it. What is
-left: map the remaining failures (permission denied, read-only directory,
-a save conflict) to friendly text with actions (Retry, Save As, Reveal,
-Dismiss), in the style of the disk notice in #26. A UTF-16 file still ends
-at "This file is not valid UTF-8 text." with no way forward — see A9.
+#21 reports mapping missing/unresolvable-path errors in core so hosts benefit.
+After #21/#26, map remaining permission/read-only-directory/conflict errors to
+friendly actions (Retry, Save As, Reveal, Dismiss). UTF-16 input still needs an
+actionable unsupported-encoding route (A9), not just "not valid UTF-8".
+Baseline workspace errors persist after successful retries. Scope errors to
+operation/document and clear only the resolved failure. Test retry success,
+two documents failing independently and multi-open aggregation (B15); announce
+errors accessibly. Never hide an unrelated failure with a generic success.
 
-### V6a. The active search match fails AA contrast in the light theme — S (confirmed)
-`EditorSyntaxTheme.light.activeMatchBackground` is `#3D8A78` with
-`#FFFFFF` text: **4.11:1**, below the 4.5:1 WCAG AA requirement for normal
-text. Every other token passes comfortably — light 5.29–7.06:1, dark
-7.09–10.91:1 — so this is an isolated fix. The same hue is also a
-desaturated teal that reads as muddy grey-green beside the Material
-primary. **Plan:** darken the light active-match background to about
-`#2F6E5E` and add a contrast test in the editor package that checks every
-token against both the surface and the current-line band.
-
-**With #41:** that PR's Parchment and Séance themes are AA-checked, so the
-fix is probably theirs to make. What is still needed either way is the
-*test* — #41 adds the colours, but nothing stops the next one from shipping
-a 4.1:1 pair. Add the contrast test to the editor package once the theme
-extension exists, and check the current-line band as well as the surface.
+### V6a. Active-search AA contrast consolidated in V3
+Keep the baseline 4.11:1 finding, extra inherited measurements and proposed
+background in V3; verify #41 before a separate fix. Do not duplicate the task.
 
 ### V7. Scroll past the end — S
 The last line sits at the bottom edge. Add bottom padding of about half
@@ -946,57 +1192,39 @@ figures, and the current number in the accent color. It lives in the
 decorations painter from #22.
 
 ### V11. A richer empty state — S
-#36 made the empty state the launch state (before, `main()` opened a blank
-buffer, so the screen could not be seen without first closing the tab) and
-gave it a subtitle and the three main shortcuts. What is left: recent files
-(A3), a drop hint once A4 exists, and the planchette easter egg in Q2. Keep
-focus handling: New and Open shortcuts must keep working with no tab open,
-as covered by the existing test.
+#36 reports making the empty workspace the launch state, with a subtitle and
+three main shortcuts; previously startup opened a blank buffer. Verify that
+assigned behavior, then add recent files (A3), a drop hint only once A4 works,
+and optional Q2 artwork. New/Open shortcuts must still work with no tab.
+The inherited report caught premature "drop a file here" copy before drop
+support existed. Do not advertise actions the current build cannot perform.
 
-**On claiming features in the UI:** #36's first draft of this screen said
-"or drop a file here to open it". Drag and drop is not implemented. A claim
-the app cannot honour is worse than its absence — do not ship copy for a
-feature that is not in the build.
+### V12. Verify the new icon at small sizes — S
+Main at `d53f416` integrated the new master/native assets; Linux packaging
+reads that master. Do not repeat integration. This session inspected source
+artwork and the committed 16px macOS icon: the detailed dark scene loses
+distinct shapes at that size. Check 16/32/64px on light/dark surfaces; preserve
+the supplied artwork and consider a simplified tiny-size silhouette only if
+accepted. Validate Windows ICO, macOS assets, Linux install and task switchers.
+No artwork was changed in this session.
 
-### V12. The editor is nearly invisible to a screen reader — M (read)
-`packages/planchette_editor/lib/src/editor_view.dart` renders a bare
-`TextField` with no label, so a screen reader announces an unlabelled
-multiline field. The status bar is not wrapped in `ExcludeSemantics`, so
-`Ln 4, Col 12 · 88 lines · 2,913 bytes · CRLF · UTF-8` is read unprompted
-on every caret move, and the workspace error banner is not a live region,
-so a failure to open a file is silent. macOS has an accessibility fixture
-(`scripts/test-macos-accessibility.sh`) but it tests lifecycle, not content,
-so none of this is caught. **Plan:** give the document field a semantics
-label, `ExcludeSemantics` the status bar, wrap the error banner in
-`Semantics(liveRegion: true)`, and add a semantics test asserting the
-editor's node exposes a label.
+### V13. Align buffer-related typography — S (inherited read)
+The source reports document monospace versus UI-font gutter/status/counter,
+with #36 moving only find fields and globally applying compact density.
+Verify actual inherited text styles, then choose deliberate typography for
+buffer coordinates/patterns versus commands. Check find-field padding beside
+buttons and preserve host fonts and large text; uniformity is a design choice.
 
-### V13. The editor and its chrome use two unrelated typefaces — S (read)
-The document uses `fontFamily: 'monospace'` while the status bar, find bar
-and gutter numbers use the platform UI font. The find fields were moved to
-the editor's face in #36, which makes the mismatch sharper rather than
-solving it: a search pattern is now shaped the way it will match while the
-match counter beside it is not. Either commit to the mono face for
-everything that describes the buffer (gutter, status, find) or keep the UI
-font throughout and accept the difference. #36 also applies
-`visualDensity: VisualDensity.compact` globally, which leaves the find
-fields under-padded next to their own buttons.
+### V14. Avoid a white native window before first paint — S (inherited read)
+The latest report says DesktopWindow never sets native background color.
+Reproduce Windows/Linux dark launch, set the intended surface before show if
+needed, and coordinate hidden-until-ready startup with B4. Test light/dark and
+settings load timing before assuming one color suits every initial frame.
 
-### V14. The window flashes white before the first frame on Windows and Linux — S (read)
-`DesktopWindow.initialize` sets the size, position and title but never
-`windowManager.setBackgroundColor`, so the native window shows the default
-white until Flutter's first frame. Painful in dark mode.
-**Plan:** call `setBackgroundColor` with the surface colour for the current
-brightness before `waitUntilReadyToShow`, and consider keeping the window
-hidden until it is shown (which also fixes B4's startup jump).
-
-### V15. The tab strip needs a defined container — S (idea)
-#36 gave the strip a full-width surface and a fixed row, which is most of
-what it needed, but the inactive tabs still have no background and the
-active one is a white rounded rectangle with no rule tying it to the editor
-below. A subtle inset border around the strip, or a hairline under it, would
-make it read as a bar rather than a row of pills. Paint it in the same place
-as the rest of the chrome so it is one decision, not three.
+### V15. Define the tab strip container — S (inherited idea)
+After #35/#36/#43 integration, compare a subtle inset border or baseline rule
+with the current pills. Keep one chrome owner, active-tab distinction and
+accessible contrast; avoid another independent rewrite.
 
 ## 9. Delightful and quirky ideas
 
@@ -1011,13 +1239,16 @@ as the rest of the chrome so it is one decision, not three.
   except the current paragraph, and center the text column. Toggle with
   Cmd/Ctrl+Shift+Enter.
 - **Q4. Automatic writing.** After a short idle pause, faintly underline
-  every occurrence of the word under the caret.
+  every occurrence of the word under the caret. Reuse E5's occurrence matching.
 - **Q5. Ghost text for untitled documents.** A faint rotating placeholder
   ("The spirits are listening…", "Type to summon…") that disappears on
   the first keystroke.
 - **Q6. Board words in the status bar.** A one-shot "YES" drifting across
   the status bar after a successful save, and "GOODBYE" when the last tab
   closes. Subtle, and skipped under reduced motion.
+  A plain, unobtrusive "Saved" state with an accessible announcement is the
+  default alternative. Never announce success for canceled/failed saves or
+  while a newer revision is dirty; no sounds/confetti or required animation.
 - **Q7. Minimap as a board.** A narrow overview strip showing the
   document's silhouette, search hits and the viewport. Realistic with P3.
 - **Q8. Rainbow CSV columns and log-level coloring.** Color each CSV/TSV
@@ -1028,204 +1259,284 @@ as the rest of the chrome so it is one decision, not three.
   the decorations render object.
 - **Q10. Clickable paths and URLs.** Cmd/Ctrl-click a path or URL in the
   text to open it.
-- **Q11. Quote and bracket teleport.** `Cmd/Ctrl+B` jumps the caret to the
-  matching bracket, and a modifier variant toggles between the two quotes of
-  a string literal. This is the most satisfying micro-feature in a text
-  editor and it is cheap: a small pure matcher in `planchette_core` that
-  uses the tokenizer to skip strings and comments, plus one paint in the
-  decorations render object from #22 to show the partner while the caret is
-  touching it. Does the same work give E4 for free.
-- **Q12. Peek the caret's line.** One extra dimmed row in the status bar
-  showing the caret's whole logical line, truncated in the middle. In a
-  10,000 line file it gives structural context for one row of layout, and it
-  doubles as the place to surface a selection's column span (E10b). Keep it
-  to one line and let it be hidden in a narrow window.
-- **Q13. Quiet "this changed on disk" inline notice.** #26 adds the notice;
-  give it a quieter form for the common case — a dim line above the status
-  bar rather than a modal-feeling banner — and make the Revert action
-  reachable from the status bar too.
-- **Q14. Trim trailing whitespace and a final newline on paste.** Not a
-  setting, just correct behaviour: strip trailing spaces from a pasted line
-  and add the final newline if the file already had one. Cheaper to live
-  with than to look for afterwards.
-- **Q15. "Ask the board" scratch buffer.** A persistent SCRATCH tab that
-  survives sessions — paste-and-forget notes that never need a filename.
-  Small once session restore (A2) exists.
-- **Q16. The board answers when idle.** Leave the empty state untouched
-  for a while and the planchette drifts across the letter arc to spell
-  something. Subtle, disablable, skipped under reduced motion — a
-  companion to Q2, not a screen saver.
-- **Q17. Ritual incantations.** `:wq` or `ZZ` in the Go to Line field —
-  or the command palette once A6 exists — saves and closes the tab. The
-  editor answers to muscle memory.
-- **Q18. Typewriter mode.** The caret line stays vertically centered
-  while typing, so neck and context stay still. One scroll-offset rule;
-  toggle under View, and make it compose with V7's scroll-past-end
-  padding.
+- **Q11. Quote and bracket teleport.** Jump to a matching bracket or the
+  other endpoint of a string literal. The inherited shortcut proposal is
+  Cmd/Ctrl+B plus a modifier variant; check existing bindings first. Reuse
+  E4's tokenizer-aware matcher and partner decoration rather than building
+  a second matching engine.
+- **Q12. Peek the caret's line.** An optional dimmed status row shows the
+  logical line, truncated in the middle, and a selection's column span.
+  Keep it to one line and hide it in narrow windows; coordinate E10b/FU13.
+- **Q13. Quiet disk-change notice.** After #26, consider a dim status-adjacent
+  notice and status-bar Revert action for routine changes. Retain FU10's
+  conflict/dirty-data choices and V6's actionable errors.
+- **Q14. Optional paste normalization.** The incoming idea proposed automatic
+  trailing-space trimming and final-newline insertion. Do not silently change
+  pasted text: make it opt-in, explicit and one-step undoable, aligned with
+  E9's policy. Test whitespace-significant content, tabs, selections and EOLs;
+  default paste preserves the supplied text.
+- **Q15. Ghost marks for unsaved lines.** A restrained gutter mark shows
+  changes since the saved revision; clicking opens a local diff. No network
+  or AI service. Bound diff work, clear only saved revisions, and design
+  per-hunk restore separately with explicit undo.
+- **Q16. Breadcrumb back.** Keep an in-memory trail of deliberate jumps
+  (find, Go to Line, tab changes), not every caret movement. Back/Forward
+  restores location/scroll; test changed and closed documents.
+- **Q17. Named local scratchpads.** Build only after A2 provides recovery,
+  so the persistence promise is real. Offer plain styling, keep thematic
+  copy out of errors, and combine the empty-state ideas rather than adding
+  competing screens.
+
+All decorative motion is optional and respects reduced motion. Focus/coding
+feedback must remain quiet and usable without animation or thematic copy.
+
+- **Q18. Idle board animation.** After a quiet delay in the empty state, an
+  optional planchette spells a short message along Q2's letters. Disable under
+  reduced motion and resume ordinary input immediately.
+- **Q19. Ritual commands.** Optionally accept `:wq`/`ZZ` through the command
+  palette or Go to Line as Save and Close. Use existing save/close guards;
+  distinguish commands from invalid line input and never close after failed save.
+- **Q20. Typewriter mode.** Optionally keep the caret line vertically centered
+  while typing. Coordinate V7 scroll-past-end, explicit navigation, selection
+  and reduced motion rather than forcing every scroll back to center.
 
 ## 10. Process and documentation
 
-- **D0a. Dead code in the shared public API.** `EditorController` is a
-  host-facing surface for three applications, so an unused member is not
-  dead code in the usual sense — but it is untested-in-anger and
-  unmentioned in `docs/STATUS.md`. Confirmed by grep:
+- **D0a. Review apparently unused shared APIs before removal.** The latest
+  local grep reports `reload()` uncalled, `EditorSaveMode.local` never passed,
+  `canPublish` used only by a test and `defaultTextDocumentMaximumBytes` an
+  unused compatibility alias. Local absence does not prove sibling-host absence.
+  Check host consumers and #19/#26/#38 first; Retry is a possible reload consumer.
+  Document supported APIs in STATUS and treat removals as compatibility changes.
 
-  | member | status |
-  |---|---|
-  | `EditorController.reload()` | **called from nowhere** — not the app, not a host, not a test. It exists to retry a failed load, and the view's error branch shows the message with no button. Wire it to a Retry, or drop it. |
-  | `EditorSaveMode.local` | never passed by any caller |
-  | `EditorController.canPublish` | read only by its own test |
-  | `defaultTextDocumentMaximumBytes` | a redundant alias of `textDocumentMaximumBytes`, used nowhere |
+- **D0b. Consolidate dirty-close policy carefully.** The source reports app
+  `_confirmTab` duplicates shared `EditorController.confirmClose`, including
+  revision rechecks. Compare differing app busy/save/dialog responsibilities
+  before routing through one contract. Retain tests for edits during dialogs,
+  native saves and failed window destruction; never delete a safety guard merely
+  to reduce duplication.
 
-- **D0b. The dirty-close decision is implemented twice.**
-  `EditorController.confirmClose` is the shared, tested contract for "may
-  this discard happen", including the revision re-check. The app's
-  `DocumentWorkspace._confirmTab` reimplements it with its own revision
-  check and never calls the shared one, so the shared one is exercised
-  only by its own tests. Two implementations of one safety rule is exactly
-  the shape that produces a future divergence bug. Either have `_confirmTab`
-  call the shared contract, or delete the shared one and say so in the
-  architecture note.
+- **D0c. Identify the authoritative icon source.** The latest source reports
+  #4 installed new raster assets while `media-sources/icon.svg` remains old.
+  Verify tracked assets; update the editable source or clearly document PNG
+  authority so regeneration cannot restore the old design. V12 retains small-size
+  and packaged-icon checks.
 
-- **D0c. Stale vector source for the app icon.** #4 wired the new PNGs
-  into the macOS asset catalog, the Windows `.ico` and `scripts/build.sh`,
-  which is what shipped. But `media-sources/icon.svg` is still the *old*
-  icon, and it is the only editable source in the tree — so the next person
-  to change the icon will regenerate the old one. Replace it with a vector
-  of the new design, or note in `media-sources/` that the PNGs are now
-  authoritative.
+- **D0d. One first-window size authority.** The reported GTK 1280×720 versus
+  DesktopWindow 1080×760 discrepancy is B4, not a separate implementation.
+  Coordinate with V14's first-frame background.
 
-- **D0d. Two authorities for the first window's size.** The GTK runner sets
-  `gtk_window_set_default_size(window, 1280, 720)` in
-  `linux/runner/my_application.cc`, and `DesktopWindow.initialize` asks
-  `window_manager` for `Size(1080, 760)`. Whichever runs last wins, and they
-  disagree on both axes. Pick one; the runner is earlier scaffolding, so
-  `window_manager` probably should.
+- **D0e. Separate native drops from Flutter drag tests.** The source reports
+  failed `dragFrom`, `timedDragFrom`, manual pumped gestures and mouse-kind tests
+  on Flutter 3.47.2 with a minimal Draggable/DragTarget pair. That failed harness
+  does not prove Flutter drag gestures cannot be widget-tested. Preserve parser
+  and wiring tests, diagnose gesture geometry/acceptance separately, and require
+  actual native file-manager drop verification for A4.
 
-- **D0e. Flutter's `DragTarget` cannot be driven from a widget test.**
-  Confirmed on Flutter 3.47.2 with a tree containing nothing but a
-  `Draggable<String>` and a `DragTarget<String>`: `tester.dragFrom`,
-  `tester.timedDragFrom`, a manual gesture with pumps between moves, and
-  `PointerDeviceKind.mouse` all leave `onWillAcceptWithDetails` uncalled.
-  So a drop target's *wiring* can be asserted (`find.byType(DragTarget<T>)`)
-  and its *payload handling* can be extracted into a tested function, but the
-  drop itself needs a real desktop run. Do not write a test that appears to
-  cover it. #43 does exactly this, and says so in its description.
+- **D0f. Earlier source ID for Unicode-search investigation.** Consolidated in
+  D0 below; do not reopen it as a confirmed native bug.
 
-- **D0f. Checked and dropped.** The initial review suspected that one `İ`
-  in a document would make case-insensitive search case-sensitive,
-  because `findSearchMatches` falls back when lowercasing changes the
-  length. That can't happen on Planchette's targets: on the Dart VM,
-  `toLowerCase` uses simple case mapping and changes the length of no
-  code point (all 1.1M were checked; `İ` → `i`). It would only matter
-  for a web build, where JavaScript applies full mappings.
+- **D0. Unicode suspicion checked and dropped.** `findSearchMatches` has
+  a fallback when lowercase conversion changes text length. The inherited
+  review reports an exhaustive native scan of all 1.1M code points on its
+  Dart 3.13.2 baseline: simple case mapping changed no code point's length
+  (`İ` → `i`). That exhaustive scan was not rerun here. This session's
+  smaller Dart 3.13.4 probe kept `İ Foo FOO foo` at length 13 and found all
+  three ASCII hits. No native bug is established; do not schedule a fix for
+  the earlier suspicion. The inherited report distinguishes JavaScript's
+  full mappings, but web is not a supported target. Any future full-folding
+  or locale policy should be an explicit feature with combining/non-BMP
+  and replacement-offset tests, not a repair justified by this rejected bug.
 
-- **D1. CHANGELOG.** None of the first eight PRs edits `CHANGELOG.md`, to
-  avoid eight-way conflicts. #21, #28 and #36 each add their own
-  "Unreleased" entries, so those three will conflict with each other on
-  `CHANGELOG.md` — resolve by keeping all the entries. Any PR still missing
-  one: add it after merging.
+- **D1. CHANGELOG.** The earlier inherited group omitted changelog edits to
+  avoid conflicts; the newer source reports #21/#28/#36 each add Unreleased
+  entries. Preserve their union during integration and add missing entries
+  after merge. These ownership claims were not independently checked.
+  Remove completed backlog records without losing unresolved acceptance cases.
 - **D2. STATUS.md.** Update "Implemented" and "Current limits" after the
-  merges: indentation, disk change detection, zoom, Go to Line, fonts, and
-  the diff language. #28 already moved the highlighting limit to 32 KiB in
-  all three documents and recorded that a plain 800 KB document still costs
-  a few hundred milliseconds a keystroke; keep that. Also note the file's
-  verification claims are all macOS-local runs (it cites Flutter 3.47.3
-  while CI pins 3.47.2) — fine, but not cross-platform proof.
-- **D3. Visual regression shots — do this next.** Real-font screenshots
-  caught the centered menu bar that no test noticed, and then the bare find
-  fields, the missing scrollbar and the misaligned status bar. A second
-  independent pass caught the same centered menu bar again, which is a
-  strong argument for making it permanent. **Plan:** a small golden suite
-  in the app package, pinned to the fonts in the Dart and Flutter caches
-  (`$DART_SDK/bin/resources/devtools/assets/fonts`,
-  `$FLUTTER_ROOT/bin/cache/artifacts/material_fonts`) so CI is
-  deterministic, covering light and dark, three tabs, the find bar open, an
-  empty workspace, and a long document so the scrollbar appears. Assert on
-  geometry as well as pixels where geometry is the point — the menu bar
-  being flush left is one `getRect` comparison and does not need a golden.
-  The structural geometry tests in #36 are a partial substitute and should
-  stay either way.
+  merges: indentation, disk change detection, zoom, Go to Line, fonts,
+  the diff language, load/memory improvements, search accessibility, bounded
+  CSS/recovery names and tab behavior. Report actual merged validation limits.
+  The newer source reports #28 updated three documents to its "32 KiB" cap
+  and recorded the remaining few-hundred-ms plain ~800 KB harness cost.
+  Preserve the measured limitation, verify units, and attribute branch results.
 
-- **D4. Focus regressions.** Chrome changes easily break where focus lands
-  after dialogs, tab switches and closing search. Keep the app tests that
-  assert `editorFocus.hasFocus` after each of those flows, and add one
-  whenever a new overlay (palette, Go to Line, notices) appears. Two
-  concrete rules from this pass: a shortcut map that consumes a key it cannot
-  act on is a focus trap, so #21 now leaves Tab unclaimed while the editor is
-  read-only; and a test that disposes a workspace while its focus nodes are
-  still attached fails in teardown for reasons unrelated to what it asserts
-  (see B13).
+  The latest inherited source says STATUS verification is macOS-local and names
+  Flutter 3.47.3 while CI pins 3.47.2. Verify those revisions/toolchains; do not
+  promote local results to cross-platform proof or erase the distinction.
+- **D3. Visual regression shots.** The inherited review reports that real-font
+  screenshots (Roboto plus DejaVu Sans Mono via `FontLoader` and
+  `RenderRepaintBoundary.toImage`) caught the centered menu bar that no test
+  noticed. Consider a small golden suite on Linux in CI with those fonts.
+  Preserve this session's before/after search/tab cases. Include light/dark,
+  narrow widths, large text, wrap boundaries, long tabs/errors, RTL host
+  direction, translated labels and the 40px tab height. Passing widget tests
+  alone do not establish native layout quality or smooth frame timing (P1).
+  The newer inherited pass used Roboto/Roboto Mono from
+  `$DART_SDK/bin/resources/devtools/assets/fonts` and MaterialIcons from
+  `$FLUTTER_ROOT/bin/cache/artifacts/material_fonts`, with `FontLoader` and
+  `matchesGoldenFile`. Pin fonts/SDK, cover three tabs, search, empty workspace
+  and a long document/visible scrollbar. Assert geometry directly where useful
+  (for example flush-left menu `getRect`), and retain reported #36 geometry tests.
+- **D4. Focus regressions.** Chrome changes easily break where focus
+  lands after dialogs, tab switches and closing search. Keep the app
+  tests that assert `editorFocus.hasFocus` after each of those flows, and
+  add one whenever a new overlay (palette, Go to Line, notices) appears.
+  The newer report says #21 leaves Tab unclaimed when read-only; verify that
+  disabled commands do not consume keys they cannot act on. Unmount test
+  widgets before disposing attached workspace nodes; do not misdiagnose a
+  failed-assertion teardown trace as an application bug (B13).
+- **D5. Desktop verification gap.** The inherited review reports a gap in
+  hands-on desktop validation; its performance/source probes should not be
+  confused with native interaction tests. This session's CI includes desktop
+  builds and native macOS fixtures, while local UI inspection used Linux
+  widget captures. Before release, run a manual pass on real macOS,
+  Windows and Linux covering fonts (#30), native menus, IME Enter and
+  Tab (#14/#21), focus-driven disk checks (#26), and #36's scrollbar/find chrome.
+  Add Linux/Windows native keyboard/accessibility smoke tests and profile-mode
+  frame measurements; mobile-host behavior still needs FU7/FU17 validation.
 
-- **D5. Desktop verification gap.** Everything above was verified with widget
-  tests only — no display was available, so nothing was run on a real
-  desktop. Before a release, run a manual pass on real macOS, Windows and
-  Linux covering fonts (#30), native menus, IME Enter and Tab (#14, #21),
-  focus-driven disk checks (#26), and the scrollbar and find-bar chrome
-  from #36.
+- **D6. Verify Flutter APIs and behavior.** The inherited #28 account says an
+  unsupported `softWrap` flag left uniform-row gutter assumptions paired with
+  wrapped text; it also reports `TextEditingController.userUpdate` was an
+  invalid reviewer suggestion. Its measured indent operation remained undoable
+  despite another review claim. Check the pinned SDK, reproduce behavior, then
+  document it; these PR-history claims were not independently inspected here.
 
-- **D6. Check a Flutter API exists before wiring to it.** #28's first push
-  added a `softWrap` flag, routed the gutter through an "unfolded rows" fast
-  path, and asserted in the PR body that word wrap was off by default.
-  `TextField` and `EditableText` in Flutter 3.47 have **no** `softWrap`
-  parameter. The flag was inert, the gutter mis-numbered any document with a
-  long line, and the claim was wrong. One grep of the SDK source would have
-  caught it. The same pass found that a reviewer's suggested fix
-  (`TextEditingController.userUpdate`) does not exist either, and that the
-  real `UndoHistory` behaviour had to be *measured*: an indent turned out to
-  be undoable, contrary to the claim. Verify the API, then measure the
-  behaviour, then write it down.
+- **D7. Match benchmark provenance.** The newer #28 source reports an initial
+  false win from measurements taken minutes apart on a shared machine, then
+  repeated its harness comparisons back-to-back. It also reports a 1 MiB
+  measurement ceiling regressed a 787 KB fixture by 1.9×. Preserve those
+  attributed lessons, not a blanket claim that every timing here shares that
+  methodology. Record revision, workload, warmup, mode, machine/load and repeated
+  samples; compare like-for-like before asserting a performance improvement.
 
-- **D7. Timing claims need a same-session baseline.** The first pass of #28
-  compared numbers taken minutes apart on a machine other agents were also
-  using and briefly reported a win that was noise. Every table in this
-  document was re-measured back to back against `main` on an idle machine,
-  repeated after each change. A "before" from an earlier run is not evidence.
-  Watch for the cliff: the first pass also set the measurement ceiling at
-  1 MiB, which regressed a 787 KB document by 1.9x, and only a measurement
-  caught that.
+- **D8. Golden-capture evidence consolidated in D3.** The inherited real-font
+  captures exposed centered chrome, bare search fields and a missing scrollbar
+  that code/test output missed. Keep D3's permanent visual/geometry work and
+  concrete font provenance; do not create a duplicate golden-suite task.
 
-- **D8. A golden capture earns its keep.** Rendering the app through
-  `matchesGoldenFile` with real fonts loaded by `FontLoader` (Roboto and
-  Roboto Mono from the Dart SDK, MaterialIcons from the Flutter cache) is
-  what made the centered menu bar, the bare find fields and the missing
-  scrollbar obvious. Nothing in the code or the test output hinted at them.
-  See D3 for making it permanent.
+- **D9. Retain regression proof for rejected hypotheses.** The newer source
+  reports tests for acted-on findings and non-issues, including D0 and #21's
+  undo question. Preserve meaningful behavior tests so future reviewers need
+  not rediscover the same result; do not treat that report as our own test run.
 
-- **D9. Pin the baseline, not just the finding.** A finding that is
-  reproduced but not pinned by a test comes back. Every confirmed item acted
-  on in this pass also got a regression test, including the ones that turned
-  out to be *non*-issues (D0, and the undo question in the #21 review) — a
-  test that says "this is fine" is worth as much as one that says "this was
-  broken", and it is cheaper than re-deriving it.
+- **D10. Screen-reader and keyboard audit.** After #10/#11/#35/#36/#43/#44 integration,
+  verify selected search toggles and dirty/busy tabs on VoiceOver, NVDA and
+  Orca. Give the document an explicit accessible label; do not rely on a
+  dirty bullet alone. Errors need live announcements, all mouse actions need
+  keyboard equivalents, and native text-edit shortcuts must survive. Avoid
+  announcing the entire status on every keystroke. Existing dirty-dot semantics
+  were a minor #11 review follow-up, not a confirmed blocker for that PR.
 
-- **D10. Gate `dart format` in CI.** `dart analyze` and `flutter analyze`
-  run on every PR, but nothing enforces formatter output, so style drift
-  enters one hunk at a time. A `dart format --set-exit-if-changed` leg
-  over the workspace packages and the app is one workflow step.
+  The latest inherited V12 reports an unlabelled multiline field, a non-live
+  error banner and possible verbose status announcements. The macOS fixture
+  covers lifecycle, not necessarily content. Add semantic-tree tests plus real
+  screen-reader checks. Avoid a blanket `ExcludeSemantics` that removes useful
+  status access; prevent unsolicited chatter while keeping explicit inspection.
 
-- **D11. AGENTS.md delegates SDK installs to a doc that is not here.**
-  "See Poltergeist's AGENTS.md §1" does not exist in this repository, and
-  fresh containers ship no Dart or Flutter at all. Copy the incantations
-  in-repo: dart-archive stable zip for the Dart SDK, the Flutter release
-  tarball for 3.47.2, and note `xz` may be absent — Python's `lzma`
-  module extracts `.tar.xz` fine.
+- **D11. Self-contained development setup.** AGENTS delegates SDK setup to
+  a sibling repository that need not be checked out. Document supported SDK
+  versions and native prerequisites locally. `scripts/build.sh` hardcodes
+  Linux x64 although packaging recognizes arm64; either enforce/document x64
+  or derive the actual built architecture and validate that configuration.
 
-- **D12. Port archaeology cleanup — S.** `editor_syntax.dart` is dotted
-  with `// 06 §7.3`-style references to decision docs that live in the
-  sibling repositories. Either map the numbering in `docs/` or drop the
-  references. Also `defaultTextDocumentMaximumBytes` is an unused alias
-  of `textDocumentMaximumBytes` kept for host compatibility — remove it
-  once no host references it.
+  The latest source observed no unzip/xz in its container; this is not universal.
+  Preserve its archive sources: Dart's stable Linux x64 ZIP at
+  `https://storage.googleapis.com/dart-archive/channels/stable/release/latest/sdk/dartsdk-linux-x64-release.zip`
+  and pinned Flutter 3.47.2 Linux tarball at
+  `https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.2-stable.tar.xz`.
+  Python `zipfile`/`tarfile` (`lzma`) can extract without external unzip/xz, but
+  `ZipFile.extractall` does not restore executable bits: restore ZIP `external_attr`
+  permissions or use a tested installer before invoking Dart. Put SDK bin paths
+  on PATH in the intended order and report standalone versus bundled Dart.
+  Pin the tested Flutter version; a >=3.47.2 constraint does not validate all
+  later SDKs. Include explicit core package paths and the documented separate
+  editor/app pub-get, analyze and test commands. The incoming recipe was not
+  independently validated here.
 
-- **D13. Index in UTF-16 code units and keep it there.** Dart `String`
-  offsets are UTF-16 code units; match ranges, syntax tokens and
-  selections all share that convention. Keep new features on it — a
-  feature that quietly mixes in byte offsets corrupts positions for
-  astral characters. (LSP positions are UTF-16 too, so the convention
-  survives even a future language-server client.)
+- **D12. Audit inherited packaging claims.** `package-linux.sh` describes
+  secure storage and a trash backend absent from this app and adds
+  `libglib2.0-bin`. #7 reports correcting section/copyright, checking objdump, removing the
+  unused gio dependency and fixing floor_of subshell error propagation. Verify
+  that assigned patch rather than duplicating it; check actual ELF/runtime
+  dependencies before further removals. Verify installable packages and retain required
+  native libraries and pinned download-integrity checks.
 
-- **D14. `textDocumentSha256` reads the file three times per open** —
-  before, during and after. The third pass is what makes the
-  changed-during-load guard meaningful; a stream-hash plus one compare
-  would only be equivalent if the after-read were free. Leave it.
+- **D13. Consider a formatter CI gate.** The latest source reports analysis
+  without format enforcement. Inspect current workflow first, then gate only
+  intended Dart paths with `dart format --output=none --set-exit-if-changed`.
+  Avoid coupling the gate to an unrelated repository-wide formatting rewrite.
+  #20 separately reports Dependabot coverage for both Flutter directories;
+  verify its assigned change after merge.
+
+- **D14. Resolve inherited decision-document references.** Map syntax comments
+  such as `// 06 §7.3` to accessible docs or remove stale references when touching
+  those sections. The duplicate maximum-byte alias is already D0a; remove only
+  after host compatibility is checked.
+
+- **D15. Preserve UTF-16 offset contracts.** Dart selections, syntax and search
+  ranges use UTF-16 code units. Keep byte counts and grapheme/display columns
+  explicit; test astral characters at every transform boundary. LSP defaults
+  to UTF-16 but can negotiate other position encodings, so a future adapter
+  must convert according to negotiation rather than assume universal UTF-16.
+  See the [official protocol definitions](https://github.com/microsoft/vscode-languageserver-node/blob/main/protocol/src/common/protocol.ts#L974-L994).
+
+- **D16. Reconcile hashing proposals before implementation.** The latest source's
+  B20 says remove a pre-read hash while its D14 says retain guarded passes.
+  P4 records both and requires equivalent safety proof; these are not two
+  independent implementation tasks.
+
+Latest-source IDs were reconciled by subject: its B15/B16 became B22/B23;
+B17/B18 remain B15/B16 here; B19 joins B18; B20/B21 join P4; B22 is P7;
+B23 joins I1. Its V12 joins D10, V13–V15 become V13–V15 here (the old icon
+V12 remains). Its Q15 joins Q17; Q16–Q18 become Q18–Q20. Its D10 joins D13,
+D11 stays D11, D12–D14 become D14–D16. Stable existing IDs take precedence.
+
+## 11. Review and verification ledger
+
+Only #5/#6/#10/#11 were reviewed and monitored in this session. Other PR
+records, APIs and measurements above were inherited from the tracked document;
+their presence is not independent approval or verification. Leave all recorded
+implementation PRs for owner review/merging. Repeated reviews of the same
+commit are identified; skipped/cached executions do not count as fresh reviews.
+
+- **#5:** Two fresh same-revision reviews, no applicable important findings.
+  Rejected old-Safari lookbehind compatibility as outside supported native
+  targets. Deferred the requested 20k→100k timing fixture: the observed old
+  code already takes 7.456s against a 1s ceiling; a larger regression would
+  stall the suite much longer. The separate fixed 200k probe took about 27ms.
+- **#6:** Round 1's minor root/relative spelling and oversized-prefix coverage
+  findings were addressed. The relative-path regression failed before fixing;
+  the smaller-filesystem limitation is documented. Round 2 had no important
+  findings. Defer early rejection of directory targets and an optional
+  subprocess test harness: existing create/save reject directory targets and
+  leave no entries. Rejected global `Directory.current` mutation because
+  parallel isolates share process state. Both temporary and backup paths use
+  `_recoverySibling`, so the temporary observer covers shared path construction.
+  A configurable filesystem-capability API remains separate future work.
+- **#10:** Round 1 found a responsive-layout input-connection regression.
+  A failing test preceded the stable-layout fix. All CI passes; three GLM
+  reviews completed, the last two without confirmed important findings. The
+  final same-revision hybrid audit ran fresh (zero delta/two unchanged sections,
+  271.871s), not from cache.
+  Its shrink-wrap concern does not apply to the private panel's unbounded-height
+  parent; tests cover both layout directions and resize with the keyboard open.
+  A claimed missing-font crash used a fixture violating TextField's theme
+  contract; valid inherited partial styles receive Theme.of defaults and pass.
+  Rejected the final claimed Enter bypass of editing locks: `replaceCurrent`
+  guards locked/busy/no-active-match states, and four temporary widget-submit
+  probes passed. The optional half-width layout tradeoff remains unchanged.
+- **#11:** Two fresh reviews completed without an important finding; all CI
+  passes. Rejected the claim that `keepVisibleAtEnd` scrolls backward needlessly:
+  the pinned Flutter implementation clamps that direction, and
+  `keepVisibleAtStart` handles left overflow. A geometry probe confirmed the
+  nearest-left target and full visibility. Existing dirty-dot accessibility
+  semantics remain a minor D10 follow-up. The second same-revision review
+  executed a fresh hybrid audit. Its claimed `num`/`double` clamp compile error
+  was disproved by a typed probe, analysis and three-platform builds. Its
+  proposed `textScalerTestValue` APIs do not exist in the pinned SDK; the
+  existing text-scale test setter is not deprecated. Coordinate #35/#36/#43.
+
+Native screen-reader operation, mobile-host behavior, macOS/Windows visual
+inspection and broad profile-mode frame timing remain unverified locally.
