@@ -21,17 +21,19 @@ Widget app(
 
 /// Put the caret in the document and settle, so a key event reaches the editor
 /// rather than whatever the test harness focused first.
+///
+/// The focus node is focused directly instead of tapping the field: a tap
+/// places the caret where it landed, and the field's own selection
+/// reconciliation can then override the offset this was asked for.
 Future<void> focusDocument(
+  EditorController c,
   WidgetTester tester,
   int offset, {
   int? extent,
 }) async {
-  await tester.tap(find.byKey(const ValueKey('planchette.document')));
+  c.editorFocus.requestFocus();
   await tester.pump();
-  tester
-      .widget<TextField>(find.byKey(const ValueKey('planchette.document')))
-      .controller!
-      .selection = TextSelection(
+  c.text.selection = TextSelection(
     baseOffset: offset,
     extentOffset: extent ?? offset,
   );
@@ -188,7 +190,7 @@ void main() {
     final c = EditorController(displayPath: 'a.py', initialText: 'def f():\n');
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c));
-    await focusDocument(tester, 9);
+    await focusDocument(c, tester, 9);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
 
@@ -202,7 +204,7 @@ void main() {
     final c = EditorController(displayPath: 'a.py', initialText: 'x = 1');
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c));
-    await focusDocument(tester, 1);
+    await focusDocument(c, tester, 1);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
 
@@ -214,25 +216,27 @@ void main() {
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c));
     // The caret is still inside the line's tab indentation.
-    await focusDocument(tester, 7);
+    await focusDocument(c, tester, 7);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
 
     expect(c.text.text, 'if x:\n\t\ty');
   });
 
-  testWidgets('Tab pads with spaces so a tab stop still lines up', (
+  testWidgets('Tab stays a tab when a tab-indented caret follows code', (
     tester,
   ) async {
     final c = EditorController(displayPath: 'a.py', initialText: 'if x:\n\ty');
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c));
-    // The caret is after the 'y', at rendered column 5.
-    await focusDocument(tester, 8);
+    // The caret is after the 'y', at rendered column 5, so the next tab stop
+    // is column 8. A literal tab lands there just as spaces would, and a
+    // tab-indented file does not pick up spaces because of where the caret was.
+    await focusDocument(c, tester, 8);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
 
-    expect(c.text.text, 'if x:\n\ty   ');
+    expect(c.text.text, 'if x:\n\ty\t');
   });
 
   testWidgets('Shift+Tab dedents the caret line', (tester) async {
@@ -242,7 +246,7 @@ void main() {
     );
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c));
-    await focusDocument(tester, 14);
+    await focusDocument(c, tester, 14);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
@@ -257,7 +261,7 @@ void main() {
     final c = EditorController(displayPath: 'a.py', initialText: 'one\ntwo');
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c));
-    await focusDocument(tester, 0, extent: 7);
+    await focusDocument(c, tester, 0, extent: 7);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
 
@@ -268,7 +272,7 @@ void main() {
     final c = EditorController(displayPath: 'a.py', initialText: 'def f():');
     addTearDown(c.dispose);
     await tester.pumpWidget(app(c, locked: true));
-    await focusDocument(tester, 7);
+    await focusDocument(c, tester, 7);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
 
@@ -327,5 +331,55 @@ void main() {
     await tester.pump();
 
     expect(c.searchOpen, isTrue);
+  });
+  testWidgets('an indent is its own undo step', (tester) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'def f():\n');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await focusDocument(c, tester, 9);
+    // UndoHistory coalesces changes for 500 ms, so an undo inside that window
+    // is swallowed by the framework for any edit, typed or not. Past it, the
+    // indent must be a step of its own rather than merged into the next
+    // character.
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(c.undoController.value.canUndo, isFalse);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+
+    expect(c.text.text, 'def f():\n    ');
+    expect(c.undoController.value.canUndo, isTrue);
+    c.undoController.undo();
+    await tester.pump();
+    expect(c.text.text, 'def f():\n');
+  });
+
+  testWidgets('a locked editor leaves Tab for focus traversal', (tester) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'def f():');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c, locked: true));
+    await focusDocument(c, tester, 7);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(c.text.text, 'def f():');
+    // The shortcut map is empty, so the key is not consumed and focus traversal
+    // still gets it. A keyboard user viewing a locked document must be able to
+    // Tab past the editor, not have the key die in a read-only buffer.
+    final shortcuts = tester.widget<Shortcuts>(
+      find.descendant(
+        of: find.byType(PlanchetteEditor),
+        matching: find.byType(Shortcuts),
+      ),
+    );
+    expect(
+      shortcuts.shortcuts.keys.where(
+        (activator) =>
+            activator is SingleActivator &&
+            activator.trigger == LogicalKeyboardKey.tab,
+      ),
+      isEmpty,
+    );
   });
 }

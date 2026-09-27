@@ -530,7 +530,7 @@ void main() {
   );
   test(
     'untitled documents number among themselves, not against opened files',
-    () {
+    () async {
       final store = MemoryDocuments();
       store.files[testPath('one.txt')] = document('one.txt', 'one');
       store.files[testPath('two.txt')] = document('two.txt', 'two');
@@ -538,12 +538,9 @@ void main() {
       addTearDown(workspace.dispose);
 
       expect(workspace.newDocument()!.name, 'Untitled 1');
-      unawaited(workspace.open(testPath('one.txt')));
-      unawaited(workspace.open(testPath('two.txt')));
-
-      return Future<void>.delayed(Duration.zero, () {
-        expect(workspace.newDocument()!.name, 'Untitled 2');
-      });
+      await workspace.open(testPath('one.txt'));
+      await workspace.open(testPath('two.txt'));
+      expect(workspace.newDocument()!.name, 'Untitled 2');
     },
   );
 }

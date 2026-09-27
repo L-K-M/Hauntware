@@ -60,7 +60,9 @@ TextEdit insertIndent(
   _requireTabWidth(tabWidth);
 
   final unit = insertSpaces ? ' ' * tabWidth : '\t';
-  if (start == end) return _indentAtCaret(text, start, tabWidth, unit);
+  if (start == end) {
+    return _indentAtCaret(text, start, tabWidth, unit, insertSpaces);
+  }
   if (!_spansNewline(text, start, end)) return _splice(text, start, end, unit);
   return _rewriteTouchedLines(
     text,
@@ -70,25 +72,29 @@ TextEdit insertIndent(
   );
 }
 
-TextEdit _indentAtCaret(String text, int caret, int tabWidth, String unit) {
+TextEdit _indentAtCaret(
+  String text,
+  int caret,
+  int tabWidth,
+  String unit,
+  bool insertSpaces,
+) {
   final lineStart = _lineStartBefore(text, caret);
   if (_isBlank(text.substring(lineStart, caret))) {
     // Only whitespace precedes the caret, so a whole indent belongs here.
     return _splice(text, caret, caret, unit);
   }
   // The caret follows code, so pad to the next stop instead of over-indenting.
+  // A literal tab lands on that same stop, so a tab-indented file never picks
+  // up spaces just because the caret sat after some code.
   final column = _whitespaceColumns(
     text,
     lineStart,
     caret - lineStart,
     tabWidth,
   );
-  return _splice(
-    text,
-    caret,
-    caret,
-    ' ' * ((column ~/ tabWidth + 1) * tabWidth - column),
-  );
+  final padding = (column ~/ tabWidth + 1) * tabWidth - column;
+  return _splice(text, caret, caret, insertSpaces ? ' ' * padding : '\t');
 }
 
 /// Strip at most one tab stop of leading whitespace from every line the
@@ -290,9 +296,10 @@ void _requireTabWidth(int tabWidth) {
   }
 }
 
-/// How many leading characters [text] indents its deepest line, or 0 when no
-/// line is indented. Sampling stops once one indented line is found, so this
-/// stays cheap on a large document.
+/// How many leading characters [text] indents its deepest line, and whether
+/// that indentation uses tabs. At most [maximumLines] line starts are examined,
+/// so this stays cheap on a large document. A line of nothing but whitespace is
+/// skipped: its width says nothing about how the file indents.
 ({int width, bool usesTabs}) measureIndentation(
   String text, {
   int maximumLines = 400,

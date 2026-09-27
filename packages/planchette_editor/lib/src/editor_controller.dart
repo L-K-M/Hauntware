@@ -381,13 +381,14 @@ class EditorController extends ChangeNotifier {
 
   /// Indent the selection the way the file already indents, so a tab-indented
   /// file keeps its tabs. A file with no indentation yet uses spaces.
-  void indentSelection() =>
-      _applyIndentation((source) => insertIndent(
-        source,
-        start: text.selection.start,
-        end: text.selection.end,
-        insertSpaces: !_indentsWithTabs(),
-      ));
+  void indentSelection() => _applyIndentation(
+    (source) => insertIndent(
+      source,
+      start: text.selection.start,
+      end: text.selection.end,
+      insertSpaces: !_indentsWithTabs(),
+    ),
+  );
 
   /// Remove one tab stop of indentation from every line the selection touches.
   void dedentSelection() => _applyIndentation(
@@ -427,10 +428,7 @@ class EditorController extends ChangeNotifier {
     final edit = plan(text.text);
     text.value = TextEditingValue(
       text: edit.text,
-      selection: TextSelection(
-        baseOffset: edit.start,
-        extentOffset: edit.end,
-      ),
+      selection: TextSelection(baseOffset: edit.start, extentOffset: edit.end),
     );
   }
 

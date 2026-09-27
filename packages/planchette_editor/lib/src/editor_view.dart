@@ -448,13 +448,17 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 ),
               Expanded(
                 child: Shortcuts(
-                  shortcuts: const {
-                    SingleActivator(LogicalKeyboardKey.tab): _IndentIntent(),
-                    SingleActivator(
-                      LogicalKeyboardKey.tab,
-                      shift: true,
-                    ): _DedentIntent(),
-                  },
+                  // A read-only editor must leave Tab unclaimed, or a keyboard
+                  // user viewing a locked document cannot Tab past it: the
+                  // action would consume the key and do nothing.
+                  shortcuts: _locked
+                      ? const <ShortcutActivator, Intent>{}
+                      : const <ShortcutActivator, Intent>{
+                          SingleActivator(LogicalKeyboardKey.tab):
+                              _IndentIntent(),
+                          SingleActivator(LogicalKeyboardKey.tab, shift: true):
+                              _DedentIntent(),
+                        },
                   child: Actions(
                     actions: {
                       _IndentIntent: CallbackAction<_IndentIntent>(

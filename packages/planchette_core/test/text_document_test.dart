@@ -404,6 +404,24 @@ void main() {
     expect('$thrown', isNot(contains('errno')));
     expect('$thrown', isNot(contains('Exception:')));
   });
+
+  test('resolveTextDocumentTarget reports a missing target plainly', () async {
+    // Only loads resolve with SymlinkPolicy.resolveOnce, so this message is
+    // always about a document that was asked for and is not there.
+    await expectLater(
+      resolveTextDocumentTarget(
+        File('${directory.path}/absent.txt'),
+        symlinkPolicy: SymlinkPolicy.resolveOnce,
+      ),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'That file no longer exists.',
+        ),
+      ),
+    );
+  });
 }
 
 Future<String> _loadText(
