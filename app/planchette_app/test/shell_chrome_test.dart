@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
@@ -137,17 +138,42 @@ void main() {
       Rect tabBox(String name) => tester.getRect(
         find.ancestor(of: find.text(name), matching: find.byType(InkWell)),
       );
+      String geometry(String name) {
+        final strip = stripBox();
+        final box = tabBox(name);
+        final position = tester
+            .state<ScrollableState>(
+              find.descendant(
+                of: find.byKey(const ValueKey('planchette.tabs')),
+                matching: find.byType(Scrollable),
+              ),
+            )
+            .position;
+        // ignore: avoid_print
+        print(
+          'DIAG $name platform=${debugDefaultTargetPlatformOverride} '
+          'strip=$strip tab=$box pixels=${position.pixels} '
+          'max=${position.maxScrollExtent} '
+          'viewport=${position.viewportDimension} '
+          'dims=${position.hasContentDimensions}',
+        );
+        return 'tab=$box strip=$strip pixels=${position.pixels} '
+            'max=${position.maxScrollExtent} '
+            'viewport=${position.viewportDimension}';
+      }
+
       void expectInView(String name) {
         final box = tabBox(name);
+        final why = geometry(name);
         expect(
           box.left,
           greaterThanOrEqualTo(stripBox().left - 1),
-          reason: name,
+          reason: '$name $why',
         );
         expect(
           box.right,
           lessThanOrEqualTo(stripBox().right + 1),
-          reason: name,
+          reason: '$name $why',
         );
       }
 
