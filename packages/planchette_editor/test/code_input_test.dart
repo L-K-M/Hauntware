@@ -3,17 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
-Widget app(
-  EditorController c, {
-  bool locked = false,
-  EditorIndent indent = const EditorIndent(),
-}) => MaterialApp(
+Widget app(EditorController c, {bool locked = false}) => MaterialApp(
   home: Scaffold(
-    body: PlanchetteEditor(
-      controller: c,
-      editingLocked: locked,
-      indent: indent,
-    ),
+    body: PlanchetteEditor(controller: c, editingLocked: locked),
   ),
 );
 
@@ -44,7 +36,8 @@ Future<void> mount(
   bool locked = false,
   EditorIndent indent = const EditorIndent(),
 }) async {
-  await tester.pumpWidget(app(c, locked: locked, indent: indent));
+  c.indent = indent;
+  await tester.pumpWidget(app(c, locked: locked));
   await tester.pump();
   c.editorFocus.requestFocus();
   await tester.pump();
@@ -95,6 +88,18 @@ void main() {
 
       await pressTab(tester);
       expect(c.text.text, '  one\n  two\nthree');
+      // The selection has to land on the lines it just indented, or the next
+      // Tab or Shift+Tab works on the wrong range.
+      // From the start of the first line to the end of the last one it
+      // touched, in the new text.
+      final text = c.text.text;
+      expect(
+        c.text.selection,
+        TextSelection(
+          baseOffset: 0,
+          extentOffset: text.indexOf('\n', text.indexOf('\n') + 1),
+        ),
+      );
       expect(tester.takeException(), isNull);
     });
 
@@ -121,6 +126,22 @@ void main() {
 
       await pressTab(tester, shift: true);
       expect(c.text.text, '  one');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Shift+Tab still dedents a file indented the other way', (
+      tester,
+    ) async {
+      // The setting says two spaces, the file says tabs. Refusing to dedent
+      // would leave the user with no way to outdent their own file.
+      final c = editorFor('\t\tone');
+      addTearDown(c.dispose);
+      await mount(tester, c);
+      c.text.selection = const TextSelection.collapsed(offset: 0);
+      await tester.pump();
+
+      await pressTab(tester, shift: true);
+      expect(c.text.text, '\tone');
       expect(tester.takeException(), isNull);
     });
 
@@ -228,6 +249,34 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a colon in prose does not open a block', (tester) async {
+      // A bare "TODO:" line in a Markdown document is prose. Indenting after it
+      // would reformat the file with nobody asking.
+      final c = editorFor('TODO:', path: 'notes.md');
+      addTearDown(c.dispose);
+      await mount(tester, c);
+      c.text.selection = const TextSelection.collapsed(offset: 5);
+      await tester.pump();
+
+      type(c, '\n');
+      await tester.pump();
+      expect(c.text.text, 'TODO:\n');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a colon in an XML tag does not open a block', (tester) async {
+      final c = editorFor('a:hover:', path: 'a.svg');
+      addTearDown(c.dispose);
+      await mount(tester, c);
+      c.text.selection = const TextSelection.collapsed(offset: 8);
+      await tester.pump();
+
+      type(c, '\n');
+      await tester.pump();
+      expect(c.text.text, 'a:hover:\n');
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('a colon in Dart is punctuation, not a block', (tester) async {
       final c = editorFor('var x:', path: 'a.dart');
       addTearDown(c.dispose);
@@ -253,6 +302,36 @@ void main() {
       type(c, '\n');
       await tester.pump();
       expect(c.text.text, '   \n   ');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Enter puts an auto-paired closer on its own line', (
+      tester,
+    ) async {
+      // With `{` `}` paired and the caret between, Enter should open the block
+      // *and* put the closer below it, not leave it stranded on the new line.
+      final c = editorFor('{}', path: 'a.json');
+      addTearDown(c.dispose);
+      await mount(tester, c);
+      c.text.selection = const TextSelection.collapsed(offset: 1);
+      await tester.pump();
+
+      type(c, '\n');
+      await tester.pump();
+      expect(c.text.text, '{\n  \n}');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Enter after a plain line is one newline', (tester) async {
+      final c = editorFor('  value');
+      addTearDown(c.dispose);
+      await mount(tester, c);
+      c.text.selection = const TextSelection.collapsed(offset: 7);
+      await tester.pump();
+
+      type(c, '\n');
+      await tester.pump();
+      expect(c.text.text, '  value\n  ');
       expect(tester.takeException(), isNull);
     });
 
@@ -311,6 +390,25 @@ void main() {
       type(c, ')');
       await tester.pump();
       expect(c.text.text, 'x))y');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a closer in prose is a character, not a skip request', (
+      tester,
+    ) async {
+      // Markdown brackets are content. Stepping over one would delete what the
+      // user typed for no reason.
+      final c = editorFor('a {} b', path: 'notes.md');
+      addTearDown(c.dispose);
+      await mount(tester, c);
+      // Between the brace and the brace, which is exactly where a skip would
+      // fire in a language that pairs.
+      c.text.selection = const TextSelection.collapsed(offset: 3);
+      await tester.pump();
+
+      type(c, '}');
+      await tester.pump();
+      expect(c.text.text, 'a {}} b');
       expect(tester.takeException(), isNull);
     });
 

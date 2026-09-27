@@ -592,7 +592,6 @@ class _DocumentShellState extends State<_DocumentShell> {
                             controller: tab.editor,
                             isActive: tab == active,
                             editingLocked: workspace.interactionLocked,
-                            indent: settings.value.indent,
                             textStyle: _textStyle,
                           ),
                       ],

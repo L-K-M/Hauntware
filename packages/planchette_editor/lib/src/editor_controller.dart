@@ -266,10 +266,33 @@ class EditorController extends ChangeNotifier {
       afterColon: colonOpensBlock(text.language),
     );
     if (carried.isEmpty) return;
+    // A lone closer left after the caret — the half pairing put there — belongs
+    // on its own line at the parent's indentation, which is what every editor
+    // with bracket pairing does and what leaves the block shaped correctly
+    // without the user moving anything.
+    final parentIndent = leadingWhitespace(previous, at);
+    final insertion = _loneCloserAfter(previous, at)
+        ? '\n$carried\n$parentIndent'
+        : '\n$carried';
     text.value = text.value.copyWith(
-      text: text.text.replaceRange(at, at + 1, '\n$carried'),
+      text: text.text.replaceRange(at, at + 1, insertion),
       selection: TextSelection.collapsed(offset: at + 1 + carried.length),
     );
+  }
+
+  /// Whether everything after the caret on this line is a single closing
+  /// bracket and whitespace.
+  ///
+  /// ```text
+  ///   {|}          the caret inside a pair  -> yes
+  ///   {   |}       trailing spaces          -> yes
+  ///   {|}  trailing code after it         -> no
+  /// ```
+  bool _loneCloserAfter(String previous, int at) {
+    final rest = previous.substring(at);
+    final trimmed = rest.trim();
+    if (trimmed.isEmpty || trimmed.length > 1) return false;
+    return const {'}', ']', ')'}.contains(trimmed);
   }
 
   void _pairIfExpected(String previous, int at, String character) {

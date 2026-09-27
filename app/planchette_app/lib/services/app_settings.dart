@@ -122,14 +122,16 @@ final class LocalSettingsStore implements SettingsStore {
 
   @override
   Future<AppSettings?> load() async {
-    if (!await file.exists()) return null;
+    // `load` is called from `main()` before `runApp`, so anything it lets
+    // escape is the reason the application refuses to open. A file that is
+    // missing, unreadable, or not settings at all is worth starting over from
+    // rather than refusing to start.
     try {
+      if (!await file.exists()) return null;
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map) return null;
       return AppSettings.fromJson(Map<String, Object?>.from(decoded));
-    } on FormatException {
-      // A truncated or hand-mangled file is worth starting over from, not
-      // worth refusing to start over from.
+    } on Exception {
       return null;
     }
   }
@@ -172,14 +174,31 @@ final class SettingsController extends ChangeNotifier {
   final SettingsStore store;
   AppSettings _value = const AppSettings();
   String? _error;
+
+  /// Values waiting to be written, oldest first. Never more than one write is
+  /// in flight, so a slow store cannot land an older value after a newer one.
+  final List<AppSettings> _queue = [];
+
+  /// Completes when the current drain finishes.
   Future<void> _pending = Future<void>.value();
+
+  /// Whether a drain is running.
+  bool _writing = false;
 
   AppSettings get value => _value;
   String? get error => _error;
 
   /// Adopt what was stored, or the defaults when there was nothing usable.
+  ///
+  /// A store that throws is treated as having nothing, for the same reason
+  /// [LocalSettingsStore.load] swallows its own failures: this runs before the
+  /// first frame and a settings file must never be able to stop the app.
   Future<void> load() async {
-    _value = await store.load() ?? const AppSettings();
+    try {
+      _value = await store.load() ?? const AppSettings();
+    } on Exception {
+      _value = const AppSettings();
+    }
     notifyListeners();
   }
 
@@ -189,21 +208,47 @@ final class SettingsController extends ChangeNotifier {
   /// A failed write is reported through [error] rather than thrown: this is
   /// called from a dialog's button press, and a setting the user just chose is
   /// worth keeping even when the disk said no.
-  Future<void> update(AppSettings next) async {
-    if (next == _value) return;
+  Future<void> update(AppSettings next) {
+    if (next == _value) return Future<void>.value();
+
     _value = next;
     notifyListeners();
-    _pending = _persist();
-    await _pending;
+    // Queued rather than written here: two updates in quick succession would
+    // otherwise write concurrently, and the slower one could land last and
+    // leave a value the user has already moved on from.
+    _queue.add(next);
+    // A drain in progress will pick this up; joining it is what keeps two
+    // writes from overlapping.
+    return _writing ? _pending : _drain();
   }
 
-  /// Wait for a save started by [update]. A dialog calls this before it closes
-  /// so its button press is not reported as done while the write is in flight.
+  /// Write everything queued, one at a time, in the order it was chosen.
+  ///
+  /// A queue rather than a `.then` chain on purpose: a caller awaiting a chain
+  /// needs an extra turn of the event loop, which a widget test that has not
+  /// pumped yet does not give it.
+  Future<void> _drain() async {
+    _writing = true;
+    try {
+      while (_queue.isNotEmpty) {
+        await _persist(_queue.removeAt(0));
+      }
+    } finally {
+      _writing = false;
+      _pending = Future<void>.value();
+    }
+  }
+
+  /// Wait for the writes [update] has queued. A dialog calls this before it
+  /// closes so its button press is not reported as done while the write is in
+  /// flight, and a test asserts on the store after this.
   Future<void> flush() => _pending;
 
-  Future<void> _persist() async {
+  /// Write [value], not whatever the field holds by the time this runs: a queue
+  /// of saves should not be able to collapse two of them into one value.
+  Future<void> _persist(AppSettings value) async {
     try {
-      await store.save(_value);
+      await store.save(value);
       _error = null;
     } on FileSystemException catch (error) {
       _error =
