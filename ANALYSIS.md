@@ -38,6 +38,13 @@ change, and how to know it is done. Read [AGENTS.md](AGENTS.md) first.
   B35, B36, P9 and Q28, and it independently found B34's territory, B25's
   readiness half and the B15/B20 fixes that an earlier pass already had in
   review — those overlaps are recorded rather than duplicated.
+- A GLM 4.7 session (this document's third merge) reviewed `e7ec67f`
+  independently and opened #15/#24/#29/#66/#67/#68 (platform monospace
+  default, line-editing keys, Go to Line, tab context actions, selection
+  status, caret-line band) before reading this consolidation; its findings
+  are folded in below. Its PRs re-implement parts of #8/#13/#14/#16/#21/
+  #22/#30/#33/#34/#35/#42/#44 — see the overlap rows. Its working notes
+  (tmp.md) were discarded after this merge.
 - Measurement provenance is local to each table/probe. The newer inherited
   keystroke table uses a non-AOT `flutter test` harness; #39 reports file-load
   time/memory, and #5 uses standalone Dart tokenization timings. Do not label
@@ -235,6 +242,24 @@ overlaps logically.
 | [#85](https://github.com/L-K-M/Planchette/pull/85), `planchette/find-past-cap` | B19: Find Next and Find Previous page past the 1,000-match highlight window in both directions and wrap at the ends of the document, so every occurrence is reachable instead of only the first page. Core `findSearchMatches` gains `start`/`reverse` (null means the whole haystack, so every existing caller is unchanged). Seven new tests across core and the controller. Core 87, editor 22. | Open at `daadda0`; round 1 found a real defect in this change — the reverse window scanned with `lastIndexOf` and so reported overlapping occurrences the forward scan skips, meaning Find Previous could highlight a match Find Next could never reach. Replaced with a sliding window over the forward enumeration, with a parity test observed failing first. Round 2 raised the unreachable `_activeMatch == -1` path and the window's O(limit) eviction, both declined with evidence. Steady: two rounds, nothing important outstanding. |
 | [#87](https://github.com/L-K-M/Planchette/pull/87), `planchette/window-backdrop` | V14: the native window is created on the surface the app is about to paint, so a dark launch no longer flashes the platform's white default. `DesktopWindow.windowOptions` is public so the geometry and backdrop are assertable. Two tests. App 40 + 2 skipped. Verified on Linux only; the macOS/Windows visual result is unverified. | Open at `67d430f`; round 1 accepted in full: the backdrop now resolves through `effectiveBrightness(ThemeMode)` so a forced theme cannot flash the other surface, and the system branch reads `PlatformDispatcher` instead of the binding. The runtime-brightness follow-up is recorded under V14. |
 
+### Implemented and monitored in the GLM 4.7 session
+
+Six PRs from an independent review of `e7ec67f` (baseline: core 84,
+editor 19, app 38 + 2 skips, analyze clean on Flutter 3.47.2). They were
+opened without reading other workers' PRs, so several duplicate findings
+already assigned above; each row says what is unique. Left open for
+owner triage — prefer the recorded assignee where an overlap row marks a
+duplicate and mine only the unique pieces.
+
+| PR / branch | Change and proof | Latest recorded status |
+|---|---|---|
+| [#15](https://github.com/L-K-M/Planchette/pull/15), `fix/monospace-font` | `'monospace'` resolves only under Linux fontconfig/Android; macOS/Windows fell back to a proportional font. `EditorTypography.monospace(platform)` (Menlo / Consolas / generic) plus a shared `fontFamilyFallback` chain; `PlanchetteEditor.textStyle` now nullable. Overlaps #30's font half; unique: the host-style merge contract. | Round 1 (merge order, CHANGELOG) applied at `29842e1`; round 2 minor (explicit host family keeps its own resolution) applied at `69daec8`; awaiting round 3. |
+| [#24](https://github.com/L-K-M/Planchette/pull/24), `feat/editor-indent-keys` | Tab/Shift+Tab indent+outdent (touched lines, direction preserved), Enter carries the first touched line's indent, Alt+Arrow moves lines (CRLF-safe content/separator swap), Shift+Alt+Arrow duplicates; ancestor `Focus.onKeyEvent`, IME/locked fall-through. Key tests on linux/windows/macOS variants; handler-disabled run fails exactly the four key regressions. Overlaps #13/#14/#21/#34/#47; unique: CRLF-safe move, per-platform chord coverage, Alt+Tab exclusion. | Round 1 majors and minors applied at `88406d1`; round 2 posted no new findings (only stale round-1 anchors re-anchored). One clean round; editor-level Ctrl+Tab escape hatch declined with reasons on the PR. |
+| [#29](https://github.com/L-K-M/Planchette/pull/29), `feat/goto-line` | `EditorController.gotoLine` clamps, deactivates the active find match so the reveal targets the caret; view reveal falls back to the caret; `DocumentDialogs.askLineNumber` digits-only behind the workspace lock; Ctrl/Cmd+L. Duplicates #8/#16/#33; unique: match-deactivation on jump. | Round 1 (stale-match reveal, zero clamp) applied at `dd6c6d6`; round 2 minor (nine-digit input cap) applied at `ffa0c60`; awaiting round 3. |
+| [#66](https://github.com/L-K-M/Planchette/pull/66), `feat/tab-ux` | Middle-click close plus right-click Close / Close Others (per-tab dirty consent, refusal stops the sweep, target reselected) / Copy Full Path (mock-clipboard test). Near-duplicate of #42 (which also has Close All); unique: Copy Full Path, reselect after sweep. | CI green; first review attempt failed after 1 minute (reviewer outage, not approval); rerun queued. |
+| [#67](https://github.com/L-K-M/Planchette/pull/67), `feat/status-selection` | `EditorController.selectionStats` (UTF-16 units + touched lines, direction-independent, line-boundary rule) surfaced through `EditorStrings` (`documentPosition` gained optional selection counts via a Devin refinement at `37a143e`). Duplicates the selection-summary half of #33/#44 (E10b); unique: the touched-lines count. | One clean review round (0 actionable findings) on `37a143e`. |
+| [#68](https://github.com/L-K-M/Planchette/pull/68), `feat/caret-line-highlight` | Subtle (5% alpha) full-width caret-line band painting to the next line's visual top, bounded by the laid-out document height on the final line; shares the gutter's repaint listenable; layout runs when either consumer needs it; `highlightCaretLine` opt-out. A Devin pass added layout gating, `IgnorePointer` and style fallbacks at `d3194c7`/`6f20244`; accepted. Duplicates #22's current-line band. | Round 1 minor (wrapped final line) applied at `2f93955`; awaiting round 2. |
+
 ### Inherited PR records
 
 The evidence labels and measurements in this table belong to the inherited
@@ -332,7 +357,8 @@ tests, not blindly combine competing implementations:
 | Caret reveal | #33/#47/#73 | All three add `caretRevealRequest`. #33 puts a Go to Line target a third of the way down; #47 and #73 scroll the caret minimally with the same `bringIntoView` hook. Keep one counter and both placements (FU2). #47 and #73 each wrap `_body()` in a document-only key layer; nest them. |
 | Store/dialog interfaces | #26/#49 | Both extend `DocumentStore` (#26 `stamp`, #49 `isWriteProtected`) and `DocumentDialogs` (#26 `confirmRevert`, #49 `chooseReadOnlySave`). Keep all members. |
 | Menus and palette | #30/#36/#43/#50 | #50 lists whatever `_menus()` returns and adds one Window item. Move it to View once #30 lands, and keep it reading the same model after #36/#43 rewrite the shell. |
-| Tab context actions | #35/#42 | #42 reports middle-click and Close/Close Others/Close All, with Cancel stopping consent traversal. Retain remaining FU5 actions. |
+| Tab context actions | #35/#42 plus #66 | #42 reports middle-click and Close/Close Others/Close All, with Cancel stopping consent traversal. #66 re-implements middle-click and Close/Close Others without reading #42; on merge keep #42's Close All and #66's Copy Full Path and reselect-after-sweep. FU5 still owns the remainder. |
+| GLM-session duplicates | #15/#24/#29/#67/#68 vs #8/#13/#14/#16/#21/#22/#30/#33/#34/#44 | Same-root findings implemented twice. Prefer the richer recorded implementation per the rows above; mine only the unique pieces listed in the GLM-session table (host-style merge on #15, CRLF-safe move and platform chord coverage on #24, match-deactivation on #29, line counts on #67). |
 
 **Inherited merge-order notes.** Earlier sources report branches based on `d53f416`; the latest source
 adds the inconsistent stack claims above. Predicted conflicts/clean merges are not verified here; check actual integration and preserve each behavior:
@@ -1376,6 +1402,10 @@ character, for `\b` parity on pasted queries (`'cat '` in `'the cat sat'`)
 and operators (`'=='` in `'a==b'`). Update the doc comment and add those
 two regression cases.
 
+Literal find matches are strictly non-overlapping
+(`from = at + needle.length`); a `.*` mode must state whether overlap or
+the same rule applies, and Replace All must not change that silently.
+
 **Still open from this item:** "in selection"; highlight all
 occurrences of the selected word; capture groups in the replacement (the
 current `replaceAll` substitutes a literal string, so `$1` is written out
@@ -1633,6 +1663,14 @@ navigation only: opening still goes through guarded loads, and the tree
 itself owns no file state. Stop before git, debugger and tasks to stay a
 focused editor.
 
+### A14. Multiple windows and split view — L (idea)
+One tabbed window per process today. A second window (File › New Window)
+needs a per-window workspace and quit coordination across them; a split
+view (same document twice, or two documents side by side) needs the
+editor surface to tolerate two mounted views of one controller (B17/#54
+owns the lock part). Both stay out of scope until session restore (A2)
+and the geometry work (FU9) settle.
+
 ## 7. Platform integration
 
 ### I1. Single instance on Linux and Windows — M
@@ -1887,6 +1925,13 @@ the last valid position or a neutral state; coordinate with FU13's status
 semantics. Also worth noting: the window title duplicates the tab's dirty
 dot and name; after #63 it is again the only dirty signal on GNOME.
 
+### V18. Gutter digit-count width jump — S (read, GLM session)
+The gutter sizes to the current line-count digit count, so the text column
+shifts left by one digit exactly when crossing a power of ten (9→10, 99→100
+lines). Pad to the next power-of-ten boundary, as VS Code does, so the
+width only ever grows at 10/100/1000. Coordinate with the geometry owner
+chosen in FU9 so the padding change lands once.
+
 ## 9. Delightful and quirky ideas
 
 - **Q1. The planchette caret.** An optional caret shaped like a tiny
@@ -2003,6 +2048,17 @@ feedback must remain quiet and usable without animation or thematic copy.
   loads the whole file, a cap on bytes shown, and an explicit action on the
   error banner (V6) rather than a dialog the editor raises itself. Report the
   same bytes the loader refused on, so the two can never disagree.
+- **Q29. File-open shimmer.** While a document loads, a single brief
+  (under 200 ms, skippable, reduced-motion aware) sweep across the gutter
+  numbers instead of a bare spinner. Keep it out of the critical path;
+  files that load in one frame show nothing.
+- **Q30. Session typing-heat ribbon.** A 2 px strip under a tab showing
+  per-line edit density for the current session — a cheap "where was I"
+  memory. Session-only, cleared on reload; no persistence promises.
+- **Q31. Idle whisper quotes.** Strictly opt-in (off by default): after a
+  long idle period the status bar may show one-line writing aphorisms.
+  Never in error contexts, never on by default, silenced while a dialog
+  is open.
 
 ## 10. Process and documentation
 
@@ -2418,6 +2474,21 @@ inspected.
   from the same revision; treat a timeout as a missing review, never as a pass.
   #55 reported zero actionable suggestions on its only round. #85 and #87 had
   not completed a round when this section was written.
+
+- **GLM 4.7 session (#15/#24/#29/#66/#67/#68):** baseline `e7ec67f`,
+  Flutter 3.47.2 / Dart 3.13.2 on Linux; analyze clean, core 84, editor
+  19→65 (branch-dependent), app 38→43 + 2 case-insensitive skips, all
+  observed failing-first for their regressions where claimed. Review
+  rounds: #15 two rounds applied (partial-style merge, then explicit
+  family gating); #24 round 1 applied and round 2 clean (stale anchors
+  only; the editor-level Ctrl+Tab escape hatch declined with reasons and
+  recorded as a possible FU8 follow-up); #29 two rounds applied
+  (match-deactivation, then the nine-digit input cap); #67 one clean
+  round including a Devin localization refinement accepted on-branch;
+  #68 round 1 applied (wrapped-final-line bound by laid-out height) with
+  two Devin hardening commits accepted; #66's first review attempt failed
+  (reviewer outage) and was rerun. All six left open for owner review per
+  instructions.
 
 ## 12. 2026-09-27 fresh pass: disposition map
 
