@@ -155,8 +155,12 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (existing != null) {
       // No new tab will appear, so point at the one that already holds the
       // document. Activation is the whole behaviour; the flash is decoration.
+      // Activating a tab the window already shows still drops the empty
+      // scratch tab it replaces, so the outcome matches a fresh open.
+      final previous = _active;
       _active = existing;
       existing.flashRequest++;
+      _dropPristine(previous);
       _notify();
       return;
     }
@@ -182,16 +186,10 @@ final class DocumentWorkspace extends ChangeNotifier {
         duplicate.flashRequest++;
       } else {
         tab.editor.displayPath = tab.path!;
-        // Opening into a fresh empty window replaces the empty tab instead
-        // of stranding it. Only the previously active tab qualifies, and
-        // only while it is still open, unnamed, empty and unedited. A failed
-        // open above keeps it untouched.
-        if (previous != null &&
-            _documents.contains(previous) &&
-            _isPristineTab(previous)) {
-          _remove(previous);
-        }
       }
+      // Opening into a fresh empty window replaces the empty tab instead
+      // of stranding it. A failed open above keeps it untouched.
+      _dropPristine(previous);
     }
     _notify();
   }
@@ -420,6 +418,15 @@ final class DocumentWorkspace extends ChangeNotifier {
       !tab.busy &&
       !tab.editor.isDirty &&
       tab.editor.text.text.isEmpty;
+
+  /// Closes the scratch tab an open just replaced. Only the previously active
+  /// tab qualifies, and only while it is still open, unnamed, empty and
+  /// unedited: background scratch tabs belong to the user.
+  void _dropPristine(DocumentTab? tab) {
+    if (tab != null && _documents.contains(tab) && _isPristineTab(tab)) {
+      _remove(tab);
+    }
+  }
 
   String _pathKey(String path) => _paths.canonicalize(path);
 

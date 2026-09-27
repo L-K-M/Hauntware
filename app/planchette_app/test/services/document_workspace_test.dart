@@ -200,6 +200,33 @@ void main() {
   });
 
   test(
+    'opening a file replaces only the previously active pristine tab',
+    () async {
+      final background = workspace.newDocument()!;
+      final scratch = workspace.newDocument()!;
+      store.files[testPath('one.txt')] = document('one.txt', 'disk');
+      await workspace.open(testPath('one.txt'));
+      expect(workspace.documents, [background, workspace.active]);
+      expect(workspace.active, isNot(scratch));
+      expect(workspace.active!.path, testPath('one.txt'));
+    },
+  );
+
+  test(
+    'activating an already open file also drops the pristine untitled tab',
+    () async {
+      store.files[testPath('one.txt')] = document('one.txt', 'disk');
+      final opened = await workspace
+          .open(testPath('one.txt'))
+          .then((_) => workspace.active!);
+      final scratch = workspace.newDocument()!;
+      await workspace.open(testPath('one.txt'));
+      expect(workspace.documents, [opened]);
+      expect(workspace.documents, isNot(contains(scratch)));
+    },
+  );
+
+  test(
     'New Save creates an absent target and records the saved identity',
     () async {
       final tab = workspace.newDocument()!;
