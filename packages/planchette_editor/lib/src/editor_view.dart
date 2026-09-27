@@ -421,8 +421,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             ? _measureGutter(scaler)
             : 0.0;
         _textWidth = constraints.maxWidth - gutterWidth - 2 * _padding;
-        // The caret-line band needs line tops even when the gutter is hidden.
-        _ensureGutterLayout(_textWidth!, scaler);
+        // The gutter or the caret band consumes line tops; skip the
+        // O(document) layout when both features are disabled.
+        if (widget.showLineNumbers || widget.highlightCaretLine) {
+          _ensureGutterLayout(_textWidth!, scaler);
+        }
         final theme = Theme.of(context);
         return NotificationListener<ScrollNotification>(
           onNotification: (_) {
@@ -457,20 +460,21 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   children: [
                     if (widget.highlightCaretLine)
                       Positioned.fill(
-                        child: CustomPaint(
-                          key: const ValueKey('editor-caret-band'),
-                          painter: _CaretLineBandPainter(
-                            scroll: c.scroll,
-                            repaint: _gutterRepaint,
-                            lineTops: _gutterTops,
-                            topInset: _padding,
-                            caretLine: c.caretLineColumn.$1,
-                            lineHeight: scaler.scale(
-                              _style.fontSize!,
-                            ) *
-                            _style.height!,
-                            color: theme.colorScheme.onSurface.withValues(
-                              alpha: 0.05,
+                        child: IgnorePointer(
+                          child: CustomPaint(
+                            key: const ValueKey('editor-caret-band'),
+                            painter: _CaretLineBandPainter(
+                              scroll: c.scroll,
+                              repaint: _gutterRepaint,
+                              lineTops: _gutterTops,
+                              topInset: _padding,
+                              caretLine: c.caretLineColumn.$1,
+                              lineHeight:
+                                  scaler.scale(_style.fontSize ?? 14) *
+                                  (_style.height ?? 1.35),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.05,
+                              ),
                             ),
                           ),
                         ),
