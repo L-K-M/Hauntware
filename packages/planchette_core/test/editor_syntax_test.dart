@@ -389,5 +389,33 @@ void main() {
     test('an empty query has no matches', () {
       expect(findSearchMatches('anything', ''), isEmpty);
     });
+
+    test('whole words respect boundaries, edges and underscore', () {
+      const text = 'cat concat cat. (cat) cat_cat café cat';
+      final matches = findSearchMatches(text, 'cat', wholeWord: true);
+      expect(
+        matches,
+        const [
+          TextMatch(start: 0, end: 3),
+          TextMatch(start: 11, end: 14),
+          TextMatch(start: 17, end: 20),
+          TextMatch(start: 35, end: 38),
+        ],
+      );
+      expect(
+        findSearchMatches('cat cat', 'cat', wholeWord: true),
+        hasLength(2),
+      );
+      expect(findSearchMatches('concat', 'cat', wholeWord: true), isEmpty);
+      expect(findSearchMatches('cat_cat', 'cat', wholeWord: true), isEmpty);
+      expect(
+        findSearchMatches('Cat CAT', 'cat', wholeWord: true),
+        hasLength(2),
+      );
+      expect(
+        findSearchMatches('a == b', '==', wholeWord: true),
+        hasLength(1),
+      );
+    });
   });
 }

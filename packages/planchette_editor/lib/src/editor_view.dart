@@ -282,6 +282,23 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                       ),
                     ),
                     IconButton(
+                      tooltip: strings.wholeWords,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: c.toggleWholeWord,
+                      icon: Text(
+                        'ab',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          decoration: c.wholeWord
+                              ? TextDecoration.underline
+                              : TextDecoration.none,
+                          color: c.wholeWord
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    IconButton(
                       tooltip: strings.previousMatch,
                       visualDensity: VisualDensity.compact,
                       onPressed: c.matches.isEmpty ? null : c.previousMatch,

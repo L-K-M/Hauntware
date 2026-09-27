@@ -168,6 +168,22 @@ void main() {
     editor.replaceAll();
     expect(editor.text.text, 'dog CAT dog');
   });
+  test('whole word search filters partial hits and replace all', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'cat concat cat',
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch(replace: true);
+    editor.search.text = 'cat';
+    expect(editor.matches.length, 3);
+    editor.toggleWholeWord();
+    expect(editor.wholeWord, isTrue);
+    expect(editor.matches.length, 2);
+    editor.replacement.text = 'dog';
+    editor.replaceAll();
+    expect(editor.text.text, 'dog concat dog');
+  });
   test('Save As metadata preserves selection and detects the new language', () {
     final editor = EditorController(
       displayPath: 'Untitled',

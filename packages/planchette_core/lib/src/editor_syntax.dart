@@ -1159,11 +1159,14 @@ final class TextMatch {
 /// Substring search used by the editor's find bar. Case-insensitive matching
 /// lowercases both sides; if lowering changes the haystack length (a handful
 /// of Unicode characters do), it falls back to case-sensitive search rather
-/// than report misaligned ranges. Capped at [limit] matches.
+/// than report misaligned ranges. With [wholeWord], a hit counts only when
+/// both edges touch a non-word character or the text boundary. Capped at
+/// [limit] matches.
 List<TextMatch> findSearchMatches(
   String text,
   String query, {
   bool caseSensitive = false,
+  bool wholeWord = false,
   int limit = searchMatchLimit,
 }) {
   if (query.isEmpty) return const [];
@@ -1181,8 +1184,31 @@ List<TextMatch> findSearchMatches(
   while (matches.length < limit) {
     final at = haystack.indexOf(needle, from);
     if (at < 0) break;
-    matches.add(TextMatch(start: at, end: at + needle.length));
-    from = at + needle.length;
+    final end = at + needle.length;
+    if (!wholeWord || _isWholeWord(haystack, at, end)) {
+      matches.add(TextMatch(start: at, end: end));
+      from = end;
+    } else {
+      // A rejected edge can still hide a later hit starting one char on.
+      from = at + 1;
+    }
   }
   return matches;
 }
+
+/// Word characters are ASCII letters, digits, `_`, and non-ASCII content
+/// (so `café` and CJK runs keep their edges); everything else is a boundary.
+bool _isWholeWord(String haystack, int start, int end) {
+  if (start > 0 && _isWordUnit(haystack.codeUnitAt(start - 1))) return false;
+  if (end < haystack.length && _isWordUnit(haystack.codeUnitAt(end))) {
+    return false;
+  }
+  return true;
+}
+
+bool _isWordUnit(int unit) =>
+    (unit >= 0x30 && unit <= 0x39) ||
+    (unit >= 0x41 && unit <= 0x5a) ||
+    (unit >= 0x61 && unit <= 0x7a) ||
+    unit == 0x5f ||
+    unit >= 0x80;

@@ -64,6 +64,7 @@ class EditorController extends ChangeNotifier {
   bool _searchOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
+  bool _wholeWord = false;
   bool _updatingSearch = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
@@ -96,6 +97,7 @@ class EditorController extends ChangeNotifier {
   bool get searchOpen => _searchOpen;
   bool get replaceOpen => _replaceOpen;
   bool get caseSensitive => _caseSensitive;
+  bool get wholeWord => _wholeWord;
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
@@ -325,6 +327,13 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  void toggleWholeWord() {
+    _wholeWord = !_wholeWord;
+    _updateMatches(resetActive: true);
+    _revealRequest++;
+    _notify();
+  }
+
   void _queryChanged() {
     if (!_searchOpen || _disposed || search.text == _lastQuery) return;
     _updateMatches(resetActive: true);
@@ -339,6 +348,7 @@ class EditorController extends ChangeNotifier {
             text.text,
             search.text,
             caseSensitive: _caseSensitive,
+            wholeWord: _wholeWord,
           )
         : const [];
     if (_matches.isEmpty) {
@@ -403,6 +413,7 @@ class EditorController extends ChangeNotifier {
       source,
       search.text,
       caseSensitive: _caseSensitive,
+      wholeWord: _wholeWord,
       limit: source.length + 1,
     );
     if (matches.isEmpty) return;
