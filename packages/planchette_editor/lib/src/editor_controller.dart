@@ -373,6 +373,7 @@ class EditorController extends ChangeNotifier {
     text.selection = TextSelection(
       baseOffset: selection.baseOffset.clamp(0, value.length),
       extentOffset: selection.extentOffset.clamp(0, value.length),
+      affinity: selection.affinity,
     );
   }
 
