@@ -54,6 +54,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// back-off already makes.
   static const _gutterMeasurementMaxChars = 128 * 1024;
   final _gutterRepaint = ValueNotifier<int>(0);
+
+  /// Whether any logical line soft-wrapped, which makes a line's top differ
+  /// from a match's row inside it. There is exactly one top per logical line
+  /// either way, so a length check can never detect this; the flag is set from
+  /// the measured row count. Left true on the uniform estimate, where folding
+  /// is unknown and must be assumed.
+  bool _gutterFolded = true;
   final TextPainter _gutterPainter = TextPainter(
     textDirection: TextDirection.ltr,
   );
@@ -152,10 +159,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     );
   }
 
-  /// The cached gutter already knows where every logical line begins, so a
-  /// reveal normally costs a binary search rather than a fresh layout.
+  /// The cached gutter knows where every logical line *begins*, which is a
+  /// binary search rather than a fresh layout. It is not enough once a line
+  /// has folded: a match below the first row of a wrapped line needs the
+  /// measured row, not the line's top.
   double? _rowTopFor(int offset) {
     if (!identical(_gutterText, c.text.text)) return null;
+    if (_gutterFolded) return null;
     final tops = _gutterTops;
     if (tops.length != c.lineStarts.length) return null;
     final starts = c.lineStarts;
@@ -172,10 +182,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     return tops[lo];
   }
 
-  /// Fallback for a document whose rows and logical lines disagree, which only
-  /// happens once a long line has soft-wrapped.
+  /// Fallback for a folded document, or one too large to measure.
+  ///
+  /// A folded line's top is not a match's row inside it, so the exact answer
+  /// needs the text laid out up to the offset. Past the measurement ceiling
+  /// that is too expensive, and the uniform row height the painter's scroll
+  /// back-off already assumes is the best available — right for any document
+  /// whose lines all fit, wrong by one row per folded line above the
+  /// viewport.
   double? _measuredTopFor(int offset) {
-    if (c.text.text.length > syntaxHighlightingMaxChars || _textWidth == null) {
+    if (c.text.text.length > _gutterMeasurementMaxChars || _textWidth == null) {
       // `indexWhere(start > offset) - 1` underflows on the last line of a file
       // with no trailing newline, where no line start is greater than the
       // offset. `lastIndexWhere` is total: `lineStarts[0]` is always 0.
@@ -584,6 +600,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       )
       ..layout(maxWidth: width > 1 ? width : 1);
     final rows = _gutterPainter.computeLineMetrics();
+    _gutterFolded = rows.length != lineCount;
     if (rows.length == lineCount) {
       _gutterPainter.text = const TextSpan(text: '');
       // LineMetrics reports each row's own height rather than its offset, so
