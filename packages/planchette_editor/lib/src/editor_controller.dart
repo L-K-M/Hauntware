@@ -64,7 +64,9 @@ class EditorController extends ChangeNotifier {
   bool _searchOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
+  bool _useRegularExpression = false;
   bool _updatingSearch = false;
+  String? _findError;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
   int _revision = 0;
@@ -96,6 +98,30 @@ class EditorController extends ChangeNotifier {
   bool get searchOpen => _searchOpen;
   bool get replaceOpen => _replaceOpen;
   bool get caseSensitive => _caseSensitive;
+  bool get useRegularExpression => _useRegularExpression;
+
+  /// Why the current query cannot be searched, or null when it can. A pattern
+  /// that does not compile says so here rather than quietly finding nothing,
+  /// which would look exactly like a file with no occurrences.
+  String? get findError => _findError;
+
+  /// Words and characters in the current selection, or null when the caret is
+  /// collapsed and there is nothing to report.
+  ({int words, int characters})? get selectionStats {
+    final selection = text.selection;
+    if (!selection.isValid || selection.isCollapsed) return null;
+    final selected = selection.textInside(text.text);
+    if (selected.isEmpty) return null;
+    var words = 0;
+    var inWord = false;
+    for (final unit in selected.codeUnits) {
+      final isWord = !_isWordSeparator(unit);
+      if (isWord && !inWord) words++;
+      inWord = isWord;
+    }
+    return (words: words, characters: selected.length);
+  }
+
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
@@ -301,6 +327,14 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  /// Empty the query, keeping the bar open.
+  void clearSearch() {
+    if (search.text.isEmpty) return;
+    search.clear();
+    _updateMatches(resetActive: true);
+    _notify();
+  }
+
   void closeSearch() {
     if (!_searchOpen) return;
     _searchOpen = false;
@@ -308,6 +342,7 @@ class EditorController extends ChangeNotifier {
     _matches = const [];
     _activeMatch = -1;
     _lastQuery = null;
+    _findError = null;
     text.setSearchMatches(const [], -1);
     editorFocus.requestFocus();
     _notify();
@@ -325,6 +360,14 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  /// Search what is typed as a regular expression instead of as plain text.
+  void toggleRegularExpression() {
+    _useRegularExpression = !_useRegularExpression;
+    _updateMatches(resetActive: true);
+    _revealRequest++;
+    _notify();
+  }
+
   void _queryChanged() {
     if (!_searchOpen || _disposed || search.text == _lastQuery) return;
     _updateMatches(resetActive: true);
@@ -334,13 +377,22 @@ class EditorController extends ChangeNotifier {
 
   void _updateMatches({required bool resetActive}) {
     _lastQuery = search.text;
-    _matches = _searchOpen
-        ? findSearchMatches(
-            text.text,
-            search.text,
-            caseSensitive: _caseSensitive,
-          )
-        : const [];
+    if (!_searchOpen) {
+      _matches = const [];
+      _findError = null;
+      return;
+    }
+    final query = _useRegularExpression
+        ? FindQuery.pattern(search.text)
+        : FindQuery.literal(search.text);
+    _findError = query.error;
+    _matches = [
+      for (final match in query.findIn(
+        text.text,
+        caseSensitive: _caseSensitive,
+      ))
+        TextRange(start: match.start, end: match.end),
+    ];
     if (_matches.isEmpty) {
       _activeMatch = -1;
     } else if (resetActive ||
@@ -399,12 +451,20 @@ class EditorController extends ChangeNotifier {
   void replaceAll() {
     if (_editingLocked || isBusy || search.text.isEmpty) return;
     final source = text.text;
-    final matches = findSearchMatches(
-      source,
-      search.text,
-      caseSensitive: _caseSensitive,
-      limit: source.length + 1,
-    );
+    // Replace-all has to cover more than the bar can show, so the display cap
+    // does not apply here. It is the one place that walks the whole buffer.
+    final query = _useRegularExpression
+        ? FindQuery.pattern(search.text)
+        : FindQuery.literal(search.text);
+    if (query.error != null) return;
+    final matches = [
+      for (final match in query.findIn(
+        source,
+        caseSensitive: _caseSensitive,
+        limit: source.length + 1,
+      ))
+        TextRange(start: match.start, end: match.end),
+    ];
     if (matches.isEmpty) return;
     final buffer = StringBuffer();
     var offset = 0;
@@ -445,3 +505,13 @@ class EditorController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+/// Whether a code unit separates words, for the selection's word count.
+bool _isWordSeparator(int codeUnit) => switch (codeUnit) {
+  0x20 || 0x09 || 0x0a || 0x0d => true,
+  0x2c || 0x2e || 0x3a || 0x3b => true,
+  0x21 || 0x3f => true,
+  0x28 || 0x29 || 0x5b || 0x5d || 0x7b || 0x7d => true,
+  0x22 || 0x27 || 0x60 => true,
+  _ => false,
+};

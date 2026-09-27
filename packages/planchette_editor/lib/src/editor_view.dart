@@ -215,15 +215,20 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   Widget _searchBar(BuildContext context) {
     final strings = widget.strings;
     final theme = Theme.of(context);
-    final counter = c.search.text.isEmpty
-        ? ''
-        : c.matches.isEmpty
-        ? strings.noMatches
-        : strings.matchCount(
+    // A pattern that will not compile says so here instead of reporting no
+    // matches, which would look the same as a file with nothing to find.
+    final error = c.findError;
+    final counter =
+        error ??
+        switch ((c.search.text.isEmpty, c.matches.isEmpty)) {
+          (true, _) => '',
+          (false, true) => strings.noMatches,
+          _ => strings.matchCount(
             c.activeMatch + 1,
             c.matches.length,
             capped: c.matches.length >= searchMatchLimit,
-          );
+          ),
+        };
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
       child: Column(
@@ -241,7 +246,18 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   decoration: InputDecoration(
                     hintText: strings.findHint,
                     isDense: true,
-                    border: InputBorder.none,
+                    // A borderless, iconless field does not read as something to
+                    // type into; the query used to float in the toolbar.
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon: c.search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: strings.clearSearch,
+                            iconSize: 16,
+                            onPressed: c.clearSearch,
+                            icon: const Icon(Icons.close),
+                          ),
+                    border: const OutlineInputBorder(),
                   ),
                   onSubmitted: (_) {
                     if (HardwareKeyboard.instance.isShiftPressed) {
@@ -259,8 +275,29 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     if (counter.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(counter, style: theme.textTheme.labelSmall),
+                        child: Text(
+                          counter,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: error != null
+                                ? theme.colorScheme.error
+                                : null,
+                          ),
+                        ),
                       ),
+                    IconButton(
+                      tooltip: strings.regularExpression,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: c.toggleRegularExpression,
+                      icon: Text(
+                        '.*',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: c.useRegularExpression
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
                     IconButton(
                       tooltip: strings.matchCase,
                       visualDensity: VisualDensity.compact,
@@ -349,7 +386,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   Widget _statusBar(BuildContext context) {
     final (line, column) = c.caretLineColumn;
     final document = c.document;
+    final selection = c.selectionStats;
     final status = [
+      if (selection != null)
+        widget.strings.selectionCount(selection.words, selection.characters),
       if (c.isSaving) widget.strings.saving,
       if (c.isDirty) widget.strings.unsaved,
       document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
