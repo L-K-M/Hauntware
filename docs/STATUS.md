@@ -3,6 +3,21 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+The owner-approved Planchette extraction moves syntax, document I/O, editing
+state, and the editor surface into shared `planchette_core` and
+`planchette_editor` packages. Séance retains its session tabs, gutter/status,
+remote-change controls, and guarded save/upload flow, and gains the shared
+dotenv rules and find/replace. Compatibility adapters preserve public editor
+entry points and managed-copy symlink rejection. Both packages are pinned to
+the same immutable revision in the pubspec and lockfile. Reconnects update
+save/upload callbacks without replacing the open editor buffer.
+
+Local Flutter analysis is clean. The full app suite passed 1,133 tests with
+two existing skips against the pinned Git packages, using real capture fonts,
+including reconnect/disconnect regressions. Without real fonts,
+two desktop sidebar capture tests fail on both unchanged main and this branch.
+Cross-platform CI and final review results are recorded on the adoption PR.
+
 macOS now preserves Command shortcuts injected with only the aggregate
 Command flag, such as Easydict's synthetic Command+C. The native controller
 supplies a missing device-side bit before Flutter processes key-down and
