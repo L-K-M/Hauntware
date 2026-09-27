@@ -8,11 +8,35 @@ import 'document_store.dart';
 
 enum CloseChoice { save, discard, cancel }
 
+/// How a saved document relates to the file it came from.
+enum DiskState {
+  /// The file still holds what was last loaded or saved.
+  current,
+
+  /// Another program changed the file while this tab has unsaved edits.
+  changed,
+
+  /// The file was moved or deleted; saving creates it again.
+  missing,
+}
+
 abstract interface class DocumentDialogs {
   Future<List<String>> pickOpenFiles();
   Future<String?> pickSavePath(String suggestedName);
   Future<bool> confirmReplace(String path);
   Future<CloseChoice> chooseClose(String name);
+  Future<bool> confirmRevert(String name);
+}
+
+/// What a disk check does when a tab without edits changed on disk.
+enum _CleanTabChange { reload, flag }
+
+enum _ReloadMode {
+  /// The user chose to replace their edits.
+  discardEdits,
+
+  /// A background refresh; edits made while reading turn it into a notice.
+  onlyIfClean,
 }
 
 /// One controller survives tab switches, retaining undo, selection, find and
@@ -26,6 +50,9 @@ final class DocumentTab {
   TextDocument? baseline;
   String? path;
   bool busy = false;
+  DiskState disk = DiskState.current;
+  String? _diskDigest;
+  ({TextDocument baseline, FileStamp stamp})? _verified;
 
   String get name => path == null ? untitledName : paths.basename(path!);
 }
@@ -101,6 +128,8 @@ final class DocumentWorkspace extends ChangeNotifier {
         );
         tab.baseline = document;
         tab.path = document.file.path;
+        tab.disk = DiskState.current;
+        tab._diskDigest = null;
         tab.editor.adoptDocument(document);
         tab.editor.displayPath = document.file.path;
         return document.sha256;
@@ -182,6 +211,137 @@ final class DocumentWorkspace extends ChangeNotifier {
     return _save(tab, saveAs: saveAs);
   }
 
+  /// File › Revert to Saved: re-reads [tab] from disk, asking first when it
+  /// has unsaved edits.
+  Future<bool> revert(DocumentTab tab) async {
+    if (!_canReload(tab)) return false;
+    if (tab.editor.isDirty &&
+        !await _dialog(() => dialogs.confirmRevert(tab.name))) {
+      return false;
+    }
+    return _canReload(tab) && await _reload(tab, _ReloadMode.discardEdits);
+  }
+
+  /// The disk notice's Reload button, an explicit choice to discard edits.
+  /// The replacement is still one undoable edit in the document.
+  Future<bool> reloadFromDisk(DocumentTab tab) => _canReload(tab)
+      ? _reload(tab, _ReloadMode.discardEdits)
+      : Future.value(false);
+
+  /// The disk notice's Keep Mine button: keep editing, and let the next save
+  /// replace the version now on disk. A later outside change is still caught.
+  void keepMine(DocumentTab tab) {
+    final baseline = tab.baseline;
+    final digest = tab._diskDigest;
+    if (tab.disk != DiskState.changed || baseline == null || digest == null) {
+      return;
+    }
+    tab.baseline = baseline.copyWith(sha256: digest);
+    _markDisk(tab, DiskState.current);
+  }
+
+  bool _canReload(DocumentTab tab) =>
+      !interactionLocked &&
+      !tab.busy &&
+      tab.path != null &&
+      _documents.contains(tab) &&
+      !tab.editor.isBusy &&
+      tab.editor.error == null;
+
+  Future<bool> _reload(DocumentTab tab, _ReloadMode mode) async {
+    tab.busy = true;
+    _notify();
+    try {
+      final document = await store.load(tab.path!);
+      if (_disposed || !_documents.contains(tab)) return false;
+      if (mode == _ReloadMode.onlyIfClean && tab.editor.isDirty) {
+        // Edited while the file was being read: ask rather than discard.
+        _markDisk(tab, DiskState.changed, digest: document.sha256);
+        return false;
+      }
+      tab.baseline = document;
+      tab.path = document.file.path;
+      tab.disk = DiskState.current;
+      tab._diskDigest = null;
+      tab.editor.revertTo(document);
+      return true;
+    } catch (error) {
+      _error = 'Could not reload ${tab.name}: $error';
+      return false;
+    } finally {
+      tab.busy = false;
+      _notify();
+    }
+  }
+
+  /// Compares each saved document with its file, typically when the window
+  /// regains focus. A tab without edits silently takes the new version, a tab
+  /// with edits shows a notice instead, and a vanished file is flagged so
+  /// Save creates it again. File stamps avoid rehashing unchanged files.
+  Future<void> checkDisk() =>
+      _diskCheck ??= _checkDisk().whenComplete(() => _diskCheck = null);
+
+  Future<void>? _diskCheck;
+
+  Future<void> _checkDisk() async {
+    for (final tab in List.of(_documents)) {
+      if (_disposed || interactionLocked) return;
+      if (tab.busy || tab.editor.isBusy || !_documents.contains(tab)) continue;
+      await _checkTab(tab, _CleanTabChange.reload);
+    }
+  }
+
+  Future<void> _checkTab(DocumentTab tab, _CleanTabChange clean) async {
+    final path = tab.path;
+    final baseline = tab.baseline;
+    if (path == null || baseline == null || tab.editor.error != null) return;
+    FileStamp? stamp;
+    String? digest;
+    try {
+      stamp = await store.stamp(path);
+      final verified = tab._verified;
+      if (stamp != null &&
+          verified != null &&
+          identical(verified.baseline, baseline) &&
+          verified.stamp == stamp) {
+        return;
+      }
+      digest = stamp == null ? null : await store.existingDigest(path);
+    } on Object {
+      // Unreadable or no longer a regular file: the next save reports it.
+      return;
+    }
+    if (_disposed ||
+        !_documents.contains(tab) ||
+        !identical(tab.baseline, baseline)) {
+      return;
+    }
+    if (stamp == null || digest == null) {
+      _markDisk(tab, DiskState.missing);
+    } else if (digest == baseline.sha256) {
+      tab._verified = (baseline: baseline, stamp: stamp);
+      _markDisk(tab, DiskState.current);
+    } else if (clean == _CleanTabChange.reload &&
+        !tab.editor.isDirty &&
+        _canReload(tab)) {
+      await _reload(tab, _ReloadMode.onlyIfClean);
+    } else {
+      _markDisk(tab, DiskState.changed, digest: digest);
+    }
+  }
+
+  void _markDisk(DocumentTab tab, DiskState state, {String? digest}) {
+    if (tab.disk == state && tab._diskDigest == digest) return;
+    tab.disk = state;
+    tab._diskDigest = digest;
+    _notify();
+  }
+
+  /// The digest a save must find on disk: none when the file vanished, so
+  /// the save creates it again rather than failing to replace it.
+  String? _expectedDigest(DocumentTab tab) =>
+      tab.disk == DiskState.missing ? null : tab.baseline!.sha256;
+
   Future<bool> _save(
     DocumentTab tab, {
     bool saveAs = false,
@@ -217,7 +377,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         }
         if (tab.path != null && _pathKey(target) == _pathKey(tab.path!)) {
           // Choosing the same file must not bypass its external-change guard.
-          digest = tab.baseline!.sha256;
+          digest = _expectedDigest(tab);
         } else {
           digest = await store.existingDigest(target);
           if (digest != null &&
@@ -227,13 +387,17 @@ final class DocumentWorkspace extends ChangeNotifier {
         }
       } else {
         target = tab.path!;
-        digest = tab.baseline!.sha256;
+        digest = _expectedDigest(tab);
       }
       _saveTargets[tab] = (path: target, digest: digest);
       final result = await tab.editor.save(access: access);
       return result != null;
     } catch (error) {
       _error = 'Could not save ${tab.name}: $error';
+      // An outside change or deletion is the usual cause. The document's own
+      // notice then explains it and offers Reload or Keep Mine.
+      await _checkTab(tab, _CleanTabChange.flag);
+      if (tab.disk != DiskState.current) _error = null;
       return false;
     } finally {
       _saveTargets.remove(tab);

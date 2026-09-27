@@ -183,6 +183,11 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
         const _Separator(),
+        _Command('Revert to Saved', () {
+          final tab = workspace.active;
+          if (tab != null) unawaited(workspace.revert(tab));
+        }, enabled: ready && active.path != null),
+        const _Separator(),
         _Command(
           'Close Tab',
           _close,
@@ -635,6 +640,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                               controller: tab.editor,
                               isActive: tab == active,
                               editingLocked: workspace.interactionLocked,
+                              banner: _diskNotice(tab),
                             ),
                         ],
                       ),
@@ -646,6 +652,67 @@ class _DocumentShellState extends State<_DocumentShell> {
     );
     if (mac) body = _nativeMenu(menus, body);
     return body;
+  }
+
+  /// Explains a file that another program changed or removed, with the
+  /// choices that resolve it. Tabs without edits reload silently instead.
+  Widget? _diskNotice(DocumentTab tab) {
+    final (icon, message, actions) = switch (tab.disk) {
+      DiskState.current => (null, '', const <Widget>[]),
+      DiskState.changed => (
+        Icons.sync_problem_outlined,
+        '“${tab.name}” changed on disk. Reload it, or keep your edits and '
+            'replace it on the next save.',
+        [
+          TextButton(
+            onPressed: workspace.interactionLocked
+                ? null
+                : () => workspace.keepMine(tab),
+            child: const Text('Keep Mine'),
+          ),
+          FilledButton.tonal(
+            onPressed: workspace.interactionLocked || tab.busy
+                ? null
+                : () => unawaited(workspace.reloadFromDisk(tab)),
+            child: const Text('Reload'),
+          ),
+        ],
+      ),
+      DiskState.missing => (
+        Icons.report_outlined,
+        '“${tab.name}” was moved or deleted. Save to create it again.',
+        [
+          FilledButton.tonal(
+            onPressed: workspace.interactionLocked || tab.busy
+                ? null
+                : () => unawaited(workspace.save(tab)),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    };
+    if (icon == null) return null;
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      key: ValueKey('disk-notice-${tab.id}'),
+      color: scheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: scheme.onTertiaryContainer),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: TextStyle(color: scheme.onTertiaryContainer),
+              ),
+            ),
+            for (final action in actions) ...[const SizedBox(width: 8), action],
+          ],
+        ),
+      ),
+    );
   }
 
   @override

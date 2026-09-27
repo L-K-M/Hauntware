@@ -221,4 +221,22 @@ void main() {
     editor.text.selection = const TextSelection.collapsed(offset: 4);
     expect(editor.caretLineColumn, (2, 3));
   });
+
+  test('revertTo installs a disk version as the clean baseline in place', () {
+    final editor = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'first line\nsecond',
+    );
+    addTearDown(editor.dispose);
+    editor.text.text = 'edited';
+    editor.text.selection = const TextSelection(baseOffset: 2, extentOffset: 6);
+    editor.revertTo(document('abc'));
+    expect(editor.text.text, 'abc');
+    expect(editor.isDirty, isFalse);
+    expect(editor.document!.sha256, 'original');
+    expect(
+      editor.text.selection,
+      const TextSelection(baseOffset: 2, extentOffset: 3),
+    );
+  });
 }

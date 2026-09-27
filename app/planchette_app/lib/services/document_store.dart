@@ -3,9 +3,16 @@ import 'dart:io';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_core/planchette_core.dart';
 
+/// A cheap summary of a file's state. Two equal stamps mean the file almost
+/// certainly did not change; unequal stamps call for a digest comparison.
+typedef FileStamp = ({DateTime modified, int size});
+
 /// The shell's filesystem boundary. Tests substitute an in-memory store.
 abstract interface class DocumentStore {
   Future<TextDocument> load(String path);
+
+  /// Null when nothing exists at [path].
+  Future<FileStamp?> stamp(String path);
   Future<String> canonicalSavePath(String path);
   Future<String?> existingDigest(String path);
   Future<TextDocument> write({
@@ -20,6 +27,13 @@ final class LocalDocumentStore implements DocumentStore {
   @override
   Future<TextDocument> load(String path) =>
       loadTextDocument(File(path), symlinkPolicy: SymlinkPolicy.resolveOnce);
+
+  @override
+  Future<FileStamp?> stamp(String path) async {
+    final stat = await FileStat.stat(path);
+    if (stat.type == FileSystemEntityType.notFound) return null;
+    return (modified: stat.modified, size: stat.size);
+  }
 
   @override
   Future<String> canonicalSavePath(String path) async {

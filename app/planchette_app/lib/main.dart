@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ Future<void> main(List<String> arguments) async {
   final desktop = DesktopWindow(
     confirmQuit: workspace.confirmQuit,
     onQuitFailed: workspace.quitFailed,
+    onFocus: () => unawaited(workspace.checkDisk()),
   );
   runApp(
     PlanchetteApp(

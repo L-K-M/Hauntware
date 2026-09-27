@@ -42,11 +42,32 @@ class MemoryDocuments implements DocumentStore {
   }
 
   @override
+  Future<FileStamp?> stamp(String path) async {
+    stamps++;
+    final value = files[aliases[path] ?? path];
+    if (value == null) return null;
+    // Content identity stands in for a modification time.
+    return (
+      modified: DateTime.utc(
+        2026,
+      ).add(Duration(seconds: value.sha256.hashCode)),
+      size: value.text.length,
+    );
+  }
+
+  int stamps = 0;
+
+  @override
   Future<String> canonicalSavePath(String path) async =>
       pathContext.normalize(pathContext.absolute(path));
 
   @override
-  Future<String?> existingDigest(String path) async => files[path]?.sha256;
+  Future<String?> existingDigest(String path) async {
+    digests++;
+    return files[path]?.sha256;
+  }
+
+  int digests = 0;
 
   @override
   Future<TextDocument> write({
@@ -81,6 +102,8 @@ class FakeDialogs implements DocumentDialogs {
   final asked = <String>[];
   Completer<CloseChoice>? choiceGate;
   Future<void> Function()? beforeReplace;
+  bool revert = true;
+  final revertsAsked = <String>[];
 
   @override
   Future<List<String>> pickOpenFiles() async => openPaths;
@@ -90,6 +113,12 @@ class FakeDialogs implements DocumentDialogs {
   Future<bool> confirmReplace(String path) async {
     await beforeReplace?.call();
     return replace;
+  }
+
+  @override
+  Future<bool> confirmRevert(String name) async {
+    revertsAsked.add(name);
+    return revert;
   }
 
   @override

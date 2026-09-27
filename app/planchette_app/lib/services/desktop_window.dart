@@ -9,10 +9,15 @@ final class DesktopWindow with WindowListener {
   DesktopWindow({
     required this.confirmQuit,
     required this.onQuitFailed,
+    this.onFocus,
     Future<void> Function()? destroyWindow,
   }) : _destroyWindow = destroyWindow ?? windowManager.destroy;
   final Future<bool> Function() confirmQuit;
   final void Function(Object error) onQuitFailed;
+
+  /// Called when the window becomes active again, for example to notice
+  /// files that other programs changed in the meantime.
+  final void Function()? onFocus;
   final Future<void> Function() _destroyWindow;
   AppLifecycleListener? _lifecycle;
   bool _destroying = false;
@@ -57,6 +62,9 @@ final class DesktopWindow with WindowListener {
 
   @override
   void onWindowClose() => unawaited(requestQuit());
+
+  @override
+  void onWindowFocus() => onFocus?.call();
 
   void setTitle(String title) => unawaited(windowManager.setTitle(title));
 

@@ -147,6 +147,29 @@ class EditorController extends ChangeNotifier {
     await _load();
   }
 
+  /// Replaces the buffer with [document], read again from disk, as the new
+  /// saved baseline. Unlike [reload], the text field stays mounted: the caret
+  /// and scroll position stay where they still fit, and the replacement is one
+  /// undoable edit. The host confirms any discard first.
+  void revertTo(TextDocument document) {
+    if (_disposed) return;
+    final length = document.text.length;
+    final selection = text.selection;
+    _document = document;
+    _savedText = document.text;
+    text.value = TextEditingValue(
+      text: document.text,
+      selection: selection.isValid
+          ? TextSelection(
+              baseOffset: selection.baseOffset.clamp(0, length),
+              extentOffset: selection.extentOffset.clamp(0, length),
+            )
+          : const TextSelection.collapsed(offset: 0),
+    );
+    _detectLanguage();
+    _notify();
+  }
+
   Future<void> _load() async {
     final loader = loadDocument;
     if (loader == null || _disposed) return;

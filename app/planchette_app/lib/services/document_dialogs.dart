@@ -53,6 +53,34 @@ final class AppDocumentDialogs implements DocumentDialogs {
   }
 
   @override
+  Future<bool> confirmRevert(String name) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Revert “$name” to the saved version?'),
+            content: const Text(
+              'Your unsaved changes will be replaced by the file on disk. '
+              'You can undo the revert in the document.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Revert'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  @override
   Future<CloseChoice> chooseClose(String name) async {
     final context = navigatorKey.currentContext;
     if (context == null) return CloseChoice.cancel;
