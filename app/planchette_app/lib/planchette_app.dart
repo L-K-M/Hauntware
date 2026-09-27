@@ -127,6 +127,36 @@ class _DocumentShellState extends State<_DocumentShell> {
     _focusAfterFrame(tab);
   }
 
+  void _showTabMenu(Offset position, DocumentTab tab) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final hasOthers = workspace.documents.length > 1;
+    showMenu<void>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(position, position),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          enabled: !workspace.interactionLocked && !tab.busy,
+          onTap: () => unawaited(workspace.closeTab(tab)),
+          child: const Text('Close'),
+        ),
+        PopupMenuItem(
+          enabled: hasOthers && !workspace.interactionLocked,
+          onTap: () => unawaited(workspace.closeOthers(tab)),
+          child: const Text('Close Others'),
+        ),
+        PopupMenuItem(
+          enabled: hasOthers && !workspace.interactionLocked,
+          onTap: () => unawaited(workspace.closeAllTabs()),
+          child: const Text('Close All Tabs'),
+        ),
+      ],
+    );
+  }
+
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
     if (tabs.isEmpty || workspace.interactionLocked) return;
@@ -514,49 +544,64 @@ class _DocumentShellState extends State<_DocumentShell> {
                                 message: tab.path ?? tab.name,
                                 child: Semantics(
                                   selected: tab == active,
-                                  child: Material(
-                                    color: tab == active
-                                        ? scheme.surface
-                                        : Colors.transparent,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(8),
+                                  child: GestureDetector(
+                                    onTertiaryTapUp:
+                                        workspace.interactionLocked || tab.busy
+                                        ? null
+                                        : (_) => unawaited(
+                                            workspace.closeTab(tab),
+                                          ),
+                                    onSecondaryTapUp: (details) => _showTabMenu(
+                                      details.globalPosition,
+                                      tab,
                                     ),
-                                    child: InkWell(
-                                      onTap: workspace.interactionLocked
-                                          ? null
-                                          : () => _select(tab),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 14,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Text(
-                                              '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: tab == active
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
+                                    child: Material(
+                                      color: tab == active
+                                          ? scheme.surface
+                                          : Colors.transparent,
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(8),
+                                      ),
+                                      child: InkWell(
+                                        onTap: workspace.interactionLocked
+                                            ? null
+                                            : () => _select(tab),
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                            left: 14,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Text(
+                                                '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: tab == active
+                                                      ? FontWeight.w600
+                                                      : FontWeight.normal,
+                                                ),
                                               ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            IconButton(
-                                              key: ValueKey('close-${tab.id}'),
-                                              tooltip: 'Close ${tab.name}',
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              iconSize: 16,
-                                              onPressed:
-                                                  workspace.interactionLocked ||
-                                                      tab.busy
-                                                  ? null
-                                                  : () => unawaited(
-                                                      workspace.closeTab(tab),
-                                                    ),
-                                              icon: const Icon(Icons.close),
-                                            ),
-                                          ],
+                                              const SizedBox(width: 4),
+                                              IconButton(
+                                                key: ValueKey(
+                                                  'close-${tab.id}',
+                                                ),
+                                                tooltip: 'Close ${tab.name}',
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                iconSize: 16,
+                                                onPressed:
+                                                    workspace
+                                                            .interactionLocked ||
+                                                        tab.busy
+                                                    ? null
+                                                    : () => unawaited(
+                                                        workspace.closeTab(tab),
+                                                      ),
+                                                icon: const Icon(Icons.close),
+                                              ),
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),

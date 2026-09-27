@@ -259,6 +259,23 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
   }
 
+  /// Batch closes still run each tab through the same consent decision as
+  /// a lone close; a Cancel stops the sweep — tabs closed so far stay
+  /// closed, the rest stay open.
+  Future<void> closeAllTabs() => _closeAllExcept(null);
+
+  Future<void> closeOthers(DocumentTab keep) async {
+    if (!_documents.contains(keep)) return;
+    await _closeAllExcept(keep);
+    if (_documents.contains(keep)) select(keep);
+  }
+
+  Future<void> _closeAllExcept(DocumentTab? keep) async {
+    for (final tab in List.of(_documents)) {
+      if (tab != keep && !await closeTab(tab)) return;
+    }
+  }
+
   Future<bool> _confirmTab(DocumentTab tab) async {
     if (tab.busy || tab.editor.isSaving) return false;
     if (!tab.editor.isDirty) return true;

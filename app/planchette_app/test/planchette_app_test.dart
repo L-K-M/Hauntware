@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -224,5 +225,49 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
     variant: const TargetPlatformVariant({TargetPlatform.macOS}),
+  );
+
+  testWidgets(
+    'middle-click closes a tab; the context menu closes others and all',
+    (tester) async {
+      workspace.newDocument();
+      final second = workspace.newDocument()!;
+      workspace.newDocument();
+      await mount(tester);
+
+      await tester.tap(
+        find.text(second.name),
+        buttons: kMiddleMouseButton,
+      );
+      await tester.pumpAndSettle();
+      expect(workspace.documents.length, 2);
+      expect(workspace.documents, isNot(contains(second)));
+
+      await tester.tap(
+        find.text('Untitled 1'),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Close Others'));
+      await tester.pumpAndSettle();
+      expect(workspace.documents.map((tab) => tab.name), ['Untitled 1']);
+
+      workspace.newDocument();
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.text('Untitled 1'),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Close All Tabs'));
+      await tester.pumpAndSettle();
+      expect(workspace.documents, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
   );
 }
