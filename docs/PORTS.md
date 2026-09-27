@@ -1,5 +1,25 @@
 # Séance ports and pin audits
 
+## Shared Planchette editor (2026-09-27)
+
+The owner approved replacing the copied editor implementation with the
+`planchette_core` and `planchette_editor` packages from
+[Planchette](https://github.com/L-K-M/Planchette). Their initial extraction
+uses Poltergeist `c43b5411` and Séance `6a1a3301`.
+
+Syntax and dotenv scanning, search, guarded document I/O, editing state,
+find/replace, gutter, and status are now shared package responsibilities.
+The old editor entries below are historical provenance, superseded by this
+package boundary. Package revisions are pinned in the dependency manifests
+and lockfiles; both applications adopt the same reviewed package revision.
+
+Poltergeist retains localized strings and theme injection, native editor
+windows and menus, checkout caps and recovery, uploads/conflict dialogs, and
+its `.poltergeist-*` temporary-file prefix. `built_in_text_document.dart`
+keeps compatibility names and the checkout byte sink but delegates document
+mechanics. User-local links resolve once before the regular-file loader;
+managed copies retain rejection. No SSH dependency enters Planchette.
+
 ## M2 probe lifecycle prerequisite (2026-09-08)
 
 The periodic `ProbeService` repair merged in

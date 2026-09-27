@@ -4,6 +4,21 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Shared Planchette editor (2026-09-27)
+
+The owner approved shared editor packages and a standalone Planchette app.
+Poltergeist's migration retains native editor windows, localized chrome,
+menus, and managed-checkout/upload behavior while using the shared syntax,
+document I/O, editing controller, and surface. The common editor adds a
+line-number gutter and find/replace. Both packages are pinned to the same
+immutable Planchette revision in the pubspecs and lockfiles.
+
+Local validation: core analysis and 58 document/checkout tests pass; Flutter
+analysis and 90 editor, window, localization, syntax, checkout and activity
+tests pass. Light/dark before-and-after captures use real fonts and record
+their provenance in `tasks/planchette-editor/screenshots/README.md`.
+Cross-platform CI and final review results are recorded on the adoption PR.
+
 ## Dotenv syntax highlighting (2026-09-27)
 
 The editor recognizes `.env`, `.env.*` and `*.env`, including local Windows

@@ -3511,6 +3511,30 @@ abstract class AppLocalizations {
   /// **'Save and upload'**
   String get editorSaveAndUploadTooltip;
 
+  /// Tooltip of the shared editor's replace controls toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find and replace'**
+  String get editorShowReplaceTooltip;
+
+  /// Hint of the shared editor's replacement text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace with'**
+  String get editorReplaceHint;
+
+  /// Replace the active literal search match.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get editorReplaceLabel;
+
+  /// Replace all literal search matches in the document.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace all'**
+  String get editorReplaceAllLabel;
+
   /// Hint text of the editor's find query field (06 §2.3).
   ///
   /// In en, this message translates to:

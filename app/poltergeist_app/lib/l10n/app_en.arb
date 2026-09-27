@@ -2923,6 +2923,22 @@
   "@editorSaveAndUploadTooltip": {
     "description": "Tooltip of the editor's save-and-upload action on a managed checkout (06 §2.4)."
   },
+  "editorShowReplaceTooltip": "Find and replace",
+  "@editorShowReplaceTooltip": {
+    "description": "Tooltip of the shared editor's replace controls toggle."
+  },
+  "editorReplaceHint": "Replace with",
+  "@editorReplaceHint": {
+    "description": "Hint of the shared editor's replacement text field."
+  },
+  "editorReplaceLabel": "Replace",
+  "@editorReplaceLabel": {
+    "description": "Replace the active literal search match."
+  },
+  "editorReplaceAllLabel": "Replace all",
+  "@editorReplaceAllLabel": {
+    "description": "Replace all literal search matches in the document."
+  },
   "editorFindHint": "Find in file",
   "@editorFindHint": {
     "description": "Hint text of the editor's find query field (06 §2.3)."

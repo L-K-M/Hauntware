@@ -10,6 +10,11 @@ environment:
   sdk: ^3.12.0
 
 dependencies:
+  planchette_core:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: 5b75f9dc213d2615a3845c942314d810f7acc4b3
+      path: packages/planchette_core
   # D2: git-pinned to Séance, never forked or copied. Tag pin at Séance
   # v0.9.1 — the first release containing the PR-S3 merge (Séance #62:
   # setTimes/setOwner/opt-out transfer hashing, merge 2f99f4e) and PR-S1;

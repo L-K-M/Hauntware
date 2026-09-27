@@ -2219,6 +2219,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editorSaveAndUploadTooltip => 'Save and upload';
 
   @override
+  String get editorShowReplaceTooltip => 'Find and replace';
+
+  @override
+  String get editorReplaceHint => 'Replace with';
+
+  @override
+  String get editorReplaceLabel => 'Replace';
+
+  @override
+  String get editorReplaceAllLabel => 'Replace all';
+
+  @override
   String get editorFindHint => 'Find in file';
 
   @override

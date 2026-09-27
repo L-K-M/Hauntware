@@ -36,6 +36,11 @@ dependencies:
   path_provider: 2.1.6
   # Applies owner-only mode bits to path-bearing local audit files.
   posix: 6.5.2
+  planchette_editor:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: 5b75f9dc213d2615a3845c942314d810f7acc4b3
+      path: packages/planchette_editor
   poltergeist_core:
     path: ../../packages/poltergeist_core
   poltergeist_sync:
