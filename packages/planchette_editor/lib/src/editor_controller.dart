@@ -119,7 +119,9 @@ class EditorController extends ChangeNotifier {
       if (isWord && !inWord) words++;
       inWord = isWord;
     }
-    return (words: words, characters: selected.length);
+    // Characters, not UTF-16 units: one pasted emoji is one character, and
+    // reporting two would be a small lie in the one place a user checks.
+    return (words: words, characters: selected.characters.length);
   }
 
   List<TextRange> get matches => _matches;

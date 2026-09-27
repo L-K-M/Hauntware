@@ -141,6 +141,43 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the status bar counts characters, not code units', (
+    tester,
+  ) async {
+    // An emoji is two UTF-16 units and one character. Reporting "2 selected"
+    // for one pasted emoji is the kind of small lie a status bar should not
+    // tell.
+    final c = editorFor('a 😀 b');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    // 'a 😀 b' is six UTF-16 units and five characters.
+    c.text.selection = const TextSelection(baseOffset: 0, extentOffset: 6);
+    await tester.pump();
+    expect(find.textContaining('5 selected'), findsOneWidget);
+    expect(find.textContaining('6 selected'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a long pattern error does not overflow the bar', (tester) async {
+    final c = editorFor('text');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(width: 360, child: PlanchetteEditor(controller: c)),
+        ),
+      ),
+    );
+    await tester.pump();
+    c.openSearch();
+    c.toggleRegularExpression();
+    // A pattern with a quantifier on a large bound produces a long message.
+    c.search.text = 'a{1,100000}';
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the status bar counts words with a selection', (tester) async {
     final c = editorFor('one two three');
     addTearDown(c.dispose);

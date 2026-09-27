@@ -41,6 +41,16 @@ void main() {
       expect(query.findIn('a TODO here\nTODO: fix'), hasLength(2));
     });
 
+    test('patterns honour the case-sensitivity flag', () {
+      // The case-insensitive form is compiled once and reused, and RegExp
+      // defaults `caseSensitive` to true — so building the twin without saying
+      // so quietly made it another case-sensitive one.
+      final query = FindQuery.pattern('todo');
+      expect(query.findIn('TODO fix'), hasLength(1));
+      expect(query.findIn('TODO fix', caseSensitive: true), isEmpty);
+      expect(query.findIn('todo fix', caseSensitive: true), hasLength(1));
+    });
+
     test('a pattern with no match is not an error', () {
       final query = FindQuery.pattern('zzz');
       expect(query.error, isNull);

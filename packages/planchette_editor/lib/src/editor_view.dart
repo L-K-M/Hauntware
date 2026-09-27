@@ -236,6 +236,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           Row(
             children: [
               Expanded(
+                flex: 3,
                 child: TextField(
                   controller: c.search,
                   focusNode: c.searchFocus,
@@ -269,21 +270,27 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   },
                 ),
               ),
+              // The counter shares the row that can shrink. It was inside the
+              // button row, which a Row lays out with an unbounded main axis,
+              // so a long pattern error pushed the buttons off the edge.
+              if (counter.isNotEmpty)
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      counter,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: error != null ? theme.colorScheme.error : null,
+                      ),
+                    ),
+                  ),
+                ),
               ExcludeFocus(
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (counter.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(
-                          counter,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: error != null
-                                ? theme.colorScheme.error
-                                : null,
-                          ),
-                        ),
-                      ),
                     IconButton(
                       tooltip: strings.regularExpression,
                       visualDensity: VisualDensity.compact,

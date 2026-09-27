@@ -52,7 +52,9 @@ final class FindQuery {
   RegExp? _insensitiveOrNull() {
     final source = _pattern?.pattern;
     if (source == null) return null;
-    return _insensitive ??= RegExp(source, multiLine: true);
+    // Stated rather than left to the default, which is `true`: a twin that
+    // quietly compiled case-sensitively is the same search twice.
+    return _insensitive ??= RegExp(source, caseSensitive: false, multiLine: true);
   }
 
   /// Every occurrence in [text], in order and without overlaps.
