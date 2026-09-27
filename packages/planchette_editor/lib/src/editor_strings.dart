@@ -20,9 +20,11 @@ class EditorStrings {
   String matchCount(int current, int total, {bool capped = false}) =>
       '$current/$total${capped ? '+' : ''}';
 
-  /// What the status bar says about a non-empty selection. Null when the caret
-  /// is collapsed, which is when there is nothing to report.
-  String? selectionCount(int words, int characters) =>
+  /// What the status bar says about a non-empty selection. A collapsed caret
+  /// has nothing to report, and the caller omits this rather than asking for a
+  /// string it will not show — so this never returns null and does not pretend
+  /// to know which case it is in.
+  String selectionCount(int words, int characters) =>
       '$words ${words == 1 ? 'word' : 'words'} · $characters selected';
 
   String documentPosition(int line, int column, int lines, int bytes) =>

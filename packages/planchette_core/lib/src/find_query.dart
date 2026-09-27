@@ -52,9 +52,19 @@ final class FindQuery {
   RegExp? _insensitiveOrNull() {
     final source = _pattern?.pattern;
     if (source == null) return null;
-    // Stated rather than left to the default, which is `true`: a twin that
-    // quietly compiled case-sensitively is the same search twice.
-    return _insensitive ??= RegExp(source, caseSensitive: false, multiLine: true);
+    // The flags come from the pattern the user typed rather than being spelled
+    // out again. Case sensitivity has to be stated — the default is `true`, and
+    // a twin that quietly compiled case-sensitively is the same search twice —
+    // but the rest are inherited, so an inline `(?s)` or `(?u)` in the query
+    // still applies to the insensitive search.
+    final pattern = _pattern!;
+    return _insensitive ??= RegExp(
+      source,
+      caseSensitive: false,
+      multiLine: pattern.isMultiLine,
+      dotAll: pattern.isDotAll,
+      unicode: pattern.isUnicode,
+    );
   }
 
   /// Every occurrence in [text], in order and without overlaps.
