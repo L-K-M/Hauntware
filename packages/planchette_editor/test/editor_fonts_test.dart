@@ -29,6 +29,7 @@ void main() {
     TargetPlatform.windows: 'Cascadia Mono',
     TargetPlatform.linux: 'monospace',
     TargetPlatform.android: 'monospace',
+    TargetPlatform.fuchsia: 'monospace',
   };
 
   testWidgets('the document uses a real monospace family on each platform', (
@@ -56,5 +57,7 @@ void main() {
     expect(style.fontFamily, 'Host Mono');
     expect(style.fontSize, 18);
     expect(style.height, 1.35);
+    // The platform stack remains behind a host family that may be missing.
+    expect(style.fontFamilyFallback, isNotEmpty);
   });
 }

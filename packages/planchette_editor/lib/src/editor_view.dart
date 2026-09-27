@@ -28,7 +28,9 @@ class PlanchetteEditor extends StatefulWidget {
   final EditorStrings strings;
 
   /// Merged over the platform's monospace family ([editorMonospaceFor]), a
-  /// 14 px size and 1.35 line height; set `fontFamily` here to replace it.
+  /// 14 px size and 1.35 line height. A `fontFamily` here is tried first;
+  /// the platform stack stays as its fallback unless `fontFamilyFallback`
+  /// is set too, so a missing host font still lands on a monospace face.
   final TextStyle textStyle;
   final EditorSyntaxTheme? syntaxTheme;
   final bool isActive;

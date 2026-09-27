@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,9 +24,12 @@ void main() {
       .fontSize!;
 
   Future<void> chord(WidgetTester tester, LogicalKeyboardKey key) async {
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    final modifier = defaultTargetPlatform == TargetPlatform.macOS
+        ? LogicalKeyboardKey.metaLeft
+        : LogicalKeyboardKey.controlLeft;
+    await tester.sendKeyDownEvent(modifier);
     await tester.sendKeyEvent(key);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyUpEvent(modifier);
     await tester.pumpAndSettle();
   }
 
@@ -66,6 +70,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
     variant: const TargetPlatformVariant({
+      TargetPlatform.macOS,
       TargetPlatform.linux,
       TargetPlatform.windows,
     }),
