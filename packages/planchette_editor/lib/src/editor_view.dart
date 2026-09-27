@@ -458,27 +458,41 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                       ),
                     },
                   },
-                  child: TextField(
-                    key: const ValueKey('planchette.document'),
-                    controller: c.text,
-                    undoController: c.undoController,
-                    readOnly: _locked,
-                    focusNode: c.editorFocus,
-                    scrollController: c.scroll,
-                    autofocus: widget.isActive,
-                    expands: true,
-                    maxLines: null,
-                    minLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textAlignVertical: TextAlignVertical.top,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    smartDashesType: SmartDashesType.disabled,
-                    smartQuotesType: SmartQuotesType.disabled,
-                    style: _style,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.all(_padding),
+                  child: CallbackShortcuts(
+                    bindings: {
+                      // Bound on the document field alone, so the find and
+                      // replace fields keep normal Tab focus traversal.
+                      if (!_locked) ...{
+                        const SingleActivator(LogicalKeyboardKey.tab):
+                            c.text.indent,
+                        const SingleActivator(
+                          LogicalKeyboardKey.tab,
+                          shift: true,
+                        ): c.text.outdent,
+                      },
+                    },
+                    child: TextField(
+                      key: const ValueKey('planchette.document'),
+                      controller: c.text,
+                      undoController: c.undoController,
+                      readOnly: _locked,
+                      focusNode: c.editorFocus,
+                      scrollController: c.scroll,
+                      autofocus: widget.isActive,
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textAlignVertical: TextAlignVertical.top,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      style: _style,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(_padding),
+                      ),
                     ),
                   ),
                 ),

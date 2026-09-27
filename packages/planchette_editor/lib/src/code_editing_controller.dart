@@ -130,6 +130,103 @@ class CodeEditingController extends TextEditingController {
   List<TextRange> get searchMatches => _matches;
   int get activeMatchIndex => _activeMatchIndex;
 
+  /// How many leading spaces [outdent] lifts on a line that has no tab —
+  /// the common four-space indent. Indent itself always inserts a literal
+  /// tab; a spaces-mode belongs to a future indentation setting.
+  static const int _outdentSpaces = 4;
+
+  /// The document field's Tab: inserts a tab at a collapsed caret, or
+  /// indents every line the selection touches. A selection ending exactly
+  /// at a line start does not pull that trailing line in — the same rule
+  /// VSCode applies. The expanded selection covers the touched lines.
+  void indent() {
+    final selection = this.selection;
+    if (!selection.isValid) return;
+    if (selection.isCollapsed) {
+      final offset = selection.extentOffset.clamp(0, text.length);
+      value = TextEditingValue(
+        text: text.replaceRange(offset, offset, '\t'),
+        selection: TextSelection.collapsed(offset: offset + 1),
+      );
+      return;
+    }
+    final starts = lineStartOffsets(text);
+    final (first, last) = _touchedLines(starts, selection);
+    final buffer = StringBuffer();
+    var cursor = 0;
+    for (var line = first; line <= last; line++) {
+      buffer
+        ..write(text.substring(cursor, starts[line]))
+        ..write('\t');
+      cursor = starts[line];
+    }
+    buffer.write(text.substring(cursor));
+    value = TextEditingValue(
+      text: buffer.toString(),
+      selection: TextSelection(
+        baseOffset: starts[first],
+        extentOffset: _lineEnd(starts, last) + (last - first + 1),
+      ),
+    );
+  }
+
+  /// Shift+Tab in the document: lifts one tab (or up to [_outdentSpaces]
+  /// leading spaces) from every touched line. Lines with no leading
+  /// whitespace are left alone; a caret line with none is a no-op, so the
+  /// undo stack is not polluted by dead presses.
+  void outdent() {
+    final selection = this.selection;
+    if (!selection.isValid) return;
+    final starts = lineStartOffsets(text);
+    final (first, last) = _touchedLines(starts, selection);
+    final buffer = StringBuffer();
+    var cursor = 0;
+    var removed = 0;
+    for (var line = first; line <= last; line++) {
+      buffer.write(text.substring(cursor, starts[line]));
+      cursor = starts[line];
+      if (cursor < text.length && text.codeUnitAt(cursor) == 0x09) {
+        cursor++;
+        removed++;
+      } else {
+        var spaces = 0;
+        while (spaces < _outdentSpaces &&
+            cursor + spaces < text.length &&
+            text.codeUnitAt(cursor + spaces) == 0x20) {
+          spaces++;
+        }
+        cursor += spaces;
+        removed += spaces;
+      }
+    }
+    buffer.write(text.substring(cursor));
+    if (removed == 0) return;
+    value = TextEditingValue(
+      text: buffer.toString(),
+      selection: TextSelection(
+        baseOffset: starts[first],
+        extentOffset: _lineEnd(starts, last) - removed,
+      ),
+    );
+  }
+
+  /// First and last line indices the selection overlaps. `end - 1` keeps a
+  /// selection that stops at a line boundary out of that trailing line.
+  (int, int) _touchedLines(List<int> starts, TextSelection selection) {
+    final lastOffset = selection.end > selection.start
+        ? selection.end - 1
+        : selection.end;
+    var first = 0, last = 0;
+    for (var i = 0; i < starts.length; i++) {
+      if (starts[i] <= selection.start) first = i;
+      if (starts[i] <= lastOffset) last = i;
+    }
+    return (first, last);
+  }
+
+  int _lineEnd(List<int> starts, int line) =>
+      line + 1 < starts.length ? starts[line + 1] : text.length;
+
   void setSearchMatches(List<TextRange> matches, int activeIndex) {
     if (identical(_matches, matches) && _activeMatchIndex == activeIndex) {
       return;
