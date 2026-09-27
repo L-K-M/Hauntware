@@ -117,6 +117,14 @@ void main() {
   });
   tearDown(() => workspace.dispose());
 
+  /// Opens the seeded one.txt fixture and returns its tab, saving each save
+  /// test from repeating the same three lines.
+  Future<DocumentTab> openOne() async {
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    await workspace.open(testPath('one.txt'));
+    return workspace.active!;
+  }
+
   test('new documents retain independent text and find state', () {
     final first = workspace.newDocument()!;
     first.editor.text.text = 'first';
@@ -171,6 +179,45 @@ void main() {
       await workspace.open(testPath('missing.txt'));
       expect(workspace.documents, [original]);
       expect(workspace.error, contains('Missing file'));
+    },
+  );
+
+  test(
+    'Save As during an in-flight save still writes the chosen path',
+    () async {
+      final tab = await openOne();
+      tab.editor.text.text = 'edited';
+      store.writeGate = Completer<void>();
+      final first = workspace.save(tab);
+      await pumpEventQueue();
+      dialogs.savePath = testPath('copy.txt');
+      final second = workspace.save(tab, saveAs: true);
+      store.writeGate!.complete();
+      expect(await first, isTrue);
+      expect(await second, isTrue);
+      expect(store.writes.map((write) => write.path), [
+        testPath('one.txt'),
+        testPath('copy.txt'),
+      ]);
+      expect(tab.path, testPath('copy.txt'));
+    },
+  );
+
+  test(
+    'a second save during an in-flight save writes the newer text',
+    () async {
+      final tab = await openOne();
+      tab.editor.text.text = 'first';
+      store.writeGate = Completer<void>();
+      final first = workspace.save(tab);
+      await pumpEventQueue();
+      tab.editor.text.text = 'second';
+      final second = workspace.save(tab);
+      store.writeGate!.complete();
+      expect(await first, isTrue);
+      expect(await second, isTrue);
+      expect(store.writes.map((write) => write.text), ['first', 'second']);
+      expect(tab.editor.isDirty, isFalse);
     },
   );
 
