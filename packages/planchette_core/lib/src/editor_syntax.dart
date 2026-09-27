@@ -79,6 +79,11 @@ class SyntaxLanguage {
   /// shell and SQL single quotes: `'C:\'` closes at its second quote.
   final List<String> rawQuotes;
 
+  /// Prefixes that open a raw string: the prefix, any number of `#`, then
+  /// `"`. It closes at `"` and the same number of `#`, with no escapes, and
+  /// may span lines, as Rust's `r"…"`, `r#"…"#` and `br"…"` do.
+  final List<String> rawStringPrefixes;
+
   /// Whether `'` opens a one-character literal rather than a string, as in
   /// Rust and Go. A `'` that does not close as a character (a Rust lifetime
   /// or label such as `'a` or `'static`) highlights its name as meta.
@@ -109,6 +114,7 @@ class SyntaxLanguage {
     this.multilineStringPairs = const [],
     this.strings = const [],
     this.rawQuotes = const [],
+    this.rawStringPrefixes = const [],
     this.charLiterals = false,
     this.quotedKeys = false,
     this.metaPattern,
@@ -573,8 +579,14 @@ class SyntaxLanguages {
       ['/*', '*/'],
     ],
     strings: const ["'", '"'],
-    // Preprocessor directives (C, C++, C#, Swift's #if).
-    metaPattern: RegExp(r'^[ \t]*#[ \t]*[A-Za-z]+', multiLine: true),
+    // Preprocessor directives (C, C++, C#, Swift's #if). Named, so that a
+    // PHP `# comment` at the start of a line is not mistaken for one.
+    metaPattern: RegExp(
+      r'^[ \t]*#[ \t]*(?:if|ifdef|ifndef|elif|elifdef|elifndef|else|endif|'
+      r'define|undef|include|import|embed|pragma|line|error|warning|region|'
+      r'endregion)\b',
+      multiLine: true,
+    ),
   );
 
   static final rust = SyntaxLanguage(
@@ -624,8 +636,11 @@ class SyntaxLanguages {
       ['/*', '*/'],
     ],
     strings: const ["'", '"'],
+    rawStringPrefixes: const ['r', 'br'],
     charLiterals: true,
-    // Attributes: #[derive(Debug)] and #![allow(...)].
+    // Attributes: #[derive(Debug)] and #![allow(...)]. An attribute holding a
+    // string literal (#[cfg(feature = "x")]) keeps only the string's color:
+    // meta matches that overlap scanner tokens are dropped when merging.
     metaPattern: RegExp(r'#!?\[[^\]\n]*\]'),
   );
 
@@ -1115,6 +1130,15 @@ List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
       }
     }
 
+    for (final prefix in language.rawStringPrefixes) {
+      final end = _rawStringEnd(text, i, prefix);
+      if (end != null) {
+        tokens.add(SyntaxToken(i, end, SyntaxTokenType.string));
+        i = end;
+        continue outer;
+      }
+    }
+
     for (final quote in language.strings) {
       if (text.startsWith(quote, i)) {
         if (language.charLiterals && quote == "'") {
@@ -1235,6 +1259,22 @@ int? _charLiteralEnd(String text, int start) {
     i += c >= 0xd800 && c <= 0xdbff ? 2 : 1;
   }
   return i < n && text.codeUnitAt(i) == 0x27 ? i + 1 : null;
+}
+
+/// The end of a raw string opening at [start] with [prefix], or null when
+/// none opens there (for example the raw identifier `r#type`).
+int? _rawStringEnd(String text, int start, String prefix) {
+  if (!text.startsWith(prefix, start)) return null;
+  var i = start + prefix.length;
+  var hashes = 0;
+  while (i < text.length && text.codeUnitAt(i) == 0x23 /* # */ ) {
+    hashes++;
+    i++;
+  }
+  if (i >= text.length || text.codeUnitAt(i) != 0x22 /* " */ ) return null;
+  final closer = '"${'#' * hashes}';
+  final close = text.indexOf(closer, i + 1);
+  return close < 0 ? text.length : close + closer.length;
 }
 
 bool _colonFollows(String text, int from) {

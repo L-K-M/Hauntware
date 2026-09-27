@@ -431,6 +431,29 @@ void main() {
       );
     });
 
+    test('Rust raw strings take no escapes; raw identifiers are not strings', () {
+      const text =
+          r'let a = r"C:\"; let b = r#"x"\y"#; let c = br"\d"; let r#type = 1;';
+      expect(slices(text, SyntaxLanguages.rust, SyntaxTokenType.string), [
+        r'r"C:\"',
+        r'r#"x"\y"#',
+        r'br"\d"',
+      ]);
+      expect(
+        slices(text, SyntaxLanguages.rust, SyntaxTokenType.keyword),
+        contains('let'),
+      );
+    });
+
+    test('Rust attributes holding a string keep only the string colored', () {
+      // A known limit of the meta merge: overlapping matches are dropped.
+      const text = '#[cfg(feature = "serde")]\nfn f() {}';
+      expect(slices(text, SyntaxLanguages.rust, SyntaxTokenType.meta), isEmpty);
+      expect(slices(text, SyntaxLanguages.rust, SyntaxTokenType.string), [
+        '"serde"',
+      ]);
+    });
+
     test('Go raw strings span lines and take no escapes', () {
       const text = 'p := `C:\\dir\\`\nq := "a\\"b"';
       expect(slices(text, SyntaxLanguages.go, SyntaxTokenType.string), [
@@ -477,6 +500,14 @@ void main() {
           SyntaxTokenType.meta,
         ),
         ['#include', '  #  define'],
+      );
+      expect(
+        slices(
+          '<?php\n# TODO tidy this\n#pragma once\n',
+          SyntaxLanguages.cFamily,
+          SyntaxTokenType.meta,
+        ),
+        ['#pragma'],
       );
       expect(
         slices(
