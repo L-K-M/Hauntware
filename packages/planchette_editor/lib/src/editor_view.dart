@@ -577,7 +577,10 @@ class _RenderDocumentDecorations extends RenderProxyBox {
     final pending = <RenderObject>[?child];
     while (pending.isNotEmpty) {
       final node = pending.removeLast();
-      if (node is RenderEditable) return node.hasSize ? node : null;
+      if (node is RenderEditable) {
+        if (node.hasSize) return node;
+        continue;
+      }
       node.visitChildren(pending.add);
     }
     return null;
