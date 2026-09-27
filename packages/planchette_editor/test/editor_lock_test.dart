@@ -85,4 +85,36 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     expect(second.editingLocked, isFalse);
   });
+
+  testWidgets('a view remounted elsewhere in the same frame keeps its lock', (
+    tester,
+  ) async {
+    final c = controller();
+    Widget place({required bool left}) => MaterialApp(
+      home: Scaffold(
+        body: Row(
+          children: [
+            // Different parents, so the old view is disposed and a new one
+            // mounted in the same frame.
+            if (left)
+              Expanded(
+                child: PlanchetteEditor(controller: c, editingLocked: true),
+              ),
+            if (!left)
+              Expanded(
+                child: SizedBox.expand(
+                  child: PlanchetteEditor(controller: c, editingLocked: true),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(place(left: true));
+    await tester.pumpWidget(place(left: false));
+
+    expect(c.editingLocked, isTrue);
+    expect(c.canSave, isFalse);
+  });
 }

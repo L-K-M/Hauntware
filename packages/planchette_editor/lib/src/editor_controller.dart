@@ -61,7 +61,7 @@ class EditorController extends ChangeNotifier {
   bool _saving = false;
   bool _disposed = false;
   bool _editingLocked = false;
-  bool _viewLocked = false;
+  final Set<Object> _viewLocks = {};
   bool _searchOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
@@ -106,7 +106,7 @@ class EditorController extends ChangeNotifier {
   /// through its `editingLocked` parameter. Either lock holds on its own, and
   /// each owner clears only its own, so rebuilding the view with its default
   /// `false` never unlocks a document the host locked.
-  bool get editingLocked => _editingLocked || _viewLocked;
+  bool get editingLocked => _editingLocked || _viewLocks.isNotEmpty;
   set editingLocked(bool value) => setEditingLocked(value);
 
   /// The host's lock. [notify] is false only for hosts that update several
@@ -117,9 +117,13 @@ class EditorController extends ChangeNotifier {
     if (notify) _notify();
   }
 
-  /// The mounted view's lock, applied during its build, so it does not
-  /// notify. Hosts use [setEditingLocked] instead.
-  void setViewEditingLocked(bool value) => _viewLocked = value;
+  /// A mounted view's lock, applied during its build, so it does not
+  /// notify. Each view passes itself as [view] and clears only its own
+  /// lock: when a host remounts the editor elsewhere in the same frame, the
+  /// old view is disposed after the new one has locked. Hosts use
+  /// [setEditingLocked] instead.
+  void setViewEditingLocked(Object view, bool value) =>
+      value ? _viewLocks.add(view) : _viewLocks.remove(view);
 
   List<int> get lineStarts {
     _updateMetrics();
