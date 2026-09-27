@@ -65,9 +65,11 @@ LineTops measureLineTops({
   required double viewportHeight,
   int minimumLines = 0,
 }) {
-  final lineHeight = scaler.scale(style.fontSize ?? 14) * (style.height ?? 1);
+  // The style's arithmetic sizes the prefix. The row height the paragraph
+  // really uses can differ from it — see below — so this is a starting guess.
+  final styleHeight = scaler.scale(style.fontSize ?? 14) * (style.height ?? 1);
   final wanted = _clamp(
-    visibleLineCount(viewportHeight, lineHeight) + _lineTopsLookaheadLines,
+    visibleLineCount(viewportHeight, styleHeight) + _lineTopsLookaheadLines,
     minimumLines,
     lineStarts.length,
   );
@@ -93,11 +95,22 @@ LineTops measureLineTops({
       painter.getOffsetForCaret(TextPosition(offset: offset), Rect.zero).dy,
     );
   }
-  // The measured prefix may wrap, so the tail continues from its real height
-  // rather than from a line count times the row height. An empty measurement is
-  // the one case where that is wrong: a laid-out empty string still reports one
-  // row, and line 0 belongs at the top.
-  final tailBase = tops.isEmpty ? 0.0 : painter.height;
+  // The row height the paragraph is really using, which is not always
+  // `fontSize * height`: the framework's default text height behaviour lets the
+  // font's own ascent and descent win. Modelling the tail with the style's
+  // arithmetic would drift by the difference on every row.
+  final lineHeight = painter.preferredLineHeight;
+  // Where the first modelled line begins: the row the prefix ends on. It is
+  // *not* the prefix's total height, which also counts the row the caret is
+  // already on — starting the tail below that would put every line after the
+  // prefix a full row too low. An empty measurement is the one case where even
+  // this is wrong, because a laid-out empty string still reports one row and
+  // line 0 belongs at the top.
+  final tailBase = tops.isEmpty
+      ? 0.0
+      : painter
+            .getOffsetForCaret(TextPosition(offset: characters), Rect.zero)
+            .dy;
   painter.dispose();
 
   final tailStart = tops.length;

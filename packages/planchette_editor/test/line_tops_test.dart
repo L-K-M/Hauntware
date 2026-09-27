@@ -136,6 +136,54 @@ void main() {
     );
   });
 
+  test('the modelled tail keeps the same offset as the measured lines', () {
+    // The measured prefix and the modelled tail have to meet exactly. Two ways
+    // to get this wrong, both of which were: starting the tail one row too low,
+    // because the prefix's total height also counts the row the caret is on;
+    // and modelling the rows with `fontSize * height` when the paragraph is
+    // really using the font's own ascent and descent, which drifts on every
+    // row. The property that catches both is that every line, measured or
+    // modelled, sits at the same offset from a whole multiple of the row height.
+    final text = lines(4000);
+    final starts = lineStartOffsets(text);
+    final tops = measureLineTops(
+      text: text,
+      lineStarts: starts,
+      style: _style,
+      scaler: _scaler,
+      width: 900,
+      viewportHeight: 400,
+    );
+    double offsetOf(int line) => tops.topOf(line) - line * tops.lineHeight;
+
+    final measured = offsetOf(0);
+    for (final line in [
+      1,
+      tops.exactLines - 1,
+      tops.exactLines,
+      tops.exactLines + 1,
+      starts.length - 1,
+    ]) {
+      // Half a pixel: anything tighter measures Skia's own sub-pixel rounding
+      // at the paragraph's first baseline rather than anything decided here.
+      expect(offsetOf(line), closeTo(measured, 0.5), reason: 'line $line');
+    }
+  });
+
+  test('a document measured end to end lines up completely', () {
+    final text = 'a\nb\nc\n';
+    final tops = measureLineTops(
+      text: text,
+      lineStarts: lineStartOffsets(text),
+      style: _style,
+      scaler: _scaler,
+      width: 900,
+      viewportHeight: 800,
+    );
+    expect(tops.tops, referenceTops(text, lineStartOffsets(text)));
+    expect(tops.topOf(3), closeTo(3 * tops.lineHeight, 0.01));
+  });
+
   test('offsets stay ascending across the measured and modelled boundary', () {
     final text = lines(40000, length: 400);
     final starts = lineStartOffsets(text);
@@ -191,7 +239,17 @@ void main() {
       width: 900,
       viewportHeight: 800,
     );
-    expect(tops.lineHeight, _lineHeight(scaler: scaled));
+    // The row height is the one the paragraph is really using, which the text
+    // scale does scale and which is not `fontSize * height`.
+    final unscaled = measureLineTops(
+      text: text,
+      lineStarts: lineStartOffsets(text),
+      style: _style,
+      scaler: _scaler,
+      width: 900,
+      viewportHeight: 800,
+    );
+    expect(tops.lineHeight, closeTo(unscaled.lineHeight * 2, 0.5));
     expect(
       tops.tops,
       referenceTops(text, lineStartOffsets(text), scaler: scaled),
