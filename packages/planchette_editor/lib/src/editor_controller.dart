@@ -288,9 +288,11 @@ class EditorController extends ChangeNotifier {
         prefill = selected;
       }
     }
+    // Prefill before opening: the query listener early-returns while
+    // closed, so the document is scanned exactly once below.
+    if (prefill != null) search.text = prefill;
     _searchOpen = true;
     _replaceOpen = replace || _replaceOpen;
-    if (prefill != null) search.text = prefill;
     _updateMatches(resetActive: true);
     search.selection = TextSelection(
       baseOffset: 0,

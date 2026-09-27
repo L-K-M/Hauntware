@@ -147,6 +147,25 @@ void main() {
       expect(editor.isDirty, isTrue);
     },
   );
+  test('opening search with a selection queries matches once', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'cat dog cat',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 3,
+    );
+    var notifications = 0;
+    editor.addListener(() => notifications++);
+    editor.openSearch();
+    // The prefill assignment must not fire a first whole-document scan on
+    // top of the explicit match update — one notification, two matches.
+    expect(notifications, 1);
+    expect(editor.search.text, 'cat');
+    expect(editor.matches.length, 2);
+  });
   test('replacement respects case mode and preserves search navigation', () {
     final editor = EditorController(
       displayPath: 'test',
