@@ -679,10 +679,15 @@ class _DocumentShellState extends State<_DocumentShell> {
                               controller: tab.editor,
                               isActive: tab == active,
                               editingLocked: workspace.interactionLocked,
-                              // The editor default already supplies the
-                              // monospace face and line height; zoom drives
-                              // only the size.
-                              textStyle: TextStyle(fontSize: _fontSize),
+                              // The editor replaces (not merges) its default
+                              // text style with this one, so the face and
+                              // line height must be spelled out; only the
+                              // size is zoom-driven.
+                              textStyle: TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: _fontSize,
+                                height: 1.35,
+                              ),
                             ),
                         ],
                       ),

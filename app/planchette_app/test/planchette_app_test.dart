@@ -248,15 +248,28 @@ void main() {
           .widget<PlanchetteEditor>(editors().first)
           .textStyle
           .fontSize!;
+      TextStyle rendered() => tester
+          .widget<EditableText>(
+            find.descendant(
+              of: editors().first,
+              matching: find.byType(EditableText),
+            ),
+          )
+          .style;
 
       expect(size(), 14);
       await zoomIn();
       expect(size(), 15);
+      // The editor merges the zoom size into its own monospace default.
+      expect(rendered().fontFamily, 'monospace');
+      expect(rendered().height, 1.35);
+      expect(rendered().fontSize, 15);
       await zoomOut();
       await zoomOut();
       expect(size(), 13);
-      // Numpad +/- bindings ship too, but flutter_test cannot synthesize
-      // numpad key events, so they stay untested here.
+      // Numpad +/- bindings ship too, but stay untested: synthesizing them
+      // throws in flutter_test (numpad keys have no linux keyCode mapping;
+      // event_simulation asserts 'not found in linux keyCode map').
 
       // A second tab opens at the current zoom and tracks later changes.
       workspace.newDocument();
@@ -279,6 +292,8 @@ void main() {
       }
       expect(size(), 32);
 
+      // Reset goes through the app menu bar, which macOS replaces with
+      // native menus that widget tests cannot tap.
       if (!mac) {
         for (var i = 0; i < 17; i++) {
           await zoomOut();
