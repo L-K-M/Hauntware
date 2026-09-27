@@ -171,6 +171,16 @@ changes and are not proof each PR works alone against main.
 | [#43](https://github.com/L-K-M/Planchette/pull/43) `feat/shell-chrome` | **~130 px of chrome before the first character, in rows that repeated each other** (**confirmed**). The dirty marker was a `'● '` prefixed onto the tab's *label string*, so every tab changed width the moment it was edited and again when saved; the error banner was a row spliced into the column, so a failed save moved the document; tabs were basename-only, so ten `index.js` files looked identical; the strip never scrolled the active tab into view; nothing handled a dropped file. One strip, a fixed-width dirty slot, the directory beside the tabs, the error as an overlay, active-tab reveal on every selection change, and a drop target. Reports work toward A4 (native drop verification remains), the stable dirty slot, and V6's placement |
 | [#44](https://github.com/L-K-M/Planchette/pull/44) `feat/find-query` | **The find bar matched plain text and nothing else**, and a mistyped pattern was indistinguishable from no match. Adds a `.*` toggle, `planchette_core.FindQuery` with compile-once, a visible pattern error, zero-width-match handling, field chrome, and a selection word/character count in the status bar. Covers the regex half of E5, the field part of V4, and the selection-summary half of E10b. Core 94, editor 41, app 40 |
 
+Opened after the consolidation by the session that opened #14–#41. Each
+passed local analysis and all three test suites before it was pushed; CI
+and review status live on the PRs.
+
+| PR | Addresses |
+|---|---|
+| [#47](https://github.com/L-K-M/Planchette/pull/47) `claude/kind-mendel-urd9v5-lines` | E2: Duplicate Line (Cmd/Ctrl+Shift+D), Move Line Up/Down (Option/Alt+↑/↓), Delete Line (Cmd/Ctrl+Shift+K) and Join Lines (Cmd/Ctrl+J), on the keyboard and in the Edit menu. Pure core transforms return a `LineEdit` (text, base, extent); a selection ending at a line start does not touch that line, and backward selections stay backward. Keys are bound around the document field only; a locked document or an IME composition leaves them to the field; a command at the edge consumes its key. **A programmatic edit does not scroll the field**, so a line moved past the bottom vanished (**confirmed**: the regression failed first); the controller bumps `caretRevealRequest` and the view calls `EditableTextState.bringIntoView`. Core 109, editor 34, app 40 + 2 skipped |
+| [#49](https://github.com/L-K-M/Planchette/pull/49) `claude/kind-mendel-urd9v5-readonly` | B3 (**confirmed**: a core test shows a `chmod a-w` file replaced by a save). `isTextDocumentWriteProtected` reads the write bits, which Dart also reports for the Windows read-only attribute; Windows CI sets it with `attrib +r`. A plain save of such a file asks Save As… (default) / Save Anyway / Cancel; Save Anyway is remembered for that tab and path, an explicit Save As does not ask, and close-to-save asks too. Core 111, app 46 + 2 skipped |
+| [#50](https://github.com/L-K-M/Planchette/pull/50) `claude/kind-mendel-urd9v5-palette` | A6: Cmd/Ctrl+Shift+P and Window › Command Palette… list every enabled menu command with its menu and platform-styled shortcut. Best-alignment fuzzy match (word starts and runs score, gaps cost), shorter label then menu order on ties, matched letters in bold, Up/Down wrap, Enter or click runs after the palette closes, Escape closes. Reads the same `_ShellMenu`/`_Command` model as both menu bars. App 50 + 2 skipped |
+
 **Overlaps between PRs.** Findings were repeated across parallel review passes — and are addressed by more than one open
 PR. Merge coordination should retain the intended behaviors and acceptance
 tests, not blindly combine competing implementations:
@@ -186,6 +196,10 @@ tests, not blindly combine competing implementations:
 | Untitled names | #21/#35 | Preserve separate counter semantics and decide name reuse. Empty-tab reuse remains B23. |
 | Search/status | #10/#33/#36/#44 | Keep #10’s keyboard/IME/responsive guarantees, #33’s clickable position/display names, #36’s surfaces/alignment and #44’s regex errors/selection counts. |
 | Error presentation | #21/#26/#36/#43 | Preserve core missing-path errors, disk-change mapping and user-facing copy; #43 reports an overlay preventing document movement. Placement must not obscure input or silence accessibility. |
+| Line edits | #14/#21/#23/#47 | #47's `LineEdit`, #14's `IndentEdit` and #21's `TextEdit` are one shape (new text plus selection); keep a single type. #23 and #47 both add Edit-menu items and document key bindings; keep both sets. |
+| Caret reveal | #33/#47 | Both add `caretRevealRequest`. #33 puts a Go to Line target a third of the way down; #47 scrolls a line command's caret minimally with `bringIntoView`. Keep one counter and both placements (FU2). |
+| Store/dialog interfaces | #26/#49 | Both extend `DocumentStore` (#26 `stamp`, #49 `isWriteProtected`) and `DocumentDialogs` (#26 `confirmRevert`, #49 `chooseReadOnlySave`). Keep all members. |
+| Menus and palette | #30/#36/#43/#50 | #50 lists whatever `_menus()` returns and adds one Window item. Move it to View once #30 lands, and keep it reading the same model after #36/#43 rewrite the shell. |
 | Tab context actions | #35/#42 | #42 reports middle-click and Close/Close Others/Close All, with Cancel stopping consent traversal. Retain remaining FU5 actions. |
 
 **Inherited merge-order notes.** Earlier sources report branches based on `d53f416`; the latest source
@@ -257,6 +271,10 @@ reverting from 2-space to 4-space text updates `indentation`.
 backed by the decorations geometry, and call it from both
 `_revealMatch` and `_revealCaret`. **Done when** both keep their tests
 green and neither lays out text itself.
+#47 adds the same `caretRevealRequest` for line commands but scrolls
+minimally through `EditableTextState.bringIntoView`, which suits a caret
+stepping past the edge; give the helper a placement (minimal, or a third
+down for jumps).
 
 ### FU3. Cache the highlighted span (after #14) — M
 Caret moves still rebuild every span. `EditableText` rebuilds on each
@@ -426,12 +444,13 @@ Check the merged #31 behavior before another change. **Plan:** use an explicit
 per-language continuation policy, and never let an escape consume `\n` when
 continuation is disallowed. Keep shell/C continuation behavior covered.
 
-### B3. Saving a read-only file overwrites it silently — S (read)
-Replacement renames a sibling into place and restores the old mode bits,
-so a `0444` file in a writable directory saves without warning.
-**Plan:** inspect POSIX write-permission bits (octal 0222) or the read-only attribute
-(Windows) at load time. Show a read-only marker in the tab and status bar,
-and ask before saving ("Save anyway" / "Save As…").
+### B3. Read-only files — save prompt assigned to #49
+#49 asks before a save replaces a file marked read-only. **Still open:** a
+read-only marker in the tab and status bar at load time, so the user learns
+before editing rather than at save. Reuse `isTextDocumentWriteProtected`
+from #49, store the answer on `DocumentTab` at load and on focus (#26's
+`checkDisk` is the natural place), and test that the marker clears after
+`chmod u+w` and a focus change.
 
 ### B4. Startup window jump on Linux and Windows — S (read)
 The Windows runner creates a 1280×720 window at (10,10) and shows it on
@@ -788,13 +807,9 @@ languages without either comment form need explicit behavior. For mixed
 commented/uncommented lines, define minimum-indent insertion consistently.
 Keep transforms in core and reuse the reconciled edit type from E2.
 
-### E2. Line operations — S each
-Duplicate line or selection (Cmd/Ctrl+Shift+D), move line up/down
-(Alt+↑/↓), delete line (Cmd/Ctrl+Shift+K), join lines (Cmd/Ctrl+J).
-Write pure core transforms returning text and selection. The older inherited
-#14 plan names `IndentEdit`; the newer #21 record reports `TextEdit` with
-`text`, `start` and `end`, returned by `insertIndent`/`removeIndent`. Reconcile
-the two PRs and reuse the resulting shared type rather than inventing another.
+### E2. Line operations — assigned to #47
+**Still open:** one shared edit type once #14, #21 and #47 settle (see
+Overlaps), and multi-caret versions of each command after B7.
 
 ### E3. Auto-close brackets and quotes — partly assigned to #34
 **Inherited #34 report:** `( [ { " ' \`` insert their closer with the caret between;
@@ -825,6 +840,16 @@ do not widen controller state without a consumer and compatibility review.
 When the caret touches a bracket, find its partner (skipping strings and
 comments via tokens) and paint both backgrounds. The decorations render
 object from #22 can paint them.
+**Do not paint through span backgrounds.** Splitting the two brackets into
+their own spans changes the span tree on caret moves, and
+`TextSpan.compareTo` then reports a layout change, so every caret move next
+to a bracket would re-lay out the whole paragraph (#28 measured layout as
+the dominant cost). A paint-only overlay keeps caret moves cheap.
+**Matcher:** a pure core function over the tokens `CodeEditingController`
+already memoizes per text instance (expose them read-only). Skip only
+string and comment tokens (Rust `#[...]` meta tokens hold real brackets),
+count depth per bracket type, and prefer the bracket before the caret, then
+the one after, so the partner of a just-typed closer shows.
 
 ### E5. Search options — regular expressions assigned to #44
 **Inherited #44 report:** a `.*` toggle beside the existing `Aa` button, a
@@ -987,13 +1012,10 @@ opens, and Esc returns to the editor.
 Offer an open-tabs mode with distinguishing path suffixes and dirty state;
 reuse identity resolution and keep this distinct from A6's command list.
 
-### A6. Command palette (Cmd/Ctrl+Shift+P) — S–M
-The shell already models menus as `_ShellMenu` / `_Command`. List every
-enabled command with its shortcut, filter by fuzzy match, and run it on
-Enter.
-Use the same command registry for menus, shortcuts and palette so enabled
-states agree. Test ranking, keyboard navigation, empty results, modal/editing
-locks and focus restoration. No plugin framework is required.
+### A6. Command palette — assigned to #50
+**Still open:** recently used commands first; commands that take an
+argument (typing `:42` for Go to Line after #33, or a file name for A5's
+Quick Open in the same field with a prefix).
 
 ### A7. Save All and Reopen Closed Tab — S each
 #42 reports Close Others/Close All with per-tab consent and Cancel stopping
@@ -1261,9 +1283,14 @@ accessible contrast; avoid another independent rewrite.
   text to open it.
 - **Q11. Quote and bracket teleport.** Jump to a matching bracket or the
   other endpoint of a string literal. The inherited shortcut proposal is
-  Cmd/Ctrl+B plus a modifier variant; check existing bindings first. Reuse
+  Cmd/Ctrl+B plus a modifier variant; check existing bindings first (on
+  macOS use Cmd, since Ctrl+B is the Cocoa move-back binding). Reuse
   E4's tokenizer-aware matcher and partner decoration rather than building
-  a second matching engine.
+  a second matching engine. Build on #47: its `caretRevealRequest` and
+  document-only key layer are what a caret jump needs. Keep the jump
+  symmetric (from after a bracket to after its partner, from before to
+  before) so pressing twice returns; with no bracket at the caret, go to
+  the innermost enclosing closer; Shift extends the selection.
 - **Q12. Peek the caret's line.** An optional dimmed status row shows the
   logical line, truncated in the middle, and a selection's column span.
   Keep it to one line and hide it in narrow windows; coordinate E10b/FU13.
