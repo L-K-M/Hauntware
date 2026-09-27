@@ -44,6 +44,12 @@ void main() {
     tab.busy = false;
     workspace.clearError();
     await tester.pump();
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Keep Mine'))
+          .onPressed,
+      isNotNull,
+    );
 
     await tester.tap(find.text('Reload'));
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));

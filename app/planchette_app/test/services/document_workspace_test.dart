@@ -489,6 +489,22 @@ void main() {
     expect(replacement.path, isNull);
   });
 
+  test('the local store stamps regular files only', () async {
+    final directory = await Directory.systemTemp.createTemp('planchette-');
+    addTearDown(() => directory.delete(recursive: true));
+    final store = LocalDocumentStore();
+    final path = paths.join(directory.path, 'notes.txt');
+    expect(await store.stamp(path), isNull);
+
+    await File(path).writeAsString('text');
+    expect(await store.stamp(path), isNotNull);
+
+    // A directory in the file's place reads as missing, not unchanged.
+    await File(path).delete();
+    await Directory(path).create();
+    expect(await store.stamp(path), isNull);
+  });
+
   test(
     'case-variant Save As retains the original external-change baseline',
     () async {

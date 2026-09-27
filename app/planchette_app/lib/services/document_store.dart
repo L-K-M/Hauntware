@@ -13,7 +13,8 @@ typedef FileStamp = ({DateTime modified, int size});
 abstract interface class DocumentStore {
   Future<TextDocument> load(String path);
 
-  /// Null when nothing exists at [path].
+  /// Null when no regular file exists at [path], as when a directory has
+  /// taken its place.
   Future<FileStamp?> stamp(String path);
   Future<String> canonicalSavePath(String path);
   Future<String?> existingDigest(String path);
@@ -33,7 +34,7 @@ final class LocalDocumentStore implements DocumentStore {
   @override
   Future<FileStamp?> stamp(String path) async {
     final stat = await FileStat.stat(path);
-    if (stat.type == FileSystemEntityType.notFound) return null;
+    if (stat.type != FileSystemEntityType.file) return null;
     return (modified: stat.modified, size: stat.size);
   }
 
