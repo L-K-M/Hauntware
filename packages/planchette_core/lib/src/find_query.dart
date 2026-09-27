@@ -52,11 +52,14 @@ final class FindQuery {
   RegExp? _insensitiveOrNull() {
     final source = _pattern?.pattern;
     if (source == null) return null;
-    // The flags come from the pattern the user typed rather than being spelled
-    // out again. Case sensitivity has to be stated — the default is `true`, and
-    // a twin that quietly compiled case-sensitively is the same search twice —
-    // but the rest are inherited, so an inline `(?s)` or `(?u)` in the query
-    // still applies to the insensitive search.
+    // The flags come from the pattern beside it rather than being spelled out
+    // again, so the two cannot drift apart. Case sensitivity has to be stated:
+    // the default is `true`, and a twin that quietly compiled case-sensitively
+    // is the same search twice.
+    //
+    // Dart's RegExp has no inline flags — a typed `(?s)` is a syntax error,
+    // reported through `error` — so the constructor options on `_pattern` are
+    // all there is to inherit. `multiLine` is currently the only one set.
     final pattern = _pattern!;
     return _insensitive ??= RegExp(
       source,
