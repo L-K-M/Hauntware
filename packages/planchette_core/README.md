@@ -20,6 +20,11 @@ symlink. A failed save never authorizes advancing the caller's document
 identity, saved text, or baseline. Both return the digest of committed bytes.
 Hosts supply `.poltergeist` or `.seance` as `temporaryPrefix` so their recovery
 and cleanup rules continue recognizing temporary and backup siblings.
+Recovery names keep the original basename when it fits. Long basenames are
+shortened at a Unicode character boundary so the name, host prefix, UUID,
+and suffix fit within 255 UTF-8 bytes. Recovery code must use the host prefix
+and suffix rather than require the full original basename; rollback errors
+identify the exact retained backup.
 
 POSIX temporary content is owner-only before writing. Replacements retain
 the original permission bits. The replacement protocol has a brief missing
