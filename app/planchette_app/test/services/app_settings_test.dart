@@ -283,9 +283,18 @@ void main() {
     });
 
     test('an unwritable destination reports rather than throws', () async {
-      final store = LocalSettingsStore(
-        File('/definitely/not/a/directory/settings.json'),
+      // The parent is a regular file, so the path cannot be created on any
+      // platform. An absolute path under the drive root is not enough: on a
+      // Windows runner `/definitely/...` resolves to the current drive and the
+      // write simply succeeds, which is what the Windows job saw.
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-settings-unwritable-',
       );
+      addTearDown(() => directory.delete(recursive: true));
+      final blocker = File('${directory.path}/blocker');
+      await blocker.writeAsString('not a directory');
+
+      final store = LocalSettingsStore(File('${blocker.path}/settings.json'));
       await expectLater(
         store.save(const AppSettings()),
         throwsA(isA<FileSystemException>()),
