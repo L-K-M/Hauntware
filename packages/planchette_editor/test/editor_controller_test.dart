@@ -95,14 +95,14 @@ void main() {
     await saving;
     expect(await editor.confirmClose(() async => false), isTrue);
   });
-  test('initialText and loadDocument together trip the debug assert', () {
+  test('initialText and loadDocument together are rejected', () {
     expect(
       () => EditorController(
         displayPath: 'test',
         initialText: 'wins',
         loadDocument: () async => document('never loaded'),
       ),
-      throwsA(isA<AssertionError>()),
+      throwsA(isA<ArgumentError>()),
     );
   });
 
