@@ -91,7 +91,11 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: PlanchetteEditor(controller: c, highlightCaretLine: false),
+          body: PlanchetteEditor(
+            controller: c,
+            highlightCaretLine: false,
+            showLineNumbers: false,
+          ),
         ),
       ),
     );
