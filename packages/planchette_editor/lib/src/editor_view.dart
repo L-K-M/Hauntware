@@ -5,6 +5,7 @@ import 'package:planchette_core/planchette_core.dart';
 import 'code_editing_controller.dart';
 import 'editor_controller.dart';
 import 'editor_strings.dart';
+import 'line_tops.dart';
 
 /// The shared document surface. Its host supplies app chrome, file commands,
 /// notifications and close decisions; no navigation or native menu is installed.
@@ -48,6 +49,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   static const _gutterInset = 8.0;
   final _gutterRepaint = ValueNotifier<int>(0);
   List<double> _gutterTops = const [0];
+
+  /// Lines the current measurement covers. Never shrinks, so scrolling down a
+  /// large document remeasures a logarithmic number of times instead of once
+  /// per frame. See `measureLineTops`.
+  int _gutterLaidOutLines = 0;
   String? _gutterText;
   double? _gutterWidth;
   TextScaler? _gutterScaler;
@@ -128,28 +134,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     if (!c.scroll.hasClients) return;
     if (c.activeMatch < 0 || c.activeMatch >= c.matches.length) return;
     final match = c.matches[c.activeMatch];
-    double dy;
-    if (c.text.text.length <= syntaxHighlightingMaxChars &&
-        _textWidth != null) {
-      final prefix = c.text.text.substring(0, match.start);
-      final painter = TextPainter(
-        text: TextSpan(text: prefix, style: _style),
-        textDirection: TextDirection.ltr,
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout(maxWidth: _textWidth! > 1 ? _textWidth! : 1);
-      dy = painter
-          .getOffsetForCaret(TextPosition(offset: prefix.length), Rect.zero)
-          .dy;
-      painter.dispose();
-    } else {
-      final line =
-          c.lineStarts.takeWhile((offset) => offset <= match.start).length - 1;
-      dy =
-          line *
-          MediaQuery.textScalerOf(context).scale(_style.fontSize!) *
-          _style.height!;
-    }
     final position = c.scroll.positions.last;
+    if (_textWidth == null) return;
+    // The gutter already knows where every line begins, so revealing a match is
+    // a lookup rather than a second layout of the document.
+    _ensureGutterIfStale(
+      _textWidth!,
+      MediaQuery.textScalerOf(context),
+      position.viewportDimension,
+    );
+    final dy = _gutterTops[_lineIndexContaining(c.lineStarts, match.start)];
     final target = (dy + _padding - position.viewportDimension / 3).clamp(
       0.0,
       position.maxScrollExtent,
@@ -416,7 +410,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             ? _measureGutter(scaler)
             : 0.0;
         _textWidth = constraints.maxWidth - gutterWidth - 2 * _padding;
-        if (widget.showLineNumbers) _ensureGutterLayout(_textWidth!, scaler);
+        if (widget.showLineNumbers) {
+          _ensureGutterIfStale(_textWidth!, scaler, constraints.maxHeight);
+        }
         final theme = Theme.of(context);
         return NotificationListener<ScrollNotification>(
           onNotification: (_) {
@@ -504,39 +500,64 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     return _gutterInset * 2 + width + 1;
   }
 
-  void _ensureGutterLayout(double width, TextScaler scaler) {
+  /// Remeasure only when something the measurement depends on moved, and skip
+  /// the work entirely while the existing layout still spans the viewport.
+  void _ensureGutterIfStale(
+    double width,
+    TextScaler scaler,
+    double viewportHeight,
+  ) {
+    final lineHeight =
+        scaler.scale(_style.fontSize ?? 14) * (_style.height ?? 1);
     if (identical(_gutterText, c.text.text) &&
         _gutterWidth == width &&
         _gutterScaler == scaler &&
-        _gutterStyle == _style) {
+        _gutterStyle == _style &&
+        _gutterLaidOutLines >= visibleLineCount(viewportHeight, lineHeight)) {
       return;
     }
-    final lineHeight = scaler.scale(_style.fontSize!) * _style.height!;
-    if (c.text.text.length <= syntaxHighlightingMaxChars) {
-      final painter = TextPainter(
-        text: c.text.buildTextSpan(
-          context: context,
-          style: _style,
-          withComposing: false,
-        ),
-        textDirection: TextDirection.ltr,
-        textScaler: scaler,
-      )..layout(maxWidth: width > 1 ? width : 1);
-      _gutterTops = [
-        for (final offset in c.lineStarts)
-          painter.getOffsetForCaret(TextPosition(offset: offset), Rect.zero).dy,
-      ];
-      painter.dispose();
-    } else {
-      _gutterTops = [
-        for (var i = 0; i < c.lineStarts.length; i++) i * lineHeight,
-      ];
-    }
+    _ensureGutterLayout(width, scaler, viewportHeight);
     _gutterText = c.text.text;
     _gutterWidth = width;
     _gutterScaler = scaler;
     _gutterStyle = _style;
   }
+
+  void _ensureGutterLayout(
+    double width,
+    TextScaler scaler,
+    double viewportHeight,
+  ) {
+    final tops = measureLineTops(
+      text: c.text.text,
+      lineStarts: c.lineStarts,
+      style: _style,
+      scaler: scaler,
+      width: width,
+      viewportHeight: viewportHeight,
+      minimumLines: _gutterLaidOutLines,
+    );
+    _gutterLaidOutLines = tops.exactLines;
+    _gutterTops = tops.tops;
+  }
+}
+
+/// Index of the line holding [offset] in the ascending [lineStarts].
+///
+/// A document can have tens of thousands of lines and a search step asks about
+/// one offset, so this is a binary search rather than a walk.
+int _lineIndexContaining(List<int> lineStarts, int offset) {
+  var low = 0;
+  var high = lineStarts.length - 1;
+  while (low < high) {
+    final mid = (low + high + 1) >> 1;
+    if (lineStarts[mid] <= offset) {
+      low = mid;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return low;
 }
 
 /// Paints right-aligned line numbers at each logical line's visual top,
@@ -601,9 +622,10 @@ class _LineNumberGutterPainter extends CustomPainter {
       }
     }
     // Insurance against line-height estimate error: painting extra
-    // off-screen lines is clipped, skipping a visible one isn't. Past the
-    // highlighting cap the estimate lags by one row per soft wrap above the
-    // viewport, so the backoff is sized in viewport rows, not one line.
+    // off-screen lines is clipped, skipping a visible one isn't. Where a
+    // measurement did not reach, the modelled tops lag by one row per soft
+    // wrap above the viewport, so the backoff is sized in viewport rows, not
+    // one line.
     lo -= (size.height / lineHeight).ceil();
     if (lo < 0) lo = 0;
     final painter = TextPainter(

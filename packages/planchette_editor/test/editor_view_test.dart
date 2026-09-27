@@ -114,6 +114,34 @@ void main() {
     await tester.pump();
     expect(c.editorFocus.hasFocus, isFalse);
   });
+
+  testWidgets('typing in a large document keeps the gutter and status exact', (
+    tester,
+  ) async {
+    // 20,000 lines is far more than any viewport. Placing line numbers used to
+    // lay out the whole buffer on every keystroke, which is invisible here but
+    // cost hundreds of milliseconds; `line_tops_test.dart` bounds the work, and
+    // this checks the gutter and the status bar still describe the document.
+    final big = List.filled(20000, 'line').join('\n');
+    final c = EditorController(displayPath: 'test', initialText: big);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    expect(find.textContaining('20000 lines'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('planchette.document')),
+      '$big extra\n',
+    );
+    await tester.pump();
+
+    expect(c.text.text.endsWith('extra\n'), isTrue);
+    expect(c.lineStarts, hasLength(20001));
+    expect(find.byKey(const ValueKey('editor-line-gutter')), findsOneWidget);
+    expect(find.textContaining('20001 lines'), findsOneWidget);
+    expect(find.textContaining('Ln 20001, Col 1'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('reparenting a controller between host layouts paints safely', (
     tester,
   ) async {
