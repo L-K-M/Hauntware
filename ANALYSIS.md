@@ -2528,3 +2528,26 @@ measured on this baseline.
     case moved to V14 rather than being shipped here.
   Three GLM jobs timed out on their first run across these PRs and were
   re-run from the same commit; a timeout is a missing review, never a pass.
+- **Second-pass branches rebased onto the merged main.** #75/#78/#80/#82/#84/#86
+  landed on `main` while these PRs were open, so every one of the nine branches
+  was rebased onto current `main` and re-verified locally before the owner
+  merges them. Two conflicts were real rather than textual:
+  1. **#77** failed every platform test job on `loadGate` being declared twice —
+     `main` merged the same field for #78's gated-load test. The branch now uses
+     `main`'s declaration. This is the failure mode to expect from any test
+     double added to `MemoryDocuments`: check the merged file first.
+  2. **#56** and **#85** conflicted with #82's tab flash (`flashRequest++` in
+     the same `open()` branch) and with #86's `searchText` refactor. Both
+     resolutions keep the merged behavior and add the new one: #56 flashes the
+     reused tab and still drops the pristine scratch tab, and #85's window
+     bounds now live on `searchText` so they compose with the case-handling
+     report #86 introduced (`findSearchMatches` forwards them).
+  #87 and #81 both extract the same top-level `planchetteTheme`; merge one and
+  take the other's. #85 is now a single commit, since its reverse-window fix was
+  folded into the paging change it corrects.
+- **Reviewer outage at the end of the pass.** The GLM review job then began
+  failing on every PR with an infrastructure error (API 429 after its retries),
+  not a code problem: the job reports "did not finish" and CI is green. The last
+  reviewed revisions are recorded per PR above; the rebased revisions of #77,
+  #79, #81, #83, #85 and #87 have **no review of record**. Re-run those jobs when
+  the reviewer recovers rather than reading the failures as approval.
