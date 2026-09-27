@@ -8,6 +8,12 @@ change, and how to know it is done. Read [AGENTS.md](AGENTS.md) first.
 - Consolidated 2026-09-27 from the existing backlogs at `e6bd9ba`, `f4c1f46` and `87caa35` and this
   session's review of `e7ec67f`. The inherited reviews cite `d53f416`, `a580387` and `e974cde`; `d53f416`
   also integrated the new icon. Other workers' PRs were not inspected.
+- A parallel session implemented and monitored #8/#9/#12/#18 (Go to Line,
+  zoom, whole-word search, Reopen Closed Tab) from its own review of
+  `e7ec67f`. Its findings are folded into §1/§2/E5/A7/FU2/FU4/FU13/V4/§9/§11
+  below; its leftover ideas are consolidated with duplicates removed, and its
+  working notes were discarded after the merge. Its PRs overlap #16/#33,
+  #25/#30, #44 and A7 — see the overlap rows, do not duplicate them.
 - This session: Flutter 3.47.2 / Dart 3.13.2 on Linux; baseline analyses
   passed with 84 core, 19 editor and 38 app tests. Two case-insensitive
   filesystem tests skipped on the local volume. Core performance probes
@@ -113,6 +119,25 @@ twenty-nine inherited PRs. Local captures covered search at 320/360/800px and th
 at 640×400 in light/dark. No hands-on native macOS/Windows visual session.
 Original CSS probes also measured 1k=31ms, 5k=744ms and 10k=2.80s before fixing.
 
+### Implemented and monitored in a parallel session
+
+Four more PRs (`planchette/*` branches, [#8](https://github.com/L-K-M/Planchette/pull/8),
+[#9](https://github.com/L-K-M/Planchette/pull/9),
+[#12](https://github.com/L-K-M/Planchette/pull/12),
+[#18](https://github.com/L-K-M/Planchette/pull/18)) were implemented against
+`e7ec67f`/`d53f416`, verified locally with Flutter 3.47.2 / Dart 3.13.2
+(analyze clean; suites green as listed), reviewed by GLM rounds, and left
+open for owner review/merging. They overlap #16/#33 (Go to Line), #25/#30
+(zoom), #44 (search) and A7 (reopen); coordinate per the overlap rows below
+and E5/A7/FU2/FU4/FU13/V4 notes, and do not duplicate them.
+
+| PR / branch | Change and proof | Latest recorded status |
+|---|---|---|
+| [#8](https://github.com/L-K-M/Planchette/pull/8), `planchette/go-to-line` | Find-menu Go to Line dialog (Ctrl+L all platforms), `EditorController.gotoLine` with clamp, view scroll via the gutter line-top cache with a shared `_estimatedLineTop` fallback, digits-only input. Controller clamp/scroll tests plus an app widget test over shortcut and menu paths; editor 20 and app 40 suites pass. | Open at `9a6a272`; CI green. Round 1 minor-only addressed; round 2 raised only a disproved `int.clamp` compile claim (analyzer, tests and CI green on the sha). No valid important findings; steady. |
+| [#9](https://github.com/L-K-M/Planchette/pull/9), `planchette/editor-zoom` | View menu Zoom In/Out/Reset (Ctrl/Cmd+=/-/0 plus numpad +/-, Shift-tolerant `=`), 8–32 clamp, session-only size state applied to every tab. Widget test pins clamps, background-tab tracking and the rendered monospace/1.35 style on all three variants. | Open at `4886cb7`; CI green. Round 1 fixed a real style-replacement regression the review caught; round 2 minor-only addressed; round 3 (comment-accuracy, editor-constants suggestion) accepted-in-principle but deferred without push per stopping rules, recorded in FU4. Steady, left open. |
+| [#12](https://github.com/L-K-M/Planchette/pull/12), `planchette/whole-word-search` | Core `wholeWord` search option (ASCII alnum/`_` and BMP non-ASCII are word chars; astral surrogates are boundaries; CJK/full-width punctuation stays word content), controller toggle flowing into find and Replace All, underlined-`ab` button with `isSelected` on both search toggles. Core 85 and editor 20 suites pass. | Open at `a7af694`; CI green. Two minor-only rounds addressed; round 3 single minor (needle-edge `\b` parity) accepted-in-principle but deferred without push per stopping rules, recorded in E5. Steady, left open. |
+| [#18](https://github.com/L-K-M/Planchette/pull/18), `planchette/reopen-tab` | Ten-deep closed-tab snapshot stack (text, save identity, full selection with affinity, dirty state) restored without a disk round-trip via a `restoreSnapshot` seam; Ctrl/Cmd+Shift+T and File menu; path reopened meanwhile is selected, not duplicated; save conflict guard still fires; cancelled closes enqueue nothing; restore writes outside undo history. App 45 and editor 20 suites pass. | Open at `6b2786b`; CI green. Round 1 (false `int.clamp` blocker declined; selection/cancel/conflict/undo accepted) and round 2 single minor (affinity) addressed. Awaiting confirmatory round 3. |
+
 ### Inherited PR records
 
 The evidence labels and measurements in this table belong to the inherited
@@ -190,8 +215,11 @@ tests, not blindly combine competing implementations:
 | Indentation/input | #13/#14/#21/#34/#37 | #13 preserves backward selections; #14 adds key modes and line edits; #21 supplies core transforms, detected convention, true input stops and read-only traversal. #34 reacts to platform text edits through `EditorIndent` and a language predicate; preserve its narrow-edit guard and explicitly test paste/IME/undo. #37 persists indent settings and reportedly adds equality for round trips. Reconcile one core edit model. |
 | Gutter geometry | #22/#27/#28/#32 | #22 adds a decorations render object/current-line band; #28 uses one `computeLineMetrics`; #32 splices cached per-line heights; #27 measures a viewport prefix, extrapolates the tail and shares reveal geometry. The source prefers #32 over #27 based on reported O(changed-region) versus O(lines) work; that ignores possible affix/layout/cache costs, so benchmark correctness and complete workloads before choosing. Keep one geometry owner. |
 | Go to Line | #16/#33 | Preserve #16’s dialog/error clearing and #33’s clickable status/platform find chords. |
+| Go to Line (parallel #8) | #16/#33 plus [#8](https://github.com/L-K-M/Planchette/pull/8) | #8 adds a Ctrl+L dialog on all platforms, clamp/scroll/focus semantics and a digits-only field. Reconcile shortcuts (Ctrl+G stays Find Next on macOS in #8) and keep one dialog. |
 | Font zoom | #25/#30/#37 | #25 scales text style with gutter/reveal; #30 adds platform monospace and Actual Size; #37 persists preferences. Reconcile shortcuts, scale and storage. |
+| Font zoom (parallel #9) | #25/#30/#37 plus [#9](https://github.com/L-K-M/Planchette/pull/9) | #9 ships Ctrl/Cmd+=/-/0, numpad +/-, a View menu, an 8–32 clamp and a rendered-style contract test; size is session-only. Persistence stays with #37/FU4; reconcile steps, Actual Size and storage on merge. |
 | Revert | #26/#38/#19 | #38 adds the File command; #26 reports disk notices/recreate-on-save; #19 fixes load-boundary undo. Preserve all safety/lifetime behavior. |
+| Reopen closed tab (parallel #18) | A7 plus [#18](https://github.com/L-K-M/Planchette/pull/18) | #18 restores text/identity/selection from a 10-deep snapshot stack, which supersedes A7's path-only stack and its "do not promise discarded-text recovery" constraint — recovery is real and guarded by the save conflict check. Keep its cancel/conflict coverage and FU5's remaining actions. |
 | Tabs/chrome | #11/#35/#36/#43 | Retain #11’s focus/visibility tests, #35’s tab commands, #36’s row geometry/ThemeData and #43’s fixed dirty slot/directory display. #43 removes the header; geometry improvements still need validation in the chosen layout. |
 | Untitled names | #21/#35 | Preserve separate counter semantics and decide name reuse. Empty-tab reuse remains B23. |
 | Search/status | #10/#33/#36/#44 | Keep #10’s keyboard/IME/responsive guarantees, #33’s clickable position/display names, #36’s surfaces/alignment and #44’s regex errors/selection counts. |
@@ -274,7 +302,9 @@ green and neither lays out text itself.
 #47 adds the same `caretRevealRequest` for line commands but scrolls
 minimally through `EditableTextState.bringIntoView`, which suits a caret
 stepping past the edge; give the helper a placement (minimal, or a third
-down for jumps).
+down for jumps). Open #8 already shares one `_estimatedLineTop` helper
+between `_revealMatch` and its Go to Line reveal; keep that shape when
+moving both onto the reconciled geometry owner.
 
 ### FU3. Cache the highlighted span (after #14) — M
 Caret moves still rebuild every span. `EditableText` rebuilds on each
@@ -292,6 +322,14 @@ that representation with #25/#30 zoom steps, restore/clamp on startup, and
 verify Actual Size and live preview. Remaining settings are A1. Verify
 platform shortcuts/reset,
 system text scaling, selection, undo, scroll anchor and gutter/reveal geometry.
+Open #9 contributes zoom steps (Ctrl/Cmd+=/-/0, numpad +/-, View menu,
+8–32 clamp, session-only) plus a rendered-style contract test pinning
+monospace/1.35 on the live `EditableText`; validate its shortcuts and reset
+against #25/#30/#37's persisted representation on merge.
+Deferred from #9's round-3 review (no push): align the app/test `textStyle`
+comments to the true contract — the app style replaces the widget default
+at the boundary, then merges with the editor's family-less internal base —
+and consider editor-owned constants for the face/height literals.
 
 ### FU5. Remaining tab actions and keys (after #30/#35/#42) — M
 #42 reports a right-click menu with Close, Close Others and Close All Tabs,
@@ -403,6 +441,10 @@ before planning an extension; specify clamping/rejection explicitly.
 Distinguish UTF-16 offsets from user-facing grapheme columns, and verify
 on-disk counts for BOM/CRLF and selection counts for combining characters.
 Keep format/status controls in E10 and native menu ownership in the app.
+Open #8 covers part of this: its dialog total counts the trailing-newline
+line (matching gutter and clamp), out-of-range input clamps, non-digits are
+untypeable (digits-only formatter), and navigation requests editor focus.
+Still open: line:column input, grapheme-column semantics, BOM/CRLF counts.
 
 ### FU14. Validate indentation across hosts (after #13/#14/#21/#34/#37 coordination) — M
 Retain tests for forward/reverse multiline selections, tabs/spaces, blank
@@ -576,6 +618,8 @@ All changes all matches. Separate bounded highlights from next/previous
 discovery and full counts. Test more than 1,000 hits, caret near EOF, wraparound,
 exact-cap display and replacement counts with bounded memory. E5 and P5
 must share these semantics instead of introducing another search model.
+Whole-word mode (#12) flows into both navigation and Replace All; keep the
+mode shared so the cap never silently bounds replacement.
 
 ### B20. Align input and output text policies — S (confirmed this session)
 Core writing accepts NUL but loading rejects it as binary
@@ -602,6 +646,31 @@ Repeated New creates empty buffers; name reuse in #35 is a separate behavior.
 If the active tab is untitled, empty and clean, optionally focus it instead.
 Keep this a product choice: tests must preserve deliberately separate buffers,
 dirty/undo history and expected New semantics.
+
+### B24. Harden workspace tab transitions — S (read)
+`_nextTab` force-unwraps `workspace.active` after checking only that the tab
+list is non-empty; prove non-empty implies active-non-null or handle null
+explicitly. `open()` queues work behind the `_unlocked` completer while
+locked; prove a dispose during that wait cannot run `_open` on a dead
+workspace. Test closing/quit races that empty or move the active tab.
+
+### B25. Confirm-close decisions need visible outcomes — S (read)
+A discard choice is silently dropped when the buffer changed under its
+dialog (the `confirmClose` revision recheck), so "Don't Save" can appear to
+do nothing; tell the user the close did not happen. Save/toolbar enable
+states also disagree about error documents — unify the `ready` predicate
+between native menus, the menu bar and the toolbar.
+
+### B26. One path for Cut/Copy/Paste — S (read)
+Menu items route through remembered-focus intents while shell shortcuts
+defer to `TextField` defaults (Edit is excluded from `CallbackShortcuts`).
+Reconcile the two paths, especially around IME composition, or document why
+both must exist. Do not change paste semantics here — see Q14.
+
+### B27. Extend Save As casing checks to Windows CI — S (read)
+Casing checks run on case-insensitive macOS temporary volumes; Windows
+volumes are case-insensitive too and have no equivalent coverage. Port the
+existing casing fixtures rather than inventing new ones.
 
 ## 4. Performance
 
@@ -779,6 +848,9 @@ The newer inherited source reports 14ms for Replace All on 769 KB, with
 `limit: source.length + 1`; its suggested callback form is one streaming option.
 Remeasure allocation/time after integration. If an operation limit is introduced,
 make it explicit rather than silently replacing only highlighted matches.
+The uncapped `limit: source.length + 1` match list also carries #12's
+whole-word matches today; stream the mode along with the plan, and confirm
+the find bar's "1000+" display never implies a bounded replacement.
 
 ### P6. Profile per-line gutter allocation (after #22/#28) — S (inherited read)
 The incoming source reports one TextPainter layout per visible line in
@@ -867,7 +939,22 @@ than stopping, or a leading empty match would lose the real ones after it.
 `replaceAll` honours the pattern mode too, and does nothing at all when the
 pattern will not compile.
 
-**Still open from this item:** whole word; "in selection"; highlight all
+**Whole word is implemented by open [#12](https://github.com/L-K-M/Planchette/pull/12)**
+(`planchette/whole-word-search`): a core `wholeWord` option (ASCII
+alphanumerics, `_` and BMP non-ASCII count as word content; astral
+surrogates are boundaries, matching `\b`-style editors; CJK/full-width
+punctuation stays word content — that classification is still an open
+decision), a controller toggle flowing into find and Replace All, and an
+underlined-`ab` button beside `Aa` with `isSelected` on both search toggles.
+Reconcile its boundary definition with #44's Unicode word-boundary work
+rather than shipping two notions of a word.
+Deferred follow-up from #12's round-3 review (accepted-in-principle, no
+push): enforce each boundary only where the needle's own edge is a word
+character, for `\b` parity on pasted queries (`'cat '` in `'the cat sat'`)
+and operators (`'=='` in `'a==b'`). Update the doc comment and add those
+two regression cases.
+
+**Still open from this item:** "in selection"; highlight all
 occurrences of the selected word; capture groups in the replacement (the
 current `replaceAll` substitutes a literal string, so `$1` is written out
 rather than expanded — a real trap now that patterns exist).
@@ -933,6 +1020,13 @@ Warn before mixed-EOL normalization. Test Save As, reload, dirty/undo semantics,
 changed shebangs, Unicode and narrow status layouts. Add format tooltips;
 #33 already owns encoded-byte and selection status changes (FU13).
 
+### E11. Regex-based symbol outline — M
+No parser: list functions, classes and section markers per language from the
+existing `SyntaxLanguage` metadata plus small regexes (c-family, Python,
+Ruby, `ini` sections). Clicking jumps through the Go to Line scroll path
+(#8/FU2). Test commented-out code, nested scopes and files with no symbols.
+Keep it out of the file-safety and highlight paths.
+
 ## 6. App features
 
 ### A1. Settings store — partly assigned to #37 (enables FU4, E9, A3, A4)
@@ -978,6 +1072,8 @@ siblings; journal interrupted publication as well as unsaved text. Offer a
 preview/choice and never overwrite disk automatically during recovery.
 Test forced termination at each save phase, stale journals, concurrent
 processes, missing files, private content, cleanup and newer unsaved revisions.
+An opt-in auto-save (on focus loss or after a delay) is separate from hot
+exit; put its setting in A1.
 
 ### A3. Open Recent and a recent list in the empty state — M
 Keep the last 20 paths in settings. Show them in File › Open Recent (on
@@ -1015,7 +1111,7 @@ reuse identity resolution and keep this distinct from A6's command list.
 ### A6. Command palette — assigned to #50
 **Still open:** recently used commands first; commands that take an
 argument (typing `:42` for Go to Line after #33, or a file name for A5's
-Quick Open in the same field with a prefix).
+Quick Open in the same field with a prefix); a keyboard shortcut reference.
 
 ### A7. Save All and Reopen Closed Tab — S each
 #42 reports Close Others/Close All with per-tab consent and Cancel stopping
@@ -1026,6 +1122,17 @@ paths. The quit prompt should list the dirty files, with "Save All" and
 Reuse existing guards, report partial success and stop safely on cancel.
 Do not promise recovery of discarded text merely because its path is in
 history. Tab menus, Copy Path and reveal actions belong to FU5's app service.
+
+Open [#18](https://github.com/L-K-M/Planchette/pull/18)
+(`planchette/reopen-tab`) implements the Reopen half with text snapshots
+rather than bare paths: a 10-deep stack keeps text, save identity, full
+selection (with affinity) and dirty state, restored without a disk
+round-trip; a path reopened meanwhile is selected instead of duplicated;
+the save conflict guard still fires on stale baselines; cancelled closes
+enqueue nothing; the restore writes outside undo history. This supersedes
+the no-recovery constraint above for closed tabs — recovery is real and
+conflict-guarded. What stays open here: Save All / Discard All in the quit
+prompt with partial-success reporting.
 
 ### A8. Remember window size, position and maximized state — S
 Store them in settings (A1). Restore them before `waitUntilReadyToShow`,
@@ -1056,6 +1163,13 @@ label. Test aliases, equal names in different directories, case-sensitive
 volumes, long paths and rename/Save As without losing active-tab visibility.
 
 #43's directory beside the strip does not prove each duplicate tab is distinct.
+
+### A13. Open Folder — M–L
+Single-file tabs are the current scope; an Open Folder mode (file tree with
+fuzzy path open feeding A5) is the most-asked next step. Keep the tree as
+navigation only: opening still goes through guarded loads, and the tree
+itself owns no file state. Stop before git, debugger and tasks to stay a
+focused editor.
 
 ## 7. Platform integration
 
@@ -1170,13 +1284,18 @@ bordered field group and content-sized width. The earlier compact/floating or
 tinted-panel suggestion is an alternative style, not another required rewrite.
 Preserve #10's responsive keyboard-accessible controls,
 selected semantics, focus and live input connection while changing appearance.
+Open #12 adds the `ab` whole-words toggle beside `Aa` and `isSelected` on
+both search toggles; keep that semantics treatment in the reconciled bar.
+Search history is still open.
 
 ### V5. Status bar segments — S
 The newer #36 record reports aligning status with the text column and avoiding
 language claims for unhighlighted large files. #33 reports display names for
 raw IDs such as `shell`, `c-family` and `dotenv`. After their integration,
 turn the "·"-joined text into distinct, clickable segments
-(see E10), and show "Unsaved" as a dot.
+(see E10), and show "Unsaved" as a dot. A colored dirty dot and
+hover-only close affordances are styling detail inside this item, not a
+second tab-strip design.
 
 ### V6. Error banner with actions — S
 #21 reports mapping missing/unresolvable-path errors in core so hosts benefit.
@@ -1326,6 +1445,18 @@ feedback must remain quiet and usable without animation or thematic copy.
 - **Q20. Typewriter mode.** Optionally keep the caret line vertically centered
   while typing. Coordinate V7 scroll-past-end, explicit navigation, selection
   and reduced motion rather than forcing every scroll back to center.
+- **Q21. Document-word ghost suggest.** After a typing pause, offer the most
+  likely next word drawn only from words already in the document (a local
+  trigram at most — no network, no model). Accept on an explicit key only,
+  never Tab (which inserts text); Esc dismisses. Private by construction.
+- **Q22. Hex/offset lens.** Make the status-bar byte count clickable to show
+  the caret's byte offset and nearby hex. Cheap and programmer-native;
+  coordinate E10/FU13 so units stay UTF-8 bytes.
+- **Q23. Local edit timeline.** Scrub session-only undo-stack snapshots with
+  timestamps per file. No persistence in v1; design per-hunk restore like
+  Q15 before promising more.
+- **Q24. Daily word-goal candle.** An optional, subtle progress marker for
+  writing goals. Off by default; never thematic pressure or sound.
 
 ## 10. Process and documentation
 
@@ -1362,6 +1493,12 @@ feedback must remain quiet and usable without animation or thematic copy.
 
 - **D0f. Earlier source ID for Unicode-search investigation.** Consolidated in
   D0 below; do not reopen it as a confirmed native bug.
+
+- **D6. State the no-network promise in product copy.** The app has no
+  account, service, telemetry or updater (README); say so explicitly in
+  settings/About once either exists. Never add networked features (model
+  completion, update checks) without revisiting this promise first — Q21's
+  ghost suggest stays local for the same reason.
 
 - **D0. Unicode suspicion checked and dropped.** `findSearchMatches` has
   a fallback when lowercase conversion changes text length. The inherited
@@ -1522,7 +1659,9 @@ D11 stays D11, D12–D14 become D14–D16. Stable existing IDs take precedence.
 
 ## 11. Review and verification ledger
 
-Only #5/#6/#10/#11 were reviewed and monitored in this session. Other PR
+Only #5/#6/#10/#11 were reviewed and monitored in this session. A parallel
+session reviewed and monitored #8/#9/#12/#18; its rounds are recorded below
+in the same style. Other PR
 records, APIs and measurements above were inherited from the tracked document;
 their presence is not independent approval or verification. Leave all recorded
 implementation PRs for owner review/merging. Repeated reviews of the same
@@ -1567,3 +1706,40 @@ commit are identified; skipped/cached executions do not count as fresh reviews.
 
 Native screen-reader operation, mobile-host behavior, macOS/Windows visual
 inspection and broad profile-mode frame timing remain unverified locally.
+
+Parallel session (#8/#9/#12/#18), Flutter 3.47.2 / Dart 3.13.2 on Linux,
+baselines `e7ec67f`/`d53f416`. Other workers' PRs were not listed or
+inspected.
+
+- **#8:** Round 1 minor-only (merged-brace artifact, digits-only input with
+  a formatter regression test, shared `_estimatedLineTop` helper) addressed.
+  Round 2 raised only a disproved `int.clamp`-returns-`num` compile claim:
+  the expression analyzes clean, the clamp tests run green, and CI
+  analyze+test passes on the reviewed sha. No valid important findings
+  across two rounds; steady, left open.
+- **#9:** Round 1 fixed a real style-replacement regression the review
+  caught (an app-passed `TextStyle` replaces the editor default, so passing
+  only the size silently dropped monospace/1.35), plus numpad bindings,
+  clamp/background-tab/macOS coverage and formatting. Two claims declined
+  with evidence (`double.clamp` compiles per analyzer and CI; the Shift+=
+  binding's guard matches the menu's `unlocked` by construction). Round 2
+  minor-only addressed (rendered-style contract test, exact skip reasons).
+  Round 3 (comment-accuracy, editor-constants suggestion) accepted-in-
+  principle but deferred without push per stopping rules; recorded in FU4.
+  Steady, left open.
+- **#12:** Round 1 minor-only (astral surrogates as boundaries, `isSelected`
+  on both search toggles, reveal parity pinned) addressed. Round 2 single
+  minor (exact reveal counts) addressed at `a7af694`. Round 3 single minor
+  (needle-edge `\b` parity) accepted-in-principle but deferred without push
+  per stopping rules; recorded in E5. Steady, left open. CJK/full-width punctuation stays word content by decision.
+- **#18:** Round 1 (false `int.clamp` blocker declined with analyzer and CI
+  evidence; full-selection round-trip, cancelled-close and conflict tests,
+  undo-noop regression accepted) and round 2 single minor (selection
+  affinity) addressed at `6b2786b`. The in-flight-open duplicate-tab claim
+  was declined with evidence: `_open` re-checks `_findPath` after loading
+  and discards its tab through the duplicate guard. Awaiting confirmatory
+  round 3.
+- **Test-infra note:** flutter_test cannot synthesize numpad key events
+  (`event_simulation` asserts no linux keyCode mapping), so #9's numpad
+  bindings stay uncovered with the exact failure cited in-test. Harness
+  limits are cited concretely, not generalized — same policy as D0e.
