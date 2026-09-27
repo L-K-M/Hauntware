@@ -102,7 +102,8 @@ final class TreeScanner {
   /// pre-existing case-variant file can spoof the insensitivity check,
   /// and the `.poltergeist*` app default plus the explicit skip below
   /// keep a stranded probe out of every snapshot.
-  static const String caseProbePrefix = '.poltergeist-caseprobe';
+  static const String caseProbePrefix = fileSystemNameProbePrefix;
+  static const String _legacyCaseProbePrefix = '.poltergeist-caseprobe';
 
   final RemoteFileSystem _fileSystem;
   final int readdirConcurrency;
@@ -246,7 +247,8 @@ final class TreeScanner {
           final isDirectory = entry.type == RemoteFileType.directory;
           // A stranded probe file never enters a snapshot, rules or no
           // rules — it is engine debris, not tree content.
-          if (name.startsWith(caseProbePrefix) ||
+          if (isFileSystemNameProbeArtifact(name) ||
+              name.startsWith(_legacyCaseProbePrefix) ||
               ignores.isExcluded(relative, isDirectory: isDirectory)) {
             continue;
           }
@@ -377,12 +379,6 @@ final class TreeScanner {
       ? path.substring(0, path.length - 1)
       : path;
 
-  /// Joins a child name onto a scan-side path. '/' is required on SFTP
-  /// and accepted by dart:io on every platform including Windows, so the
-  /// same join serves local and remote sides.
-  static String _joinPath(String parent, String name) =>
-      parent.endsWith('/') ? '$parent$name' : '$parent/$name';
-
   /// Resolves this side's case sensitivity per 05 §3: an explicit
   /// per-pair override wins; otherwise a write probe (when requested)
   /// answers the question on the filesystem itself; an unwritable root
@@ -393,37 +389,21 @@ final class TreeScanner {
     required bool? override,
     required bool probe,
   }) async {
-    if (override != null) return (override, CaseSensitivityBasis.override, null);
+    if (override != null) {
+      return (override, CaseSensitivityBasis.override, null);
+    }
     if (!probe) return (true, CaseSensitivityBasis.assumption, null);
-    RemoteFileEntry? probeEntry;
+
     try {
-      // A randomly-suffixed name: a pre-existing case-variant of a
-      // FIXED probe name would spoof case-insensitivity on a sensitive
-      // filesystem; a random name cannot have a pre-existing variant.
-      final probeName = '$caseProbePrefix-$_probeSuffix';
-      probeEntry = await _fileSystem.upload(
-        _joinPath(root, probeName),
-        const Stream<List<int>>.empty(),
-        overwrite: true,
+      final traits = await probeFileSystemNameTraits(
+        _fileSystem,
+        root,
+        probePrefix: caseProbePrefix,
+        probeSuffix: _probeSuffix,
       );
-      bool sensitive;
-      try {
-        await _fileSystem.stat(
-          _joinPath(root, probeName.toUpperCase()),
-          followLinks: false,
-        );
-        sensitive = false;
-      } on RemoteFileException catch (e) {
-        if (e.kind != RemoteFileErrorKind.notFound) rethrow;
-        sensitive = true;
-      }
-      try {
-        await _fileSystem.delete(probeEntry);
-      } catch (_) {
-        // Best effort: a stranded probe is invisible to scans (the
-        // .poltergeist* default) and harmless to the next run's
-        // overwrite:true.
-      }
+
+      final sensitive =
+          traits.caseSensitivity == FileSystemNameSensitivity.sensitive;
       return (sensitive, CaseSensitivityBasis.probe, null);
     } catch (_) {
       return (

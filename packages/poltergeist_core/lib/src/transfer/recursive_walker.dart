@@ -4,7 +4,9 @@ import 'dart:collection';
 import 'package:path/path.dart' as p;
 import 'package:seance_core/seance_core.dart';
 
+import '../fs/file_system_name_traits.dart';
 import '../fs/local_fs_safety.dart';
+import 'destination_name_key.dart';
 import 'transfer_task.dart';
 
 /// The app-level recursive walker (07 §3.5).
@@ -51,6 +53,8 @@ class RecursiveWalker {
     required this.purpose,
     this.source,
     this.destination,
+    this.destinationNameKey,
+    this.destinationCollisionDisposition,
     this.isFlaggedEntry,
     this.cancellation,
     Future<RemoteFileEntry> Function(String path)? stat,
@@ -89,6 +93,15 @@ class RecursiveWalker {
   /// against its rules ([validateLocalName] for local targets,
   /// [validatePathComponent] for remote ones).
   final FsLocation? destination;
+
+  /// Maps a destination leaf to its filesystem identity. Null uses the
+  /// exact spelling; the queue supplies normalization and case folding.
+  final String Function(String name)? destinationNameKey;
+
+  /// Decides whether a duplicate destination identity is refused or can
+  /// proceed to keep-both numbering. Null refuses duplicates.
+  final DestinationCollisionDisposition Function(RemoteFileEntry entry)?
+      destinationCollisionDisposition;
 
   /// The §13 flag detector — consulted once per enumerated entry, with
   /// the result shared by the containment guard and classification.
@@ -145,6 +158,7 @@ class RecursiveWalker {
 
   Stream<WalkEvent> _walkTransfer(List<String> roots) async* {
     final pending = Queue<WalkNode>();
+    final rootDestinationNames = <String>{};
     for (final rootPath in roots) {
       _throwIfCancelled();
       final RemoteFileEntry entry;
@@ -160,6 +174,7 @@ class RecursiveWalker {
         WalkNode._(entry: entry, parent: null, depth: 0),
         pending,
         flagged: isFlaggedEntry?.call(entry) ?? false,
+        destinationNames: rootDestinationNames,
       );
     }
     while (pending.isNotEmpty) {
@@ -174,6 +189,7 @@ class RecursiveWalker {
         yield WalkListingFailedEvent(directory: node, error: error);
         continue;
       }
+      final childDestinationNames = <String>{};
       for (final child in children) {
         _throwIfCancelled();
         // §13 is consulted once per entry and feeds both the
@@ -187,6 +203,7 @@ class RecursiveWalker {
           WalkNode._(entry: child, parent: node, depth: node.depth + 1),
           pending,
           flagged: flagged,
+          destinationNames: childDestinationNames,
         );
       }
       // The listing closed — the directory's planned children are final
@@ -202,8 +219,13 @@ class RecursiveWalker {
     WalkNode node,
     Queue<WalkNode> pending, {
     required bool flagged,
+    required Set<String> destinationNames,
   }) async* {
-    final classified = _classify(node.entry, flagged: flagged);
+    final classified = _classify(
+      node.entry,
+      flagged: flagged,
+      destinationNames: destinationNames,
+    );
     if (classified.kind == WalkItemKind.directory) {
       pending.addLast(node);
     }
@@ -318,7 +340,15 @@ class RecursiveWalker {
   ({WalkItemKind kind, String? detail}) _classify(
     RemoteFileEntry entry, {
     required bool flagged,
+    Set<String>? destinationNames,
   }) {
+    if (isFileSystemNameProbeArtifact(entry.name)) {
+      return (
+        kind: WalkItemKind.nameProbeArtifact,
+        detail: 'reserved filesystem-name probe artifact',
+      );
+    }
+
     // §13 before everything: a flagged name cannot round-trip, so the
     // entry is reported and never listed or planned. (A flagged symlink
     // reports as flagged — the name problem dominates the link skip.)
@@ -346,6 +376,22 @@ class RecursiveWalker {
       } on FormatException catch (error) {
         rejectedEntries++;
         return (kind: WalkItemKind.rejectedName, detail: error.message);
+      }
+    }
+    if (destinationNames != null &&
+        (entry.type == RemoteFileType.file || entry.isDirectory)) {
+      final key = destinationNameKey?.call(entry.name) ?? entry.name;
+      final firstClaim = destinationNames.add(key);
+      final disposition =
+          destinationCollisionDisposition?.call(entry) ??
+          DestinationCollisionDisposition.refuse;
+      if (!firstClaim &&
+          disposition == DestinationCollisionDisposition.refuse) {
+        rejectedEntries++;
+        return (
+          kind: WalkItemKind.destinationCollision,
+          detail: withinTaskDestinationCollisionMessage,
+        );
       }
     }
     switch (entry.type) {
@@ -480,6 +526,9 @@ enum WalkItemKind {
   /// a delete enumeration.
   symbolicLink,
 
+  /// A generated name-probe artifact. It is reported but never acted on.
+  nameProbeArtifact,
+
   /// A §13 flagged (undecodable) name — reported, never silently
   /// skipped; never listed, since the lossy name cannot round-trip.
   flagged,
@@ -489,8 +538,24 @@ enum WalkItemKind {
   /// undiscovered and none of its descendants are reported or counted.
   rejectedName,
 
+  /// Another source entry in the same destination container has the
+  /// same filesystem identity. Only keep-both may admit both entries.
+  destinationCollision,
+
   /// A type with no transferable content (fifo, socket, …).
   unsupported,
+}
+
+/// The only safe outcomes for an in-plan destination-name collision.
+enum DestinationCollisionDisposition {
+  /// Refuse the later source entry before it can overwrite task output.
+  refuse,
+
+  /// Admit it so the executor can choose a distinct numbered name.
+  keepBoth,
+
+  /// Admit it because a restored journal, not enumeration order, owns keys.
+  admit,
 }
 
 /// One enumerated node — the container linkage consumers key
@@ -519,6 +584,7 @@ sealed class WalkEvent {
 /// One enumerated entry. [container] links to the parent's node; [kind]
 /// is the classification, and [detail] carries reason text for the
 /// report kinds (`symbolicLink`, `flagged`, `rejectedName`,
+/// `destinationCollision`,
 /// `unsupported`).
 final class WalkEntryEvent extends WalkEvent {
   const WalkEntryEvent({

@@ -67,7 +67,8 @@ D24 name · D25 parking lot · D26 local↔local · D27 archives · D28
 permissions · D29 mobile hooks · D30 Séance license · D31 no mounting ·
 D32 inspector workspace · D33 sidebar density · D34 colour vocabulary ·
 D35 Android supported · D36 settings window · D37 transfer limits ·
-D38 device themes · D39 workspace windows
+D38 device themes · D39 workspace windows · D40 task-local destination
+ownership
 
 ### Stack and shape
 
@@ -830,6 +831,21 @@ D38 device themes · D39 workspace windows
   - **Not SSH connections:** capping connections would slow browsing,
     which shares them. The pool's two connections per server (D9) stay
     as they are.
+- **D40 — One source owns each task-local destination key (2026-09-27;
+  amends 03 §4.2).** A destination key, after applying that filesystem's
+  independently probed case and canonical-normalization rules, belongs to
+  one source for the task's lifetime. Traits are resolved at each actual
+  destination container because a nested mount can differ from the task
+  root; an unprovable result uses the conservative case-and-normalization
+  folding. `replace` and `replaceIfNewer` resolve external or cross-task
+  occupants, never output owned by another item in the same task. `skip`
+  skips that item; `ask` may choose `keepBoth` or `skip`; `keepBoth` claims
+  the first unowned numbered key. Cross-task aliases serialize, then re-stat
+  under the ordinary conflict policy. A destructive or renamed commit
+  fsyncs its selected key to the versioned queue journal before acting. If
+  recovery or retry cannot prove that an occupant at that key is this
+  item's output, the item fails terminally: repeating an ambiguous write
+  cannot make it safe.
 - **D38 — Device themes (2026-09-25, owner-directed; amends D11 and
   10 §10's shared tokens).** The owner asked whether Vervellum's theming
   system could come to Séance and Poltergeist. Séance built it first and

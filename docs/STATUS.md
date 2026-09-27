@@ -4,6 +4,39 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Destination collision ownership (2026-09-27)
+
+Transfer tasks now probe each resolved destination container for independent
+case and Unicode-normalization identity. A source owns the resulting key for
+the task's lifetime. A later task item cannot replace that output:
+`replace` and `replaceIfNewer` fail, `skip` skips, and `ask` may keep both or
+skip. Keep Both reserves the first free numbered key. A queue-wide
+conservative registry serializes possible aliases across tasks, then each
+waiter re-stats under the container's actual rules.
+
+Moves and renamed outputs journal and fsync their selected destination before
+the filesystem effect. Recovery reuses an empty claimed path and fails an
+occupied, ambiguous claim without touching either copy. Journal schema v2
+atomically upgrades the complete v1 prefix before migration or compaction;
+raw unknown fields survive upgrades, compaction, and history trimming. A
+legacy failure without retry evidence remains terminal.
+On Linux, native directory open, fsync, and close failures block source
+removal. Other platforms retain PGE-03a's explicit unsupported behavior.
+
+Name probes are isolated from directory mutation. Exact generated artifacts
+remain visible as skipped rows, while prefix-like user files transfer
+normally; a stranded artifact causes a bounded failure. Cancellation can
+leave a queued probe without retaining channel leases or admitting a later
+probe past the active holder. Regressions cover case and NFC/NFD twins,
+same-basename roots, nested mounts, cross-task races, retry and crash replay,
+probe cleanup, cancellation, restored cleanup admission, and local-move
+durability.
+
+Validation: core analysis is clean; 1,688 core tests pass with 27 environment
+skips. Sync analysis is clean and all 249 tests pass with 3 SSH fixture skips.
+All 138 benchmark tests and 2,882 Flutter tests pass; Flutter analysis and the
+import-boundary check are clean on the pinned 3.47.2 SDK.
+
 ## Dotenv syntax highlighting (2026-09-27)
 
 The editor recognizes `.env`, `.env.*` and `*.env`, including local Windows

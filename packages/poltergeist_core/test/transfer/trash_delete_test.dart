@@ -534,6 +534,55 @@ void main() {
     );
 
     test(
+      'a cancelled directory delete waiting behind a probe is inert',
+      () async {
+        final queue = newQueue();
+        localSide.addFile('/seed.txt', [1]);
+        remoteFs.addDirectory('/data/empty');
+        final probeStatGate = Completer<void>();
+        remoteFs.nameProbeGates[FakeNameProbeOperation.stat] = probeStatGate;
+        final probing = queue.enqueue(
+          TransferTaskSpec(
+            source: const LocalFsLocation(),
+            destination: const ServerFsLocation('srv1'),
+            rootPaths: const ['/seed.txt'],
+            destinationDir: '/data/empty',
+            policy: ResolvedConflictPolicy(),
+          ),
+        );
+        await pumpUntil(
+          () => remoteFs.nameProbeCalls.any((call) => call.startsWith('stat:')),
+          reason: 'the directory probe never became visible',
+        );
+
+        final deleting = await queue.enqueueDelete(
+          const DeleteRequest(
+            source: ServerFsLocation('srv1'),
+            rootPaths: ['/data/empty'],
+            disposition: DeleteDisposition.permanent,
+            confirmed: true,
+          ),
+        );
+        await pumpUntil(
+          () => deleting.items.any((item) => item.isDirectory),
+          reason: 'the directory delete never reached the queue',
+        );
+        queue.cancelTask(deleting.id);
+        queue.cancelTask(probing.id);
+        probeStatGate.complete();
+        await awaitTaskDone(deleting);
+        await awaitTaskDone(probing);
+        await pumpUntil(
+          () => connections.activeLeases('srv1') == 0,
+          reason: 'the cancelled delete did not drain',
+        );
+
+        expect(deleting.state, TransferTaskState.cancelled);
+        expect(remoteFs.entryAt('/data/empty'), isNotNull);
+      },
+    );
+
+    test(
       'remote opt-in ON: entries rename into .poltergeist-trash/<runId>/',
       () async {
         final queue = newQueue(

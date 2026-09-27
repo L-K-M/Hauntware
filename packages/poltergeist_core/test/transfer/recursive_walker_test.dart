@@ -108,6 +108,27 @@ void main() {
       expect(entries[1].kind, WalkItemKind.symbolicLink);
     });
 
+    test('probe-like user names remain transferable content', () async {
+      const path = '/src/.poltergeist-nameprobe-notes';
+      remote.addFile(path, 'notes'.codeUnits);
+
+      final entries = entriesOf(await collect(remoteWalker(), ['/src']));
+
+      expect(entries.map((entry) => entry.entry.path), contains(path));
+    });
+
+    test('reserved probe artifacts remain visible as skipped rows', () async {
+      const path = '/src/.poltergeist-nameprobe-0123456789abcdef-e\u0301';
+      remote.addFile(path, const []);
+
+      final entry = entriesOf(
+        await collect(remoteWalker(), ['/src']),
+      ).singleWhere((entry) => entry.entry.path == path);
+
+      expect(entry.entry.path, path);
+      expect(entry.kind, WalkItemKind.nameProbeArtifact);
+    });
+
     test('a root stat failure reports and the walk continues', () async {
       remote.addFile('/ok.txt', 'ok'.codeUnits);
 
@@ -579,6 +600,30 @@ void main() {
       // The boundary: enumeration never deletes — no VFS delete ran.
       expect(remote.deleteCalls, 0);
     });
+
+    test('probe-like user names remain delete targets', () async {
+      const path = '/tree/.poltergeist-nameprobe-notes';
+      remote.addFile(path, 'notes'.codeUnits);
+
+      final entries = entriesOf(await collect(deleteWalker(), ['/tree']));
+
+      expect(entries.map((entry) => entry.entry.path), contains(path));
+    });
+
+    test(
+      'delete reports reserved probe artifacts instead of hiding them',
+      () async {
+        const path = '/tree/.poltergeist-nameprobe-0123456789abcdef-e\u0301';
+        remote.addFile(path, const []);
+
+        final entries = entriesOf(await collect(deleteWalker(), ['/tree']));
+
+        expect(
+          entries.singleWhere((entry) => entry.entry.path == path).kind,
+          WalkItemKind.nameProbeArtifact,
+        );
+      },
+    );
 
     test('delete walks run over the local filesystem too', () async {
       // p.join throughout: local paths carry the platform separator.

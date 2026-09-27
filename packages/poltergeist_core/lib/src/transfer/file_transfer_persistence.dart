@@ -42,8 +42,11 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:seance_core/seance_core.dart';
 
+import 'destination_name_key.dart';
 import 'transfer_journal.dart';
 import 'transfer_task.dart';
+
+enum _JournalDurability { batched, immediate }
 
 /// The default journal fsync policy (03 §4.6): fsync every ~64 records
 /// or ~250 ms of pending writes, whichever comes first.
@@ -81,6 +84,7 @@ class FileTransferPersistence implements TransferPersistence {
     required this.replay,
     required Map<String, _LiveTask> liveTasks,
     required List<TransferHistoryEntry> historyRecords,
+    required List<String> historyLines,
   }) : journalFile = File(
          p.join(directory.path, transferJournalFileName),
        ).absolute,
@@ -95,7 +99,8 @@ class FileTransferPersistence implements TransferPersistence {
        _fsyncEveryRecords = fsyncEveryRecords,
        _fsyncInterval = fsyncInterval,
        _liveTasks = liveTasks,
-       _historyRecords = historyRecords {
+       _historyRecords = historyRecords,
+       _historyLines = historyLines {
     _historyIds = {for (final entry in historyRecords) entry.taskId};
     _journalBytes = liveTasks.values.fold(
       0,
@@ -137,6 +142,7 @@ class FileTransferPersistence implements TransferPersistence {
   /// re-reading the file.
   final Map<String, _LiveTask> _liveTasks;
   final List<TransferHistoryEntry> _historyRecords;
+  final List<String> _historyLines;
   late final Set<String> _historyIds;
 
   /// The single-writer chain (03 §4.6): every append and every rewrite of
@@ -152,6 +158,7 @@ class FileTransferPersistence implements TransferPersistence {
   int _recordsSinceFsync = 0;
   int _finishedSinceCompact = 0;
   Timer? _fsyncTimer;
+  AsyncError? _journalWriteFailure;
 
   /// Opens the store, repairing torn/corrupt logs and running the
   /// startup replay + compaction (03 §4.6). [directory] is the
@@ -208,6 +215,7 @@ class FileTransferPersistence implements TransferPersistence {
       fsyncInterval: fsyncInterval,
       liveTasks: liveTasks,
       historyRecords: [for (final (entry, _) in history.entries) entry],
+      historyLines: [for (final (_, line) in history.entries) line],
       replay: TransferJournalReplay(
         tasks: tasks,
         tornJournalBytes: journal.tornBytes,
@@ -225,8 +233,18 @@ class FileTransferPersistence implements TransferPersistence {
       );
     }
 
-    // Startup compaction: crash-recovered finished tasks migrate to
-    // history, then the journal rewrites to the pending set (03 §4.6).
+    // Upgrade the complete journal before any v2 history mutation. A crash
+    // then leaves an older reader failing at line one, never replaying v1.
+    if (_containsLegacySchema(journal.entries)) {
+      await store._rewriteJournalAtCurrentSchema(
+        journal.entries.map((entry) => entry.$2),
+      );
+    }
+    if (_containsLegacySchema(history.entries)) {
+      await store._rewriteHistoryAtCurrentSchema(
+        history.entries.map((entry) => entry.$2),
+      );
+    }
     await store._compact();
     return store;
   }
@@ -242,28 +260,23 @@ class FileTransferPersistence implements TransferPersistence {
       );
       return;
     }
-    _enqueue(() async {
-      final line = jsonEncode(record.toJson());
-      await _io.appendLine(journalFile, line);
-      // Byte-accurate accounting: String.length is UTF-16 code units and
-      // journaled paths are commonly non-ASCII.
-      final lineBytes = utf8.encode(line).length + 1;
-      _journalBytes += lineBytes;
-      _recordsSinceFsync++;
-      _applyToLive(record, line, lineBytes);
-      if (record is TaskStateRecord &&
-          (record.state == TransferTaskState.completed ||
-              record.state == TransferTaskState.failed ||
-              record.state == TransferTaskState.cancelled)) {
-        _finishedSinceCompact++;
-      }
-      if (_recordsSinceFsync >= _fsyncEveryRecords) {
-        await _fsyncJournal();
-      } else {
-        _armFsyncTimer();
-      }
-      if (_shouldCompact()) await _compact();
-    });
+    _enqueue(() => _writeJournalRecord(record, _JournalDurability.batched));
+  }
+
+  @override
+  Future<void> appendJournalDurably(TransferJournalRecord record) {
+    if (_closed) {
+      final error = StateError(
+        'journal record rejected: persistence is shut down '
+        '(${record.type} for ${record.taskId})',
+      );
+      _notice('$error');
+      return Future.error(error);
+    }
+
+    return _enqueue(
+      () => _writeJournalRecord(record, _JournalDurability.immediate),
+    );
   }
 
   @override
@@ -276,6 +289,7 @@ class FileTransferPersistence implements TransferPersistence {
       return;
     }
     _enqueue(() async {
+      _throwIfJournalUnavailable();
       // 03 §4.6's ordering rule: the journal is fsynced before a task's
       // history record lands, so a power loss can never leave a
       // "completed" the UI showed without its journal records.
@@ -312,6 +326,7 @@ class FileTransferPersistence implements TransferPersistence {
     _fsyncTimer?.cancel();
     _fsyncTimer = null;
     return _enqueue(() async {
+      _throwIfJournalUnavailable();
       if (await journalFile.exists()) await _fsyncJournal();
     });
   }
@@ -332,6 +347,7 @@ class FileTransferPersistence implements TransferPersistence {
     if (_closed) return _pending;
     return _enqueue(() async {
       _historyRecords.clear();
+      _historyLines.clear();
       await _io.atomicRewrite(historyFile, '');
     });
   }
@@ -358,6 +374,40 @@ class FileTransferPersistence implements TransferPersistence {
       _onNotice?.call(message);
     } on Object {
       // Diagnostics must never feed back into the store.
+    }
+  }
+
+  Future<void> _writeJournalRecord(
+    TransferJournalRecord record,
+    _JournalDurability durability,
+  ) async {
+    _throwIfJournalUnavailable();
+
+    try {
+      final line = jsonEncode(record.toJson());
+      await _io.appendLine(journalFile, line);
+      // Byte-accurate accounting: String.length is UTF-16 code units and
+      // journaled paths are commonly non-ASCII.
+      final lineBytes = utf8.encode(line).length + 1;
+      _journalBytes += lineBytes;
+      _recordsSinceFsync++;
+      _applyToLive(record, line, lineBytes);
+      if (record is TaskStateRecord &&
+          (record.state == TransferTaskState.completed ||
+              record.state == TransferTaskState.failed ||
+              record.state == TransferTaskState.cancelled)) {
+        _finishedSinceCompact++;
+      }
+      if (durability == _JournalDurability.immediate ||
+          _recordsSinceFsync >= _fsyncEveryRecords) {
+        await _fsyncJournal();
+      } else {
+        _armFsyncTimer();
+      }
+      if (_shouldCompact()) await _compact();
+    } catch (error, stackTrace) {
+      _journalWriteFailure ??= AsyncError(error, stackTrace);
+      rethrow;
     }
   }
 
@@ -399,13 +449,37 @@ class FileTransferPersistence implements TransferPersistence {
           outcome: existing?.outcome,
           error: existing?.error,
           failureKind: existing?.failureKind,
+          failureRetryPolicy:
+              existing?.failureRetryPolicy ??
+              TransferFailureRetryPolicy.retryable,
           resolvedPath: existing?.resolvedPath,
           disposition: existing?.disposition,
+          destinationClaims: {...?existing?.destinationClaims},
         );
+      case DestinationClaimedRecord():
+        final item = task.entries.putIfAbsent(
+          record.itemId,
+          () => _RestoredItemMutable(
+            itemId: record.itemId,
+            isDirectory: false,
+            sourcePath: '',
+            destinationPath: '',
+            containerKey: null,
+            name: null,
+            source: null,
+            existing: null,
+          ),
+        );
+        // A retry may return to an earlier candidate (A, B, A). Move a
+        // repeated path to the end so replay keeps the last journal order.
+        item.destinationClaims
+          ..remove(record.destinationPath)
+          ..add(record.destinationPath);
       case ScanCompleteRecord():
         task.scanComplete = true;
         task.totalBytes = record.totalBytes;
         task.skippedSymlinks = record.skippedSymlinks;
+        task.destinationNameComparison = record.destinationNameComparison;
       case TaskStateRecord():
         task.lastState = record.state;
         task.lastStateAt = record.at;
@@ -426,6 +500,7 @@ class FileTransferPersistence implements TransferPersistence {
           RestoredItemOutcome.failed,
           error: record.error,
           failureKind: record.failureKind,
+          failureRetryPolicy: record.retryPolicy,
         );
       case ItemRemovedRecord():
         _applyOutcome(
@@ -445,6 +520,8 @@ class FileTransferPersistence implements TransferPersistence {
     RestoredItemOutcome outcome, {
     String? error,
     RemoteFileErrorKind? failureKind,
+    TransferFailureRetryPolicy failureRetryPolicy =
+        TransferFailureRetryPolicy.retryable,
     String? resolvedPath,
     ItemDisposition? disposition,
   }) {
@@ -468,6 +545,7 @@ class FileTransferPersistence implements TransferPersistence {
     item.outcome = outcome;
     item.error = error;
     item.failureKind = failureKind;
+    item.failureRetryPolicy = failureRetryPolicy;
     item.resolvedPath = resolvedPath;
     item.disposition = disposition;
   }
@@ -476,8 +554,15 @@ class FileTransferPersistence implements TransferPersistence {
     _fsyncTimer?.cancel();
     _fsyncTimer = null;
     if (!await journalFile.exists()) return;
-    await _io.fsyncFile(journalFile);
-    _recordsSinceFsync = 0;
+    try {
+      await _io.fsyncFile(journalFile);
+      _recordsSinceFsync = 0;
+    } catch (error, stackTrace) {
+      // Timer-driven fsync runs outside `_writeJournalRecord`; latch it too
+      // so every later durability boundary reports the lost guarantee.
+      _journalWriteFailure ??= AsyncError(error, stackTrace);
+      rethrow;
+    }
   }
 
   void _armFsyncTimer() {
@@ -519,6 +604,7 @@ class FileTransferPersistence implements TransferPersistence {
   /// item-level terminal records would let the next replay resurrect
   /// files it already completed or the user already removed.
   Future<void> _compact() async {
+    _throwIfJournalUnavailable();
     final finished = _liveTasks.values.where((t) => t.isFinished).toList();
     var migrated = false;
     for (final task in finished) {
@@ -546,10 +632,53 @@ class FileTransferPersistence implements TransferPersistence {
     _recordsSinceFsync = 0;
   }
 
+  Future<void> _rewriteJournalAtCurrentSchema(Iterable<String> lines) async {
+    final upgraded = lines.map(_upgradeSchemaLine).toList();
+    final content = upgraded.map((line) => '$line\n').join();
+    await _io.atomicRewrite(journalFile, content);
+
+    for (final task in _liveTasks.values) {
+      final records = <(TransferJournalRecord, String)>[];
+      var encodedBytes = 0;
+      for (final (record, line) in task.records) {
+        final upgradedLine = _upgradeSchemaLine(line);
+        records.add((record, upgradedLine));
+        encodedBytes += utf8.encode(upgradedLine).length + 1;
+      }
+      task.records
+        ..clear()
+        ..addAll(records);
+      task.encodedBytes = encodedBytes;
+    }
+
+    _journalBytes = utf8.encode(content).length;
+    _reclaimableBytes = _liveTasks.values
+        .where((task) => task.isFinished)
+        .fold(0, (sum, task) => sum + task.encodedBytes);
+  }
+
+  Future<void> _rewriteHistoryAtCurrentSchema(Iterable<String> lines) async {
+    final upgraded = lines.map(_upgradeSchemaLine).toList();
+    final content = upgraded.map((line) => '$line\n').join();
+    await _io.atomicRewrite(historyFile, content);
+    _historyLines
+      ..clear()
+      ..addAll(upgraded);
+  }
+
+  void _throwIfJournalUnavailable() {
+    final failure = _journalWriteFailure;
+    if (failure == null) return;
+
+    Error.throwWithStackTrace(failure.error, failure.stackTrace);
+  }
+
   Future<void> _appendHistoryLine(TransferHistoryEntry entry) async {
-    await _io.appendLine(historyFile, jsonEncode(entry.toJson()));
+    final line = jsonEncode(entry.toJson());
+    await _io.appendLine(historyFile, line);
     _historyIds.add(entry.taskId);
     _historyRecords.add(entry);
+    _historyLines.add(line);
   }
 
   /// The 10 000-record cap with 10 % slack (03 §4.6): the trim rewrites
@@ -562,13 +691,17 @@ class FileTransferPersistence implements TransferPersistence {
     final kept = _historyRecords.sublist(
       _historyRecords.length - _historyLimit,
     );
-    final content = kept
-        .map((entry) => '${jsonEncode(entry.toJson())}\n')
-        .join();
+    final keptLines = _historyLines.sublist(
+      _historyLines.length - _historyLimit,
+    );
+    final content = keptLines.map((line) => '$line\n').join();
     await _io.atomicRewrite(historyFile, content);
     _historyRecords
       ..clear()
       ..addAll(kept);
+    _historyLines
+      ..clear()
+      ..addAll(keptLines);
     _historyIds
       ..clear()
       ..addAll(kept.map((entry) => entry.taskId));
@@ -784,8 +917,10 @@ class FileTransferPersistence implements TransferPersistence {
           outcome: item.outcome,
           error: item.error,
           failureKind: item.failureKind,
+          failureRetryPolicy: item.failureRetryPolicy,
           resolvedPath: item.resolvedPath,
           disposition: item.disposition,
+          destinationClaims: Set.unmodifiable(item.destinationClaims),
         ),
     ];
     return RestoredTransferTask(
@@ -798,6 +933,7 @@ class FileTransferPersistence implements TransferPersistence {
       skippedSymlinks: live.skippedSymlinks,
       items: items,
       sweepDirectories: _sweepDirectories(spec, items),
+      destinationNameComparison: live.destinationNameComparison,
     );
   }
 
@@ -813,9 +949,16 @@ class FileTransferPersistence implements TransferPersistence {
         : p.dirname(path);
     final dirs = <String>{spec.destinationDir};
     for (final item in items) {
-      if (item.destinationPath.isEmpty) continue;
-      dirs.add(parent(item.destinationPath));
-      if (item.isDirectory) dirs.add(item.destinationPath);
+      final paths = <String>{
+        item.destinationPath,
+        ...item.destinationClaims,
+        ?item.resolvedPath,
+      };
+      for (final path in paths) {
+        if (path.isEmpty) continue;
+        dirs.add(parent(path));
+        if (item.isDirectory) dirs.add(path);
+      }
     }
     return dirs;
   }
@@ -851,6 +994,7 @@ class _LiveTask {
   bool scanComplete = false;
   int? totalBytes;
   int skippedSymlinks = 0;
+  DestinationNameComparison? destinationNameComparison;
   bool removed = false;
 
   /// Every `_LiveTask` carries at least the record that created it —
@@ -891,9 +1035,11 @@ class _RestoredItemMutable {
     this.outcome,
     this.error,
     this.failureKind,
+    this.failureRetryPolicy = TransferFailureRetryPolicy.retryable,
     this.resolvedPath,
     this.disposition,
-  });
+    Set<String>? destinationClaims,
+  }) : destinationClaims = destinationClaims ?? <String>{};
 
   final String itemId;
   final bool isDirectory;
@@ -906,7 +1052,9 @@ class _RestoredItemMutable {
   RestoredItemOutcome? outcome;
   String? error;
   RemoteFileErrorKind? failureKind;
+  TransferFailureRetryPolicy failureRetryPolicy;
   String? resolvedPath;
+  final Set<String> destinationClaims;
 
   /// D15: the journaled per-item delete outcome (osTrash/remoteTrash/
   /// permanent) — carried so a restored task's items keep their
@@ -929,4 +1077,19 @@ class _RecoveredLog<T> {
   final int tornBytes;
   final String? quarantinedTo;
   final int quarantinedRecords;
+}
+
+bool _containsLegacySchema<T>(Iterable<(T, String)> entries) {
+  for (final (_, line) in entries) {
+    final json = (jsonDecode(line) as Map).cast<String, Object?>();
+    if (json['v'] != transferJournalSchemaVersion) return true;
+  }
+
+  return false;
+}
+
+String _upgradeSchemaLine(String line) {
+  final json = (jsonDecode(line) as Map).cast<String, Object?>();
+  json['v'] = transferJournalSchemaVersion;
+  return jsonEncode(json);
 }
