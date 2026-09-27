@@ -375,6 +375,8 @@ Reveal needs `open -R` on macOS, `explorer /select,` on Windows, and
 service, not in the widget.
 
 ### FU6. Languages left out of #31 — S each
+- **Diff**: `GIT binary patch` (from `git diff --binary`) is a file header
+  like `Binary files … differ`; add it to #31's `_diffHeaders`.
 - **PHP**: has its own `#` line comments. Under `c-family` (#31), a
   leading `#` reads as a preprocessor line. Give PHP an entry with `//`,
   `#` and `/* */` comments, `$variable` meta and PHP keywords.
@@ -669,6 +671,9 @@ Keep it optional and respect reduced motion; activation must work without it.
 (`canEditText`) read the private `_editingLocked` field; switch them to
 `editingLocked` so they honor the view's lock too. Hosts that listen for lock
 changes are not notified when only the view lock changes (as before #54).
+If a host needs it, notify after the frame when releasing the last view lock
+(dispose or a remount elsewhere) turns `editingLocked` false; notifying
+during build is not allowed, and every other path already notifies.
 
 ### B18. Reserve Save As identities during async work — M (investigate, high priority)
 `document_workspace.dart` checks ownership before async digest, confirmation
@@ -1265,6 +1270,11 @@ reuse identity resolution and keep this distinct from A6's command list.
 **Still open:** recently used commands first; commands that take an
 argument (typing `:42` for Go to Line after #33, or a file name for A5's
 Quick Open in the same field with a prefix); a keyboard shortcut reference.
+**Ranking fix (from #50's review):** menu-name matches rank below label
+matches through a sentinel score of -1, but a scattered label match can
+score -1 or lower (each gap costs up to 3 against a base of 1; `ln` in
+"Clear Recent" scores -1). Sort label and menu-name matches as two tiers
+instead, and test that pair.
 
 ### A7. Save All and Reopen Closed Tab — S each
 #42 reports Close Others/Close All with per-tab consent and Cancel stopping
