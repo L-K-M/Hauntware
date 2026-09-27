@@ -118,41 +118,72 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the active tab is brought into view when it changes', (
-    tester,
-  ) async {
-    for (var i = 0; i < 24; i++) {
-      store.files[testPath('file-$i.txt')] = document('file-$i.txt', 'body $i');
-    }
-    for (var i = 0; i < 24; i++) {
-      await workspace.open(testPath('file-$i.txt'));
-    }
-    await mount(tester, size: const Size(640, 700));
+  testWidgets(
+    'the active tab is brought into view when it changes',
+    (tester) async {
+      for (var i = 0; i < 24; i++) {
+        store.files[testPath('file-$i.txt')] = document(
+          'file-$i.txt',
+          'body $i',
+        );
+      }
+      for (var i = 0; i < 24; i++) {
+        await workspace.open(testPath('file-$i.txt'));
+      }
+      await mount(tester, size: const Size(640, 700));
 
-    final strip = find.byKey(const ValueKey('planchette.tabs'));
-    Rect stripBox() => tester.getRect(strip);
-    Rect tabBox(String name) => tester.getRect(
-      find.ancestor(of: find.text(name), matching: find.byType(InkWell)),
-    );
-    void expectInView(String name) {
-      final box = tabBox(name);
-      expect(box.left, greaterThanOrEqualTo(stripBox().left - 1), reason: name);
-      expect(box.right, lessThanOrEqualTo(stripBox().right + 1), reason: name);
-    }
+      final strip = find.byKey(const ValueKey('planchette.tabs'));
+      Rect stripBox() => tester.getRect(strip);
+      Rect tabBox(String name) => tester.getRect(
+        find.ancestor(of: find.text(name), matching: find.byType(InkWell)),
+      );
+      void expectInView(String name) {
+        final box = tabBox(name);
+        expect(
+          box.left,
+          greaterThanOrEqualTo(stripBox().left - 1),
+          reason: name,
+        );
+        expect(
+          box.right,
+          lessThanOrEqualTo(stripBox().right + 1),
+          reason: name,
+        );
+      }
 
-    // The last file opened is the active one, and it is off the end of the strip
-    // until something brings it into view.
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 400));
-    expectInView('file-23.txt');
+      // The last file opened is the active one, and it is off the end of the strip
+      // until something brings it into view.
+      //
+      // Pumped in steps rather than one large jump: the reveal is scheduled from
+      // a post-frame callback and then animated, so a single big pump can sample
+      // the strip mid-flight. That is what the macOS and Windows runners saw —
+      // the tab 27 pixels short of the edge — and a test that only passes when
+      // the animation happens to finish in one step is measuring the runner.
+      Future<void> settleStrip() async {
+        await tester.pump();
+        for (var i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+      }
 
-    // And back to the other end.
-    workspace.select(workspace.documents.first);
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 400));
-    expectInView('file-0.txt');
-    expect(tester.takeException(), isNull);
-  });
+      await settleStrip();
+      expectInView('file-23.txt');
+
+      // And back to the other end.
+      workspace.select(workspace.documents.first);
+      await settleStrip();
+      expectInView('file-0.txt');
+      expect(tester.takeException(), isNull);
+    },
+    variant: const TargetPlatformVariant(<TargetPlatform>{
+      TargetPlatform.android,
+      TargetPlatform.fuchsia,
+      TargetPlatform.iOS,
+      TargetPlatform.linux,
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+    }),
+  );
 
   testWidgets('an error does not move the document', (tester) async {
     workspace.newDocument();
