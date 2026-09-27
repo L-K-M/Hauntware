@@ -149,15 +149,17 @@ TextEditingValue _shiftIndent(
     final existing = text.substring(range.start, range.end);
     // A dedent removes one level, and at most one. If the file's indent does
     // not match the setting — tabs against spaces, or a width from another
-    // project — removing nothing would leave the user with no way to outdent
-    // their own file, so one character goes.
+    // project — removing a whole level would remove more than the line has, so
+    // one character goes instead. Leaving it untouched would be worse: the
+    // comment's case is a file indented in some other convention, and refusing
+    // to move it leaves no way to outdent at all.
     final after = forwards
         ? existing.length + unit.length
         : existing.startsWith(unit)
         ? existing.length - unit.length
-        : existing.startsWith('\t')
-        ? existing.length - 1
-        : existing.length;
+        : existing.isEmpty
+        ? 0
+        : existing.length - 1;
     buffer
       ..write(text.substring(copied, range.start))
       ..write(

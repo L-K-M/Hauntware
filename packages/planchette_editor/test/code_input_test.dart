@@ -145,6 +145,24 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('Shift+Tab dedents a narrower indent than the setting', (
+      tester,
+    ) async {
+      // Four-space setting, a file indented two. Removing a level would remove
+      // more than the line has, and removing nothing is the case the comment
+      // rules out: the user would have no way to outdent their own file.
+      final c = editorFor('  one');
+      addTearDown(c.dispose);
+      await mount(tester, c);
+      c.indent = const EditorIndent(size: 4);
+      c.text.selection = const TextSelection.collapsed(offset: 0);
+      await tester.pump();
+
+      await pressTab(tester, shift: true);
+      expect(c.text.text, ' one');
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('Shift+Tab on an unindented line does nothing', (tester) async {
       final c = editorFor('one');
       addTearDown(c.dispose);
