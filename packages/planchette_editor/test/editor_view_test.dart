@@ -85,6 +85,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('caret-line band covers a wrapped final line', (tester) async {
+    final c = EditorController(
+      displayPath: 'test',
+      initialText: 'one\n${'word ' * 40}',
+    );
+    addTearDown(c.dispose);
+    await tester.binding.setSurfaceSize(const Size(240, 400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    c.text.selection = TextSelection.collapsed(
+      offset: c.text.text.length,
+    );
+    await tester.pump();
+    final painter =
+        tester.widget<CustomPaint>(
+          find.byKey(const ValueKey('editor-caret-band')),
+        ).painter.toString();
+    // The only line wraps, so the laid-out height must exceed one row.
+    expect(painter, contains('lines: 2'));
+    final height = double.parse(
+      RegExp(r'documentHeight: ([0-9.]+)').firstMatch(painter)!.group(1)!,
+    );
+    final lastLineTopEstimate = 1 * 14 * 1.35;
+    expect(height, greaterThan(lastLineTopEstimate * 3));
+  });
+
   testWidgets('caret-line band can be disabled by hosts', (tester) async {
     final c = EditorController(displayPath: 'test', initialText: 'x');
     addTearDown(c.dispose);

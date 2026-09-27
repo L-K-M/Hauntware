@@ -58,6 +58,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   TextScaler? _gutterScaler;
   TextStyle? _gutterStyle;
   double? _textWidth;
+
+  /// Laid-out height of the whole document text; bounds the caret-line
+  /// band when the caret is on the final (possibly wrapped) line.
+  double _documentHeight = 0;
   int _lastReveal = -1;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
@@ -467,6 +471,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                               scroll: c.scroll,
                               repaint: _gutterRepaint,
                               lineTops: _gutterTops,
+                              documentHeight: _documentHeight,
                               topInset: _padding,
                               caretLine: c.caretLineColumn.$1,
                               lineHeight:
@@ -560,11 +565,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         for (final offset in c.lineStarts)
           painter.getOffsetForCaret(TextPosition(offset: offset), Rect.zero).dy,
       ];
+      // The painter laid out the whole document, so its height already
+      // accounts for any wrapped rows the per-line tops cannot express.
+      _documentHeight = painter.height;
       painter.dispose();
     } else {
       _gutterTops = [
         for (var i = 0; i < c.lineStarts.length; i++) i * lineHeight,
       ];
+      _documentHeight = c.lineStarts.length * lineHeight;
     }
     _gutterText = c.text.text;
     _gutterWidth = width;
@@ -686,6 +695,10 @@ class _LineNumberGutterPainter extends CustomPainter {
 class _CaretLineBandPainter extends CustomPainter {
   final ScrollController scroll;
   final List<double> lineTops;
+
+  /// Laid-out height of the whole document; bounds the band on the final
+  /// line, whose wrapped rows have no successor entry in [lineTops].
+  final double documentHeight;
   final double topInset;
   final int caretLine;
   final double lineHeight;
@@ -695,6 +708,7 @@ class _CaretLineBandPainter extends CustomPainter {
     required this.scroll,
     required Listenable repaint,
     required this.lineTops,
+    required this.documentHeight,
     required this.topInset,
     required this.caretLine,
     required this.lineHeight,
@@ -708,9 +722,11 @@ class _CaretLineBandPainter extends CustomPainter {
     // During reparenting the newest attached position is the live one.
     final offset = scroll.hasClients ? scroll.positions.last.pixels : 0.0;
     final top = topInset + lineTops[index] - offset;
-    final bottom = index + 1 < lineTops.length
+    final nextTop = index + 1 < lineTops.length
         ? topInset + lineTops[index + 1] - offset
-        : top + lineHeight;
+        : topInset + documentHeight - offset;
+    // Never invert if documentHeight is briefly stale.
+    final bottom = nextTop > top ? nextTop : top + lineHeight;
     final band = Rect.fromLTWH(0, top, size.width, bottom - top);
     canvas.drawRect(band.intersect(Offset.zero & size), Paint()..color = color);
   }
@@ -718,6 +734,7 @@ class _CaretLineBandPainter extends CustomPainter {
   @override
   bool shouldRepaint(_CaretLineBandPainter old) =>
       !identical(lineTops, old.lineTops) ||
+      documentHeight != old.documentHeight ||
       caretLine != old.caretLine ||
       topInset != old.topInset ||
       lineHeight != old.lineHeight ||
@@ -725,5 +742,6 @@ class _CaretLineBandPainter extends CustomPainter {
 
   @override
   String toString() =>
-      '_CaretLineBandPainter(caretLine: $caretLine, lines: ${lineTops.length})';
+      '_CaretLineBandPainter(caretLine: $caretLine, lines: ${lineTops.length}, '
+      'documentHeight: $documentHeight)';
 }
