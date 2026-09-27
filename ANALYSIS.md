@@ -14,6 +14,11 @@ change, and how to know it is done. Read [AGENTS.md](AGENTS.md) first.
   below; its leftover ideas are consolidated with duplicates removed, and its
   working notes were discarded after the merge. Its PRs overlap #16/#33,
   #25/#30, #44 and A7 — see the overlap rows, do not duplicate them.
+- Later on 2026-09-27 a further pass added six small PRs (#75, #78, #80,
+  #82, #84, #86) against `origin/main`, each with a regression that failed
+  first. Baselines were re-verified at `1fea9ec`: 84 core, 19 editor and
+  38 app tests (two case-insensitive filesystem skips). Corrects B31's
+  mechanism — see that entry — and adds B34.
 - This session: Flutter 3.47.2 / Dart 3.13.2 on Linux; baseline analyses
   passed with 84 core, 19 editor and 38 app tests. Two case-insensitive
   filesystem tests skipped on the local volume. Core performance probes
@@ -98,7 +103,7 @@ review. Do not duplicate their implementation. If a PR closes unmerged,
 restore its outstanding work to the backlog. Twenty-nine records below are
 inherited from those main-branch documents; their statuses and claims were not independently
 checked. Four additional PRs were implemented and monitored in an earlier session,
-and seven more in the 2026-09-27 review pass.
+seven more in the 2026-09-27 review pass, and six more later the same day.
 The newer inherited source warns that more parallel PRs may exist. This is
 not a complete ownership registry; refresh coordination from authorized
 repository records before duplicating work. This session did not list or
@@ -156,6 +161,24 @@ avoid colliding with the inherited PR territories above.
 | [#61](https://github.com/L-K-M/Planchette/pull/61), `fix/open-dash-filenames` | `OpenDocuments.start` dropped every argv entry starting with `-`, so `planchette -draft.txt` silently lost a real file. Only macOS Finder's injected `-psn_*` is filtered now; other entries reach `open` as paths. App tests updated. | Open; GLM review pending. |
 | [#62](https://github.com/L-K-M/Planchette/pull/62), `fix/startup-window-size` | B4: both desktop runners now create the window at 1080×760 centered on the work area (Windows computes a DPI-aware centered origin), matching `WindowOptions` so an early-shown frame already has final geometry. `window_manager` keeps owning runtime size. | Open; GLM review pending. |
 | [#63](https://github.com/L-K-M/Planchette/pull/63), `fix/linux-title-sync` | B-b/I6 (upgraded to confirmed-by-reading): a `GtkHeaderBar` titlebar does not follow `GtkWindow:title`, so filename/dirty title updates were invisible on GNOME/Wayland. `notify::title` now syncs the header bar. | Open; GLM review pending. |
+
+### Implemented and monitored in the later 2026-09-27 pass
+
+Six PRs against `origin/main` (`1fea9ec`), each cut from current main, each
+with a regression observed failing before the fix. Baselines re-verified at
+that revision: 84 core, 19 editor, 38 app tests (two case-insensitive
+filesystem skips), all three analyses clean. Kept deliberately narrow and
+away from the inherited PR territories; all six touch only `main`'s own
+`planchette_app` shell, the shared editor controller and core search.
+
+| PR / branch | Change and proof | Latest recorded status |
+|---|---|---|
+| [#75](https://github.com/L-K-M/Planchette/pull/75), `fix/untitled-header-label` | V16: the header fell back to the launch tagline for every untitled buffer, so `Untitled 1` sat next to "A place for your words.". The label falls through to the tab's name first; a file-backed tab still shows its full path, and a `ValueKey` marks the label so the test can tell it from the tab strip. Three-state widget test. | Open at `72dc5ab`; CI green. Round 1's `??`-only-guards-null concern answered with the documented null-or-non-empty invariant; the missing second-untitled and empty-again transitions added; the truncation info answered with a full-path tooltip. |
+| [#78](https://github.com/L-K-M/Planchette/pull/78), `fix/document-command-readiness` | B25 first half: the menus disabled Save for a loading or errored tab while the toolbar's button did not, and a tab is activated before its load resolves — so a document that was still opening showed an enabled Save that did nothing when pressed. One `_documentReady` getter now backs both surfaces. Gated-load widget test. | Open; all CI checks green. The GLM reviewer job failed after 1m12s on this revision, so there is **no** review of record. |
+| [#80](https://github.com/L-K-M/Planchette/pull/80), `fix/refused-close-feedback` | B25 second half: a close refused because the tab was saving, started saving under the prompt, or lost the reviewed text to a newer edit returned `false` in silence — "Don't Save" looked broken. Those refusals now report; a cancelled prompt and a locked workspace stay quiet; a retryable refusal is dropped once its tab closes. Five tests, one per branch. | Open at `4b70043`; CI green. Round 1's four findings all applied: the post-confirm re-check, a `contains('busy')` assertion the fixture name satisfied on its own, an untested second wording, and a refusal outliving its tab. The save-branch hole it found (`isLoading` returning `false` silently) is fixed here. |
+| [#82](https://github.com/L-K-M/Planchette/pull/82), `feat/reopen-tab-flash` | B16: opening a document the workspace already holds (same path, or a link resolving onto one) activates its tab and nothing else happened. `DocumentTab.flashRequest` plus a new `_TabChip` answer with a 700 ms pulse, skipped when animation is disabled. Activation itself is unchanged. | Open; all CI checks green. The GLM reviewer job failed after 1m14s, so there is **no** review of record. |
+| [#84](https://github.com/L-K-M/Planchette/pull/84), `fix/first-line-language-detect` | E12: detection ran only on load and on a path change, so a shebang typed into a new buffer — or into any extensionless file — left the document plain text with no way to make the tokenizer look again. `_refreshLanguage` re-recognises when a **bounded** 4 KiB lead changes, so the check never joins the per-keystroke whole-document scans P1 is about. Five tests, including one that pins the bound. | Open at `94d88f8`; CI green. Round 1's redundant-assignment finding applied; the guard is not observable from outside, which the reply states rather than faking. |
+| [#86](https://github.com/L-K-M/Planchette/pull/86), `fix/case-insensitive-search-reporting` | B31: the length guard in `findSearchMatches` is **unreachable** (see the entry) and silently changed what a case-insensitive search meant when it did fire. `searchText` now reports `CaseFolding`; the fold is injectable, so the limited path is reachable and tested instead of defensive; the find bar says so; hosts can read it. | Open at `0cb9a74`; all CI checks green. Review pending. |
 
 ### Inherited PR records
 
@@ -298,6 +321,25 @@ resize/scaling and undo/search tests. This session did not inspect #35.
 #5 and inherited #31 both touch syntax code; #6 and inherited #21/#39 touch document
 I/O; #10 and inherited #14/#21/#22/#28/#30/#33/#34/#36/#44 touch the shared surface. Re-run affected
 tests after actual integration, not just textual conflict resolution.
+
+**The later pass (#75, #78, #80, #82) collides with the shell rewrites.** All
+four are small diffs against `main`'s own shell, and inherited #35/#36/#42/#43
+plus #60 rewrite the same file — #36 most of it. Integration notes:
+- #82 **extracts** the tab-strip subtree into `_TabChip` and adds a flash
+  pulse. #35/#42/#43 rewrite that strip; land #82's shape and let their
+  contents flow into it rather than re-inlining.
+- #78 replaces the menus' `ready` expression with one `_documentReady`
+  getter. #36 rewrites `_menus()`, #37 removes the test-only `themeMode`
+  argument — re-apply the getter there, do not let the toolbar's own
+  predicate come back.
+- #80 changes `closeTab`/`_confirmTab` and adds `_reportTabRefusal`. #60
+  rewrites the same close rules for the tab-strip button; **B34** (found
+  while reviewing #80) is a third close rule still to decide, and all three
+  should end up reading one readiness story.
+- #75 is a three-term `??` chain plus a `ValueKey`. Cheap to re-apply, but it
+  is a header row #36/#43 both remove or move.
+- #80's and #78's test helpers both add `MemoryDocuments.loadGate`. That is a
+  one-line duplicate to resolve on merge, not a design difference.
 
 **Next work.** Address independent lock ownership (B17) and measure editing
 frames (P1). For geometry, reload, navigation, indentation, shell notifications,
@@ -667,10 +709,15 @@ branch only; re-apply if #57 closes unmerged).
 Collect the failures and show "2 files could not be opened: a.bin (binary),
 b.txt (not UTF-8)". **In review at #59** with that exact aggregated shape.
 
-### B16. Opening a file that is already open should flash its tab — S (idea)
-Today the existing tab is simply activated. Add a short highlight
-animation on that tab so it's clear why nothing new appeared.
-Keep it optional and respect reduced motion; activation must work without it.
+### B16. Opening a file that is already open should flash its tab — assigned to #82
+**In review at #82.** Both reuse paths bump `DocumentTab.flashRequest` and a
+new `_TabChip` pulses for 700 ms, skipped when
+`MediaQuery.disableAnimationsOf` is set. Two notes for whoever integrates it:
+the chip compares the counter against its own last-seen value, never against
+`oldWidget.tab` (the tab is a mutable object, so the old widget reads the new
+value), and `didUpdateWidget` assigns `_flashing` without `setState` because
+the element is about to rebuild. #35/#42/#43 rewrite the same tab strip; take
+this shape rather than re-inlining it.
 
 ### B17. Preserve independently owned editing locks — assigned to #54
 **Still open after merge:** guards added by #14 (`_canEditText`) and #47
@@ -747,13 +794,26 @@ workspace. Test closing/quit races that empty or move the active tab.
 active is null instead of unwrapping. The `_unlocked`-wait dispose race
 remains unproven.
 
-### B25. Confirm-close decisions need visible outcomes — S (read)
-A discard choice is silently dropped when the buffer changed under its
-dialog (the `confirmClose` revision recheck), so "Don't Save" can appear to
-do nothing; tell the user the close did not happen. Save/toolbar enable
-states also disagree about error documents — unify the `ready` predicate
-between native menus, the menu bar and the toolbar. A close requested while
-`tab.editor.isSaving` is refused just as silently — same missing outcome.
+### B25. Confirm-close decisions need visible outcomes — split across #78 and #80
+Two separate defects that shared a paragraph; both are now in review.
+
+**#78, the readiness predicate.** The menus disabled Save for a loading or
+errored tab and the toolbar did not, and a tab is activated before its load
+resolves — so a document that was still opening showed an enabled Save whose
+click did nothing. One `_documentReady` getter now backs both surfaces.
+#60 owns the sibling item (Close Tab's rule), so the tab-strip close button
+was deliberately left alone.
+
+**#80, the silent refusals.** A close refused because the tab was saving,
+started saving under the prompt, or lost its reviewed text to a newer edit
+returned `false` with nothing said. Those report through `_reportTabRefusal`
+now. A cancelled prompt and a locked workspace stay silent on purpose, and
+both are pinned by tests so the silence is a claim rather than an accident. A
+retryable refusal is cleared when its tab closes; a failed save, a missing
+file and a declined destination persist until replaced or dismissed, which is
+what the shell's dismiss button is for.
+
+Found while writing #80 and **not** fixed by it — see B34.
 
 ### B26. One path for Cut/Copy/Paste — S (read)
 Menu items route through remembered-focus intents while shell shortcuts
@@ -791,14 +851,31 @@ its loader. Assert the invariant in debug builds or document
 "initialText wins" — the former catches host mistakes early, and the hosts
 (Séance, Poltergeist) are exactly the audience that can hit it.
 
-### B31. Case-insensitive find degrades on length-shifting Unicode — M (read, 2026-09-27)
-`findSearchMatches` falls back to *case-sensitive* matching when
-`toLowerCase()` changes the haystack length, while the UI still claims
-case-insensitive mode. Query "STRASSE" in text with "straße" reports
-"No matches" — wrong in a way the user cannot detect. Options: a
-code-point-wise lowercase that preserves length per character where
-possible (hard), or a visible "matching is limited for this text" state
-(honest). ß/İ/ı cases are common in European text.
+### B31. Case-insensitive find does not do what it says — assigned to #86
+**The stated mechanism was wrong.** This entry claimed `findSearchMatches`
+falls back to case-sensitive matching when `toLowerCase()` changes the
+haystack length, and offered "STRASSE" in "straße" as the example. A scan of
+every code point from U+0080 to U+2FFFF plus the astral planes found **no**
+case where Dart's `toLowerCase` changes a string's length — ß, ẞ, İ, Cherokee
+and the ligatures all fold to the same number of UTF-16 units. The guard was
+unreachable, and "STRASSE" finds nothing in "Straße" for a different reason:
+`toLowerCase` is *simple* folding, not Unicode *full* case folding, and does
+not expand ß to ss. A test now pins the scan so the next reader does not have
+to repeat it.
+
+**The underlying defect is real and is in review at #86:** when a search is
+not the case-insensitive search the user asked for, nothing said so.
+`searchText` returns a `CaseFolding`, the needle is length-checked too (only
+the haystack was, so a query whose fold changed length bypassed the guard
+entirely), and the find bar shows a marker whose tooltip is the injectable
+`EditorStrings.caseFoldLimited`. The fold is injectable
+(`EditorController.caseFolder`), which is what makes the limited path
+reachable and tested rather than defensive.
+
+**Still open:** a real full-folding table. With one, `STRASSE` finds
+`straße` and the notice stops appearing for ordinary European text. That is a
+table, not a fix, and a host may reasonably supply its own via `caseFolder`
+rather than every host paying for it.
 
 ### B32. Pin `_mergeMetaTokens` group-offset assumption with a test — S (read, 2026-09-27)
 `match[0]!.indexOf(groupText)` finds the first occurrence of the group's
@@ -815,6 +892,30 @@ search/replacement focus runs *after* the focus already moved to the
 document. If the destination tab had its find bar focused, the user loses
 it on every tab switch. Only request editor focus when none of the tab's
 three nodes already has focus.
+
+### B34. Closing a document mid-load discards typed text with no prompt — M (read, 2026-09-27, found while reviewing #80)
+`EditorController.isDirty` is `!_loading && text.text != _savedText`, so a
+document that is still loading is **never** dirty. `DocumentWorkspace._confirmTab`
+asks `if (!tab.editor.isDirty) return true` before showing any prompt, so a
+tab that is opening closes immediately: the in-flight load is abandoned and
+any text typed into the tab while it loaded is dropped with no consent step
+at all. Reproduce by gating a store load, typing into the tab, then closing
+it.
+
+The `isDirty` shape is otherwise deliberate — a half-read buffer is not a
+"document with unsaved edits" — so the fix belongs in the close decision,
+not in `isDirty`. Decide what "close" means for a loading tab: refuse it with
+an outcome (the same treatment #80 gives a busy tab), or wait for the load and
+then run the normal consent decision. Refusing is smaller and loses nothing;
+the user asked to close and can close again a moment later. Whatever is
+chosen, `closeTab`'s `interactionLocked` guard already covers the
+prompt-on-open case, and #60's tab-strip close button must agree with
+whichever rule is chosen here.
+
+Note the interaction with #78: that PR disables Save for a loading tab
+precisely because the workspace refuses it. B34 is the same "the shell offers
+something the workspace silently refuses" family, on the close path.
+Coordinate so the two end up with one readiness story.
 
 ## 4. Performance
 
@@ -1186,13 +1287,17 @@ Ruby, `ini` sections). Clicking jumps through the Go to Line scroll path
 (#8/FU2). Test commented-out code, nested scopes and files with no symbols.
 Keep it out of the file-safety and highlight paths.
 
-### E12. Re-run language detection on first-line edits — S (read, 2026-09-27)
-`_detectLanguage` fires only on `_installText` and `displayPath` changes, so
-an untitled buffer where the user types `#!/usr/bin/env python` stays plain
-text forever — the shebang machinery exists but is unreachable live. In
-`_textChanged`, compare the bounded (~4 KiB) first line before and after an
-edit and re-detect only when it changed. Pairs with Q25's subtle status-bar
-confirmation when detection changes through typing.
+### E12. Re-run language detection on first-line edits — assigned to #84
+**In review at #84**, with one change of emphasis: the comparison is against
+a **bounded 4 KiB lead**, not the whole first line, because the original
+suggestion put `indexOf('\n')` on the keystroke path, which is a full scan
+of a single-line megabyte document per character — the shape of cost P1
+exists to remove. Every recogniser in `syntaxLanguageFor` reads the start of
+the first line, so a longer lead cannot change the answer, and a test pins
+the bound. Q25's status-bar confirmation is still open and still pairs here:
+detection now changes under typing, with no visible acknowledgement.
+Also applies to extensionless *files* (`script` with a `#!/bin/sh` first
+line), not only untitled buffers — the original entry missed that.
 
 ## 6. App features
 
@@ -1562,11 +1667,15 @@ After #35/#36/#43 integration, compare a subtle inset border or baseline rule
 with the current pills. Keep one chrome owner, active-tab distinction and
 accessible contrast; avoid another independent rewrite.
 
-### V16. Empty-state copy shows beside untitled tabs — S (read, 2026-09-27)
-The header path label falls back to "A place for your words." whenever the
-active tab has no path — so "Untitled 1" can be open while the header still
-shows marketing copy (#21 also flagged it). Show the untitled name instead;
-one-line label fix, but coordinate the shell file with #36/#43.
+### V16. Empty-state copy shows beside untitled tabs — assigned to #75
+**In review at #75.** The label falls through to the tab's name before the
+tagline; a file-backed tab still shows its full path. Two additions the
+review asked for: each untitled tab's own name is pinned, and the launch copy
+is pinned again after the workspace empties, so all three fallbacks are
+covered. The full path is kept rather than the basename — which directory is
+open is worth knowing, and the tab strip already shows the name — but it
+truncates, so the label carries a tooltip with the whole path. #36/#43
+rewrite this row too.
 
 ### V17. `caretLineColumn` reports (1,1) for an invalid selection — S (read, 2026-09-27)
 An unfocused/invalid selection renders "Ln 1, Col 1" in the status bar —
@@ -1985,3 +2094,38 @@ inspected.
   #59–#63 await their first rounds. One finding resolved as by-design:
   `OpenDocuments` is intentionally never disposed because its macOS
   channel handler must outlive every document event (recorded under B22).
+- **Later 2026-09-27 pass (#75, #78, #80, #82, #84, #86):** baseline
+  `origin/main` at `1fea9ec`; 84 core, 19 editor, 38 app tests (two
+  case-insensitive filesystem skips), three analyses clean. All six
+  regressions were observed failing on the unfixed code first. Every
+  regression that a change was meant to fix was also confirmed to pass on
+  the unfixed code, so none of them could pass for the wrong reason.
+  - **#75** round 1: the `??` chain only guards `null` — declined the
+    suggested `isNotEmpty` nesting after checking `DocumentTab.name` and
+    `path`, which are null-or-non-empty by construction, and wrote the
+    invariant down instead; the two uncovered `??` fallbacks added; the
+    truncation info answered with a full-path tooltip rather than a flip to
+    basename.
+  - **#80** round 1: all four findings were real and three were holes in
+    the change itself. The post-confirm busy re-check still refused
+    silently; `contains('busy')` could not fail because the fixture was
+    named `busy.txt`, so both wordings now have their own test (the second
+    needed a new `canonicalSavePath` gate to reach the busy-but-not-saving
+    window); a refusal outlived the tab it named and is now cleared with
+    it. The save-branch sweep it prompted found a real hole — `isLoading`
+    returned `false` with nothing said. The deliberate silences (a
+    cancelled prompt, a locked workspace) are now pinned by tests.
+  - **#84** round 1: a redundant `text.language` assignment accepted. The
+    review's stated impact is ahead of the code — `language` is a plain
+    field, so nothing re-runs today — which is the argument for the guard,
+    not against it. The guard is not observable from outside, and the
+    reply says so instead of claiming a test for it; what is tested is the
+    churn path around it.
+  - **#78 and #82** have **no review of record.** The GLM reviewer job
+    failed after 1m12s and 1m14s respectively on their only revision.
+    Read that as missing, not clean. Both have green CI on every real
+    check, which is not the same thing.
+  - **#86** review pending at the time of writing.
+  - Not verified locally: screen-reader announcement of the tab flash,
+    the `Tooltips`' layout at extreme text scale, and any hands-on
+    macOS/Windows session.
