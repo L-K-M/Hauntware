@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -110,15 +111,51 @@ void main() {
     c.goToLine(0);
     expect(c.caretLineColumn, (1, 1));
 
+    // A number too large for an int still means "the last line".
     c.openGoToLine();
-    c.goToLineInput.text = 'twelve';
-    expect(c.submitGoToLine(), isFalse);
-    expect(c.goToLineOpen, isTrue);
+    c.goToLineInput.text = '9' * 25;
+    expect(c.submitGoToLine(), isTrue);
+    expect(c.caretLineColumn, (3, 1));
+
+    c.openGoToLine();
     await tester.pump();
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.controller == c.goToLineInput,
+      ),
+      'twelve',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(c.goToLineOpen, isTrue);
+    expect(
+      c.goToLineInput.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 6),
+      reason: 'rejected input is selected so typing replaces it',
+    );
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(c.goToLineOpen, isFalse);
     expect(c.editorFocus.hasFocus, isTrue);
+  });
+
+  test('submitting while the document reloads keeps the field', () async {
+    final loading = Completer<TextDocument>();
+    final c = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'a\nb',
+      loadDocument: () => loading.future,
+    );
+    addTearDown(c.dispose);
+    c.openGoToLine();
+    c.goToLineInput.text = '2';
+    final reload = c.reload();
+    expect(c.isLoading, isTrue);
+    expect(c.submitGoToLine(), isFalse);
+    expect(c.goToLineOpen, isTrue);
+    expect(c.goToLineInput.text, '2');
+    loading.completeError(StateError('offline'));
+    await reload;
   });
 
   testWidgets('clicking the position opens Go to Line', (tester) async {

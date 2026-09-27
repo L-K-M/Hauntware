@@ -352,17 +352,18 @@ class EditorController extends ChangeNotifier {
   }
 
   /// Jumps to the go-to-line field's `line` or `line:column` and closes it.
-  /// Returns false, leaving the field open, when the input is not a number.
+  /// Returns false, leaving the field open, when the input is not a number
+  /// or the document cannot be navigated right now.
   bool submitGoToLine() {
     final match = RegExp(
       r'^\s*(\d+)\s*(?:[:,]\s*(\d+)\s*)?$',
     ).firstMatch(goToLineInput.text);
-    if (match == null) return false;
+    if (match == null || _loading || _error != null) return false;
+    // Digits too many for an int still mean "past the end"; goToLine clamps.
+    int number(String? digits) =>
+        digits == null ? 1 : int.tryParse(digits) ?? 0x7fffffff;
     _goToLineOpen = false;
-    goToLine(
-      int.parse(match[1]!),
-      column: match[2] == null ? 1 : int.parse(match[2]!),
-    );
+    goToLine(number(match[1]), column: number(match[2]));
     return true;
   }
 

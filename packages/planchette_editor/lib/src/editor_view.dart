@@ -420,7 +420,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               autofocus: true,
               autocorrect: false,
               enableSuggestions: false,
-              keyboardType: TextInputType.number,
+              // A text keyboard, so touch devices can type line:column.
+              keyboardType: TextInputType.text,
               style: theme.textTheme.bodyMedium,
               decoration: InputDecoration(
                 hintText: strings.goToLineHint(c.lineStarts.length),
@@ -428,7 +429,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 border: InputBorder.none,
               ),
               onSubmitted: (_) {
-                if (!c.submitGoToLine()) c.goToLineFocus.requestFocus();
+                if (c.submitGoToLine()) return;
+                // Keep the field and select its text, so typing replaces it.
+                c.goToLineInput.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: c.goToLineInput.text.length,
+                );
+                c.goToLineFocus.requestFocus();
               },
             ),
           ),
