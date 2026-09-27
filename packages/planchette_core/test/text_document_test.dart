@@ -393,7 +393,13 @@ void main() {
     for (final normalization in TextNormalization.values) {
       await expectLater(
         createTextDocument(created, expected, normalization: normalization),
-        throwsA(isA<TextDocumentException>()),
+        throwsA(
+          isA<TextDocumentException>().having(
+            (error) => error.message,
+            'message',
+            contains('NUL'),
+          ),
+        ),
       );
     }
     expect(await created.exists(), isFalse);

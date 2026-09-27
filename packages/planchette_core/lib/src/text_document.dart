@@ -124,7 +124,7 @@ Future<TextDocument> loadTextDocument(
   } on FormatException {
     throw const TextDocumentException('This file is not valid UTF-8 text.');
   }
-  if (raw.contains('\u0000')) {
+  if (_firstNulIndex(raw) >= 0) {
     throw const TextDocumentException(
       'This file appears to be binary, not editable text.',
     );
@@ -216,11 +216,12 @@ Future<String> _writeTextDocument(
   // Loading rejects NUL as binary; writing it would produce a file this
   // editor can never reopen. Reject before publication, while the original
   // destination is still untouched.
-  if (normalized.contains('\u0000')) {
-    throw const TextDocumentException(
-      'The edited text contains a NUL character. Loading treats that as '
-      'binary content, so saving it would create a file the editor cannot '
-      'reopen.',
+  final nulIndex = _firstNulIndex(normalized);
+  if (nulIndex >= 0) {
+    throw TextDocumentException(
+      'The edited text contains a NUL character at code unit $nulIndex. '
+      'Loading treats that as binary content, so saving it would create a '
+      'file the editor cannot reopen.',
     );
   }
   final bytes = <int>[if (hasUtf8Bom) ..._utf8Bom, ...utf8.encode(normalized)];
@@ -341,6 +342,11 @@ bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes[offset] == _utf8Bom[0] &&
     bytes[offset + 1] == _utf8Bom[1] &&
     bytes[offset + 2] == _utf8Bom[2];
+
+/// The load- and write-side binary rule, shared so a save can never emit a
+/// file the loader would then reject. Broadening the binary heuristic must
+/// update this one place.
+int _firstNulIndex(String text) => text.indexOf('\u0000');
 
 String _foldToLf(String text) =>
     text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
