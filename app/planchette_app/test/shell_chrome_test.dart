@@ -105,10 +105,16 @@ void main() {
   });
 
   testWidgets('two files with the same name are told apart', (tester) async {
-    store.files[testPath('a/index.js')] = document('a/index.js', 'one');
-    store.files[testPath('b/index.js')] = document('b/index.js', 'two');
-    await workspace.open(testPath('a/index.js'));
-    await workspace.open(testPath('b/index.js'));
+    // Spelled with the host's separator. `path.join` only joins the segments
+    // it is given, so a hardcoded `a/index.js` becomes a mixed path on Windows
+    // — and a path the workspace then has no tab for at all.
+    final sep = Platform.pathSeparator;
+    final a = 'a${sep}index.js';
+    final b = 'b${sep}index.js';
+    store.files[testPath(a)] = document(a, 'one');
+    store.files[testPath(b)] = document(b, 'two');
+    await workspace.open(testPath(a));
+    await workspace.open(testPath(b));
     await mount(tester);
 
     // Both basenames are index.js, so the strip has to disambiguate them with
