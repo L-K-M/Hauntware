@@ -97,7 +97,8 @@ These findings have open PR records against `main`, left for the owner's
 review. Do not duplicate their implementation. If a PR closes unmerged,
 restore its outstanding work to the backlog. Twenty-nine records below are
 inherited from those main-branch documents; their statuses and claims were not independently
-checked. Four additional PRs were implemented and monitored in this session.
+checked. Four additional PRs were implemented and monitored in an earlier session,
+and seven more in the 2026-09-27 review pass.
 The newer inherited source warns that more parallel PRs may exist. This is
 not a complete ownership registry; refresh coordination from authorized
 repository records before duplicating work. This session did not list or
@@ -137,6 +138,24 @@ and E5/A7/FU2/FU4/FU13/V4 notes, and do not duplicate them.
 | [#9](https://github.com/L-K-M/Planchette/pull/9), `planchette/editor-zoom` | View menu Zoom In/Out/Reset (Ctrl/Cmd+=/-/0 plus numpad +/-, Shift-tolerant `=`), 8–32 clamp, session-only size state applied to every tab. Widget test pins clamps, background-tab tracking and the rendered monospace/1.35 style on all three variants. | Open at `4886cb7`; CI green. Round 1 fixed a real style-replacement regression the review caught; round 2 minor-only addressed; round 3 (comment-accuracy, editor-constants suggestion) accepted-in-principle but deferred without push per stopping rules, recorded in FU4. Steady, left open. |
 | [#12](https://github.com/L-K-M/Planchette/pull/12), `planchette/whole-word-search` | Core `wholeWord` search option (ASCII alnum/`_` and BMP non-ASCII are word chars; astral surrogates are boundaries; CJK/full-width punctuation stays word content), controller toggle flowing into find and Replace All, underlined-`ab` button with `isSelected` on both search toggles. Core 85 and editor 20 suites pass. | Open at `a7af694`; CI green. Two minor-only rounds addressed; round 3 single minor (needle-edge `\b` parity) accepted-in-principle but deferred without push per stopping rules, recorded in E5. Steady, left open. |
 | [#18](https://github.com/L-K-M/Planchette/pull/18), `planchette/reopen-tab` | Ten-deep closed-tab snapshot stack (text, save identity, full selection with affinity, dirty state) restored without a disk round-trip via a `restoreSnapshot` seam; Ctrl/Cmd+Shift+T and File menu; path reopened meanwhile is selected, not duplicated; save conflict guard still fires; cancelled closes enqueue nothing; restore writes outside undo history. App 45 and editor 20 suites pass. | Open at `6b2786b`; CI green. Round 1 (false `int.clamp` blocker declined; selection/cancel/conflict/undo accepted) and round 2 single minor (affinity) addressed. Awaiting confirmatory round 3. |
+
+### Implemented and monitored in the 2026-09-27 review pass
+
+Seven PRs (`fix/*` branches) were implemented against `797deb9`, each
+verified locally with Flutter 3.47.2 (`analyze` clean; suites green as
+listed; two app filesystem skips expected on a case-sensitive volume) and
+left open for owner review/merging. They were kept deliberately small to
+avoid colliding with the inherited PR territories above.
+
+| PR / branch | Change and proof | Latest recorded status |
+|---|---|---|
+| [#57](https://github.com/L-K-M/Planchette/pull/57), `fix/save-rejects-nul` | B20 + B14: `_writeTextDocument` rejects NUL before publication, sharing `_firstNulIndex` with the loader's binary rule so the two cannot drift; the error names the first NUL's code-unit offset, and the 0x180/0x1ff literals became named constants. Regression asserts the original bytes and no leaked siblings; 85 core tests pass. | Open; round 1 GLM findings (matcher pinning, NUL offset, shared predicate) applied; awaiting round 2. |
+| [#58](https://github.com/L-K-M/Planchette/pull/58), `fix/save-error-messages` | B-d/F-b/F-c core half + I4's explanation: temp-create failures wrap in `TextDocumentException` naming the unwritable folder and carrying the real `osError` detail and original stack; a vanished destination reports a mid-save conflict only on ENOENT, other rename failures keep an honest cause. Read-only-folder test skips under root and restores the recorded dir mode. 85 core tests pass. | Open; round 1 GLM findings (osError/stack, root guard, ENOENT-only conflict) applied; awaiting round 2. |
+| [#59](https://github.com/L-K-M/Planchette/pull/59), `fix/multi-open-errors` | B15: `openDialog` collects a failure record per file and reports one message with the count, every failed name and each error, instead of keeping only the last; single failures keep the old shape. App 40 + 2 skipped. | Open; GLM review in progress. |
+| [#60](https://github.com/L-K-M/Planchette/pull/60), `fix/close-tab-consistency` | B5 + B24 (partial): Close Tab follows the tab ×'s `!busy` rule — loading and load-error tabs close, in-flight saves still refuse; `_nextTab` selects the first tab instead of unwrapping a null active. Widget test closes a tab mid-load and confirms the in-flight open unwinds. App 42 + 2 skipped. | Open; GLM review pending. |
+| [#61](https://github.com/L-K-M/Planchette/pull/61), `fix/open-dash-filenames` | `OpenDocuments.start` dropped every argv entry starting with `-`, so `planchette -draft.txt` silently lost a real file. Only macOS Finder's injected `-psn_*` is filtered now; other entries reach `open` as paths. App tests updated. | Open; GLM review pending. |
+| [#62](https://github.com/L-K-M/Planchette/pull/62), `fix/startup-window-size` | B4: both desktop runners now create the window at 1080×760 centered on the work area (Windows computes a DPI-aware centered origin), matching `WindowOptions` so an early-shown frame already has final geometry. `window_manager` keeps owning runtime size. | Open; GLM review pending. |
+| [#63](https://github.com/L-K-M/Planchette/pull/63), `fix/linux-title-sync` | B-b/I6 (upgraded to confirmed-by-reading): a `GtkHeaderBar` titlebar does not follow `GtkWindow:title`, so filename/dirty title updates were invisible on GNOME/Wayland. `notify::title` now syncs the header bar. | Open; GLM review pending. |
 
 ### Inherited PR records
 
@@ -364,6 +383,14 @@ service, not in the widget.
 - **JSONC**: the reviewed baseline maps `.jsonc` to strict JSON without
   comment rules (`editor_syntax.dart:823`). Check #31 after merge, then add
   a separate JSONC entry if still missing; test quoted comment delimiters.
+- **Basename gaps** (2026-09-27 pass, distinct from language additions):
+  `_basenameLanguages` misses `bashrc`/`zshrc`/`profile` without the dot,
+  `.envrc` (direnv → shell — the only one arguably *wrong* today, since
+  extension `envrc` doesn't match `env`), `PKGBUILD`, `Brewfile`,
+  `Vagrantfile`, `CMakeLists.txt`, `SConstruct`/`wscript`, `.babelrc`/
+  `.eslintrc`/`.prettierrc` (json), `.clang-format`/`.clang-tidy` (yaml),
+  `Caddyfile`, `Jenkinsfile`, `meson.build`. Each is a one-line map entry;
+  bulk-add with a test per name.
 - **More languages**: TypeScript-only keywords (`interface`,
   `implements`, `declare`, `keyof`, `readonly`, `satisfies`), Kotlin
   and Swift keyword sets, PowerShell, Batch, HCL/Terraform, CMake, Nix.
@@ -503,6 +530,10 @@ C-family and shell continuations but not for JSON, INI or YAML.
 Check the merged #31 behavior before another change. **Plan:** use an explicit
 per-language continuation policy, and never let an escape consume `\n` when
 continuation is disallowed. Keep shell/C continuation behavior covered.
+Adjacent confirmation from the 2026-09-27 pass: `_scanString` also treats
+`\` as an escape in INI/YAML/config values that have no escape processing,
+so `key = 'it\'s'` keeps the string open past its close quote — same root
+cause; the fix wants a per-language `escapes` flag, not only the newline case.
 
 ### B3. Read-only files — save prompt assigned to #49
 #49 asks before a save replaces a file marked read-only. **Still open:** a
@@ -525,12 +556,17 @@ first frame shows it. No jump. Still unverified on Windows and under a
 compositing window manager. **Plan if Windows shows it:** match the native
 size to 1080×760 and center the origin, rather than hiding the window until
 Dart shows it (a startup failure would then leave no window at all).
+**In review at #62:** both runners now create 1080×760 centered on the work
+area; manual Windows verification still needed after merge.
 
 ### B5. Close button vs Close Tab during load — S (read)
 Close Tab in the menu requires `!isLoading` (`ready`), while the tab's ×
 only checks `busy`. Pick one rule, probably allowing a loading tab to close,
 and test it. Current disposal ignores late completion; it does not cancel
 the underlying file I/O. Do not claim cancellation without implementing it.
+**In review at #60:** the menu now follows the ×'s `!busy` rule — loading
+and load-error tabs close, in-flight saves still refuse — with a widget
+test closing a tab mid-load.
 
 ### B6. Multi-open error aggregation moved to B15
 The earlier backlog used B6; B15 is the consolidated task. Do not implement twice.
@@ -605,11 +641,13 @@ Replace meaningful POSIX `0x180` (0600) and `0x1ff` (0777 mask) with descriptive
 constants such as `_ownerOnlyMode` and `_permissionBits`, or existing standard
 definitions when available. Keep this optional cleanup scoped to file-operation
 work and preserve mode/privacy tests; it is not a correctness blocker.
+**Done in #57** as `_ownerReadWriteMode`/`_posixPermissionMask` (on that
+branch only; re-apply if #57 closes unmerged).
 
 ### B15. Only the last error survives a multi-file open — S (read)
 `DocumentWorkspace.openDialog` overwrites `error` for each failing file.
 Collect the failures and show "2 files could not be opened: a.bin (binary),
-b.txt (not UTF-8)".
+b.txt (not UTF-8)". **In review at #59** with that exact aggregated shape.
 
 ### B16. Opening a file that is already open should flash its tab — S (idea)
 Today the existing tab is simply activated. Add a short highlight
@@ -649,6 +687,10 @@ Core writing accepts NUL but loading rejects it as binary
 a file that cannot reopen. Decide whether to reject NUL on save or support
 it on load; give a precise error before publication. Test create/save and
 round trips, preserving original bytes when rejecting an edit.
+**In review at #57:** save/create reject NUL before publication with the
+first offset named; load and write share `_firstNulIndex` so the binary
+rule cannot drift. Wider "non-UTF-8 input" policy remains undecided — this
+closes only the NUL hole.
 
 ### B21. Define find preview and caret behavior — S (read)
 Typing a query highlights/reveals a hit without selecting it; Escape returns
@@ -662,6 +704,11 @@ The latest source reports `main()` creates DesktopWindow without disposing
 its window-manager listener or AppLifecycleListener. Verify ownership on root
 unmount and future multi-window flows, then dispose through the owning root
 or app collaborator. Do not assume local usage proves a leak in sibling hosts.
+Same class: `OpenDocuments` (`main.dart`) is also created and never
+disposed — there it is arguably correct, since the macOS channel handler
+must live for the app's lifetime to receive Finder open events. If a
+lifetime decision lands here, either tie both to the root widget or
+document why process scope is right for each.
 
 ### B23. Consider reusing an untouched untitled tab — S (inherited idea)
 Repeated New creates empty buffers; name reuse in #35 is a separate behavior.
@@ -675,13 +722,17 @@ list is non-empty; prove non-empty implies active-non-null or handle null
 explicitly. `open()` queues work behind the `_unlocked` completer while
 locked; prove a dispose during that wait cannot run `_open` on a dead
 workspace. Test closing/quit races that empty or move the active tab.
+**Partially in review at #60:** `_nextTab` selects the first tab when
+active is null instead of unwrapping. The `_unlocked`-wait dispose race
+remains unproven.
 
 ### B25. Confirm-close decisions need visible outcomes — S (read)
 A discard choice is silently dropped when the buffer changed under its
 dialog (the `confirmClose` revision recheck), so "Don't Save" can appear to
 do nothing; tell the user the close did not happen. Save/toolbar enable
 states also disagree about error documents — unify the `ready` predicate
-between native menus, the menu bar and the toolbar.
+between native menus, the menu bar and the toolbar. A close requested while
+`tab.editor.isSaving` is refused just as silently — same missing outcome.
 
 ### B26. One path for Cut/Copy/Paste — S (read)
 Menu items route through remembered-focus intents while shell shortcuts
@@ -693,6 +744,56 @@ both must exist. Do not change paste semantics here — see Q14.
 Casing checks run on case-insensitive macOS temporary volumes; Windows
 volumes are case-insensitive too and have no equivalent coverage. Port the
 existing casing fixtures rather than inventing new ones.
+
+### B28. `openSearch` scans the document twice when prefill is used — S (read, 2026-09-27)
+`EditorController.openSearch` sets `_searchOpen = true`, then assigns
+`search.text = prefill` (`editor_controller.dart`). The assignment
+synchronously fires `_queryChanged`, which runs `_updateMatches`; `openSearch`
+then calls `_updateMatches` again — two whole-document searches for every
+"select text → Cmd+F". Fix: assign `search.text` before flipping
+`_searchOpen` (the listener early-returns while closed). Ordering-only
+change, no behavior delta.
+
+### B29. Save As onto a symlink reports a misleading error — S (read, 2026-09-27)
+`LocalDocumentStore.canonicalSavePath` checks `FileSystemEntity.type(...,
+followLinks: false)`: a link whose target is a regular file throws
+"Choose a regular file as the destination." The user did choose a regular
+file — through a link. Decide the policy deliberately: resolve the link
+(then `existingDigest`/guarded replace handle it like `load`'s
+`resolveOnce`) or keep rejecting but say "destination is a symbolic link".
+Current behavior is safe but confusing; needs a product decision.
+
+### B30. `initialText` plus `loadDocument` is a silent API trap — S (read, 2026-09-27)
+`EditorController`'s constructor only marks `_loading` when
+`initialText == null`; a host passing both gets an editor that never calls
+its loader. Assert the invariant in debug builds or document
+"initialText wins" — the former catches host mistakes early, and the hosts
+(Séance, Poltergeist) are exactly the audience that can hit it.
+
+### B31. Case-insensitive find degrades on length-shifting Unicode — M (read, 2026-09-27)
+`findSearchMatches` falls back to *case-sensitive* matching when
+`toLowerCase()` changes the haystack length, while the UI still claims
+case-insensitive mode. Query "STRASSE" in text with "straße" reports
+"No matches" — wrong in a way the user cannot detect. Options: a
+code-point-wise lowercase that preserves length per character where
+possible (hard), or a visible "matching is limited for this text" state
+(honest). ß/İ/ı cases are common in European text.
+
+### B32. Pin `_mergeMetaTokens` group-offset assumption with a test — S (read, 2026-09-27)
+`match[0]!.indexOf(groupText)` finds the first occurrence of the group's
+text inside the match — wrong if the same text also appears earlier in the
+prefix. Documented caveat in the code; all current patterns are safe (YAML
+prefix is whitespace/dashes only). Leave a test pinning the property so a
+future `([a-z]+)=` pattern where the key repeats in the prefix does not
+silently mis-highlight.
+
+### B33. Tab switch can steal find-field focus — S (read, 2026-09-27)
+`_select` → `_focusAfterFrame` unconditionally requests `editorFocus` for the
+newly active tab; the `didUpdateWidget` isActive logic that preserves
+search/replacement focus runs *after* the focus already moved to the
+document. If the destination tab had its find bar focused, the user loses
+it on every tab switch. Only request editor focus when none of the tab's
+three nodes already has focus.
 
 ## 4. Performance
 
@@ -890,6 +991,15 @@ for already-normalized input and a single-pass builder against mixed CR/LF,
 CRLF, empty input and target conventions. Preserve the documented mixed-EOL
 normalization contract and coordinate #39/FU12/P4.
 
+### P8. Per-identifier lowercase allocation in keyword matching — S (read, 2026-09-27)
+`caseInsensitiveKeywords` calls `word.toLowerCase()` per scanned identifier
+(Dockerfile, INI, SQL, CSS). Keep a pre-lowered keyword set at
+`SyntaxLanguage` construction and compare with a length-checked
+case-insensitive scan, or a small `HashMap` lookup. Low impact but free.
+Also from that pass: `loadTextDocument` runs three digest passes plus a
+stat, a UTF-8 decode, two EOL passes and a fold on the caller isolate —
+already owned by P4/FU12/P7, confirmed here.
+
 ## 5. Editing features
 
 ### E1. Validate comment toggle; extend block-only languages — after #23
@@ -1049,6 +1159,14 @@ Ruby, `ini` sections). Clicking jumps through the Go to Line scroll path
 (#8/FU2). Test commented-out code, nested scopes and files with no symbols.
 Keep it out of the file-safety and highlight paths.
 
+### E12. Re-run language detection on first-line edits — S (read, 2026-09-27)
+`_detectLanguage` fires only on `_installText` and `displayPath` changes, so
+an untitled buffer where the user types `#!/usr/bin/env python` stays plain
+text forever — the shebang machinery exists but is unreachable live. In
+`_textChanged`, compare the bounded (~4 KiB) first line before and after an
+edit and re-detect only when it changed. Pairs with Q25's subtle status-bar
+confirmation when detection changes through typing.
+
 ## 6. App features
 
 ### A1. Settings store — partly assigned to #37 (enables FU4, E9, A3, A4)
@@ -1144,6 +1262,10 @@ paths. The quit prompt should list the dirty files, with "Save All" and
 Reuse existing guards, report partial success and stop safely on cancel.
 Do not promise recovery of discarded text merely because its path is in
 history. Tab menus, Copy Path and reveal actions belong to FU5's app service.
+**Save All command** (2026-09-27): a File › Save All that iterates dirty
+tabs through the existing `_save` serialization and aggregates partial
+failures using the B15 aggregation shape is the cheap first piece; the
+quit-prompt Save All/Discard All flow is the bigger half and stays here.
 
 Open [#18](https://github.com/L-K-M/Planchette/pull/18)
 (`planchette/reopen-tab`) implements the Reopen half with text snapshots
@@ -1240,17 +1362,24 @@ Test restricted access and retained metadata, not just ordinary mode bits.
 ### I4. Directory write permission — S
 A writable file in a read-only directory can't be saved, because the
 temp sibling can't be created. Explain this in the error, and offer
-"Save As…".
+"Save As…". **Core half in review at #58:** the temp-create failure becomes
+a `TextDocumentException` naming the unwritable folder and carrying the
+real `osError`. The "Save As…" offer on that error remains open — it is an
+app-level decision tied to the dialogs seam.
 
 ### I5. Host-neutral wording in core errors — S
 Core messages say "the local copy", which is Poltergeist/Séance
 vocabulary. Make the messages injectable (like `EditorStrings`), or use
 neutral wording, and check both hosts' error adapters first.
 
-### I6. Linux header title synchronization — S (investigate)
-`linux/runner/my_application.cc:48` sets a GtkHeaderBar title, while the window
-plugin changes GtkWindow title. Verify filename/dirty updates on GNOME/Wayland
-before changing native code. Cover both header-bar and traditional decorations.
+### I6. Linux header title synchronization — S (confirmed by reading)
+`linux/runner/my_application.cc` sets a `GtkHeaderBar` title once, while
+the window plugin changes `GtkWindow:title`. A header-bar titlebar has its
+own title label that does not follow the window title, so filename/dirty
+updates never appear on GNOME/Wayland — and the window title is the only
+dirty indicator outside the tab strip. **In review at #63:** `notify::title`
+syncs the header bar; traditional decorations already follow. Manual
+GNOME/Wayland verification still open after merge.
 
 ## 8. Visual design and theming
 
@@ -1395,6 +1524,19 @@ After #35/#36/#43 integration, compare a subtle inset border or baseline rule
 with the current pills. Keep one chrome owner, active-tab distinction and
 accessible contrast; avoid another independent rewrite.
 
+### V16. Empty-state copy shows beside untitled tabs — S (read, 2026-09-27)
+The header path label falls back to "A place for your words." whenever the
+active tab has no path — so "Untitled 1" can be open while the header still
+shows marketing copy (#21 also flagged it). Show the untitled name instead;
+one-line label fix, but coordinate the shell file with #36/#43.
+
+### V17. `caretLineColumn` reports (1,1) for an invalid selection — S (read, 2026-09-27)
+An unfocused/invalid selection renders "Ln 1, Col 1" in the status bar —
+plausible-looking but wrong for a document whose caret was elsewhere. Show
+the last valid position or a neutral state; coordinate with FU13's status
+semantics. Also worth noting: the window title duplicates the tab's dirty
+dot and name; after #63 it is again the only dirty signal on GNOME.
+
 ## 9. Delightful and quirky ideas
 
 - **Q1. The planchette caret.** An optional caret shaped like a tiny
@@ -1485,6 +1627,20 @@ feedback must remain quiet and usable without animation or thematic copy.
   Q15 before promising more.
 - **Q24. Daily word-goal candle.** An optional, subtle progress marker for
   writing goals. Off by default; never thematic pressure or sound.
+- **Q25. Shebang wake-up.** E12 turns typing `#!/usr/bin/env …` into the
+  file *choosing its own language* — a small moment worth a gentle
+  confirmation: when detection changes the language through a first-line
+  edit, flash the language segment in the status bar once (subtle,
+  reduced-motion aware).
+- **Q26. "Saved · verified" trust beat.** The digest guard that runs on
+  every save is a real guarantee worth surfacing: after a successful save,
+  the status could briefly read "saved · verified" before returning to
+  normal. Truthful, programmer-native, zero cost.
+- **Q27. Planchette glyph on the close dialog.** `chooseClose` is the one
+  place the app asks a yes/no question, and the spirit board's YES/NO/
+  GOODBYE semantics already exist implicitly. Keep the copy plain (thematic
+  text stays out of errors) but a tiny planchette glyph in the dialog
+  corner is a quiet nod — optional art, removable in one line.
 
 ## 10. Process and documentation
 
@@ -1781,3 +1937,12 @@ inspected.
   (`event_simulation` asserts no linux keyCode mapping), so #9's numpad
   bindings stay uncovered with the exact failure cited in-test. Harness
   limits are cited concretely, not generalized — same policy as D0e.
+- **2026-09-27 review pass (#57–#63):** baseline `797deb9` on Flutter
+  3.47.2; suites green (core 85, editor 19, app 40 + 2 case-insensitive
+  skips). #57 and #58 each completed a first GLM round with all findings
+  applied — matcher pinning, the NUL code-unit offset and a shared
+  `_firstNulIndex` on #57; `osError`/stack-trace preservation, a root-and-
+  chmod-hardened read-only test and ENOENT-only conflict reporting on #58.
+  #59–#63 await their first rounds. One finding resolved as by-design:
+  `OpenDocuments` is intentionally never disposed because its macOS
+  channel handler must outlive every document event (recorded under B22).
