@@ -447,38 +447,59 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   ),
                 ),
               Expanded(
-                child: Actions(
-                  actions: {
-                    if (_locked) ...{
-                      UndoTextIntent: CallbackAction<UndoTextIntent>(
-                        onInvoke: (_) => null,
-                      ),
-                      RedoTextIntent: CallbackAction<RedoTextIntent>(
-                        onInvoke: (_) => null,
-                      ),
-                    },
+                child: Shortcuts(
+                  shortcuts: const {
+                    SingleActivator(LogicalKeyboardKey.tab): _IndentIntent(),
+                    SingleActivator(
+                      LogicalKeyboardKey.tab,
+                      shift: true,
+                    ): _DedentIntent(),
                   },
-                  child: TextField(
-                    key: const ValueKey('planchette.document'),
-                    controller: c.text,
-                    undoController: c.undoController,
-                    readOnly: _locked,
-                    focusNode: c.editorFocus,
-                    scrollController: c.scroll,
-                    autofocus: widget.isActive,
-                    expands: true,
-                    maxLines: null,
-                    minLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textAlignVertical: TextAlignVertical.top,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    smartDashesType: SmartDashesType.disabled,
-                    smartQuotesType: SmartQuotesType.disabled,
-                    style: _style,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.all(_padding),
+                  child: Actions(
+                    actions: {
+                      _IndentIntent: CallbackAction<_IndentIntent>(
+                        onInvoke: (_) {
+                          if (!_locked) c.indentSelection();
+                          return null;
+                        },
+                      ),
+                      _DedentIntent: CallbackAction<_DedentIntent>(
+                        onInvoke: (_) {
+                          if (!_locked) c.dedentSelection();
+                          return null;
+                        },
+                      ),
+                      if (_locked) ...{
+                        UndoTextIntent: CallbackAction<UndoTextIntent>(
+                          onInvoke: (_) => null,
+                        ),
+                        RedoTextIntent: CallbackAction<RedoTextIntent>(
+                          onInvoke: (_) => null,
+                        ),
+                      },
+                    },
+                    child: TextField(
+                      key: const ValueKey('planchette.document'),
+                      controller: c.text,
+                      undoController: c.undoController,
+                      readOnly: _locked,
+                      focusNode: c.editorFocus,
+                      scrollController: c.scroll,
+                      autofocus: widget.isActive,
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textAlignVertical: TextAlignVertical.top,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      style: _style,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(_padding),
+                      ),
                     ),
                   ),
                 ),
@@ -537,6 +558,17 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     _gutterScaler = scaler;
     _gutterStyle = _style;
   }
+}
+
+/// Tab belongs to the buffer, not the focus ring. Flutter routes Tab to focus
+/// traversal, so without these intents a tab-indented file cannot be typed at
+/// all and Shift+Tab has nothing to dedent with.
+class _IndentIntent extends Intent {
+  const _IndentIntent();
+}
+
+class _DedentIntent extends Intent {
+  const _DedentIntent();
 }
 
 /// Paints right-aligned line numbers at each logical line's visual top,

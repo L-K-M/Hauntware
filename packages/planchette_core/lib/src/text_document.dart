@@ -62,7 +62,13 @@ final class TextDocumentException implements Exception {
 
 Future<String> textDocumentSha256(File file) async {
   await _requireRegularFile(file);
-  return (await crypto.sha256.bind(file.openRead()).first).toString();
+  try {
+    return (await crypto.sha256.bind(file.openRead()).first).toString();
+  } on FileSystemException {
+    throw const TextDocumentException(
+      'That file could not be read. Check that you have permission to read it.',
+    );
+  }
 }
 
 Future<File> resolveTextDocumentTarget(
@@ -72,10 +78,29 @@ Future<File> resolveTextDocumentTarget(
   if (symlinkPolicy == SymlinkPolicy.resolveOnce) {
     // Resolve ancestors as well, so a later retargeted directory link cannot
     // silently move a local document's save identity to another directory.
-    file = File(await file.resolveSymbolicLinks());
+    file = File(await _resolveExistingPath(file));
   }
   await _requireRegularFile(file);
   return file;
+}
+
+/// Resolve [file]'s real path, reporting a missing or unreadable file in the
+/// same plain language as every other document error. `dart:io` reports these
+/// as a `PathNotFoundException` carrying the platform errno, which is not
+/// something to put in front of someone whose file did not open.
+Future<String> _resolveExistingPath(File file) async {
+  if (await FileSystemEntity.type(file.path, followLinks: false) ==
+      FileSystemEntityType.notFound) {
+    throw const TextDocumentException('That file no longer exists.');
+  }
+  try {
+    return await file.resolveSymbolicLinks();
+  } on FileSystemException {
+    throw TextDocumentException(
+      'That file could not be opened. Check that it still exists and that you '
+      'have permission to read it.',
+    );
+  }
 }
 
 /// Reads bounded, strict UTF-8, retaining one leading BOM as metadata and

@@ -478,7 +478,10 @@ class _DocumentShellState extends State<_DocumentShell> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          active?.path ?? 'A place for your words.',
+                          // An untitled document already names itself in its
+                          // tab; repeating the empty state's marketing line
+                          // next to an open buffer read as a bug.
+                          active?.path ?? active?.name ?? '',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

@@ -45,6 +45,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   final Set<DocumentTab> _closingTabs = {};
   final Map<DocumentTab, Future<bool>> _saves = {};
   int _nextId = 1;
+  int _nextUntitled = 1;
   int _dialogCount = 0;
   bool _closingAll = false;
   bool _quitAccepted = false;
@@ -76,7 +77,10 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   DocumentTab _makeTab({String? path, String? initialText}) {
     final id = _nextId++;
-    final tab = DocumentTab._(id, 'Untitled $id')..path = path;
+    // Untitled documents number among themselves. Sharing the tab counter made
+    // opening three files turn the next new document into "Untitled 4".
+    final untitled = path == null ? _nextUntitled++ : _nextUntitled;
+    final tab = DocumentTab._(id, 'Untitled $untitled')..path = path;
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,

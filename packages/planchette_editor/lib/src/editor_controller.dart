@@ -361,6 +361,12 @@ class EditorController extends ChangeNotifier {
   void nextMatch() => _stepMatch(1);
   void previousMatch() => _stepMatch(-1);
   void _stepMatch(int delta) {
+    if (!_searchOpen) {
+      // Find Next outside the find bar reopens it with the remembered query
+      // rather than doing nothing, which made F3 a dead key after a close.
+      openSearch();
+      return;
+    }
     if (_matches.isEmpty) return;
     _activeMatch = (_activeMatch + delta + _matches.length) % _matches.length;
     text.setSearchMatches(_matches, _activeMatch);
@@ -371,6 +377,61 @@ class EditorController extends ChangeNotifier {
     );
     _revealRequest++;
     _notify();
+  }
+
+  /// Indent the selection the way the file already indents, so a tab-indented
+  /// file keeps its tabs. A file with no indentation yet uses spaces.
+  void indentSelection() =>
+      _applyIndentation((source) => insertIndent(
+        source,
+        start: text.selection.start,
+        end: text.selection.end,
+        insertSpaces: !_indentsWithTabs(),
+      ));
+
+  /// Remove one tab stop of indentation from every line the selection touches.
+  void dedentSelection() => _applyIndentation(
+    (source) => removeIndent(
+      source,
+      start: text.selection.start,
+      end: text.selection.end,
+    ),
+  );
+
+  /// Indent a selection the file's own indentation does not decide, for hosts
+  /// that expose an explicit width. [insertSpaces] false writes a literal tab.
+  void indentSelectionBy({
+    int tabWidth = defaultTabWidth,
+    bool insertSpaces = true,
+  }) => _applyIndentation(
+    (source) => insertIndent(
+      source,
+      start: text.selection.start,
+      end: text.selection.end,
+      tabWidth: tabWidth,
+      insertSpaces: insertSpaces,
+    ),
+  );
+
+  bool _indentsWithTabs() {
+    final measured = measureIndentation(text.text);
+    return measured.width > 0 && measured.usesTabs;
+  }
+
+  void _applyIndentation(TextEdit Function(String source) plan) {
+    if (_editingLocked || _loading || _error != null) return;
+    final selection = text.selection;
+    // A live composition belongs to the input method; editing around it would
+    // corrupt the range it is still producing.
+    if (!selection.isValid || text.value.isComposingRangeValid) return;
+    final edit = plan(text.text);
+    text.value = TextEditingValue(
+      text: edit.text,
+      selection: TextSelection(
+        baseOffset: edit.start,
+        extentOffset: edit.end,
+      ),
+    );
   }
 
   void replaceCurrent() {

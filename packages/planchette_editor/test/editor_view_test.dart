@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -17,6 +18,25 @@ Widget app(
     ),
   ),
 );
+
+/// Put the caret in the document and settle, so a key event reaches the editor
+/// rather than whatever the test harness focused first.
+Future<void> focusDocument(
+  WidgetTester tester,
+  int offset, {
+  int? extent,
+}) async {
+  await tester.tap(find.byKey(const ValueKey('planchette.document')));
+  await tester.pump();
+  tester
+      .widget<TextField>(find.byKey(const ValueKey('planchette.document')))
+      .controller!
+      .selection = TextSelection(
+    baseOffset: offset,
+    extentOffset: extent ?? offset,
+  );
+  await tester.pump();
+}
 
 class TestStrings extends EditorStrings {
   const TestStrings();
@@ -161,5 +181,151 @@ void main() {
           .readOnly,
       isTrue,
     );
+  });
+  testWidgets('Tab reaches the buffer instead of the focus ring', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'def f():\n');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await focusDocument(tester, 9);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(c.text.text, 'def f():\n    ');
+    expect(c.editorFocus.hasFocus, isTrue, reason: 'focus must stay put');
+  });
+
+  testWidgets('Tab pads to the next stop when the caret follows code', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'x = 1');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await focusDocument(tester, 1);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(c.text.text, 'x    = 1');
+  });
+
+  testWidgets('Tab keeps a tab-indented file on tabs', (tester) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'if x:\n\ty');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    // The caret is still inside the line's tab indentation.
+    await focusDocument(tester, 7);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(c.text.text, 'if x:\n\t\ty');
+  });
+
+  testWidgets('Tab pads with spaces so a tab stop still lines up', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'if x:\n\ty');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    // The caret is after the 'y', at rendered column 5.
+    await focusDocument(tester, 8);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(c.text.text, 'if x:\n\ty   ');
+  });
+
+  testWidgets('Shift+Tab dedents the caret line', (tester) async {
+    final c = EditorController(
+      displayPath: 'a.py',
+      initialText: '    one\n        two',
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await focusDocument(tester, 14);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+
+    expect(c.text.text, '    one\n    two');
+  });
+
+  testWidgets('Tab indents every line a block selection touches', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'one\ntwo');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await focusDocument(tester, 0, extent: 7);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(c.text.text, '    one\n    two');
+  });
+
+  testWidgets('a locked editor ignores Tab', (tester) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'def f():');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c, locked: true));
+    await focusDocument(tester, 7);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+
+    expect(c.text.text, 'def f():');
+  });
+
+  testWidgets('Find Next reopens a closed find bar', (tester) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'a needle a');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    c.openSearch();
+    c.search.text = 'needle';
+    await tester.pump();
+    expect(c.matches, hasLength(1));
+    c.closeSearch();
+    await tester.pump();
+    expect(c.searchOpen, isFalse);
+
+    c.nextMatch();
+    await tester.pump();
+
+    expect(c.searchOpen, isTrue);
+    expect(c.matches, hasLength(1));
+  });
+
+  testWidgets('Find Previous reopens a closed find bar too', (tester) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'a needle a');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    c.openSearch();
+    c.search.text = 'needle';
+    await tester.pump();
+    c.closeSearch();
+    await tester.pump();
+
+    c.previousMatch();
+    await tester.pump();
+
+    expect(c.searchOpen, isTrue);
+  });
+
+  testWidgets('F3 reopens a closed find bar from the keyboard', (tester) async {
+    final c = EditorController(displayPath: 'a.py', initialText: 'needle');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    c.openSearch();
+    c.search.text = 'needle';
+    await tester.pump();
+    c.closeSearch();
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.f3);
+    await tester.pump();
+
+    expect(c.searchOpen, isTrue);
   });
 }

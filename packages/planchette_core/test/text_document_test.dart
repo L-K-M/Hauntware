@@ -370,6 +370,40 @@ void main() {
       ),
     );
   });
+
+  test('a missing file is reported in plain language', () async {
+    await expectLater(
+      loadTextDocument(
+        File('${directory.path}/absent.txt'),
+        symlinkPolicy: SymlinkPolicy.resolveOnce,
+      ),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'That file no longer exists.',
+        ),
+      ),
+    );
+  });
+
+  test('an unresolvable path never leaks a platform errno', () async {
+    // A path whose parent is a file rather than a directory cannot be
+    // resolved. The raw dart:io failure names the syscall and the errno, which
+    // is not something to show someone whose document did not open.
+    Object? thrown;
+    try {
+      await loadTextDocument(
+        File('${file.path}/nested.txt'),
+        symlinkPolicy: SymlinkPolicy.resolveOnce,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown, isA<TextDocumentException>());
+    expect('$thrown', isNot(contains('errno')));
+    expect('$thrown', isNot(contains('Exception:')));
+  });
 }
 
 Future<String> _loadText(

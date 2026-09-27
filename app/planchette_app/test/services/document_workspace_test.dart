@@ -528,4 +528,22 @@ void main() {
       expect(tab.path, isNull);
     },
   );
+  test(
+    'untitled documents number among themselves, not against opened files',
+    () {
+      final store = MemoryDocuments();
+      store.files[testPath('one.txt')] = document('one.txt', 'one');
+      store.files[testPath('two.txt')] = document('two.txt', 'two');
+      final workspace = DocumentWorkspace(store: store, dialogs: FakeDialogs());
+      addTearDown(workspace.dispose);
+
+      expect(workspace.newDocument()!.name, 'Untitled 1');
+      unawaited(workspace.open(testPath('one.txt')));
+      unawaited(workspace.open(testPath('two.txt')));
+
+      return Future<void>.delayed(Duration.zero, () {
+        expect(workspace.newDocument()!.name, 'Untitled 2');
+      });
+    },
+  );
 }
