@@ -57,6 +57,32 @@ class _DocumentShellState extends State<_DocumentShell> {
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   FocusNode? _lastTextFocus;
 
+  /// Editor font sizes for View › Zoom. The default is the editor's own 14.
+  static const _zoomSizes = [
+    9.0,
+    10.0,
+    11.0,
+    12.0,
+    13.0,
+    14.0,
+    16.0,
+    18.0,
+    20.0,
+    22.0,
+    24.0,
+    28.0,
+    32.0,
+    36.0,
+    48.0,
+  ];
+  static const _defaultZoom = 5;
+  int _zoom = _defaultZoom;
+
+  void _setZoom(int zoom) {
+    final next = zoom.clamp(0, _zoomSizes.length - 1);
+    if (next != _zoom) setState(() => _zoom = next);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -278,6 +304,35 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
       ]),
+      _ShellMenu('View', [
+        _Command(
+          'Zoom In',
+          () => _setZoom(_zoom + 1),
+          shortcut: _shortcut(LogicalKeyboardKey.equal),
+          // `+` sits on different keys, shifted or not, across layouts.
+          aliases: [
+            _shortcut(LogicalKeyboardKey.equal, shift: true),
+            _shortcut(LogicalKeyboardKey.add),
+            _shortcut(LogicalKeyboardKey.add, shift: true),
+            _shortcut(LogicalKeyboardKey.numpadAdd),
+          ],
+          enabled: _zoom < _zoomSizes.length - 1,
+        ),
+        _Command(
+          'Zoom Out',
+          () => _setZoom(_zoom - 1),
+          shortcut: _shortcut(LogicalKeyboardKey.minus),
+          aliases: [_shortcut(LogicalKeyboardKey.numpadSubtract)],
+          enabled: _zoom > 0,
+        ),
+        _Command(
+          'Actual Size',
+          () => _setZoom(_defaultZoom),
+          shortcut: _shortcut(LogicalKeyboardKey.digit0),
+          aliases: [_shortcut(LogicalKeyboardKey.numpad0)],
+          enabled: _zoom != _defaultZoom,
+        ),
+      ]),
       _ShellMenu('Window', [
         _Command(
           'Next Tab',
@@ -424,9 +479,10 @@ class _DocumentShellState extends State<_DocumentShell> {
           if (entry is _Command &&
               entry.shortcut != null &&
               menu.label != 'Edit')
-            entry.shortcut!: () {
-              if (entry.enabled) entry.run();
-            },
+            for (final shortcut in [entry.shortcut!, ...entry.aliases])
+              shortcut: () {
+                if (entry.enabled) entry.run();
+              },
     };
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
@@ -632,6 +688,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                           for (final tab in tabs)
                             PlanchetteEditor(
                               key: ValueKey(tab.id),
+                              textStyle: TextStyle(fontSize: _zoomSizes[_zoom]),
                               controller: tab.editor,
                               isActive: tab == active,
                               editingLocked: workspace.interactionLocked,
@@ -671,9 +728,18 @@ final class _Separator extends _MenuEntry {
 }
 
 final class _Command extends _MenuEntry {
-  const _Command(this.label, this.run, {this.shortcut, this.enabled = true});
+  const _Command(
+    this.label,
+    this.run, {
+    this.shortcut,
+    this.aliases = const [],
+    this.enabled = true,
+  });
   final String label;
   final VoidCallback run;
   final SingleActivator? shortcut;
+
+  /// More key combinations for the same command, not shown in menus.
+  final List<SingleActivator> aliases;
   final bool enabled;
 }
