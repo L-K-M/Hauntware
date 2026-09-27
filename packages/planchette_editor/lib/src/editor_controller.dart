@@ -206,10 +206,17 @@ class EditorController extends ChangeNotifier {
 
   void _applyLanguage(String lead) {
     final newline = lead.indexOf('\n');
-    text.language = syntaxLanguageFor(
+    final language = syntaxLanguageFor(
       _displayPath,
       firstLine: newline < 0 ? lead : lead.substring(0, newline),
     );
+    // Typing anywhere in the lead changes it on almost every keystroke while
+    // leaving the answer alone. Only assign a real change: the field is a
+    // plain one today, but a view that keys its highlighting off it should not
+    // be handed the same value twice. Every language is a canonical
+    // `SyntaxLanguages` instance, so identity is the comparison.
+    if (identical(language, text.language)) return;
+    text.language = language;
   }
 
   /// Bounds the per-keystroke language check. Every recogniser in

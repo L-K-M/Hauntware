@@ -258,6 +258,20 @@ void main() {
     expect(editor.text.language, SyntaxLanguages.markdown);
   });
 
+  test('first-line churn keeps a language that never changed', () {
+    final editor = EditorController(displayPath: 'script', initialText: '');
+    addTearDown(editor.dispose);
+
+    // Every keystroke changes the lead, so detection runs each time and finds
+    // nothing to name yet.
+    for (final partial in ['#', '#!', '#!/usr', '#!/usr/bin/env pyth']) {
+      editor.text.text = partial;
+      expect(editor.text.language, isNull, reason: partial);
+    }
+    editor.text.text = '#!/usr/bin/env python\n';
+    expect(editor.text.language, SyntaxLanguages.python);
+  });
+
   test('edits away from the first line leave the language alone', () {
     final editor = EditorController(
       displayPath: 'Untitled 1',
