@@ -221,4 +221,75 @@ void main() {
     editor.text.selection = const TextSelection.collapsed(offset: 4);
     expect(editor.caretLineColumn, (2, 3));
   });
+
+  test('a shebang typed into a buffer names its language', () {
+    final editor = EditorController(displayPath: 'Untitled 1', initialText: '');
+    addTearDown(editor.dispose);
+    expect(editor.text.language, isNull);
+
+    editor.text.text = '#!/usr/bin/env python';
+    expect(editor.text.language, SyntaxLanguages.python);
+
+    // The other direction too: undoing the shebang takes the language away.
+    editor.text.text = 'print(1)';
+    expect(editor.text.language, isNull);
+
+    editor.text.text = '#!/bin/sh\necho hi\n';
+    expect(editor.text.language, SyntaxLanguages.shell);
+  });
+
+  test(
+    'language detection follows the first line of an extensionless file',
+    () {
+      final editor = EditorController(displayPath: 'script', initialText: '');
+      addTearDown(editor.dispose);
+      expect(editor.text.language, isNull);
+      editor.text.text = 'echo hi\n';
+      expect(editor.text.language, isNull);
+      editor.text.text = '#!/usr/bin/env ruby\nputs 1\n';
+      expect(editor.text.language, SyntaxLanguages.ruby);
+    },
+  );
+
+  test('a known extension outranks the shebang', () {
+    final editor = EditorController(displayPath: 'notes.md', initialText: '');
+    addTearDown(editor.dispose);
+    editor.text.text = '#!/usr/bin/env python\n';
+    expect(editor.text.language, SyntaxLanguages.markdown);
+  });
+
+  test('first-line churn keeps a language that never changed', () {
+    final editor = EditorController(displayPath: 'script', initialText: '');
+    addTearDown(editor.dispose);
+
+    // Every keystroke changes the lead, so detection runs each time and finds
+    // nothing to name yet.
+    for (final partial in ['#', '#!', '#!/usr', '#!/usr/bin/env pyth']) {
+      editor.text.text = partial;
+      expect(editor.text.language, isNull, reason: partial);
+    }
+    editor.text.text = '#!/usr/bin/env python\n';
+    expect(editor.text.language, SyntaxLanguages.python);
+  });
+
+  test('edits away from the first line leave the language alone', () {
+    final editor = EditorController(
+      displayPath: 'Untitled 1',
+      initialText: '#!/usr/bin/env node\n',
+    );
+    addTearDown(editor.dispose);
+    expect(editor.text.language, SyntaxLanguages.javascript);
+    editor.text.text = '#!/usr/bin/env node\nconst a = 1;\n';
+    expect(editor.text.language, SyntaxLanguages.javascript);
+  });
+
+  test('the per-keystroke language check stays bounded', () {
+    final editor = EditorController(displayPath: 'Untitled 1', initialText: '');
+    addTearDown(editor.dispose);
+
+    // A shebang past the bounded lead is not a shebang. Pinning the bound
+    // keeps it from being widened without a reason.
+    editor.text.text = '${'x' * 4096}#!/usr/bin/env python';
+    expect(editor.text.language, isNull);
+  });
 }

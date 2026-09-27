@@ -71,6 +71,7 @@ class EditorController extends ChangeNotifier {
   int _revealRequest = 0;
   String _lastText = '';
   String? _lastQuery;
+  String _languageProbe = '';
   String? _metricsText;
   List<int> _lineStarts = const [0];
   int _bytes = 0;
@@ -187,13 +188,46 @@ class EditorController extends ChangeNotifier {
   }
 
   void _detectLanguage() {
-    final value = text.text;
-    final newline = value.indexOf('\n');
-    text.language = syntaxLanguageFor(
-      _displayPath,
-      firstLine: newline < 0 ? value : value.substring(0, newline),
-    );
+    _languageProbe = _leadingText(text.text);
+    _applyLanguage(_languageProbe);
   }
+
+  /// An untitled buffer has no extension to recognise, so the shebang machinery
+  /// in [syntaxLanguageFor] is the only thing that can name its language. Watch
+  /// the lead of the document while it is being typed, and re-recognise when
+  /// that lead changes — but only then, so a keystroke deep inside a large
+  /// document costs no more than the bound below.
+  void _refreshLanguage() {
+    final lead = _leadingText(text.text);
+    if (lead == _languageProbe) return;
+    _languageProbe = lead;
+    _applyLanguage(lead);
+  }
+
+  void _applyLanguage(String lead) {
+    final newline = lead.indexOf('\n');
+    final language = syntaxLanguageFor(
+      _displayPath,
+      firstLine: newline < 0 ? lead : lead.substring(0, newline),
+    );
+    // Typing anywhere in the lead changes it on almost every keystroke while
+    // leaving the answer alone. Only assign a real change: the field is a
+    // plain one today, but a view that keys its highlighting off it should not
+    // be handed the same value twice. Every language is a canonical
+    // `SyntaxLanguages` instance, so identity is the comparison.
+    if (identical(language, text.language)) return;
+    text.language = language;
+  }
+
+  /// Bounds the per-keystroke language check. Every recogniser in
+  /// [syntaxLanguageFor] looks at the start of the first line — a shebang is
+  /// under a hundred characters — so a longer lead cannot change the answer.
+  static const _languageProbeLimit = 4096;
+
+  static String _leadingText(String value) =>
+      value.length <= _languageProbeLimit
+      ? value
+      : value.substring(0, _languageProbeLimit);
 
   void _updateMetrics() {
     if (identical(_metricsText, text.text)) return;
@@ -207,6 +241,7 @@ class EditorController extends ChangeNotifier {
     if (text.text != _lastText) {
       _lastText = text.text;
       _revision++;
+      _refreshLanguage();
       if (_searchOpen) _updateMatches(resetActive: false);
     }
     _notify();
