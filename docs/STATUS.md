@@ -4,6 +4,17 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Region seams (2026-09-27)
+
+The three region boundaries (sidebar | panes, A | B, panes | inspector)
+now take 1 px in layout instead of their 7 px splitter slot. The grab
+area floats over the seam (`ShellSeam.straddle`), so the header divider
+and the active pane's accent line reach the vertical lines; before, each
+stopped 3 px short. Stage thresholds and clamps still budget the full
+splitter extent, so the stages switch at the same widths; the secondary
+pane and the main column take the 6 px each seam frees. Covered by
+`test/ui/shell/shell_seams_test.dart`. Owner-reported; 10 §3.1 amended.
+
 ## Desktop file interactions (2026-09-26)
 
 Show Hidden Files now carries its checked state into the macOS menu. The

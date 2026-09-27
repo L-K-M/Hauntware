@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Lines meet at the region edges.** The line under the header and the
+  active pane's accent line stopped a few pixels short of the sidebar's
+  edge, the divider between the two panes and the inspector's edge. They
+  now run all the way to those lines.
 - **The active pane's accent line is above its tabs.** The coloured line
   that shows which pane is active now runs along the top of that pane's
   tab bar instead of under the tabs, so it no longer sits between a tab

@@ -2039,6 +2039,52 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       ),
     );
 
+    // The panes | inspector boundary is a 1 px seam in the row; the
+    // splitter's grab area floats over it (see [ShellSeam]).
+    final paneRow = !inspectorInline
+        ? panes
+        : ShellSeam.straddle(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: panes),
+                const ShellSeam(),
+                SizedBox(
+                  key: const ValueKey('inspector.region'),
+                  width: inspectorWidth,
+                  child: inspector,
+                ),
+              ],
+            ),
+            end: inspectorWidth,
+            handle: ShellSplitter(
+              key: const ValueKey('inspector.splitter'),
+              focusNode: _inspectorSplitterFocus,
+              label: strings.resizeInspector,
+              value: strings.splitterWidthPx(inspectorWidth.round()),
+              increasedValue: strings.splitterWidthPx(
+                _clampInspector(
+                  inspectorWidth + shellSplitterKeyStep,
+                  width,
+                ).round(),
+              ),
+              decreasedValue: strings.splitterWidthPx(
+                _clampInspector(
+                  inspectorWidth - shellSplitterKeyStep,
+                  width,
+                ).round(),
+              ),
+              grow: -1,
+              onResizeStart: () => _inspectorDragWidth = null,
+              onResize: (delta) => _resizeInspector(delta, width),
+              onResizeEnd: _commitInspectorWidth,
+              onReset: () {
+                setState(() => _inspectorWidth = inspectorDefaultWidth);
+                _commitInspectorWidth();
+              },
+            ),
+          );
+
     final main = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2049,54 +2095,18 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         Divider(height: 1, color: chrome.separator),
         // D19's update banner lives in Alerts now (D32 §3); the pane
         // row owns the rest of the column.
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: panes),
-              if (inspectorInline) ...[
-                ShellSplitter(
-                  key: const ValueKey('inspector.splitter'),
-                  focusNode: _inspectorSplitterFocus,
-                  label: strings.resizeInspector,
-                  value: strings.splitterWidthPx(inspectorWidth.round()),
-                  increasedValue: strings.splitterWidthPx(
-                    _clampInspector(
-                      inspectorWidth + shellSplitterKeyStep,
-                      width,
-                    ).round(),
-                  ),
-                  decreasedValue: strings.splitterWidthPx(
-                    _clampInspector(
-                      inspectorWidth - shellSplitterKeyStep,
-                      width,
-                    ).round(),
-                  ),
-                  grow: -1,
-                  onResizeStart: () => _inspectorDragWidth = null,
-                  onResize: (delta) => _resizeInspector(delta, width),
-                  onResizeEnd: _commitInspectorWidth,
-                  onReset: () {
-                    setState(() => _inspectorWidth = inspectorDefaultWidth);
-                    _commitInspectorWidth();
-                  },
-                ),
-                SizedBox(
-                  key: const ValueKey('inspector.region'),
-                  width: inspectorWidth,
-                  child: inspector,
-                ),
-              ],
-            ],
-          ),
-        ),
+        Expanded(child: paneRow),
       ],
     );
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (sidebarInline) ...[
+    if (!sidebarInline) return main;
+
+    // The sidebar | main boundary is a 1 px seam, so the header divider
+    // and the sidebar's edge meet; the splitter floats over it.
+    return ShellSeam.straddle(
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           SizedBox(
             key: const ValueKey('sidebar.region'),
             width: sidebarWidth,
@@ -2114,29 +2124,31 @@ class _WorkspaceShellState extends State<WorkspaceShell>
               ),
             ),
           ),
-          ShellSplitter(
-            key: const ValueKey('sidebar.splitter'),
-            focusNode: _sidebarSplitterFocus,
-            nativeTitlebar: unifiedToolbar,
-            label: strings.resizeSidebar,
-            value: strings.splitterWidthPx(sidebarWidth.round()),
-            increasedValue: strings.splitterWidthPx(
-              _clampSidebar(sidebarWidth + shellSplitterKeyStep, width).round(),
-            ),
-            decreasedValue: strings.splitterWidthPx(
-              _clampSidebar(sidebarWidth - shellSplitterKeyStep, width).round(),
-            ),
-            onResizeStart: () => _sidebarDragWidth = null,
-            onResize: (delta) => _resizeSidebar(delta, width),
-            onResizeEnd: _commitSidebarWidth,
-            onReset: () {
-              setState(() => _sidebarWidth = sidebarDefaultWidth);
-              _commitSidebarWidth();
-            },
-          ),
+          const ShellSeam(),
+          Expanded(child: main),
         ],
-        Expanded(child: main),
-      ],
+      ),
+      start: sidebarWidth,
+      handle: ShellSplitter(
+        key: const ValueKey('sidebar.splitter'),
+        focusNode: _sidebarSplitterFocus,
+        nativeTitlebar: unifiedToolbar,
+        label: strings.resizeSidebar,
+        value: strings.splitterWidthPx(sidebarWidth.round()),
+        increasedValue: strings.splitterWidthPx(
+          _clampSidebar(sidebarWidth + shellSplitterKeyStep, width).round(),
+        ),
+        decreasedValue: strings.splitterWidthPx(
+          _clampSidebar(sidebarWidth - shellSplitterKeyStep, width).round(),
+        ),
+        onResizeStart: () => _sidebarDragWidth = null,
+        onResize: (delta) => _resizeSidebar(delta, width),
+        onResizeEnd: _commitSidebarWidth,
+        onReset: () {
+          setState(() => _sidebarWidth = sidebarDefaultWidth);
+          _commitSidebarWidth();
+        },
+      ),
     );
   }
 

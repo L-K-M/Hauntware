@@ -121,6 +121,11 @@ changes how it is presented.
   - panes | inspector
 - **Splitter behavior** (one reusable `ShellSplitter`):
   - 1 px line with an 8 px hit area and a resize cursor.
+  - Only the 1 px line takes part in layout (a *seam*). The hit area floats
+    over it and overlaps the regions either side, so each region's own
+    horizontal lines (the header divider, the active pane's accent line)
+    run into the vertical line instead of stopping a few pixels short.
+    Stage thresholds still budget the full hit area.
   - Focusable, resizable with the arrow keys in 16 px steps, and announced
     ("Resize sidebar, 232 pixels").
   - Double-click resets to the default.
