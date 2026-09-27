@@ -99,6 +99,7 @@ several backlog entries here are also covered by an unlisted PR.
 | [L-K-M/Planchette#31](https://github.com/L-K-M/Planchette/pull/31) | Rust lifetimes swallowed lines as strings (**confirmed**), Go raw strings, backslashes in shell/SQL/YAML single quotes, JSON/YAML keys, C preprocessor, Rust attributes, Python decorators, and a diff/patch language |
 | [L-K-M/Planchette#33](https://github.com/L-K-M/Planchette/pull/33) | Go to Line (Cmd+L / Ctrl+G, and a clickable status position). Find shortcuts per platform: Ctrl chords no longer shadow macOS text bindings. Status shows the on-disk byte count (CRLF + BOM), language display names and a selection summary |
 | [L-K-M/Planchette#39](https://github.com/L-K-M/Planchette/pull/39) | Loading a 3.9 MB file cost about 450 ms on the UI isolate (**confirmed**, measured). Byte buffers instead of `List<int>`, and a loop instead of two regexes for the line-ending census: load 453 → 178 ms, peak memory 124 → 37 MB |
+| [L-K-M/Planchette#41](https://github.com/L-K-M/Planchette/pull/41) | Curated Parchment (light) and Séance (dark) themes with AA-checked syntax colors and a warm selection color. `EditorSyntaxTheme` becomes a `ThemeExtension` hosts can set once |
 | [L-K-M/Planchette#35](https://github.com/L-K-M/Planchette/pull/35) | The Linux/Windows menu bar and tab strip were centered mid-window (**confirmed**). Merges the toolbar into one tab strip with a dirty dot and close on hover, middle-click close, Cmd/Ctrl+1…9, the active tab kept in view, wheel scrolling, and "Untitled"/"Untitled 2" naming |
 
 From the second review pass, on three further branches:
@@ -131,6 +132,9 @@ whichever merges second:
   the indentation segment and the language display name.
 - #30 and #33 both add to the app's Find/View menus in
   `planchette_app.dart`.
+- #41 changes the app's `_theme` and the editor's syntax-theme lookup.
+  It overlaps nothing else, but re-check #22's current-line band on the
+  new surfaces after both merge.
 - #22, #30 and #33 touch other parts of `editor_view.dart`, as do #26,
   #30, #33 and #35 in `planchette_app.dart`. Their hunks are separated, so
   expect clean merges, but re-run all three test suites after each merge.
@@ -593,28 +597,13 @@ neutral wording, and check both hosts' error adapters first.
 
 ## 8. Visual design and theming
 
-### V1. Curated themes — M (idea)
-Planchette is named after the Ouija pointer, and its icon leans into
-that. Offer two themes beside the Material seed:
-- **Parchment** (light): paper `#F7F1E3`, ink `#2B2522`, sepia comments,
-  oxblood keywords, brass numbers, verdigris strings.
-- **Séance** (dark): candle-lit `#1B1716`, warm off-white text, ember
-  keywords, brass numbers, moss strings, smoke comments.
-
-Every token color needs AA contrast (4.5:1) against the background and
-the current-line band. Add a contrast test in the editor package.
-
 ### V2. More token classes — M, risk: medium
+A follow-up to #41.
 Five classes (comment, string, number, keyword, meta) limit themes. Add
 `type` (capitalized identifiers in C-family, Dart, Swift, Kotlin and
 Rust), `function` (an identifier before `(`), and `constant`.
 `SyntaxTokenType` is used by hosts, so coordinate the enum change or add
 optional theme fields with defaults.
-
-### V3. Selection color per theme — S
-The Material default (primary at 40%) reads as muddy teal on the current
-seed. Set `TextSelectionThemeData` in the app theme, and pass it through
-for the editor.
 
 ### V4. Search bar polish — S
 #36 gave the bar its own surface and gave both fields an outline, a fill and
