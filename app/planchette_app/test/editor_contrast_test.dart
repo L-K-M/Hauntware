@@ -13,7 +13,8 @@ double _contrast(Color first, Color second) {
 }
 
 double _luminance(Color color) {
-  double channel(double value) => value <= 0.03928
+  // WCAG 2.1 sRGB linearization cutoff.
+  double channel(double value) => value <= 0.04045
       ? value / 12.92
       : math.pow((value + 0.055) / 1.055, 2.4).toDouble();
   return 0.2126 * channel(color.r) +
@@ -27,7 +28,10 @@ const double minimumTextContrast = 4.5;
 
 void main() {
   for (final brightness in Brightness.values) {
-    final surface = planchetteTheme(brightness).colorScheme.surface;
+    // The editor paints no background of its own, so its text sits on the
+    // Scaffold it is placed in. Keep this in step with that Scaffold: if the
+    // editor ever gets its own canvas color, measure against that instead.
+    final surface = planchetteTheme(brightness).scaffoldBackgroundColor;
     final syntax = EditorSyntaxTheme.of(brightness);
 
     group('${brightness.name} editor surface', () {
@@ -48,9 +52,10 @@ void main() {
 
       test('a search match is readable on its own highlight', () {
         // The inactive highlight is translucent, so measure the composite the
-        // user actually sees rather than the color alone.
+        // user actually sees: the highlight over the surface, and the text on
+        // top of that composite.
         final background = Color.alphaBlend(syntax.matchBackground, surface);
-        final foreground = Color.alphaBlend(syntax.matchForeground, surface);
+        final foreground = Color.alphaBlend(syntax.matchForeground, background);
         expect(
           _contrast(background, foreground),
           greaterThanOrEqualTo(minimumTextContrast),
