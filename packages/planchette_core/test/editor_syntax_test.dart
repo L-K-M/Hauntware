@@ -389,5 +389,37 @@ void main() {
     test('an empty query has no matches', () {
       expect(findSearchMatches('anything', ''), isEmpty);
     });
+
+    test('a start offset skips the matches before it', () {
+      expect(findSearchMatches('ab ab ab ab', 'ab', start: 3), [
+        const TextMatch(start: 3, end: 5),
+        const TextMatch(start: 6, end: 8),
+        const TextMatch(start: 9, end: 11),
+      ]);
+      expect(findSearchMatches('ab ab', 'ab', start: 99), isEmpty);
+    });
+
+    test('a reverse window returns the matches before the bound', () {
+      expect(
+        findSearchMatches('ab ab ab ab', 'ab', start: 5, reverse: true),
+        [const TextMatch(start: 0, end: 2), const TextMatch(start: 3, end: 5)],
+      );
+      expect(findSearchMatches('ab ab ab ab', 'ab', reverse: true), [
+        const TextMatch(start: 0, end: 2),
+        const TextMatch(start: 3, end: 5),
+        const TextMatch(start: 6, end: 8),
+        const TextMatch(start: 9, end: 11),
+      ]);
+      expect(findSearchMatches('ab', 'ab', start: 0, reverse: true), isEmpty);
+    });
+
+    test('a reverse window still honours the limit', () {
+      final text = List.filled(50, 'a').join();
+      expect(findSearchMatches(text, 'a', limit: 3, reverse: true), [
+        const TextMatch(start: 47, end: 48),
+        const TextMatch(start: 48, end: 49),
+        const TextMatch(start: 49, end: 50),
+      ]);
+    });
   });
 }

@@ -190,12 +190,16 @@ List<TextRange> findSearchMatches(
   String query, {
   bool caseSensitive = false,
   int limit = searchMatchLimit,
+  int? start,
+  bool reverse = false,
 }) => [
   for (final match in core.findSearchMatches(
     text,
     query,
     caseSensitive: caseSensitive,
     limit: limit,
+    start: start,
+    reverse: reverse,
   ))
     TextRange(start: match.start, end: match.end),
 ];

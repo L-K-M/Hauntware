@@ -1160,11 +1160,19 @@ final class TextMatch {
 /// lowercases both sides; if lowering changes the haystack length (a handful
 /// of Unicode characters do), it falls back to case-sensitive search rather
 /// than report misaligned ranges. Capped at [limit] matches.
+///
+/// [start] is where the scan begins, and with [reverse] it is instead the
+/// exclusive upper bound: the window is then the matches nearest to it, still
+/// returned in document order. Null, the default, means the whole haystack. A
+/// find bar that only highlights its first page of matches needs both
+/// directions to reach every occurrence.
 List<TextMatch> findSearchMatches(
   String text,
   String query, {
   bool caseSensitive = false,
   int limit = searchMatchLimit,
+  int? start,
+  bool reverse = false,
 }) {
   if (query.isEmpty) return const [];
   var haystack = text;
@@ -1177,7 +1185,17 @@ List<TextMatch> findSearchMatches(
     }
   }
   final matches = <TextMatch>[];
-  var from = 0;
+  if (reverse) {
+    var bound = (start ?? haystack.length).clamp(0, haystack.length);
+    while (matches.length < limit && bound > 0) {
+      final at = haystack.lastIndexOf(needle, bound - 1);
+      if (at < 0) break;
+      matches.add(TextMatch(start: at, end: at + needle.length));
+      bound = at;
+    }
+    return matches.reversed.toList(growable: false);
+  }
+  var from = (start ?? 0).clamp(0, haystack.length);
   while (matches.length < limit) {
     final at = haystack.indexOf(needle, from);
     if (at < 0) break;
