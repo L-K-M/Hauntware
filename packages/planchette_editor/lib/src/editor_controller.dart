@@ -189,8 +189,8 @@ class EditorController extends ChangeNotifier {
       !text.value.composing.isValid;
 
   /// Moves the caret to the partner of the bracket beside it, on the same
-  /// side, or to the closing bracket around it; with [extend] the other end
-  /// of the selection stays. A second jump returns to where the first began.
+  /// side, so a second jump returns; away from a bracket, to the closing
+  /// bracket around it. With [extend] the other end of the selection stays.
   /// Returns false when there is nowhere to go.
   bool goToMatchingBracket({bool extend = false}) {
     if (!canMoveCaret) return false;
