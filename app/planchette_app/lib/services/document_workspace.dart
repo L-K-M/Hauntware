@@ -60,6 +60,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   String? _error;
   String? _tabRefusal;
 
+  /// Open failures accumulate so one multi-file open reports every file,
+  /// not just the last failure. The banner still clears at once.
+  void _reportError(String message) {
+    _error = _error == null ? message : '$_error\n$message';
+  }
+
   List<DocumentTab> get documents => List.unmodifiable(_documents);
   DocumentTab? get active => _active;
   String? get error => _error;
@@ -131,7 +137,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         await open(path);
       }
     } catch (error) {
-      _error = 'Could not open documents: $error';
+      _reportError('Could not open documents: $error');
       _notify();
     }
   }
@@ -168,7 +174,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (_disposed || !_documents.contains(tab)) return;
     final error = tab.editor.error;
     if (error != null) {
-      _error = 'Could not open ${tab.name}: $error';
+      _reportError('Could not open ${tab.name}: $error');
       _remove(tab);
     } else {
       // A symlink may resolve onto an already-open document. Keep the existing

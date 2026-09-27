@@ -175,6 +175,17 @@ void main() {
   );
 
   test(
+    'consecutive failed opens report every file, not just the last',
+    () async {
+      await workspace.open(testPath('first-missing.txt'));
+      await workspace.open(testPath('second-missing.txt'));
+      expect(workspace.documents, isEmpty);
+      expect(workspace.error, contains('first-missing.txt'));
+      expect(workspace.error, contains('second-missing.txt'));
+    },
+  );
+
+  test(
     'New Save creates an absent target and records the saved identity',
     () async {
       final tab = workspace.newDocument()!;
