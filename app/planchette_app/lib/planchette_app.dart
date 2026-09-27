@@ -478,7 +478,12 @@ class _DocumentShellState extends State<_DocumentShell> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          active?.path ?? 'A place for your words.',
+                          // The launch copy belongs to the empty workspace only.
+                          // An untitled tab has a name worth showing.
+                          active?.path ??
+                              active?.name ??
+                              'A place for your words.',
+                          key: const ValueKey('active-document-label'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(

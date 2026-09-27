@@ -137,6 +137,32 @@ void main() {
   );
 
   testWidgets(
+    'the header names the document, launch copy only when empty',
+    (tester) async {
+      Finder header() => find.byKey(const ValueKey('active-document-label'));
+      String headerText() => tester.widget<Text>(header()).data!;
+
+      await mount(tester);
+      expect(headerText(), 'A place for your words.');
+
+      final untitled = workspace.newDocument()!;
+      await tester.pumpAndSettle();
+      expect(headerText(), untitled.name);
+
+      store.files[testPath('named.txt')] = document('named.txt', 'on disk');
+      await workspace.open(testPath('named.txt'));
+      await tester.pumpAndSettle();
+      expect(headerText(), testPath('named.txt'));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'menu Save As uses the active document',
     (tester) async {
       final tab = workspace.newDocument()!..editor.text.text = 'menu text';
