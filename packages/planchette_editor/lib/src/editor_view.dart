@@ -573,6 +573,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       _gutterTops = [
         for (var i = 0; i < c.lineStarts.length; i++) i * lineHeight,
       ];
+      // No real layout here, so assume one visual row per logical line; a
+      // wrapped final line under-covers until the TextPainter path runs.
+      // The band painter's `nextTop > top` guard prevents inversion.
       _documentHeight = c.lineStarts.length * lineHeight;
     }
     _gutterText = c.text.text;
