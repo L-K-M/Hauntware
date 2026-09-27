@@ -20,8 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Two tooltips appeared at once when hovering a tab's close button: one on the
   tab and one on the button.
 - A tab's ink splash painted a square over its rounded top corners.
-- Launching created a blank buffer, so the empty state — the only screen
-  offering New and Open — could not be seen without first closing the tab.
+- Launching created a blank buffer, so the empty state could not be seen
+  without first closing the tab.
 
 ### Changed
 - The window's top toolbar is gone. New, Open and Save are in the File menu
@@ -33,8 +33,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   floating on the surface.
 - The tab strip keeps a fixed row height, clips its ink to the rounded tab
   shape, caps long names with an ellipsis, shows the dirty marker as an icon
-  rather than a bullet character, and no longer grows a scrollbar that would
-  clip the last tab's close button.
+  rather than a bullet character, grows no scrollbar that would clip the last
+  tab's close button, and scrolls on a plain mouse wheel — which reports
+  vertical delta, so a horizontal strip needs to be told to read it.
+- `PlanchetteEditor.showScrollbar` defaults to on, so hosts embedding the
+  editor get a visible, draggable scroll thumb they did not have before. Pass
+  `showScrollbar: false` if the surrounding chrome already draws one.
 - The launch state is the empty state, which carries the two things worth
   doing and their shortcuts.
 - Syntax highlighting now stops above 32,768 characters instead of

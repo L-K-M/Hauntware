@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -282,6 +283,11 @@ void main() {
     tab.editor.text.text = List.generate(4000, (i) => 'line $i').join('\n');
     await tester.pumpAndSettle();
 
+    // ~39k characters is past the highlighting cap, so the status bar explains
+    // the missing colours rather than leaving the reader to guess.
+    expect(tab.editor.highlightingEnabled, isFalse);
+    expect(find.textContaining('Large file'), findsOneWidget);
+
     // The field's own scrollable never gets a scrollbar, so the editor has to
     // supply one and drive it from the document's own controller.
     final scrollbars = tester
@@ -332,5 +338,72 @@ void main() {
     );
     expect(newButton.onPressed, isNotNull);
     expect(openButton.onPressed, isNotNull);
+  });
+  testWidgets('a locked workspace refuses to switch tabs', (tester) async {
+    final first = workspace.newDocument()!;
+    final second = workspace.newDocument()!;
+    await mount(tester);
+    await tester.tap(find.text('Untitled 1'));
+    await tester.pumpAndSettle();
+    expect(workspace.active, same(first));
+
+    // A pending "Save changes?" dialog is what `interactionLocked` means.
+    first.editor.text.text = 'unsaved';
+    dialogs.choiceGate = Completer<CloseChoice>();
+    final pending = workspace.closeTab(first);
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isTrue);
+
+    await tester.tap(find.text('Untitled 2'));
+    await tester.pumpAndSettle();
+    expect(
+      workspace.active,
+      same(first),
+      reason: 'a dialog owns the interaction',
+    );
+
+    dialogs.choiceGate!.complete(CloseChoice.cancel);
+    await pending;
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isFalse);
+
+    await tester.tap(find.text('Untitled 2'));
+    await tester.pumpAndSettle();
+    expect(workspace.active, same(second));
+  });
+
+  testWidgets('a plain mouse wheel scrolls the tab strip sideways', (
+    tester,
+  ) async {
+    for (var i = 0; i < 40; i++) {
+      final tab = workspace.newDocument()!;
+      tab.editor.displayPath = 'a-long-document-name-number-$i-for-width.dart';
+    }
+    await mount(tester);
+
+    // Forty tabs cannot fit, so the strip has somewhere to scroll to.
+    final before = tester.getRect(find.text('Untitled 1'));
+    expect(before.left, lessThan(40));
+
+    // A real mouse wheel reports vertical delta, which a horizontal
+    // scrollable ignores unless something forwards it.
+    final strip = find.byType(SingleChildScrollView).first;
+    final centre = tester.getCenter(strip);
+    // ignore: avoid_print
+    print('W strip rect=${tester.getRect(strip)} centre=$centre');
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(position: centre, scrollDelta: const Offset(0, 200)),
+    );
+    await tester.pumpAndSettle();
+    // ignore: avoid_print
+    print('W after event left=${tester.getRect(find.text('Untitled 1')).left}');
+
+    await tester.drag(strip, const Offset(-200, 0));
+    await tester.pumpAndSettle();
+    // ignore: avoid_print
+    print(
+      'W after drag left=${tester.getRect(find.text('Untitled 1')).left} before=$before.left',
+    );
   });
 }

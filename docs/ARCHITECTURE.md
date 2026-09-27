@@ -35,9 +35,11 @@ remote state stay in their applications.
 ## File handling
 
 The editor remains a bounded UTF-8 text editor: a 4 MiB file limit and a
-32,768-character highlighting limit, the point past which one span per
-token stops fitting a keystroke's frame budget. That limit counts
-characters; the file-size limit above counts bytes. BOM and dominant line-ending metadata
+32,768-unit highlighting limit, set where the span-per-token layout cost
+stops being tolerable. It is an absolute-latency limit, not a frame-budget
+threshold: no highlighted size fits a frame, and the cost is about ten times
+the plain floor at every size. The limit counts UTF-16 code units, via
+`String.length`; the file-size limit above counts bytes. BOM and dominant line-ending metadata
 survive saves; mixed line endings are normalized according to the existing
 document policy, rather than claimed to be preserved individually.
 

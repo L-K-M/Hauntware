@@ -220,11 +220,17 @@ void main() {
     c.openSearch();
     c.search.text = 'third';
     await tester.pump();
+    // Prove the search matched first, or "the reveal did nothing" and "the
+    // reveal scrolled to the wrong row" look the same.
+    expect(c.matches, hasLength(1));
     c.nextMatch();
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(c.scroll.offset, greaterThanOrEqualTo(0));
+    // The first line folds into dozens of rows at this width, so 'third' on
+    // logical line 3 has a row far below the viewport. A reveal that clamps to
+    // line 0 — the underflow class this guards — would leave the offset at 0.
+    expect(c.scroll.offset, greaterThan(0));
   });
 
   testWidgets('a document past the highlight cap says so in the status bar', (

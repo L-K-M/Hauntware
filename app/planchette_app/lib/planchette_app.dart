@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
@@ -121,6 +122,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   DocumentWorkspace get workspace => widget.workspace;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   FocusNode? _lastTextFocus;
+  final _tabStripScroll = ScrollController();
 
   @override
   void initState() {
@@ -523,28 +525,47 @@ class _DocumentShellState extends State<_DocumentShell> {
                     // that holds the close buttons.
                     child: ScrollConfiguration(
                       behavior: const _TabStripScroll(),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const ClampingScrollPhysics(),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 8),
-                            for (final tab in tabs)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: _Tab(
-                                  tab: tab,
-                                  selected: tab == active,
-                                  closeEnabled:
-                                      !workspace.interactionLocked && !tab.busy,
-                                  scheme: scheme,
-                                  onSelect: () => _select(tab),
-                                  onClose: () =>
-                                      unawaited(workspace.closeTab(tab)),
+                      // A plain mouse wheel reports vertical delta, which a
+                      // horizontal scrollable ignores. Without this the tabs
+                      // past the right edge are unreachable without a
+                      // trackpad, and the strip shows no scrollbar.
+                      child: Listener(
+                        onPointerSignal: (event) {
+                          if (event is PointerScrollEvent &&
+                              event.scrollDelta.dy != 0 &&
+                              _tabStripScroll.hasClients) {
+                            _tabStripScroll.position.pointerScroll(
+                              event.scrollDelta.dy,
+                            );
+                          }
+                        },
+                        child: SingleChildScrollView(
+                          controller: _tabStripScroll,
+                          scrollDirection: Axis.horizontal,
+                          physics: const ClampingScrollPhysics(),
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 8),
+                              for (final tab in tabs)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: _Tab(
+                                    tab: tab,
+                                    selected: tab == active,
+                                    closeEnabled:
+                                        !workspace.interactionLocked &&
+                                        !tab.busy,
+                                    scheme: scheme,
+                                    onSelect: workspace.interactionLocked
+                                        ? null
+                                        : () => _select(tab),
+                                    onClose: () =>
+                                        unawaited(workspace.closeTab(tab)),
+                                  ),
                                 ),
-                              ),
-                            const SizedBox(width: 8),
-                          ],
+                              const SizedBox(width: 8),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -605,6 +626,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   void dispose() {
     workspace.removeListener(_changed);
     FocusManager.instance.removeListener(_rememberTextFocus);
+    _tabStripScroll.dispose();
     super.dispose();
   }
 }
@@ -688,9 +710,9 @@ const double _tabStripHeight = 36.0;
 /// One document tab.
 ///
 /// The dirty marker is an icon rather than a bullet character so it does not
-/// depend on the UI font carrying U+25CF, and the whole tab carries no
-/// tooltip: a tooltip on the tab and another on its close button meant two
-/// appeared at once when hovering the button.
+/// depend on the UI font carrying U+25CF. The tab carries the only tooltip,
+/// for its full path; the close button has none, because two nested Tooltips
+/// both fire and appeared on top of each other on hover.
 class _Tab extends StatelessWidget {
   const _Tab({
     required this.tab,
@@ -705,7 +727,11 @@ class _Tab extends StatelessWidget {
   final bool selected;
   final bool closeEnabled;
   final ColorScheme scheme;
-  final VoidCallback onSelect;
+
+  /// Null while the workspace is locked, which both disables the tap and stops
+  /// the ink from rippling. The shell used to inline that gate and lost it when
+  /// this widget was extracted.
+  final VoidCallback? onSelect;
   final VoidCallback onClose;
 
   @override
@@ -750,18 +776,23 @@ class _Tab extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 2),
-                  IconButton(
-                    key: ValueKey('close-${tab.id}'),
-                    tooltip: 'Close ${tab.name}',
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 28,
-                      height: 28,
+                  // No tooltip of its own: nested Tooltips both fire, so the
+                  // tab's full-path tooltip and this one would appear on top of
+                  // each other. The name is still announced.
+                  Semantics(
+                    label: 'Close ${tab.name}',
+                    child: IconButton(
+                      key: ValueKey('close-${tab.id}'),
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
+                      iconSize: 14,
+                      onPressed: closeEnabled ? onClose : null,
+                      icon: const Icon(Icons.close),
                     ),
-                    iconSize: 14,
-                    onPressed: closeEnabled ? onClose : null,
-                    icon: const Icon(Icons.close),
                   ),
                 ],
               ),

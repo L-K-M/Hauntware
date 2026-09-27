@@ -50,9 +50,10 @@ checks actually completed and current limitations.
 The editor accepts UTF-8 files up to 4 MiB. Syntax highlighting is disabled
 above 32,768 characters to keep typing responsive; the status bar says
 `Large file` when that happens. The two limits count different things: the
-file size is in bytes, the highlighting cap is in characters. It preserves UTF-8 BOM and dominant line-ending metadata; it
-does not preserve each mixed line ending independently. External-change guards
-are best-effort filesystem checks, not a lock on other programs.
+file size is in bytes, the highlighting cap is in characters. It preserves
+UTF-8 BOM and dominant line-ending metadata; it does not preserve each mixed
+line ending independently. External-change guards are best-effort filesystem
+checks, not a lock on other programs.
 
 ## License
 

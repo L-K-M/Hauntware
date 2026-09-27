@@ -76,10 +76,10 @@ List<InlineSpan> buildHighlightedSpans({
   required int activeMatchIndex,
   required EditorSyntaxTheme theme,
 }) {
-  final tokenStyles = [
+  final tokenStyles = <SyntaxTokenType, TextStyle>{
     for (final type in SyntaxTokenType.values)
-      TextStyle(color: theme.colorFor(type)),
-  ];
+      type: TextStyle(color: theme.colorFor(type)),
+  };
   final spans = <InlineSpan>[];
   final n = text.length;
   var position = 0;
@@ -99,7 +99,7 @@ List<InlineSpan> buildHighlightedSpans({
     var end = n;
     if (token != null) end = end.clamp(0, inToken ? token.end : token.start);
     if (match != null) end = end.clamp(0, inMatch ? match.end : match.start);
-    TextStyle? style = inToken ? tokenStyles[token.type.index] : null;
+    TextStyle? style = inToken ? tokenStyles[token.type] : null;
     if (inMatch) {
       final active = matchIndex == activeMatchIndex;
       style = (style ?? const TextStyle()).copyWith(
