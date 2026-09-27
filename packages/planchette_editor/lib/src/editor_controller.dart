@@ -58,6 +58,7 @@ class EditorController extends ChangeNotifier {
   String _savedText = '';
   // A full-buffer comparison per call is O(document); the shell and status
   // bar ask several times per frame, so remember the answer per text pair.
+  // Strings are immutable, so an identical pair always has the same answer.
   String? _dirtyText;
   String? _dirtySavedText;
   bool _dirty = false;

@@ -67,7 +67,12 @@ final class DesktopWindow with WindowListener {
   void setTitle(String title) {
     if (title == _title) return;
     _title = title;
-    unawaited(_setWindowTitle(title));
+    unawaited(
+      _setWindowTitle(title).catchError((Object _) {
+        // Forget a title that never arrived so the next request retries it.
+        if (title == _title) _title = null;
+      }),
+    );
   }
 
   void dispose() {
