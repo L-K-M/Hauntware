@@ -89,7 +89,8 @@ final class DocumentWorkspace extends ChangeNotifier {
     final maximumLine = tab.editor.lineStarts.length;
     final line = await _dialog(() => dialogs.askLineNumber(maximumLine));
     if (_disposed || !_documents.contains(tab)) return;
-    if (line != null && line >= 1) tab.editor.gotoLine(line);
+    // Out-of-range answers clamp inside the editor, including 0 → line 1.
+    if (line != null) tab.editor.gotoLine(line);
   }
 
   DocumentTab _makeTab({String? path, String? initialText}) {

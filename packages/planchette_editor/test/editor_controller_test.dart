@@ -251,6 +251,25 @@ void _gotoLineTests() {
       editor.gotoLine(0);
       expect(editor.caretLineColumn, (1, 1));
     });
+
+    test('deactivates the find match so the reveal targets the caret', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo cat\nthree cat',
+      );
+      addTearDown(editor.dispose);
+      editor.openSearch();
+      editor.search.text = 'cat';
+      editor.nextMatch();
+      expect(editor.activeMatch, greaterThanOrEqualTo(0));
+      editor.gotoLine(3);
+      expect(editor.activeMatch, -1);
+      expect(editor.text.activeMatchIndex, -1);
+      expect(editor.caretLineColumn.$1, 3);
+      // Cycling still works from the reset state.
+      editor.nextMatch();
+      expect(editor.activeMatch, greaterThanOrEqualTo(0));
+    });
   });
 }
 

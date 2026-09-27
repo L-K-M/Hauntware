@@ -365,6 +365,10 @@ class EditorController extends ChangeNotifier {
   /// and ask the view to reveal it.
   void gotoLine(int line) {
     if (_loading || _error != null) return;
+    // A stale find match would win the reveal; deactivate it so the view
+    // scrolls to the caret this command just placed.
+    _activeMatch = -1;
+    text.setSearchMatches(_matches, -1);
     final starts = lineStarts;
     final index = (line - 1).clamp(0, starts.length - 1).toInt();
     text.selection = TextSelection.collapsed(offset: starts[index]);
