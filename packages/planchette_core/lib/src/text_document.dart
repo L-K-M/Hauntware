@@ -213,6 +213,16 @@ Future<String> _writeTextDocument(
   final normalized = normalization == TextNormalization.preserve
       ? text
       : _normalizeLineEndings(text, lineEnding);
+  // Loading rejects NUL as binary; writing it would produce a file this
+  // editor can never reopen. Reject before publication, while the original
+  // destination is still untouched.
+  if (normalized.contains('\u0000')) {
+    throw const TextDocumentException(
+      'The edited text contains a NUL character. Loading treats that as '
+      'binary content, so saving it would create a file the editor cannot '
+      'reopen.',
+    );
+  }
   final bytes = <int>[if (hasUtf8Bom) ..._utf8Bom, ...utf8.encode(normalized)];
   if (bytes.length > maximumBytes) {
     throw TextDocumentException(
@@ -231,7 +241,8 @@ Future<String> _writeTextDocument(
   var retainTemporary = false;
   try {
     await temporary.create(exclusive: true);
-    setFilePermissions(temporary.path, 0x180); // 0600, before any plaintext.
+    // Owner-only before any plaintext reaches the file.
+    setFilePermissions(temporary.path, _ownerReadWriteMode);
     handle = await temporary.open(mode: FileMode.writeOnly);
     await handle.writeFrom(bytes);
     await handle.flush();
@@ -265,7 +276,7 @@ Future<String> _writeTextDocument(
         );
       }
       final stat = await backup.stat();
-      setFilePermissions(temporary.path, stat.mode & 0x1ff);
+      setFilePermissions(temporary.path, stat.mode & _posixPermissionMask);
       renameFileWithoutReplacing(temporary.path, file.path);
     } catch (error) {
       if (error is HardLinkCleanupException) retainTemporary = true;
@@ -317,6 +328,13 @@ String _tooLargeMessage(int maximumBytes) =>
     '${(maximumBytes / (1024 * 1024)).toStringAsFixed(0)} MB.';
 
 const _utf8Bom = [0xef, 0xbb, 0xbf];
+
+/// chmod 0600: temporary plaintext is owner-only until it inherits the
+/// destination's mode below.
+const int _ownerReadWriteMode = 0x180;
+
+/// chmod 0777 mask: only the portable permission bits survive a save.
+const int _posixPermissionMask = 0x1ff;
 
 bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes.length >= offset + _utf8Bom.length &&

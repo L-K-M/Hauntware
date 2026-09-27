@@ -370,6 +370,35 @@ void main() {
       ),
     );
   });
+
+  test('a save containing NUL refuses before touching the original', () async {
+    const expected = 'binary \u0000 content\n';
+    await expectLater(
+      _save(file, 'safe \u0000 edit\n', expectedSha256: 'ignored'),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          contains('NUL'),
+        ),
+      ),
+    );
+    // The original is untouched and no save sibling escaped cleanup.
+    expect(await file.readAsString(), 'one\ntwo\n');
+    expect(await directory.list().length, 1);
+
+    // A create would publish a file the loader rejects as binary; refuse
+    // that too — also under `preserve` normalization, which skips folding.
+    final created = File('${directory.path}/new.bin');
+    for (final normalization in TextNormalization.values) {
+      await expectLater(
+        createTextDocument(created, expected, normalization: normalization),
+        throwsA(isA<TextDocumentException>()),
+      );
+    }
+    expect(await created.exists(), isFalse);
+    expect(await directory.list().length, 1);
+  });
 }
 
 Future<String> _loadText(
