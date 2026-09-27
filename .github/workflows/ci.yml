@@ -44,6 +44,13 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
+      # Formatting needs each package's language version resolved first —
+      # unresolved, the formatter guesses and reports phantom diffs.
+      - name: Resolve packages
+        run: |
+          (cd packages/planchette_core && dart pub get)
+          (cd packages/planchette_editor && flutter pub get)
+          (cd app/planchette_app && flutter pub get)
       - name: Format
         run: >-
           dart format --set-exit-if-changed
