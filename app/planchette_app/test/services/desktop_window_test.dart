@@ -67,6 +67,18 @@ void main() {
     );
   });
 
+  test(
+    'a forced theme mode paints the window that theme, not the system one',
+    () {
+      expect(effectiveBrightness(ThemeMode.light), Brightness.light);
+      expect(effectiveBrightness(ThemeMode.dark), Brightness.dark);
+      expect(
+        windowBackdrop(effectiveBrightness(ThemeMode.dark)),
+        windowBackdrop(Brightness.dark),
+      );
+    },
+  );
+
   test('overlapping close callbacks request native destruction once', () async {
     final decision = Completer<bool>();
     var destroys = 0;

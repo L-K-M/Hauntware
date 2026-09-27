@@ -11,6 +11,9 @@ import 'services/open_documents.dart';
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // One source for both the theme and the window's pre-paint color. A
+  // persisted preference (A1) replaces this line and nothing else.
+  const themeMode = ThemeMode.system;
   final navigatorKey = GlobalKey<NavigatorState>();
   final workspace = DocumentWorkspace(
     store: LocalDocumentStore(),
@@ -19,17 +22,14 @@ Future<void> main(List<String> arguments) async {
   final desktop = DesktopWindow(
     confirmQuit: workspace.confirmQuit,
     onQuitFailed: workspace.quitFailed,
-    // The app follows the system brightness, so the native window can start on
-    // the color Flutter is about to paint instead of the platform default.
-    windowBackgroundColor: windowBackdrop(
-      WidgetsBinding.instance.platformDispatcher.platformBrightness,
-    ),
+    windowBackgroundColor: windowBackdrop(effectiveBrightness(themeMode)),
   );
   runApp(
     PlanchetteApp(
       workspace: workspace,
       navigatorKey: navigatorKey,
       onQuit: desktop.requestQuit,
+      themeMode: themeMode,
     ),
   );
   await desktop.initialize();
