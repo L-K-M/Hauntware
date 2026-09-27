@@ -4,22 +4,23 @@ Read this first. It captures what isn't obvious from the code: how to get a
 toolchain in a fresh environment, how to build/test each piece, and the
 conventions this repo family shares.
 
-Planchette is a cross-platform text editor (macOS, Windows, Linux, Android),
-a sibling of [Séance](https://github.com/L-K-M/Seance) and
-[Poltergeist](https://github.com/L-K-M/Poltergeist). The repo is at the
-scaffolding stage: the pure-Dart workspace and `planchette_core` package
-exist; the Flutter client (`app/planchette_app`) does not yet.
+Planchette is a desktop text editor (macOS, Windows, Linux) and the shared
+editor foundation for [Séance](https://github.com/L-K-M/Seance) and
+[Poltergeist](https://github.com/L-K-M/Poltergeist). The shared Flutter editor
+also supports the hosts' mobile flows. Architecture and file-safety contracts
+live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); verified results and limits
+live in [docs/STATUS.md](docs/STATUS.md).
 
 ## Repository layout
 
 ```
 pubspec.yaml              pub WORKSPACE root — members are the pure-Dart packages
 packages/
-  planchette_core/        pure Dart — scaffold today; document model, editing,
-                          file handling land here
+  planchette_core/        pure Dart syntax, search, metadata, guarded file I/O
+  planchette_editor/      Flutter controller and surface; outside the workspace
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
-                          the Flutter SDK; members must not). Not scaffolded yet.
+                          the Flutter SDK; members must not).
 scripts/                  build.sh, release.sh, package-linux.sh,
                           verify-android-version.sh
 ```
@@ -30,26 +31,31 @@ The layout deliberately mirrors the siblings' proven shape (`packages/` +
 ## Build & test
 
 Requires the Dart SDK (3.12+) for the pure-Dart packages and Flutter 3.47.2
-for the app (once scaffolded). Dev containers for this repo family ship **no
+for the app and shared editor. Dev containers for this repo family ship **no
 Dart or Flutter SDK** — see Poltergeist's AGENTS.md §1 for the exact install
 incantations; everything there applies verbatim.
 
 ```bash
 # Pure-Dart packages — always with explicit paths (a bare `dart test` at the
-# repo root tries to resolve the Flutter app once it exists and fails
+# repo root tries to resolve the Flutter app and fails
 # without Flutter)
 dart pub get
 dart analyze packages/planchette_core
 dart test    packages/planchette_core
 
-# Everything this host can build, staged into dist/
-scripts/build.sh            # app + apk; missing toolchains are skipped
+# Shared Flutter package and standalone application
+(cd packages/planchette_editor && flutter pub get && flutter analyze && flutter test)
+(cd app/planchette_app && flutter pub get && flutter analyze && flutter test)
+
+# Desktop app for this host, staged into dist/
+scripts/build.sh
 scripts/build.sh --install  # build + install the app for this host
 ```
 
 CI (`.github/workflows/ci.yml`) runs Dart analyze+test on every push/PR on
-three OSes. The Flutter analyze/test and per-platform client-compile jobs are
-detect-gated and skip themselves until `app/planchette_app` exists.
+three OSes, shared-editor/app analysis and tests on Linux, and release builds
+on all three desktop platforms. macOS also runs native keyboard and
+accessibility fixtures; Linux validates its installable packages.
 
 ## Releasing
 
@@ -58,34 +64,34 @@ detect-gated and skip themselves until `app/planchette_app` exists.
 `version:` in every pubspec in lockstep, keeps committed lockfiles and the
 README version line in step, commits, and tags `v<version>` — pushing that
 tag triggers `.github/workflows/release.yml`, which tests, then builds and
-publishes the app for every client platform as the GitHub Release (Android
-APK, Linux `.deb` + AppImage + bundle for x64, macOS/Windows desktop bundles,
-unsigned iOS IPA — the same asset shape as the siblings).
+publishes the desktop app as the GitHub Release: Linux `.deb`, AppImage and
+bundle for x64, plus macOS and Windows desktop bundles.
 
 ```bash
 scripts/release.sh 0.2.0          # bump + commit, tag v0.2.0
 scripts/release.sh 0.2.0 --push   # …also push branch + tag (CI then publishes)
 ```
 
-Tagging while `app/planchette_app` does not exist fails the release's client
-jobs by design — there is nothing to release yet. The siblings' Dart
-tag-ordering guard (`tool/release_version`) is deliberately not ported yet;
-this stub notes where it plugs in when `tool/` exists.
+The release script validates versions and keeps package, app and lockfile
+versions in step. A release is a separate explicit task.
 
 ## Conventions
 
 - The product name is **Planchette** — plain ASCII everywhere a file name or
   bundle identifier appears (Séance's codesign lesson: macOS codesign rejects
-  accented file names). Planned identifiers, matching the siblings' scheme:
-  Android application id `com.lkm.planchette_app`, Apple bundle id
+  accented file names). Identifiers follow the siblings' scheme: Apple bundle id
   `com.lkm.planchetteApp`, Linux binary/package name `planchette`, Linux
   GApplication id `com.lkm.planchette_app`. The packaged build reports X11
   `WM_CLASS` class `Com.lkm.planchette_app`; the case-sensitive class must
   match `StartupWMClass` in `scripts/package-linux.sh`.
 - Keep new code matching the surrounding style: small focused files, doc
   comments that explain *why*, `analyze` clean before committing.
-- Cross-repo work: editor/UX improvements that apply to the siblings are
-  ported back — never fork shared concepts silently.
+- Cross-repo work: change shared editor behavior here, then update both hosts
+  to the same reviewed Git revision. Never copy or fork the shared editor.
+- The core must not depend on Flutter or SSH; host adapters own remote
+  checkout/upload state, localization, menus, windows and notifications.
+- Commits include `Co-Authored-By: Codex <noreply@openai.com>` and the current
+  `Codex-Session:` link. Do not put a model identifier in commits or code.
 
 ## Gotchas inherited from the siblings (they will bite here too)
 

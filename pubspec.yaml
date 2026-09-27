@@ -1,7 +1,7 @@
 # Planchette — Dart pub workspace root.
 #
 # Groups the pure-Dart packages that can be built and tested without the
-# Flutter SDK. The Flutter app in `app/planchette_app` (once scaffolded) is
+# Flutter SDK. The Flutter app in `app/planchette_app` is
 # intentionally NOT a workspace member: it requires the Flutter SDK and is
 # resolved on its own.
 name: _planchette_workspace
@@ -14,5 +14,5 @@ workspace:
   - packages/planchette_core
 
 dev_dependencies:
-  lints: ^5.0.0
+  lints: ^6.0.0
   test: ^1.25.0

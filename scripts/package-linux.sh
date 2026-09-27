@@ -332,10 +332,11 @@ Type=Application
 Name=Planchette
 GenericName=Text Editor
 Comment=The pointer that spells it out
-Exec=$2
+Exec=$2 %F
 Icon=planchette
 Terminal=false
 Categories=Utility;TextEditor;
+MimeType=text/plain;text/x-source;
 # The packaged build reports this X11 WM_CLASS class (the instance is the
 # lowercase application id); StartupWMClass is case-sensitive.
 StartupWMClass=$LINUX_STARTUP_WM_CLASS

@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Cuts a release: bumps the `version:` in every pubspec in lockstep (the
-# packages + the app once it exists), keeps the committed lockfiles and the
+# shared packages + desktop app), keeps the committed lockfiles and the
 # README version line in step, commits, tags "v<version>", and with --push
 # pushes branch + tag — which triggers .github/workflows/release.yml to test,
-# build the app clients (Android APK, Linux/macOS/Windows desktop bundles,
-# unsigned iOS IPA), and publish the GitHub Release.
+# build Linux/macOS/Windows desktop artifacts, and publish the GitHub Release.
 #
 #   scripts/release.sh 0.2.0          # bump pubspecs + README, commit, tag v0.2.0
 #   scripts/release.sh 0.2.0 --push   # …also push the commit + tag (CI then publishes)
@@ -40,12 +39,12 @@ export RELEASE_PUBSPECS="$PUBSPECS"
 
 # Every committed lockfile that path-depends on a package the release bumps
 # pins that package's version. Keep them in step so the post-release
-# `dart pub get` is a no-op. The locks are the ones beside the pubspecs bumped
-# above (packages/*, tool/*, app/*); the pinned packages are read by their
+# `dart pub get` is a no-op. The locks include the workspace root and those
+# beside the pubspecs bumped above; the pinned packages are read by their
 # `name:`, not their directory. The app is left out of pinning: its version
-# carries a build code and nothing depends on it — when app/planchette_app
-# exists with a `version: X.Y.Z+N` line, port the siblings' sync step
-# (tool/release_version) so the engine's bump does not drop the +N.
+# carries a build code and nothing depends on it. The shared release engine
+# preserves and increments an existing Flutter +N suffix on each version bump;
+# the desktop app starts at 0.1.0+1. No mobile version-code mapping is needed.
 # Each lockfile entry's block ends at its `version:` line, so the range
 # substitution touches exactly that line; a package absent from a lockfile
 # makes its range a harmless no-op. The engine runs this via bash -c with
@@ -73,12 +72,12 @@ export RELEASE_POST_BUMP='
   done
   if [ "${#SED_EXPRS[@]}" -gt 0 ]; then
     # One lock per call, so no range carries over into the next file.
-    for lock in packages/*/pubspec.lock tool/*/pubspec.lock app/*/pubspec.lock; do
+    for lock in pubspec.lock packages/*/pubspec.lock tool/*/pubspec.lock app/*/pubspec.lock; do
       [ -f "$lock" ] || continue
       "${SED_I[@]}" -E "${SED_EXPRS[@]}" "$lock"
     done
   fi'
-export RELEASE_CI_NOTE="CI (release.yml) will now test, build the app clients (APK, Linux/macOS/Windows, iOS IPA), and publish the GitHub Release for <tag>."
+export RELEASE_CI_NOTE="CI (release.yml) will now analyze and test the shared packages and app, build Linux/macOS/Windows desktop artifacts, and publish the GitHub Release for <tag>."
 export RELEASE_INVOKED_AS="scripts/release.sh"
 
 BIN="${LKM_RELEASE_BIN:-lkm-release}"

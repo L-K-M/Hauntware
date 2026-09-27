@@ -1,17 +1,10 @@
 name: Release
 
 # Tag a version (scripts/release.sh X.Y.Z --push) to test, build, and publish
-# Planchette's release artifacts: the app client for every platform folder
-# the repo carries — Android APK, Linux packages (.deb + AppImage, x64 —
-# Flutter publishes no linux-arm64 host artifacts), macOS/Windows desktop
-# bundles, and an unsigned iOS IPA. Planchette has no server component, so
-# unlike Séance there are no server binaries or Docker images here. The
-# desktop bundles are unsigned
-# (macOS: ad-hoc), so first launch needs the usual unidentified-developer
-# step (macOS: right-click ▸ Open; Windows: SmartScreen ▸ Run anyway), and
-# the iOS IPA must be re-signed to install (AltStore / Sideloadly / Xcode
-# with a free Apple ID). Tagging before app/planchette_app exists fails the
-# client jobs by design — there is nothing to release yet.
+# Planchette's desktop release artifacts: Linux packages (.deb + AppImage,
+# x64) and macOS/Windows bundles. Desktop bundles are unsigned (macOS:
+# ad-hoc), so first launch needs the usual unidentified-developer step
+# (macOS: right-click > Open; Windows: SmartScreen > Run anyway).
 # No tag handy? The workflow_dispatch trigger below cuts the same release from
 # a chosen commit and creates the tag for you (see its comment).
 #
@@ -29,7 +22,7 @@ on:
   # can push branches but not tag refs (e.g. remote agent sessions). The tag
   # is created at the dispatched commit by the first gh-release step; the
   # input must match the pubspec `version:` (the scripts/release.sh lockstep
-  # contract), since the APK/bundles bake that version in.
+  # contract), since the desktop bundles bake that version in.
   workflow_dispatch:
     inputs:
       tag:
@@ -53,15 +46,12 @@ env:
   FLUTTER_VERSION: '3.47.2'
 
 jobs:
-  # Gate the release on the pure-Dart suite. A tag on a broken commit must
-  # not publish a release. (The Flutter app's analyze+test and a per-platform
-  # compile of every client run in CI on main/PRs, so the tagged commit is
-  # already green there; the client jobs below still re-compile each
-  # platform, which fails that platform's asset if it won't build.)
+  # Gate every release on core, shared editor, and app analysis and tests.
+  # Platform builds below must all succeed before assets become public.
   test:
     name: Test (release gate)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     # Deliberately NOT scoped down to contents: read: the guard below
     # lists releases, and GitHub shows draft releases only to tokens
     # with write access (REST docs: "Only users with push access will
@@ -133,9 +123,10 @@ jobs:
             } >&2
             exit 1
           fi
-      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1 (SHA-pinned)
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
-          sdk: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
       - name: Resolve workspace
         run: dart pub get
       # The committed pubspec `version:` at the tagged commit is the source
@@ -153,16 +144,26 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${RELEASE_TAG#v}"
-          for pubspec in packages/*/pubspec.yaml; do
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+            echo "invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          }
+          for pubspec in packages/*/pubspec.yaml tool/*/pubspec.yaml app/*/pubspec.yaml; do
             [ -f "$pubspec" ] || continue
+            grep -q '^version:' "$pubspec" || continue
             committed="$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$pubspec" | head -n1)"
-            if [ -n "$committed" ] && [ "$committed" != "$VERSION" ]; then
+            if [ "$committed" != "$VERSION" ]; then
               echo "!! tag $RELEASE_TAG does not match committed version $committed in $pubspec" >&2
               echo "!! re-cut the release with scripts/release.sh" >&2
               exit 1
             fi
           done
-          echo "tag $RELEASE_TAG matches committed package versions"
+          app_version="$(awk '/^version:/ {print $2; exit}' app/planchette_app/pubspec.yaml)"
+          [[ "$app_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+\+[1-9][0-9]*$ ]] || {
+            echo "app version must retain a positive numeric build suffix: $app_version" >&2
+            exit 1
+          }
+          echo "tag $RELEASE_TAG matches committed package and app versions"
 
           if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
             tag_commit="$(
@@ -183,27 +184,25 @@ jobs:
               exit "$show_ref_status"
             fi
           fi
-      - name: Analyze
-        run: dart analyze $(ls -d packages/*)
-      - name: Test
+      - name: Analyze core
+        run: dart analyze packages/planchette_core
+      - name: Test core
+        run: dart test packages/planchette_core
+      - name: Analyze and test shared editor
+        working-directory: packages/planchette_editor
         run: |
-          set -euo pipefail
-          dirs=""
-          ran=0
-          for p in packages/*; do
-            [ -d "$p/test" ] || continue
-            dirs="$dirs $p"
-          done
-          if [ -n "$dirs" ]; then
-            dart test $dirs
-            ran=1
-          fi
-          if [ "$ran" -ne 1 ]; then
-            echo "no package has a test/ directory yet"; exit 1
-          fi
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Analyze and test app
+        working-directory: app/planchette_app
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
 
   # The app, once per client platform. `flutter build` is host-locked
-  # (linux/windows only build on their own OS, macos/ios only on a Mac) —
+  # (linux/windows only build on their own OS, macos only on a Mac) —
   # hence a matrix over runners. fail-fast stays off so one platform's
   # breakage doesn't cancel the others: each job attaches its own asset to
   # the release independently. CI compiles the same matrix on main/PRs
@@ -218,15 +217,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The APK should sign with a committed, deliberately public,
-          # debug-grade keystore (Séance's ci-release.jks pattern — personal
-          # tool, no Play Store) so each release's APK upgrades the installed
-          # app in place instead of demanding an uninstall. The app scaffold
-          # milestone sets this up; no signing secrets are needed either way.
-          - os: ubuntu-latest
-            target: android
-            build: apk --release
-            files: planchette-android.apk
           # The .deb and AppImage ride along with the plain bundle (three
           # assets); the .deb keeps its versioned Debian filename, hence the
           # glob. x64 only: Flutter publishes no linux-arm64 host artifacts
@@ -243,14 +233,6 @@ jobs:
             target: macos
             build: macos --release
             files: planchette-macos-universal.zip
-          # No Apple Developer account: built unsigned (--no-codesign) and
-          # shipped as an IPA for users who re-sign and sideload. `build ipa`
-          # stops at the unsigned .xcarchive — the Package step below zips
-          # the IPA out of it explicitly.
-          - os: macos-latest
-            target: ios
-            build: ipa --release --no-codesign
-            files: planchette-ios-unsigned.ipa
           - os: windows-latest
             target: windows
             build: windows --release
@@ -283,13 +265,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned: the publish path must not follow a mutable tag)
         with:
           ref: ${{ steps.checkout-ref.outputs.ref }}
-      # Pin the JDK so the Gradle build is deterministic rather than tracking
-      # the runner's default; keep in step with the app's compileOptions.
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6 (SHA-pinned)
-        if: matrix.target == 'android'
-        with:
-          distribution: temurin
-          java-version: '17'
       # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
       # for flutter_secure_storage's keyring backend; imagemagick/file feed
       # scripts/package-linux.sh (icon resize, appimagetool).
@@ -324,29 +299,16 @@ jobs:
         run: flutter pub get
       - name: Build
         working-directory: app/planchette_app
-        # Building with pub (against the committed lock) lets the
-        # tool regenerate GeneratedPluginRegistrant for the release
-        # dependency set; with --no-pub the registrant from the
-        # earlier plain `flutter pub get` kept the dev-dep
-        # integration_test entry and release javac failed twice
-        # identically (runs 35898272663, 35907981194). The gate
-        # now permits this: pub with a committed lock is
-        # deterministic and cannot drift the verified pin.
+        # Resolve against committed locks, then refuse dependency drift.
         shell: bash
         run: |
           flutter build ${{ matrix.build }}
-          drift="$(git status --porcelain -- pubspec.lock '**/pubspec.lock')"
+          drift="$(git -C "$GITHUB_WORKSPACE" status --porcelain -- pubspec.lock '**/pubspec.lock')"
           if [ -n "$drift" ]; then
             drift_flat="$(printf '%s' "$drift" | tr '\r\n' '  ')"
             echo "::error::pubspec.lock drift after build: $drift_flat" >&2
             exit 1
           fi
-      # Prove Gradle consumed the synchronized pubspec code in the real APK.
-      - name: Verify Android version code
-        if: matrix.target == 'android'
-        working-directory: app/planchette_app
-        shell: bash
-        run: bash "$GITHUB_WORKSPACE/scripts/verify-android-version.sh"
       # Stage each platform's product under its release asset name: product +
       # platform, no version (the release page already carries the version) —
       # except the .deb, whose filename is Debian's versioned convention.
@@ -356,10 +318,6 @@ jobs:
         shell: bash
         run: |
           case "${{ matrix.target }}" in
-            android)
-              cp app/planchette_app/build/app/outputs/flutter-apk/app-release.apk \
-                 planchette-android.apk
-              ;;
             linux)
               mv "$(ls -d app/planchette_app/build/linux/*/release/bundle)" \
                  "planchette-linux-${{ matrix.flavor }}"
@@ -375,19 +333,6 @@ jobs:
               cd app/planchette_app/build/macos/Build/Products/Release
               ditto -c -k --keepParent "$(ls -d *.app | head -1)" \
                 "$GITHUB_WORKSPACE/planchette-macos-universal.zip"
-              ;;
-            ios)
-              # An IPA is Payload/<app>.app zipped. `flutter build ipa
-              # --no-codesign` stops at the unsigned .xcarchive and emits no
-              # .ipa on its own, so zip the archive's app bundle explicitly
-              # (D23's step) — unsigned; installing it means re-signing
-              # (AltStore / Sideloadly / Xcode free account).
-              app_dir="app/planchette_app/build/ios/archive/Runner.xcarchive/Products/Applications"
-              app="$(ls -d "$app_dir"/*.app | head -1)"
-              [[ -n "$app" ]] || { echo "no .app under $app_dir" >&2; exit 1; }
-              mkdir Payload
-              cp -R "$app" Payload/
-              zip -qry planchette-ios-unsigned.ipa Payload
               ;;
             windows)
               mv "$(ls -d app/planchette_app/build/windows/*/runner/Release)" planchette-windows-x64
@@ -437,14 +382,13 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$REPO" \
             --dir "$assets_dir" --clobber
 
-          # Rehearsal floor (07 §3.2): the APK and the Linux
-          # .deb/AppImage/bundle must publish; everything they need builds on
-          # ubuntu-latest, so a miss here is a pipeline bug the tag must wait
-          # for.
+          # All five desktop assets must exist before checksums or publication.
           floor_missing=()
-          for asset in 'planchette-android.apk' 'planchette_*.deb' \
+          for asset in 'planchette_*.deb' \
                        'planchette-linux-x64.AppImage' \
-                       'planchette-linux-x64.tar.gz'; do
+                       'planchette-linux-x64.tar.gz' \
+                       'planchette-macos-universal.zip' \
+                       'planchette-windows-x64.zip'; do
             compgen -G "$assets_dir/$asset" >/dev/null \
               || floor_missing+=("$asset")
           done
@@ -456,18 +400,13 @@ jobs:
           ( cd "$assets_dir" && sha256sum -- * ) > SHA256SUMS
 
           # The notes own the install-relevant labels beside the artifacts
-          # (the desktop bundles are unsigned/ad-hoc; the IPA stays unsigned
-          # and unsupported) and the sums users verify downloads against.
+          # (the desktop bundles are unsigned/ad-hoc) and the sums users
+          # verify downloads against.
           {
             cat <<'NOTES'
-          **Android APK**: sideload on a recent Android release; it upgrades
-          an earlier Planchette APK in place.
           **macOS / Windows bundles** — unsigned; first launch needs the usual
           unidentified-developer step (macOS: right-click ▸ Open; Windows:
           SmartScreen ▸ Run anyway).
-          **iOS IPA** — unsigned; re-sign to sideload (AltStore / Sideloadly /
-          Xcode with a free Apple ID). iOS is not a supported target of this
-          release.
 
           `SHA256SUMS` ships beside the assets; the same sums follow below.
 
