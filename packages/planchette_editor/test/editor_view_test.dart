@@ -101,12 +101,12 @@ void main() {
     await tester.pump();
     // The painter is library-private; read its fields dynamically rather
     // than parsing a toString() contract.
-    final painter = tester
+    final band = tester
         .widget<CustomPaint>(find.byKey(const ValueKey('editor-caret-band')))
-        .painter!;
-    final lineTops = (painter as dynamic).lineTops as List<double>;
-    final lineHeight = (painter as dynamic).lineHeight as double;
-    final documentHeight = (painter as dynamic).documentHeight as double;
+        .painter! as dynamic;
+    final lineTops = band.lineTops as List<double>;
+    final lineHeight = band.lineHeight as double;
+    final documentHeight = band.documentHeight as double;
     // The only line wraps, so the laid-out height must exceed one row.
     expect(lineTops.length, 2);
     expect(documentHeight, greaterThan(lineHeight * 3));
