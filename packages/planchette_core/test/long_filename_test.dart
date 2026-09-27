@@ -17,6 +17,44 @@ void main() {
 
   tearDown(() => directory.delete(recursive: true));
 
+  test('retains the original directory prefix of relative paths', () async {
+    final uniqueName = directory.uri.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .last;
+    final file = File('$uniqueName.txt');
+    addTearDown(() async {
+      if (await file.exists()) await file.delete();
+    });
+
+    await createTextDocument(
+      file,
+      'content',
+      observeTemporary: (temporary) async {
+        expect(temporary.path, startsWith('${file.path}.planchette-'));
+      },
+    );
+    expect(await file.readAsString(), 'content');
+  });
+
+  test('rejects oversized valid prefixes before writing', () async {
+    final file = File('${directory.path}/short.txt');
+    await expectLater(
+      createTextDocument(
+        file,
+        'content',
+        temporaryPrefix: '.${'p' * _maximumNameBytes}',
+      ),
+      throwsA(
+        isA<ArgumentError>().having(
+          (error) => error.message,
+          'reason',
+          'Prefix is too long.',
+        ),
+      ),
+    );
+    expect(await directory.list().length, 0);
+  });
+
   for (final name in [
     '${'a' * (_maximumNameBytes - 4)}.txt',
     '${'😀' * 62}abc.txt',

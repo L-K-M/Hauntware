@@ -25,6 +25,8 @@ shortened at a Unicode character boundary so the name, host prefix, UUID,
 and suffix fit within 255 UTF-8 bytes. Recovery code must use the host prefix
 and suffix rather than require the full original basename; rollback errors
 identify the exact retained backup.
+This bound covers common 255-byte component limits; filesystems with smaller
+limits can still reject a recovery filename.
 
 POSIX temporary content is owner-only before writing. Replacements retain
 the original permission bits. The replacement protocol has a brief missing

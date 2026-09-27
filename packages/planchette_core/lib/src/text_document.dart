@@ -303,15 +303,18 @@ File _recoverySibling(File file, String prefix, String extension) {
 
   // Retain recognizable names and host recovery suffixes without splitting
   // Unicode characters when a valid destination nearly fills the limit.
+  final originalName = file.uri.pathSegments.last;
   final stem = StringBuffer();
   var used = 0;
-  for (final rune in file.uri.pathSegments.last.runes) {
+  for (final rune in originalName.runes) {
     final character = String.fromCharCode(rune);
     used += utf8.encode(character).length;
     if (used > available) break;
     stem.write(character);
   }
-  return File('${file.parent.path}${Platform.pathSeparator}$stem$suffix');
+  // Keep the caller's directory spelling, including root and relative paths.
+  final parent = file.path.substring(0, file.path.length - originalName.length);
+  return File('$parent$stem$suffix');
 }
 
 Future<void> _requireRegularFile(File file) async {
