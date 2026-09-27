@@ -44,6 +44,23 @@ void main() {
         contrast(syntax.activeMatchForeground, syntax.activeMatchBackground),
         greaterThanOrEqualTo(4.5),
       );
+      // Dialogs and raised chrome sit on the higher containers; only UI text
+      // is drawn there.
+      for (final raised in {
+        'raised chrome': scheme.surfaceContainerHigh,
+        'highest chrome': scheme.surfaceContainerHighest,
+      }.entries) {
+        for (final text in {
+          'text': scheme.onSurface,
+          'secondary text': scheme.onSurfaceVariant,
+        }.entries) {
+          expect(
+            contrast(text.value, raised.value),
+            greaterThanOrEqualTo(4.5),
+            reason: '${text.key} on ${raised.key}',
+          );
+        }
+      }
       // Ordinary matches are translucent, so check them as composited.
       for (final background in backgrounds.entries) {
         expect(

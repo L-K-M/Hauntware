@@ -13,7 +13,7 @@ abstract final class PlanchettePalette {
     ink: Color(0xFF2B2522),
     chrome: Color(0xFFEDE3CE),
     chromeHigh: Color(0xFFE3D6BC),
-    faded: Color(0xFF6B5E52),
+    faded: Color(0xFF665A4E),
     rule: Color(0xFFD6C8AB),
     accent: Color(0xFF8B2E3C),
     selection: Color(0x66E2B865),
