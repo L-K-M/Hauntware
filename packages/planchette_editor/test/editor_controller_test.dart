@@ -210,6 +210,18 @@ void main() {
       expect(editor.canPublish, isFalse);
     },
   );
+  test('font zoom steps, clamps, and resets the document scale', () {
+    final editor = EditorController(displayPath: 'test', initialText: 'x');
+    addTearDown(editor.dispose);
+    editor.zoomIn();
+    expect(editor.fontScale, closeTo(1.2, 0.001));
+    editor.resetZoom();
+    expect(editor.fontScale, 1.0);
+    editor.fontScale = 100;
+    expect(editor.fontScale, 3.0);
+    editor.fontScale = 0;
+    expect(editor.fontScale, 0.5);
+  });
   test('statistics count UTF-8 and trailing empty lines', () {
     final editor = EditorController(
       displayPath: 'test',

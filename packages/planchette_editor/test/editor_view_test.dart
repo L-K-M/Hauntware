@@ -83,6 +83,20 @@ void main() {
     await tester.pump();
     expect(c.text.text, 'dog dog');
   });
+  testWidgets('font zoom scales the document text style', (tester) async {
+    final c = EditorController(displayPath: 'test', initialText: 'one\ntwo\n');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    final field = find.byKey(const ValueKey('planchette.document'));
+    expect(tester.widget<TextField>(field).style!.fontSize, 14);
+    c.zoomIn();
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(field).style!.fontSize,
+      closeTo(16.8, 0.01),
+    );
+  });
   testWidgets('IME composing text retains framework rendering', (tester) async {
     final c = EditorController(displayPath: '.env', initialText: 'KEY=value');
     addTearDown(c.dispose);

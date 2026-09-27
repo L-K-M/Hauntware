@@ -56,8 +56,18 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   int _lastReveal = -1;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
-  TextStyle get _style =>
-      const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
+  /// The zoom factor multiplies the base size so the gutter, document
+  /// field, and reveal estimates stay in lockstep; the host's textStyle
+  /// overrides the base but never the zoom.
+  TextStyle get _style {
+    final merged = const TextStyle(
+      fontSize: 14,
+      height: 1.35,
+    ).merge(widget.textStyle);
+    final size = merged.fontSize;
+    if (size == null || c.fontScale == 1.0) return merged;
+    return merged.copyWith(fontSize: size * c.fontScale);
+  }
   bool get _locked => widget.editingLocked || c.editingLocked;
 
   @override
@@ -197,6 +207,38 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             c.previousMatch,
+        const SingleActivator(LogicalKeyboardKey.equal, control: true):
+            c.zoomIn,
+        const SingleActivator(LogicalKeyboardKey.equal, meta: true): c.zoomIn,
+        const SingleActivator(
+          LogicalKeyboardKey.equal,
+          control: true,
+          shift: true,
+        ): c.zoomIn,
+        const SingleActivator(
+          LogicalKeyboardKey.equal,
+          meta: true,
+          shift: true,
+        ): c.zoomIn,
+        const SingleActivator(LogicalKeyboardKey.numpadAdd, control: true):
+            c.zoomIn,
+        const SingleActivator(LogicalKeyboardKey.numpadAdd, meta: true):
+            c.zoomIn,
+        const SingleActivator(LogicalKeyboardKey.minus, control: true):
+            c.zoomOut,
+        const SingleActivator(LogicalKeyboardKey.minus, meta: true): c.zoomOut,
+        const SingleActivator(LogicalKeyboardKey.numpadSubtract, control: true):
+            c.zoomOut,
+        const SingleActivator(LogicalKeyboardKey.numpadSubtract, meta: true):
+            c.zoomOut,
+        const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+            c.resetZoom,
+        const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
+            c.resetZoom,
+        const SingleActivator(LogicalKeyboardKey.numpad0, control: true):
+            c.resetZoom,
+        const SingleActivator(LogicalKeyboardKey.numpad0, meta: true):
+            c.resetZoom,
         if (c.searchOpen)
           const SingleActivator(LogicalKeyboardKey.escape): c.closeSearch,
       },

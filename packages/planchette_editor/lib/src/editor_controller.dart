@@ -64,6 +64,7 @@ class EditorController extends ChangeNotifier {
   bool _searchOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
+  double _fontScale = 1.0;
   bool _updatingSearch = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
@@ -101,6 +102,23 @@ class EditorController extends ChangeNotifier {
   int get revealRequest => _revealRequest;
   bool get editingLocked => _editingLocked;
   set editingLocked(bool value) => setEditingLocked(value);
+
+  static const double _minFontScale = 0.5;
+  static const double _maxFontScale = 3.0;
+  static const double _fontScaleStep = 1.2;
+
+  /// View-only zoom of the document text; never persisted with the buffer.
+  double get fontScale => _fontScale;
+  set fontScale(double value) {
+    final clamped = value.clamp(_minFontScale, _maxFontScale);
+    if (clamped == _fontScale) return;
+    _fontScale = clamped;
+    _notify();
+  }
+
+  void zoomIn() => fontScale = _fontScale * _fontScaleStep;
+  void zoomOut() => fontScale = _fontScale / _fontScaleStep;
+  void resetZoom() => fontScale = 1.0;
 
   /// The view applies configuration during its build without notifying its
   /// ancestors; hosts changing the lock directly use the notifying setter.

@@ -278,6 +278,26 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
       ]),
+      _ShellMenu('View', [
+        _Command(
+          'Zoom In',
+          () => active?.editor.zoomIn(),
+          shortcut: _shortcut(LogicalKeyboardKey.equal),
+          enabled: ready,
+        ),
+        _Command(
+          'Zoom Out',
+          () => active?.editor.zoomOut(),
+          shortcut: _shortcut(LogicalKeyboardKey.minus),
+          enabled: ready,
+        ),
+        _Command(
+          'Reset Zoom',
+          () => active?.editor.resetZoom(),
+          shortcut: _shortcut(LogicalKeyboardKey.digit0),
+          enabled: ready,
+        ),
+      ]),
       _ShellMenu('Window', [
         _Command(
           'Next Tab',
