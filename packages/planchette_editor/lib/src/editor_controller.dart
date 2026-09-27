@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart' hide findSearchMatches;
+import 'package:planchette_core/planchette_core.dart'
+    as core
+    show deleteLines, duplicateLines, joinLines, moveLines;
 
 import 'code_editing_controller.dart';
 
@@ -69,6 +72,7 @@ class EditorController extends ChangeNotifier {
   int _activeMatch = -1;
   int _revision = 0;
   int _revealRequest = 0;
+  int _caretRevealRequest = 0;
   String _lastText = '';
   String? _lastQuery;
   String? _metricsText;
@@ -99,6 +103,10 @@ class EditorController extends ChangeNotifier {
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
+
+  /// Increments when an edit moved the caret somewhere the view should
+  /// scroll to; typing scrolls by itself, but a programmatic edit does not.
+  int get caretRevealRequest => _caretRevealRequest;
   bool get editingLocked => _editingLocked;
   set editingLocked(bool value) => setEditingLocked(value);
 
@@ -171,6 +179,53 @@ class EditorController extends ChangeNotifier {
     _document = document;
     if (replaceText) _installText(document.text);
     _notify();
+  }
+
+  /// Whether a command may change the buffer now: not while it loads, is
+  /// locked or failed to load, and not while an input method composes, since
+  /// the composition owns the text until it is committed.
+  bool get canEditText =>
+      !_loading &&
+      !_editingLocked &&
+      _error == null &&
+      text.selection.isValid &&
+      !text.value.composing.isValid;
+
+  /// Copies the selected lines, or the caret's line, below themselves.
+  bool duplicateLines() => _applyLineEdit(core.duplicateLines);
+
+  /// Swaps the selected lines, or the caret's line, with the neighbouring
+  /// line. Returns false at the top or bottom of the document.
+  bool moveLines(LineDirection direction) => _applyLineEdit(
+    (text, base, extent) => core.moveLines(text, base, extent, direction),
+  );
+
+  /// Removes the selected lines, or the caret's line.
+  bool deleteLines() => _applyLineEdit(core.deleteLines);
+
+  /// Joins the selected lines, or the caret's line with the next one.
+  bool joinLines() => _applyLineEdit(core.joinLines);
+
+  bool _applyLineEdit(
+    LineEdit? Function(String text, int base, int extent) command,
+  ) {
+    if (!canEditText) return false;
+    final selection = text.selection;
+    final edit = command(
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    if (edit == null) return false;
+    _caretRevealRequest++;
+    text.value = TextEditingValue(
+      text: edit.text,
+      selection: TextSelection(
+        baseOffset: edit.selectionBase,
+        extentOffset: edit.selectionExtent,
+      ),
+    );
+    return true;
   }
 
   void _installText(String value) {

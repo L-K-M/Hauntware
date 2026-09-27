@@ -245,6 +245,43 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyA),
           enabled: ready,
         ),
+        const _Separator(),
+        _Command(
+          'Duplicate Line',
+          () => active?.editor.duplicateLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyD, shift: true),
+          enabled: ready,
+        ),
+        _Command(
+          'Move Line Up',
+          () => active?.editor.moveLines(LineDirection.up),
+          shortcut: const SingleActivator(
+            LogicalKeyboardKey.arrowUp,
+            alt: true,
+          ),
+          enabled: ready,
+        ),
+        _Command(
+          'Move Line Down',
+          () => active?.editor.moveLines(LineDirection.down),
+          shortcut: const SingleActivator(
+            LogicalKeyboardKey.arrowDown,
+            alt: true,
+          ),
+          enabled: ready,
+        ),
+        _Command(
+          'Delete Line',
+          () => active?.editor.deleteLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyK, shift: true),
+          enabled: ready,
+        ),
+        _Command(
+          'Join Lines',
+          () => active?.editor.joinLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyJ),
+          enabled: ready,
+        ),
       ]),
       _ShellMenu('Find', [
         _Command(
