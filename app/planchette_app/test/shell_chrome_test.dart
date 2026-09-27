@@ -354,7 +354,7 @@ void main() {
     expect(() => droppedPaths('file:///a%2Fb'), returnsNormally);
     expect(
       droppedPaths('file://host/share/one.txt\r\nfile:///home/me/ok.txt'),
-      [contains(fromUri('file:///home/me/ok.txt'))],
+      contains(fromUri('file:///home/me/ok.txt')),
     );
   });
 
