@@ -416,6 +416,15 @@ void main() {
         findSearchMatches('a == b', '==', wholeWord: true),
         hasLength(1),
       );
+      // Astral symbols are boundaries, like \b in other editors.
+      expect(
+        findSearchMatches('cat🙂', 'cat', wholeWord: true),
+        const [TextMatch(start: 0, end: 3)],
+      );
+      expect(
+        findSearchMatches('🙂cat', 'cat', wholeWord: true),
+        const [TextMatch(start: 2, end: 5)],
+      );
     });
   });
 }

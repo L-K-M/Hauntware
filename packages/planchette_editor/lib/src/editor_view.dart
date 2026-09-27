@@ -270,6 +270,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     IconButton(
                       tooltip: strings.matchCase,
                       visualDensity: VisualDensity.compact,
+                      isSelected: c.caseSensitive,
                       onPressed: c.toggleCaseSensitive,
                       icon: Text(
                         'Aa',
@@ -284,6 +285,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     IconButton(
                       tooltip: strings.wholeWords,
                       visualDensity: VisualDensity.compact,
+                      isSelected: c.wholeWord,
                       onPressed: c.toggleWholeWord,
                       icon: Text(
                         'ab',

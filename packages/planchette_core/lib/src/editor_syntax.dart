@@ -1196,8 +1196,10 @@ List<TextMatch> findSearchMatches(
   return matches;
 }
 
-/// Word characters are ASCII letters, digits, `_`, and non-ASCII content
-/// (so `café` and CJK runs keep their edges); everything else is a boundary.
+/// Word characters are ASCII letters, digits, `_`, and non-ASCII BMP content
+/// (so `café` and CJK runs keep their edges). Astral symbols such as emoji
+/// are UTF-16 surrogate pairs, and surrogates act as boundaries, matching
+/// `\b`-style editors. CJK/full-width punctuation stays word content for now.
 bool _isWholeWord(String haystack, int start, int end) {
   if (start > 0 && _isWordUnit(haystack.codeUnitAt(start - 1))) return false;
   if (end < haystack.length && _isWordUnit(haystack.codeUnitAt(end))) {
@@ -1211,4 +1213,4 @@ bool _isWordUnit(int unit) =>
     (unit >= 0x41 && unit <= 0x5a) ||
     (unit >= 0x61 && unit <= 0x7a) ||
     unit == 0x5f ||
-    unit >= 0x80;
+    (unit >= 0x80 && (unit < 0xd800 || unit > 0xdfff));

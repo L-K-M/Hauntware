@@ -177,8 +177,12 @@ void main() {
     editor.openSearch(replace: true);
     editor.search.text = 'cat';
     expect(editor.matches.length, 3);
+    final revealed = editor.revealRequest;
     editor.toggleWholeWord();
     expect(editor.wholeWord, isTrue);
+    expect(editor.revealRequest, greaterThan(revealed));
+    editor.toggleCaseSensitive();
+    expect(editor.revealRequest, greaterThan(revealed + 1));
     expect(editor.matches.length, 2);
     editor.replacement.text = 'dog';
     editor.replaceAll();
