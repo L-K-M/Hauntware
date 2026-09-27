@@ -111,10 +111,10 @@ void main() {
     await workspace.open(testPath('b/index.js'));
     await mount(tester);
 
-    // Both basenames are index.js, so the strip has to disambiguate them.
-    expect(find.textContaining('index.js'), findsNWidgets(2));
-    expect(find.textContaining('a'), findsWidgets);
-    expect(find.textContaining('b'), findsWidgets);
+    // Both basenames are index.js, so the strip has to disambiguate them with
+    // enough of the path to tell the two apart.
+    expect(find.textContaining('a/index.js'), findsOneWidget);
+    expect(find.textContaining('b/index.js'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -213,5 +213,35 @@ void main() {
     expect(droppedPaths(''), isEmpty);
     expect(droppedPaths('\n\n'), isEmpty);
     expect(droppedPaths('   '), isEmpty);
+  });
+
+  test('a Windows payload keeps its carriage returns out of the paths', () {
+    // A desktop drop on Windows separates with CRLF, so a path that is not
+    // trimmed would carry a \r that no file matches.
+    expect(droppedPaths('/tmp/one.txt\r\n/tmp/two.txt\r\n'), [
+      '/tmp/one.txt',
+      '/tmp/two.txt',
+    ]);
+  });
+
+  test('a desktop drop arrives as URIs, with comment lines', () {
+    // This is the actual payload: text/uri-list, one file: URI per line, with
+    // comment lines a file manager is free to include. Handing a URI straight
+    // to File is why this had to be understood rather than split on newlines.
+    expect(
+      droppedPaths(
+        'file:///home/me/one.txt\r\nfile:///home/me/two%20three.txt\r\n',
+      ),
+      ['/home/me/one.txt', '/home/me/two three.txt'],
+    );
+    expect(droppedPaths('//comment\r\nfile:///home/me/one.txt\r\n'), [
+      '/home/me/one.txt',
+    ]);
+    // A plain path still works, so a test-supplied or hand-made drop is fine.
+    expect(droppedPaths('/home/me/one.txt'), ['/home/me/one.txt']);
+  });
+
+  test('a payload of only comments opens nothing', () {
+    expect(droppedPaths('//a comment\r\n//another\r\n'), isEmpty);
   });
 }

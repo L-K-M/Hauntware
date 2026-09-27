@@ -718,6 +718,24 @@ class _DocumentShellState extends State<_DocumentShell> {
     );
   }
 
+  /// What a tab calls its document.
+  ///
+  /// The basename, until two open documents share one — ten `index.js` files
+  /// are otherwise ten identical tabs, and only the active tab's directory is
+  /// shown beside the strip, so the strip itself has to carry the difference.
+  /// Adding the parent only when it is needed keeps the common case short.
+  String _tabLabel(DocumentTab tab) {
+    final name = tab.name;
+    final siblings = workspace.documents.where(
+      (other) => other != tab && other.name == name,
+    );
+    if (siblings.isEmpty) return name;
+    final path = tab.path;
+    if (path == null) return name;
+    final parent = paths.basename(paths.dirname(path));
+    return parent.isEmpty || parent == '.' ? name : '$parent/$name';
+  }
+
   Widget _tab({
     required DocumentTab tab,
     required bool selected,
@@ -725,7 +743,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   }) {
     final locked = workspace.interactionLocked;
     final label = Text(
-      tab.name,
+      _tabLabel(tab),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
@@ -838,14 +856,31 @@ class _DocumentShellState extends State<_DocumentShell> {
 
 /// The paths a drop carried.
 ///
-/// A desktop drop delivers one path per line for several files and a single
-/// path for one, so both shapes arrive here and neither is worth special
-/// casing at the call site. Blank lines are dropped, and surrounding
-/// whitespace trimmed, because a file manager will happily quote a name.
-List<String> droppedPaths(String data) => [
-  for (final line in data.split('\n'))
-    if (line.trim().isNotEmpty) line.trim(),
-];
+/// A desktop drop delivers `text/uri-list`: one `file:` URI per line, CRLF
+/// separated, with comment lines beginning `//` that a file manager is free to
+/// include and that mean nothing as a path. Percent escapes are decoded, and a
+/// line that is already a plain path — which is what a test or a hand-made drop
+/// carries — is passed through. A URI is not the same thing as a path, so
+/// splitting on newlines alone produces names no file matches.
+List<String> droppedPaths(String data) {
+  final paths = <String>[];
+  for (final line in data.split('\n')) {
+    final entry = line.trim();
+    if (entry.isEmpty || entry.startsWith('//')) continue;
+    if (!entry.startsWith('file:')) {
+      paths.add(entry);
+      continue;
+    }
+    // A malformed URI is skipped rather than allowed to throw out of a
+    // gesture handler, which would take the frame with it.
+    try {
+      paths.add(Uri.parse(entry).toFilePath());
+    } on FormatException {
+      continue;
+    }
+  }
+  return paths;
+}
 
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);
