@@ -68,9 +68,13 @@ LineTops measureLineTops({
   // The style's arithmetic sizes the prefix. The row height the paragraph
   // really uses can differ from it — see below — so this is a starting guess.
   final styleHeight = scaler.scale(style.fontSize ?? 14) * (style.height ?? 1);
+  // `minimumLines` is folded into the upper bound rather than passed as the
+  // lower one: a stale value (most of the document was deleted) can exceed the
+  // line count, and clamping to a lower bound above the upper one returns the
+  // oversize number and leaves the two bounds inverted.
   final wanted = _clamp(
     visibleLineCount(viewportHeight, styleHeight) + _lineTopsLookaheadLines,
-    minimumLines,
+    minimumLines < lineStarts.length ? minimumLines : lineStarts.length,
     lineStarts.length,
   );
 
