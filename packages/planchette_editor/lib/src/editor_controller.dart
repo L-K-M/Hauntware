@@ -343,8 +343,9 @@ class EditorController extends ChangeNotifier {
     if (!_replaceOpen && _focusMemory == replacementFocus) {
       _focusMemory = searchFocus;
       // The collapsing field may hold focus; hand it to the find field now
-      // rather than leaving primary focus on the enclosing scope.
-      restoreFocus();
+      // rather than leaving primary focus on the enclosing scope. Only
+      // steal when it really did — a host may share our focus scope.
+      if (replacementFocus.hasFocus) restoreFocus();
     }
     _notify();
   }
