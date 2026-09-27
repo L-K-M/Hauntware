@@ -45,8 +45,14 @@ class EditorController extends ChangeNotifier {
   Future<void> Function()? onSaved;
   Future<bool> Function()? onPublish;
   /// Replaced on every document install to sever the undo stack, which
-  /// UndoHistory binds to the controller instance itself.
+  /// UndoHistory binds to the controller instance itself. The replaced
+  /// instance is disposed: re-read [text] on every notification and never
+  /// cache the instance across document installs.
   late CodeEditingController text;
+  /// Retired controllers stay reachable until disposal: an EditableText
+  /// bound to the outgoing instance may still read it during the frame
+  /// the swap lands in, and disposing it eagerly would crash that read.
+  final _retiredText = <CodeEditingController>{};
   final search = TextEditingController();
   final replacement = TextEditingController();
   final editorFocus = FocusNode();
@@ -189,7 +195,8 @@ class EditorController extends ChangeNotifier {
         text: value,
         selection: const TextSelection.collapsed(offset: 0),
       );
-    outgoing.dispose();
+    outgoing.removeListener(_textChanged);
+    _retiredText.add(outgoing);
     _detectLanguage();
     if (_searchOpen) _updateMatches(resetActive: true);
     if (scroll.hasClients) scroll.jumpTo(0);
@@ -445,6 +452,9 @@ class EditorController extends ChangeNotifier {
     text.removeListener(_textChanged);
     search.removeListener(_queryChanged);
     text.dispose();
+    for (final retired in _retiredText) {
+      retired.dispose();
+    }
     search.dispose();
     replacement.dispose();
     editorFocus.dispose();

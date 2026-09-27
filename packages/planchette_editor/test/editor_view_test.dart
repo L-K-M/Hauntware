@@ -103,9 +103,19 @@ void main() {
     await c.initialize();
     await tester.pump();
     expect(c.text.text, 'original');
-    await tester.enterText(
-      find.byKey(const ValueKey('planchette.document')),
-      'edited',
+    // UndoHistory records any focused-controller change but coalesces it
+    // through a 500ms throttle, and a stack with a single entry cannot
+    // undo — two settled edits are needed to prove the sever.
+    c.editorFocus.requestFocus();
+    await tester.pump();
+    c.text.value = const TextEditingValue(
+      text: 'edited one',
+      selection: TextSelection.collapsed(offset: 10),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    c.text.value = const TextEditingValue(
+      text: 'edited two',
+      selection: TextSelection.collapsed(offset: 10),
     );
     await tester.pump(const Duration(milliseconds: 600));
     c.adoptDocument(
@@ -123,6 +133,30 @@ void main() {
     c.undoController.undo();
     await tester.pump();
     expect(c.text.text, 'reloaded');
+    // Typing after the swap must land in the fresh controller: it fails
+    // loudly if the field still holds the retired instance.
+    await tester.enterText(
+      find.byKey(const ValueKey('planchette.document')),
+      'reloaded more',
+    );
+    await tester.pump();
+    expect(c.text.text, 'reloaded more');
+    // Undo keeps working inside the new buffer. Entries are throttled
+    // 500ms and the cleared stack re-baselines on the first post-swap
+    // edit, so a revert needs two settled edits.
+    c.text.value = const TextEditingValue(
+      text: 'reloaded more+',
+      selection: TextSelection.collapsed(offset: 14),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    c.text.value = const TextEditingValue(
+      text: 'reloaded more++',
+      selection: TextSelection.collapsed(offset: 15),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    c.undoController.undo();
+    await tester.pump();
+    expect(c.text.text, 'reloaded more+');
   });
   testWidgets('IME composing text retains framework rendering', (tester) async {
     final c = EditorController(displayPath: '.env', initialText: 'KEY=value');
