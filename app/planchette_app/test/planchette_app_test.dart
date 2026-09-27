@@ -4,19 +4,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
+import 'package:planchette_app/services/app_settings.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
+import 'services/memory_settings.dart';
 
 void main() {
   late MemoryDocuments store;
   late FakeDialogs dialogs;
   late DocumentWorkspace workspace;
-  setUp(() {
+  late SettingsController settings;
+  setUp(() async {
     store = MemoryDocuments();
     dialogs = FakeDialogs();
     workspace = DocumentWorkspace(store: store, dialogs: dialogs);
+    settings = SettingsController(store: MemorySettings());
+    addTearDown(settings.dispose);
+    await settings.load();
   });
   tearDown(() {
     workspace.dispose();
@@ -27,11 +33,15 @@ void main() {
         widget is TextField && identical(widget.controller, tab.editor.text),
   );
 
-  Future<void> mount(WidgetTester tester) async {
+  Future<void> mount(
+    WidgetTester tester, {
+    ThemeMode mode = ThemeMode.light,
+  }) async {
+    await settings.update(settings.value.copyWith(themeMode: mode));
     await tester.binding.setSurfaceSize(const Size(1000, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+      PlanchetteApp(workspace: workspace, settings: settings),
     );
     await tester.pumpAndSettle();
   }
