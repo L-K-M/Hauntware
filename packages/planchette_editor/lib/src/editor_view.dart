@@ -64,7 +64,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void initState() {
     super.initState();
     c.addListener(_changed);
-    c.setEditingLocked(widget.editingLocked, notify: false);
+    c.setViewEditingLocked(widget.editingLocked);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) c.initialize();
     });
@@ -83,6 +83,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != c) {
       oldWidget.controller.removeListener(_changed);
+      oldWidget.controller.setViewEditingLocked(false);
       c.addListener(_changed);
       _lastReveal = -1;
       _gutterText = null;
@@ -90,7 +91,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         if (mounted) c.initialize();
       });
     }
-    c.setEditingLocked(widget.editingLocked, notify: false);
+    c.setViewEditingLocked(widget.editingLocked);
     c.text.theme =
         widget.syntaxTheme ??
         EditorSyntaxTheme.of(Theme.of(context).brightness);
@@ -164,6 +165,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   @override
   void dispose() {
     c.removeListener(_changed);
+    c.setViewEditingLocked(false);
     _gutterRepaint.dispose();
     super.dispose();
   }

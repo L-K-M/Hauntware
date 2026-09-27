@@ -61,6 +61,7 @@ class EditorController extends ChangeNotifier {
   bool _saving = false;
   bool _disposed = false;
   bool _editingLocked = false;
+  bool _viewLocked = false;
   bool _searchOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
@@ -91,7 +92,7 @@ class EditorController extends ChangeNotifier {
   bool get isSaving => _saving;
   bool get isBusy => _loading || _saving;
   bool get isDirty => !_loading && text.text != _savedText;
-  bool get canSave => !isBusy && !_editingLocked && _error == null;
+  bool get canSave => !isBusy && !editingLocked && _error == null;
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;
   bool get replaceOpen => _replaceOpen;
@@ -99,16 +100,26 @@ class EditorController extends ChangeNotifier {
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
-  bool get editingLocked => _editingLocked;
+
+  /// Whether edits, saves and reloads are refused. Two owners can lock: the
+  /// host, through [setEditingLocked], and the mounted [PlanchetteEditor],
+  /// through its `editingLocked` parameter. Either lock holds on its own, and
+  /// each owner clears only its own, so rebuilding the view with its default
+  /// `false` never unlocks a document the host locked.
+  bool get editingLocked => _editingLocked || _viewLocked;
   set editingLocked(bool value) => setEditingLocked(value);
 
-  /// The view applies configuration during its build without notifying its
-  /// ancestors; hosts changing the lock directly use the notifying setter.
+  /// The host's lock. [notify] is false only for hosts that update several
+  /// controllers and notify once themselves.
   void setEditingLocked(bool value, {bool notify = true}) {
     if (_editingLocked == value) return;
     _editingLocked = value;
     if (notify) _notify();
   }
+
+  /// The mounted view's lock, applied during its build, so it does not
+  /// notify. Hosts use [setEditingLocked] instead.
+  void setViewEditingLocked(bool value) => _viewLocked = value;
 
   List<int> get lineStarts {
     _updateMetrics();
@@ -143,7 +154,7 @@ class EditorController extends ChangeNotifier {
 
   /// The host confirms any discard and refreshes a remote checkout first.
   Future<void> reload() async {
-    if (isBusy || _editingLocked || loadDocument == null) return;
+    if (isBusy || editingLocked || loadDocument == null) return;
     await _load();
   }
 
@@ -221,7 +232,7 @@ class EditorController extends ChangeNotifier {
         _error != null ||
         saver == null ||
         _disposed ||
-        (_editingLocked && access != EditorSaveAccess.confirmedClose)) {
+        (editingLocked && access != EditorSaveAccess.confirmedClose)) {
       return null;
     }
     _saving = true;
@@ -374,7 +385,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void replaceCurrent() {
-    if (_editingLocked || isBusy || _activeMatch < 0 || _matches.isEmpty) {
+    if (editingLocked || isBusy || _activeMatch < 0 || _matches.isEmpty) {
       return;
     }
     final match = _matches[_activeMatch];
@@ -397,7 +408,7 @@ class EditorController extends ChangeNotifier {
   /// Replace every literal occurrence, including matches beyond the display cap.
   /// Offsets come from the original text so replacements never match themselves.
   void replaceAll() {
-    if (_editingLocked || isBusy || search.text.isEmpty) return;
+    if (editingLocked || isBusy || search.text.isEmpty) return;
     final source = text.text;
     final matches = findSearchMatches(
       source,
