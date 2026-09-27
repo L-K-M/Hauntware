@@ -77,4 +77,32 @@ void main() {
 
     expect(body(html), 'a<span class="k">b</span>');
   });
+
+  test('rejects a color that could leave the style block', () {
+    for (final color in ['red}body{display:none', '</style><script>']) {
+      expect(
+        () => highlightedHtml(
+          text: 'a',
+          tokens: const [],
+          palette: HtmlPalette(
+            background: '#fff',
+            foreground: '#000',
+            tokens: {SyntaxTokenType.keyword: color},
+          ),
+        ),
+        throwsArgumentError,
+        reason: color,
+      );
+    }
+    // Functional notation stays accepted.
+    highlightedHtml(
+      text: 'a',
+      tokens: const [],
+      palette: const HtmlPalette(
+        background: 'rgb(255 250 240)',
+        foreground: 'hsl(0 0% 13% / 90%)',
+        tokens: {},
+      ),
+    );
+  });
 }

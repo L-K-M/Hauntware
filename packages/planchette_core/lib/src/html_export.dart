@@ -1,7 +1,8 @@
 import 'editor_syntax.dart';
 
-/// CSS colors for [highlightedHtml]: any value a CSS `color` property
-/// accepts, such as `#1f7a54`.
+/// CSS colors for [highlightedHtml], such as `#1f7a54` or `rgb(31 122 84)`.
+/// They are written into a style block, so [highlightedHtml] rejects a value
+/// with any character that could end a declaration or the block.
 final class HtmlPalette {
   const HtmlPalette({
     required this.background,
@@ -26,6 +27,15 @@ String highlightedHtml({
   required HtmlPalette palette,
   String title = '',
 }) {
+  for (final color in [
+    palette.background,
+    palette.foreground,
+    ...palette.tokens.values,
+  ]) {
+    if (!_plainCssColor.hasMatch(color)) {
+      throw ArgumentError.value(color, 'palette', 'Not a plain CSS color');
+    }
+  }
   final out = StringBuffer()
     ..writeln('<!doctype html>')
     ..writeln('<html>')
@@ -43,7 +53,7 @@ String highlightedHtml({
     );
   for (final type in SyntaxTokenType.values) {
     final color = palette.tokens[type];
-    if (color != null) out.writeln('.${_classes[type]}{color:$color}');
+    if (color != null) out.writeln('.${_classOf(type)}{color:$color}');
   }
   out
     ..writeln('</style>')
@@ -60,7 +70,7 @@ String highlightedHtml({
     out.write(_escape(text.substring(position, start)));
     if (end > start) {
       out
-        ..write('<span class="${_classes[token.type]}">')
+        ..write('<span class="${_classOf(token.type)}">')
         ..write(_escape(text.substring(start, end)))
         ..write('</span>');
     }
@@ -74,12 +84,18 @@ String highlightedHtml({
   return out.toString();
 }
 
-const _classes = {
-  SyntaxTokenType.comment: 'c',
-  SyntaxTokenType.string: 's',
-  SyntaxTokenType.number: 'n',
-  SyntaxTokenType.keyword: 'k',
-  SyntaxTokenType.meta: 'm',
+/// Hex, named and functional colors; no `;`, braces, quotes or angle
+/// brackets, so a value cannot leave its declaration or the style block.
+final _plainCssColor = RegExp(r'^[#A-Za-z0-9(),.%/ -]+$');
+
+// A switch, not a map, so a new token type fails to compile until it has a
+// class.
+String _classOf(SyntaxTokenType type) => switch (type) {
+  SyntaxTokenType.comment => 'c',
+  SyntaxTokenType.string => 's',
+  SyntaxTokenType.number => 'n',
+  SyntaxTokenType.keyword => 'k',
+  SyntaxTokenType.meta => 'm',
 };
 
 String _escape(String text) => text
