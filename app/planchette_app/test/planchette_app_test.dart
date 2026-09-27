@@ -184,6 +184,60 @@ void main() {
   );
 
   testWidgets(
+    'switching back after the find bar closed restores document focus',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      final second = workspace.newDocument()!;
+      await mount(tester);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      first.editor.openSearch();
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isTrue);
+      first.editor.closeSearch();
+      await tester.pumpAndSettle();
+      workspace.select(second);
+      await tester.pumpAndSettle();
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      expect(first.editor.editorFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'switching back to a tab restores replacement-field focus',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      final second = workspace.newDocument()!;
+      await mount(tester);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      first.editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      first.editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(first.editor.replacementFocus.hasFocus, isTrue);
+      workspace.select(second);
+      await tester.pumpAndSettle();
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      expect(first.editor.replacementFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!

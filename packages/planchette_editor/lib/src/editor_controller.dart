@@ -63,7 +63,10 @@ class EditorController extends ChangeNotifier {
   /// The node to focus when this editor's tab becomes active. Deactivation
   /// unfocuses all three, so remembering the last-focused node lets a tab
   /// switch restore a focused find field instead of always the document.
-  FocusNode get focusTarget => _focusMemory ?? editorFocus;
+  /// Falls back to the document when the remembered node is detached —
+  /// the find or replace field it belonged to may have closed.
+  FocusNode get focusTarget =>
+      _focusMemory?.context != null ? _focusMemory! : editorFocus;
 
   /// Restores [focusTarget] after the frame's focus bookkeeping settles.
   /// A same-frame `unfocus` marks the enclosing scope for focus and would
@@ -326,6 +329,7 @@ class EditorController extends ChangeNotifier {
     if (!_searchOpen) return;
     _searchOpen = false;
     _replaceOpen = false;
+    if (_focusMemory != editorFocus) _focusMemory = null;
     _matches = const [];
     _activeMatch = -1;
     _lastQuery = null;
@@ -336,6 +340,9 @@ class EditorController extends ChangeNotifier {
 
   void toggleReplace() {
     _replaceOpen = !_replaceOpen;
+    if (!_replaceOpen && _focusMemory == replacementFocus) {
+      _focusMemory = searchFocus;
+    }
     _notify();
   }
 
