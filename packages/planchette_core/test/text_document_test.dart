@@ -409,6 +409,16 @@ void main() {
     expect(await file.readAsString(), 'one\ntwo\n');
     expect(await directory.list().length, 1);
   });
+
+  test('vanished-path classification is platform-aware', () {
+    FileSystemException withCode(int code) =>
+        FileSystemException('rename', 'doc.txt', OSError('failed', code));
+    expect(isVanishedPathError(withCode(2)), isTrue);
+    // ERROR_PATH_NOT_FOUND counts only on Windows; POSIX code 3 is ESRCH.
+    expect(isVanishedPathError(withCode(3)), Platform.isWindows);
+    // EACCES stays a real failure, not a concurrent-modification signal.
+    expect(isVanishedPathError(withCode(13)), isFalse);
+  });
 }
 
 Future<String> _loadText(

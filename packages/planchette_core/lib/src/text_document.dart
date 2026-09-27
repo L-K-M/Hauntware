@@ -273,12 +273,8 @@ Future<String> _writeTextDocument(
       // A vanished destination or parent means a mid-save conflict;
       // anything else (permissions, quota) keeps its real OS error
       // instead of being misreported as concurrent modification.
-      final code = error.osError?.errorCode;
-      final vanished =
-          code == _errorNoSuchFile ||
-          (Platform.isWindows && code == _errorPathNotFound);
       Error.throwWithStackTrace(
-        vanished
+        isVanishedPathError(error)
             ? TextDocumentException(
                 'The local copy changed while it was being saved. '
                 '${error.osError?.message ?? error.message}',
@@ -361,6 +357,18 @@ const int _errorNoSuchFile = 2;
 /// Windows ERROR_PATH_NOT_FOUND: a parent directory in the path vanished.
 /// POSIX reports the same situation as ENOENT ([_errorNoSuchFile]).
 const int _errorPathNotFound = 3;
+
+/// Whether [error] means a path vanished mid-operation — the destination
+/// file itself ([_errorNoSuchFile]) or, on Windows, a parent directory
+/// ([_errorPathNotFound]). Everything else (permissions, quota) is a real
+/// failure, not a concurrent-modification signal. Exposed so the platform
+/// gating can be pinned from tests; callers should prefer the wrapped
+/// [TextDocumentException] diagnostics to classifying errors themselves.
+bool isVanishedPathError(FileSystemException error) {
+  final code = error.osError?.errorCode;
+  return code == _errorNoSuchFile ||
+      (Platform.isWindows && code == _errorPathNotFound);
+}
 
 bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes.length >= offset + _utf8Bom.length &&
