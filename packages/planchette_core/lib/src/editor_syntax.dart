@@ -602,7 +602,9 @@ class SyntaxLanguages {
       ['/*', '*/'],
     ],
     strings: const ["'", '"'],
-    metaPattern: RegExp(r'([-a-zA-Z]+)[ \t]*:'),
+    // Start once per identifier; retrying every suffix makes missing colons
+    // quadratic on long selectors and values.
+    metaPattern: RegExp(r'(?<![-a-zA-Z])([-a-zA-Z]+)[ \t]*:'),
     metaGroup: 1,
   );
 
