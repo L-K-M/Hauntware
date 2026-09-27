@@ -191,7 +191,7 @@ away from the inherited PR territories; all six touch only `main`'s own
 | [#80](https://github.com/L-K-M/Planchette/pull/80), `fix/refused-close-feedback` | B25 second half: a close refused because the tab was saving, started saving under the prompt, or lost the reviewed text to a newer edit returned `false` in silence — "Don't Save" looked broken. Those refusals now report; a cancelled prompt and a locked workspace stay quiet; a retryable refusal is dropped once its tab closes. Five tests, one per branch. | Open at `4b70043`; CI green. Round 1's four findings all applied: the post-confirm re-check, a `contains('busy')` assertion the fixture name satisfied on its own, an untested second wording, and a refusal outliving its tab. The save-branch hole it found (`isLoading` returning `false` silently) is fixed here. |
 | [#82](https://github.com/L-K-M/Planchette/pull/82), `feat/reopen-tab-flash` | B16: opening a document the workspace already holds (same path, or a link resolving onto one) activates its tab and nothing else happened. `DocumentTab.flashRequest` plus a new `_TabChip` answer with a 700 ms pulse, skipped when animation is disabled. Activation itself is unchanged. | Open; all CI checks green. The GLM reviewer job failed after 1m14s, so there is **no** review of record. |
 | [#84](https://github.com/L-K-M/Planchette/pull/84), `fix/first-line-language-detect` | E12: detection ran only on load and on a path change, so a shebang typed into a new buffer — or into any extensionless file — left the document plain text with no way to make the tokenizer look again. `_refreshLanguage` re-recognises when a **bounded** 4 KiB lead changes, so the check never joins the per-keystroke whole-document scans P1 is about. Five tests, including one that pins the bound. | Open at `94d88f8`; CI green. Round 1's redundant-assignment finding applied; the guard is not observable from outside, which the reply states rather than faking. |
-| [#86](https://github.com/L-K-M/Planchette/pull/86), `fix/case-insensitive-search-reporting` | B31: the length guard in `findSearchMatches` is **unreachable** (see the entry) and silently changed what a case-insensitive search meant when it did fire. `searchText` now reports `CaseFolding`; the fold is injectable, so the limited path is reachable and tested instead of defensive; the find bar says so; hosts can read it. | Open at `0cb9a74`; all CI checks green. Review pending. |
+| [#86](https://github.com/L-K-M/Planchette/pull/86), `fix/case-insensitive-search-reporting` | B31: the length guard in `findSearchMatches` is **unreachable** (see the entry) and silently changed what a case-insensitive search meant when it did fire. `searchText` now reports `CaseFolding`; the fold is injectable, so the limited path is reachable and tested instead of defensive; the find bar says so; hosts can read it. | Open at `f53f1a2`; all CI checks green. Round 1's major finding (a needle-length check this pass added, which blocked the fold's whole purpose) fixed, its doc-honesty finding accepted, and its test-hygiene finding taken. **B35** records what it still cannot do. |
 ### Implemented and monitored in the 2026-09-27 second pass
 
 Nine small PRs (`planchette/*`) from the fresh review in §12. Each was
@@ -950,10 +950,12 @@ entirely), and the find bar shows a marker whose tooltip is the injectable
 (`EditorController.caseFolder`), which is what makes the limited path
 reachable and tested rather than defensive.
 
-**Still open:** a real full-folding table. With one, `STRASSE` finds
-`straße` and the notice stops appearing for ordinary European text. That is a
-table, not a fix, and a host may reasonably supply its own via `caseFolder`
-rather than every host paying for it.
+**Still open:** see B35. With one, `STRASSE` finds `straße` and the notice
+stops appearing for ordinary European text. Note what #86 *can* already
+deliver through `caseFolder`: a **length-preserving** fold, which covers Greek
+final sigma (`toLowerCase` maps `Σ` to `σ` and never to the final `ς` a Greek
+word ends with), a locale's dotted and dotless i, and canonical Cherokee forms.
+It cannot cover `ß` ⇔ `ss`, because that changes length.
 
 ### B32. Pin `_mergeMetaTokens` group-offset assumption with a test — S (read, 2026-09-27)
 `match[0]!.indexOf(groupText)` finds the first occurrence of the group's
@@ -1012,6 +1014,39 @@ the header label rather than inventing a second one, and keep the tooltip
 with the untruncated path. (The rest of that pass's finding — the toolbar and
 the menus disagreeing about when Save is available — is B25's first half and
 is in review at #78.)
+
+### B35. Full case folding needs a folded-offset map — M/L (read, 2026-09-27, from #86's review)
+`toLowerCase` is *simple* folding. Unicode *full* case folding also equates `ß`
+with `ss`, which changes a string's length, so a match located in the folded
+document no longer maps to the original by arithmetic. #86 therefore reports
+`CaseFolding.lengthChanging` and compares exactly whenever a fold changes the
+document's length — which means `STRASSE` still does not find `straße`, the
+case B31 was filed about.
+
+The fix is an index, not a smarter fold: fold rune by rune, and where a
+rune's fold is longer, record the folded-offset → original-offset mapping;
+translate each match's start and end back through it. The design questions to
+settle before writing it:
+- **Cost.** A per-code-unit index is 4 bytes per character — 16 MB for a 4 MB
+  document. Do not build it unconditionally.
+- **Sparse is enough.** Almost no rune expands. Store the map as a sorted list
+  of (foldedStart, originalStart) pairs for the *expanding* runes only and
+  offset by the count of preceding expansions — memory proportional to the
+  number of expanding runes, which is near zero for ordinary text, and no
+  bound needed.
+- **The query side needs nothing.** A match's end comes from the document, as
+  #86's second review established; only the haystack is mapped.
+- Test `ß`/`ẞ`, `ﬁ` ligatures, Cherokee, Greek final sigma (length-preserving,
+  so it already works and must keep working), and a document with no expanding
+  rune at all — asserting no map is built in that last case.
+- Decide whether `replaceAll` uses mapped offsets too. #86 passes the host's
+  fold there as well, and Replace All computes its own ranges.
+- `limit` caps matches at 1000, so the translation cost is bounded by the
+  match count, not the document length.
+
+Cross-check against E5: #12's whole-word mode and #44's regex mode flow into
+the same match list, so any offset mapping has to serve all three rather than
+becoming a fourth search model.
 
 ## 4. Performance
 
@@ -2282,7 +2317,17 @@ inspected.
     failed after 1m12s and 1m14s respectively on their only revision.
     Read that as missing, not clean. Both have green CI on every real
     check, which is not the same thing.
-  - **#86** review pending at the time of writing.
+  - **#86** round 1: one **major** finding, and it was a real bug this pass
+    introduced. Checking the *query's* folded length suppressed exactly the
+    matches an injected fold exists to find, because a match spans whatever
+    the folded document holds at that offset — the query's length is
+    irrelevant to offset validity. Only the haystack's length is checked now,
+    and a length-preserving fold is shown working (Greek final sigma, which
+    `toLowerCase` never produces). The docs no longer promise `STRASSE` finds
+    `straße`; that needs a folded-offset map, filed as **B35**. Also taken: an
+    eager `reason:` string built 196k times in the rune scan, which now
+    compares and calls `fail()` only on a mismatch, over the full
+    0x80–0x10FFFF range.
   - Not verified locally: screen-reader announcement of the tab flash,
     the tooltip's layout at extreme text scale, and any hands-on
     macOS/Windows session.
