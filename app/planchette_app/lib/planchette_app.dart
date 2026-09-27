@@ -317,7 +317,8 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: unlocked && _fontSize != _defaultFontSize,
         ),
       ]),
-      _ShellMenu('Window', [        _Command(
+      _ShellMenu('Window', [
+        _Command(
           'Next Tab',
           _nextTab,
           shortcut: const SingleActivator(
@@ -468,6 +469,8 @@ class _DocumentShellState extends State<_DocumentShell> {
       // Typing "+" on most layouts needs Shift, which the menu shortcut
       // does not include; accept it as Zoom In too.
       _shortcut(LogicalKeyboardKey.equal, shift: true): () => _zoom(1),
+      _shortcut(LogicalKeyboardKey.numpadAdd): () => _zoom(1),
+      _shortcut(LogicalKeyboardKey.numpadSubtract): () => _zoom(-1),
     };
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
@@ -676,11 +679,10 @@ class _DocumentShellState extends State<_DocumentShell> {
                               controller: tab.editor,
                               isActive: tab == active,
                               editingLocked: workspace.interactionLocked,
-                              textStyle: TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: _fontSize,
-                                height: 1.35,
-                              ),
+                              // The editor default already supplies the
+                              // monospace face and line height; zoom drives
+                              // only the size.
+                              textStyle: TextStyle(fontSize: _fontSize),
                             ),
                         ],
                       ),

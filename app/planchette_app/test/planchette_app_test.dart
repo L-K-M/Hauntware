@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,12 +42,17 @@ void main() {
     WidgetTester tester,
     LogicalKeyboardKey key, {
     bool shift = false,
+    bool meta = false,
   }) async {
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(
+      meta ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft,
+    );
     if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(key);
     if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyUpEvent(
+      meta ? LogicalKeyboardKey.metaLeft : LogicalKeyboardKey.controlLeft,
+    );
     await tester.pumpAndSettle();
   }
 
@@ -230,37 +236,65 @@ void main() {
   testWidgets(
     'view zoom adjusts every open editor and resets',
     (tester) async {
+      final mac = defaultTargetPlatform == TargetPlatform.macOS;
+      Future<void> zoomIn() =>
+          chord(tester, LogicalKeyboardKey.equal, shift: true, meta: mac);
+      Future<void> zoomOut() =>
+          chord(tester, LogicalKeyboardKey.minus, meta: mac);
       workspace.newDocument();
       await mount(tester);
       Finder editors() => find.byType(PlanchetteEditor);
+      double size() => tester
+          .widget<PlanchetteEditor>(editors().first)
+          .textStyle
+          .fontSize!;
 
-      expect(
-        tester.widget<PlanchetteEditor>(editors().first).textStyle.fontSize,
-        14,
-      );
-      await chord(tester, LogicalKeyboardKey.equal, shift: true);
-      expect(
-        tester.widget<PlanchetteEditor>(editors().first).textStyle.fontSize,
-        15,
-      );
-      await chord(tester, LogicalKeyboardKey.minus);
-      await chord(tester, LogicalKeyboardKey.minus);
-      expect(
-        tester.widget<PlanchetteEditor>(editors().first).textStyle.fontSize,
-        13,
-      );
-      await tester.tap(find.text('View'));
+      expect(size(), 14);
+      await zoomIn();
+      expect(size(), 15);
+      await zoomOut();
+      await zoomOut();
+      expect(size(), 13);
+      // Numpad +/- bindings ship too, but flutter_test cannot synthesize
+      // numpad key events, so they stay untested here.
+
+      // A second tab opens at the current zoom and tracks later changes.
+      workspace.newDocument();
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Reset Zoom'));
-      await tester.pumpAndSettle();
-      expect(
-        tester.widget<PlanchetteEditor>(editors().first).textStyle.fontSize,
-        14,
-      );
+      for (final editor in tester.widgetList<PlanchetteEditor>(editors())) {
+        expect(editor.textStyle.fontSize, 13);
+      }
+      await zoomIn();
+      for (final editor in tester.widgetList<PlanchetteEditor>(editors())) {
+        expect(editor.textStyle.fontSize, 14);
+      }
+
+      // Both clamps hold.
+      for (var i = 0; i < 30; i++) {
+        await zoomOut();
+      }
+      expect(size(), 8);
+      for (var i = 0; i < 40; i++) {
+        await zoomIn();
+      }
+      expect(size(), 32);
+
+      if (!mac) {
+        for (var i = 0; i < 17; i++) {
+          await zoomOut();
+        }
+        expect(size(), 15);
+        await tester.tap(find.text('View'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Reset Zoom'));
+        await tester.pumpAndSettle();
+        expect(size(), 14);
+      }
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
     variant: const TargetPlatformVariant({
+      TargetPlatform.macOS,
       TargetPlatform.linux,
       TargetPlatform.windows,
     }),
