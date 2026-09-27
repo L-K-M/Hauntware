@@ -203,8 +203,11 @@ and review status live on the PRs.
 | PR | Addresses |
 |---|---|
 | [#47](https://github.com/L-K-M/Planchette/pull/47) `claude/kind-mendel-urd9v5-lines` | E2: Duplicate Line (Cmd/Ctrl+Shift+D), Move Line Up/Down (Option/Alt+↑/↓), Delete Line (Cmd/Ctrl+Shift+K) and Join Lines (Cmd/Ctrl+J), on the keyboard and in the Edit menu. Pure core transforms return a `LineEdit` (text, base, extent); a selection ending at a line start does not touch that line, and backward selections stay backward. Keys are bound around the document field only; a locked document or an IME composition leaves them to the field; a command at the edge consumes its key. **A programmatic edit does not scroll the field**, so a line moved past the bottom vanished (**confirmed**: the regression failed first); the controller bumps `caretRevealRequest` and the view calls `EditableTextState.bringIntoView`. Core 109, editor 34, app 40 + 2 skipped |
-| [#49](https://github.com/L-K-M/Planchette/pull/49) `claude/kind-mendel-urd9v5-readonly` | B3 (**confirmed**: a core test shows a `chmod a-w` file replaced by a save). `isTextDocumentWriteProtected` reads the write bits, which Dart also reports for the Windows read-only attribute; Windows CI sets it with `attrib +r`. A plain save of such a file asks Save As… (default) / Save Anyway / Cancel; Save Anyway is remembered for that tab and path, an explicit Save As does not ask, and close-to-save asks too. Core 111, app 46 + 2 skipped |
+| [#49](https://github.com/L-K-M/Planchette/pull/49) `claude/kind-mendel-urd9v5-readonly` | B3 (**confirmed**: a core test shows a `chmod a-w` file replaced by a save). `isTextDocumentWriteProtected` reads the write bits, which Dart also reports for the Windows read-only attribute; Windows CI sets it with `attrib +r`. A plain save of such a file asks Save As… (default) / Save Anyway / Cancel; Save Anyway is remembered for that tab and path, an explicit Save As does not ask, and close-to-save asks too. On Windows the save also restores the read-only attribute and clears it on the backup so the backup can be deleted (**confirmed** by Windows CI; the attribute was lost and a `.backup` sibling left behind before). Core 86, app 46 + 2 skipped |
 | [#50](https://github.com/L-K-M/Planchette/pull/50) `claude/kind-mendel-urd9v5-palette` | A6: Cmd/Ctrl+Shift+P and Window › Command Palette… list every enabled menu command with its menu and platform-styled shortcut. Best-alignment fuzzy match (word starts and runs score, gaps cost), shorter label then menu order on ties, matched letters in bold, Up/Down wrap, Enter or click runs after the palette closes, Escape closes. Reads the same `_ShellMenu`/`_Command` model as both menu bars. App 50 + 2 skipped |
+| [#51](https://github.com/L-K-M/Planchette/pull/51) `claude/kind-mendel-urd9v5-reopen` | A7's Reopen half, **path-only**: a 20-entry stack of files the user closed through `closeTab`, File › Reopen Closed Tab (Cmd/Ctrl+Shift+T), skipping entries opened again. Duplicates #18, which restores text, selection and dirty state from snapshots and so supersedes it; merge one (see Overlaps). App 42 + 2 skipped |
+| [#52](https://github.com/L-K-M/Planchette/pull/52) `claude/kind-mendel-urd9v5-ghost` | Q5: `PlanchetteEditor.placeholder` (faint italic, editor face, gone on the first keystroke) and one of five "Start typing. The board is waiting…" lines per untitled tab; opened files show none. Editor 21, app 39 + 2 skipped |
+| [#53](https://github.com/L-K-M/Planchette/pull/53) `claude/kind-mendel-urd9v5-plurals` | Every new document's status bar read `1 lines · 0 bytes`; `documentPosition` now says `1 line`, `1 byte`. Editor 20 |
 
 **Overlaps between PRs.** Findings were repeated across parallel review passes — and are addressed by more than one open
 PR. Merge coordination should retain the intended behaviors and acceptance
@@ -213,13 +216,14 @@ tests, not blindly combine competing implementations:
 | Finding | Reported PRs | Integration requirement |
 |---|---|---|
 | Indentation/input | #13/#14/#21/#34/#37 | #13 preserves backward selections; #14 adds key modes and line edits; #21 supplies core transforms, detected convention, true input stops and read-only traversal. #34 reacts to platform text edits through `EditorIndent` and a language predicate; preserve its narrow-edit guard and explicitly test paste/IME/undo. #37 persists indent settings and reportedly adds equality for round trips. Reconcile one core edit model. |
-| Gutter geometry | #22/#27/#28/#32 | #22 adds a decorations render object/current-line band; #28 uses one `computeLineMetrics`; #32 splices cached per-line heights; #27 measures a viewport prefix, extrapolates the tail and shares reveal geometry. The source prefers #32 over #27 based on reported O(changed-region) versus O(lines) work; that ignores possible affix/layout/cache costs, so benchmark correctness and complete workloads before choosing. Keep one geometry owner. |
+| Gutter geometry | #22/#27/#28/#32 | #22 adds a decorations render object/current-line band; #28 uses one `computeLineMetrics`; #32 splices cached per-line heights; #27 measures a viewport prefix, extrapolates the tail and shares reveal geometry. The source prefers #32 over #27 based on reported O(changed-region) versus O(lines) work; that ignores possible affix/layout/cache costs, so benchmark correctness and complete workloads before choosing. Keep one geometry owner. A real Linux X11 release build of `e0acb11` draws each number about 6 px below its line (DejaVu Sans Mono via `monospace`); check the chosen owner on a native build, not only in widget tests. |
 | Go to Line | #16/#33 | Preserve #16’s dialog/error clearing and #33’s clickable status/platform find chords. |
 | Go to Line (parallel #8) | #16/#33 plus [#8](https://github.com/L-K-M/Planchette/pull/8) | #8 adds a Ctrl+L dialog on all platforms, clamp/scroll/focus semantics and a digits-only field. Reconcile shortcuts (Ctrl+G stays Find Next on macOS in #8) and keep one dialog. |
 | Font zoom | #25/#30/#37 | #25 scales text style with gutter/reveal; #30 adds platform monospace and Actual Size; #37 persists preferences. Reconcile shortcuts, scale and storage. |
 | Font zoom (parallel #9) | #25/#30/#37 plus [#9](https://github.com/L-K-M/Planchette/pull/9) | #9 ships Ctrl/Cmd+=/-/0, numpad +/-, a View menu, an 8–32 clamp and a rendered-style contract test; size is session-only. Persistence stays with #37/FU4; reconcile steps, Actual Size and storage on merge. |
 | Revert | #26/#38/#19 | #38 adds the File command; #26 reports disk notices/recreate-on-save; #19 fixes load-boundary undo. Preserve all safety/lifetime behavior. |
-| Reopen closed tab (parallel #18) | A7 plus [#18](https://github.com/L-K-M/Planchette/pull/18) | #18 restores text/identity/selection from a 10-deep snapshot stack, which supersedes A7's path-only stack and its "do not promise discarded-text recovery" constraint — recovery is real and guarded by the save conflict check. Keep its cancel/conflict coverage and FU5's remaining actions. |
+| Reopen closed tab (parallel #18) | A7 plus [#18](https://github.com/L-K-M/Planchette/pull/18), #51 | #51 is a path-only duplicate opened before #18 was recorded here; prefer #18 and close #51 unless path-only is wanted. |
+| Reopen closed tab (detail) | #18 | #18 restores text/identity/selection from a 10-deep snapshot stack, which supersedes A7's path-only stack and its "do not promise discarded-text recovery" constraint — recovery is real and guarded by the save conflict check. Keep its cancel/conflict coverage and FU5's remaining actions. |
 | Tabs/chrome | #11/#35/#36/#43 | Retain #11’s focus/visibility tests, #35’s tab commands, #36’s row geometry/ThemeData and #43’s fixed dirty slot/directory display. #43 removes the header; geometry improvements still need validation in the chosen layout. |
 | Untitled names | #21/#35 | Preserve separate counter semantics and decide name reuse. Empty-tab reuse remains B23. |
 | Search/status | #10/#33/#36/#44 | Keep #10’s keyboard/IME/responsive guarantees, #33’s clickable position/display names, #36’s surfaces/alignment and #44’s regex errors/selection counts. |
@@ -317,6 +321,9 @@ range. `RenderEditable.text =` then short-circuits on `identical`.
 the identical span, and a text or theme change returns a new one.
 
 ### FU4. Validate persisted zoom/view settings (after #25/#30/#37) — M
+Deferred from #30's second review: its zoom aliases (Cmd/Ctrl+Shift+=,
+numpad +/−, numpad 0) have no key tests; the helper only sends the
+unshifted primary chord. Cover them wherever zoom lands.
 Baseline zoom resets on launch; #37 reports persisted font size. Reconcile
 that representation with #25/#30 zoom steps, restore/clamp on startup, and
 verify Actual Size and live preview. Remaining settings are A1. Verify
@@ -494,13 +501,19 @@ from #49, store the answer on `DocumentTab` at load and on focus (#26's
 `checkDisk` is the natural place), and test that the marker clears after
 `chmod u+w` and a focus change.
 
-### B4. Startup window jump on Linux and Windows — S (read)
+### B4. Startup window jump on Windows — S (not reproduced on Linux)
 The Windows runner creates a 1280×720 window at (10,10) and shows it on
 the first frame (`windows/runner/main.cpp`, `flutter_window.cpp`). GTK
-shows 1280×720 (`linux/runner/my_application.cc`). Then
-`DesktopWindow.initialize` resizes to 1080×760 and centers it. **Plan:**
-make the native sizes match 1080×760, or keep the window hidden until
-`waitUntilReadyToShow` shows it, as window_manager's README describes.
+creates 1280×720 (`linux/runner/my_application.cc`). Then
+`DesktopWindow.initialize` resizes to 1080×760 and centers it.
+**Linux, measured:** release and debug builds of `e0acb11` under Xvfb (no
+window manager), polling `xwininfo` every 20 ms, three runs: the window
+exists unmapped at 1280×720 after ~180 ms and is first viewable at ~700 ms
+already 1080×760 and centered, because `setSize`/`center` land before the
+first frame shows it. No jump. Still unverified on Windows and under a
+compositing window manager. **Plan if Windows shows it:** match the native
+size to 1080×760 and center the origin, rather than hiding the window until
+Dart shows it (a startup failure would then leave no window at all).
 
 ### B5. Close button vs Close Tab during load — S (read)
 Close Tab in the menu requires `!isLoading` (`ready`), while the tab's ×
@@ -1311,10 +1324,16 @@ errors accessibly. Never hide an unrelated failure with a generic success.
 Keep the baseline 4.11:1 finding, extra inherited measurements and proposed
 background in V3; verify #41 before a separate fix. Do not duplicate the task.
 
-### V7. Scroll past the end — S
-The last line sits at the bottom edge. Add bottom padding of about half
-the viewport to the document field. The gutter geometry from #22 already
-follows the text.
+### V7. Scroll past the end — M (not S)
+The last line sits at the bottom edge. **Bottom `contentPadding` does not
+do this:** the `InputDecorator` padding sits outside `EditableText`'s own
+`Scrollable`, so it shrinks the viewport instead of adding scroll extent,
+and `RenderEditable` computes its max scroll extent from the text height
+alone. Options: a non-expanding field inside an outer scroll view with
+trailing space (caret reveal still works through `showOnScreen`, but every
+gutter and reveal path that reads `c.scroll` must move to the outer
+controller), or the virtualized surface in P3. Do it with P3 or after one
+gutter owner is chosen.
 
 ### V8. Unified macOS title bar — M
 Use `TitleBarStyle.hidden` with the traffic lights over the tab strip,
@@ -1381,9 +1400,9 @@ accessible contrast; avoid another independent rewrite.
   Cmd/Ctrl+Shift+Enter.
 - **Q4. Automatic writing.** After a short idle pause, faintly underline
   every occurrence of the word under the caret. Reuse E5's occurrence matching.
-- **Q5. Ghost text for untitled documents.** A faint rotating placeholder
-  ("The spirits are listening…", "Type to summon…") that disappears on
-  the first keystroke.
+- **Q5. Ghost text for untitled documents.** Assigned to #52. Still open:
+  let hosts (Séance, Poltergeist) supply their own lines through the same
+  parameter.
 - **Q6. Board words in the status bar.** A one-shot "YES" drifting across
   the status bar after a successful save, and "GOODBYE" when the last tab
   closes. Subtle, and skipped under reduced motion.
@@ -1550,6 +1569,16 @@ feedback must remain quiet and usable without animation or thematic copy.
   disabled commands do not consume keys they cannot act on. Unmount test
   widgets before disposing attached workspace nodes; do not misdiagnose a
   failed-assertion teardown trace as an application bug (B13).
+- **D5a. A native Linux harness works in the dev container.** Install
+  `libgtk-3-dev x11-utils xdotool imagemagick`, run `flutter build linux`,
+  start `Xvfb :96 -screen 0 1400x900x24`, launch the bundle with a file,
+  then drive it with `xdotool key ctrl+shift+p` / `type` and capture with
+  `import -window root`. Saving with Ctrl+S and reading the file back gives
+  byte-exact end-to-end checks of real X11 key handling; #47 and #49 were
+  verified this way. **Gotcha:** switching branches and rebuilding reused a
+  stale MaterialIcons subset from `.dart_tool/flutter_build`, so an icon the
+  new branch added rendered as a missing-glyph box; delete that directory
+  before visual checks. CI builds clean and is unaffected.
 - **D5. Desktop verification gap.** The inherited review reports a gap in
   hands-on desktop validation; its performance/source probes should not be
   confused with native interaction tests. This session's CI includes desktop
