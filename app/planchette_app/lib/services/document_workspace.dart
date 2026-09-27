@@ -300,8 +300,11 @@ final class DocumentWorkspace extends ChangeNotifier {
     try {
       stamp = await store.stamp(path);
       final verified = tab._verified;
+      // Only a tab already current may skip: a file moved away and back
+      // keeps its stamp, and must still clear a missing or changed notice.
       if (stamp != null &&
           verified != null &&
+          tab.disk == DiskState.current &&
           identical(verified.baseline, baseline) &&
           verified.stamp == stamp) {
         return;

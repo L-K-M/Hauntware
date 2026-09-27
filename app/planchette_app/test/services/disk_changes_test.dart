@@ -148,6 +148,22 @@ void main() {
     expect(await workspace.revert(tab), isFalse);
   });
 
+  test('a file moved away and back clears its missing notice', () async {
+    final tab = await open('original');
+    await workspace.checkDisk();
+    final original = store.files.remove(path)!;
+    await workspace.checkDisk();
+    expect(tab.disk, DiskState.missing);
+
+    // Moving it back keeps its modification time and size.
+    store.files[path] = original;
+    await workspace.checkDisk();
+    expect(tab.disk, DiskState.current);
+    tab.editor.text.text = 'edited';
+    expect(await workspace.save(tab), isTrue);
+    expect(store.files[path]!.text, 'edited');
+  });
+
   test('unchanged file stamps skip rehashing', () async {
     await open('stable');
     await workspace.checkDisk();

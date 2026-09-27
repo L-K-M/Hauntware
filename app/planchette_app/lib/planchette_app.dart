@@ -670,7 +670,8 @@ class _DocumentShellState extends State<_DocumentShell> {
             'replace it on the next save.',
         [
           TextButton(
-            onPressed: workspace.interactionLocked
+            // A reload in flight would replace the text after Keep Mine.
+            onPressed: workspace.interactionLocked || tab.busy
                 ? null
                 : () => workspace.keepMine(tab),
             child: const Text('Keep Mine'),

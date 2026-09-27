@@ -31,6 +31,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('changed on disk'), findsOneWidget);
     expect(find.text('Keep Mine'), findsOneWidget);
+    // While a reload is in flight, Keep Mine would be overwritten by it.
+    tab.busy = true;
+    workspace.clearError();
+    await tester.pump();
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, 'Keep Mine'))
+          .onPressed,
+      isNull,
+    );
+    tab.busy = false;
+    workspace.clearError();
+    await tester.pump();
 
     await tester.tap(find.text('Reload'));
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
