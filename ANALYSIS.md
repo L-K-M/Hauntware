@@ -1065,6 +1065,9 @@ do not widen controller state without a consumer and compatibility review.
 The matcher below is in #73 (`matchBracket` in core, tokens from
 `CodeEditingController.syntaxTokens`); what remains is the paint-only
 overlay, with capped tokens so a caret move never tokenizes a large file.
+From #73's second review: `bracketJump` with a caret past the end throws a
+bare `RangeError` from its enclosing scan (the editor never passes one).
+Reject an out-of-range caret explicitly at both public entry points.
 When the caret touches a bracket, find its partner (skipping strings and
 comments via tokens) and paint both backgrounds. The decorations render
 object from #22 can paint them.
