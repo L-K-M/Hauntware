@@ -238,6 +238,29 @@ void main() {
   );
 
   testWidgets(
+    'collapsing replace moves focus back to the find field',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+      final editor = workspace.active!.editor;
+      editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(editor.replacementFocus.hasFocus, isTrue);
+      editor.toggleReplace();
+      await tester.pumpAndSettle();
+      expect(editor.searchFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!
