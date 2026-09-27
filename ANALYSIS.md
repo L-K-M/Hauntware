@@ -52,3 +52,4 @@ Thorough review of the desktop text editor (Planchette). No code changes made ye
 - Tab names could show file extension as a tiny colored badge (language indicator).
 - A small clock or timestamp in the status bar showing when the file was last saved.
 - Quirky splash / empty state message rotation (e.g., quotes about text editing).
+Session restore: add workspace persistence using File-backed document registry; restore tabs on startup; retain undo stacks via IndexedStack with persistent controllers.
