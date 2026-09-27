@@ -229,6 +229,7 @@ and review status live on the PRs.
 | [#53](https://github.com/L-K-M/Planchette/pull/53) `claude/kind-mendel-urd9v5-plurals` | Every new document's status bar read `1 lines · 0 bytes`; `documentPosition` now says `1 line`, `1 byte`. Editor 20 |
 | [#54](https://github.com/L-K-M/Planchette/pull/54) `claude/kind-mendel-urd9v5-locks` | B17 (**confirmed**: three of its four lock tests fail on main). The controller keeps the host's lock and each mounted view's lock apart; `editingLocked` reports either and every guard reads it. Each view registers itself, so a same-frame remount under another parent keeps its lock (a review finding on the first version, fixed with a regression test). Editor 24, app 38 + 2 skipped |
 | [#64](https://github.com/L-K-M/Planchette/pull/64) `claude/kind-mendel-urd9v5-export` | A11's HTML half: File › Export as HTML… writes the active buffer, unsaved edits included, as a standalone page in the editor's live syntax theme (one class per token type, whitespace and tabs kept). A pure core `highlightedHtml` renders it, so hosts can export too; the page goes through the store's guarded write, asks before replacing, and never overwrites a document open in a tab. Core 88, app 41 + 2 skipped |
+| [#73](https://github.com/L-K-M/Planchette/pull/73) `claude/kind-mendel-urd9v5-brackets` | Q11's bracket half and E4's matcher: Find › Go to Matching Bracket (Cmd/Ctrl+B; Shift selects) moves the caret to the same side of the partner, returns on a second press even between adjacent brackets, and otherwise goes to the enclosing closer. Pure core `matchBracket`/`bracketJump` over the syntax tokens: per-type depth, strings and comments skipped by code but paired within themselves, linear past runs of unclosed openers (**confirmed**: 25 s before the fix). Works in locked documents; reveals the partner like #47. Verified on a real Linux build. Core 98, editor 34, app 40 + 2 skipped |
 
 **Overlaps between PRs.** Findings were repeated across parallel review passes — and are addressed by more than one open
 PR. Merge coordination should retain the intended behaviors and acceptance
@@ -250,7 +251,7 @@ tests, not blindly combine competing implementations:
 | Search/status | #10/#33/#36/#44 | Keep #10’s keyboard/IME/responsive guarantees, #33’s clickable position/display names, #36’s surfaces/alignment and #44’s regex errors/selection counts. |
 | Error presentation | #21/#26/#36/#43 | Preserve core missing-path errors, disk-change mapping and user-facing copy; #43 reports an overlay preventing document movement. Placement must not obscure input or silence accessibility. |
 | Line edits | #14/#21/#23/#47 | #47's `LineEdit`, #14's `IndentEdit` and #21's `TextEdit` are one shape (new text plus selection); keep a single type. #23 and #47 both add Edit-menu items and document key bindings; keep both sets. |
-| Caret reveal | #33/#47 | Both add `caretRevealRequest`. #33 puts a Go to Line target a third of the way down; #47 scrolls a line command's caret minimally with `bringIntoView`. Keep one counter and both placements (FU2). |
+| Caret reveal | #33/#47/#73 | All three add `caretRevealRequest`. #33 puts a Go to Line target a third of the way down; #47 and #73 scroll the caret minimally with the same `bringIntoView` hook. Keep one counter and both placements (FU2). #47 and #73 each wrap `_body()` in a document-only key layer; nest them. |
 | Store/dialog interfaces | #26/#49 | Both extend `DocumentStore` (#26 `stamp`, #49 `isWriteProtected`) and `DocumentDialogs` (#26 `confirmRevert`, #49 `chooseReadOnlySave`). Keep all members. |
 | Menus and palette | #30/#36/#43/#50 | #50 lists whatever `_menus()` returns and adds one Window item. Move it to View once #30 lands, and keep it reading the same model after #36/#43 rewrite the shell. |
 | Tab context actions | #35/#42 | #42 reports middle-click and Close/Close Others/Close All, with Cancel stopping consent traversal. Retain remaining FU5 actions. |
@@ -1050,6 +1051,9 @@ insertion boundaries. Coordinate with #37 preferences and the shared host API;
 do not widen controller state without a consumer and compatibility review.
 
 ### E4. Bracket-match highlight — M
+The matcher below is in #73 (`matchBracket` in core, tokens from
+`CodeEditingController.syntaxTokens`); what remains is the paint-only
+overlay, with capped tokens so a caret move never tokenizes a large file.
 When the caret touches a bracket, find its partner (skipping strings and
 comments via tokens) and paint both backgrounds. The decorations render
 object from #22 can paint them.
@@ -1583,7 +1587,8 @@ dot and name; after #63 it is again the only dirty signal on GNOME.
   the decorations render object.
 - **Q10. Clickable paths and URLs.** Cmd/Ctrl-click a path or URL in the
   text to open it.
-- **Q11. Quote and bracket teleport.** Jump to a matching bracket or the
+- **Q11. Quote and bracket teleport.** Brackets assigned to #73; the string
+  endpoint jump below is still open. Jump to a matching bracket or the
   other endpoint of a string literal. The inherited shortcut proposal is
   Cmd/Ctrl+B plus a modifier variant; check existing bindings first (on
   macOS use Cmd, since Ctrl+B is the Cocoa move-back binding). Reuse
