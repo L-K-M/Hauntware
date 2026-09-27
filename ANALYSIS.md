@@ -185,9 +185,11 @@ into `main` with it. GitHub then reported all six as merged and deleted their
 branches. The code in `main` is the six-way integration that was tested (89
 core, 27 editor, 52 app), not six independent landings, and two review
 findings that arrived afterwards could not be applied in place — they are
-[#88](https://github.com/L-K-M/Planchette/pull/88) and
-[#89](https://github.com/L-K-M/Planchette/pull/89). The parallel pass's
-`98c879f` landed on top and merged its own review into this document.
+[#88](https://github.com/L-K-M/Planchette/pull/88),
+[#89](https://github.com/L-K-M/Planchette/pull/89) and
+[#90](https://github.com/L-K-M/Planchette/pull/90). The parallel pass's
+`98c879f` and `cd75634` landed on top and merged its own review rounds into
+this document.
 
 Six PRs against `origin/main` (`1fea9ec`), each cut from current main, each
 with a regression observed failing before the fix. Baselines re-verified at
@@ -206,6 +208,7 @@ away from the inherited PR territories; all six touch only `main`'s own
 | [#86](https://github.com/L-K-M/Planchette/pull/86), `fix/case-insensitive-search-reporting` | B31: the length guard in `findSearchMatches` is **unreachable** (see the entry) and silently changed what a case-insensitive search meant when it did fire. `searchText` now reports `CaseFolding`; the fold is injectable, so the limited path is reachable and tested instead of defensive; the find bar says so; hosts can read it. |  **Merged** at `71d5778`, one minute *before* its first review round finished. Round 1's major finding — a needle-length check this pass added, which suppressed every match the fold exists to find — could not be fixed in place, so it is fixed in [#88](https://github.com/L-K-M/Planchette/pull/88). **B37** records what still cannot be done. |
 | [#88](https://github.com/L-K-M/Planchette/pull/88), `fix/case-fold-query-length` | #86's round-1 major finding, which could not be fixed inside #86 because it was merged first: the query's folded length has nothing to do with whether a match's offsets are valid, so checking it suppressed every match an injected fold could add. Only the haystack's length is checked now, and a length-preserving fold is shown working (Greek final sigma, which `toLowerCase` never produces). Also takes the review's eager-`reason:` finding and widens the rune scan to `0x10FFFF`. | Open; CI green. Adds the second case-folding test and renames the first to what it now checks. |
 | [#89](https://github.com/L-K-M/Planchette/pull/89), `fix/header-tooltip-empty-message` | #75's round-2 finding, likewise unfixable in place: the header's `Tooltip` had `message: active?.path ?? ''`, so an untitled document and the empty workspace both showed a blank bubble and an empty semantics attribute. The label moves into `_documentLabel`, which wraps only a file-backed label. | Open; CI green. |
+| [#90](https://github.com/L-K-M/Planchette/pull/90), `fix/language-canonical-instance-test` | #84's round-2 findings, likewise unfixable in place: the `identical` guard in `_applyLanguage` depends on `syntaxLanguageFor` returning canonical `SyntaxLanguages` members, and nothing enforced it. The churn test asserts `same(...)`, and a new test walks every recognised extension and requires the canonical instance both times. | Open; CI green. |
 ### Implemented and monitored in the 2026-09-27 second pass
 
 Nine small PRs (`planchette/*`) from the fresh review in §12. Each was
@@ -2379,13 +2382,10 @@ inspected.
   ancestors of `main` (see the note in §1 about how that happened), so the
   branch is now redundant rather than a proposal.
 
-- **Two review findings arrived after `main` moved.** #86's major finding and
-  #75's second-round finding could not be applied to the merged code as
-  fixes, so they are follow-up PRs: #88 and #89. Read those as part of this
-  pass, not as new work. #84's round-2 requests (`same(...)` on the
-  canonical-instance assertion, and enforcing canonicality in core) are
-  **not** yet applied — they are still open work against #84's code, which is
-  in `main`.
+- **Three review findings arrived after `main` moved.** #86's major finding,
+  #75's second-round finding and #84's second-round finding could not be
+  applied to the merged code as fixes, so they are follow-up PRs: #88, #89
+  and #90. Read all three as part of this pass, not as new work.
 - **2026-09-27 second pass (#55/#56/#76/#77/#79/#81/#83/#85/#87):** written
   from a fresh review at `797deb9` with no code changed for the review itself.
   Suites green per PR (core 86–87, editor 22, app 40–52 with two
