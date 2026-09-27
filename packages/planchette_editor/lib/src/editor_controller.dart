@@ -69,6 +69,8 @@ class EditorController extends ChangeNotifier {
   int _activeMatch = -1;
   int _revision = 0;
   int _revealRequest = 0;
+  int _caretRevealRequest = 0;
+  ({String text, int offset, int bracket})? _lastBracketJump;
   String _lastText = '';
   String? _lastQuery;
   String? _metricsText;
@@ -99,6 +101,10 @@ class EditorController extends ChangeNotifier {
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
+
+  /// Increments when a command moved the caret somewhere the view should
+  /// scroll to; typing scrolls by itself, but a programmatic change does not.
+  int get caretRevealRequest => _caretRevealRequest;
   bool get editingLocked => _editingLocked;
   set editingLocked(bool value) => setEditingLocked(value);
 
@@ -171,6 +177,46 @@ class EditorController extends ChangeNotifier {
     _document = document;
     if (replaceText) _installText(document.text);
     _notify();
+  }
+
+  /// Whether a command may move the caret now: not while the document loads
+  /// or failed to load, and not while an input method composes. Moving the
+  /// caret is not an edit, so a locked document allows it.
+  bool get canMoveCaret =>
+      !_loading &&
+      _error == null &&
+      text.selection.isValid &&
+      !text.value.composing.isValid;
+
+  /// Moves the caret to the partner of the bracket beside it, on the same
+  /// side, or to the closing bracket around it; with [extend] the other end
+  /// of the selection stays. A second jump returns to where the first began.
+  /// Returns false when there is nowhere to go.
+  bool goToMatchingBracket({bool extend = false}) {
+    if (!canMoveCaret) return false;
+    final source = text.text;
+    final selection = text.selection;
+    final caret = selection.extentOffset;
+    final last = _lastBracketJump;
+    final jump = bracketJump(
+      source,
+      caret,
+      text.syntaxTokens,
+      preferred: last != null && last.text == source && last.offset == caret
+          ? last.bracket
+          : null,
+    );
+    if (jump == null) return false;
+    _lastBracketJump = (
+      text: source,
+      offset: jump.offset,
+      bracket: jump.bracket,
+    );
+    _caretRevealRequest++;
+    text.selection = extend
+        ? selection.extendTo(TextPosition(offset: jump.offset))
+        : TextSelection.collapsed(offset: jump.offset);
+    return true;
   }
 
   void _installText(String value) {

@@ -137,6 +137,38 @@ void main() {
   );
 
   testWidgets(
+    'Go to Matching Bracket runs once from the Find menu and the keyboard',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'f(a, b)';
+      await mount(tester);
+      tab.editor.text.selection = const TextSelection.collapsed(offset: 1);
+      await tester.pump();
+
+      await tester.tap(find.text('Find'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Go to Matching Bracket'));
+      await tester.pumpAndSettle();
+      expect(tab.editor.text.selection.extentOffset, 6);
+
+      // Both the document and the menu bind the chord; a second run would
+      // jump straight back.
+      tab.editor.editorFocus.requestFocus();
+      await tester.pump();
+      await chord(tester, LogicalKeyboardKey.keyB, shift: true);
+      expect(
+        tab.editor.text.selection,
+        const TextSelection(baseOffset: 6, extentOffset: 1),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'menu Save As uses the active document',
     (tester) async {
       final tab = workspace.newDocument()!..editor.text.text = 'menu text';

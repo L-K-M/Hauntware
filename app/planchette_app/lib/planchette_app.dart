@@ -277,6 +277,19 @@ class _DocumentShellState extends State<_DocumentShell> {
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
           enabled: ready,
         ),
+        const _Separator(),
+        _Command(
+          'Go to Matching Bracket',
+          () => active?.editor.goToMatchingBracket(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyB),
+          enabled: ready,
+        ),
+        _Command(
+          'Select to Matching Bracket',
+          () => active?.editor.goToMatchingBracket(extend: true),
+          shortcut: _shortcut(LogicalKeyboardKey.keyB, shift: true),
+          enabled: ready,
+        ),
       ]),
       _ShellMenu('Window', [
         _Command(
