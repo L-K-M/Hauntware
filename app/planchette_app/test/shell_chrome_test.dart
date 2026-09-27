@@ -117,23 +117,27 @@ void main() {
     // is derived from a host path, so it is written with the host's separator
     // and a hardcoded `a/index.js` matches nothing on Windows; spelling the
     // expectation out just moves the same guess to the other platform.
-    final labels = tester
+    final all = tester
         .widgetList<Text>(
           find.descendant(
             of: find.byKey(const ValueKey('planchette.tabs')),
             matching: find.byType(Text),
           ),
         )
-        .map((text) => text.data ?? '')
-        .where((data) => data.contains('index.js'))
+        .map((text) => text.data ?? text.textSpan?.toPlainText() ?? '<rich>')
         .toList();
-    expect(labels, hasLength(2), reason: 'both tabs should be labelled');
+    final names = all.where((data) => data.contains('index.js')).toList();
     expect(
-      labels.toSet(),
+      names,
+      hasLength(2),
+      reason: 'both tabs should be labelled, strip holds: $all',
+    );
+    expect(
+      names.toSet(),
       hasLength(2),
       reason:
           'the two are not told apart: '
-          '$labels',
+          '$names',
     );
     expect(tester.takeException(), isNull);
   });
