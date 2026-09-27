@@ -135,7 +135,7 @@ class EditorController extends ChangeNotifier {
         hi = mid - 1;
       }
     }
-    return (lo + 1, offset - starts[lo] + 1);
+    return (lo + 1, displayColumnFor(text.text, starts[lo], offset));
   }
 
   Future<void> initialize() =>

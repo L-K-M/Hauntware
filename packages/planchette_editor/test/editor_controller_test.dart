@@ -221,4 +221,19 @@ void main() {
     editor.text.selection = const TextSelection.collapsed(offset: 4);
     expect(editor.caretLineColumn, (2, 3));
   });
+
+  test('caret column counts display width: tabs, CJK, emoji, marks', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: '\tindented\n中x\n',
+    );
+    addTearDown(editor.dispose);
+    // After the tab and three letters the caret sits on column 8 under
+    // a 4-wide tab stop — not column 5.
+    editor.text.selection = const TextSelection.collapsed(offset: 4);
+    expect(editor.caretLineColumn, (1, 8));
+    // 中 takes two columns; past it and 'x' is column 5 on line 2.
+    editor.text.selection = const TextSelection.collapsed(offset: 12);
+    expect(editor.caretLineColumn, (2, 4));
+  });
 }

@@ -36,4 +36,36 @@ void main() {
     expect(findSearchMatches('x', 'x', limit: 0), isEmpty);
     expect(const TextMatch(start: 2, end: 4).length, 2);
   });
+
+  group('displayColumnFor', () {
+    test('plain ASCII matches the UTF-16 column', () {
+      expect(displayColumnFor('abc', 0, 3), 4);
+      expect(displayColumnFor('abc', 0, 0), 1);
+    });
+
+    test('a tab advances to the next multiple of the tab width', () {
+      // \t at column 1 covers 1–4 under tabWidth 4; offset 4 sits at 8.
+      expect(displayColumnFor('\tindented', 0, 4), 8);
+      expect(displayColumnFor('ab\tc', 0, 4), 6);
+      expect(displayColumnFor('\ti', 0, 1, tabWidth: 8), 9);
+    });
+
+    test('wide CJK and emoji count two columns', () {
+      expect(displayColumnFor('中', 0, 1), 3);
+      expect(displayColumnFor('a中b', 0, 3), 5);
+      expect(displayColumnFor('😀x', 0, 2), 3); // surrogate pair, one point
+      expect(displayColumnFor('😀x', 0, 3), 4);
+    });
+
+    test('combining marks and joiners count zero', () {
+      expect(displayColumnFor('é', 0, 2), 2);
+      expect(displayColumnFor('🇫🇷x', 0, 5), 4);
+    });
+
+    test('columns count from the line start, not the buffer start', () {
+      const text = 'one\n中x';
+      expect(displayColumnFor(text, 4, 5), 3);
+      expect(displayColumnFor(text, 4, 6), 4);
+    });
+  });
 }
