@@ -1325,7 +1325,9 @@ save through the platform.
 
 HTML export is assigned to #64. Still open: printing and PDF through the
 platform (render the same page, or paint the spans directly), and a
-line-number column in the exported page.
+line-number column in the exported page. The app writes colors as `#rrggbb`,
+dropping alpha; every exported color is opaque today, but a translucent theme
+color would need `#rrggbbaa` (alpha last, unlike `toARGB32`).
 
 ### A12. Disambiguate equal filenames — S
 After reconciling #11/#35/#43, check whether duplicate basenames still need the
