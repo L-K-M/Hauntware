@@ -1031,6 +1031,7 @@ class _SessionViewState extends State<_SessionView> {
   };
 
   final FocusNode _focus = FocusNode();
+  late bool _wasConnected;
   // Our own controller so the copy/paste menu can read (and set) the selection.
   final TerminalController _terminalController = TerminalController();
   @override
@@ -1041,6 +1042,8 @@ class _SessionViewState extends State<_SessionView> {
     // to the terminal when a terminal (not a text field) is focused.
     widget.tab.controller = _terminalController;
     _focus.addListener(_reportTerminalFocus);
+    _wasConnected = widget.tab.status == TerminalStatus.connected;
+    if (_wasConnected && widget.isActive) _requestTerminalFocus();
   }
 
   @override
@@ -1051,12 +1054,28 @@ class _SessionViewState extends State<_SessionView> {
     // new id instead of swapping the tab under this one, so no controller
     // rebind is needed (the old server-id keying required one).
     //
-    // Focus the terminal when this session becomes the active one.
-    if (widget.isActive && !oldWidget.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _focus.requestFocus();
-      });
+    // The session mutates in place, so oldWidget.tab cannot tell us whether
+    // the terminal just replaced its connecting placeholder. Autofocus alone
+    // leaves focus on the sidebar row that opened the connection.
+    final connected = widget.tab.status == TerminalStatus.connected;
+    if (widget.isActive &&
+        connected &&
+        (!oldWidget.isActive || !_wasConnected)) {
+      _requestTerminalFocus();
     }
+    _wasConnected = connected;
+  }
+
+  void _requestTerminalFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !widget.isActive ||
+          widget.tab.status != TerminalStatus.connected ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      _focus.requestFocus();
+    });
   }
 
   @override
