@@ -66,6 +66,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.pump();
     expect(c.text.text, 'a\n  b');
+    expect(c.text.selection, const TextSelection.collapsed(offset: 4));
     expect(c.editorFocus.hasFocus, isTrue);
   }, variant: TargetPlatformVariant.desktop());
 
@@ -117,6 +118,16 @@ void main() {
     await tester.pump();
     expect(python.text.text, 'def f():\n    ');
 
+    final yaml = await mount(
+      tester,
+      'key:',
+      path: 'a.yaml',
+      selection: const TextSelection.collapsed(offset: 4),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(yaml.text.text, 'key:\n    ');
+
     final prose = await mount(
       tester,
       'Note:',
@@ -127,6 +138,9 @@ void main() {
     expect(prose.text.text, 'Note:\n');
   });
 
+  // Flutter's own Backspace mapping (DefaultTextEditingShortcuts) sits in
+  // WidgetsApp, above the editor, so the editor's binding is consulted first
+  // on every platform; the variants pin that down.
   testWidgets('Backspace removes a level of space indentation', (tester) async {
     final c = await mount(
       tester,
@@ -138,7 +152,15 @@ void main() {
     await tester.pump();
     expect(c.text.text, 'a\n    b\n    c');
     expect(c.text.selection, const TextSelection.collapsed(offset: 12));
-  });
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(c.text.text, 'a\n    b\nc');
+    c.text.text = 'ab';
+    c.text.selection = const TextSelection.collapsed(offset: 2);
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pump();
+    expect(c.text.text, 'a', reason: 'ordinary Backspace still deletes');
+  }, variant: TargetPlatformVariant.desktop());
 
   testWidgets('input method composition keeps Enter and Tab', (tester) async {
     final c = await mount(tester, 'ab');

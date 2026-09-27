@@ -129,7 +129,9 @@ void main() {
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
+    // Next Tab is Control+Tab on every platform, including macOS.
     variant: const TargetPlatformVariant({
+      TargetPlatform.macOS,
       TargetPlatform.linux,
       TargetPlatform.windows,
     }),

@@ -256,7 +256,9 @@ class EditorController extends ChangeNotifier {
   );
 
   /// Enter. Starts the new line at the current indentation, one level deeper
-  /// after an opening bracket, and splits an empty bracket pair.
+  /// after an opening bracket, and splits an empty bracket pair. The view
+  /// calls this for hardware Enter; a newline that a software keyboard or
+  /// input method inserts arrives as text and is not indented.
   bool insertNewline() => _applyIndentEdit(
     (text, base, extent) => core.insertNewline(
       text,

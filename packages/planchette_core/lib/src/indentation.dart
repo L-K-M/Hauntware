@@ -61,6 +61,8 @@ Indentation defaultIndentationFor(String path) {
 /// indented lines, which is robust against deeply nested files where the
 /// absolute indentation is mostly 8 or 12. Continuation lines of block
 /// comments (` * text`) are ignored because they add a one-space step.
+/// Steps wider than 8 spaces are not recognized, and a line indented with
+/// spaces before a tab counts as space-indented.
 Indentation? detectIndentation(String text) {
   if (text.length > _detectionCharLimit) {
     text = text.substring(0, _detectionCharLimit);

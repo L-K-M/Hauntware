@@ -8,7 +8,9 @@ import 'editor_strings.dart';
 
 /// What the Tab key does inside the document.
 enum EditorTabKeyBehavior {
-  /// Tab and Shift+Tab indent and outdent, as in a code editor.
+  /// Tab and Shift+Tab indent and outdent, as in a code editor. Neither
+  /// traverses focus then; a host whose keyboard-only users need Tab to leave
+  /// the document should offer another shortcut or choose [moveFocus].
   indent,
 
   /// Tab and Shift+Tab move keyboard focus, as in an ordinary text field.
