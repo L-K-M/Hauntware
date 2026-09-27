@@ -147,6 +147,30 @@ void main() {
     },
   );
 
+  test('a batch open reports every failure in one message', () async {
+    store.files[testPath('good.txt')] = document('good.txt', 'ok');
+    dialogs.openPaths = [
+      testPath('missing-a.txt'),
+      testPath('good.txt'),
+      testPath('missing-b.txt'),
+      testPath('missing-c.txt'),
+    ];
+    await workspace.openDialog();
+    expect(workspace.documents.map((tab) => tab.name), ['good.txt']);
+    final error = workspace.error!;
+    expect(error, contains('3 files'));
+    expect(error, contains('missing-a.txt'));
+    expect(error, contains('missing-b.txt'));
+    expect(error, contains('missing-c.txt'));
+    expect(error, isNot(contains('good.txt')));
+  });
+
+  test('a single failed batch open keeps the one-file message', () async {
+    dialogs.openPaths = [testPath('missing.txt')];
+    await workspace.openDialog();
+    expect(workspace.error, startsWith('Could not open missing.txt: '));
+  });
+
   test(
     'New Save creates an absent target and records the saved identity',
     () async {

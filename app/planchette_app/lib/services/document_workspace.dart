@@ -30,6 +30,9 @@ final class DocumentTab {
   String get name => path == null ? untitledName : paths.basename(path!);
 }
 
+/// One file that failed to open, for callers that aggregate batch results.
+typedef _OpenFailure = ({String name, String message});
+
 final class DocumentWorkspace extends ChangeNotifier {
   DocumentWorkspace({
     required this.store,
@@ -41,7 +44,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   final DocumentStore store;
   final DocumentDialogs dialogs;
   final List<DocumentTab> _documents = [];
-  final Map<String, Future<void>> _opening = {};
+  final Map<String, Future<_OpenFailure?>> _opening = {};
   final Set<DocumentTab> _closingTabs = {};
   final Map<DocumentTab, Future<bool>> _saves = {};
   int _nextId = 1;
@@ -121,8 +124,23 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (interactionLocked) return;
     try {
       final selected = await _dialog(dialogs.pickOpenFiles);
+      final failures = <_OpenFailure>[];
       for (final path in selected) {
-        await open(path);
+        final failure = await _openDeduped(path);
+        if (failure != null) failures.add(failure);
+      }
+      if (failures.length == 1) {
+        _error =
+            'Could not open ${failures.single.name}: '
+            '${failures.single.message}';
+        _notify();
+      } else if (failures.length > 1) {
+        // One line naming every failure; the last error alone would hide
+        // the rest of the batch.
+        _error =
+            'Could not open ${failures.length} files: '
+            '${failures.map((failure) => '${failure.name} (${failure.message})').join(', ')}';
+        _notify();
       }
     } catch (error) {
       _error = 'Could not open documents: $error';
@@ -130,10 +148,20 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
   }
 
-  Future<void> open(String path) {
+  Future<void> open(String path) async {
+    final failure = await _openDeduped(path);
+    if (failure != null) {
+      _error = 'Could not open ${failure.name}: ${failure.message}';
+      _notify();
+    }
+  }
+
+  Future<_OpenFailure?> _openDeduped(String path) {
     if (_quitAccepted || _disposed) return Future.value();
     if (interactionLocked) {
-      return (_unlocked ??= Completer<void>()).future.then((_) => open(path));
+      return (_unlocked ??= Completer<void>()).future.then(
+        (_) => _openDeduped(path),
+      );
     }
     final key = _pathKey(path);
     return _opening.putIfAbsent(
@@ -144,22 +172,23 @@ final class DocumentWorkspace extends ChangeNotifier {
     );
   }
 
-  Future<void> _open(String path) async {
+  Future<_OpenFailure?> _open(String path) async {
     final existing = _findPath(path);
     if (existing != null) {
       _active = existing;
       _notify();
-      return;
+      return null;
     }
     final tab = _makeTab(path: _paths.normalize(_paths.absolute(path)));
     _documents.add(tab);
     _active = tab;
     _notify();
     await tab.editor.initialize();
-    if (_disposed || !_documents.contains(tab)) return;
+    if (_disposed || !_documents.contains(tab)) return null;
     final error = tab.editor.error;
+    _OpenFailure? failure;
     if (error != null) {
-      _error = 'Could not open ${tab.name}: $error';
+      failure = (name: tab.name, message: error);
       _remove(tab);
     } else {
       // A symlink may resolve onto an already-open document. Keep the existing
@@ -173,6 +202,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
     }
     _notify();
+    return failure;
   }
 
   Future<bool> save(DocumentTab tab, {bool saveAs = false}) {
