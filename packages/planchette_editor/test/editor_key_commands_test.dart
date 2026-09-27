@@ -39,6 +39,20 @@ void main() {
       expect(controller.selection.baseOffset, 4);
       expect(controller.selection.extentOffset, 9);
     });
+
+    test('indents touched lines for a reversed selection', () {
+      final controller = TextEditingController(text: 'ab\ncd');
+      addTearDown(controller.dispose);
+      controller.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 0,
+      );
+      indentSelection(controller);
+      expect(controller.text, '\tab\n\tcd');
+      // Direction survives: base still marks the later offset.
+      expect(controller.selection.baseOffset, 6);
+      expect(controller.selection.extentOffset, 1);
+    });
   });
 
   group('outdentSelection', () {
@@ -61,13 +75,29 @@ void main() {
       controller.selection = const TextSelection.collapsed(offset: 0);
       outdentSelection(controller);
       expect(controller.text, '  two');
+      expect(controller.selection.baseOffset, 0);
     });
 
     test('keeps unindented lines intact', () {
       final controller = TextEditingController(text: 'ab');
       addTearDown(controller.dispose);
+      controller.selection = const TextSelection.collapsed(offset: 1);
       outdentSelection(controller);
       expect(controller.text, 'ab');
+      expect(controller.selection.baseOffset, 1);
+    });
+
+    test('keeps a reversed selection reversed while outdenting', () {
+      final controller = TextEditingController(text: '\tab\n\tcd');
+      addTearDown(controller.dispose);
+      controller.selection = const TextSelection(
+        baseOffset: 5,
+        extentOffset: 0,
+      );
+      outdentSelection(controller);
+      expect(controller.text, 'ab\ncd');
+      expect(controller.selection.baseOffset, 3);
+      expect(controller.selection.extentOffset, 0);
     });
   });
 
@@ -79,6 +109,33 @@ void main() {
       insertNewlineWithIndent(controller);
       expect(controller.text, '\t\tab cd\n\t\t');
       expect(controller.selection.baseOffset, controller.text.length);
+    });
+
+    test('uses the first selected line indent in both directions', () {
+      const text = '  a\n    b\n  c';
+      for (final (name, selection, expected) in [
+        (
+          'forward',
+          const TextSelection(baseOffset: 0, extentOffset: 12),
+          '\n  c',
+        ),
+        (
+          'reversed',
+          const TextSelection(baseOffset: 12, extentOffset: 0),
+          '\n  c',
+        ),
+        (
+          'ending at a line boundary',
+          const TextSelection(baseOffset: 0, extentOffset: 7),
+          '\n   b\n  c',
+        ),
+      ]) {
+        final controller = TextEditingController(text: text);
+        addTearDown(controller.dispose);
+        controller.selection = selection;
+        insertNewlineWithIndent(controller);
+        expect(controller.text, expected, reason: name);
+      }
     });
 
     test('replaces the selection with the indented newline', () {
@@ -161,6 +218,33 @@ void main() {
       moveSelectionLines(controller, direction: LineMoveDirection.up);
       expect(controller.text, 'ab\ncd');
     });
+
+    test('moves CRLF lines without stranding carriage returns', () {
+      final up = TextEditingController(text: 'x\r\nb');
+      addTearDown(up.dispose);
+      up.selection = const TextSelection.collapsed(offset: 3);
+      moveSelectionLines(up, direction: LineMoveDirection.up);
+      expect(up.text, 'b\r\nx');
+
+      final down = TextEditingController(text: 'a\r\nb\r\nc');
+      addTearDown(down.dispose);
+      down.selection = const TextSelection.collapsed(offset: 0);
+      moveSelectionLines(down, direction: LineMoveDirection.down);
+      expect(down.text, 'b\r\na\r\nc');
+    });
+
+    test('keeps the selection direction while moving', () {
+      final controller = TextEditingController(text: 'ab\ncd');
+      addTearDown(controller.dispose);
+      controller.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 3,
+      );
+      moveSelectionLines(controller, direction: LineMoveDirection.up);
+      expect(controller.text, 'cd\nab');
+      expect(controller.selection.baseOffset, 1);
+      expect(controller.selection.extentOffset, 0);
+    });
   });
 
   group('duplicateSelectionLines', () {
@@ -180,6 +264,8 @@ void main() {
       controller.selection = const TextSelection.collapsed(offset: 4);
       duplicateSelectionLines(controller);
       expect(controller.text, 'ab\nXY\nXY');
+      expect(controller.selection.baseOffset, 6);
+      expect(controller.selection.extentOffset, 8);
     });
 
     test('duplicates a multi-line block as one unit', () {
@@ -197,6 +283,14 @@ void main() {
   });
 
   group('document key handling', () {
+    // The chords must survive every desktop platform's default text-editing
+    // shortcut map, so each key test runs per platform.
+    const desktopVariant = TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+    });
+
     Future<EditorController> pumpEditor(WidgetTester tester) async {
       final controller = EditorController(
         displayPath: 'notes.txt',
@@ -223,7 +317,7 @@ void main() {
       await tester.pump();
       expect(controller.text.text, 'ab\t');
       expect(controller.editorFocus.hasFocus, isTrue);
-    });
+    }, variant: desktopVariant);
 
     testWidgets('Shift+Tab outdents the caret line', (tester) async {
       final controller = await pumpEditor(tester);
@@ -236,7 +330,17 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.pump();
       expect(controller.text.text, 'ab');
-    });
+    }, variant: desktopVariant);
+
+    testWidgets('Alt+Tab never indents', (tester) async {
+      final controller = await pumpEditor(tester);
+      controller.text.selection = const TextSelection.collapsed(offset: 2);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.pump();
+      expect(controller.text.text, 'ab');
+    }, variant: desktopVariant);
 
     testWidgets('Enter preserves the line indent', (tester) async {
       final controller = await pumpEditor(tester);
@@ -247,7 +351,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pump();
       expect(controller.text.text, '  ab\n  ');
-    });
+    }, variant: desktopVariant);
 
     testWidgets('Alt+ArrowUp moves the caret line up', (tester) async {
       final controller = await pumpEditor(tester);
@@ -260,7 +364,20 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
       await tester.pump();
       expect(controller.text.text, 'cd\nab');
-    });
+    }, variant: desktopVariant);
+
+    testWidgets('Alt+ArrowDown moves the caret line down', (tester) async {
+      final controller = await pumpEditor(tester);
+      controller.text.value = const TextEditingValue(
+        text: 'ab\ncd',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.pump();
+      expect(controller.text.text, 'cd\nab');
+    }, variant: desktopVariant);
 
     testWidgets('Shift+Alt+ArrowDown duplicates the caret line', (
       tester,
@@ -277,17 +394,40 @@ void main() {
       await tester.sendKeyUpEvent(LogicalKeyboardKey.shift);
       await tester.pump();
       expect(controller.text.text, 'ab\ncd\ncd');
-    });
+    }, variant: desktopVariant);
 
     testWidgets('locked editor leaves Tab to focus traversal', (
       tester,
     ) async {
-      final controller = await pumpEditor(tester);
+      final controller = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'ab',
+      );
+      addTearDown(controller.dispose);
+      final outsideNode = FocusNode(debugLabel: 'outside');
+      addTearDown(outsideNode.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                Focus(focusNode: outsideNode, child: const SizedBox()),
+                Expanded(child: PlanchetteEditor(controller: controller)),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      controller.editorFocus.requestFocus();
+      await tester.pump();
       controller.setEditingLocked(true);
       await tester.pump();
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
       expect(controller.text.text, 'ab');
+      // Tab must actually leave the locked editor, not just insert nothing.
+      expect(controller.editorFocus.hasFocus, isFalse);
     });
 
     testWidgets('composing text keeps Tab away from the document', (
@@ -302,6 +442,8 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
       expect(controller.text.text, 'ab');
+      // The in-progress composition must survive the key event untouched.
+      expect(controller.text.value.composing, const TextRange(start: 0, end: 2));
     });
   });
 }

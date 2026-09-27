@@ -175,17 +175,20 @@ void outdentSelection(TextEditingController controller) {
   );
 }
 
-/// Enter: replace the selection with a newline plus the previous line's
-/// leading whitespace. Callers must not invoke this during IME composition.
+/// Enter: replace the selection with a newline plus the first selected
+/// line's leading whitespace. Callers must not invoke this during IME
+/// composition.
 void insertNewlineWithIndent(TextEditingController controller) {
   final value = controller.value;
   final selection = value.selection;
   if (!selection.isValid) return;
   final text = value.text;
-  final caret = selection.extentOffset.clamp(0, text.length);
+  // The first selected line survives the replace; the last one does not,
+  // and the extent's position depends on how the selection was built.
+  final caret = selection.start.clamp(0, text.length).toInt();
   final lineStart = _lineStartBefore(text, caret);
   var indentEnd = lineStart;
-  while (indentEnd < caret) {
+  while (indentEnd < text.length) {
     final unit = text.codeUnitAt(indentEnd);
     if (unit == 0x20 || unit == 0x09) {
       indentEnd++;
@@ -201,8 +204,21 @@ void insertNewlineWithIndent(TextEditingController controller) {
   );
 }
 
+/// Content end and separator length of the line terminating at [lineEnd]
+/// (the index of its '\n', or the end of the text). A '\r' immediately
+/// before the line feed belongs to the separator, so CRLF neighbors swap
+/// without stranding carriage returns.
+(int, int) _contentEndAndSeparatorLength(String text, int lineEnd) {
+  if (lineEnd >= text.length) return (lineEnd, 0);
+  return lineEnd > 0 && text.codeUnitAt(lineEnd - 1) == 0x0d
+      ? (lineEnd - 1, 2)
+      : (lineEnd, 1);
+}
+
 /// Alt+ArrowUp/ArrowDown: swap the touched lines with the neighbor above or
-/// below, keeping the selection on the moved text. A no-op at the edges.
+/// below, keeping the selection on the moved text. Line contents swap while
+/// separators stay in place, so CRLF and LF endings survive unchanged. A
+/// no-op at the edges.
 void moveSelectionLines(
   TextEditingController controller, {
   required LineMoveDirection direction,
@@ -213,39 +229,48 @@ void moveSelectionLines(
   final text = value.text;
   if (text.isEmpty) return;
   final touched = _touchedLines(text, selection);
-  final block = text.substring(touched.first, touched.blockEnd);
+  final (blockContentEnd, blockSeparatorLength) = _contentEndAndSeparatorLength(
+    text,
+    touched.blockEnd,
+  );
+  final block = text.substring(touched.first, blockContentEnd);
+  final blockEndWithSeparator = blockContentEnd + blockSeparatorLength;
 
   late final String newText;
   late final int blockStart;
-  // The block's own line break travels with the swap: it terminates the
-  // neighbor's text in its new position, and the neighbor's break (which
-  // always exists for the line above, conditionally below) lands after
-  // the block.
   if (direction == LineMoveDirection.up) {
     if (touched.first == 0) return;
     final previousStart = _lineStartBefore(text, touched.first - 1);
-    final previous = text.substring(previousStart, touched.first - 1);
-    final blockHadNewline = touched.blockEnd < text.length;
-    final suffixStart = blockHadNewline ? touched.blockEnd + 1 : touched.blockEnd;
+    final (previousContentEnd, previousSeparatorLength) =
+        _contentEndAndSeparatorLength(text, touched.first - 1);
+    final previous = text.substring(previousStart, previousContentEnd);
     newText =
         '${text.substring(0, previousStart)}'
-        '$block\n$previous'
-        '${blockHadNewline ? '\n' : ''}'
-        '${text.substring(suffixStart)}';
+        '$block'
+        '${text.substring(previousContentEnd, touched.first)}'
+        '$previous'
+        '${text.substring(blockContentEnd, blockEndWithSeparator)}'
+        '${text.substring(blockEndWithSeparator)}';
     blockStart = previousStart;
   } else {
     if (touched.blockEnd >= text.length) return;
     final nextStart = touched.blockEnd + 1;
     final nextEnd = _lineEndBeforeNewline(text, nextStart);
-    final next = text.substring(nextStart, nextEnd);
-    final nextHadNewline = nextEnd < text.length;
-    final suffixStart = nextHadNewline ? nextEnd + 1 : nextEnd;
+    final (nextContentEnd, nextSeparatorLength) = _contentEndAndSeparatorLength(
+      text,
+      nextEnd,
+    );
+    final next = text.substring(nextStart, nextContentEnd);
+    final suffixStart = nextContentEnd + nextSeparatorLength;
     newText =
         '${text.substring(0, touched.first)}'
-        '$next\n$block'
-        '${nextHadNewline ? '\n' : ''}'
+        '$next'
+        '${text.substring(blockContentEnd, blockEndWithSeparator)}'
+        '$block'
+        '${text.substring(nextContentEnd, suffixStart)}'
         '${text.substring(suffixStart)}';
-    blockStart = touched.first + next.length + 1;
+    blockStart =
+        touched.first + (nextContentEnd - nextStart) + blockSeparatorLength;
   }
   _apply(
     controller,

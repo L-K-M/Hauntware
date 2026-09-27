@@ -73,10 +73,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       return KeyEventResult.ignored;
     }
     final keyboard = HardwareKeyboard.instance;
-    final plainModifiers =
+    final noWordModifiers =
         !keyboard.isControlPressed && !keyboard.isMetaPressed;
     final key = event.logicalKey;
-    if (plainModifiers && key == LogicalKeyboardKey.tab) {
+    if (noWordModifiers &&
+        // Alt+Tab is window switching on most desktops; never indent with it.
+        !keyboard.isAltPressed &&
+        key == LogicalKeyboardKey.tab) {
       if (keyboard.isShiftPressed) {
         outdentSelection(c.text);
       } else {
@@ -84,13 +87,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       }
       return KeyEventResult.handled;
     }
-    if (plainModifiers &&
+    if (noWordModifiers &&
         (key == LogicalKeyboardKey.enter ||
             key == LogicalKeyboardKey.numpadEnter)) {
       insertNewlineWithIndent(c.text);
       return KeyEventResult.handled;
     }
-    if (plainModifiers && keyboard.isAltPressed) {
+    if (noWordModifiers && keyboard.isAltPressed) {
       if (keyboard.isShiftPressed) {
         // Both arrows duplicate; the copy lands below either way.
         if (key == LogicalKeyboardKey.arrowUp ||
