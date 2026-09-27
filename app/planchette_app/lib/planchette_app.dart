@@ -394,6 +394,31 @@ class _DocumentShellState extends State<_DocumentShell> {
     child: child,
   );
 
+  /// The header's document label: the open file's full path, an untitled
+  /// tab's name, or the launch copy when there is no document.
+  ///
+  /// A full path is more useful than a bare name here — which directory is
+  /// open is worth knowing — but it truncates on narrow windows, so the
+  /// tooltip carries the whole thing. `path` and `name` are null or non-empty
+  /// by construction: `name` is 'Untitled &lt;id&gt;' or basename of a
+  /// normalised path, and a directory can never become a document path. The
+  /// tooltip therefore appears only for a file, since an empty message
+  /// still shows a blank bubble.
+  Widget _documentLabel(BuildContext context, DocumentTab? active) {
+    final label = Text(
+      active?.path ?? active?.name ?? 'A place for your words.',
+      key: const ValueKey('active-document-label'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+        fontSize: 12,
+      ),
+    );
+    final path = active?.path;
+    return path == null ? label : Tooltip(message: path, child: label);
+  }
+
   Widget _menuBar(List<_ShellMenu> menus) => MenuBar(
     style: MenuStyle(
       elevation: const WidgetStatePropertyAll(0),
@@ -479,31 +504,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                         icon: const Icon(Icons.save_outlined),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
-                        // A full path is more useful than a bare name here —
-                        // which directory is open is worth knowing — but it
-                        // truncates on narrow windows, so the tooltip carries
-                        // the whole thing.
-                        child: Tooltip(
-                          message: active?.path ?? '',
-                          child: Text(
-                            // `path` and `name` are null or non-empty by
-                            // construction: `name` is 'Untitled <id>' or
-                            // basename of a normalised path, and a directory
-                            // can never become a document path.
-                            active?.path ??
-                                active?.name ??
-                                'A place for your words.',
-                            key: const ValueKey('active-document-label'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: scheme.onSurfaceVariant,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
+                      Expanded(child: _documentLabel(context, active)),
                       if (active?.busy == true)
                         const SizedBox(
                           width: 18,

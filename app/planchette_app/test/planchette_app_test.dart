@@ -148,6 +148,12 @@ void main() {
       final untitled = workspace.newDocument()!;
       await tester.pumpAndSettle();
       expect(headerText(), untitled.name);
+      // An untitled document has no path to add, so no tooltip at all —
+      // Flutter shows an empty message as a blank bubble.
+      expect(
+        find.ancestor(of: header(), matching: find.byTooltip('')),
+        findsNothing,
+      );
 
       // Each untitled tab names itself, not the first one.
       final second = workspace.newDocument()!;
