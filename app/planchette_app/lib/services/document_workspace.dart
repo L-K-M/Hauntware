@@ -42,6 +42,15 @@ final class DocumentWorkspace extends ChangeNotifier {
     paths.Context? pathContext,
   }) : _paths = pathContext ?? paths.context;
 
+  /// Refusals to quit, as opposed to failures. They describe work that is
+  /// about to finish, so the completion of that work clears exactly these and
+  /// leaves a real error for the user to dismiss.
+  static const String _busyWhileOpeningMessage =
+      'A document is still opening or closing, or a dialog is waiting. '
+      'Quit again once it finishes.';
+  static const String _busySavingMessage =
+      'A save is still running. Quit again once it finishes.';
+
   final paths.Context _paths;
   final DocumentStore store;
   final DocumentDialogs dialogs;
@@ -183,6 +192,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         tab.editor.displayPath = tab.path!;
       }
     }
+    _clearBusyNotice();
     _notify();
   }
 
@@ -255,6 +265,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     } finally {
       _saveTargets.remove(tab);
       tab.busy = false;
+      _clearBusyNotice();
       _notify();
     }
   }
@@ -284,6 +295,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       return true;
     } finally {
       _closingTabs.remove(tab);
+      _clearBusyNotice();
     }
   }
 
@@ -365,13 +377,12 @@ final class DocumentWorkspace extends ChangeNotifier {
     // A busy window cannot ask about its tabs, and refusing in silence looks
     // like a broken Quit button. Say what to wait for instead.
     if (_dialogCount > 0 || _closingTabs.isNotEmpty || _opening.isNotEmpty) {
-      _error = 'A document is still opening or a dialog is waiting. '
-          'Quit again once it finishes.';
+      _error = _busyWhileOpeningMessage;
       _notify();
       return false;
     }
     if (_documents.any((tab) => tab.busy || tab.editor.isSaving)) {
-      _error = 'A save is still running. Quit again once it finishes.';
+      _error = _busySavingMessage;
       _notify();
       return false;
     }
@@ -423,6 +434,15 @@ final class DocumentWorkspace extends ChangeNotifier {
     _error = null;
     _tabRefusal = null;
     _notify();
+  }
+
+  /// Drops a stale quit refusal once the work it named has finished. A real
+  /// failure stays: the user has to see it and decide.
+  void _clearBusyNotice() {
+    if (_error != _busySavingMessage && _error != _busyWhileOpeningMessage) {
+      return;
+    }
+    _error = null;
   }
 
   void _remove(DocumentTab tab) {

@@ -314,7 +314,9 @@ void main() {
     expect(workspace.error, contains('save'));
     store.writeGate!.complete();
     expect(await saving, isTrue);
-    workspace.clearError();
+
+    // The notice described work that has now finished, so it must not linger.
+    expect(workspace.error, isNull);
     expect(await workspace.confirmQuit(), isTrue);
   });
 
@@ -327,8 +329,22 @@ void main() {
     expect(workspace.error, contains('open'));
     store.loadGate!.complete();
     await opening;
-    workspace.clearError();
+    expect(workspace.error, isNull);
     expect(await workspace.confirmQuit(), isTrue);
+  });
+
+  test('a real failure is not cleared when the busy work finishes', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'saving';
+    dialogs.savePath = testPath('one.txt');
+    store.writeGate = Completer<void>();
+    store.writeError = const FileSystemException('Disk full');
+    final saving = workspace.save(tab);
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('save is still running'));
+    store.writeGate!.complete();
+    expect(await saving, isFalse);
+    expect(workspace.error, contains('Disk full'));
   });
 
   test(
