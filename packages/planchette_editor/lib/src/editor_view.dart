@@ -513,7 +513,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         _gutterWidth == width &&
         _gutterScaler == scaler &&
         _gutterStyle == _style &&
-        _gutterLaidOutLines >= visibleLineCount(viewportHeight, lineHeight)) {
+        // Either the viewport is already covered, or the whole document has
+        // been measured — in which case the tops are the real line tops and
+        // hold for any viewport height, so a resize has nothing to add.
+        (_gutterLaidOutLines >= visibleLineCount(viewportHeight, lineHeight) ||
+            _gutterLaidOutLines >= c.lineStarts.length)) {
       return;
     }
     _ensureGutterLayout(width, scaler, viewportHeight);

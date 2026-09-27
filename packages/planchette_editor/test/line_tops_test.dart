@@ -256,6 +256,52 @@ void main() {
     );
   });
 
+  test('a document shorter than the viewport measures every line once', () {
+    // The editor stops remeasuring when the whole document is covered, on the
+    // grounds that the tops then no longer depend on the viewport. That is the
+    // property this states, for the two viewport heights a resize moves
+    // between.
+    final text = List.filled(5, 'line').join('\n');
+    final starts = lineStartOffsets(text);
+    final short = measureLineTops(
+      text: text,
+      lineStarts: starts,
+      style: _style,
+      scaler: _scaler,
+      width: 400,
+      viewportHeight: 300,
+    );
+    final tall = measureLineTops(
+      text: text,
+      lineStarts: starts,
+      style: _style,
+      scaler: _scaler,
+      width: 400,
+      viewportHeight: 2000,
+    );
+    expect(short.exactLines, 5);
+    expect(tall.exactLines, 5);
+    expect(tall.tops, short.tops);
+  });
+
+  test('a stale minimumLines beyond the document still measures it once', () {
+    // Deleting most of a long document leaves the editor holding a line count
+    // larger than the document has. `minimumLines` then exceeds the line count,
+    // and the clamp's bounds are inverted, so this pins what that produces.
+    final text = List.filled(5, 'line').join('\n');
+    final tops = measureLineTops(
+      text: text,
+      lineStarts: lineStartOffsets(text),
+      style: _style,
+      scaler: _scaler,
+      width: 400,
+      viewportHeight: 300,
+      minimumLines: 900,
+    );
+    expect(tops.exactLines, 5);
+    expect(tops.tops, hasLength(5));
+  });
+
   test('a zero or negative width does not throw', () {
     final text = 'one\ntwo\nthree';
     final tops = measureLineTops(
