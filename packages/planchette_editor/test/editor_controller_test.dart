@@ -240,6 +240,36 @@ void main() {
       '// void f() {\n  // int a;\n\n  // int b;\n// }',
     );
   });
+  test('toggle comment skips whitespace-only lines like blank ones', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'one\n   \ntwo',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 11,
+    );
+    editor.text.toggleComment();
+    expect(editor.text.text, '# one\n   \n# two');
+  });
+  test('toggle comment keeps a backward selection pointing at its anchor', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'one\ntwo',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 7,
+      extentOffset: 0,
+    );
+    editor.text.toggleComment();
+    expect(editor.text.text, '# one\n# two');
+    expect(
+      editor.text.selection,
+      const TextSelection(baseOffset: 11, extentOffset: 0),
+    );
+  });
   test('toggle comment lifts marker and one space per line', () {
     final editor = EditorController(
       displayPath: 'x.py',

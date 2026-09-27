@@ -164,7 +164,7 @@ class CodeEditingController extends TextEditingController {
     var sawLine = false;
     for (var i = first; i <= last; i++) {
       final content = _lineContent(source, starts, i);
-      if (content.isEmpty) continue;
+      if (content.trimRight().isEmpty) continue;
       sawLine = true;
       if (!content.substring(_indentWidth(content)).startsWith(marker)) {
         uncomment = false;
@@ -198,7 +198,7 @@ class CodeEditingController extends TextEditingController {
           removed = stripEnd - ws;
           line = line.substring(0, ws) + line.substring(stripEnd);
         }
-      } else if (line.isNotEmpty || first == last) {
+      } else if (line.trimRight().isNotEmpty || first == last) {
         line = '${line.substring(0, ws)}$marker ${line.substring(ws)}';
       }
       changed = changed || line != original;
@@ -225,8 +225,12 @@ class CodeEditingController extends TextEditingController {
       selection: sel.isCollapsed
           ? TextSelection.collapsed(offset: caret)
           : TextSelection(
-              baseOffset: starts[first],
-              extentOffset: lastEnd + delta,
+              baseOffset: sel.baseOffset <= sel.extentOffset
+                  ? starts[first]
+                  : lastEnd + delta,
+              extentOffset: sel.baseOffset <= sel.extentOffset
+                  ? lastEnd + delta
+                  : starts[first],
             ),
     );
   }
