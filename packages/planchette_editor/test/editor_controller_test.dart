@@ -95,6 +95,17 @@ void main() {
     await saving;
     expect(await editor.confirmClose(() async => false), isTrue);
   });
+  test('initialText and loadDocument together trip the debug assert', () {
+    expect(
+      () => EditorController(
+        displayPath: 'test',
+        initialText: 'wins',
+        loadDocument: () async => document('never loaded'),
+      ),
+      throwsA(isA<AssertionError>()),
+    );
+  });
+
   test('a discarded revision never authorizes newer edits', () async {
     final decision = Completer<bool>();
     final editor = EditorController(displayPath: 'test', initialText: '');

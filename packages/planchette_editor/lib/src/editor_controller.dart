@@ -32,6 +32,10 @@ class EditorController extends ChangeNotifier {
     CaseFolder? caseFolder,
   }) : _displayPath = displayPath,
        _fold = caseFolder ?? _defaultCaseFolder {
+    assert(
+      initialText == null || loadDocument == null,
+      'initialText wins: loadDocument would never run.',
+    );
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
