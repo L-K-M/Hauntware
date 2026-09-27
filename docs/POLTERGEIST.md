@@ -14,6 +14,16 @@ same change.
 
 ## How Poltergeist consumes Séance
 
+The owner approved [Planchette](https://github.com/L-K-M/Planchette) as the
+shared editor repository on 2026-09-27. Syntax, search, document I/O, editing
+state, and the Flutter surface now belong to `planchette_core` and
+`planchette_editor`, consumed by both apps through pinned Git dependencies.
+This replaces editor copy-with-attribution below; the other porting rules
+are unchanged. Séance retains its session-owned tabs, remote-change banner,
+managed copies, upload/conflict routing, and application theme. Future
+shared editor fixes belong in Planchette and reach both consumers through
+reviewed dependency updates.
+
 - **Git-pinned dependencies, never forks**: `seance_protocol` and
   `seance_core` (records/crypto/DTOs, `SyncEngine`/`HttpSyncClient`/
   `LocalRecordStore`, `RemoteFileSystem` + adapter, `TofuVerifier`, stores,
