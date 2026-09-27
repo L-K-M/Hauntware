@@ -99,7 +99,7 @@ void main() {
     expect(tab.editor.caretLineColumn, (3, 1));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
-  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux, TargetPlatform.windows}));
 
   testWidgets(
     'document shortcuts save the active tab and create another',
