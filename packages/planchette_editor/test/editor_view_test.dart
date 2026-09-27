@@ -83,6 +83,58 @@ void main() {
     await tester.pump();
     expect(c.text.text, 'dog dog');
   });
+  testWidgets(
+    'gutter tops follow soft wraps past the highlighting cap',
+    (tester) async {
+      // One long first line, then enough filler to exceed the cap.
+      final body = '${'wrap ' * 300}\n${'x\n' * 110000}end';
+      final c = EditorController(displayPath: 'test', initialText: body);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(app(c));
+      await tester.pump();
+      final paint = tester
+          .widgetList<CustomPaint>(find.byType(CustomPaint))
+          .map((w) => w.painter)
+          .whereType<CustomPainter>()
+          .firstWhere(
+            (p) => p.toString().contains('LineNumberGutter'),
+            orElse: () => throw StateError('gutter painter not found'),
+          );
+      final tops = (paint as dynamic).lineTops as List<double>;
+      // The ~1500-char first line wraps to several rows, so line 2's top
+      // must exceed one unwrapped row's height (~18.9px at 14×1.35).
+      expect(tops[1], greaterThan(40));
+    },
+  );
+  testWidgets(
+    'gutter tops stay exact after an edit between wrapped lines',
+    (tester) async {
+      final body = '${'wrap ' * 300}\nshort\nend';
+      final c = EditorController(displayPath: 'test', initialText: body);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(app(c));
+      await tester.pump();
+      List<double> tops() =>
+          (tester
+                  .widgetList<CustomPaint>(find.byType(CustomPaint))
+                  .map((w) => w.painter)
+                  .whereType<CustomPainter>()
+                  .firstWhere((p) => p.toString().contains('LineNumberGutter'))
+                  as dynamic)
+              .lineTops as List<double>;
+      final before = tops();
+      c.text.value = TextEditingValue(
+        text: 'edited\n${'wrap ' * 300}\nshort\nend',
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      await tester.pump();
+      final after = tops();
+      expect(after.length, before.length + 1);
+      // The wrapped line's own height survives the splice unchanged.
+      expect(after[2] - after[1], before[1] - before[0]);
+      expect(after[3] - after[2], before[2] - before[1]);
+    },
+  );
   testWidgets('IME composing text retains framework rendering', (tester) async {
     final c = EditorController(displayPath: '.env', initialText: 'KEY=value');
     addTearDown(c.dispose);

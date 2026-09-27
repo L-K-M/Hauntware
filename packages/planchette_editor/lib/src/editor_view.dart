@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_core/planchette_core.dart';
@@ -48,6 +50,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   static const _gutterInset = 8.0;
   final _gutterRepaint = ValueNotifier<int>(0);
   List<double> _gutterTops = const [0];
+  List<double>? _gutterHeights;
+  List<int>? _gutterStarts;
   String? _gutterText;
   double? _gutterWidth;
   TextScaler? _gutterScaler;
@@ -504,38 +508,210 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     return _gutterInset * 2 + width + 1;
   }
 
+  /// Per-line visual tops for the gutter. Heights are measured line by
+  /// line so they stay exact under soft wrap at any document size —
+  /// past the highlighting cap the old flat estimate drifted by a row
+  /// per wrap. An edit remeasures only the lines it touches: the common
+  /// prefix/suffix lines keep their cached heights, so a keystroke does
+  /// a couple of TextPainter layouts instead of re-shaping the buffer.
   void _ensureGutterLayout(double width, TextScaler scaler) {
-    if (identical(_gutterText, c.text.text) &&
+    final text = c.text.text;
+    if (identical(_gutterText, text) &&
         _gutterWidth == width &&
         _gutterScaler == scaler &&
         _gutterStyle == _style) {
       return;
     }
     final lineHeight = scaler.scale(_style.fontSize!) * _style.height!;
-    if (c.text.text.length <= syntaxHighlightingMaxChars) {
-      final painter = TextPainter(
-        text: c.text.buildTextSpan(
-          context: context,
-          style: _style,
-          withComposing: false,
-        ),
-        textDirection: TextDirection.ltr,
-        textScaler: scaler,
-      )..layout(maxWidth: width > 1 ? width : 1);
-      _gutterTops = [
-        for (final offset in c.lineStarts)
-          painter.getOffsetForCaret(TextPosition(offset: offset), Rect.zero).dy,
-      ];
-      painter.dispose();
+    final starts = c.lineStarts;
+    final oldHeights = _gutterHeights;
+    final oldStarts = _gutterStarts;
+    final old = _gutterText;
+    if (oldHeights == null ||
+        oldStarts == null ||
+        old == null ||
+        old.isEmpty ||
+        _gutterWidth != width ||
+        _gutterScaler != scaler ||
+        _gutterStyle != _style) {
+      _gutterHeights = _measureHeights(
+        text,
+        starts,
+        0,
+        starts.length - 1,
+        width,
+        lineHeight,
+        scaler,
+      );
     } else {
-      _gutterTops = [
-        for (var i = 0; i < c.lineStarts.length; i++) i * lineHeight,
+      // startsWith/endsWith catch appends and truncations in native code;
+      // otherwise the scan stops at the first difference, usually near the
+      // caret.
+      var prefix = 0;
+      if (text.startsWith(old)) {
+        prefix = old.length;
+      } else if (old.startsWith(text)) {
+        prefix = text.length;
+      } else {
+        final shared = math.min(old.length, text.length);
+        while (prefix < shared &&
+            old.codeUnitAt(prefix) == text.codeUnitAt(prefix)) {
+          prefix++;
+        }
+      }
+      final shared = math.min(old.length, text.length);
+      var suffix = 0;
+      if (text.endsWith(old)) {
+        suffix = old.length;
+      } else if (old.endsWith(text)) {
+        suffix = text.length;
+      } else {
+        while (suffix < shared - prefix &&
+            old.codeUnitAt(old.length - 1 - suffix) ==
+                text.codeUnitAt(text.length - 1 - suffix)) {
+          suffix++;
+        }
+      }
+      // Prefix and suffix may overlap (an identical string under a new
+      // identity, or diffs with ambiguous boundaries); keep the changed
+      // ranges disjoint so preserved lines can't be counted twice.
+      suffix = math.min(suffix, shared - prefix);
+      // Lines fully inside the shared prefix keep their heights pairwise;
+      // lines fully inside the shared suffix keep theirs aligned from the
+      // tail. Everything between — including lines the insertion or
+      // deletion only straddles — is remeasured.
+      final headOld = _headLines(oldStarts, prefix, old.length);
+      final headNew = _headLines(starts, prefix, text.length);
+      final keepHead = math.min(headOld, headNew);
+      final tailStartOld = _upperBound(oldStarts, old.length - suffix);
+      final tailStartNew = _upperBound(starts, text.length - suffix);
+      final tail = math.min(
+        oldStarts.length - tailStartOld,
+        starts.length - tailStartNew,
+      );
+      final midLast = starts.length - tail - 1;
+      _gutterHeights = [
+        ...oldHeights.sublist(0, keepHead),
+        ..._measureHeights(
+          text,
+          starts,
+          keepHead,
+          midLast,
+          width,
+          lineHeight,
+          scaler,
+        ),
+        ...oldHeights.sublist(oldHeights.length - tail),
       ];
     }
-    _gutterText = c.text.text;
+    // Defensive: a splice bookkeeping slip must not wedge the frame —
+    // fall back to a full measurement.
+    if (_gutterHeights!.length != starts.length) {
+      _gutterHeights = _measureHeights(
+        text,
+        starts,
+        0,
+        starts.length - 1,
+        width,
+        lineHeight,
+        scaler,
+      );
+    }
+    final tops = List<double>.filled(starts.length, 0);
+    var top = 0.0;
+    for (var i = 0; i < starts.length; i++) {
+      tops[i] = top;
+      top += _gutterHeights![i];
+    }
+    _gutterTops = tops;
+    _gutterStarts = starts;
+    _gutterText = text;
     _gutterWidth = width;
     _gutterScaler = scaler;
     _gutterStyle = _style;
+  }
+
+  /// Index of the line containing [offset]: the largest line start ≤ it.
+  int _lineIndex(List<int> starts, int offset) {
+    var lo = 0;
+    var hi = starts.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi + 1) >> 1;
+      if (starts[mid] <= offset) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return lo;
+  }
+
+  /// First line whose start lies at or after [offset] — the first line
+  /// fully inside a shared suffix that begins there.
+  int _upperBound(List<int> starts, int offset) {
+    var lo = 0;
+    var hi = starts.length;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (starts[mid] < offset) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+
+  /// Lines whose whole content lies inside the first [prefix] characters:
+  /// every line start up to and including [prefix] closes the line before
+  /// it, and a text ending inside the prefix closes its last line too.
+  int _headLines(List<int> starts, int prefix, int length) {
+    if (prefix <= 0 || length <= 0) return 0;
+    var count = _lineIndex(starts, math.min(prefix, length - 1));
+    if (length <= prefix) count++;
+    return count;
+  }
+
+  /// Visual heights of lines [first]..[last] at the field's wrap width.
+  /// A line can wrap only if its glyphs could exceed the width; 1.5 em per
+  /// code unit is a generous upper bound for the widest glyph, so short
+  /// lines skip their layout entirely.
+  List<double> _measureHeights(
+    String text,
+    List<int> starts,
+    int first,
+    int last,
+    double width,
+    double lineHeight,
+    TextScaler scaler,
+  ) {
+    if (last < first) return const [];
+    final maxLinePx = scaler.scale(_style.fontSize! * 1.5);
+    final painter = TextPainter(
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    );
+    final heights = List<double>.filled(last - first + 1, lineHeight);
+    try {
+      for (var i = first; i <= last; i++) {
+        final start = starts[i];
+        final end = i + 1 < starts.length
+            ? starts[i + 1] - 1
+            : text.length;
+        final len = end - start;
+        if (len * maxLinePx <= width) continue;
+        painter
+          ..text = TextSpan(
+            text: text.substring(start, end),
+            style: _style,
+          )
+          ..layout(maxWidth: width > 1 ? width : 1);
+        heights[i - first] = painter.height;
+      }
+    } finally {
+      painter.dispose();
+    }
+    return heights;
   }
 }
 
@@ -600,10 +776,9 @@ class _LineNumberGutterPainter extends CustomPainter {
         lo = mid + 1;
       }
     }
-    // Insurance against line-height estimate error: painting extra
-    // off-screen lines is clipped, skipping a visible one isn't. Past the
-    // highlighting cap the estimate lags by one row per soft wrap above the
-    // viewport, so the backoff is sized in viewport rows, not one line.
+    // Insurance against a transiently stale tops list (e.g. a resize
+    // mid-layout): painting extra off-screen lines is clipped, skipping a
+    // visible one isn't.
     lo -= (size.height / lineHeight).ceil();
     if (lo < 0) lo = 0;
     final painter = TextPainter(
