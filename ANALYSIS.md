@@ -2127,5 +2127,21 @@ inspected.
     check, which is not the same thing.
   - **#86** review pending at the time of writing.
   - Not verified locally: screen-reader announcement of the tab flash,
-    the `Tooltips`' layout at extreme text scale, and any hands-on
+    the tooltip's layout at extreme text scale, and any hands-on
     macOS/Windows session.
+- **The six integrate together.** Merged in order #75 → #78 → #80 → #82 →
+  #84 → #86 onto `origin/main` (`804b32b`) and ran everything: **89 core,
+  27 editor, 52 app tests** (two case-insensitive filesystem skips), all
+  three analyses clean, `dart format --set-exit-if-changed` clean. Three
+  conflicts, all mechanical and all in test files:
+  1. `planchette_app_test.dart` — #75 and #78 both inserted a `testWidgets`
+     at the same anchor. Both kept, in order.
+  2. `document_workspace_test.dart` — #80 added `savePathGate` to
+     `MemoryDocuments` where #78 had added `loadGate`. Both fields kept.
+  3. `editor_controller_test.dart` — #84 and #86 both appended to the end of
+     `main()`. Both kept.
+
+  No production file conflicted: #75/#78/#80/#82 touch disjoint regions of
+  `planchette_app.dart` and `document_workspace.dart`. The integration branch
+  is `integration/check-all` if it is wanted; it is not proposed for `main`,
+  because each PR must land on its own review.
