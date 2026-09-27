@@ -47,9 +47,11 @@ class EditorController extends ChangeNotifier {
   late final CodeEditingController text;
   final search = TextEditingController();
   final replacement = TextEditingController();
+  final goToLineInput = TextEditingController();
   final editorFocus = FocusNode();
   final searchFocus = FocusNode();
   final replacementFocus = FocusNode();
+  final goToLineFocus = FocusNode();
   final scroll = ScrollController();
   final undoController = UndoHistoryController();
 
@@ -62,6 +64,8 @@ class EditorController extends ChangeNotifier {
   bool _disposed = false;
   bool _editingLocked = false;
   bool _searchOpen = false;
+  bool _goToLineOpen = false;
+  int _caretRevealRequest = 0;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
   bool _updatingSearch = false;
@@ -94,6 +98,10 @@ class EditorController extends ChangeNotifier {
   bool get canSave => !isBusy && !_editingLocked && _error == null;
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;
+  bool get goToLineOpen => _goToLineOpen;
+
+  /// Increments when the caret moved somewhere the view should scroll to.
+  int get caretRevealRequest => _caretRevealRequest;
   bool get replaceOpen => _replaceOpen;
   bool get caseSensitive => _caseSensitive;
   List<TextRange> get matches => _matches;
@@ -118,6 +126,17 @@ class EditorController extends ChangeNotifier {
   int get byteCount {
     _updateMetrics();
     return _bytes;
+  }
+
+  /// The size the document has once saved: the buffer holds LF line endings
+  /// and no byte-order mark, but a CRLF or BOM document writes them back.
+  int get fileByteCount {
+    final document = _document;
+    if (document == null) return byteCount;
+    final newlines = lineStarts.length - 1;
+    return byteCount +
+        (document.lineEnding == LineEnding.crlf ? newlines : 0) +
+        (document.hasUtf8Bom ? 3 : 0);
   }
 
   (int, int) get caretLineColumn {
@@ -313,6 +332,58 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  void openGoToLine() {
+    if (_loading || _error != null) return;
+    _goToLineOpen = true;
+    final (line, _) = caretLineColumn;
+    goToLineInput.value = TextEditingValue(
+      text: '$line',
+      selection: TextSelection(baseOffset: 0, extentOffset: '$line'.length),
+    );
+    goToLineFocus.requestFocus();
+    _notify();
+  }
+
+  void closeGoToLine() {
+    if (!_goToLineOpen) return;
+    _goToLineOpen = false;
+    editorFocus.requestFocus();
+    _notify();
+  }
+
+  /// Jumps to the go-to-line field's `line` or `line:column` and closes it.
+  /// Returns false, leaving the field open, when the input is not a number.
+  bool submitGoToLine() {
+    final match = RegExp(
+      r'^\s*(\d+)\s*(?:[:,]\s*(\d+)\s*)?$',
+    ).firstMatch(goToLineInput.text);
+    if (match == null) return false;
+    _goToLineOpen = false;
+    goToLine(
+      int.parse(match[1]!),
+      column: match[2] == null ? 1 : int.parse(match[2]!),
+    );
+    return true;
+  }
+
+  /// Places the caret at 1-based [line] and [column], clamped to the
+  /// document, focuses the editor and asks the view to scroll there.
+  void goToLine(int line, {int column = 1}) {
+    if (_loading || _error != null) return;
+    final starts = lineStarts;
+    final index = (line - 1).clamp(0, starts.length - 1);
+    final start = starts[index];
+    final end = index + 1 < starts.length
+        ? starts[index + 1] - 1
+        : text.text.length;
+    text.selection = TextSelection.collapsed(
+      offset: (start + column - 1).clamp(start, end),
+    );
+    _caretRevealRequest++;
+    editorFocus.requestFocus();
+    _notify();
+  }
+
   void toggleReplace() {
     _replaceOpen = !_replaceOpen;
     _notify();
@@ -437,9 +508,11 @@ class EditorController extends ChangeNotifier {
     text.dispose();
     search.dispose();
     replacement.dispose();
+    goToLineInput.dispose();
     editorFocus.dispose();
     searchFocus.dispose();
     replacementFocus.dispose();
+    goToLineFocus.dispose();
     scroll.dispose();
     undoController.dispose();
     super.dispose();

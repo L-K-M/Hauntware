@@ -54,11 +54,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   TextStyle? _gutterStyle;
   double? _textWidth;
   int _lastReveal = -1;
+  int _lastCaretReveal = 0;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
   TextStyle get _style =>
       const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
   bool get _locked => widget.editingLocked || c.editingLocked;
+  bool get _apple => switch (Theme.of(context).platform) {
+    TargetPlatform.macOS || TargetPlatform.iOS => true,
+    _ => false,
+  };
 
   @override
   void initState() {
@@ -113,6 +118,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void _changed() {
     if (!mounted) return;
     setState(() {});
+    if (_lastCaretReveal != c.caretRevealRequest) {
+      _lastCaretReveal = c.caretRevealRequest;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _revealCaret();
+      });
+    }
     if (_lastReveal != c.revealRequest && !_revealQueued) {
       _revealQueued = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -121,6 +132,32 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         _lastReveal = c.revealRequest;
         _revealMatch();
       });
+    }
+  }
+
+  /// Scrolls a caret that moved without typing (Go to Line) a third of the
+  /// way down the view, unless it is already visible.
+  void _revealCaret() {
+    final editable = c.editorFocus.context
+        ?.findAncestorStateOfType<EditableTextState>()
+        ?.renderEditable;
+    if (editable == null || !editable.hasSize || !c.scroll.hasClients) return;
+    final caret = editable.getLocalRectForCaret(c.text.selection.extent);
+    if (caret.top >= 0 && caret.bottom <= editable.size.height) return;
+    final position = c.scroll.positions.last;
+    c.scroll.jumpTo(
+      (caret.top + position.pixels - position.viewportDimension / 3).clamp(
+        0.0,
+        position.maxScrollExtent,
+      ),
+    );
+  }
+
+  void _escape() {
+    if (c.goToLineOpen) {
+      c.closeGoToLine();
+    } else {
+      c.closeSearch();
     }
   }
 
@@ -171,37 +208,48 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   @override
   Widget build(BuildContext context) {
     return CallbackShortcuts(
+      // Command on Apple platforms and Control elsewhere, never both: Control
+      // chords are Cocoa text bindings on macOS (Ctrl+F moves forward, Ctrl+H
+      // deletes backward), and Ctrl+G is Go to Line on Windows and Linux.
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
-            c.openSearch,
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-            c.openSearch,
-        const SingleActivator(LogicalKeyboardKey.keyH, control: true): () =>
-            c.openSearch(replace: true),
-        const SingleActivator(
-          LogicalKeyboardKey.keyF,
-          meta: true,
-          alt: true,
-        ): () =>
-            c.openSearch(replace: true),
-        const SingleActivator(LogicalKeyboardKey.keyG, meta: true): c.nextMatch,
-        const SingleActivator(LogicalKeyboardKey.keyG, control: true):
-            c.nextMatch,
-        const SingleActivator(LogicalKeyboardKey.keyG, meta: true, shift: true):
-            c.previousMatch,
-        const SingleActivator(
-          LogicalKeyboardKey.keyG,
-          control: true,
-          shift: true,
-        ): c.previousMatch,
+        if (_apple) ...{
+          const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+              c.openSearch,
+          const SingleActivator(
+            LogicalKeyboardKey.keyF,
+            meta: true,
+            alt: true,
+          ): () =>
+              c.openSearch(replace: true),
+          const SingleActivator(LogicalKeyboardKey.keyG, meta: true):
+              c.nextMatch,
+          const SingleActivator(
+            LogicalKeyboardKey.keyG,
+            meta: true,
+            shift: true,
+          ): c.previousMatch,
+          const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
+              c.openGoToLine,
+        } else ...{
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+              c.openSearch,
+          const SingleActivator(LogicalKeyboardKey.keyH, control: true): () =>
+              c.openSearch(replace: true),
+          const SingleActivator(LogicalKeyboardKey.keyG, control: true):
+              c.openGoToLine,
+        },
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             c.previousMatch,
-        if (c.searchOpen)
-          const SingleActivator(LogicalKeyboardKey.escape): c.closeSearch,
+        if (c.searchOpen || c.goToLineOpen)
+          const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
       child: Column(
         children: [
+          if (c.goToLineOpen) ...[
+            _goToLineBar(context),
+            const Divider(height: 1),
+          ],
           if (widget.banner != null) widget.banner!,
           if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
           Expanded(child: _body()),
@@ -352,31 +400,95 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     );
   }
 
+  Widget _goToLineBar(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+      child: Row(
+        children: [
+          Icon(
+            Icons.format_list_numbered,
+            size: 18,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: c.goToLineInput,
+              focusNode: c.goToLineFocus,
+              autofocus: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.number,
+              style: theme.textTheme.bodyMedium,
+              decoration: InputDecoration(
+                hintText: strings.goToLineHint(c.lineStarts.length),
+                isDense: true,
+                border: InputBorder.none,
+              ),
+              onSubmitted: (_) {
+                if (!c.submitGoToLine()) c.goToLineFocus.requestFocus();
+              },
+            ),
+          ),
+          ExcludeFocus(
+            child: IconButton(
+              tooltip: strings.closeGoToLine,
+              visualDensity: VisualDensity.compact,
+              onPressed: c.closeGoToLine,
+              icon: const Icon(Icons.close),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _statusBar(BuildContext context) {
     final (line, column) = c.caretLineColumn;
     final document = c.document;
+    final selection = c.text.selection;
+    final selected = selection.isValid && !selection.isCollapsed
+        ? selection.textInside(c.text.text)
+        : '';
     final status = [
+      if (selected.isNotEmpty)
+        widget.strings.selectionSummary(
+          selected.length,
+          '\n'.allMatches(selected).length + 1,
+        ),
       if (c.isSaving) widget.strings.saving,
       if (c.isDirty) widget.strings.unsaved,
       document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
       document?.hasUtf8Bom == true ? 'UTF-8 BOM' : 'UTF-8',
-      if (c.text.language case final language?) language.id,
+      widget.strings.languageName(c.text.language),
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              widget.strings.documentPosition(
-                line,
-                column,
-                c.lineStarts.length,
-                c.byteCount,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Tooltip(
+                message: widget.strings.goToLine,
+                child: InkWell(
+                  onTap: c.openGoToLine,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Text(
+                    widget.strings.documentPosition(
+                      line,
+                      column,
+                      c.lineStarts.length,
+                      c.fileByteCount,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall,
             ),
           ),
           Flexible(
