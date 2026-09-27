@@ -234,7 +234,13 @@ void main() {
       await mount(tester);
 
       await chord(tester, LogicalKeyboardKey.keyL);
-      await tester.enterText(find.byType(TextField).last, '3');
+      // The digits-only formatter strips typed letters.
+      await tester.enterText(find.byType(TextField).last, 'a3');
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+        '3',
+      );
       await tester.tap(find.text('Go'));
       await tester.pumpAndSettle();
       expect(

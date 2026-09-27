@@ -156,13 +156,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     } else {
       final line =
           c.lineStarts.takeWhile((offset) => offset <= match.start).length - 1;
-      dy =
-          line *
-          MediaQuery.textScalerOf(context).scale(_style.fontSize!) *
-          _style.height!;
+      dy = _estimatedLineTop(line);
     }
-    final position = c.scroll.positions.last;
-    _scrollToDy(position, dy);
+    _scrollToDy(c.scroll.positions.last, dy);
   }
 
   void _revealGotoLine() {
@@ -172,16 +168,20 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     final starts = c.lineStarts;
     if (target > starts.length) return;
     double dy;
-    if (target - 1 < _gutterTops.length && _gutterTops.length == starts.length) {
+    if (target - 1 < _gutterTops.length &&
+        _gutterTops.length == starts.length) {
       dy = _gutterTops[target - 1];
     } else {
-      final scaler = MediaQuery.textScalerOf(context);
-      dy =
-          (target - 1) *
-          scaler.scale(_style.fontSize!) *
-          _style.height!;
+      dy = _estimatedLineTop(target - 1);
     }
     _scrollToDy(c.scroll.positions.last, dy);
+  }
+
+  /// One screen line per document line. Exact while nothing wraps; past the
+  /// highlighting cap (or before the gutter cache fills) it is an estimate.
+  double _estimatedLineTop(int lineIndex) {
+    final scaler = MediaQuery.textScalerOf(context);
+    return lineIndex * scaler.scale(_style.fontSize!) * _style.height!;
   }
 
   void _scrollToDy(ScrollPosition position, double dy) {

@@ -148,8 +148,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     unawaited(
       showDialog<int>(
         context: context,
-        builder: (context) =>
-            _GoToLineDialog(total: editor.lineStarts.length),
+        builder: (context) => _GoToLineDialog(total: editor.lineStarts.length),
       ).then((line) {
         if (line != null) editor.gotoLine(line);
       }),
@@ -708,7 +707,10 @@ class _GoToLineDialogState extends State<_GoToLineDialog> {
       controller: _input,
       autofocus: true,
       keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       decoration: InputDecoration(
+        // The total counts the empty line after a trailing newline, matching
+        // the gutter and gotoLine's clamp.
         hintText: 'Line 1–${widget.total}',
         isDense: true,
       ),
@@ -731,7 +733,9 @@ class _ShellMenu {
   const _ShellMenu(this.label, this.items);
   final String label;
   final List<_MenuEntry> items;
-}sealed class _MenuEntry {
+}
+
+sealed class _MenuEntry {
   const _MenuEntry();
 }
 
