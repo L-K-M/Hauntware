@@ -65,6 +65,7 @@ class EditorController extends ChangeNotifier {
   bool _replaceOpen = false;
   bool _caseSensitive = false;
   bool _updatingSearch = false;
+  bool _updatingQuery = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
   int _revision = 0;
@@ -288,9 +289,15 @@ class EditorController extends ChangeNotifier {
         prefill = selected;
       }
     }
-    // Prefill before opening: the query listener early-returns while
-    // closed, so the document is scanned exactly once below.
-    if (prefill != null) search.text = prefill;
+    // Assign the prefill while the query listener cannot scan — still
+    // closed on a fresh open, guarded on re-entry — so the explicit call
+    // below stays the single whole-document scan on every path.
+    _updatingQuery = true;
+    try {
+      if (prefill != null) search.text = prefill;
+    } finally {
+      _updatingQuery = false;
+    }
     _searchOpen = true;
     _replaceOpen = replace || _replaceOpen;
     _updateMatches(resetActive: true);
@@ -328,7 +335,12 @@ class EditorController extends ChangeNotifier {
   }
 
   void _queryChanged() {
-    if (!_searchOpen || _disposed || search.text == _lastQuery) return;
+    if (!_searchOpen ||
+        _disposed ||
+        _updatingQuery ||
+        search.text == _lastQuery) {
+      return;
+    }
     _updateMatches(resetActive: true);
     _revealRequest++;
     _notify();
