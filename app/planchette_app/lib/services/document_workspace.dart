@@ -125,21 +125,22 @@ final class DocumentWorkspace extends ChangeNotifier {
     try {
       final selected = await _dialog(dialogs.pickOpenFiles);
       final failures = <_OpenFailure>[];
+      final reported = <String>{};
       for (final path in selected) {
-        final failure = await _openDeduped(path);
-        if (failure != null) failures.add(failure);
+        try {
+          final failure = await _openDeduped(path);
+          if (failure != null && reported.add(_pathKey(path))) {
+            failures.add(failure);
+          }
+        } catch (error) {
+          // One exceptional path must not abort the rest of the batch.
+          if (reported.add(_pathKey(path))) {
+            failures.add((name: _paths.basename(path), message: '$error'));
+          }
+        }
       }
-      if (failures.length == 1) {
-        _error =
-            'Could not open ${failures.single.name}: '
-            '${failures.single.message}';
-        _notify();
-      } else if (failures.length > 1) {
-        // One line naming every failure; the last error alone would hide
-        // the rest of the batch.
-        _error =
-            'Could not open ${failures.length} files: '
-            '${failures.map((failure) => '${failure.name} (${failure.message})').join(', ')}';
+      if (failures.isNotEmpty) {
+        _error = _openFailureMessage(failures);
         _notify();
       }
     } catch (error) {
@@ -151,9 +152,27 @@ final class DocumentWorkspace extends ChangeNotifier {
   Future<void> open(String path) async {
     final failure = await _openDeduped(path);
     if (failure != null) {
-      _error = 'Could not open ${failure.name}: ${failure.message}';
+      _error = _openFailureMessage([failure]);
       _notify();
     }
+  }
+
+  /// One line naming every failure — the last error alone would hide the
+  /// rest of the batch. The enumeration is capped so a large multi-select
+  /// stays readable.
+  String _openFailureMessage(List<_OpenFailure> failures) {
+    if (failures.length == 1) {
+      return 'Could not open ${failures.single.name}: '
+          '${failures.single.message}';
+    }
+    const maxListed = 5;
+    final listed = failures
+        .take(maxListed)
+        .map((failure) => '${failure.name} (${failure.message})')
+        .join(', ');
+    final extra = failures.length - maxListed;
+    return 'Could not open ${failures.length} files: '
+        '$listed${extra > 0 ? ', and $extra more' : ''}';
   }
 
   Future<_OpenFailure?> _openDeduped(String path) {

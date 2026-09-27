@@ -171,6 +171,27 @@ void main() {
     expect(workspace.error, startsWith('Could not open missing.txt: '));
   });
 
+  test('a repeated path in one batch reports its failure once', () async {
+    dialogs.openPaths = [testPath('missing.txt'), testPath('missing.txt')];
+    await workspace.openDialog();
+    expect(workspace.error, startsWith('Could not open missing.txt: '));
+  });
+
+  test('a long batch error lists the first failures and counts the rest', () async {
+    dialogs.openPaths = [
+      for (var i = 0; i < 7; i++) testPath('missing-$i.txt'),
+    ];
+    await workspace.openDialog();
+    final error = workspace.error!;
+    expect(error, contains('7 files'));
+    for (var i = 0; i < 5; i++) {
+      expect(error, contains('missing-$i.txt'));
+    }
+    expect(error, isNot(contains('missing-5.txt')));
+    expect(error, isNot(contains('missing-6.txt')));
+    expect(error, contains('and 2 more'));
+  });
+
   test(
     'New Save creates an absent target and records the saved identity',
     () async {
