@@ -210,13 +210,12 @@ Future<String> _writeTextDocument(
   if (!RegExp(r'^\.[a-zA-Z0-9_-]+$').hasMatch(temporaryPrefix)) {
     throw ArgumentError.value(temporaryPrefix, 'temporaryPrefix');
   }
-  final normalized = normalization == TextNormalization.preserve
-      ? text
-      : _normalizeLineEndings(text, lineEnding);
   // Loading rejects NUL as binary; writing it would produce a file this
   // editor can never reopen. Reject before publication, while the original
-  // destination is still untouched.
-  final nulIndex = _firstNulIndex(normalized);
+  // destination is still untouched. Scan the input, not the normalized
+  // text: normalization never adds or removes a NUL, and this keeps the
+  // reported offset pointing into the text the caller actually edited.
+  final nulIndex = _firstNulIndex(text);
   if (nulIndex >= 0) {
     throw TextDocumentException(
       'The edited text contains a NUL character at code unit $nulIndex. '
@@ -224,6 +223,9 @@ Future<String> _writeTextDocument(
       'file the editor cannot reopen.',
     );
   }
+  final normalized = normalization == TextNormalization.preserve
+      ? text
+      : _normalizeLineEndings(text, lineEnding);
   final bytes = <int>[if (hasUtf8Bom) ..._utf8Bom, ...utf8.encode(normalized)];
   if (bytes.length > maximumBytes) {
     throw TextDocumentException(
