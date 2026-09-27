@@ -218,4 +218,44 @@ void main() {
       isSemantics(isSelected: false, isButton: true),
     );
   });
+
+  testWidgets(
+    'resizing preserves search and replacement focus and composition',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final controller = EditorController(
+        displayPath: 'test.txt',
+        initialText: 'cat cat',
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_app(controller));
+      controller.openSearch(replace: true);
+      await tester.pumpAndSettle();
+
+      const composing = TextEditingValue(
+        text: 'ca',
+        selection: TextSelection.collapsed(offset: 2),
+        composing: TextRange(start: 0, end: 2),
+      );
+      for (final (field, focus) in [
+        (controller.search, controller.searchFocus),
+        (controller.replacement, controller.replacementFocus),
+      ]) {
+        focus.requestFocus();
+        await tester.pump();
+        tester.testTextInput.updateEditingValue(composing);
+        await tester.pump();
+        expect(tester.testTextInput.isVisible, isTrue);
+
+        for (final width in [320.0, 800.0]) {
+          await tester.binding.setSurfaceSize(Size(width, 900));
+          await tester.pumpAndSettle();
+          expect(focus.hasFocus, isTrue);
+          expect(field.value, composing);
+          expect(tester.testTextInput.isVisible, isTrue);
+        }
+      }
+    },
+  );
 }

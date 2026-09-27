@@ -351,25 +351,24 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       final fontSize = Theme.of(context).textTheme.bodyMedium!.fontSize!;
       final textScale =
           MediaQuery.textScalerOf(context).scale(fontSize) / fontSize;
+      final inline = constraints.maxWidth >= inlineWidth * textScale;
       final actions = Wrap(
         alignment: WrapAlignment.end,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: controls,
       );
 
-      // Give inputs their own row on narrow or enlarged-text layouts. Wrapping
-      // controls also accommodates longer translations without hiding actions.
-      if (constraints.maxWidth < inlineWidth * textScale) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [field, actions],
-        );
-      }
-
-      return Row(
+      // Stack narrow layouts without replacing field elements, preserving the
+      // input connection and composition while resizing. Long labels wrap.
+      return Flex(
+        direction: inline ? Axis.horizontal : Axis.vertical,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: inline
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.stretch,
         children: [
-          Expanded(child: field),
-          Expanded(child: actions),
+          Expanded(flex: inline ? 1 : 0, child: field),
+          Expanded(flex: inline ? 1 : 0, child: actions),
         ],
       );
     },
