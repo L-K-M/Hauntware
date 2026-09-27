@@ -295,7 +295,8 @@ final class DocumentWorkspace extends ChangeNotifier {
       return true;
     } finally {
       _closingTabs.remove(tab);
-      _clearBusyNotice();
+      // The removal above already notified, so only the clearing needs one.
+      if (_clearBusyNotice()) _notify();
     }
   }
 
@@ -437,12 +438,14 @@ final class DocumentWorkspace extends ChangeNotifier {
   }
 
   /// Drops a stale quit refusal once the work it named has finished. A real
-  /// failure stays: the user has to see it and decide.
-  void _clearBusyNotice() {
+  /// failure stays: the user has to see it and decide. Returns whether one was
+  /// dropped, so a caller that has not notified yet can do exactly one.
+  bool _clearBusyNotice() {
     if (_error != _busySavingMessage && _error != _busyWhileOpeningMessage) {
-      return;
+      return false;
     }
     _error = null;
+    return true;
   }
 
   void _remove(DocumentTab tab) {

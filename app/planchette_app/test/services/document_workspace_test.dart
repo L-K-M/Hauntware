@@ -333,6 +333,30 @@ void main() {
     expect(await workspace.confirmQuit(), isTrue);
   });
 
+  test('clearing a stale quit refusal reaches the listeners', () async {
+    final tab = workspace.newDocument()!;
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    store.loadGate = Completer<void>();
+    final opening = workspace.open(testPath('one.txt'));
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('open'));
+
+    // The close notifies when it removes the tab, before the notice is
+    // dropped, so the clearing needs its own notification or the banner stays.
+    var afterClearing = 0;
+    workspace.addListener(() {
+      if (workspace.error == null) afterClearing++;
+    });
+    expect(await workspace.closeTab(tab), isTrue);
+    // Asserted while the load is still gated: the open's own completion would
+    // otherwise notify after the notice is gone and mask the close path.
+    expect(workspace.error, isNull);
+    expect(afterClearing, greaterThan(0));
+    store.loadGate!.complete();
+    await opening;
+  });
+
   test('a real failure is not cleared when the busy work finishes', () async {
     final tab = workspace.newDocument()!..editor.text.text = 'saving';
     dialogs.savePath = testPath('one.txt');
