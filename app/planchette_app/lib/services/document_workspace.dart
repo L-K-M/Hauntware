@@ -113,12 +113,9 @@ final class DocumentWorkspace extends ChangeNotifier {
   final Map<DocumentTab, ({String path, String? digest})> _saveTargets = {};
 
   /// "Untitled", then "Untitled 2" and so on, reusing the lowest number no
-  /// unsaved document currently shows.
+  /// open tab currently shows, a saved file called "Untitled 2" included.
   String _freeUntitledName() {
-    final used = {
-      for (final tab in _documents)
-        if (tab.path == null) tab.untitledName,
-    };
+    final used = {for (final tab in _documents) tab.name};
     for (var number = 1; ; number++) {
       final name = number == 1 ? 'Untitled' : 'Untitled $number';
       if (!used.contains(name)) return name;

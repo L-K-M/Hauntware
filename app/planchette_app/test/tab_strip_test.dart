@@ -7,7 +7,7 @@ import 'package:planchette_app/services/document_workspace.dart';
 import 'package:planchette_app/widgets/tab_strip.dart';
 
 import 'services/document_workspace_test.dart'
-    show MemoryDocuments, FakeDialogs;
+    show MemoryDocuments, FakeDialogs, document, testPath;
 
 void main() {
   late DocumentWorkspace workspace;
@@ -43,6 +43,14 @@ void main() {
     // Closing a clean tab needs no dialog.
     await workspace.closeTab(first);
     expect(workspace.newDocument()!.name, 'Untitled');
+    expect(workspace.newDocument()!.name, 'Untitled 3');
+  });
+
+  test('an untitled name is never one an open file already shows', () async {
+    final store = workspace.store as MemoryDocuments;
+    store.files[testPath('Untitled 2')] = document('Untitled 2', 'saved');
+    expect(workspace.newDocument()!.name, 'Untitled');
+    await workspace.open(testPath('Untitled 2'));
     expect(workspace.newDocument()!.name, 'Untitled 3');
   });
 
@@ -215,6 +223,13 @@ void main() {
     await tester.sendEventToBinding(pointer.scroll(const Offset(0, 50)));
     await tester.pump();
     expect(position.pixels, 150);
+    // Shift+wheel is scrolled by the scroll view itself, with its axes
+    // flipped; the resolver keeps the strip's handler from adding it again.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, 25)));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(position.pixels, 175);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 }
