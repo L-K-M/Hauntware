@@ -149,10 +149,34 @@ void main() {
       await tester.pumpAndSettle();
       expect(headerText(), untitled.name);
 
+      // Each untitled tab names itself, not the first one.
+      final second = workspace.newDocument()!;
+      await tester.pumpAndSettle();
+      expect(headerText(), second.name);
+
       store.files[testPath('named.txt')] = document('named.txt', 'on disk');
       await workspace.open(testPath('named.txt'));
       await tester.pumpAndSettle();
       expect(headerText(), testPath('named.txt'));
+      // A truncated path is still recoverable: the header's own tooltip
+      // carries it, whether or not the tab strip shows the same one.
+      expect(
+        find
+            .ancestor(
+              of: header(),
+              matching: find.byTooltip(testPath('named.txt')),
+            )
+            .evaluate()
+            .isNotEmpty,
+        isTrue,
+      );
+
+      // Closing every tab brings the launch copy back.
+      for (final tab in workspace.documents) {
+        expect(await workspace.closeTab(tab), isTrue);
+      }
+      await tester.pumpAndSettle();
+      expect(headerText(), 'A place for your words.');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
