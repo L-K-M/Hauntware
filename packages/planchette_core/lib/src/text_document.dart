@@ -217,12 +217,15 @@ Future<String> _writeTextDocument(
   if (!RegExp(r'^\.[a-zA-Z0-9_-]+$').hasMatch(temporaryPrefix)) {
     throw ArgumentError.value(temporaryPrefix, 'temporaryPrefix');
   }
+  // Fail before the normalization pass: a doomed save should not rebuild up
+  // to 4 MB of text to learn it was never writable. Normalization only touches
+  // CR and LF, so the caller's own text is the string to inspect.
+  if (text.contains(_nul)) {
+    throw const TextDocumentException(_nulOnSaveMessage);
+  }
   final normalized = normalization == TextNormalization.preserve
       ? text
       : _normalizeLineEndings(text, lineEnding);
-  if (normalized.contains(_nul)) {
-    throw const TextDocumentException(_nulOnSaveMessage);
-  }
   final bytes = <int>[if (hasUtf8Bom) ..._utf8Bom, ...utf8.encode(normalized)];
   if (bytes.length > maximumBytes) {
     throw TextDocumentException(
