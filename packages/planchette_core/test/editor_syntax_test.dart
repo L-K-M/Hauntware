@@ -235,17 +235,14 @@ void main() {
     });
 
     test('yaml: meta token offsets skip every dash prefix', () {
-      // _mergeMetaTokens locates a grouped token by searching the group
-      // text inside its whole match, which is exact only while the group
-      // cannot also occur inside the match's prefix. The YAML pattern's
-      // group starts [^\s#-] while its prefix is whitespace and dashes;
-      // nested list markers pin that boundary.
+      // Regression: a key inside a nested list must start at the key
+      // itself, not at either of the leading '-' list markers.
       const text = '- - name: x\n';
       final tokens = tokenizeSyntax(text, SyntaxLanguages.yaml);
       final meta = _ofType(tokens, SyntaxTokenType.meta);
       expect(meta, hasLength(1));
       expect(meta.single.start, text.indexOf('name'));
-      expect(meta.single.end, text.indexOf(':'));
+      expect(meta.single.end, text.indexOf('name') + 'name'.length);
     });
 
     test('ini: sections, comments, booleans', () {
