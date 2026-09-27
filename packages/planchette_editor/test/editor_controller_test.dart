@@ -221,7 +221,6 @@ void main() {
     editor.text.selection = const TextSelection.collapsed(offset: 4);
     expect(editor.caretLineColumn, (2, 3));
   });
-<<<<<<< HEAD
 
   test('a shebang typed into a buffer names its language', () {
     final editor = EditorController(displayPath: 'Untitled 1', initialText: '');
@@ -331,6 +330,5 @@ void main() {
     closed.search.text = 'strasse';
     closed.closeSearch();
     expect(closed.caseFoldingLimited, isFalse);
->>>>>>> origin/fix/case-insensitive-search-reporting
   });
 }
