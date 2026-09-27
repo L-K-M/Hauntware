@@ -99,7 +99,12 @@ final class AppDocumentDialogs implements DocumentDialogs {
           autocorrect: false,
           enableSuggestions: false,
           keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            // Keep the answer inside int; longer input is meaningless for
+            // a line number and would otherwise parse to null (cancel).
+            LengthLimitingTextInputFormatter(9),
+          ],
           decoration: InputDecoration(
             hintText: 'Line number (1–$maximumLine)',
           ),
