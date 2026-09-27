@@ -942,13 +942,22 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
 - Source: app/seance_app/lib/ui/editor_syntax.dart
 - Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
 - Ported: 2026-09-20
-- Divergences: tokenizer, controller, and engine semantics are
-  verbatim; the `EditorSyntaxTheme` values are Poltergeist's teal-seed
+- Divergences: the generic tokenizer and controller retain their source
+  semantics; the `EditorSyntaxTheme` values are Poltergeist's teal-seed
   palette (06 §2.2), and §7's data-only additions extend the language
   table (css, ruby, perl, lua, the Apache dot-config mappings,
-  env-aware shebangs) without touching the engine.
-- Port-back candidates: none — palette and table entries are
-  Poltergeist data.
+  env-aware shebangs). The owner's 2026-09-27 dotenv request adds a private
+  assignment-aware scanner in `dotenv_syntax.dart` and `.env`/`.env.*`/`*.env`
+  detection. This is first proven in Poltergeist with dedicated regression
+  fixtures; the token API, controller and size cap are unchanged. Windows
+  basename separation follows Séance's current implementation at
+  `6a1a3301512a6593208062be389e7414929a0649`.
+  Dark-theme comments are brighter to meet the editor's 4.5:1 text contrast
+  threshold; the palette remains app-specific.
+- Port-back candidates: dotenv detection, scanner and regression fixtures
+  apply to Séance. Palette differences remain app-specific. Shared editor
+  package extraction and a possible Planchette app are under discussion;
+  no shared dependency or standalone app is introduced by this change.
 
 ## app/poltergeist_app/lib/ui/built_in_text_editor.dart
 

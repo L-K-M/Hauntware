@@ -5,6 +5,8 @@
 /// "meta" tokens (YAML keys, INI sections, shell variables, tags). That is
 /// enough to make config files and scripts readable without pulling in a
 /// highlighting dependency or paying for a real parser on every keystroke.
+/// Dotenv uses a small assignment-aware scanner so quotes in bare values
+/// cannot consume later lines.
 library;
 
 // Ported from Séance
@@ -13,9 +15,12 @@ library;
 // docs/PORTS.md: the EditorSyntaxTheme values are Poltergeist's
 // teal-seed palette (06 §2.2), and §7's data-only additions (css, ruby,
 // perl, lua families, the Apache dot-config mappings, and the
-// env-aware shebang interpreters) extend only the declarative layer.
+// env-aware shebang interpreters) extend only the declarative layer. Dotenv
+// adds assignment-aware scanning; filename separators match current Séance.
 
 import 'package:flutter/material.dart';
+
+part 'dotenv_syntax.dart';
 
 /// Above this size the editor skips syntax highlighting (and the precise
 /// scroll-to-match layout): tokenizing stays linear, but building and painting
@@ -110,6 +115,9 @@ class SyntaxLanguage {
 /// The language families the editor recognizes. Kept intentionally small:
 /// the files edited over SFTP are overwhelmingly configs and scripts.
 class SyntaxLanguages {
+  /// Dotenv's value boundaries require the dedicated assignment scanner.
+  static const dotenv = SyntaxLanguage(id: 'dotenv', highlightNumbers: false);
+
   static final shell = SyntaxLanguage(
     id: 'shell',
     keywords: const {
@@ -826,7 +834,7 @@ const Map<String, String> _extensionLanguages = {
   'json': 'json', 'jsonc': 'json',
   'yaml': 'yaml', 'yml': 'yaml',
   'toml': 'ini', 'ini': 'ini', 'cfg': 'ini', 'conf': 'ini',
-  'properties': 'ini', 'env': 'ini', 'desktop': 'ini', 'service': 'ini',
+  'properties': 'ini', 'env': 'dotenv', 'desktop': 'ini', 'service': 'ini',
   'socket': 'ini', 'timer': 'ini',
   'sql': 'sql',
   'c': 'c-family', 'h': 'c-family', 'cpp': 'c-family', 'cc': 'c-family',
@@ -865,6 +873,7 @@ const Map<String, String> _basenameLanguages = {
 };
 
 SyntaxLanguage? _languageById(String id) => switch (id) {
+  'dotenv' => SyntaxLanguages.dotenv,
   'shell' => SyntaxLanguages.shell,
   'python' => SyntaxLanguages.python,
   'javascript' => SyntaxLanguages.javascript,
@@ -888,9 +897,12 @@ SyntaxLanguage? _languageById(String id) => switch (id) {
 /// extension, then a `#!` interpreter line from [firstLine]. Returns null for
 /// unrecognized files, which render as plain text.
 SyntaxLanguage? syntaxLanguageFor(String path, {String? firstLine}) {
-  final basename = path
-      .substring(path.contains('/') ? path.lastIndexOf('/') + 1 : 0)
-      .toLowerCase();
+  // Remote paths use POSIX separators; local Windows paths use backslashes.
+  final separator = path.lastIndexOf(RegExp(r'[/\\]'));
+  final basename = path.substring(separator + 1).toLowerCase();
+  if (basename == '.env' || basename.startsWith('.env.')) {
+    return SyntaxLanguages.dotenv;
+  }
   final byBasename = _basenameLanguages[basename];
   if (byBasename != null) return _languageById(byBasename);
   if (basename.startsWith('dockerfile.') || basename.endsWith('.dockerfile')) {
@@ -933,6 +945,7 @@ bool _isDigit(int c) => c >= 0x30 && c <= 0x39;
 
 /// Scan [text] into non-overlapping, ordered [SyntaxToken]s.
 List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
+  if (language.id == 'dotenv') return _tokenizeDotenv(text);
   final tokens = <SyntaxToken>[];
   final n = text.length;
   var i = 0;
@@ -1192,7 +1205,7 @@ class EditorSyntaxTheme {
   });
 
   static const dark = EditorSyntaxTheme(
-    comment: Color(0xFF6B7D85),
+    comment: Color(0xFF91A3AB),
     string: Color(0xFF7FD8B0),
     number: Color(0xFFE6C177),
     keyword: Color(0xFFC9A6E8),

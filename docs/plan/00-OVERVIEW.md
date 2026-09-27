@@ -604,6 +604,13 @@ D38 device themes · D39 workspace windows
     Quit freezes document edits and window creation until the decision
     completes; a veto restores editing, so later dialogs cannot invalidate
     an earlier document's discard consent.
+  - **Dotenv highlighting (2026-09-27, owner-directed).** `.env`, `.env.*`,
+    and `*.env` use assignment-aware highlighting for keys, `export`,
+    comments and quoted values. A small dedicated scanner handles multiline
+    values without treating quotes inside bare values as string openers;
+    the other language families retain their scanner. This uses Node's
+    documented dotenv convention, described in 06 §7.1, and is recorded as
+    a Séance port-back candidate.
 - **D28 — Permissions UI.** chmod via octal + checkboxes with recursive
   apply (app-level walker with progress/cancel); chown UI lands once the D3
   `setOwner` addition ships; uid→username shown when the server's `longname`
