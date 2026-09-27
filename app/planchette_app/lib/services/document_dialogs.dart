@@ -54,6 +54,9 @@ final class AppDocumentDialogs implements DocumentDialogs {
 
   @override
   Future<BulkCloseChoice> chooseBulkClose(int count) async {
+    // The workspace offers this question only when more than one document is
+    // unsaved; a single one gets the prompt that names its file.
+    assert(count > 1, 'the bulk close question covers several documents');
     final context = navigatorKey.currentContext;
     if (context == null) return BulkCloseChoice.cancel;
     return await showDialog<BulkCloseChoice>(

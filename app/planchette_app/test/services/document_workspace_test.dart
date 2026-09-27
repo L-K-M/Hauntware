@@ -564,6 +564,10 @@ void main() {
     expect(workspace.documents, [first, second]);
     expect(first.editor.isDirty, isTrue);
     expect(second.editor.isDirty, isTrue);
+    // A declined destination is a choice, not a failure: nothing was written
+    // and the user is not shown an error.
+    expect(store.writes, isEmpty);
+    expect(workspace.error, isNull);
     expect(workspace.interactionLocked, isFalse);
   });
 
