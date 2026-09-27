@@ -177,8 +177,10 @@ void main() {
       addTearDown(settings.dispose);
       await settings.load();
 
-      settings.update(settings.value.copyWith(fontSize: 31));
-      settings.update(settings.value.copyWith(fontSize: 32));
+      // Not awaited: the first write is held open on purpose so the second can
+      // be seen waiting behind it. Awaiting it here would block on the gate.
+      unawaited(settings.update(settings.value.copyWith(fontSize: 31)));
+      unawaited(settings.update(settings.value.copyWith(fontSize: 32)));
       // The writes are chained, so they start on later turns of the event
       // loop. Let the queue turn before asking for one to finish.
       await pumpEventQueue();
