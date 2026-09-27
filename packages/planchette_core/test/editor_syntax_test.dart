@@ -14,7 +14,10 @@ void main() {
       expect(syntaxLanguageFor('/etc/nginx/nginx.conf')?.id, 'ini');
       expect(syntaxLanguageFor('/tmp/data.json')?.id, 'json');
       expect(syntaxLanguageFor('compose.yaml')?.id, 'yaml');
-      expect(syntaxLanguageFor('main.go')?.id, 'c-family');
+      expect(syntaxLanguageFor('main.go')?.id, 'go');
+      expect(syntaxLanguageFor('lib.rs')?.id, 'rust');
+      expect(syntaxLanguageFor('fix.patch')?.id, 'diff');
+      expect(syntaxLanguageFor('changes.diff')?.id, 'diff');
       expect(syntaxLanguageFor('query.sql')?.id, 'sql');
       expect(syntaxLanguageFor('notes.xyz'), isNull);
       expect(syntaxLanguageFor('README'), isNull);
@@ -388,6 +391,140 @@ void main() {
 
     test('an empty query has no matches', () {
       expect(findSearchMatches('anything', ''), isEmpty);
+    });
+  });
+
+  group('language fixes', () {
+    List<String> slices(
+      String text,
+      SyntaxLanguage language,
+      SyntaxTokenType type,
+    ) => [
+      for (final token in _ofType(tokenizeSyntax(text, language), type))
+        _slice(text, token),
+    ];
+
+    test('Rust lifetimes are names, not strings that eat the line', () {
+      const text = "fn f<'a>(x: &'a str) -> &'static str { x }";
+      final rust = syntaxLanguageFor('lib.rs')!;
+      expect(slices(text, rust, SyntaxTokenType.string), isEmpty);
+      expect(slices(text, rust, SyntaxTokenType.meta), ["'a", "'a", "'static"]);
+      expect(slices(text, rust, SyntaxTokenType.keyword), ['fn']);
+    });
+
+    test('Rust and Go character literals, escapes included', () {
+      const text =
+          r"let c = 'x'; let n = '\n'; let q = '\''; let e = '\u{1F600}';";
+      expect(slices(text, SyntaxLanguages.rust, SyntaxTokenType.string), [
+        "'x'",
+        r"'\n'",
+        r"'\''",
+        r"'\u{1F600}'",
+      ]);
+      expect(
+        slices(
+          "r := 'é' + '\\x41'",
+          SyntaxLanguages.go,
+          SyntaxTokenType.string,
+        ),
+        ["'é'", r"'\x41'"],
+      );
+    });
+
+    test('Go raw strings span lines and take no escapes', () {
+      const text = 'p := `C:\\dir\\`\nq := "a\\"b"';
+      expect(slices(text, SyntaxLanguages.go, SyntaxTokenType.string), [
+        '`C:\\dir\\`',
+        '"a\\"b"',
+      ]);
+    });
+
+    test('shell and SQL single quotes take no backslash escapes', () {
+      const shell = r"echo 'C:\' && ls # done";
+      expect(slices(shell, SyntaxLanguages.shell, SyntaxTokenType.string), [
+        r"'C:\'",
+      ]);
+      expect(slices(shell, SyntaxLanguages.shell, SyntaxTokenType.comment), [
+        '# done',
+      ]);
+      const sql = r"SELECT '\' AS slash -- note";
+      expect(slices(sql, SyntaxLanguages.sql, SyntaxTokenType.comment), [
+        '-- note',
+      ]);
+    });
+
+    test('JSON and YAML quoted keys are keys, values stay strings', () {
+      const json = '{"name": "Ada", "tags": ["a:b"]}';
+      expect(slices(json, SyntaxLanguages.json, SyntaxTokenType.meta), [
+        '"name"',
+        '"tags"',
+      ]);
+      expect(slices(json, SyntaxLanguages.json, SyntaxTokenType.string), [
+        '"Ada"',
+        '"a:b"',
+      ]);
+      expect(
+        slices("'quoted key' : x", SyntaxLanguages.yaml, SyntaxTokenType.meta),
+        ["'quoted key'"],
+      );
+    });
+
+    test('C preprocessor, Rust attributes and Python decorators', () {
+      expect(
+        slices(
+          '#include <stdio.h>\n  #  define X 1\nint a = b # c;',
+          SyntaxLanguages.cFamily,
+          SyntaxTokenType.meta,
+        ),
+        ['#include', '  #  define'],
+      );
+      expect(
+        slices(
+          '#[derive(Debug)]\n#![allow(dead_code)]',
+          SyntaxLanguages.rust,
+          SyntaxTokenType.meta,
+        ),
+        ['#[derive(Debug)]', '#![allow(dead_code)]'],
+      );
+      expect(
+        slices(
+          '@app.route("/")\ndef f(): return a @ b',
+          SyntaxLanguages.python,
+          SyntaxTokenType.meta,
+        ),
+        ['@app.route'],
+      );
+    });
+
+    test('diffs separate headers, hunks, additions and removals', () {
+      const text =
+          'diff --git a/x b/x\n'
+          'index 1..2 100644\n'
+          '--- a/x\n'
+          '+++ b/x\n'
+          '@@ -1,3 +1,3 @@\n'
+          ' same\n'
+          '--- removed SQL comment\n'
+          '+++ added counter\n'
+          '\\ No newline at end of file\n'
+          '\n'
+          'diff --git a/y b/y\n';
+      final diff = SyntaxLanguages.diff;
+      expect(slices(text, diff, SyntaxTokenType.keyword), [
+        'diff --git a/x b/x',
+        'index 1..2 100644',
+        '--- a/x',
+        '+++ b/x',
+        'diff --git a/y b/y',
+      ]);
+      expect(slices(text, diff, SyntaxTokenType.meta), ['@@ -1,3 +1,3 @@']);
+      expect(slices(text, diff, SyntaxTokenType.number), [
+        '--- removed SQL comment',
+      ]);
+      expect(slices(text, diff, SyntaxTokenType.string), ['+++ added counter']);
+      expect(slices(text, diff, SyntaxTokenType.comment), [
+        '\\ No newline at end of file',
+      ]);
     });
   });
 }
