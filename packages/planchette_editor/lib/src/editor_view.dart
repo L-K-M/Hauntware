@@ -57,12 +57,17 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   bool _revealQueued = false;
   EditorController get c => widget.controller;
   // A partial host style (a size or color without a family) still needs a
-  // real monospace family; a host that names its own family owns its
-  // typography and does not inherit the monospace fallback chain.
+  // real monospace family, and so does the literal generic 'monospace'
+  // (only fontconfig and Android resolve it). A host that names any other
+  // family owns its typography and does not inherit the fallback chain.
   TextStyle get _style {
     final host = widget.textStyle;
+    final needsMonoDefault =
+        host == null ||
+        host.fontFamily == null ||
+        host.fontFamily == 'monospace';
     final base =
-        host?.fontFamily == null
+        needsMonoDefault
             ? EditorTypography.monospace(defaultTargetPlatform)
             : const TextStyle(
               fontSize: EditorTypography.defaultFontSize,

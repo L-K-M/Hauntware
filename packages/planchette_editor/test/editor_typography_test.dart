@@ -83,6 +83,32 @@ void main() {
     expect(field.style!.fontFamilyFallback, isNotEmpty);
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 
+  testWidgets('an explicit monospace family still gets real fallbacks', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'hello',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlanchetteEditor(
+            controller: controller,
+            // The generic name alone does not resolve on macOS/Windows.
+            textStyle: const TextStyle(fontFamily: 'monospace'),
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('planchette.document')),
+    );
+    expect(field.style!.fontFamilyFallback, isNotEmpty);
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
   testWidgets('explicit host style overrides the monospace default', (
     tester,
   ) async {
