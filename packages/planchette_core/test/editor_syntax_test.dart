@@ -243,6 +243,7 @@ void main() {
       expect(meta, hasLength(1));
       expect(meta.single.start, text.indexOf('name'));
       expect(meta.single.end, text.indexOf('name') + 'name'.length);
+      expect(text.substring(meta.single.start, meta.single.end), 'name');
     });
 
     test('ini: sections, comments, booleans', () {
