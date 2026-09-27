@@ -59,6 +59,17 @@ void main() {
       expect(c.text, 'ab');
       c.dispose();
     });
+
+    test('keeps a backward selection pointing at its anchor', () {
+      final c = controllerWith('one\ntwo\nthree', 8, 2);
+      c.indent();
+      expect(c.text, '\tone\n\ttwo\nthree');
+      expect(
+        c.selection,
+        const TextSelection(baseOffset: 10, extentOffset: 0),
+      );
+      c.dispose();
+    });
   });
 
   group('outdent', () {
@@ -66,6 +77,15 @@ void main() {
       final c = controllerWith('\tone\ntwo', 2);
       c.outdent();
       expect(c.text, 'one\ntwo');
+      expect(c.selection, const TextSelection.collapsed(offset: 1));
+      c.dispose();
+    });
+
+    test('clamps a caret inside the stripped run to the line start', () {
+      final c = controllerWith('    one', 2);
+      c.outdent();
+      expect(c.text, 'one');
+      expect(c.selection, const TextSelection.collapsed(offset: 0));
       c.dispose();
     });
 

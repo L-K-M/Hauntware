@@ -161,12 +161,14 @@ class CodeEditingController extends TextEditingController {
       cursor = starts[line];
     }
     buffer.write(text.substring(cursor));
+    final end = _lineEnd(starts, last) + (last - first + 1);
     value = TextEditingValue(
       text: buffer.toString(),
-      selection: TextSelection(
-        baseOffset: starts[first],
-        extentOffset: _lineEnd(starts, last) + (last - first + 1),
-      ),
+      // A selection dragged upward keeps its direction: base stays on the
+      // anchor side instead of collapsing to the line start.
+      selection: selection.extentOffset >= selection.baseOffset
+          ? TextSelection(baseOffset: starts[first], extentOffset: end)
+          : TextSelection(baseOffset: end, extentOffset: starts[first]),
     );
   }
 
@@ -182,31 +184,39 @@ class CodeEditingController extends TextEditingController {
     final buffer = StringBuffer();
     var cursor = 0;
     var removed = 0;
+    var caretShift = 0;
     for (var line = first; line <= last; line++) {
       buffer.write(text.substring(cursor, starts[line]));
       cursor = starts[line];
+      var width = 0;
       if (cursor < text.length && text.codeUnitAt(cursor) == 0x09) {
-        cursor++;
-        removed++;
+        width = 1;
       } else {
-        var spaces = 0;
-        while (spaces < _outdentSpaces &&
-            cursor + spaces < text.length &&
-            text.codeUnitAt(cursor + spaces) == 0x20) {
-          spaces++;
+        while (width < _outdentSpaces &&
+            cursor + width < text.length &&
+            text.codeUnitAt(cursor + width) == 0x20) {
+          width++;
         }
-        cursor += spaces;
-        removed += spaces;
       }
+      // A collapsed caret slides left by what was stripped before it;
+      // inside the stripped run it lands on the line's new first column.
+      if (width > 0 && starts[line] < selection.extentOffset) {
+        final visible = selection.extentOffset - starts[line];
+        caretShift += visible < width ? visible : width;
+      }
+      cursor += width;
+      removed += width;
     }
     buffer.write(text.substring(cursor));
     if (removed == 0) return;
+    final end = _lineEnd(starts, last) - removed;
     value = TextEditingValue(
       text: buffer.toString(),
-      selection: TextSelection(
-        baseOffset: starts[first],
-        extentOffset: _lineEnd(starts, last) - removed,
-      ),
+      selection: selection.isCollapsed
+          ? TextSelection.collapsed(offset: selection.extentOffset - caretShift)
+          : selection.extentOffset >= selection.baseOffset
+          ? TextSelection(baseOffset: starts[first], extentOffset: end)
+          : TextSelection(baseOffset: end, extentOffset: starts[first]),
     );
   }
 
