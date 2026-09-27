@@ -31,11 +31,13 @@ class MemoryDocuments implements DocumentStore {
   final writes = <({String path, String text, String? digest})>[];
   final aliases = <String, String>{};
   Completer<void>? writeGate;
+  Completer<void>? loadGate;
   Object? writeError;
   int version = 0;
 
   @override
   Future<TextDocument> load(String path) async {
+    await loadGate?.future;
     final value = files[aliases[path] ?? path];
     if (value == null) throw const FileSystemException('Missing file');
     return value;

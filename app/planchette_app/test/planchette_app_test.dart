@@ -137,6 +137,45 @@ void main() {
   );
 
   testWidgets(
+    'the toolbar Save waits for the document, like the menu Save',
+    (tester) async {
+      // The toolbar's save button, identified by its icon: find.byTooltip
+      // resolves to the Tooltip, which does not carry the enabled state.
+      Finder toolbarSave() => find.byWidgetPredicate(
+        (widget) =>
+            widget is IconButton &&
+            widget.icon is Icon &&
+            (widget.icon as Icon).icon == Icons.save_outlined,
+      );
+      VoidCallback? saveHandler() =>
+          tester.widget<IconButton>(toolbarSave()).onPressed;
+
+      store.files[testPath('slow.txt')] = document('slow.txt', 'on disk');
+      store.loadGate = Completer<void>();
+      await mount(tester);
+
+      // A tab is created and activated before its load resolves, so the shell
+      // can render a document that is still loading.
+      final opening = workspace.open(testPath('slow.txt'));
+      await tester.pump();
+      expect(workspace.active!.editor.isLoading, isTrue);
+      expect(saveHandler(), isNull);
+
+      store.loadGate!.complete();
+      await opening;
+      await tester.pumpAndSettle();
+      expect(workspace.active!.editor.isLoading, isFalse);
+      expect(saveHandler(), isNotNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'menu Save As uses the active document',
     (tester) async {
       final tab = workspace.newDocument()!..editor.text.text = 'menu text';
