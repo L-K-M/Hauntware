@@ -139,6 +139,64 @@ void main() {
       expect(settings.value, const AppSettings());
     });
 
+    test('a store that throws still lets the app start', () async {
+      // `load` runs in `main()` before `runApp`. A settings file that cannot be
+      // read — a permission change, a dead network mount, a directory in the
+      // way — must not be the reason the application refuses to open.
+      final settings = SettingsController(
+        store: ThrowingSettings(const FileSystemException('denied', '/x')),
+      );
+      addTearDown(settings.dispose);
+      await settings.load();
+      expect(settings.value, const AppSettings());
+    });
+
+    test('a rejected save is not left pending for the next one', () async {
+      // A failed write must not break the chain, or every later save is
+      // silently skipped.
+      final store = MemorySettings();
+      final settings = SettingsController(store: store);
+      addTearDown(settings.dispose);
+      await settings.load();
+      store.failSaves = true;
+      await settings.update(settings.value.copyWith(fontSize: 25));
+      expect(settings.error, isNotNull);
+
+      store.failSaves = false;
+      await settings.update(settings.value.copyWith(fontSize: 26));
+      expect(settings.error, isNull);
+      expect((await store.load())?.fontSize, 26);
+    });
+
+    test('rapid updates persist the last one, not an earlier one', () async {
+      // Two updates in a row, where the first write is slow. Without
+      // serialization the slow one lands last and the file holds a value the
+      // user has already moved on from.
+      final store = SlowSettings();
+      final settings = SettingsController(store: store);
+      addTearDown(settings.dispose);
+      await settings.load();
+
+      settings.update(settings.value.copyWith(fontSize: 31));
+      settings.update(settings.value.copyWith(fontSize: 32));
+      // The writes are chained, so they start on later turns of the event
+      // loop. Let the queue turn before asking for one to finish.
+      await pumpEventQueue();
+
+      // Let the first write finish. With the writes serialized the second is
+      // still waiting behind it, so the file cannot end up holding 31.
+      store.finishOldest();
+      await pumpEventQueue();
+      expect(store.completed.map((s) => s.fontSize), [31]);
+
+      store.finishAll();
+      await settings.flush();
+
+      expect(store.written.map((s) => s.fontSize), [31, 32]);
+      expect(store.completed.map((s) => s.fontSize), [31, 32]);
+      expect((await store.load())?.fontSize, 32);
+    });
+
     test('a change is saved and announced once', () async {
       final store = MemorySettings();
       final settings = SettingsController(store: store);

@@ -45,6 +45,24 @@ class ShellStrings {
   String get newDocumentAction => 'New document';
   String get openDocumentAction => 'Open…';
   String get saving => 'Saving';
+
+  // The preferences dialog, so the shell's whole copy is in one place.
+  String get settingsTitle => 'Settings';
+  String get cancel => 'Cancel';
+  String get done => 'Done';
+  String get appearance => 'Appearance';
+  String get textSize => 'Text';
+  String get indentation => 'Indentation';
+  String get system => 'System';
+  String get light => 'Light';
+  String get dark => 'Dark';
+  String get size => 'Size';
+  String get width => 'Width';
+  String get indentWith => 'Indent with';
+  String get spaces => 'Spaces';
+  String get tabs => 'Tabs';
+  String get tabWidthHint =>
+      'A tab is one character wide, so width does not apply.';
 }
 
 /// Preferences: what the app looks like and how it indents.
@@ -121,10 +139,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _cancel, child: const Text('Cancel')),
+        TextButton(onPressed: _cancel, child: Text(widget.strings.cancel)),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Done'),
+          child: Text(widget.strings.done),
         ),
       ],
     );
