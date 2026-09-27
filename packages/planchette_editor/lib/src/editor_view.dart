@@ -4,6 +4,7 @@ import 'package:planchette_core/planchette_core.dart';
 
 import 'code_editing_controller.dart';
 import 'editor_controller.dart';
+import 'editor_key_commands.dart';
 import 'editor_strings.dart';
 
 /// The shared document surface. Its host supplies app chrome, file commands,
@@ -59,6 +60,54 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   TextStyle get _style =>
       const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
   bool get _locked => widget.editingLocked || c.editingLocked;
+
+  /// Raw keys the framework's default bindings would misplace: Tab is bound
+  /// to focus traversal everywhere, and Enter must grow the new line's
+  /// indentation. Handled here so the characters reach the document instead
+  /// of moving focus or falling through to the platform text input.
+  KeyEventResult _handleDocumentKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (_locked || c.text.value.isComposingRangeValid) {
+      return KeyEventResult.ignored;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    final plainModifiers =
+        !keyboard.isControlPressed && !keyboard.isMetaPressed;
+    final key = event.logicalKey;
+    if (plainModifiers && key == LogicalKeyboardKey.tab) {
+      if (keyboard.isShiftPressed) {
+        outdentSelection(c.text);
+      } else {
+        indentSelection(c.text);
+      }
+      return KeyEventResult.handled;
+    }
+    if (plainModifiers &&
+        (key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter)) {
+      insertNewlineWithIndent(c.text);
+      return KeyEventResult.handled;
+    }
+    if (plainModifiers && keyboard.isAltPressed) {
+      if (keyboard.isShiftPressed) {
+        // Both arrows duplicate; the copy lands below either way.
+        if (key == LogicalKeyboardKey.arrowUp ||
+            key == LogicalKeyboardKey.arrowDown) {
+          duplicateSelectionLines(c.text);
+          return KeyEventResult.handled;
+        }
+      } else if (key == LogicalKeyboardKey.arrowUp) {
+        moveSelectionLines(c.text, direction: LineMoveDirection.up);
+        return KeyEventResult.handled;
+      } else if (key == LogicalKeyboardKey.arrowDown) {
+        moveSelectionLines(c.text, direction: LineMoveDirection.down);
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
+  }
 
   @override
   void initState() {
@@ -458,27 +507,34 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                       ),
                     },
                   },
-                  child: TextField(
-                    key: const ValueKey('planchette.document'),
-                    controller: c.text,
-                    undoController: c.undoController,
-                    readOnly: _locked,
-                    focusNode: c.editorFocus,
-                    scrollController: c.scroll,
-                    autofocus: widget.isActive,
-                    expands: true,
-                    maxLines: null,
-                    minLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textAlignVertical: TextAlignVertical.top,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    smartDashesType: SmartDashesType.disabled,
-                    smartQuotesType: SmartQuotesType.disabled,
-                    style: _style,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.all(_padding),
+                  // An ancestor focus node sees the document field's key
+                  // events after its own handlers and before the app-level
+                  // traversal shortcuts (Tab, arrows).
+                  child: Focus(
+                    canRequestFocus: false,
+                    onKeyEvent: _handleDocumentKey,
+                    child: TextField(
+                      key: const ValueKey('planchette.document'),
+                      controller: c.text,
+                      undoController: c.undoController,
+                      readOnly: _locked,
+                      focusNode: c.editorFocus,
+                      scrollController: c.scroll,
+                      autofocus: widget.isActive,
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textAlignVertical: TextAlignVertical.top,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      style: _style,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(_padding),
+                      ),
                     ),
                   ),
                 ),
