@@ -62,10 +62,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   // family owns its typography and does not inherit the fallback chain.
   TextStyle get _style {
     final host = widget.textStyle;
-    final needsMonoDefault =
-        host == null ||
-        host.fontFamily == null ||
-        host.fontFamily == 'monospace';
+    // CSS-style generic names match case-insensitively.
+    final family = host?.fontFamily?.toLowerCase();
+    final needsMonoDefault = family == null || family == 'monospace';
     final base =
         needsMonoDefault
             ? EditorTypography.monospace(defaultTargetPlatform)
