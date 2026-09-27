@@ -236,6 +236,29 @@ void main() {
     expect(editor.text.selection.baseOffset, 8);
   });
 
+  test('paging back and forth returns to the same match', () {
+    final occurrences = searchMatchLimit + 2;
+    final editor = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(occurrences, 'hit').join('\n'),
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.search.text = 'hit';
+    for (var i = 0; i < occurrences - 1; i++) {
+      editor.nextMatch();
+    }
+    final last = editor.text.selection;
+
+    // Back across the page boundary, then forward across it again: the same
+    // match, reached the way Find Next alone would have reached it.
+    editor.previousMatch();
+    editor.previousMatch();
+    editor.nextMatch();
+    editor.nextMatch();
+    expect(editor.text.selection, last);
+  });
+
   test('Save As metadata preserves selection and detects the new language', () {
     final editor = EditorController(
       displayPath: 'Untitled',

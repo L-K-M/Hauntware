@@ -421,5 +421,29 @@ void main() {
         const TextMatch(start: 49, end: 50),
       ]);
     });
+
+    test('a reverse window offers the same occurrences as a forward scan', () {
+      // Self-overlapping needles are the case that diverged: 'aa' in 'aaaa' is
+      // [0, 2] forwards, and a backward scan with lastIndexOf also offered the
+      // match at 1 that Find Next would never produce.
+      for (final text in ['aaaa', 'aaaaa', 'ababab', 'ababa', 'cat CAT cat']) {
+        for (final query in ['a', 'aa', 'aba', 'cat']) {
+          expect(
+            findSearchMatches(text, query, reverse: true),
+            findSearchMatches(text, query),
+            reason: 'reverse window of "$query" in "$text"',
+          );
+        }
+      }
+    });
+
+    test('a reverse window ends at the limit without losing the oldest hit', () {
+      final text = List.filled(10, 'a').join();
+      expect(findSearchMatches(text, 'a', limit: 3, start: 6, reverse: true), [
+        const TextMatch(start: 3, end: 4),
+        const TextMatch(start: 4, end: 5),
+        const TextMatch(start: 5, end: 6),
+      ]);
+    });
   });
 }

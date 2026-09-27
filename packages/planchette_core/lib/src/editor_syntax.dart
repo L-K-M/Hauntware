@@ -1162,10 +1162,11 @@ final class TextMatch {
 /// than report misaligned ranges. Capped at [limit] matches.
 ///
 /// [start] is where the scan begins, and with [reverse] it is instead the
-/// exclusive upper bound: the window is then the matches nearest to it, still
-/// returned in document order. Null, the default, means the whole haystack. A
-/// find bar that only highlights its first page of matches needs both
-/// directions to reach every occurrence.
+/// exclusive upper bound: the window is the last [limit] matches before it,
+/// still in document order and enumerated exactly as a forward scan would.
+/// Null, the default, means the whole haystack. A find bar that only highlights
+/// its first page of matches needs both directions, and both must describe the
+/// same occurrences or stepping back offers matches stepping forward never did.
 List<TextMatch> findSearchMatches(
   String text,
   String query, {
@@ -1186,14 +1187,20 @@ List<TextMatch> findSearchMatches(
   }
   final matches = <TextMatch>[];
   if (reverse) {
-    var bound = (start ?? haystack.length).clamp(0, haystack.length);
-    while (matches.length < limit && bound > 0) {
-      final at = haystack.lastIndexOf(needle, bound - 1);
-      if (at < 0) break;
+    // A sliding window over the forward enumeration. Scanning backwards with
+    // lastIndexOf would instead report overlapping occurrences — 'aa' in
+    // 'aaaa' is [0, 2] forwards and [0, 1, 2] backwards — so Find Previous
+    // would offer hits Find Next never had.
+    final bound = (start ?? haystack.length).clamp(0, haystack.length);
+    var from = 0;
+    while (true) {
+      final at = haystack.indexOf(needle, from);
+      if (at < 0 || at >= bound) break;
+      if (matches.length == limit) matches.removeAt(0);
       matches.add(TextMatch(start: at, end: at + needle.length));
-      bound = at;
+      from = at + needle.length;
     }
-    return matches.reversed.toList(growable: false);
+    return matches;
   }
   var from = (start ?? 0).clamp(0, haystack.length);
   while (matches.length < limit) {
