@@ -1196,8 +1196,11 @@ final class SearchResult {
 /// locale's dotted and dotless i, canonical Cherokee forms.
 ///
 /// Both halves are required. Length alone is not enough: a length-preserving
-/// fold that reorders or depends on surrounding context would satisfy the
-/// length check and return confidently wrong ranges. Injectable so the
+/// fold that is not index-wise — one that reorders characters, say — would
+/// satisfy the length check and return confidently wrong ranges. Depending on
+/// surrounding context is fine, so long as output position *i* still stands
+/// for input *i*: Unicode's final-sigma rule (σ → ς at a word's end) is
+/// exactly such a fold, and it is the one worth having. Injectable so the
 /// guarded paths are testable at all.
 ///
 /// A fold that *changes* the length cannot be used on a document: matches are
