@@ -113,12 +113,28 @@ void main() {
 
     // Both basenames are index.js, so the strip has to disambiguate them with
     // enough of the path to tell the two apart.
-    // The separator is the host's: a Windows path is spelled with backslashes
-    // and the tab label is built from the path, so a hardcoded forward slash
-    // matches nothing there.
-    final sep = Platform.pathSeparator;
-    expect(find.textContaining('a${sep}index.js'), findsOneWidget);
-    expect(find.textContaining('b${sep}index.js'), findsOneWidget);
+    // Asserted by the two labels differing, not by their spelling. The label
+    // is derived from a host path, so it is written with the host's separator
+    // and a hardcoded `a/index.js` matches nothing on Windows; spelling the
+    // expectation out just moves the same guess to the other platform.
+    final labels = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byKey(const ValueKey('planchette.tabs')),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data ?? '')
+        .where((data) => data.contains('index.js'))
+        .toList();
+    expect(labels, hasLength(2), reason: 'both tabs should be labelled');
+    expect(
+      labels.toSet(),
+      hasLength(2),
+      reason:
+          'the two are not told apart: '
+          '$labels',
+    );
     expect(tester.takeException(), isNull);
   });
 
