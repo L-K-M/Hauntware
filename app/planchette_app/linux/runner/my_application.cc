@@ -19,6 +19,13 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// A GtkHeaderBar titlebar does not follow GtkWindow:title, so plugin title
+// changes (filename, dirty marker) would leave "Planchette" up forever.
+static void sync_header_bar_title(GtkWindow* window, GParamSpec* pspec,
+                                  GtkHeaderBar* header_bar) {
+  gtk_header_bar_set_title(header_bar, gtk_window_get_title(window));
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
@@ -48,6 +55,8 @@ static void my_application_activate(GApplication* application) {
     gtk_header_bar_set_title(header_bar, "Planchette");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
+    g_signal_connect(window, "notify::title",
+                     G_CALLBACK(sync_header_bar_title), header_bar);
   } else {
     gtk_window_set_title(window, "Planchette");
   }
