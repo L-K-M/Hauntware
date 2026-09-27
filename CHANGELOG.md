@@ -12,10 +12,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cost was roughly an order of magnitude over the plain-text path; the status
   bar reads `Large file` when highlighting is off. Widening the limit needs an
   editor surface that lays out only the visible lines.
-- Word wrap is off by default, with `View > Toggle Word Wrap` (`Alt+Z`) to
-  turn it back on. Code is read by structure, and folding a long line hides
-  the rest of the statement.
-
 ### Added
 - Standalone desktop editor for macOS, Linux and Windows, with document tabs,
   New/Open/Save/Save As, native menus, file-open events and guarded close/quit.

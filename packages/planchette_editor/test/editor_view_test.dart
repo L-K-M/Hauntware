@@ -162,33 +162,13 @@ void main() {
       isTrue,
     );
   });
-  test('soft wrap is off until a host or the reader asks for it', () {
-    final c = EditorController(displayPath: 'a.py', initialText: 'x');
-    addTearDown(c.dispose);
 
-    expect(c.softWrap, isFalse);
-  });
-
-  test('toggling soft wrap notifies once per change', () {
-    final c = EditorController(displayPath: 'a.py', initialText: 'x');
-    addTearDown(c.dispose);
-    var notifications = 0;
-    c.addListener(() => notifications++);
-
-    c.setSoftWrap(true);
-    c.setSoftWrap(true);
-    c.setSoftWrap(false);
-
-    expect(notifications, 2);
-    expect(c.softWrap, isFalse);
-  });
-
-  testWidgets('without folding every line sits exactly one row apart', (
+  testWidgets('a reveal lands on the measured row of its match', (
     tester,
   ) async {
-    // 200 short lines in a tall-enough window. With folding off the gutter
-    // knows each line's offset from the row height alone, so a reveal lands on
-    // an exact, checkable position instead of a re-measured one.
+    // 200 short lines, none of which folds. Flutter's TextField cannot turn
+    // soft wrap off, so the gutter measures the rows; the point of the test is
+    // that the reveal reads those measurements rather than re-deriving them.
     const lineHeight = 14 * 1.35;
     final text = List.generate(200, (i) => 'line $i').join('\n');
     final c = EditorController(displayPath: 'a.txt', initialText: text);
@@ -205,9 +185,16 @@ void main() {
 
     expect(c.activeMatch, greaterThanOrEqualTo(0));
     // A third of the way down puts the match in the upper third of the window,
-    // with the top inset and one third of the real viewport subtracted.
+    // with the top inset and one third of the real viewport subtracted. The row
+    // height comes from the font's own line metrics rather than
+    // fontSize x height, so the rows drift a little over a hundred lines and
+    // one row of slack is allowed; a gutter that mis-places lines by folding
+    // or by estimating drifts far further than that.
     final viewport = c.scroll.position.viewportDimension;
-    expect(c.scroll.offset, closeTo(100 * lineHeight + 14 - viewport / 3, 0.5));
+    expect(
+      c.scroll.offset,
+      closeTo(100 * lineHeight + 14 - viewport / 3, lineHeight),
+    );
   });
 
   testWidgets('a folded long line still numbers every line it covers', (
@@ -219,7 +206,6 @@ void main() {
       initialText: '$long\nsecond\nthird',
     );
     addTearDown(c.dispose);
-    c.softWrap = true;
     tester.view.physicalSize = const Size(400, 600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(() => tester.view.reset());

@@ -8,8 +8,6 @@ ownership boundaries and compatibility policies are documented in
 
 - One tabbed document window with New, Open, Save, Save As, native desktop
   menus and guarded document/application close.
-- Tab and Shift+Tab indent the selection the way the file already indents, and
-  the View menu toggles word wrap, which is off by default for code.
 - Syntax highlighting including `.env`, literal find/replace, line numbers,
   selection, undo/redo and document status shared with Poltergeist and Séance.
 - Bounded UTF-8 loading, BOM/EOL metadata, digest conflict checks, protected

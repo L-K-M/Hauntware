@@ -46,14 +46,18 @@ class PlanchetteEditor extends StatefulWidget {
 class _PlanchetteEditorState extends State<PlanchetteEditor> {
   static const _padding = 14.0;
   static const _gutterInset = 8.0;
+
+  /// Past this size the gutter falls back to assuming a uniform row height
+  /// rather than measuring every row. The estimate is right for any document
+  /// whose lines all fit the width, and wrong by one row per folded line
+  /// above the viewport otherwise — the same trade the painter's scroll
+  /// back-off already makes.
+  static const _gutterMeasurementMaxChars = 128 * 1024;
   final _gutterRepaint = ValueNotifier<int>(0);
   final TextPainter _gutterPainter = TextPainter(
     textDirection: TextDirection.ltr,
   );
   List<double> _gutterTops = const [0];
-  int _gutterLines = -1;
-  double? _gutterLineHeight;
-  bool? _gutterWrapped;
   String? _gutterText;
   double? _gutterWidth;
   TextScaler? _gutterScaler;
@@ -92,7 +96,6 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       c.addListener(_changed);
       _lastReveal = -1;
       _gutterText = null;
-      _gutterLines = -1;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) c.initialize();
       });
@@ -536,59 +539,36 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   }
 
   void _ensureGutterLayout(double width, TextScaler scaler) {
-    final lineHeight = scaler.scale(_style.fontSize!) * _style.height!;
-    final lineCount = c.lineStarts.length;
-
-    if (!c.softWrap) {
-      // Without folding, one logical line is exactly one row, so the tops fall
-      // out of the line count and the row height. Laying the whole document
-      // out to measure that cost about 120 ms per keystroke on a 200 KB file,
-      // and a keystroke inside a line cannot change the answer anyway.
-      if (_gutterLines == lineCount &&
-          _gutterLineHeight == lineHeight &&
-          _gutterWrapped == false) {
-        return;
-      }
-      _gutterTops = _uniformTops(lineCount, lineHeight);
-      _rememberGutter(lineCount, lineHeight, folded: false);
-      return;
-    }
-
     if (identical(_gutterText, c.text.text) &&
         _gutterWidth == width &&
         _gutterScaler == scaler &&
-        _gutterStyle == _style &&
-        _gutterWrapped == true) {
+        _gutterStyle == _style) {
       return;
     }
-    _gutterTops = _foldedTops(width, lineCount, lineHeight);
+    _gutterTops = _measuredTops(width, scaler);
     _gutterText = c.text.text;
     _gutterWidth = width;
     _gutterScaler = scaler;
     _gutterStyle = _style;
-    _rememberGutter(lineCount, lineHeight, folded: true);
-  }
-
-  void _rememberGutter(
-    int lineCount,
-    double lineHeight, {
-    required bool folded,
-  }) {
-    _gutterLines = lineCount;
-    _gutterLineHeight = lineHeight;
-    _gutterWrapped = folded;
   }
 
   List<double> _uniformTops(int lineCount, double lineHeight) => [
     for (var i = 0; i < lineCount; i++) i * lineHeight,
   ];
 
-  /// Where each logical line begins when folding may have merged or split
-  /// rows. One `computeLineMetrics` call answers the common case an order of
-  /// magnitude faster than a caret lookup per line; only a document that
-  /// actually folded needs the per-line path.
-  List<double> _foldedTops(double width, int lineCount, double lineHeight) {
-    if (c.text.text.length > syntaxHighlightingMaxChars) {
+  /// Where each logical line begins.
+  ///
+  /// Flutter's `TextField` cannot turn soft wrap off, so a long line may have
+  /// folded and the tops cannot be assumed uniform. One `computeLineMetrics`
+  /// call measures every row at once — an order of magnitude cheaper than a
+  /// caret lookup per line, which is what this used to do — and the row count
+  /// it returns says whether anything folded at all. Only a document that
+  /// genuinely folded needs the per-line path, and only a document too large
+  /// to measure affordably falls back to the uniform estimate.
+  List<double> _measuredTops(double width, TextScaler scaler) {
+    final lineHeight = scaler.scale(_style.fontSize!) * _style.height!;
+    final lineCount = c.lineStarts.length;
+    if (c.text.text.length > _gutterMeasurementMaxChars) {
       return _uniformTops(lineCount, lineHeight);
     }
     _gutterPainter

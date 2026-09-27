@@ -140,13 +140,6 @@ class _DocumentShellState extends State<_DocumentShell> {
     }
   }
 
-  void _toggleWrap() {
-    final editor = workspace.active?.editor;
-    if (editor != null && !workspace.interactionLocked) {
-      editor.softWrap = !editor.softWrap;
-    }
-  }
-
   SingleActivator _shortcut(
     LogicalKeyboardKey key, {
     bool shift = false,
@@ -283,14 +276,6 @@ class _DocumentShellState extends State<_DocumentShell> {
               ? _shortcut(LogicalKeyboardKey.keyG, shift: true)
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
           enabled: ready,
-        ),
-      ]),
-      _ShellMenu('View', [
-        _Command(
-          'Toggle Word Wrap',
-          _toggleWrap,
-          shortcut: _shortcut(LogicalKeyboardKey.keyZ, alt: true),
-          enabled: unlocked && active != null,
         ),
       ]),
       _ShellMenu('Window', [
