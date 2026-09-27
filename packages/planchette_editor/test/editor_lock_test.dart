@@ -117,4 +117,31 @@ void main() {
     expect(c.editingLocked, isTrue);
     expect(c.canSave, isFalse);
   });
+
+  testWidgets('a view remounted elsewhere without a lock releases it', (
+    tester,
+  ) async {
+    final c = controller();
+    Widget place({required bool locked}) => MaterialApp(
+      home: Scaffold(
+        body: Row(
+          children: [
+            if (locked)
+              Expanded(
+                child: PlanchetteEditor(controller: c, editingLocked: true),
+              ),
+            if (!locked)
+              Expanded(
+                child: SizedBox.expand(child: PlanchetteEditor(controller: c)),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(place(locked: true));
+    expect(c.editingLocked, isTrue);
+    await tester.pumpWidget(place(locked: false));
+    expect(c.editingLocked, isFalse);
+  });
 }
