@@ -579,12 +579,13 @@ class SyntaxLanguages {
       ['/*', '*/'],
     ],
     strings: const ["'", '"'],
-    // Preprocessor directives (C, C++, C#, Swift's #if). Named, so that a
-    // PHP `# comment` at the start of a line is not mistaken for one.
+    // Preprocessor directives (C, C++, C#'s #nullable, Swift's #elseif, GCC's
+    // #include_next). Named, so that a PHP `# comment` at the start of a line
+    // is not mistaken for one.
     metaPattern: RegExp(
-      r'^[ \t]*#[ \t]*(?:if|ifdef|ifndef|elif|elifdef|elifndef|else|endif|'
-      r'define|undef|include|import|embed|pragma|line|error|warning|region|'
-      r'endregion)\b',
+      r'^[ \t]*#[ \t]*(?:if|ifdef|ifndef|elif|elseif|elifdef|elifndef|else|'
+      r'endif|define|undef|include|include_next|import|embed|pragma|line|'
+      r'error|warning|region|endregion|nullable)\b',
       multiLine: true,
     ),
   );

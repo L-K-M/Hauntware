@@ -511,6 +511,14 @@ void main() {
       );
       expect(
         slices(
+          '#elseif os(macOS)\n#nullable enable\n#include_next <limits.h>\n',
+          SyntaxLanguages.cFamily,
+          SyntaxTokenType.meta,
+        ),
+        ['#elseif', '#nullable', '#include_next'],
+      );
+      expect(
+        slices(
           '#[derive(Debug)]\n#![allow(dead_code)]',
           SyntaxLanguages.rust,
           SyntaxTokenType.meta,
