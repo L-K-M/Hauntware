@@ -54,7 +54,7 @@ static void my_application_activate(GApplication* application) {
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
     g_object_bind_property(window, "title", header_bar, "title",
-                           G_BINDING_DEFAULT);
+                           G_BINDING_SYNC_CREATE);
   }
 
   gtk_window_set_default_size(window, 1280, 720);
