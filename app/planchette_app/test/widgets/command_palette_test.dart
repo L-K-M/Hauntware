@@ -1,0 +1,153 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_app/widgets/command_palette.dart';
+
+void main() {
+  group('fuzzyMatch', () {
+    test('matches a subsequence ignoring case and query spaces', () {
+      expect(fuzzyMatch('sva', 'Save As…')!.positions, [0, 2, 5]);
+      expect(fuzzyMatch('save as', 'Save As…')!.positions, [0, 1, 2, 3, 5, 6]);
+      expect(fuzzyMatch('xyz', 'Save As…'), isNull);
+      expect(fuzzyMatch('', 'Save')!.positions, isEmpty);
+    });
+
+    test('finds initials, but keeps a run over a later word start', () {
+      expect(fuzzyMatch('fn', 'Find Next')!.positions, [0, 5]);
+      expect(fuzzyMatch('cp', 'Command Palette…')!.positions, [0, 8]);
+      expect(fuzzyMatch('fin', 'Find Next')!.positions, [0, 1, 2]);
+    });
+
+    test('ranks initials and runs above scattered letters', () {
+      int score(String query, String label) => fuzzyMatch(query, label)!.score;
+      expect(score('sa', 'Save As…'), greaterThan(score('sa', 'Close Tab')));
+      expect(score('fn', 'Find Next'), greaterThan(score('fn', 'Find…')));
+      expect(score('fin', 'Find…'), score('fin', 'Find Next'));
+    });
+  });
+
+  test('shortcut labels follow the platform', () {
+    const saveAs = SingleActivator(
+      LogicalKeyboardKey.keyS,
+      meta: true,
+      shift: true,
+    );
+    expect(shortcutLabel(saveAs, apple: true), '⇧⌘S');
+    const next = SingleActivator(LogicalKeyboardKey.tab, control: true);
+    expect(shortcutLabel(next, apple: false), 'Ctrl+Tab');
+    const up = SingleActivator(LogicalKeyboardKey.arrowUp, alt: true);
+    expect(shortcutLabel(up, apple: true), '⌥↑');
+    expect(shortcutLabel(up, apple: false), 'Alt+Up');
+  });
+
+  group('CommandPalette', () {
+    late List<String> ran;
+    late List<PaletteCommand> commands;
+    setUp(() {
+      ran = [];
+      PaletteCommand command(String group, String label) =>
+          PaletteCommand(group: group, label: label, run: () => ran.add(label));
+      commands = [
+        command('File', 'New'),
+        command('File', 'Save'),
+        command('File', 'Save As…'),
+        command('Edit', 'Select All'),
+        command('Find', 'Find Next'),
+      ];
+    });
+
+    Future<void> open(WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showCommandPalette(context, commands),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> type(WidgetTester tester, String text) async {
+      await tester.enterText(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        text,
+      );
+      await tester.pump();
+    }
+
+    testWidgets('lists every command in menu order', (tester) async {
+      await open(tester);
+      final labels = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((text) => text.textSpan?.toPlainText() ?? text.data)
+          .toList();
+      expect(
+        labels.where(
+          (label) => commands.any((command) => command.label == label),
+        ),
+        ['New', 'Save', 'Save As…', 'Select All', 'Find Next'],
+      );
+    });
+
+    testWidgets('Enter runs the best match after the palette closes', (
+      tester,
+    ) async {
+      await open(tester);
+      await type(tester, 'save');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      // Save and Save As tie on the letters; the shorter label wins.
+      expect(ran, ['Save']);
+      expect(find.byType(CommandPalette), findsNothing);
+    });
+
+    testWidgets('arrows move the highlight and wrap', (tester) async {
+      await open(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(ran, ['Find Next']);
+    });
+
+    testWidgets('a click runs that command', (tester) async {
+      await open(tester);
+      await tester.tap(find.text('Select All'));
+      await tester.pumpAndSettle();
+
+      expect(ran, ['Select All']);
+    });
+
+    testWidgets('Escape closes without running anything', (tester) async {
+      await open(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CommandPalette), findsNothing);
+      expect(ran, isEmpty);
+    });
+
+    testWidgets('says when nothing matches, and Enter does nothing', (
+      tester,
+    ) async {
+      await open(tester);
+      await type(tester, 'qqq');
+      expect(find.text('No matching commands'), findsOneWidget);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CommandPalette), findsOneWidget);
+      expect(ran, isEmpty);
+    });
+  });
+}

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace.dart';
+import 'widgets/command_palette.dart';
 
 class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
@@ -132,6 +133,31 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (tabs.isEmpty || workspace.interactionLocked) return;
     final index = tabs.indexOf(workspace.active!);
     _select(tabs[(index + (previous ? -1 : 1)) % tabs.length]);
+  }
+
+  bool _paletteOpen = false;
+
+  /// Lists every command the menus enable right now. The native macOS menu
+  /// stays live under the palette, so a second request is ignored.
+  Future<void> _openPalette() async {
+    if (_paletteOpen || workspace.interactionLocked) return;
+    final commands = [
+      for (final menu in _menus())
+        for (final entry in menu.items)
+          if (entry is _Command && entry.enabled && entry.run != _openPalette)
+            PaletteCommand(
+              group: menu.label,
+              label: entry.label,
+              run: entry.run,
+              shortcut: entry.shortcut,
+            ),
+    ];
+    _paletteOpen = true;
+    try {
+      await showCommandPalette(context, commands);
+    } finally {
+      _paletteOpen = false;
+    }
   }
 
   void _find({bool replace = false}) {
@@ -279,6 +305,13 @@ class _DocumentShellState extends State<_DocumentShell> {
         ),
       ]),
       _ShellMenu('Window', [
+        _Command(
+          'Command Palette…',
+          _openPalette,
+          shortcut: _shortcut(LogicalKeyboardKey.keyP, shift: true),
+          enabled: unlocked,
+        ),
+        const _Separator(),
         _Command(
           'Next Tab',
           _nextTab,
