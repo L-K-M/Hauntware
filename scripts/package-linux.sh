@@ -219,10 +219,16 @@ fi
 floor_of() {  # $1 = objdump tag prefix (e.g. GLIBC_), max across all ELFs
   # sort -Vu is version-aware (2.14 > 2.9); trust it instead of re-comparing.
   # `|| true`: grep exits 1 when a file references none of the tags, and
-  # pipefail would turn that into a failure of the whole function.
-  local tag="$1" f
+  # pipefail would turn that into a failure of the whole function. A failed
+  # or empty objdump run instead means a bad ELF — die rather than let the
+  # floor silently drop.
+  local tag="$1" f symbols
   for f in "${ELFS[@]}"; do
-    objdump -T "$f" 2>/dev/null | grep -o "${tag}[0-9.]*" || true
+    symbols="$(objdump -T "$f" 2>/dev/null)" \
+      || die "objdump failed on $(basename "$f") — cannot compute $tag floor"
+    [[ -n $symbols ]] \
+      || die "no dynamic symbols in $(basename "$f") — cannot compute $tag floor"
+    grep -o "${tag}[0-9.]*" <<<"$symbols" || true
   done | sed "s/^$tag//" | sort -Vu | tail -1
 }
 GLIBC_FLOOR="$(floor_of GLIBC_)"
