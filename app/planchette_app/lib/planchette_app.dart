@@ -143,7 +143,12 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
     if (tabs.isEmpty || workspace.interactionLocked) return;
-    final index = tabs.indexOf(workspace.active!);
+    final active = workspace.active;
+    if (active == null) {
+      _select(tabs.first);
+      return;
+    }
+    final index = tabs.indexOf(active);
     _select(tabs[(index + (previous ? -1 : 1)) % tabs.length]);
   }
 
@@ -163,6 +168,9 @@ class _DocumentShellState extends State<_DocumentShell> {
     final active = workspace.active;
     final unlocked = !workspace.interactionLocked;
     final ready = _documentReady;
+    // The tab's × closes whenever a save isn't in flight — including during
+    // load or after a load error — so the menu command follows the same rule.
+    final closable = active != null && unlocked && !active.busy;
     return [
       _ShellMenu('File', [
         _Command(
@@ -195,7 +203,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           'Close Tab',
           _close,
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
-          enabled: ready,
+          enabled: closable,
         ),
         if (!mac && widget.onQuit != null) ...[
           const _Separator(),

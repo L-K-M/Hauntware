@@ -314,6 +314,37 @@ void main() {
   );
 
   testWidgets(
+    'Close Tab stays available while a document is loading',
+    (tester) async {
+      store.files[testPath('slow.txt')] = document('slow.txt', 'slow');
+      store.loadGate = Completer<void>();
+      await mount(tester);
+      final opening = workspace.open(testPath('slow.txt'));
+      // pump only: the loading spinner never lets pumpAndSettle finish.
+      await tester.pump();
+      expect(workspace.active!.editor.isLoading, isTrue);
+      await tester.tap(find.text('File'));
+      await tester.pump();
+      final item = tester.widget<MenuItemButton>(
+        find.widgetWithText(MenuItemButton, 'Close Tab'),
+      );
+      expect(item.onPressed, isNotNull);
+      await tester.tap(find.text('Close Tab'));
+      await tester.pump();
+      expect(workspace.documents, isEmpty);
+      store.loadGate!.complete();
+      await opening;
+      expect(workspace.documents, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!
