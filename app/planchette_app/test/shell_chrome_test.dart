@@ -341,6 +341,18 @@ void main() {
     expect(droppedPaths('/home/me/one.txt'), ['/home/me/one.txt']);
   });
 
+  test('a URI with no path on this platform is skipped, not thrown', () {
+    // A UNC share and an escaped separator both reach `toFilePath`, which
+    // throws UnsupportedError rather than FormatException. A Windows drop can
+    // carry either, and a throw from a gesture handler takes the frame with it.
+    expect(droppedPaths('file://host/share/one.txt'), isEmpty);
+    expect(droppedPaths('file:///a%2Fb'), isEmpty);
+    // The rest of the payload still opens.
+    expect(droppedPaths('file://host/share\\x.txt\r\nfile:///home/me/ok.txt'), [
+      fromUri('file:///home/me/ok.txt'),
+    ]);
+  });
+
   test('a payload of only comments opens nothing', () {
     expect(droppedPaths('//a comment\r\n//another\r\n'), isEmpty);
   });

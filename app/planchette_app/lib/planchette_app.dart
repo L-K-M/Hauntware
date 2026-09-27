@@ -875,11 +875,16 @@ List<String> droppedPaths(String data) {
       paths.add(entry);
       continue;
     }
-    // A malformed URI is skipped rather than allowed to throw out of a
-    // gesture handler, which would take the frame with it.
+    // A URI with no path here is skipped rather than allowed to throw out of a
+    // gesture handler, which would take the frame with it. Both failures are
+    // named: `parse` rejects malformed input, and `toFilePath` throws
+    // `UnsupportedError` for a UNC share (`file://host/share`) or an escaped
+    // separator, both of which a Windows drop can legitimately carry.
     try {
       paths.add(Uri.parse(entry).toFilePath());
     } on FormatException {
+      continue;
+    } on UnsupportedError {
       continue;
     }
   }
