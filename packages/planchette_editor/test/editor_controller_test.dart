@@ -283,6 +283,14 @@ void main() {
     const paths = [
       'a.py',
       'a.js',
+      'a.dart',
+      // The C family is one member behind several extensions, so exercise a
+      // couple: a branch that rebuilt only one of them would otherwise hide.
+      'a.c',
+      'a.h',
+      'a.go',
+      'a.rs',
+      'a.cpp',
       'a.sh',
       'a.rb',
       'a.lua',
@@ -298,9 +306,13 @@ void main() {
       'Dockerfile.dev',
       'Makefile',
     ];
-    // Every member of `SyntaxLanguages`, which is the whole canonical set:
-    // `syntaxLanguageFor` resolves through `_languageById` and these.
-    final canonical = {
+    // Intended to be every member of `SyntaxLanguages`; this test cannot
+    // enforce that, because the class exposes no list of its instances. When
+    // you add a member to `SyntaxLanguages`, add it here and a path above.
+    // A List, not a Set: a future `==`/`hashCode` on SyntaxLanguage would make
+    // a set literal collapse equal members and quietly shrink the pool this
+    // test exists to check against.
+    final canonical = [
       SyntaxLanguages.dotenv,
       SyntaxLanguages.shell,
       SyntaxLanguages.python,
@@ -318,7 +330,7 @@ void main() {
       SyntaxLanguages.perl,
       SyntaxLanguages.lua,
       SyntaxLanguages.cFamily,
-    };
+    ];
     for (final path in paths) {
       final language = syntaxLanguageFor(path);
       expect(language, isNotNull, reason: path);
