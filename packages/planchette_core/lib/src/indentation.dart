@@ -11,9 +11,6 @@ class TextEdit {
   final int start;
   final int end;
 
-  int get length => end - start;
-  bool get isCollapsed => start == end;
-
   @override
   String toString() => 'TextEdit($start, $end)';
 }
