@@ -27,6 +27,11 @@ final class DocumentTab {
   String? path;
   bool busy = false;
 
+  /// Bumped when the tab is chosen by opening a document it already holds, so
+  /// the shell can point at it. Monotonic, never reset: a view compares it to
+  /// the previous build's value.
+  int flashRequest = 0;
+
   String get name => path == null ? untitledName : paths.basename(path!);
 }
 
@@ -148,7 +153,10 @@ final class DocumentWorkspace extends ChangeNotifier {
   Future<void> _open(String path) async {
     final existing = _findPath(path);
     if (existing != null) {
+      // No new tab will appear, so point at the one that already holds the
+      // document. Activation is the whole behaviour; the flash is decoration.
       _active = existing;
+      existing.flashRequest++;
       _notify();
       return;
     }
@@ -169,6 +177,8 @@ final class DocumentWorkspace extends ChangeNotifier {
       if (duplicate != null) {
         _remove(tab);
         _active = duplicate;
+        // The link resolved onto an open document, so again no new tab.
+        duplicate.flashRequest++;
       } else {
         tab.editor.displayPath = tab.path!;
       }
