@@ -1668,9 +1668,11 @@ void main() {
     test(
       'a fully-scanned restore keeps the probed exact-name identity',
       () async {
-        final fileA = File('${localSrc.path}/A.txt')
+        final fileA = File('${localSrc.path}/upper/A.txt')
+          ..createSync(recursive: true)
           ..writeAsStringSync('upper');
-        final fileB = File('${localSrc.path}/a.txt')
+        final fileB = File('${localSrc.path}/lower/a.txt')
+          ..createSync(recursive: true)
           ..writeAsStringSync('lower');
         final crashed = await openStore();
         crashed.appendJournal(
@@ -1715,9 +1717,11 @@ void main() {
     test(
       'fully-scanned restore revalidates an exact destination retarget',
       () async {
-        final fileA = File('${localSrc.path}/A.txt')
+        final fileA = File('${localSrc.path}/upper/A.txt')
+          ..createSync(recursive: true)
           ..writeAsStringSync('upper');
-        final fileB = File('${localSrc.path}/a.txt')
+        final fileB = File('${localSrc.path}/lower/a.txt')
+          ..createSync(recursive: true)
           ..writeAsStringSync('lower');
         final crashed = await openStore();
         crashed.appendJournal(
