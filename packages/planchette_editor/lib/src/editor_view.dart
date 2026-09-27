@@ -199,6 +199,36 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             c.previousMatch,
         if (c.searchOpen)
           const SingleActivator(LogicalKeyboardKey.escape): c.closeSearch,
+        if (!_locked) ...{
+          const SingleActivator(
+            LogicalKeyboardKey.keyD,
+            control: true,
+            shift: true,
+          ): c.text.duplicateLines,
+          const SingleActivator(
+            LogicalKeyboardKey.keyD,
+            meta: true,
+            shift: true,
+          ): c.text.duplicateLines,
+          const SingleActivator(LogicalKeyboardKey.arrowUp, alt: true): () =>
+              c.text.moveLines(up: true),
+          const SingleActivator(LogicalKeyboardKey.arrowDown, alt: true): () =>
+              c.text.moveLines(up: false),
+          const SingleActivator(
+            LogicalKeyboardKey.keyK,
+            control: true,
+            shift: true,
+          ): c.text.deleteLines,
+          const SingleActivator(
+            LogicalKeyboardKey.keyK,
+            meta: true,
+            shift: true,
+          ): c.text.deleteLines,
+          const SingleActivator(LogicalKeyboardKey.keyJ, control: true):
+              c.text.joinLines,
+          const SingleActivator(LogicalKeyboardKey.keyJ, meta: true):
+              c.text.joinLines,
+        },
       },
       child: Column(
         children: [
