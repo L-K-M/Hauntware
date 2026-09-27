@@ -52,6 +52,14 @@ while coordinating application shutdown. Ordinary save and replace commands are
 then blocked; an explicit Save choice in that shutdown flow can use
 `EditorSaveAccess.confirmedClose`.
 
+Tab and Shift+Tab indent and outdent the caret line or every selected line,
+Enter keeps the current indentation (one level deeper after an opening bracket,
+or a colon in Python and YAML), and Backspace in space indentation removes a
+whole level. The unit is learned from the document and exposed as
+`EditorController.indentation`; hosts may set it. Pass
+`tabKeyBehavior: EditorTabKeyBehavior.moveFocus` where Tab must traverse focus
+instead. Tabs render at the indentation width rather than one space wide.
+
 `EditorStrings` adapts existing host localization resources. Token colors,
 monospace style, an external-change banner, and the status row can be supplied
 without introducing application dependencies into the package. The surface

@@ -65,12 +65,16 @@ class EditorSyntaxTheme {
 /// Flatten syntax [tokens] and search [matches] into styled spans. Both
 /// inputs are ordered and internally non-overlapping; a search hit overlaying
 /// a token keeps the token's color and adds the hit background.
+///
+/// When [tabStyle] is given, runs of tab characters get it merged over their
+/// surrounding style (see [CodeEditingController.tabWidth]).
 List<InlineSpan> buildHighlightedSpans({
   required String text,
   required List<SyntaxToken> tokens,
   required List<TextRange> matches,
   required int activeMatchIndex,
   required EditorSyntaxTheme theme,
+  TextStyle? tabStyle,
 }) {
   final spans = <InlineSpan>[];
   final n = text.length;
@@ -102,10 +106,40 @@ List<InlineSpan> buildHighlightedSpans({
             : theme.matchBackground,
       );
     }
-    spans.add(TextSpan(text: text.substring(position, end), style: style));
+    _addSegment(spans, text.substring(position, end), style, tabStyle);
     position = end;
   }
   return spans;
+}
+
+void _addSegment(
+  List<InlineSpan> spans,
+  String segment,
+  TextStyle? style,
+  TextStyle? tabStyle,
+) {
+  if (tabStyle == null || !segment.contains('\t')) {
+    spans.add(TextSpan(text: segment, style: style));
+    return;
+  }
+  final tab = style?.merge(tabStyle) ?? tabStyle;
+  var from = 0;
+  while (from < segment.length) {
+    final at = segment.indexOf('\t', from);
+    if (at < 0) break;
+    var run = at;
+    while (run < segment.length && segment.codeUnitAt(run) == 0x09) {
+      run++;
+    }
+    if (at > from) {
+      spans.add(TextSpan(text: segment.substring(from, at), style: style));
+    }
+    spans.add(TextSpan(text: segment.substring(at, run), style: tab));
+    from = run;
+  }
+  if (from < segment.length) {
+    spans.add(TextSpan(text: segment.substring(from), style: style));
+  }
 }
 
 /// A [TextEditingController] that renders syntax and search-match highlights.
@@ -124,6 +158,24 @@ class CodeEditingController extends TextEditingController {
   String? _tokenizedText;
   SyntaxLanguage? _tokenizedLanguage;
   List<SyntaxToken> _tokens = const [];
+
+  /// How many spaces wide a tab character renders. Flutter's paragraph engine
+  /// draws a tab as a single space, which flattens tab-indented files, so each
+  /// tab gets letter spacing for the remaining width. This is a fixed width,
+  /// not a tab stop: a tab after text is still [tabWidth] spaces wide.
+  int get tabWidth => _tabWidth;
+  int _tabWidth = defaultIndentWidth;
+  set tabWidth(int value) {
+    if (_tabWidth == value) return;
+    _tabWidth = value;
+    notifyListeners();
+  }
+
+  String? _tabScannedText;
+  bool _hasTabs = false;
+  TextStyle? _spaceStyle;
+  TextScaler? _spaceScaler;
+  double _spaceWidth = 0;
 
   CodeEditingController({this.language, this.theme = EditorSyntaxTheme.dark});
 
@@ -153,6 +205,29 @@ class CodeEditingController extends TextEditingController {
     return _tokens;
   }
 
+  TextStyle? _tabStyleFor(BuildContext context, TextStyle? style) {
+    if (!identical(_tabScannedText, text)) {
+      _tabScannedText = text;
+      _hasTabs = text.contains('\t');
+    }
+    if (!_hasTabs || tabWidth <= 1) return null;
+    final scaler =
+        MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+    if (_spaceStyle != style || _spaceScaler != scaler) {
+      final painter = TextPainter(
+        text: TextSpan(text: ' ', style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+      )..layout();
+      _spaceWidth = painter.width;
+      painter.dispose();
+      _spaceStyle = style;
+      _spaceScaler = scaler;
+    }
+    // Letter spacing is not scaled by the text scaler; the measured space is.
+    return TextStyle(letterSpacing: _spaceWidth * (tabWidth - 1));
+  }
+
   @override
   TextSpan buildTextSpan({
     required BuildContext context,
@@ -160,7 +235,27 @@ class CodeEditingController extends TextEditingController {
     required bool withComposing,
   }) {
     final composing = withComposing && value.isComposingRangeValid;
-    if (composing || text.isEmpty) {
+    final tabStyle = text.isEmpty ? null : _tabStyleFor(context, style);
+    if (composing) {
+      if (tabStyle == null) {
+        return super.buildTextSpan(
+          context: context,
+          style: style,
+          withComposing: withComposing,
+        );
+      }
+      // Keep tab widths stable while an input method composes, with the
+      // same underline the default span uses.
+      final underline =
+          style?.merge(const TextStyle(decoration: TextDecoration.underline)) ??
+          const TextStyle(decoration: TextDecoration.underline);
+      final spans = <InlineSpan>[];
+      _addSegment(spans, value.composing.textBefore(text), null, tabStyle);
+      _addSegment(spans, value.composing.textInside(text), underline, tabStyle);
+      _addSegment(spans, value.composing.textAfter(text), null, tabStyle);
+      return TextSpan(style: style, children: spans);
+    }
+    if (text.isEmpty) {
       return super.buildTextSpan(
         context: context,
         style: style,
@@ -169,7 +264,10 @@ class CodeEditingController extends TextEditingController {
     }
     final tokens = _tokensFor(text);
     if (tokens.isEmpty && _matches.isEmpty) {
-      return TextSpan(style: style, text: text);
+      if (tabStyle == null) return TextSpan(style: style, text: text);
+      final spans = <InlineSpan>[];
+      _addSegment(spans, text, null, tabStyle);
+      return TextSpan(style: style, children: spans);
     }
     return TextSpan(
       style: style,
@@ -179,6 +277,7 @@ class CodeEditingController extends TextEditingController {
         matches: _matches,
         activeMatchIndex: _activeMatchIndex,
         theme: theme,
+        tabStyle: tabStyle,
       ),
     );
   }

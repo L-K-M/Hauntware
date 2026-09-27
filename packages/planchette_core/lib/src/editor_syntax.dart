@@ -85,6 +85,9 @@ class SyntaxLanguage {
   /// highlighting — digits in text are content, not literals.
   final bool highlightNumbers;
 
+  /// Whether a line ending in `:` opens an indented block (Python, YAML).
+  final bool indentAfterColon;
+
   const SyntaxLanguage({
     required this.id,
     this.keywords = const {},
@@ -98,6 +101,7 @@ class SyntaxLanguage {
     this.metaPattern,
     this.metaGroup,
     this.highlightNumbers = true,
+    this.indentAfterColon = false,
   });
 }
 
@@ -197,6 +201,7 @@ class SyntaxLanguages {
     lineComments: const ['#'],
     multilineStrings: const ["'''", '"""'],
     strings: const ["'", '"'],
+    indentAfterColon: true,
   );
 
   static final javascript = SyntaxLanguage(
@@ -355,6 +360,7 @@ class SyntaxLanguages {
       multiLine: true,
     ),
     metaGroup: 1,
+    indentAfterColon: true,
   );
 
   static final ini = SyntaxLanguage(
