@@ -78,6 +78,21 @@ Future<File> resolveTextDocumentTarget(
   return file;
 }
 
+/// Whether [file] is marked read-only: no write permission for anyone on
+/// POSIX, or the read-only attribute on Windows, which Dart reports the same
+/// way. A save replaces the document through a sibling and restores its
+/// mode, so the file's own permission never stops a save; hosts ask this to
+/// warn before replacing a file someone deliberately protected. Ownership is
+/// not considered: a file only its owner may write reads as unprotected.
+Future<bool> isTextDocumentWriteProtected(File file) async {
+  final stat = await file.stat();
+  return stat.type == FileSystemEntityType.file &&
+      stat.mode & _writePermissionBits == 0;
+}
+
+/// POSIX write permission for owner, group and others: 0222.
+const _writePermissionBits = 0x92;
+
 /// Reads bounded, strict UTF-8, retaining one leading BOM as metadata and
 /// every additional U+FEFF as content. Digest checks reject changing snapshots.
 Future<TextDocument> loadTextDocument(

@@ -358,6 +358,32 @@ void main() {
     expect(saved.mode & 0x1ff, 0x180);
   });
 
+  test('reports a read-only file, which a save still replaces', () async {
+    expect(await isTextDocumentWriteProtected(file), isFalse);
+    await _setReadOnly(file, true);
+    try {
+      expect(await isTextDocumentWriteProtected(file), isTrue);
+      if (Platform.isWindows) return;
+      // Replacement renames a sibling into place, so only the directory's
+      // permission is checked; this is why hosts must ask first.
+      final document = await loadTextDocument(file);
+      await _save(file, 'edit\n', expectedSha256: document.sha256);
+      expect(await file.readAsString(), 'edit\n');
+      expect(await isTextDocumentWriteProtected(file), isTrue);
+    } finally {
+      await _setReadOnly(file, false);
+    }
+    expect(await isTextDocumentWriteProtected(file), isFalse);
+  });
+
+  test('a missing file or a directory is not write-protected', () async {
+    expect(
+      await isTextDocumentWriteProtected(File('${file.path}.gone')),
+      isFalse,
+    );
+    expect(await isTextDocumentWriteProtected(File(directory.path)), isFalse);
+  });
+
   test('the encoded output is size-checked too', () async {
     await expectLater(
       _save(file, 'x' * (textDocumentMaximumBytes + 1)),
@@ -392,3 +418,14 @@ Future<String> _save(
   lineEnding: lineEnding,
   observeTemporary: observeTemporary,
 );
+
+/// Marks [file] read-only the way a user would: `chmod a-w`, or the
+/// read-only attribute on Windows.
+Future<void> _setReadOnly(File file, bool readOnly) async {
+  final result = Platform.isWindows
+      ? await Process.run('attrib', [readOnly ? '+r' : '-r', file.path])
+      : await Process.run('chmod', [readOnly ? 'a-w' : 'u+w', file.path]);
+  if (result.exitCode != 0) {
+    throw StateError('Could not change ${file.path}: ${result.stderr}');
+  }
+}

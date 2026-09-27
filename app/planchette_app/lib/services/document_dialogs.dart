@@ -82,4 +82,37 @@ final class AppDocumentDialogs implements DocumentDialogs {
         ) ??
         CloseChoice.cancel;
   }
+
+  @override
+  Future<ReadOnlyChoice> chooseReadOnlySave(String name) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return ReadOnlyChoice.cancel;
+    return await showDialog<ReadOnlyChoice>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('“$name” is read-only'),
+            content: const Text(
+              'Saving replaces the file anyway and keeps it read-only. You '
+              'can save your changes as a new file instead.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, ReadOnlyChoice.cancel),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context, ReadOnlyChoice.saveAnyway),
+                child: const Text('Save Anyway'),
+              ),
+              FilledButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(context, ReadOnlyChoice.saveAs),
+                child: const Text('Save As…'),
+              ),
+            ],
+          ),
+        ) ??
+        ReadOnlyChoice.cancel;
+  }
 }
