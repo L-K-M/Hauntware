@@ -53,6 +53,13 @@ class _DocumentShell extends StatefulWidget {
 }
 
 class _DocumentShellState extends State<_DocumentShell> {
+  static const _maximumTabWidth = 240.0;
+  final _activeTabKey = GlobalKey();
+  List<(int, String, bool)> _tabLayout = const [];
+  double? _tabStripWidth;
+  TextScaler? _tabTextScaler;
+  int? _revealedTabId;
+  bool _tabRevealQueued = false;
   DocumentWorkspace get workspace => widget.workspace;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   FocusNode? _lastTextFocus;
@@ -125,6 +132,47 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _select(DocumentTab tab) {
     workspace.select(tab);
     _focusAfterFrame(tab);
+  }
+
+  void _revealActiveTabAfterLayout(double width, List<DocumentTab> tabs) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final layout = [
+      for (final tab in tabs) (tab.id, tab.name, tab.editor.isDirty),
+    ];
+    final activeId = workspace.active?.id;
+    if (_tabStripWidth == width &&
+        _tabTextScaler == scaler &&
+        _revealedTabId == activeId &&
+        listEquals(_tabLayout, layout)) {
+      return;
+    }
+    _tabStripWidth = width;
+    _tabTextScaler = scaler;
+    _revealedTabId = activeId;
+    _tabLayout = layout;
+    if (_tabRevealQueued) return;
+    _tabRevealQueued = true;
+
+    // Wait for tab widths to settle; reveal either edge without moving a tab
+    // that is already visible or stealing the editor's keyboard focus.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _tabRevealQueued = false;
+      if (!mounted) return;
+      final context = _activeTabKey.currentContext;
+      if (context == null) return;
+      unawaited(
+        Scrollable.ensureVisible(
+          context,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        ),
+      );
+      unawaited(
+        Scrollable.ensureVisible(
+          context,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+        ),
+      );
+    });
   }
 
   void _nextTab({bool previous = false}) {
@@ -412,6 +460,71 @@ class _DocumentShellState extends State<_DocumentShell> {
     ],
   );
 
+  Widget _documentTab(
+    DocumentTab tab,
+    DocumentTab? active,
+    double availableWidth,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Tooltip(
+        key: tab == active ? _activeTabKey : null,
+        message: tab.path ?? tab.name,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: _maximumTabWidth.clamp(0.0, availableWidth),
+          ),
+          child: Semantics(
+            selected: tab == active,
+            child: Material(
+              color: tab == active ? scheme.surface : Colors.transparent,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(8),
+              ),
+              child: InkWell(
+                onTap: workspace.interactionLocked ? null : () => _select(tab),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (tab.editor.isDirty) const Text('● '),
+                      Flexible(
+                        child: Text(
+                          tab.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: tab == active
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        key: ValueKey('close-${tab.id}'),
+                        tooltip: 'Close ${tab.name}',
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 16,
+                        onPressed: workspace.interactionLocked || tab.busy
+                            ? null
+                            : () => unawaited(workspace.closeTab(tab)),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final menus = _menus();
@@ -502,70 +615,20 @@ class _DocumentShellState extends State<_DocumentShell> {
                   color: scheme.surfaceContainerLow,
                   child: SizedBox(
                     height: 40,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 8),
-                          for (final tab in tabs)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Tooltip(
-                                message: tab.path ?? tab.name,
-                                child: Semantics(
-                                  selected: tab == active,
-                                  child: Material(
-                                    color: tab == active
-                                        ? scheme.surface
-                                        : Colors.transparent,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(8),
-                                    ),
-                                    child: InkWell(
-                                      onTap: workspace.interactionLocked
-                                          ? null
-                                          : () => _select(tab),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 14,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Text(
-                                              '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: tab == active
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            IconButton(
-                                              key: ValueKey('close-${tab.id}'),
-                                              tooltip: 'Close ${tab.name}',
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              iconSize: 16,
-                                              onPressed:
-                                                  workspace.interactionLocked ||
-                                                      tab.busy
-                                                  ? null
-                                                  : () => unawaited(
-                                                      workspace.closeTab(tab),
-                                                    ),
-                                              icon: const Icon(Icons.close),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        _revealActiveTabAfterLayout(constraints.maxWidth, tabs);
+                        return SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              const SizedBox(width: 8),
+                              for (final tab in tabs)
+                                _documentTab(tab, active, constraints.maxWidth),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),

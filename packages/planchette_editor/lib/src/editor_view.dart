@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_core/planchette_core.dart';
@@ -98,9 +100,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (widget.isActive) {
-          if (!c.searchFocus.hasFocus && !c.replacementFocus.hasFocus) {
-            c.editorFocus.requestFocus();
-          }
+          // Inactive tabs must release focus before the selected tab claims it.
+          scheduleMicrotask(() {
+            if (!mounted || !widget.isActive) return;
+            if (!c.searchFocus.hasFocus && !c.replacementFocus.hasFocus) {
+              c.editorFocus.requestFocus();
+            }
+          });
         } else {
           c.editorFocus.unfocus();
           c.searchFocus.unfocus();
