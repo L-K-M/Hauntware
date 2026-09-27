@@ -211,12 +211,12 @@ overlaps logically.
 | [#55](https://github.com/L-K-M/Planchette/pull/55), `planchette/aggregate-open-errors` | B15 (app-layer half): `openDialog` collects every failed path and reports one message with the count and each file's error instead of keeping only the last; a single failure keeps the old shape. Two regressions (consecutive failures, mixed success/failure) failed first. App 43 + 2 skipped. | Open; round 1 reported zero actionable suggestions. |
 | [#56](https://github.com/L-K-M/Planchette/pull/56), `planchette/reuse-pristine-untitled-tab` | B23: opening a file reuses the empty untitled tab it replaces. One `_dropPristine` helper runs on every branch that activates a tab, including the already-open and symlink-duplicate paths, and only the *previously active* untouched tab qualifies; a failed open keeps it. Four regressions; the scoping test passes without the fix on purpose. App 46 + 2 skipped. | Open at `f3ca652`; round 1 (real leak on the duplicate paths, missing scoping test) addressed. Round 2 raised one speculative guard; declined with the aliasing proof, second consecutive minor-only round, so minor nits are closed here. |
 | [#76](https://github.com/L-K-M/Planchette/pull/76), `planchette/serialize-saves` | B12: saves for one tab run in request order. `putIfAbsent` deduplicated, so a Save As during a save wrote nothing to the chosen path while the old path reported success, and a Save after an edit wrote the older text. Each request chains behind the in-flight save and re-reads the slot after every wait, so queued saves cannot race. The test store detects overlapping writes. Five regressions; the race test failed first. App 43 + 2 skipped. | Open at `a2ea266`; round 1's major concurrency finding confirmed and fixed. |
-| [#77](https://github.com/L-K-M/Planchette/pull/77), `planchette/explain-quit-during-save` | B11: a quit refused because a save, open, close or dialog is in flight named what to wait for instead of silently doing nothing, and the notice clears itself when that work finishes. A real failure is never cleared. Three regressions; the stale-notice test failed first. App 43 + 2 skipped. | Open at `305b300`; round 1 (stale notice, incomplete wording) addressed. The GLM job timed out once on this revision and was re-run; the code checks are green. |
+| [#77](https://github.com/L-K-M/Planchette/pull/77), `planchette/explain-quit-during-save` | B11: a quit refused because a save, open, close or dialog is in flight named what to wait for instead of silently doing nothing, and the notice clears itself when that work finishes. A real failure is never cleared. Three regressions; the stale-notice test failed first. App 43 + 2 skipped. | Open at `60e0eba`; round 1 (stale notice, incomplete wording) addressed, and the re-run round 2 found one more real hole — the close path cleared the notice after `_remove` had already notified — fixed with a test that counts notifications arriving after the clear. The first GLM run timed out; the re-run is the review of record. |
 | [#79](https://github.com/L-K-M/Planchette/pull/79), `planchette/refuse-nul-on-save` | B20 (independent second fix, alongside #57's offset-reporting version): the write path refuses a NUL byte with its own message, checked on the caller's text before the normalization pass. The load message stays as it was. Two regressions: the original bytes survive and no file is created. Core 86. | Open at `9429f8d`; round 1's fail-fast finding accepted. |
 | [#81](https://github.com/L-K-M/Planchette/pull/81), `planchette/theme-contrast-test` | V3/V6a: a measured contrast gate for the shipped palette — every token against the surface the editor sits on, and both match-highlight pairs, in light and dark, at the WCAG AA body-text ratio. It caught the one real failure (white on the light active match, 4.11:1), fixed to 5.06:1 with `#377A69`. The app theme builder became public so the test measures the real surface. App 52 + 2 skipped. | Open at `0e57a61`; round 1 (WCAG 2.1 cutoff, foreground composited over the highlight, Scaffold-derived backdrop) all accepted. |
-| [#83](https://github.com/L-K-M/Planchette/pull/83), `planchette/quit-bulk-save` | A7 (quit half): several unsaved documents now share one Don't Save / Cancel / Save All question instead of a queue of per-file dialogs, with an exhaustive `switch` so a new answer cannot fall through to discarding edits. One dirty document keeps its file-named prompt. Six regressions including the several-tabs-one-dirty boundary and a cancelled destination. App 44 + 2 skipped. | Open at `b98c364`; round 1 (exhaustive switch, boundary tests, formatting drift, dead copy) all addressed. The GLM job timed out once and was re-run. |
-| [#85](https://github.com/L-K-M/Planchette/pull/85), `planchette/find-past-cap` | B19: Find Next and Find Previous page past the 1,000-match highlight window in both directions and wrap at the ends of the document, so every occurrence is reachable instead of only the first page. Core `findSearchMatches` gains `start`/`reverse` (null means the whole haystack, so every existing caller is unchanged). Seven new tests across core and the controller. Core 87, editor 22. | Open at `900d2d9`; CI green, first review in progress at the time of writing. |
-| [#87](https://github.com/L-K-M/Planchette/pull/87), `planchette/window-backdrop` | V14: the native window is created on the surface the app is about to paint, so a dark launch no longer flashes the platform's white default. `DesktopWindow.windowOptions` is public so the geometry and backdrop are assertable. Two tests. App 40 + 2 skipped. Verified on Linux only; the macOS/Windows visual result is unverified. | Open; CI green, review pending at the time of writing. |
+| [#83](https://github.com/L-K-M/Planchette/pull/83), `planchette/quit-bulk-save` | A7 (quit half): several unsaved documents now share one Don't Save / Cancel / Save All question instead of a queue of per-file dialogs, with an exhaustive `switch` so a new answer cannot fall through to discarding edits. One dirty document keeps its file-named prompt. Six regressions including the several-tabs-one-dirty boundary and a cancelled destination. App 44 + 2 skipped. | Open at `217c7e2`; round 1 (exhaustive switch, boundary tests, formatting drift, dead copy) all addressed; the re-run round 2 added the `count > 1` contract assert and the "a declined destination is not an error" assertions. The first GLM run timed out; the re-run is the review of record. |
+| [#85](https://github.com/L-K-M/Planchette/pull/85), `planchette/find-past-cap` | B19: Find Next and Find Previous page past the 1,000-match highlight window in both directions and wrap at the ends of the document, so every occurrence is reachable instead of only the first page. Core `findSearchMatches` gains `start`/`reverse` (null means the whole haystack, so every existing caller is unchanged). Seven new tests across core and the controller. Core 87, editor 22. | Open at `daadda0`; round 1 found a real defect in this change — the reverse window scanned with `lastIndexOf` and so reported overlapping occurrences the forward scan skips, meaning Find Previous could highlight a match Find Next could never reach. Replaced with a sliding window over the forward enumeration, with a parity test observed failing first. Round 2 raised the unreachable `_activeMatch == -1` path and the window's O(limit) eviction, both declined with evidence. Steady: two rounds, nothing important outstanding. |
+| [#87](https://github.com/L-K-M/Planchette/pull/87), `planchette/window-backdrop` | V14: the native window is created on the surface the app is about to paint, so a dark launch no longer flashes the platform's white default. `DesktopWindow.windowOptions` is public so the geometry and backdrop are assertable. Two tests. App 40 + 2 skipped. Verified on Linux only; the macOS/Windows visual result is unverified. | Open at `67d430f`; round 1 accepted in full: the backdrop now resolves through `effectiveBrightness(ThemeMode)` so a forced theme cannot flash the other surface, and the system branch reads `PlatformDispatcher` instead of the binding. The runtime-brightness follow-up is recorded under V14. |
 
 ### Inherited PR records
 
@@ -1829,11 +1829,20 @@ Reproduce Windows/Linux dark launch, set the intended surface before show if
 needed, and coordinate hidden-until-ready startup with B4. Test light/dark and
 settings load timing before assuming one color suits every initial frame.
 **Done in #87** for the app's own themes: the window is created on
-`scaffoldBackgroundColor` for the brightness the app will follow, so neither
-theme flashes the wrong color. `DesktopWindow.windowOptions` is public, which
-also makes the geometry assertable and pairs with D0d's single size authority.
-Verified on Linux only — the macOS and Windows first-frame result is unverified,
-and a host-supplied theme injected after startup is out of scope.
+`scaffoldBackgroundColor` for the brightness the app will paint with, resolved
+by one `effectiveBrightness(ThemeMode)` that also feeds `PlanchetteApp`, so a
+forced theme cannot flash the other surface and the two cannot drift.
+`DesktopWindow.windowOptions` is public, which also makes the geometry
+assertable and pairs with D0d's single size authority. Verified on Linux only —
+the macOS and Windows first-frame result is unverified, and a host-supplied
+theme injected after startup is out of scope.
+**Still open here:** the backdrop is sampled once. A system theme change while
+the app runs leaves the native window on the old color, which can peek through
+on Windows during a resize. Subscribe to
+`PlatformDispatcher.instance.onPlatformBrightnessChanged` in
+`DesktopWindow.initialize` and tear it down in `dispose` — but do it with the
+theme work in A1/V1, which will have a real brightness source, rather than as a
+second partial path.
 
 ### V15. Define the tab strip container — S (inherited idea)
 After #35/#36/#43 integration, compare a subtle inset border or baseline rule
@@ -2462,3 +2471,30 @@ layout items in its §4 were read from source, never seen on screen (no native
 session), and its performance claims were inherited rather than re-profiled —
 both are labeled as such above and in P1, and neither may be presented as
 measured on this baseline.
+- **Second-pass rounds, after the first merge of §12.** Recorded here so the
+  ledger stays the one place a reader learns what review actually changed:
+  - **#77** round 2 (the re-run of a timed-out job) found a real hole in the
+    round-1 fix: `closeTab` dropped the stale notice in its `finally`, after
+    `_remove` had already notified, so the banner survived. The helper now
+    reports whether it dropped anything and the close notifies once more only
+    then. The regression counts notifications that arrive with the error already
+    gone, and asserts while the gated load is still in flight — the open's own
+    completion would otherwise notify afterwards and mask the missing one.
+  - **#83** round 2 added the `count > 1` contract assert to the dialog and the
+    "a declined destination is not an error" assertions to the cancelled-save
+    test, so a deliberate cancel cannot later start reporting a failure.
+  - **#85** round 1 found a real defect in the paging change itself: the reverse
+    window used `lastIndexOf`, which enumerates overlapping occurrences the
+    forward scan skips (`'aa'` in `'aaaa'` is `[0, 2]` forwards, `[0, 1, 2]`
+    backwards), so Find Previous could offer a match Find Next could not reach.
+    Replaced with a sliding window over the forward enumeration; the parity test
+    was observed failing first. Round 2's two remaining points were declined
+    with evidence — the `_activeMatch == -1` state is unreachable, and
+    collecting matches before slicing would undo the cap that keeps the window
+    bounded. Steady.
+  - **#87** round 1 accepted in full, including the outside-diff major: the
+    backdrop now resolves through `effectiveBrightness(ThemeMode)` so the
+    window and `PlanchetteApp` share one theme source. The runtime-brightness
+    case moved to V14 rather than being shipped here.
+  Three GLM jobs timed out on their first run across these PRs and were
+  re-run from the same commit; a timeout is a missing review, never a pass.
