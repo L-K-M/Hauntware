@@ -244,12 +244,15 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   Future<bool> closeTab(DocumentTab tab) async {
     if (interactionLocked ||
-        tab.busy ||
         !_documents.contains(tab) ||
         !_closingTabs.add(tab)) {
       return false;
     }
     try {
+      if (tab.busy) {
+        _reportBusy(tab);
+        return false;
+      }
       if (!await _confirmTab(tab) || tab.busy) return false;
       _remove(tab);
       _notify();
@@ -260,22 +263,47 @@ final class DocumentWorkspace extends ChangeNotifier {
   }
 
   Future<bool> _confirmTab(DocumentTab tab) async {
-    if (tab.busy || tab.editor.isSaving) return false;
+    if (tab.busy || tab.editor.isSaving) {
+      _reportBusy(tab);
+      return false;
+    }
     if (!tab.editor.isDirty) return true;
     final reviewedText = tab.editor.text.text;
     _active = tab;
     _notify();
     final choice = await _dialog(() => dialogs.chooseClose(tab.name));
-    if (tab.busy || tab.editor.isSaving) return false;
+    if (tab.busy || tab.editor.isSaving) {
+      _reportBusy(tab);
+      return false;
+    }
     switch (choice) {
       case CloseChoice.cancel:
         return false;
       case CloseChoice.discard:
-        return tab.editor.text.text == reviewedText;
+        if (tab.editor.text.text == reviewedText) return true;
+        // The buffer moved on while the prompt was open, so the reviewed text
+        // is no longer what would be dropped. Say so instead of closing
+        // nothing in silence.
+        _error =
+            '${tab.name} changed while the prompt was open, so nothing was '
+            'discarded. Review it, then close again.';
+        _notify();
+        return false;
       case CloseChoice.save:
         return await _save(tab, access: EditorSaveAccess.confirmedClose) &&
             !tab.editor.isDirty;
     }
+  }
+
+  /// A close refused for a reason the user did not choose needs an outcome.
+  /// A cancelled prompt and a locked workspace stay silent: the user can see
+  /// the dialog and knows why.
+  void _reportBusy(DocumentTab tab) {
+    _error = tab.editor.isSaving
+        ? '${tab.name} is still being saved. Close it again once the save '
+              'finishes.'
+        : '${tab.name} is busy. Close it again in a moment.';
+    _notify();
   }
 
   /// Both the native close button and the OS Quit route share this decision.

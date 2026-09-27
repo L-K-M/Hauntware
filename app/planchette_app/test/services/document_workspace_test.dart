@@ -288,6 +288,50 @@ void main() {
     },
   );
 
+  test('a refused close says why instead of doing nothing', () async {
+    store.files[testPath('busy.txt')] = document('busy.txt', 'original');
+    await workspace.open(testPath('busy.txt'));
+    final tab = workspace.active!..editor.text.text = 'saving';
+    store.writeGate = Completer<void>();
+    final saving = workspace.save(tab);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(await workspace.closeTab(tab), isFalse);
+    expect(workspace.error, contains('busy.txt'));
+    expect(workspace.error, contains('busy'));
+    expect(workspace.documents, [tab]);
+
+    store.writeGate!.complete();
+    expect(await saving, isTrue);
+    expect(await workspace.closeTab(tab), isTrue);
+    expect(workspace.error, contains('busy.txt'));
+  });
+
+  test(
+    'a discard refused by a newer edit says nothing was discarded',
+    () async {
+      final tab = workspace.newDocument()!..editor.text.text = 'keep me';
+      dialogs.choiceGate = Completer<CloseChoice>();
+      final closing = workspace.closeTab(tab);
+      await Future<void>.delayed(Duration.zero);
+      tab.editor.text.text = 'edited again';
+      dialogs.choiceGate!.complete(CloseChoice.discard);
+
+      expect(await closing, isFalse);
+      expect(workspace.documents, [tab]);
+      expect(tab.editor.isDirty, isTrue);
+      expect(workspace.error, contains('nothing was'));
+    },
+  );
+
+  test('a cancelled close prompt stays silent', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'keep me';
+    dialogs.choices.add(CloseChoice.cancel);
+    expect(await workspace.closeTab(tab), isFalse);
+    expect(workspace.documents, [tab]);
+    expect(workspace.error, isNull);
+  });
+
   test('canceled destination keeps dirty close open', () async {
     final tab = workspace.newDocument()!..editor.text.text = 'keep me';
     dialogs.choices.add(CloseChoice.save);
