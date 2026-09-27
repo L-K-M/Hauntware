@@ -57,6 +57,19 @@ class _DocumentShellState extends State<_DocumentShell> {
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   FocusNode? _lastTextFocus;
 
+  /// The one readiness rule behind every document command and the toolbar.
+  /// [DocumentWorkspace] refuses edits and saves for a tab that is still
+  /// loading or that failed to load, so a control offering them anyway would
+  /// accept the click and silently do nothing.
+  bool get _documentReady {
+    final tab = workspace.active;
+    return tab != null &&
+        !workspace.interactionLocked &&
+        !tab.busy &&
+        !tab.editor.isLoading &&
+        tab.editor.error == null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -149,12 +162,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   List<_ShellMenu> _menus() {
     final active = workspace.active;
     final unlocked = !workspace.interactionLocked;
-    final ready =
-        active != null &&
-        unlocked &&
-        !active.busy &&
-        !active.editor.isLoading &&
-        active.editor.error == null;
+    final ready = _documentReady;
     return [
       _ShellMenu('File', [
         _Command(
@@ -467,12 +475,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                       ),
                       IconButton(
                         tooltip: 'Save',
-                        onPressed:
-                            active == null ||
-                                active.busy ||
-                                workspace.interactionLocked
-                            ? null
-                            : _save,
+                        onPressed: _documentReady ? _save : null,
                         icon: const Icon(Icons.save_outlined),
                       ),
                       const SizedBox(width: 12),
