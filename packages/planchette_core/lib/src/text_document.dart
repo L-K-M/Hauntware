@@ -232,12 +232,16 @@ Future<String> _writeTextDocument(
   try {
     try {
       await temporary.create(exclusive: true);
-    } on FileSystemException catch (error) {
+    } on FileSystemException catch (error, stackTrace) {
       // The guarded design needs a sibling staging file, so an unwritable
       // folder blocks every save; name the actionable cause, not the syscall.
-      throw TextDocumentException(
-        'A temporary file could not be created beside the document. '
-        'Check that its folder is writable. ${error.message}',
+      Error.throwWithStackTrace(
+        TextDocumentException(
+          'A temporary file could not be created beside the document. '
+          'Check that its folder is writable. '
+          '${error.osError?.message ?? error.message}',
+        ),
+        stackTrace,
       );
     }
     setFilePermissions(temporary.path, 0x180); // 0600, before any plaintext.
@@ -266,10 +270,17 @@ Future<String> _writeTextDocument(
     try {
       renameFileWithoutReplacing(file.path, backup.path);
     } on FileSystemException catch (error) {
-      // The destination vanished or changed between the type check and the
-      // backup rename; surface that as a save conflict, not a raw OS error.
+      // A vanished destination means a mid-save conflict; anything else
+      // (permissions, quota) keeps its real OS error instead of being
+      // misreported as concurrent modification.
+      if (error.osError?.errorCode == _errorNoSuchFile) {
+        throw TextDocumentException(
+          'The local copy changed while it was being saved. ${error.message}',
+        );
+      }
       throw TextDocumentException(
-        'The local copy changed while it was being saved. ${error.message}',
+        'The original file could not be moved aside for replacement. '
+        '${error.osError?.message ?? error.message}',
       );
     }
     try {
@@ -334,6 +345,10 @@ String _tooLargeMessage(int maximumBytes) =>
     '${(maximumBytes / (1024 * 1024)).toStringAsFixed(0)} MB.';
 
 const _utf8Bom = [0xef, 0xbb, 0xbf];
+
+/// ENOENT on POSIX; ERROR_FILE_NOT_FOUND on Windows. Coincidentally 2 on
+/// both — it marks a file that vanished, not a permission or quota failure.
+const int _errorNoSuchFile = 2;
 
 bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes.length >= offset + _utf8Bom.length &&

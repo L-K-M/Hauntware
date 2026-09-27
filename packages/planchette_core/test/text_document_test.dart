@@ -373,9 +373,19 @@ void main() {
 
   test('an unwritable folder fails the save with an actionable error', () async {
     if (!Platform.isLinux && !Platform.isMacOS) return;
-    await Process.run('chmod', ['555', directory.path]);
+    // Root bypasses directory mode bits; the precondition cannot hold there.
+    final uid = await Process.run('id', ['-u']);
+    if (uid.stdout.toString().trim() == '0') return;
+    final originalMode = (await directory.stat()).mode & 0x1ff;
+    final restrict = await Process.run('chmod', ['555', directory.path]);
+    if (restrict.exitCode != 0) {
+      fail('chmod 555 failed: ${restrict.stderr}');
+    }
     addTearDown(() async {
-      await Process.run('chmod', ['755', directory.path]);
+      await Process.run('chmod', [
+        originalMode.toRadixString(8),
+        directory.path,
+      ]);
     });
 
     await expectLater(
