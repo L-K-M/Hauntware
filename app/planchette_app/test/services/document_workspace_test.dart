@@ -174,6 +174,31 @@ void main() {
     },
   );
 
+  test('opening a file reuses a pristine untitled tab', () async {
+    final scratch = workspace.newDocument()!;
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    await workspace.open(testPath('one.txt'));
+    expect(workspace.documents, hasLength(1));
+    expect(workspace.active, isNot(scratch));
+    expect(workspace.active!.path, testPath('one.txt'));
+    expect(workspace.active!.editor.text.text, 'disk');
+  });
+
+  test('opening a file keeps an untitled tab that has content', () async {
+    final scratch = workspace.newDocument()!..editor.text.text = 'note';
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    await workspace.open(testPath('one.txt'));
+    expect(workspace.documents, [scratch, workspace.active]);
+    expect(scratch.editor.text.text, 'note');
+  });
+
+  test('a failed open keeps the pristine untitled tab', () async {
+    final scratch = workspace.newDocument()!;
+    await workspace.open(testPath('missing.txt'));
+    expect(workspace.documents, [scratch]);
+    expect(workspace.active, scratch);
+  });
+
   test(
     'New Save creates an absent target and records the saved identity',
     () async {

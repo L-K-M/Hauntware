@@ -160,6 +160,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       _notify();
       return;
     }
+    final previous = _active;
     final tab = _makeTab(path: _paths.normalize(_paths.absolute(path)));
     _documents.add(tab);
     _active = tab;
@@ -181,6 +182,15 @@ final class DocumentWorkspace extends ChangeNotifier {
         duplicate.flashRequest++;
       } else {
         tab.editor.displayPath = tab.path!;
+        // Opening into a fresh empty window replaces the empty tab instead
+        // of stranding it. Only the previously active tab qualifies, and
+        // only while it is still open, unnamed, empty and unedited. A failed
+        // open above keeps it untouched.
+        if (previous != null &&
+            _documents.contains(previous) &&
+            _isPristineTab(previous)) {
+          _remove(previous);
+        }
       }
     }
     _notify();
@@ -401,6 +411,15 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
     return null;
   }
+
+  /// A New tab still in its initial state: never saved, nothing typed,
+  /// nothing to lose. Type-then-erase-all also reads pristine (the buffer is
+  /// empty and clean); its dropped undo tail is accepted and documented.
+  bool _isPristineTab(DocumentTab tab) =>
+      tab.path == null &&
+      !tab.busy &&
+      !tab.editor.isDirty &&
+      tab.editor.text.text.isEmpty;
 
   String _pathKey(String path) => _paths.canonicalize(path);
 
