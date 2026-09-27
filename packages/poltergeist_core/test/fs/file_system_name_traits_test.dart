@@ -17,6 +17,7 @@ final class _ProbeFileSystem implements RemoteFileSystem {
   String? uploadedPath;
   Object? deleteError;
   Object? postCommitUploadError;
+  bool suppressStats = false;
 
   String _key(String path) {
     var key = path;
@@ -59,6 +60,15 @@ final class _ProbeFileSystem implements RemoteFileSystem {
 
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
+    if (suppressStats) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.notFound,
+        operation: 'stat',
+        path: path,
+        message: 'not visible yet',
+      );
+    }
+
     final entry = _entries[_key(path)];
     if (entry != null) return entry;
 
@@ -84,6 +94,19 @@ final class _ProbeFileSystem implements RemoteFileSystem {
 }
 
 void main() {
+  test('recognizes only generated name-probe artifacts', () {
+    expect(
+      isFileSystemNameProbeArtifact(
+        '.poltergeist-nameprobe-0123456789ABCDEF-e\u0301',
+      ),
+      isTrue,
+    );
+    expect(
+      isFileSystemNameProbeArtifact('.poltergeist-nameprobe-notes'),
+      isFalse,
+    );
+  });
+
   group('probeFileSystemNameTraits', () {
     for (final expected in <FileSystemNameTraits>[
       const FileSystemNameTraits(
@@ -173,6 +196,21 @@ void main() {
 
       expect(fileSystem.deleteCalls, 0);
       expect(fileSystem._entries, isNotEmpty);
+    });
+
+    test('refuses traits when the uploaded probe is not visible', () async {
+      final fileSystem = _ProbeFileSystem(
+        caseSensitivity: FileSystemNameSensitivity.insensitive,
+        normalizationSensitivity: FileSystemNameSensitivity.insensitive,
+      )..suppressStats = true;
+
+      await expectLater(
+        probeFileSystemNameTraits(fileSystem, '/root', probeSuffix: 'fixed'),
+        throwsStateError,
+      );
+
+      expect(fileSystem.deleteCalls, 1);
+      expect(fileSystem._entries, isEmpty);
     });
   });
 

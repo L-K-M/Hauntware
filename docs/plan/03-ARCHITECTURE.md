@@ -1015,10 +1015,15 @@ non-negotiable:
   completed, restored, and failed attempts until every terminal attempt and
   cleanup operation drains. A later task item that aliases an output is
   not an ordinary external conflict: `replace` and `replaceIfNewer` fail
-  terminally rather than erase it, `skip` skips, and `ask` may choose
-  `keepBoth` or `skip`; `keepBoth` selects the first stat-free, unowned
-  numbered key. Retry reuses a safe selected key. Recovery refuses an
-  occupied durable key when ownership cannot be proved (D40).
+  terminally rather than erase it. This is v1's first
+  terminal-fail-with-`conflict` escape hatch: the item emits a failed
+  `TransferQueueItemEvent` and a `fileFailed` journal record with
+  `withinTaskDestinationCollisionMessage`, `conflict` kind, and a
+  `terminal` retry policy, never a conflict prompt. `skip` skips, and
+  `ask` may choose `keepBoth` or `skip`; `keepBoth` selects the first
+  stat-free, unowned numbered key. Retry reuses a safe selected key.
+  Recovery refuses an occupied durable key when ownership cannot be
+  proved (D40).
 
   A separate queue-wide registry conservatively folds both case and
   normalization and serializes plausible aliases across tasks. Its key is

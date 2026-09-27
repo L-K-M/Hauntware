@@ -407,6 +407,9 @@ class FileTransferPersistence implements TransferPersistence {
       if (_shouldCompact()) await _compact();
     } catch (error, stackTrace) {
       _journalWriteFailure ??= AsyncError(error, stackTrace);
+      // Durability is lost; a pending timer must not touch the journal.
+      _fsyncTimer?.cancel();
+      _fsyncTimer = null;
       rethrow;
     }
   }
@@ -576,6 +579,7 @@ class FileTransferPersistence implements TransferPersistence {
       _fsyncTimer = null;
       if (_closed) return;
       _enqueue(() async {
+        _throwIfJournalUnavailable();
         if (await journalFile.exists()) await _fsyncJournal();
       });
     });

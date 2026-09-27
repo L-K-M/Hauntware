@@ -1,4 +1,4 @@
-import 'package:poltergeist_core/src/transfer/destination_name_key.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
 void main() {

@@ -39,7 +39,9 @@ const String fileSystemNameProbePrefix = '.poltergeist-nameprobe';
 const String _decomposedProbeLetter = 'e\u0301';
 const int _probeSuffixBytes = 8;
 final RegExp _probeArtifactName = RegExp(
-  r'^\.poltergeist-nameprobe-[0-9a-f]{16}-é$',
+  '^${RegExp.escape(fileSystemNameProbePrefix)}-'
+  '[0-9a-f]{${_probeSuffixBytes * 2}}-'
+  '${unorm.nfc(_decomposedProbeLetter)}\$',
   caseSensitive: false,
 );
 
@@ -80,6 +82,14 @@ Future<FileSystemNameTraits> probeFileSystemNameTraits(
     }
 
     cancellation?.throwIfCancelled();
+    final probeVisible = await _exists(fileSystem, probePath);
+    cancellation?.throwIfCancelled();
+    if (!probeVisible) {
+      throw StateError(
+        'filename probe "$probePath" is not visible after upload',
+      );
+    }
+
     final caseSensitive = !await _exists(
       fileSystem,
       joinPath(rootPath, probeName.toUpperCase()),

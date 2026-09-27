@@ -60,6 +60,9 @@ class ScriptedIo extends TransferJournalIo {
   /// Throw on the Nth appendLine (1-based) to script write failures.
   int? failOnAppend;
 
+  /// Throw on the Nth appendLine after its record-type gate opens.
+  int? failAfterGateOnAppend;
+
   /// Throw on the Nth fsyncFile (1-based) to script durability failures.
   int? failOnFsync;
 
@@ -82,6 +85,9 @@ class ScriptedIo extends TransferJournalIo {
       final type = json['type']! as String;
       journalAppendTypesStarted.add(type);
       await journalAppendGates[type]?.future;
+      if (appendCalls == failAfterGateOnAppend) {
+        throw const FileSystemException('scripted gated append failure');
+      }
       journalAppendBytes += utf8.encode(line).length + 1;
     }
     return super.appendLine(file, line);
@@ -451,12 +457,22 @@ void main() {
     test('an unknown schema version quarantines the journal', () async {
       await openStore().then((s) => s.shutdown());
       await storeDir.create(recursive: true);
-      File('${storeDir.path}/$transferJournalFileName').writeAsStringSync(
-        '{"v":99,"type":"taskEnqueued","taskId":"t1","at":"2026-01-01T00:00:00Z","enqueuedAt":"2026-01-01T00:00:00Z","spec":{}}\n',
-      );
+      final futureVersion = transferJournalSchemaVersion + 1;
+      final futureLine =
+          '{"v":$futureVersion,"type":"taskEnqueued","taskId":"t1",'
+          '"at":"2026-01-01T00:00:00Z",'
+          '"enqueuedAt":"2026-01-01T00:00:00Z","spec":{}}';
+      final journal = File('${storeDir.path}/$transferJournalFileName');
+      journal.writeAsStringSync('$futureLine\n');
+
       final reopened = await openStore();
       expect(reopened.replay.tasks, isEmpty);
       expect(reopened.replay.quarantinedJournalPath, isNotNull);
+      expect(
+        File(reopened.replay.quarantinedJournalPath!).readAsStringSync(),
+        '$futureLine\n',
+      );
+      expect(journal.readAsStringSync(), isEmpty);
       await reopened.shutdown();
     });
 
@@ -835,6 +851,22 @@ void main() {
     });
 
     test('terminal failure retry policy round-trips and defaults safely', () {
+      final defaulted = FileFailedRecord(taskId: 't1', itemId: 'i1');
+      expect(
+        defaulted.retryPolicy,
+        TransferFailureRetryPolicy.terminal,
+      );
+
+      final retryable = FileFailedRecord(
+        taskId: 't1',
+        itemId: 'i1',
+        retryPolicy: TransferFailureRetryPolicy.retryable,
+      );
+      final parsedRetryable =
+          TransferJournalRecord.parse(jsonEncode(retryable.toJson()))
+              as FileFailedRecord;
+      expect(parsedRetryable.retryPolicy, TransferFailureRetryPolicy.retryable);
+
       final record = FileFailedRecord(
         taskId: 't1',
         itemId: 'i1',
@@ -1038,6 +1070,67 @@ void main() {
       store.appendJournal(enqueued('t1', localToRemoteSpec(rootPaths: ['/r'])));
 
       await expectLater(store.flush(), throwsA(isA<FileSystemException>()));
+    });
+
+    test('append failure cancels an armed fsync timer', () async {
+      const fsyncInterval = Duration(milliseconds: 100);
+      final io = ScriptedIo();
+      final store = await openStore(
+        io: io,
+        fsyncEveryRecords: 100,
+        fsyncInterval: fsyncInterval,
+      );
+      store.appendJournal(enqueued('t1', localToRemoteSpec(rootPaths: ['/r'])));
+      await pumpUntil(
+        () => io.appendCalls == 1,
+        reason: 'the first journal append never armed its fsync timer',
+      );
+      io.failOnAppend = 2;
+
+      await expectLater(
+        store.appendJournalDurably(
+          TaskStateRecord(taskId: 't1', state: TransferTaskState.paused),
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+      await Future<void>.delayed(fsyncInterval * 2);
+
+      expect(io.fsyncCalls, 0);
+    });
+
+    test('fired fsync timer stops behind a failing append', () async {
+      const fsyncInterval = Duration(milliseconds: 100);
+      final appendGate = Completer<void>();
+      final io = ScriptedIo()
+        ..failAfterGateOnAppend = 2
+        ..journalAppendGates[TaskStateRecord.wireType] = appendGate;
+      final store = await openStore(
+        io: io,
+        fsyncEveryRecords: 100,
+        fsyncInterval: fsyncInterval,
+      );
+      store.appendJournal(enqueued('t1', localToRemoteSpec(rootPaths: ['/r'])));
+      await pumpUntil(
+        () => io.appendCalls == 1,
+        reason: 'the first journal append never armed its fsync timer',
+      );
+      final failingAppend = store.appendJournalDurably(
+        TaskStateRecord(taskId: 't1', state: TransferTaskState.paused),
+      );
+      await pumpUntil(
+        () => io.journalAppendTypesStarted.contains(TaskStateRecord.wireType),
+        reason: 'the failing append never reached its gate',
+      );
+
+      await Future<void>.delayed(fsyncInterval * 2);
+      appendGate.complete();
+      await expectLater(
+        failingAppend,
+        throwsA(isA<FileSystemException>()),
+      );
+      await expectLater(store.flush(), throwsA(isA<FileSystemException>()));
+
+      expect(io.fsyncCalls, 0);
     });
 
     test('flush reports an earlier timer fsync failure', () async {

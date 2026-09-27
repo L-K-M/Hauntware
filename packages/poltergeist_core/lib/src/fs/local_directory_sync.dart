@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 /// Flushes a local directory entry where the platform exposes a proven
 /// primitive. Linux uses `open(O_DIRECTORY)` plus `fsync`; other platforms
 /// retain the explicit unsupported-handle behavior tracked by PGE-03a.
+/// Linux performs those blocking syscalls on the calling isolate.
 Future<void> syncLocalDirectory(Directory directory) async {
   if (Platform.isLinux) {
     _syncLinuxDirectory(directory.path);

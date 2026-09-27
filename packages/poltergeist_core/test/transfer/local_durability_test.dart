@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
+const int _posixInvalidArgument = 22;
+
 final class _RecordingIo extends TransferJournalIo {
   final List<String> operations = [];
   String? failingOperation;
@@ -66,11 +68,16 @@ void main() {
   });
 
   test('Linux directory fsync reaches the native barrier', () async {
-    // procfs rejects fsync with EINVAL. Returning success here means the
-    // implementation stopped at dart:io's EISDIR open failure.
+    // procfs rejects fsync with EINVAL. EISDIR means native fsync was skipped.
     await expectLater(
       const TransferJournalIo().fsyncDirectory(Directory('/proc')),
-      throwsA(isA<FileSystemException>()),
+      throwsA(
+        isA<FileSystemException>().having(
+          (error) => error.osError?.errorCode,
+          'errno',
+          _posixInvalidArgument,
+        ),
+      ),
     );
   }, skip: !Platform.isLinux);
 }

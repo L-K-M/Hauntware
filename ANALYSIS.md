@@ -2039,6 +2039,8 @@ names where the plan already places it; anything in D25 needs a 00 edit.
 | NFC-aware name identity on macOS (badge for normalization-only twins) | P1 | Pure `namesEquivalentOnHost()` for the rename preflight | |
 | Adaptive off-isolate local copy with live throughput ("kernel copy" hint) | P1 | P1-07 (b) chunk timing budget | D8 |
 | ssh_config import "explain" view (effective directives with file:line) | P1 | Carry `sourcePath:line` in `SshConfigImportRow` | D22 |
+| Plan-time collision lens for transfers ("2 items map to one name") | P2 | Preview the task-local collision that D40 fails terminally at execution | |
+| Per-server filesystem traits probed once (setstat, posix-rename) | P2 | Extend D40's case/normalization probe to the remaining traits | |
 | Opt-in NFC-on-upload from macOS, per server | P2 | Transform in the walker's `plannedDest` with a flagged row | |
 | Transfer receipts (JSONL manifest per task, "export receipt") | P2, sibling | Manifest for completed items from `fileCompleted`: exact destination, counts, skips/failures, verification and retained backups, Reveal and Retry failed; partial/cancelled runs never look successful; respect disabled history | SR-01 |
 | Chaos property test for moves (seeded tree, fault injection, byte conservation) | P2 | Move-only, disconnect and cancel faults | |

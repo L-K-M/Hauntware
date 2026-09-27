@@ -510,7 +510,7 @@ final class FileFailedRecord extends TransferJournalRecord {
     required this.itemId,
     this.error,
     this.failureKind,
-    this.retryPolicy = TransferFailureRetryPolicy.retryable,
+    this.retryPolicy = TransferFailureRetryPolicy.terminal,
     super.at,
   });
 

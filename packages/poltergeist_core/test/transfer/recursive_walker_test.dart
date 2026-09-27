@@ -97,6 +97,28 @@ void main() {
       expect(walker.discoveredSymlinks, 1); // the symlink
     });
 
+    test('asks for a collision disposition only on a duplicate', () async {
+      remote
+        ..addFile('/src/A.txt', 'upper'.codeUnits)
+        ..addFile('/src/a.txt', 'lower'.codeUnits);
+      final dispositionNames = <String>[];
+      final walker = RecursiveWalker(
+        source: remote,
+        location: const ServerFsLocation('src'),
+        purpose: WalkPurpose.transfer,
+        destination: const ServerFsLocation('dst'),
+        destinationNameKey: (name) => name.toLowerCase(),
+        destinationCollisionDisposition: (entry) {
+          dispositionNames.add(entry.name);
+          return DestinationCollisionDisposition.admit;
+        },
+      );
+
+      await collect(walker, ['/src']);
+
+      expect(dispositionNames, ['a.txt']);
+    });
+
     test('file and symlink roots enumerate like listed children',
         () async {
       remote.addFile('/solo.txt', 'x'.codeUnits);

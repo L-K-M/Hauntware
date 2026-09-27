@@ -1558,7 +1558,12 @@ void main() {
 
         try {
           queue.pauseTask(task.id);
-          await Future<void>.delayed(const Duration(milliseconds: 20));
+          await pumpUntil(
+            () =>
+                connections.activeLeases('s1') == 0 &&
+                connections.activeLeases('s2') == 0,
+            reason: 'the paused probe never released its leases',
+          );
           expect(connections.activeLeases('s1'), 0);
           expect(connections.activeLeases('s2'), 0);
         } finally {

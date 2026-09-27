@@ -831,21 +831,6 @@ ownership
   - **Not SSH connections:** capping connections would slow browsing,
     which shares them. The pool's two connections per server (D9) stay
     as they are.
-- **D40 — One source owns each task-local destination key (2026-09-27;
-  amends 03 §4.2).** A destination key, after applying that filesystem's
-  independently probed case and canonical-normalization rules, belongs to
-  one source for the task's lifetime. Traits are resolved at each actual
-  destination container because a nested mount can differ from the task
-  root; an unprovable result uses the conservative case-and-normalization
-  folding. `replace` and `replaceIfNewer` resolve external or cross-task
-  occupants, never output owned by another item in the same task. `skip`
-  skips that item; `ask` may choose `keepBoth` or `skip`; `keepBoth` claims
-  the first unowned numbered key. Cross-task aliases serialize, then re-stat
-  under the ordinary conflict policy. A destructive or renamed commit
-  fsyncs its selected key to the versioned queue journal before acting. If
-  recovery or retry cannot prove that an occupant at that key is this
-  item's output, the item fails terminally: repeating an ambiguous write
-  cannot make it safe.
 - **D38 — Device themes (2026-09-25, owner-directed; amends D11 and
   10 §10's shared tokens).** The owner asked whether Vervellum's theming
   system could come to Séance and Poltergeist. Séance built it first and
@@ -958,6 +943,21 @@ ownership
     first open window, so an older build still restores it; the others go
     in `session.windows`, versioned and fail-closed like it, in the same
     write.
+- **D40 — One source owns each task-local destination key (2026-09-27;
+  amends 03 §4.2).** A destination key, after applying that filesystem's
+  independently probed case and canonical-normalization rules, belongs to
+  one source for the task's lifetime. Traits are resolved at each actual
+  destination container because a nested mount can differ from the task
+  root; an unprovable result uses the conservative case-and-normalization
+  folding. `replace` and `replaceIfNewer` resolve external or cross-task
+  occupants, never output owned by another item in the same task. `skip`
+  skips that item; `ask` may choose `keepBoth` or `skip`; `keepBoth` claims
+  the first unowned numbered key. Cross-task aliases serialize, then re-stat
+  under the ordinary conflict policy. A destructive or renamed commit
+  fsyncs its selected key to the versioned queue journal before acting. If
+  recovery or retry cannot prove that an occupant at that key is this
+  item's output, the item fails terminally: repeating an ambiguous write
+  cannot make it safe.
 
 ### Security, trust, distribution
 

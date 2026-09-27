@@ -32,7 +32,7 @@ same-basename roots, nested mounts, cross-task races, retry and crash replay,
 probe cleanup, cancellation, restored cleanup admission, and local-move
 durability.
 
-Validation: core analysis is clean; 1,688 core tests pass with 27 environment
+Validation: core analysis is clean; 1,693 core tests pass with 27 environment
 skips. Sync analysis is clean and all 249 tests pass with 3 SSH fixture skips.
 All 138 benchmark tests and 2,882 Flutter tests pass; Flutter analysis and the
 import-boundary check are clean on the pinned 3.47.2 SDK.

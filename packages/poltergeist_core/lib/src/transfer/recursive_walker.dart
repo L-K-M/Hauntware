@@ -382,16 +382,17 @@ class RecursiveWalker {
         (entry.type == RemoteFileType.file || entry.isDirectory)) {
       final key = destinationNameKey?.call(entry.name) ?? entry.name;
       final firstClaim = destinationNames.add(key);
-      final disposition =
-          destinationCollisionDisposition?.call(entry) ??
-          DestinationCollisionDisposition.refuse;
-      if (!firstClaim &&
-          disposition == DestinationCollisionDisposition.refuse) {
-        rejectedEntries++;
-        return (
-          kind: WalkItemKind.destinationCollision,
-          detail: withinTaskDestinationCollisionMessage,
-        );
+      if (!firstClaim) {
+        final disposition =
+            destinationCollisionDisposition?.call(entry) ??
+            DestinationCollisionDisposition.refuse;
+        if (disposition == DestinationCollisionDisposition.refuse) {
+          rejectedEntries++;
+          return (
+            kind: WalkItemKind.destinationCollision,
+            detail: withinTaskDestinationCollisionMessage,
+          );
+        }
       }
     }
     switch (entry.type) {
