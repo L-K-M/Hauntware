@@ -92,6 +92,31 @@ void main() {
     expect(seen, ['/document.txt', '-draft.txt']);
     intake.dispose();
   });
+
+  test('macOS argv keeps a file after a valueless injected flag', () async {
+    final seen = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async => null);
+    final intake = OpenDocuments(open: (path) async => seen.add(path));
+    // '-draft.txt' is not YES/NO, so the flag must not consume it.
+    await intake.start([
+      '-ApplePersistenceIgnoreState',
+      '-draft.txt',
+    ], macOS: true);
+    expect(seen, ['-draft.txt']);
+    intake.dispose();
+  });
+
+  test('macOS argv drops an injected flag at the end', () async {
+    final seen = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async => null);
+    final intake = OpenDocuments(open: (path) async => seen.add(path));
+    await intake.start([
+      '/document.txt',
+      '-NSDocumentRevisionsDebugMode',
+    ], macOS: true);
+    expect(seen, ['/document.txt']);
+    intake.dispose();
+  });
   test(
     'an unexpected callback failure does not poison the next batch',
     () async {
