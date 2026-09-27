@@ -180,6 +180,39 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 
+  testWidgets('the ghost line hides while the workspace is locked', (
+    tester,
+  ) async {
+    final empty = workspace.newDocument()!;
+    workspace.newDocument()!.editor.text.text = 'unsaved';
+    dialogs.choiceGate = Completer<CloseChoice>();
+    await mount(tester);
+    // The quit prompt activates the dirty tab, so the empty one is offstage.
+    String? hint() => tester
+        .widget<TextField>(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField &&
+                identical(widget.controller, empty.editor.text),
+            skipOffstage: false,
+          ),
+        )
+        .decoration!
+        .hintText;
+    expect(hint(), ghostLineFor(empty.id));
+
+    final quitting = workspace.confirmQuit();
+    await tester.pump();
+    expect(workspace.interactionLocked, isTrue);
+    expect(hint(), isNull);
+
+    dialogs.choiceGate!.complete(CloseChoice.cancel);
+    expect(await quitting, isFalse);
+    await tester.pumpAndSettle();
+    expect(hint(), ghostLineFor(empty.id));
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {

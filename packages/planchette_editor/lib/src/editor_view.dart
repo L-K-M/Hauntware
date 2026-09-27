@@ -40,8 +40,9 @@ class PlanchetteEditor extends StatefulWidget {
   final Widget Function(BuildContext context, EditorController controller)?
   statusBuilder;
 
-  /// Faint text shown while the document is empty; it goes on the first
-  /// keystroke. Screen readers announce it as the field's hint.
+  /// Faint text shown whenever the document is empty: it goes on the first
+  /// keystroke and returns if the text is deleted. Screen readers announce it
+  /// as the field's hint.
   final String? placeholder;
 
   @override

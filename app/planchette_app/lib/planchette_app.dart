@@ -635,7 +635,11 @@ class _DocumentShellState extends State<_DocumentShell> {
                               controller: tab.editor,
                               isActive: tab == active,
                               editingLocked: workspace.interactionLocked,
-                              placeholder: tab.path == null
+                              // A locked field cannot take the typing the
+                              // line invites.
+                              placeholder:
+                                  tab.path == null &&
+                                      !workspace.interactionLocked
                                   ? ghostLineFor(tab.id)
                                   : null,
                             ),
@@ -659,9 +663,9 @@ class _DocumentShellState extends State<_DocumentShell> {
   }
 }
 
-/// What an empty untitled document says until the first keystroke. Each line
-/// leads with the instruction, which is what a screen reader announces first;
-/// the rest is the board talking.
+/// What an untitled document shows while it is empty. Each line leads with
+/// the instruction, which is what a screen reader announces first; the rest
+/// is the board talking.
 const _ghostLines = [
   'Start typing. The spirits are listening…',
   'Start typing. The board is waiting…',
@@ -670,7 +674,8 @@ const _ghostLines = [
   'Start typing. Ask, and it will answer…',
 ];
 
-/// The ghost line for a tab: fixed for that tab, different for the next.
+/// The ghost line for a tab: fixed for that tab, and different for the tab
+/// created right after it.
 @visibleForTesting
 String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
 
