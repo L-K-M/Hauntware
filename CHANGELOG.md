@@ -6,6 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- `PlanchetteEditor.textStyle` is now nullable; omitting it selects a
+  per-platform monospace default (previously the literal family
+  `'monospace'`, which macOS and Windows do not resolve).
+
 ### Fixed
 - The editing surface now defaults to a real monospace family per platform
   (Menlo, Consolas, or the resolved generic) with a shared fallback chain;

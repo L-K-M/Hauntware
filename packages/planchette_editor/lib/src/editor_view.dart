@@ -56,12 +56,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   int _lastReveal = -1;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
-  TextStyle get _style => const TextStyle(
-    fontSize: EditorTypography.defaultFontSize,
-    height: EditorTypography.defaultLineHeight,
-  ).merge(
-    widget.textStyle ?? EditorTypography.monospace(defaultTargetPlatform),
-  );
+  // The platform default is the base so partial host styles (a size, a
+  // color) keep a real monospace family; merge only applies non-null fields.
+  TextStyle get _style =>
+      EditorTypography.monospace(defaultTargetPlatform).merge(widget.textStyle);
   bool get _locked => widget.editingLocked || c.editingLocked;
 
   @override

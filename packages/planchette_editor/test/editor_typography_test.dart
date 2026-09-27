@@ -56,6 +56,33 @@ void main() {
     variant: const TargetPlatformVariant({TargetPlatform.windows}),
   );
 
+  testWidgets('partial host style keeps the platform family', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'hello',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlanchetteEditor(
+            controller: controller,
+            textStyle: const TextStyle(fontSize: 16),
+          ),
+        ),
+      ),
+    );
+
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('planchette.document')),
+    );
+    expect(field.style!.fontFamily, 'Menlo');
+    expect(field.style!.fontSize, 16);
+    expect(field.style!.fontFamilyFallback, isNotEmpty);
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
   testWidgets('explicit host style overrides the monospace default', (
     tester,
   ) async {
