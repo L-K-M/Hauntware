@@ -345,6 +345,35 @@ void main() {
   );
 
   testWidgets(
+    'Close Tab stays available after a reload error',
+    (tester) async {
+      store.files[testPath('gone.txt')] = document('gone.txt', 'ok');
+      await mount(tester);
+      await workspace.open(testPath('gone.txt'));
+      await tester.pumpAndSettle();
+      store.files.remove(testPath('gone.txt'));
+      await workspace.active!.editor.reload();
+      await tester.pump();
+      expect(workspace.active!.editor.error, isNotNull);
+      await tester.tap(find.text('File'));
+      await tester.pump();
+      final item = tester.widget<MenuItemButton>(
+        find.widgetWithText(MenuItemButton, 'Close Tab'),
+      );
+      expect(item.onPressed, isNotNull);
+      await tester.tap(find.text('Close Tab'));
+      await tester.pump();
+      expect(workspace.documents, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!

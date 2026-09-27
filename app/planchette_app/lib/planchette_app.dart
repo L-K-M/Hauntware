@@ -168,8 +168,9 @@ class _DocumentShellState extends State<_DocumentShell> {
     final active = workspace.active;
     final unlocked = !workspace.interactionLocked;
     final ready = _documentReady;
-    // The tab's × closes whenever a save isn't in flight — including during
-    // load or after a load error — so the menu command follows the same rule.
+    // The tab's × is available whenever no save is in flight and the
+    // workspace isn't interaction-locked — including during load or after
+    // a load error — so the menu command follows the same rule.
     final closable = active != null && unlocked && !active.busy;
     return [
       _ShellMenu('File', [
