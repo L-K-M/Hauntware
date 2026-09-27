@@ -456,6 +456,12 @@ parent disposal. Test load/reload/blank install after focused edits: Undo must
 not resurrect the previous document. Preserve listener detachment and
 mid-frame lifetime safety; profile accumulation after many reloads.
 
+#26 skips hashing when a file's mtime and size match its last verified read.
+A rewrite that keeps both (`rsync -a`, `cp -p`) therefore shows no notice on
+focus; the save-time digest guard still refuses to overwrite it, and the
+notice appears after that failed save. If that matters, hash dirty tabs even
+when the stamp matches, and test same-size content under an unchanged stamp.
+
 ### FU11. Verify bounded shell notifications (after #17) — M
 Deferred from #17's second review: the title cache's stale-failure guard
 (`if (title == _title)` in `DesktopWindow.setTitle`'s error path) has no
