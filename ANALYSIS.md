@@ -110,15 +110,34 @@ From the second review pass, on three further branches:
 | [#28](https://github.com/L-K-M/Planchette/pull/28) `perf/keystroke-cost` | **The gutter re-laid out the whole document on every keystroke and then asked for one caret offset per line** (**confirmed**: 59.0 ms layout + 124.3 ms of `getOffsetForCaret` for 5,001 lines, against 9.1 ms for a single `computeLineMetrics`). One metrics call replaces the caret loop; revealing a match reads the cached tops instead of measuring. **Highlighting cost roughly an order of magnitude over the plain floor** (79 KB JSON: 12,001 spans, 11 ms to build the tree, 70 ms to lay it out, against 35 ms plain), so the cap moves from 200,000 characters to 32 KiB and the status bar says `Large file` instead of silently dropping colours. See P1 and P3 for what is left |
 | [#36](https://github.com/L-K-M/Planchette/pull/36) `ui/window-chrome` | **The menu bar and tab strip were drawn in the middle of the window** (**confirmed**: a `Column` centres its children across the cross axis and both shrink-wrap — the `MenuBar` measured x 537–863 in a 1400 px window, the first tab label started at x 426). **The 52-row toolbar repeated the File menu, the tab and the window title** — 132 rows of chrome before the first character, 23% of a 900 px window. The empty state is now the launch state, so the only screen offering New and Open is reachable. The find and replace fields had no outline, no fill and no surface (bare text with a caret in dark mode); **the editor had no scrollbar at all**; the status bar's readout started under the line numbers instead of under the text; two tooltips appeared at once on a tab; a tab's ink splash painted a square over its rounded corners; the dirty marker was a bullet character depending on the UI font; a horizontal scrollbar in a 40 px strip would have clipped the last close button. Plus a real `ThemeData` (flat dialogs, fast square tooltips, thin always-visible scrollbar, menu bar with a baseline rule). Core 84, editor 22, app 45 + 2 skipped |
 
-**Overlaps between PRs.** Six findings were found independently — by two
+From a third review pass, on these branches:
+
+| PR | Addresses |
+|---|---|
+| [#7](https://github.com/L-K-M/Planchette/pull/7) `fix/linux-packaging-metadata` | The `.deb` metadata was Poltergeist residue (**confirmed**): the copyright read "a two-pane file transfer client", the section was `net`, `objdump` ran unchecked, and `libglib2.0-bin` was a dead dep — the Linux file picker uses the XDG portal over D-Bus, so nothing spawns `gio`. Also fixes `floor_of`: a `die` inside it previously aborted only a pipeline subshell and let the script continue without a floor |
+| [#13](https://github.com/L-K-M/Planchette/pull/13) `feat/tab-indent` | Same Tab-focus bug as #14/#21 (**confirmed**). Tab/Shift+Tab indent and outdent on the document field only (the search field keeps traversal), caret clamped inside removed whitespace, forward and backward selection direction preserved |
+| [#16](https://github.com/L-K-M/Planchette/pull/16) `feat/go-to-line` | The dialog half of #33's Go to Line (Ctrl+G/Ctrl+L), plus clearing a stale validation error when the input changes |
+| [#19](https://github.com/L-K-M/Planchette/pull/19) `fix/undo-load-boundary` | **Undo history crossed the document-load boundary** (**confirmed**): `UndoHistory` binds its stack to the controller instance, so focused edits stayed undoable after `_installText` replaced the buffer — undo could resurrect pre-load text into a blank file. A fresh `CodeEditingController` per install severs the stack; replaced controllers retire (listeners removed, disposed with the parent) so no widget touches a disposed controller mid-frame |
+| [#20](https://github.com/L-K-M/Planchette/pull/20) `ci/dependabot-coverage` | `dependabot.yml` covered only the workspace root (`planchette_core`); `packages/planchette_editor` and `app/planchette_app` sit outside the pub workspace, so their deps never got update PRs |
+| [#23](https://github.com/L-K-M/Planchette/pull/23) `feat/comment-toggle` | E1: Ctrl+/ toggles `lineComments` per language, keeps indentation, skips blank and whitespace-only lines, preserves caret and both selection directions |
+| [#25](https://github.com/L-K-M/Planchette/pull/25) `feat/font-zoom` | The zoom half of #30: Ctrl+=/-/0 and a View menu, folded into the text style so the gutter and reveal painter scale consistently |
+| [#32](https://github.com/L-K-M/Planchette/pull/32) `fix/gutter-wrap-drift` | Same gutter finding as #22/#28 (**confirmed**). Exact per-line measured heights at every document size, with unchanged prefix/suffix heights spliced back after edits and a full-measurement fallback |
+| [#38](https://github.com/L-K-M/Planchette/pull/38) `feat/revert-file` | The Revert command from #26 alone: File › Revert File on file-backed tabs, prompting only when dirty |
+| [#40](https://github.com/L-K-M/Planchette/pull/40) `fix/temp-leftover-sweep` | The delete half of B10: sweeps `.planchette-<uuid>.edit`/`.backup` siblings older than 7 days when a document opens, keyed on `changed` — a `.backup` inherits the old file's mtime, so `modified` could call a fresh recovery file ancient. B10 keeps the restore half |
+| [#42](https://github.com/L-K-M/Planchette/pull/42) `feat/tab-close-others` | Middle-click closes a tab; right-click offers Close / Close Others / Close All Tabs, each still running the per-tab consent decision with Cancel stopping the sweep. Covers part of A7 and the context-menu part of FU5 |
+
+**Overlaps between PRs.** These findings were found independently — by the
 review passes working in parallel — and are addressed by more than one open
 PR. Whoever merges second should keep the union rather than resolve in
 favour of one side:
 
 | finding | PRs | what each does |
 |---|---|---|
-| Tab moves focus out of the editor | #14, #21 | #14 adds an `EditorTabKeyBehavior` and line-editing keys. #21 puts the indentation rules in `planchette_core` as pure functions, matches the file's own tab or space convention, pads to the next tab stop, and leaves Tab to focus traversal while the editor is read-only |
-| The gutter re-measures the document per edit | #22, #28 | #22 moves the numbers into a decorations render object and adds a current-line band. #28 keeps the existing painter and replaces its per-line caret loop with one `computeLineMetrics` call. Both change `_ensureGutterLayout`; the union is one measurement path plus a band |
+| Tab moves focus out of the editor | #14, #21, #13 | #14 adds an `EditorTabKeyBehavior` and line-editing keys. #21 puts the indentation rules in `planchette_core` as pure functions, matches the file's own tab or space convention, pads to the next tab stop, and leaves Tab to focus traversal while the editor is read-only. #13 keeps the fix in the editor package and preserves backward selection direction |
+| The gutter re-measures the document per edit | #22, #28, #32 | #22 moves the numbers into a decorations render object and adds a current-line band. #28 keeps the existing painter and replaces its per-line caret loop with one `computeLineMetrics` call. #32 keeps per-line measured heights in a cache and splices unchanged regions on edit. All change `_ensureGutterLayout`; the union is one measurement path plus a band |
+| Go to Line | #33, #16 | #33 adds a clickable status position and per-platform find chords. #16 is the dialog and reveal plumbing alone |
+| Font zoom | #30, #25 | #30 adds the platform monospace stack and Actual Size. #25 folds the scale into the text style so gutter metrics and the reveal painter stay consistent |
+| Revert to disk | #26, #38 | #26 adds on-focus change detection, recreate-on-save and the Reload/Keep Mine notice. #38 is the File-menu command alone |
 | Centered menu bar and tab strip | #35, #36 | #35 folds the toolbar into the tab strip and adds tab commands. #36 removes the toolbar outright, fixes the `Column` alignment, and reworks the tab and status rows. #35's tab-strip features and #36's row geometry should both survive |
 | Untitled document naming | #35, #21 | #35 reuses "Untitled 1" for a fresh buffer. #21 gives untitled documents a counter separate from the tab identity counter |
 | Search and status rows | #33, #36 | #33 makes the status position clickable and adds language display names. #36 aligns the status bar's leading edge to the text column and stops claiming a language for a file too large to highlight |
@@ -183,9 +202,10 @@ Zoom resets on every launch. See A1 (settings store). Store the zoom
 index, and restore and clamp it on startup.
 
 ### FU5. Tab strip context menu and more tab keys (after #30 and #35) — M
-Planned in #35 but not built:
-- A right-click menu on tabs: Close, Close Others, Close to the Right,
-  Copy Path, Reveal in Finder/Explorer/Files.
+Planned in #35 but not built there; #42 added the right-click menu with
+Close / Close Others / Close All Tabs, so what remains is:
+- Extend the menu: Close to the Right, Copy Path, Reveal in
+  Finder/Explorer/Files.
 - Drag to reorder.
 - Aliases through `_Command.aliases` from #30: Ctrl+PageDown/PageUp for
   next/previous tab on Windows/Linux, and Cmd+Shift+] / [ on macOS.
@@ -279,16 +299,15 @@ tabs. **Plan:** use `Ctrl+PageDown` / `Ctrl+PageUp` (VS Code) and
 `Cmd+Shift+]` / `[` on macOS. #30 already adds platform-correct aliases
 through `_Command.aliases`; reuse that.
 
-### B10. Orphaned save siblings are never swept — S (read)
-A save writes `name.planchette-<uuid>.edit` next to the target and, for a
-replacement, `name.planchette-<uuid>.backup`. A crash between the two renames
-leaves both, with the plaintext of the document beside the file at 0600.
-`ARCHITECTURE.md` says hosts keep their own crash-recovery sweeps; the
-standalone app has none, so they accumulate forever. **Plan:** on startup,
-list the target directory for `*.planchette-*.backup` and `*.planchette-*.edit`
-older than a day, and either restore a lone `.backup` or offer to remove
-them. Guard against deleting a sibling another running Planchette is using:
-only sweep files older than the process start.
+### B10. Offer recovery for a lone save sibling — S
+The delete half landed in #40: `.planchette-<uuid>.edit`/`.backup`
+siblings older than 7 days are swept when a document opens, keyed on
+`changed` — keep that cutoff, a `.backup` inherits the old file's mtime
+so `modified` cannot date the leftover. What is left: a lone `.backup`
+still holds the previous file content after a mid-save crash. When an
+opened document has one, offer to restore it rather than letting the
+sweep discard it — restore beats delete for the recovery case the
+format exists for.
 
 ### B11. Quit during a save is refused with no explanation — S (read)
 `_confirmQuit` returns false when any tab is busy or saving
@@ -348,6 +367,14 @@ b.txt (not UTF-8)".
 ### B18. Opening a file that is already open should flash its tab — S (idea)
 Today the existing tab is simply activated. Add a short highlight
 animation on that tab so it's clear why nothing new appeared.
+
+### B19. Save As can slip the open-tab check while a sibling is loading — S (read)
+`DocumentWorkspace._findPath` canonicalizes the target and compares it
+against `tab.path`, but a tab's `path` is only set after its load
+finishes. A Save As aimed at a still-loading tab's unresolved alias can
+miss the check. The digest guard still refuses a true collision at
+write time, so the worst case is a confusing error rather than lost
+data — recheck `_documents` once the pending load lands.
 
 ## 4. Performance
 
@@ -440,12 +467,6 @@ while scrolling — plus a fresh `Paint()` for the divider. **Plan:** cache
 pre-measured digit atlas, and hoist the divider's `Paint`.
 
 ## 5. Editing features
-
-### E1. Toggle line comment (Cmd/Ctrl+/) — S
-Use the language's `lineComments.first`. If every selected line is
-commented, uncomment; otherwise comment at the minimum indentation. For
-`blockComments`-only languages (CSS, XML), wrap the selection. Put the
-pure function in `planchette_core` next to `indentation.dart`.
 
 ### E2. Line operations — S each
 Duplicate line or selection (Cmd/Ctrl+Shift+D), move line up/down
@@ -554,10 +575,11 @@ The shell already models menus as `_ShellMenu` / `_Command`. List every
 enabled command with its shortcut, filter by fuzzy match, and run it on
 Enter.
 
-### A7. Save All, Close All, Close Others, Reopen Closed Tab — S each
-Reopen Closed Tab (Cmd/Ctrl+Shift+T) keeps a stack of recently closed
-paths. The quit prompt should list the dirty files, with "Save All" and
-"Discard All" buttons instead of one dialog per tab.
+### A7. Save All and Reopen Closed Tab — S each
+Close Others and Close All landed with #42, with the consent decision
+still per tab. Reopen Closed Tab (Cmd/Ctrl+Shift+T) keeps a stack of
+recently closed paths. The quit prompt should list the dirty files,
+with "Save All" and "Discard All" buttons instead of one dialog per tab.
 
 ### A8. Remember window size, position and maximized state — S
 Store them in settings (A1). Restore them before `waitUntilReadyToShow`,
@@ -785,6 +807,20 @@ as the rest of the chrome so it is one decision, not three.
   setting, just correct behaviour: strip trailing spaces from a pasted line
   and add the final newline if the file already had one. Cheaper to live
   with than to look for afterwards.
+- **Q15. "Ask the board" scratch buffer.** A persistent SCRATCH tab that
+  survives sessions — paste-and-forget notes that never need a filename.
+  Small once session restore (A2) exists.
+- **Q16. The board answers when idle.** Leave the empty state untouched
+  for a while and the planchette drifts across the letter arc to spell
+  something. Subtle, disablable, skipped under reduced motion — a
+  companion to Q2, not a screen saver.
+- **Q17. Ritual incantations.** `:wq` or `ZZ` in the Go to Line field —
+  or the command palette once A6 exists — saves and closes the tab. The
+  editor answers to muscle memory.
+- **Q18. Typewriter mode.** The caret line stays vertically centered
+  while typing, so neck and context stay still. One scroll-offset rule;
+  toggle under View, and make it compose with V7's scroll-past-end
+  padding.
 
 ## 10. Process and documentation
 
@@ -805,7 +841,9 @@ as the rest of the chrome so it is one decision, not three.
   merges: indentation, disk change detection, zoom, Go to Line, fonts, and
   the diff language. #28 already moved the highlighting limit to 32 KiB in
   all three documents and recorded that a plain 800 KB document still costs
-  a few hundred milliseconds a keystroke; keep that.
+  a few hundred milliseconds a keystroke; keep that. Also note the file's
+  verification claims are all macOS-local runs (it cites Flutter 3.47.3
+  while CI pins 3.47.2) — fine, but not cross-platform proof.
 - **D3. Visual regression shots — do this next.** Real-font screenshots
   caught the centered menu bar that no test noticed, and then the bare find
   fields, the missing scrollbar and the misaligned status bar. A second
@@ -872,3 +910,34 @@ as the rest of the chrome so it is one decision, not three.
   out to be *non*-issues (D0, and the undo question in the #21 review) — a
   test that says "this is fine" is worth as much as one that says "this was
   broken", and it is cheaper than re-deriving it.
+
+- **D10. Gate `dart format` in CI.** `dart analyze` and `flutter analyze`
+  run on every PR, but nothing enforces formatter output, so style drift
+  enters one hunk at a time. A `dart format --set-exit-if-changed` leg
+  over the workspace packages and the app is one workflow step.
+
+- **D11. AGENTS.md delegates SDK installs to a doc that is not here.**
+  "See Poltergeist's AGENTS.md §1" does not exist in this repository, and
+  fresh containers ship no Dart or Flutter at all. Copy the incantations
+  in-repo: dart-archive stable zip for the Dart SDK, the Flutter release
+  tarball for 3.47.2, and note `xz` may be absent — Python's `lzma`
+  module extracts `.tar.xz` fine.
+
+- **D12. Port archaeology cleanup — S.** `editor_syntax.dart` is dotted
+  with `// 06 §7.3`-style references to decision docs that live in the
+  sibling repositories. Either map the numbering in `docs/` or drop the
+  references. Also `defaultTextDocumentMaximumBytes` is an unused alias
+  of `textDocumentMaximumBytes` kept for host compatibility — remove it
+  once no host references it.
+
+- **D13. Index in UTF-16 code units and keep it there.** Dart `String`
+  offsets are UTF-16 code units; match ranges, syntax tokens and
+  selections all share that convention. Keep new features on it — a
+  feature that quietly mixes in byte offsets corrupts positions for
+  astral characters. (LSP positions are UTF-16 too, so the convention
+  survives even a future language-server client.)
+
+- **D14. `textDocumentSha256` reads the file three times per open** —
+  before, during and after. The third pass is what makes the
+  changed-during-load guard meaningful; a stream-hash plus one compare
+  would only be equivalent if the after-read were free. Leave it.
