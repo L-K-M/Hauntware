@@ -22,6 +22,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.isActive = true,
     this.editingLocked = false,
     this.showLineNumbers = true,
+    this.highlightCaretLine = true,
     this.showStatus = true,
     this.banner,
     this.statusBuilder,
@@ -34,6 +35,10 @@ class PlanchetteEditor extends StatefulWidget {
   final bool isActive;
   final bool editingLocked;
   final bool showLineNumbers;
+
+  /// Draw a subtle full-width band behind the caret's line, as mainstream
+  /// code editors do. Hosts can opt out.
+  final bool highlightCaretLine;
   final bool showStatus;
   final Widget? banner;
   final Widget Function(BuildContext context, EditorController controller)?
@@ -416,7 +421,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             ? _measureGutter(scaler)
             : 0.0;
         _textWidth = constraints.maxWidth - gutterWidth - 2 * _padding;
-        if (widget.showLineNumbers) _ensureGutterLayout(_textWidth!, scaler);
+        // The caret-line band needs line tops even when the gutter is hidden.
+        _ensureGutterLayout(_textWidth!, scaler);
         final theme = Theme.of(context);
         return NotificationListener<ScrollNotification>(
           onNotification: (_) {
@@ -447,40 +453,64 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   ),
                 ),
               Expanded(
-                child: Actions(
-                  actions: {
-                    if (_locked) ...{
-                      UndoTextIntent: CallbackAction<UndoTextIntent>(
-                        onInvoke: (_) => null,
+                child: Stack(
+                  children: [
+                    if (widget.highlightCaretLine)
+                      Positioned.fill(
+                        child: CustomPaint(
+                          key: const ValueKey('editor-caret-band'),
+                          painter: _CaretLineBandPainter(
+                            scroll: c.scroll,
+                            repaint: _gutterRepaint,
+                            lineTops: _gutterTops,
+                            topInset: _padding,
+                            caretLine: c.caretLineColumn.$1,
+                            lineHeight: scaler.scale(
+                              _style.fontSize!,
+                            ) *
+                            _style.height!,
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.05,
+                            ),
+                          ),
+                        ),
                       ),
-                      RedoTextIntent: CallbackAction<RedoTextIntent>(
-                        onInvoke: (_) => null,
+                    Actions(
+                      actions: {
+                        if (_locked) ...{
+                          UndoTextIntent: CallbackAction<UndoTextIntent>(
+                            onInvoke: (_) => null,
+                          ),
+                          RedoTextIntent: CallbackAction<RedoTextIntent>(
+                            onInvoke: (_) => null,
+                          ),
+                        },
+                      },
+                      child: TextField(
+                        key: const ValueKey('planchette.document'),
+                        controller: c.text,
+                        undoController: c.undoController,
+                        readOnly: _locked,
+                        focusNode: c.editorFocus,
+                        scrollController: c.scroll,
+                        autofocus: widget.isActive,
+                        expands: true,
+                        maxLines: null,
+                        minLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textAlignVertical: TextAlignVertical.top,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        style: _style,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.all(_padding),
+                        ),
                       ),
-                    },
-                  },
-                  child: TextField(
-                    key: const ValueKey('planchette.document'),
-                    controller: c.text,
-                    undoController: c.undoController,
-                    readOnly: _locked,
-                    focusNode: c.editorFocus,
-                    scrollController: c.scroll,
-                    autofocus: widget.isActive,
-                    expands: true,
-                    maxLines: null,
-                    minLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textAlignVertical: TextAlignVertical.top,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    smartDashesType: SmartDashesType.disabled,
-                    smartQuotesType: SmartQuotesType.disabled,
-                    style: _style,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.all(_padding),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ],
@@ -643,4 +673,53 @@ class _LineNumberGutterPainter extends CustomPainter {
       dividerColor != old.dividerColor ||
       textScaler != old.textScaler ||
       rightInset != old.rightInset;
+}
+
+/// Paints a subtle full-width band behind the caret's logical line, from
+/// that line's visual top to the next line's top (so wrapped rows are
+/// covered). Tracks the editor's scroll offset like the gutter painter and
+/// shares its repaint listenable.
+class _CaretLineBandPainter extends CustomPainter {
+  final ScrollController scroll;
+  final List<double> lineTops;
+  final double topInset;
+  final int caretLine;
+  final double lineHeight;
+  final Color color;
+
+  _CaretLineBandPainter({
+    required this.scroll,
+    required Listenable repaint,
+    required this.lineTops,
+    required this.topInset,
+    required this.caretLine,
+    required this.lineHeight,
+    required this.color,
+  }) : super(repaint: repaint);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final index = caretLine - 1;
+    if (index < 0 || index >= lineTops.length) return;
+    // During reparenting the newest attached position is the live one.
+    final offset = scroll.hasClients ? scroll.positions.last.pixels : 0.0;
+    final top = topInset + lineTops[index] - offset;
+    final bottom = index + 1 < lineTops.length
+        ? topInset + lineTops[index + 1] - offset
+        : top + lineHeight;
+    final band = Rect.fromLTWH(0, top, size.width, bottom - top);
+    canvas.drawRect(band.intersect(Offset.zero & size), Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_CaretLineBandPainter old) =>
+      !identical(lineTops, old.lineTops) ||
+      caretLine != old.caretLine ||
+      topInset != old.topInset ||
+      lineHeight != old.lineHeight ||
+      color != old.color;
+
+  @override
+  String toString() =>
+      '_CaretLineBandPainter(caretLine: $caretLine, lines: ${lineTops.length})';
 }

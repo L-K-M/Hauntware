@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- The shared editing surface draws a subtle full-width band behind the
+  caret's line (wrapping-aware, scroll-tracked); hosts can opt out with
+  `PlanchetteEditor.highlightCaretLine`.
 - Standalone desktop editor for macOS, Linux and Windows, with document tabs,
   New/Open/Save/Save As, native menus, file-open events and guarded close/quit.
 - Shared pure-Dart `planchette_core` and Flutter `planchette_editor` packages

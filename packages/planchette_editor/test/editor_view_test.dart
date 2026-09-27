@@ -61,6 +61,44 @@ void main() {
       expect(find.text('Remplacer'), findsOneWidget);
     },
   );
+  testWidgets('caret-line band follows the caret and survives scrolling', (
+    tester,
+  ) async {
+    final c = EditorController(
+      displayPath: 'test',
+      initialText: List.generate(40, (i) => 'line $i').join('\n'),
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    String band() =>
+        (tester.widget<CustomPaint>(find.byKey(const ValueKey('editor-caret-band'))).painter)
+            .toString();
+    expect(band(), contains('caretLine: 1'));
+    c.text.selection = const TextSelection.collapsed(offset: 15);
+    await tester.pump();
+    expect(band(), contains('caretLine: 3'));
+    expect(c.scroll.hasClients, isTrue);
+    c.scroll.jumpTo(120);
+    await tester.pump();
+    expect(band(), contains('caretLine: 3'));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('caret-line band can be disabled by hosts', (tester) async {
+    final c = EditorController(displayPath: 'test', initialText: 'x');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlanchetteEditor(controller: c, highlightCaretLine: false),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('editor-caret-band')), findsNothing);
+  });
+
   testWidgets('replacement can be undone and redone in the document', (
     tester,
   ) async {
