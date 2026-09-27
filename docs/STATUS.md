@@ -4,6 +4,25 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Dotenv syntax highlighting (2026-09-27)
+
+The editor recognizes `.env`, `.env.*` and `*.env`, including local Windows
+paths. It highlights assignment keys, an optional `export` prefix, comments
+and single/double-quoted values across lines. Bare values remain text, so
+booleans, numbers, semicolons and quotes within an unquoted value cannot
+acquire misleading INI or shell syntax. The highlighter follows the Node
+dotenv convention; dialect limits are recorded in 06 §7.1. Dark-theme
+comments also have stronger contrast, checked against both editor backgrounds.
+
+Detection and token-range regressions reproduced the missing/incorrect
+highlighting before the fix. All 69 syntax, editor and capture tests pass,
+as do the 10 localization checks after updating their technical-literal
+inventory. Flutter analysis is clean on 3.47.3. Independent review checked
+malformed input, Unicode offsets and linear scaling. The scanner is recorded
+in PORTS.md as a Séance port-back candidate. Before/after light and dark captures are in
+[the task evidence](../tasks/dotenv-highlighting/README.md); sharing editor
+packages with a possible Planchette app remains a proposal.
+
 ## Desktop file interactions (2026-09-26)
 
 Show Hidden Files now carries its checked state into the macOS menu. The
