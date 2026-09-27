@@ -651,6 +651,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'ratio'",
     "'must be finite'",
   },
+  // Dotenv assignment grammar, BOM handling, and value delimiters.
+  'lib/ui/dotenv_syntax.dart': {
+    r"r'[ \t]*(?:(export)[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*'",
+    r"'\ufeff'",
+    "'='",
+    "'export'",
+    '\'"\'',
+    '"\'"',
+  },
   // The ported syntax engine's grammar literals (06 §2.2, ported from
   // Séance's editor_syntax.dart @ 2e6d1f1): language ids, keyword sets,
   // comment/string delimiters, regex patterns, and the extension/basename
@@ -676,6 +685,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'.dockerfile\'',
     '\'.dockerignore\'',
     '\'.editorconfig\'',
+    '\'.env\'',
+    '\'.env.\'',
     '\'.gitconfig\'',
     '\'.gitignore\'',
     '\'.gitmodules\'',
@@ -686,7 +697,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'.zprofile\'',
     '\'.zshenv\'',
     '\'.zshrc\'',
-    '\'/\'',
     '\'/*\'',
     '\'//\'',
     '\'0X\'',
@@ -780,6 +790,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'dockerfile\'',
     '\'dockerfile.\'',
     '\'done\'',
+    '\'dotenv\'',
     '\'double\'',
     '\'drop\'',
     '\'dynamic\'',
@@ -1074,6 +1085,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'yield\'',
     '\'yml\'',
     '\'zsh\'',
+    r"r'[/\\]'",
     'r\'([-a-zA-Z]+)[ \\t]*:\'',
     'r\'</?[A-Za-z][A-Za-z0-9:._-]*\'',
     'r\'\\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?\'',

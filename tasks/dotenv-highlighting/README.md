@@ -21,6 +21,11 @@ documented in 06 §7.1; it does not expand or execute values.
 - Independent review exercised 20,000 randomized incomplete inputs without
   exceptions or invalid token ranges and checked linear scaling with large
   malformed inputs. It found no correctness blocker.
+- The first full CI run passed 2,880 tests and found two localization-audit
+  failures: the literal inventory needed the new scanner's technical strings
+  and still contained the removed POSIX-only separator literal. The follow-up
+  updates only those exact inventory entries, preserving both audit rules.
+  All 79 combined editor/localization tests and full app analysis then pass.
 
 ## Visual evidence
 

@@ -16,9 +16,10 @@ comments also have stronger contrast, checked against both editor backgrounds.
 
 Detection and token-range regressions reproduced the missing/incorrect
 highlighting before the fix. All 69 syntax, editor and capture tests pass,
-and Flutter analysis is clean on 3.47.3. Independent review checked malformed
-input, Unicode offsets and linear scaling. The scanner is recorded in PORTS.md as
-a Séance port-back candidate. Before/after light and dark captures are in
+as do the 10 localization checks after updating their technical-literal
+inventory. Flutter analysis is clean on 3.47.3. Independent review checked
+malformed input, Unicode offsets and linear scaling. The scanner is recorded
+in PORTS.md as a Séance port-back candidate. Before/after light and dark captures are in
 [the task evidence](../tasks/dotenv-highlighting/README.md); sharing editor
 packages with a possible Planchette app remains a proposal.
 
