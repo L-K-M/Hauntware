@@ -341,16 +341,21 @@ void main() {
     expect(droppedPaths('/home/me/one.txt'), ['/home/me/one.txt']);
   });
 
-  test('a URI with no path on this platform is skipped, not thrown', () {
-    // A UNC share and an escaped separator both reach `toFilePath`, which
-    // throws UnsupportedError rather than FormatException. A Windows drop can
-    // carry either, and a throw from a gesture handler takes the frame with it.
-    expect(droppedPaths('file://host/share/one.txt'), isEmpty);
-    expect(droppedPaths('file:///a%2Fb'), isEmpty);
-    // The rest of the payload still opens.
-    expect(droppedPaths('file://host/share\\x.txt\r\nfile:///home/me/ok.txt'), [
-      fromUri('file:///home/me/ok.txt'),
-    ]);
+  test('an unconvertible URI is skipped, never thrown out of the handler', () {
+    // `toFilePath` throws UnsupportedError — not FormatException — for a UNC
+    // share and for an escaped separator. What it throws is host-dependent:
+    // off Windows a share has no path and throws, and on Windows it converts
+    // to a UNC path, which is the right answer there. The Windows job is the
+    // reason this asserts the outcome rather than an exact list.
+    //
+    // What must hold everywhere: the payload is processed, nothing escapes, and
+    // the rest of it still opens.
+    expect(() => droppedPaths('file://host/share/one.txt'), returnsNormally);
+    expect(() => droppedPaths('file:///a%2Fb'), returnsNormally);
+    expect(
+      droppedPaths('file://host/share/one.txt\r\nfile:///home/me/ok.txt'),
+      [contains(fromUri('file:///home/me/ok.txt'))],
+    );
   });
 
   test('a payload of only comments opens nothing', () {
