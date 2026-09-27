@@ -415,6 +415,9 @@ void main() {
         FileSystemException('rename', 'doc.txt', OSError('failed', code));
     expect(isVanishedPathError(withCode(2)), isTrue);
     // ERROR_PATH_NOT_FOUND counts only on Windows; POSIX code 3 is ESRCH.
+    // Both sides of the gate are pinned regardless of the host running this.
+    expect(isVanishedPathError(withCode(3), isWindows: true), isTrue);
+    expect(isVanishedPathError(withCode(3), isWindows: false), isFalse);
     expect(isVanishedPathError(withCode(3)), Platform.isWindows);
     // EACCES stays a real failure, not a concurrent-modification signal.
     expect(isVanishedPathError(withCode(13)), isFalse);

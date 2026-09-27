@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:meta/meta.dart';
 import 'package:uuid/uuid.dart';
 
 import 'native_file_operations.dart';
@@ -361,13 +362,12 @@ const int _errorPathNotFound = 3;
 /// Whether [error] means a path vanished mid-operation — the destination
 /// file itself ([_errorNoSuchFile]) or, on Windows, a parent directory
 /// ([_errorPathNotFound]). Everything else (permissions, quota) is a real
-/// failure, not a concurrent-modification signal. Exposed so the platform
-/// gating can be pinned from tests; callers should prefer the wrapped
-/// [TextDocumentException] diagnostics to classifying errors themselves.
-bool isVanishedPathError(FileSystemException error) {
+/// failure, not a concurrent-modification signal.
+@visibleForTesting
+bool isVanishedPathError(FileSystemException error, {bool? isWindows}) {
   final code = error.osError?.errorCode;
   return code == _errorNoSuchFile ||
-      (Platform.isWindows && code == _errorPathNotFound);
+      ((isWindows ?? Platform.isWindows) && code == _errorPathNotFound);
 }
 
 bool _utf8BomAt(List<int> bytes, int offset) =>
