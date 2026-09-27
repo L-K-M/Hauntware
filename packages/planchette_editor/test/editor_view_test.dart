@@ -61,6 +61,22 @@ void main() {
       expect(find.text('Remplacer'), findsOneWidget);
     },
   );
+  testWidgets('status bar shows selection extent while selecting', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'test', initialText: 'one\ntwo');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    expect(find.textContaining('selected'), findsNothing);
+    c.text.selection = const TextSelection(baseOffset: 0, extentOffset: 7);
+    await tester.pump();
+    expect(find.textContaining('7 selected (2 lines)'), findsOneWidget);
+    c.text.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
+    expect(find.textContaining('selected'), findsNothing);
+  });
+
   testWidgets('replacement can be undone and redone in the document', (
     tester,
   ) async {

@@ -12,8 +12,62 @@ TextDocument document(String text) => TextDocument(
   sha256: 'original',
 );
 
+void _selectionStatsTests() {
+  group('selectionStats', () {
+    test('counts characters and lines for forward selections', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo\nthree',
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = const TextSelection(
+        baseOffset: 2,
+        extentOffset: 10,
+      );
+      expect(editor.selectionStats, (8, 3));
+    });
+
+    test('direction does not matter', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo\nthree',
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = const TextSelection(
+        baseOffset: 10,
+        extentOffset: 2,
+      );
+      expect(editor.selectionStats, (8, 3));
+    });
+
+    test('a selection ending at a line start does not count that line', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo\nthree',
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 3,
+      );
+      expect(editor.selectionStats, (3, 1));
+    });
+
+    test('collapsed selections report nothing', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one',
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = const TextSelection.collapsed(offset: 1);
+      expect(editor.selectionStats, (0, 0));
+    });
+  });
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  _selectionStatsTests();
   test(
     'save retains new edits and updates the next conflict baseline',
     () async {

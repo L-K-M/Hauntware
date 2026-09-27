@@ -138,6 +138,28 @@ class EditorController extends ChangeNotifier {
     return (lo + 1, offset - starts[lo] + 1);
   }
 
+  /// Characters and logical lines covered by the selection; (0, 0) when
+  /// collapsed. Direction does not matter.
+  (int, int) get selectionStats {
+    final selection = text.selection;
+    if (!selection.isValid || selection.isCollapsed) return (0, 0);
+    final start = selection.start.clamp(0, text.text.length);
+    final end = selection.end.clamp(0, text.text.length);
+    if (end <= start) return (0, 0);
+    final starts = lineStarts;
+    // First line of the anchor, last line of the character before the
+    // extent — the same touched-lines rule the line commands use.
+    var first = 0;
+    while (first + 1 < starts.length && starts[first + 1] <= start) {
+      first++;
+    }
+    var last = first;
+    while (last + 1 < starts.length && starts[last + 1] < end) {
+      last++;
+    }
+    return (end - start, last - first + 1);
+  }
+
   Future<void> initialize() =>
       _initialization ??= _loading ? _load() : Future<void>.value();
 

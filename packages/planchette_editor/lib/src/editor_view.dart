@@ -355,6 +355,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   Widget _statusBar(BuildContext context) {
     final (line, column) = c.caretLineColumn;
     final document = c.document;
+    final (selectedCharacters, selectedLines) = c.selectionStats;
     final status = [
       if (c.isSaving) widget.strings.saving,
       if (c.isDirty) widget.strings.unsaved,
@@ -369,11 +370,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           Expanded(
             child: Text(
               widget.strings.documentPosition(
-                line,
-                column,
-                c.lineStarts.length,
-                c.byteCount,
-              ),
+                    line,
+                    column,
+                    c.lineStarts.length,
+                    c.byteCount,
+                  ) +
+                  (selectedCharacters > 0
+                      ? ' · ${widget.strings.selectionInfo(selectedCharacters, selectedLines)}'
+                      : ''),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall,

@@ -19,4 +19,7 @@ class EditorStrings {
       '$current/$total${capped ? '+' : ''}';
   String documentPosition(int line, int column, int lines, int bytes) =>
       'Ln $line, Col $column · $lines lines · $bytes bytes';
+  String selectionInfo(int characters, int lines) => lines > 1
+      ? '$characters selected ($lines lines)'
+      : '$characters selected';
 }
