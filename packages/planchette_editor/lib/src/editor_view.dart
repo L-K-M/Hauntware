@@ -55,6 +55,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   double? _textWidth;
   int _lastReveal = -1;
   bool _revealQueued = false;
+  int _lastGoto = -1;
+  bool _gotoQueued = false;
   EditorController get c => widget.controller;
   TextStyle get _style =>
       const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
@@ -85,6 +87,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       oldWidget.controller.removeListener(_changed);
       c.addListener(_changed);
       _lastReveal = -1;
+      _lastGoto = -1;
       _gutterText = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) c.initialize();
@@ -122,6 +125,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         _revealMatch();
       });
     }
+    if (_lastGoto != c.gotoLineRequest && !_gotoQueued) {
+      _gotoQueued = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _gotoQueued = false;
+        if (!mounted) return;
+        _lastGoto = c.gotoLineRequest;
+        _revealGotoLine();
+      });
+    }
   }
 
   void _revealMatch() {
@@ -150,6 +162,29 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           _style.height!;
     }
     final position = c.scroll.positions.last;
+    _scrollToDy(position, dy);
+  }
+
+  void _revealGotoLine() {
+    if (!c.scroll.hasClients) return;
+    final target = c.gotoLineTarget;
+    if (target < 1) return;
+    final starts = c.lineStarts;
+    if (target > starts.length) return;
+    double dy;
+    if (target - 1 < _gutterTops.length && _gutterTops.length == starts.length) {
+      dy = _gutterTops[target - 1];
+    } else {
+      final scaler = MediaQuery.textScalerOf(context);
+      dy =
+          (target - 1) *
+          scaler.scale(_style.fontSize!) *
+          _style.height!;
+    }
+    _scrollToDy(c.scroll.positions.last, dy);
+  }
+
+  void _scrollToDy(ScrollPosition position, double dy) {
     final target = (dy + _padding - position.viewportDimension / 3).clamp(
       0.0,
       position.maxScrollExtent,

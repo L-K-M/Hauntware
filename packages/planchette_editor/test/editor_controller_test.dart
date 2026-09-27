@@ -221,4 +221,29 @@ void main() {
     editor.text.selection = const TextSelection.collapsed(offset: 4);
     expect(editor.caretLineColumn, (2, 3));
   });
+  test('go to line clamps into range and parks the caret at the line start', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\nthree\n',
+    );
+    addTearDown(editor.dispose);
+    final before = editor.gotoLineRequest;
+    expect(editor.gotoLine(2), 2);
+    expect(
+      editor.text.selection,
+      const TextSelection.collapsed(offset: 4),
+    );
+    expect(editor.gotoLineRequest, before + 1);
+    expect(editor.gotoLineTarget, 2);
+    expect(editor.gotoLine(99), 4);
+    expect(
+      editor.text.selection,
+      const TextSelection.collapsed(offset: 14),
+    );
+    expect(editor.gotoLine(0), 1);
+    expect(
+      editor.text.selection,
+      const TextSelection.collapsed(offset: 0),
+    );
+  });
 }

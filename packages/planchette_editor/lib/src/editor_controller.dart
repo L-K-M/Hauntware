@@ -69,6 +69,8 @@ class EditorController extends ChangeNotifier {
   int _activeMatch = -1;
   int _revision = 0;
   int _revealRequest = 0;
+  int _gotoLineRequest = 0;
+  int _gotoLine = 0;
   String _lastText = '';
   String? _lastQuery;
   String? _metricsText;
@@ -99,6 +101,8 @@ class EditorController extends ChangeNotifier {
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
+  int get gotoLineRequest => _gotoLineRequest;
+  int get gotoLineTarget => _gotoLine;
   bool get editingLocked => _editingLocked;
   set editingLocked(bool value) => setEditingLocked(value);
 
@@ -356,6 +360,21 @@ class EditorController extends ChangeNotifier {
     } finally {
       _updatingSearch = false;
     }
+  }
+
+  /// Move the caret to the start of [line] (1-based) and ask the view to
+  /// scroll it into sight. Returns the applied line, clamped into range,
+  /// or null when navigation is unavailable (loading, error, disposed).
+  int? gotoLine(int line) {
+    if (isLoading || _error != null || _disposed) return null;
+    final starts = lineStarts;
+    final target = line.clamp(1, starts.length);
+    text.selection = TextSelection.collapsed(offset: starts[target - 1]);
+    _gotoLine = target;
+    _gotoLineRequest++;
+    editorFocus.requestFocus();
+    _notify();
+    return target;
   }
 
   void nextMatch() => _stepMatch(1);

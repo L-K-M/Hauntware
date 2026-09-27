@@ -225,4 +225,40 @@ void main() {
     },
     variant: const TargetPlatformVariant({TargetPlatform.macOS}),
   );
+
+  testWidgets(
+    'go to line dialog parks the caret from keyboard or menu',
+    (tester) async {
+      final tab = workspace.newDocument()!
+        ..editor.text.text = 'one\ntwo\nthree\n';
+      await mount(tester);
+
+      await chord(tester, LogicalKeyboardKey.keyL);
+      await tester.enterText(find.byType(TextField).last, '3');
+      await tester.tap(find.text('Go'));
+      await tester.pumpAndSettle();
+      expect(
+        tab.editor.text.selection,
+        const TextSelection.collapsed(offset: 8),
+      );
+
+      await tester.tap(find.text('Find'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Go to Line…'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, '99');
+      await tester.tap(find.text('Go'));
+      await tester.pumpAndSettle();
+      expect(
+        tab.editor.text.selection,
+        const TextSelection.collapsed(offset: 14),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 }

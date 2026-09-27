@@ -140,6 +140,22 @@ class _DocumentShellState extends State<_DocumentShell> {
     }
   }
 
+  void _goToLine() {
+    final tab = workspace.active;
+    if (tab == null || workspace.interactionLocked) return;
+    final editor = tab.editor;
+    if (editor.isLoading || editor.error != null) return;
+    unawaited(
+      showDialog<int>(
+        context: context,
+        builder: (context) =>
+            _GoToLineDialog(total: editor.lineStarts.length),
+      ).then((line) {
+        if (line != null) editor.gotoLine(line);
+      }),
+    );
+  }
+
   SingleActivator _shortcut(
     LogicalKeyboardKey key, {
     bool shift = false,
@@ -275,6 +291,13 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: mac
               ? _shortcut(LogicalKeyboardKey.keyG, shift: true)
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
+          enabled: ready,
+        ),
+        const _Separator(),
+        _Command(
+          'Go to Line…',
+          _goToLine,
+          shortcut: _shortcut(LogicalKeyboardKey.keyL),
           enabled: ready,
         ),
       ]),
@@ -656,13 +679,59 @@ class _DocumentShellState extends State<_DocumentShell> {
   }
 }
 
+/// Owns its input controller so the pop transition never touches a
+/// disposed controller.
+class _GoToLineDialog extends StatefulWidget {
+  const _GoToLineDialog({required this.total});
+  final int total;
+
+  @override
+  State<_GoToLineDialog> createState() => _GoToLineDialogState();
+}
+
+class _GoToLineDialogState extends State<_GoToLineDialog> {
+  final _input = TextEditingController();
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  void _submit(String value) =>
+      Navigator.pop(context, int.tryParse(value.trim()));
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Go to Line'),
+    content: TextField(
+      controller: _input,
+      autofocus: true,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(
+        hintText: 'Line 1–${widget.total}',
+        isDense: true,
+      ),
+      onSubmitted: _submit,
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        onPressed: () => _submit(_input.text),
+        child: const Text('Go'),
+      ),
+    ],
+  );
+}
+
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);
   final String label;
   final List<_MenuEntry> items;
-}
-
-sealed class _MenuEntry {
+}sealed class _MenuEntry {
   const _MenuEntry();
 }
 
