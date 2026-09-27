@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_core/planchette_core.dart';
 
@@ -25,6 +26,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.showStatus = true,
     this.banner,
     this.statusBuilder,
+    this.currentLineColor,
   });
 
   final EditorController controller;
@@ -39,6 +41,10 @@ class PlanchetteEditor extends StatefulWidget {
   final Widget Function(BuildContext context, EditorController controller)?
   statusBuilder;
 
+  /// The band behind the caret's line. Defaults to a faint tint of the
+  /// theme's text color; pass [Colors.transparent] to turn it off.
+  final Color? currentLineColor;
+
   @override
   State<PlanchetteEditor> createState() => _PlanchetteEditorState();
 }
@@ -47,12 +53,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   static const _padding = 14.0;
   static const _gutterInset = 8.0;
   final _gutterRepaint = ValueNotifier<int>(0);
-  List<double> _gutterTops = const [0];
-  String? _gutterText;
-  double? _gutterWidth;
-  TextScaler? _gutterScaler;
-  TextStyle? _gutterStyle;
-  double? _textWidth;
+  final _decorationsKey = GlobalKey();
   int _lastReveal = -1;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
@@ -85,7 +86,6 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       oldWidget.controller.removeListener(_changed);
       c.addListener(_changed);
       _lastReveal = -1;
-      _gutterText = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) c.initialize();
       });
@@ -128,27 +128,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     if (!c.scroll.hasClients) return;
     if (c.activeMatch < 0 || c.activeMatch >= c.matches.length) return;
     final match = c.matches[c.activeMatch];
-    double dy;
-    if (c.text.text.length <= syntaxHighlightingMaxChars &&
-        _textWidth != null) {
-      final prefix = c.text.text.substring(0, match.start);
-      final painter = TextPainter(
-        text: TextSpan(text: prefix, style: _style),
-        textDirection: TextDirection.ltr,
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout(maxWidth: _textWidth! > 1 ? _textWidth! : 1);
-      dy = painter
-          .getOffsetForCaret(TextPosition(offset: prefix.length), Rect.zero)
-          .dy;
-      painter.dispose();
-    } else {
-      final line =
-          c.lineStarts.takeWhile((offset) => offset <= match.start).length - 1;
-      dy =
-          line *
-          MediaQuery.textScalerOf(context).scale(_style.fontSize!) *
-          _style.height!;
-    }
+    final decorations = _decorationsKey.currentContext?.findRenderObject();
+    // The laid-out document knows where the match is, soft wraps included.
+    // Before its first layout, estimate from the logical line.
+    final dy =
+        (decorations is _RenderDocumentDecorations
+            ? decorations.textTopOf(match.start)
+            : null) ??
+        (c.lineStarts.takeWhile((offset) => offset <= match.start).length - 1) *
+            MediaQuery.textScalerOf(context).scale(_style.fontSize!) *
+            _style.height!;
     final position = c.scroll.positions.last;
     final target = (dy + _padding - position.viewportDimension / 3).clamp(
       0.0,
@@ -204,7 +193,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         children: [
           if (widget.banner != null) widget.banner!,
           if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
-          Expanded(child: _body()),
+          Expanded(child: _decorated(context, _body())),
           if (widget.showStatus && !c.isLoading && c.error == null) ...[
             const Divider(height: 1),
             SafeArea(
@@ -392,6 +381,30 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     );
   }
 
+  /// Line numbers and the current-line band are painted around the document
+  /// by one render object; see [_RenderDocumentDecorations].
+  Widget _decorated(BuildContext context, Widget body) {
+    if (c.isLoading || c.error != null) return body;
+    final theme = Theme.of(context);
+    final scaler = MediaQuery.textScalerOf(context);
+    return _DocumentDecorations(
+      key: _decorationsKey,
+      controller: c,
+      repaint: _gutterRepaint,
+      gutterWidth: widget.showLineNumbers ? _measureGutter(scaler) : 0,
+      textStyle: _style,
+      textScaler: scaler,
+      numberColor: theme.colorScheme.onSurfaceVariant,
+      caretNumberColor: theme.colorScheme.onSurface,
+      dividerColor: theme.dividerColor,
+      currentLineColor:
+          widget.currentLineColor ??
+          theme.colorScheme.onSurface.withValues(alpha: 0.045),
+      rightInset: _gutterInset,
+      child: body,
+    );
+  }
+
   Widget _body() {
     if (c.isLoading) return const Center(child: CircularProgressIndicator());
     if (c.error != null) {
@@ -415,9 +428,6 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         final gutterWidth = widget.showLineNumbers
             ? _measureGutter(scaler)
             : 0.0;
-        _textWidth = constraints.maxWidth - gutterWidth - 2 * _padding;
-        if (widget.showLineNumbers) _ensureGutterLayout(_textWidth!, scaler);
-        final theme = Theme.of(context);
         return NotificationListener<ScrollNotification>(
           onNotification: (_) {
             _gutterRepaint.value++;
@@ -430,21 +440,6 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 SizedBox(
                   key: const ValueKey('editor-line-gutter'),
                   width: gutterWidth,
-                  child: CustomPaint(
-                    painter: _LineNumberGutterPainter(
-                      scroll: c.scroll,
-                      repaint: _gutterRepaint,
-                      lineTops: _gutterTops,
-                      topInset: _padding,
-                      caretLine: c.caretLineColumn.$1,
-                      textStyle: _style,
-                      numberColor: theme.colorScheme.onSurfaceVariant,
-                      caretLineColor: theme.colorScheme.onSurface,
-                      dividerColor: theme.dividerColor,
-                      textScaler: scaler,
-                      rightInset: _gutterInset,
-                    ),
-                  ),
                 ),
               Expanded(
                 child: Actions(
@@ -503,144 +498,214 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     painter.dispose();
     return _gutterInset * 2 + width + 1;
   }
+}
 
-  void _ensureGutterLayout(double width, TextScaler scaler) {
-    if (identical(_gutterText, c.text.text) &&
-        _gutterWidth == width &&
-        _gutterScaler == scaler &&
-        _gutterStyle == _style) {
-      return;
+/// Paints the line-number gutter and the current-line band behind [child],
+/// which holds the gutter's space and the document field.
+///
+/// Positions come from the document's own [RenderEditable], which the text
+/// field has already laid out, and only for lines in view. Nothing lays out
+/// the document a second time, so edits cost no extra layout and numbers stay
+/// aligned with soft-wrapped lines at any document size.
+class _DocumentDecorations extends SingleChildRenderObjectWidget {
+  const _DocumentDecorations({
+    super.key,
+    required this.controller,
+    required this.repaint,
+    required this.gutterWidth,
+    required this.textStyle,
+    required this.textScaler,
+    required this.numberColor,
+    required this.caretNumberColor,
+    required this.dividerColor,
+    required this.currentLineColor,
+    required this.rightInset,
+    required super.child,
+  });
+
+  final EditorController controller;
+  final Listenable repaint;
+  final double gutterWidth;
+  final TextStyle textStyle;
+  final TextScaler textScaler;
+  final Color numberColor;
+  final Color caretNumberColor;
+  final Color dividerColor;
+  final Color currentLineColor;
+  final double rightInset;
+
+  @override
+  _RenderDocumentDecorations createRenderObject(BuildContext context) =>
+      _RenderDocumentDecorations(this);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderDocumentDecorations renderObject,
+  ) => renderObject.configuration = this;
+}
+
+class _RenderDocumentDecorations extends RenderProxyBox {
+  _RenderDocumentDecorations(this._configuration);
+
+  _DocumentDecorations _configuration;
+  set configuration(_DocumentDecorations value) {
+    final previous = _configuration;
+    _configuration = value;
+    if (attached && !identical(previous.repaint, value.repaint)) {
+      previous.repaint.removeListener(markNeedsPaint);
+      value.repaint.addListener(markNeedsPaint);
     }
-    final lineHeight = scaler.scale(_style.fontSize!) * _style.height!;
-    if (c.text.text.length <= syntaxHighlightingMaxChars) {
-      final painter = TextPainter(
-        text: c.text.buildTextSpan(
-          context: context,
-          style: _style,
-          withComposing: false,
+    // The host rebuilds on every edit and caret move; either can move lines.
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _configuration.repaint.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _configuration.repaint.removeListener(markNeedsPaint);
+    super.detach();
+  }
+
+  /// The document field's text render object, or null before it is laid out.
+  RenderEditable? _editable() {
+    final pending = <RenderObject>[?child];
+    while (pending.isNotEmpty) {
+      final node = pending.removeLast();
+      if (node is RenderEditable) return node.hasSize ? node : null;
+      node.visitChildren(pending.add);
+    }
+    return null;
+  }
+
+  /// The unscrolled top of the line holding [offset], or null before layout.
+  double? textTopOf(int offset) {
+    final editable = _editable();
+    if (editable == null) return null;
+    return _LineGeometry(editable).topOf(offset) + editable.offset.pixels;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final editable = _editable();
+    if (editable != null) _paintDecorations(context.canvas, offset, editable);
+    super.paint(context, offset);
+  }
+
+  void _paintDecorations(
+    Canvas canvas,
+    Offset offset,
+    RenderEditable editable,
+  ) {
+    final config = _configuration;
+    final controller = config.controller;
+    final starts = controller.lineStarts;
+    final lines = _LineGeometry(editable);
+    final origin = offset + editable.localToGlobal(Offset.zero, ancestor: this);
+    double topOf(int offset) => origin.dy + lines.topOf(offset);
+
+    // Clip to the text's own viewport so numbers never show for lines whose
+    // text has scrolled into the field's padding.
+    final viewport = Rect.fromLTRB(
+      offset.dx,
+      origin.dy,
+      offset.dx + size.width,
+      origin.dy + editable.size.height,
+    );
+    canvas
+      ..save()
+      ..clipRect(viewport);
+
+    final (caretLineNumber, _) = controller.caretLineColumn;
+    final caretLine = caretLineNumber - 1;
+    final selection = controller.text.selection;
+    if (config.currentLineColor.a > 0 &&
+        selection.isValid &&
+        selection.isCollapsed) {
+      final lineEnd = caretLine + 1 < starts.length
+          ? starts[caretLine + 1] - 1
+          : controller.text.text.length;
+      canvas.drawRect(
+        Rect.fromLTRB(
+          viewport.left,
+          topOf(starts[caretLine]),
+          viewport.right,
+          topOf(lineEnd) + editable.preferredLineHeight,
         ),
-        textDirection: TextDirection.ltr,
-        textScaler: scaler,
-      )..layout(maxWidth: width > 1 ? width : 1);
-      _gutterTops = [
-        for (final offset in c.lineStarts)
-          painter.getOffsetForCaret(TextPosition(offset: offset), Rect.zero).dy,
-      ];
-      painter.dispose();
-    } else {
-      _gutterTops = [
-        for (var i = 0; i < c.lineStarts.length; i++) i * lineHeight,
-      ];
+        Paint()..color = config.currentLineColor,
+      );
     }
-    _gutterText = c.text.text;
-    _gutterWidth = width;
-    _gutterScaler = scaler;
-    _gutterStyle = _style;
+
+    if (config.gutterWidth > 0) {
+      // The last line starting at or above the viewport's top edge.
+      var first = 0;
+      var last = starts.length - 1;
+      while (first < last) {
+        final middle = (first + last + 1) >> 1;
+        if (topOf(starts[middle]) <= viewport.top) {
+          first = middle;
+        } else {
+          last = middle - 1;
+        }
+      }
+      final painter = TextPainter(
+        textDirection: TextDirection.ltr,
+        textScaler: config.textScaler,
+      );
+      final right = offset.dx + config.gutterWidth - 1 - config.rightInset;
+      for (var line = first; line < starts.length; line++) {
+        final top = topOf(starts[line]);
+        if (top > viewport.bottom) break;
+        painter
+          ..text = TextSpan(
+            text: '${line + 1}',
+            style: config.textStyle.copyWith(
+              color: line == caretLine
+                  ? config.caretNumberColor
+                  : config.numberColor,
+            ),
+          )
+          ..layout()
+          ..paint(canvas, Offset(right - painter.width, top));
+      }
+      painter.dispose();
+    }
+    canvas.restore();
+
+    if (config.gutterWidth > 0) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          offset.dx + config.gutterWidth - 1,
+          offset.dy,
+          1,
+          size.height,
+        ),
+        Paint()..color = config.dividerColor,
+      );
+    }
   }
 }
 
-/// Paints right-aligned line numbers at each logical line's visual top,
-/// tracking the editor's scroll offset. Only lines intersecting the
-/// viewport are laid out, and scroll notifications repaint through
-/// [CustomPainter.repaint] without a widget rebuild.
-class _LineNumberGutterPainter extends CustomPainter {
-  /// Read for the live offset at paint time; its notifications do not
-  /// reach this painter — [repaint] (bumped by scroll notifications)
-  /// drives repaints instead.
-  final ScrollController scroll;
-  final List<double> lineTops;
-  final double topInset;
+/// Line tops in a [RenderEditable]'s local coordinates, which include its
+/// scroll offset.
+///
+/// The caret rectangle is the only public per-position geometry, and it
+/// carries a platform-specific vertical adjustment. Line 0 starts at the top
+/// of the text, so measuring its caret calibrates that adjustment away.
+final class _LineGeometry {
+  _LineGeometry(this.editable)
+    : _bias =
+          editable.getLocalRectForCaret(const TextPosition(offset: 0)).top +
+          editable.offset.pixels;
 
-  /// 1-based logical line holding the caret, drawn brighter.
-  final int caretLine;
-  final TextStyle textStyle;
-  final Color numberColor;
-  final Color caretLineColor;
-  final Color dividerColor;
-  final TextScaler textScaler;
-  final double rightInset;
+  final RenderEditable editable;
+  final double _bias;
 
-  _LineNumberGutterPainter({
-    required this.scroll,
-    required Listenable repaint,
-    required this.lineTops,
-    required this.topInset,
-    required this.caretLine,
-    required this.textStyle,
-    required this.numberColor,
-    required this.caretLineColor,
-    required this.dividerColor,
-    required this.textScaler,
-    required this.rightInset,
-  }) : assert(
-         textStyle.fontSize != null,
-         '_LineNumberGutterPainter needs a TextStyle with an explicit '
-         'fontSize.',
-       ),
-       super(repaint: repaint);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // During reparenting the old text field detaches at frame finalization,
-    // after its replacement has attached. Paint against the newest position
-    // rather than asserting that this transient attachment count is one.
-    final offset = scroll.hasClients ? scroll.positions.last.pixels : 0.0;
-    final lineHeight =
-        textScaler.scale(textStyle.fontSize!) * (textStyle.height ?? 1);
-    canvas.clipRect(Offset.zero & size);
-    // Skip ahead to the first line whose box bottom is still on screen.
-    final threshold = offset - topInset - lineHeight;
-    var lo = 0;
-    var hi = lineTops.length;
-    while (lo < hi) {
-      final mid = (lo + hi) >> 1;
-      if (lineTops[mid] > threshold) {
-        hi = mid;
-      } else {
-        lo = mid + 1;
-      }
-    }
-    // Insurance against line-height estimate error: painting extra
-    // off-screen lines is clipped, skipping a visible one isn't. Past the
-    // highlighting cap the estimate lags by one row per soft wrap above the
-    // viewport, so the backoff is sized in viewport rows, not one line.
-    lo -= (size.height / lineHeight).ceil();
-    if (lo < 0) lo = 0;
-    final painter = TextPainter(
-      textDirection: TextDirection.ltr,
-      textScaler: textScaler,
-    );
-    for (var i = lo; i < lineTops.length; i++) {
-      final y = topInset + lineTops[i] - offset;
-      if (y > size.height) break;
-      painter.text = TextSpan(
-        text: '${i + 1}',
-        style: textStyle.copyWith(
-          color: i + 1 == caretLine ? caretLineColor : numberColor,
-        ),
-      );
-      painter.layout();
-      painter.paint(
-        canvas,
-        Offset(size.width - 1 - rightInset - painter.width, y),
-      );
-    }
-    painter.dispose();
-    canvas.drawRect(
-      Rect.fromLTWH(size.width - 1, 0, 1, size.height),
-      Paint()..color = dividerColor,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_LineNumberGutterPainter old) =>
-      !identical(lineTops, old.lineTops) ||
-      caretLine != old.caretLine ||
-      topInset != old.topInset ||
-      textStyle != old.textStyle ||
-      numberColor != old.numberColor ||
-      caretLineColor != old.caretLineColor ||
-      dividerColor != old.dividerColor ||
-      textScaler != old.textScaler ||
-      rightInset != old.rightInset;
+  double topOf(int offset) =>
+      editable.getLocalRectForCaret(TextPosition(offset: offset)).top - _bias;
 }
