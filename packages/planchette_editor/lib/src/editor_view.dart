@@ -370,14 +370,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           Expanded(
             child: Text(
               widget.strings.documentPosition(
-                    line,
-                    column,
-                    c.lineStarts.length,
-                    c.byteCount,
-                  ) +
-                  (selectedCharacters > 0
-                      ? ' · ${widget.strings.selectionInfo(selectedCharacters, selectedLines)}'
-                      : ''),
+                line,
+                column,
+                c.lineStarts.length,
+                c.byteCount,
+                selectedCharacters: selectedCharacters,
+                selectedLines: selectedLines,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelSmall,

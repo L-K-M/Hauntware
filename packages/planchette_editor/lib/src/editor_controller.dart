@@ -138,8 +138,8 @@ class EditorController extends ChangeNotifier {
     return (lo + 1, offset - starts[lo] + 1);
   }
 
-  /// Characters and logical lines covered by the selection; (0, 0) when
-  /// collapsed. Direction does not matter.
+  /// UTF-16 code units and logical lines covered by the selection; (0, 0)
+  /// when collapsed. Direction does not matter.
   (int, int) get selectionStats {
     final selection = text.selection;
     if (!selection.isValid || selection.isCollapsed) return (0, 0);

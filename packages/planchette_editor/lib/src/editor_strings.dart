@@ -17,8 +17,16 @@ class EditorStrings {
   String get saving => 'Saving…';
   String matchCount(int current, int total, {bool capped = false}) =>
       '$current/$total${capped ? '+' : ''}';
-  String documentPosition(int line, int column, int lines, int bytes) =>
-      'Ln $line, Col $column · $lines lines · $bytes bytes';
+  String documentPosition(
+    int line,
+    int column,
+    int lines,
+    int bytes, {
+    int selectedCharacters = 0,
+    int selectedLines = 0,
+  }) =>
+      'Ln $line, Col $column · $lines lines · $bytes bytes'
+      '${selectedCharacters > 0 ? ' · ${selectionInfo(selectedCharacters, selectedLines)}' : ''}';
   String selectionInfo(int characters, int lines) => lines > 1
       ? '$characters selected ($lines lines)'
       : '$characters selected';

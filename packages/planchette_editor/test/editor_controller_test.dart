@@ -62,6 +62,32 @@ void _selectionStatsTests() {
       editor.text.selection = const TextSelection.collapsed(offset: 1);
       expect(editor.selectionStats, (0, 0));
     });
+
+    test('a selection ending at a trailing newline counts its two lines', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo\n',
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 8,
+      );
+      expect(editor.selectionStats, (8, 2));
+    });
+
+    test('a whole-document selection counts every line', () {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo\nthree',
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 13,
+      );
+      expect(editor.selectionStats, (13, 3));
+    });
   });
 }
 
