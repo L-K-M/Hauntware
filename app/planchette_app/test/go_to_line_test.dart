@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,9 +35,39 @@ void main() {
       await tester.pumpAndSettle();
       expect(tab.editor.goToLineOpen, isFalse);
 
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    // macOS menus are native, so the menu half runs on Linux and Windows.
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'the Go to Line shortcut is Cmd+L on macOS and Ctrl+G elsewhere',
+    (tester) async {
+      final workspace = DocumentWorkspace(
+        store: MemoryDocuments(),
+        dialogs: FakeDialogs(),
+      );
+      addTearDown(workspace.dispose);
+      final tab = workspace.newDocument()!;
+      tab.editor.text.text = 'one\ntwo\nthree';
+      await tester.pumpWidget(
+        PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+      );
+      await tester.pumpAndSettle();
+
+      final apple = defaultTargetPlatform == TargetPlatform.macOS;
+      final modifier = apple
+          ? LogicalKeyboardKey.metaLeft
+          : LogicalKeyboardKey.controlLeft;
+      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyEvent(
+        apple ? LogicalKeyboardKey.keyL : LogicalKeyboardKey.keyG,
+      );
+      await tester.sendKeyUpEvent(modifier);
       await tester.pumpAndSettle();
       expect(tab.editor.goToLineOpen, isTrue);
       tab.editor.goToLineInput.text = '3';
@@ -46,6 +77,7 @@ void main() {
     },
     variant: const TargetPlatformVariant({
       TargetPlatform.linux,
+      TargetPlatform.macOS,
       TargetPlatform.windows,
     }),
   );
