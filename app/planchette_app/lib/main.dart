@@ -19,6 +19,11 @@ Future<void> main(List<String> arguments) async {
   final desktop = DesktopWindow(
     confirmQuit: workspace.confirmQuit,
     onQuitFailed: workspace.quitFailed,
+    // The app follows the system brightness, so the native window can start on
+    // the color Flutter is about to paint instead of the platform default.
+    windowBackgroundColor: windowBackdrop(
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    ),
   );
   runApp(
     PlanchetteApp(

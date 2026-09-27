@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/desktop_window.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
@@ -35,6 +37,35 @@ void main() {
       expect(attempts, 2);
     },
   );
+
+  test(
+    'the native window opens on the app surface, not the platform default',
+    () {
+      final desktop = DesktopWindow(
+        confirmQuit: () async => true,
+        onQuitFailed: (_) {},
+        windowBackgroundColor: const Color(0xff0e1415),
+      );
+      addTearDown(desktop.dispose);
+      expect(desktop.windowOptions.backgroundColor, const Color(0xff0e1415));
+      expect(desktop.windowOptions.size, const Size(1080, 760));
+      expect(desktop.windowOptions.minimumSize, const Size(640, 400));
+      expect(desktop.windowOptions.title, 'Planchette');
+    },
+  );
+
+  test('the window backdrop is the surface the app paints', () {
+    for (final brightness in Brightness.values) {
+      expect(
+        windowBackdrop(brightness),
+        planchetteTheme(brightness).scaffoldBackgroundColor,
+      );
+    }
+    expect(
+      windowBackdrop(Brightness.dark),
+      isNot(windowBackdrop(Brightness.light)),
+    );
+  });
 
   test('overlapping close callbacks request native destruction once', () async {
     final decision = Completer<bool>();

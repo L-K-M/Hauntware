@@ -7,6 +7,24 @@ import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace.dart';
 
+/// Public so the window backdrop and the tests resolve the same colors the app
+/// paints, rather than a copy of the seed.
+ThemeData planchetteTheme(Brightness brightness) => ThemeData(
+  brightness: brightness,
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: const Color(0xff245b5c),
+    brightness: brightness,
+  ),
+  useMaterial3: true,
+  visualDensity: VisualDensity.compact,
+);
+
+/// The color the native window shows before the first Flutter frame. Must be
+/// the same surface the app paints, or the window flashes a different color on
+/// the way in.
+Color windowBackdrop(Brightness brightness) =>
+    planchetteTheme(brightness).scaffoldBackgroundColor;
+
 class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
     super.key,
@@ -26,20 +44,10 @@ class PlanchetteApp extends StatelessWidget {
     title: 'Planchette',
     navigatorKey: navigatorKey,
     debugShowCheckedModeBanner: false,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
+    theme: planchetteTheme(Brightness.light),
+    darkTheme: planchetteTheme(Brightness.dark),
     themeMode: themeMode,
     home: _DocumentShell(workspace: workspace, onQuit: onQuit),
-  );
-
-  ThemeData _theme(Brightness brightness) => ThemeData(
-    brightness: brightness,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xff245b5c),
-      brightness: brightness,
-    ),
-    useMaterial3: true,
-    visualDensity: VisualDensity.compact,
   );
 }
 
