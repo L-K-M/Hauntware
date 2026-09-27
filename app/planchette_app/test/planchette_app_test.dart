@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,9 @@ import 'package:planchette_app/services/document_workspace.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
+
+/// Last text written through the mocked clipboard channel.
+String? _clipboard;
 
 void main() {
   late MemoryDocuments store;
@@ -180,6 +184,65 @@ void main() {
       TargetPlatform.windows,
     }),
   );
+  testWidgets('middle-click closes a tab', (tester) async {
+    final first = workspace.newDocument()!;
+    final second = workspace.newDocument()!;
+    await mount(tester);
+    final center = tester.getCenter(find.text(second.name));
+    await tester.sendEventToBinding(
+      PointerDownEvent(position: center, buttons: kMiddleMouseButton),
+    );
+    await tester.pumpAndSettle();
+    expect(workspace.documents, [first]);
+    expect(workspace.active, first);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('tab context menu copies the full path', (tester) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            _clipboard = call.arguments['text'] as String;
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    store.files[testPath('context.txt')] = document('context.txt', 'body');
+    await workspace.open(testPath('context.txt'));
+    final tab = workspace.documents.single;
+    await mount(tester);
+    await tester.tap(find.text(tab.name), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Copy Full Path'));
+    await tester.pumpAndSettle();
+    expect(_clipboard, testPath('context.txt'));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('tab context menu closes others with dirty confirmation', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    final dirty = workspace.newDocument()!..editor.text.text = 'unsaved';
+    final third = workspace.newDocument()!;
+    dialogs.choices.add(CloseChoice.discard);
+    await mount(tester);
+    await tester.tap(find.text(third.name), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close Others'));
+    await tester.pumpAndSettle();
+    expect(workspace.documents, [third]);
+    expect(workspace.active, third);
+    expect(dialogs.asked, [dirty.name]);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets(
     'native text menus target the focused search field and lock for close',
     (tester) async {

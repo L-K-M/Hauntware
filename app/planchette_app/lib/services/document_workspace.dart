@@ -259,6 +259,20 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
   }
 
+  /// Close every tab except [tab], confirming unsaved documents one by one.
+  /// A canceled or busy tab stops the sweep and keeps the rest open.
+  Future<bool> closeOthers(DocumentTab tab) async {
+    if (interactionLocked || !_documents.contains(tab)) return false;
+    for (final other in List.of(_documents)) {
+      if (other == tab) continue;
+      if (_disposed || !_documents.contains(other)) continue;
+      if (!await closeTab(other)) return false;
+    }
+    _active = tab;
+    _notify();
+    return true;
+  }
+
   Future<bool> _confirmTab(DocumentTab tab) async {
     if (tab.busy || tab.editor.isSaving) return false;
     if (!tab.editor.isDirty) return true;

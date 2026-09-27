@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kMiddleMouseButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
@@ -107,6 +108,68 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _close() {
     final tab = workspace.active;
     if (tab != null) unawaited(workspace.closeTab(tab));
+  }
+
+  /// Context menu for one document tab. Runs on the overlay so it stays
+  /// inside the navigator while the underlying tab strip rebuilds.
+  void _showTabMenu(TapUpDetails details, DocumentTab tab) {
+    if (workspace.interactionLocked || tab.busy) return;
+    final overlay =
+        Overlay.maybeOf(context, rootOverlay: true)?.context.findRenderObject()
+            as RenderBox?;
+    final position = overlay != null
+        ? RelativeRect.fromLTRB(
+            details.globalPosition.dx,
+            details.globalPosition.dy,
+            overlay.size.width - details.globalPosition.dx,
+            overlay.size.height - details.globalPosition.dy,
+          )
+        : RelativeRect.fromLTRB(
+            details.globalPosition.dx,
+            details.globalPosition.dy,
+            0,
+            0,
+          );
+    final menu = <PopupMenuEntry<String>>[
+      const PopupMenuItem(
+        value: 'close',
+        height: 40,
+        child: Text('Close'),
+      ),
+      PopupMenuItem(
+        value: 'closeOthers',
+        height: 40,
+        enabled: workspace.documents.length > 1,
+        child: const Text('Close Others'),
+      ),
+      const PopupMenuDivider(),
+      PopupMenuItem<String>(
+        value: 'copyPath',
+        height: 40,
+        enabled: tab.path != null,
+        child: const Text('Copy Full Path'),
+      ),
+    ];
+    unawaited(
+      showMenu<String>(
+        context: context,
+        position: position,
+        items: menu,
+      ).then((choice) {
+        if (!mounted) return;
+        switch (choice) {
+          case 'close':
+            unawaited(workspace.closeTab(tab));
+          case 'closeOthers':
+            unawaited(workspace.closeOthers(tab));
+          case 'copyPath':
+            final path = tab.path;
+            if (path != null) {
+              Clipboard.setData(ClipboardData(text: path));
+            }
+        }
+      }),
+    );
   }
 
   void _new() {
@@ -521,42 +584,65 @@ class _DocumentShellState extends State<_DocumentShell> {
                                     borderRadius: const BorderRadius.vertical(
                                       top: Radius.circular(8),
                                     ),
-                                    child: InkWell(
-                                      onTap: workspace.interactionLocked
-                                          ? null
-                                          : () => _select(tab),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 14,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Text(
-                                              '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: tab == active
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
-                                              ),
+                                    child: GestureDetector(
+                                      onSecondaryTapUp: (details) =>
+                                          _showTabMenu(details, tab),
+                                      // Middle-click closes, as on every
+                                      // mainstream desktop browser and editor.
+                                      child: Listener(
+                                        onPointerDown: (event) {
+                                          if (event.buttons ==
+                                                  kMiddleMouseButton &&
+                                              !workspace.interactionLocked &&
+                                              !tab.busy) {
+                                            unawaited(
+                                              workspace.closeTab(tab),
+                                            );
+                                          }
+                                        },
+                                        child: InkWell(
+                                          onTap: workspace.interactionLocked
+                                              ? null
+                                              : () => _select(tab),
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 14,
                                             ),
-                                            const SizedBox(width: 4),
-                                            IconButton(
-                                              key: ValueKey('close-${tab.id}'),
-                                              tooltip: 'Close ${tab.name}',
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              iconSize: 16,
-                                              onPressed:
-                                                  workspace.interactionLocked ||
+                                            child: Row(
+                                              children: [
+                                                Text(
+                                                  '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    fontWeight: tab == active
+                                                        ? FontWeight.w600
+                                                        : FontWeight.normal,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 4),
+                                                IconButton(
+                                                  key: ValueKey(
+                                                    'close-${tab.id}',
+                                                  ),
+                                                  tooltip: 'Close ${tab.name}',
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                  iconSize: 16,
+                                                  onPressed:
+                                                      workspace
+                                                          .interactionLocked ||
                                                       tab.busy
-                                                  ? null
-                                                  : () => unawaited(
-                                                      workspace.closeTab(tab),
-                                                    ),
-                                              icon: const Icon(Icons.close),
+                                                      ? null
+                                                      : () => unawaited(
+                                                          workspace.closeTab(
+                                                            tab,
+                                                          ),
+                                                        ),
+                                                  icon: const Icon(Icons.close),
+                                                ),
+                                              ],
                                             ),
-                                          ],
+                                          ),
                                         ),
                                       ),
                                     ),

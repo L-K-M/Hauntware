@@ -528,4 +528,26 @@ void main() {
       expect(tab.path, isNull);
     },
   );
+
+  test('closeOthers keeps the target and confirms dirty neighbors', () async {
+    final target = workspace.newDocument()!;
+    final dirty = workspace.newDocument()!..editor.text.text = 'unsaved';
+    workspace.newDocument();
+    dialogs.choices.add(CloseChoice.discard);
+    expect(await workspace.closeOthers(target), isTrue);
+    expect(workspace.documents, [target]);
+    expect(workspace.active, target);
+    expect(dialogs.asked, [dirty.name]);
+  });
+
+  test('closeOthers stops at a canceled confirmation', () async {
+    workspace.newDocument();
+    final dirty = workspace.newDocument()!..editor.text.text = 'unsaved';
+    final target = workspace.newDocument()!;
+    dialogs.choices.add(CloseChoice.cancel);
+    expect(await workspace.closeOthers(target), isFalse);
+    // Clean tabs before the refusal closed; the dirty one and everything
+    // after it survive.
+    expect(workspace.documents, [dirty, target]);
+  });
 }
