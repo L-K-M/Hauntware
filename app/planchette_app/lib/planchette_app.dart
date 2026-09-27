@@ -277,6 +277,13 @@ class _DocumentShellState extends State<_DocumentShell> {
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
           enabled: ready,
         ),
+        const _Separator(),
+        _Command(
+          'Go to Line…',
+          () => unawaited(workspace.goToLine()),
+          shortcut: _shortcut(LogicalKeyboardKey.keyL),
+          enabled: ready,
+        ),
       ]),
       _ShellMenu('Window', [
         _Command(

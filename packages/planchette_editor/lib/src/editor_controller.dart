@@ -69,6 +69,7 @@ class EditorController extends ChangeNotifier {
   int _activeMatch = -1;
   int _revision = 0;
   int _revealRequest = 0;
+  int _revealOffset = -1;
   String _lastText = '';
   String? _lastQuery;
   String? _metricsText;
@@ -99,6 +100,8 @@ class EditorController extends ChangeNotifier {
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
+  /// Text offset the view should scroll into view for the latest request.
+  int get revealOffset => _revealOffset;
   bool get editingLocked => _editingLocked;
   set editingLocked(bool value) => setEditingLocked(value);
 
@@ -114,6 +117,8 @@ class EditorController extends ChangeNotifier {
     _updateMetrics();
     return _lineStarts;
   }
+
+  int get lineCount => lineStarts.length;
 
   int get byteCount {
     _updateMetrics();
@@ -136,6 +141,36 @@ class EditorController extends ChangeNotifier {
       }
     }
     return (lo + 1, offset - starts[lo] + 1);
+  }
+
+  /// Selects [line] (1-based, clamped) and scrolls it into view. The
+  /// document field takes focus so a prompt can hand typing back to it.
+  void goToLine(int line) {
+    final value = text.text;
+    if (value.isEmpty) return;
+    final starts = lineStarts;
+    final index = line.clamp(1, starts.length) - 1;
+    final start = starts[index];
+    final end = index + 1 < starts.length
+        ? starts[index + 1] - 1
+        : value.length;
+    text.selection = TextSelection(baseOffset: start, extentOffset: end);
+    editorFocus.requestFocus();
+    _requestReveal(start);
+    _notify();
+  }
+
+  /// The active match while searching, the caret otherwise.
+  int get _revealAnchor =>
+      _activeMatch >= 0 && _activeMatch < _matches.length
+          ? _matches[_activeMatch].start
+          : text.selection.isValid
+          ? text.selection.extentOffset.clamp(0, text.text.length)
+          : 0;
+
+  void _requestReveal(int offset) {
+    _revealOffset = offset;
+    _revealRequest++;
   }
 
   Future<void> initialize() =>
@@ -183,7 +218,7 @@ class EditorController extends ChangeNotifier {
     _detectLanguage();
     if (_searchOpen) _updateMatches(resetActive: true);
     if (scroll.hasClients) scroll.jumpTo(0);
-    _revealRequest++;
+    _requestReveal(_revealAnchor);
   }
 
   void _detectLanguage() {
@@ -297,7 +332,7 @@ class EditorController extends ChangeNotifier {
       extentOffset: search.text.length,
     );
     searchFocus.requestFocus();
-    _revealRequest++;
+    _requestReveal(_revealAnchor);
     _notify();
   }
 
@@ -321,14 +356,14 @@ class EditorController extends ChangeNotifier {
   void toggleCaseSensitive() {
     _caseSensitive = !_caseSensitive;
     _updateMatches(resetActive: true);
-    _revealRequest++;
+    _requestReveal(_revealAnchor);
     _notify();
   }
 
   void _queryChanged() {
     if (!_searchOpen || _disposed || search.text == _lastQuery) return;
     _updateMatches(resetActive: true);
-    _revealRequest++;
+    _requestReveal(_revealAnchor);
     _notify();
   }
 
@@ -369,7 +404,7 @@ class EditorController extends ChangeNotifier {
       baseOffset: match.start,
       extentOffset: match.end,
     );
-    _revealRequest++;
+    _requestReveal(match.start);
     _notify();
   }
 
@@ -390,7 +425,7 @@ class EditorController extends ChangeNotifier {
       ),
     );
     _updateMatches(resetActive: true);
-    _revealRequest++;
+    _requestReveal(_revealAnchor);
     _notify();
   }
 
@@ -421,7 +456,7 @@ class EditorController extends ChangeNotifier {
       selection: TextSelection.collapsed(offset: caret),
     );
     _updateMatches(resetActive: true);
-    _revealRequest++;
+    _requestReveal(_revealAnchor);
     _notify();
   }
 

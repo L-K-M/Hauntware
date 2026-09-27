@@ -77,6 +77,7 @@ class FakeDialogs implements DocumentDialogs {
   List<String> openPaths = [];
   String? savePath;
   bool replace = true;
+  int? lineNumber;
   final choices = <CloseChoice>[];
   final asked = <String>[];
   Completer<CloseChoice>? choiceGate;
@@ -98,6 +99,10 @@ class FakeDialogs implements DocumentDialogs {
     return choiceGate?.future ??
         (choices.isEmpty ? CloseChoice.cancel : choices.removeAt(0));
   }
+
+  @override
+  Future<int?> promptLineNumber(String documentName, int maxLines) async =>
+      lineNumber;
 }
 
 void main() {
@@ -123,6 +128,17 @@ void main() {
     expect(first.editor.search.text, 'fir');
     expect(second.editor.text.text, 'second');
     expect(first.name, isNot(second.name));
+  });
+
+  test('go to line moves the caret and ignores a dismissed prompt', () async {
+    final tab = workspace.newDocument()!
+      ..editor.text.text = 'one\ntwo\nthree';
+    dialogs.lineNumber = 2;
+    await workspace.goToLine();
+    expect(tab.editor.text.selection.extentOffset, 7);
+    dialogs.lineNumber = null;
+    await workspace.goToLine();
+    expect(tab.editor.text.selection.extentOffset, 7);
   });
 
   test('opening a path or resolved alias reuses the existing buffer', () async {

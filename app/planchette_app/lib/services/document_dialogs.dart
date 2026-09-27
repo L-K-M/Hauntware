@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as paths;
 
 import 'document_workspace.dart';
@@ -82,4 +83,70 @@ final class AppDocumentDialogs implements DocumentDialogs {
         ) ??
         CloseChoice.cancel;
   }
+
+  @override
+  Future<int?> promptLineNumber(String documentName, int maxLines) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return null;
+    return showDialog<int>(
+      context: context,
+      builder: (context) => _LineNumberDialog(maxLines: maxLines),
+    );
+  }
+}
+
+class _LineNumberDialog extends StatefulWidget {
+  const _LineNumberDialog({required this.maxLines});
+  final int maxLines;
+
+  @override
+  State<_LineNumberDialog> createState() => _LineNumberDialogState();
+}
+
+class _LineNumberDialogState extends State<_LineNumberDialog> {
+  final _field = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final line = int.tryParse(_field.text.trim());
+    if (line == null || line < 1 || line > widget.maxLines) {
+      setState(
+        () => _error = 'Enter a line between 1 and ${widget.maxLines}.',
+      );
+      return;
+    }
+    Navigator.pop(context, line);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Go to Line'),
+    content: SizedBox(
+      width: 280,
+      child: TextField(
+        controller: _field,
+        autofocus: true,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          hintText: 'Line 1–${widget.maxLines}',
+          errorText: _error,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _submit, child: const Text('Go')),
+    ],
+  );
 }

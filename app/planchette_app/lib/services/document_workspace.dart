@@ -13,6 +13,8 @@ abstract interface class DocumentDialogs {
   Future<String?> pickSavePath(String suggestedName);
   Future<bool> confirmReplace(String path);
   Future<CloseChoice> chooseClose(String name);
+  /// Returns a 1-based line number, or null when the prompt is dismissed.
+  Future<int?> promptLineNumber(String documentName, int maxLines);
 }
 
 /// One controller survives tab switches, retaining undo, selection, find and
@@ -306,6 +308,22 @@ final class DocumentWorkspace extends ChangeNotifier {
       _closingAll = false;
       _notify();
     }
+  }
+
+  /// Prompts for a 1-based line and moves the active document's caret there.
+  Future<void> goToLine() async {
+    final tab = active;
+    if (interactionLocked ||
+        tab == null ||
+        tab.editor.isLoading ||
+        tab.editor.error != null) {
+      return;
+    }
+    final line = await _dialog(
+      () => dialogs.promptLineNumber(tab.name, tab.editor.lineCount),
+    );
+    if (line == null || !_documents.contains(tab)) return;
+    tab.editor.goToLine(line);
   }
 
   Future<T> _dialog<T>(Future<T> Function() show) async {

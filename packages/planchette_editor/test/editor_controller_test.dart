@@ -210,6 +210,44 @@ void main() {
       expect(editor.canPublish, isFalse);
     },
   );
+  test('go to line selects and reveals a middle line', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\nthree',
+    );
+    addTearDown(editor.dispose);
+    final request = editor.revealRequest;
+    editor.goToLine(2);
+    expect(
+      editor.text.selection,
+      const TextSelection(baseOffset: 4, extentOffset: 7),
+    );
+    expect(editor.revealOffset, 4);
+    expect(editor.revealRequest, request + 1);
+    expect(editor.caretLineColumn, (2, 4));
+  });
+  test('go to line clamps and collapses a trailing empty line', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\nthree\n',
+    );
+    addTearDown(editor.dispose);
+    editor.goToLine(0);
+    expect(
+      editor.text.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 3),
+    );
+    editor.goToLine(99);
+    expect(editor.text.selection, const TextSelection.collapsed(offset: 14));
+  });
+  test('go to line is a no-op on an empty document', () {
+    final editor = EditorController(displayPath: 'test', initialText: '');
+    addTearDown(editor.dispose);
+    final request = editor.revealRequest;
+    editor.goToLine(1);
+    expect(editor.revealRequest, request);
+    expect(editor.text.selection.isCollapsed, isTrue);
+  });
   test('statistics count UTF-8 and trailing empty lines', () {
     final editor = EditorController(
       displayPath: 'test',
