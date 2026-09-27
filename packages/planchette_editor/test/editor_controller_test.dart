@@ -291,7 +291,8 @@ void main() {
     // keeps it from being widened without a reason.
     editor.text.text = '${'x' * 4096}#!/usr/bin/env python';
     expect(editor.text.language, isNull);
-=======
+  });
+
   test('a limited case fold is reported instead of hidden', () {
     // Unicode full folding expands the sharp s to "ss", which changes
     // length. A host can supply that fold; the editor must then say the

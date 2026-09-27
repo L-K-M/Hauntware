@@ -216,7 +216,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(workspace.active!.editor.isLoading, isFalse);
       expect(saveHandler(), isNotNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 
+  testWidgets(
     'reopening an open document flashes its tab',
     (tester) async {
       store.files[testPath('flash.txt')] = document('flash.txt', 'on disk');
@@ -256,7 +265,6 @@ void main() {
       TargetPlatform.windows,
     }),
   );
-
 
   testWidgets('the tab flash respects disabled animation', (tester) async {
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
