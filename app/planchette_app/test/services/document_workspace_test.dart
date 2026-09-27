@@ -31,19 +31,24 @@ class MemoryDocuments implements DocumentStore {
   final writes = <({String path, String text, String? digest})>[];
   final aliases = <String, String>{};
   Completer<void>? writeGate;
+  Completer<void>? loadGate;
+  Completer<void>? savePathGate;
   Object? writeError;
   int version = 0;
 
   @override
   Future<TextDocument> load(String path) async {
+    await loadGate?.future;
     final value = files[aliases[path] ?? path];
     if (value == null) throw const FileSystemException('Missing file');
     return value;
   }
 
   @override
-  Future<String> canonicalSavePath(String path) async =>
-      pathContext.normalize(pathContext.absolute(path));
+  Future<String> canonicalSavePath(String path) async {
+    await savePathGate?.future;
+    return pathContext.normalize(pathContext.absolute(path));
+  }
 
   @override
   Future<String?> existingDigest(String path) async => files[path]?.sha256;
@@ -296,15 +301,76 @@ void main() {
     final saving = workspace.save(tab);
     await Future<void>.delayed(Duration.zero);
 
+    expect(tab.editor.isSaving, isTrue);
     expect(await workspace.closeTab(tab), isFalse);
-    expect(workspace.error, contains('busy.txt'));
-    expect(workspace.error, contains('busy'));
+    expect(workspace.error, contains('still being saved'));
     expect(workspace.documents, [tab]);
 
     store.writeGate!.complete();
     expect(await saving, isTrue);
     expect(await workspace.closeTab(tab), isTrue);
-    expect(workspace.error, contains('busy.txt'));
+    // The refusal named this tab, and the tab is gone, so it goes too.
+    expect(workspace.error, isNull);
+  });
+
+  test('a tab busy with a save in progress gets its own wording', () async {
+    // The Save As dialog has answered but the destination is not resolved
+    // yet: the tab is busy, no write is running, and no dialog holds the
+    // workspace. That is the window the "busy" wording is for.
+    store.files[testPath('source.txt')] = document('source.txt', 'original');
+    await workspace.open(testPath('source.txt'));
+    final tab = workspace.active!..editor.text.text = 'changed';
+    dialogs.savePath = testPath('target.txt');
+    store.savePathGate = Completer<void>();
+    final saving = workspace.save(tab, saveAs: true);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(tab.busy, isTrue);
+    expect(tab.editor.isSaving, isFalse);
+    expect(workspace.interactionLocked, isFalse);
+    expect(await workspace.closeTab(tab), isFalse);
+    expect(workspace.error, contains('is busy'));
+    expect(workspace.error, isNot(contains('still being saved')));
+
+    store.savePathGate!.complete();
+    expect(await saving, isTrue);
+    expect(await workspace.closeTab(tab), isTrue);
+    expect(workspace.error, isNull);
+  });
+
+  test('saving a document that is still opening says so', () async {
+    store.files[testPath('opening.txt')] = document('opening.txt', 'on disk');
+    store.loadGate = Completer<void>();
+    final opening = workspace.open(testPath('opening.txt'));
+    await Future<void>.delayed(Duration.zero);
+    final tab = workspace.active!;
+    expect(tab.editor.isLoading, isTrue);
+
+    expect(await workspace.save(tab), isFalse);
+    expect(workspace.error, contains('still opening'));
+    expect(workspace.documents, [tab]);
+
+    store.loadGate!.complete();
+    await opening;
+    expect(tab.editor.isLoading, isFalse);
+    // The refusal is about a state that has now passed.
+    expect(await workspace.closeTab(tab), isTrue);
+    expect(workspace.error, isNull);
+  });
+
+  test('a locked workspace refuses a close silently', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'keep me';
+    dialogs.choiceGate = Completer<CloseChoice>();
+    final closing = workspace.closeTab(tab);
+    await Future<void>.delayed(Duration.zero);
+
+    // A dialog is open: the refusal is visible, so it must not also raise an
+    // error the user did not cause.
+    expect(await workspace.save(tab), isFalse);
+    expect(workspace.error, isNull);
+
+    dialogs.choiceGate!.complete(CloseChoice.discard);
+    expect(await closing, isTrue);
   });
 
   test(

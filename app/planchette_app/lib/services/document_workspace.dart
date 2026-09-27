@@ -53,6 +53,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   Completer<void>? _unlocked;
   DocumentTab? _active;
   String? _error;
+  String? _tabRefusal;
 
   List<DocumentTab> get documents => List.unmodifiable(_documents);
   DocumentTab? get active => _active;
@@ -198,7 +199,13 @@ final class DocumentWorkspace extends ChangeNotifier {
     required bool saveAs,
     required EditorSaveAccess access,
   }) async {
-    if (tab.editor.isLoading || tab.editor.error != null) return false;
+    if (tab.editor.isLoading || tab.editor.error != null) {
+      // Reachable from a close, where a refusal needs an outcome. A document
+      // that failed to load has already reported its own error, so only the
+      // still-opening case speaks.
+      if (tab.editor.error == null) _reportNotReady(tab);
+      return false;
+    }
     tab.busy = true;
     _notify();
     try {
@@ -253,8 +260,16 @@ final class DocumentWorkspace extends ChangeNotifier {
         _reportBusy(tab);
         return false;
       }
-      if (!await _confirmTab(tab) || tab.busy) return false;
+      if (!await _confirmTab(tab)) return false;
+      // A save can start in the gap between the decision and the removal, so
+      // the tab can still be busy here. Report it rather than closing nothing
+      // in silence: _confirmTab returning true means it had nothing to say.
+      if (tab.busy) {
+        _reportBusy(tab);
+        return false;
+      }
       _remove(tab);
+      _clearCloseRefusal();
       _notify();
       return true;
     } finally {
@@ -284,10 +299,10 @@ final class DocumentWorkspace extends ChangeNotifier {
         // The buffer moved on while the prompt was open, so the reviewed text
         // is no longer what would be dropped. Say so instead of closing
         // nothing in silence.
-        _error =
-            '${tab.name} changed while the prompt was open, so nothing was '
-            'discarded. Review it, then close again.';
-        _notify();
+        _reportTabRefusal(
+          '${tab.name} changed while the prompt was open, so nothing was '
+          'discarded. Review it, then close again.',
+        );
         return false;
       case CloseChoice.save:
         return await _save(tab, access: EditorSaveAccess.confirmedClose) &&
@@ -298,12 +313,32 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// A close refused for a reason the user did not choose needs an outcome.
   /// A cancelled prompt and a locked workspace stay silent: the user can see
   /// the dialog and knows why.
-  void _reportBusy(DocumentTab tab) {
-    _error = tab.editor.isSaving
+  void _reportBusy(DocumentTab tab) => _reportTabRefusal(
+    tab.editor.isSaving
         ? '${tab.name} is still being saved. Close it again once the save '
               'finishes.'
-        : '${tab.name} is busy. Close it again in a moment.';
+        : '${tab.name} is busy. Close it again in a moment.',
+  );
+
+  /// Copy that fits both a refused close and a refused save: the document is
+  /// not ready yet, and it will be.
+  void _reportNotReady(DocumentTab tab) =>
+      _reportTabRefusal('${tab.name} is still opening. Try again in a moment.');
+
+  /// A retryable refusal names the tab it is about, so it stops being true
+  /// the moment that tab closes. Tracking the last one keeps a stale excuse
+  /// from outliving its cause without clearing errors the workspace owns —
+  /// a failed save, a missing file and a declined destination still persist
+  /// until they are replaced or dismissed.
+  void _reportTabRefusal(String message) {
+    _tabRefusal = message;
+    _error = message;
     _notify();
+  }
+
+  void _clearCloseRefusal() {
+    if (_error == _tabRefusal) _error = null;
+    _tabRefusal = null;
   }
 
   /// Both the native close button and the OS Quit route share this decision.
@@ -368,6 +403,7 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   void clearError() {
     _error = null;
+    _tabRefusal = null;
     _notify();
   }
 
