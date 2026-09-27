@@ -137,6 +137,28 @@ void main() {
     expect(original.editor.text.text, 'unsaved');
   });
 
+  test('reusing an open document asks the view to point at its tab', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    store.aliases[testPath('alias.txt')] = testPath('one.txt');
+    await workspace.open(testPath('one.txt'));
+    final original = workspace.active!;
+    expect(original.flashRequest, 0);
+
+    // The same path, and a link that resolves onto it, both activate the
+    // existing tab rather than adding one.
+    await workspace.open(testPath('one.txt'));
+    expect(original.flashRequest, 1);
+    await workspace.open(testPath('alias.txt'));
+    expect(original.flashRequest, 2);
+    expect(workspace.documents, [original]);
+
+    // A genuinely new document starts at zero: it has nothing to point at.
+    store.files[testPath('two.txt')] = document('two.txt', 'disk');
+    await workspace.open(testPath('two.txt'));
+    expect(workspace.active!.flashRequest, 0);
+    expect(workspace.documents, hasLength(2));
+  });
+
   test(
     'an unreadable file reports an error without leaving a broken tab',
     () async {

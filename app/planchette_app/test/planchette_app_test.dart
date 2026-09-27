@@ -137,6 +137,73 @@ void main() {
   );
 
   testWidgets(
+    'reopening an open document flashes its tab',
+    (tester) async {
+      store.files[testPath('flash.txt')] = document('flash.txt', 'on disk');
+      await workspace.open(testPath('flash.txt'));
+      await mount(tester);
+      final tab = workspace.active!;
+      final chip = find.byKey(ValueKey('tab-${tab.id}'));
+      final surface = Theme.of(tester.element(chip)).colorScheme;
+      Color chipColor() =>
+          (tester
+                      .widget<AnimatedContainer>(
+                        find.descendant(
+                          of: chip,
+                          matching: find.byType(AnimatedContainer),
+                        ),
+                      )
+                      .decoration!
+                  as BoxDecoration)
+              .color!;
+
+      expect(chipColor(), surface.surface);
+
+      // Opening the same path again activates the tab instead of adding one.
+      await workspace.open(testPath('flash.txt'));
+      await tester.pump();
+      expect(workspace.documents, [tab]);
+      expect(chipColor(), surface.secondaryContainer);
+
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(chipColor(), surface.surface);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets('the tab flash respects disabled animation', (tester) async {
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    store.files[testPath('still.txt')] = document('still.txt', 'on disk');
+    await workspace.open(testPath('still.txt'));
+    await mount(tester);
+    final tab = workspace.active!;
+    final chip = find.byKey(ValueKey('tab-${tab.id}'));
+
+    await workspace.open(testPath('still.txt'));
+    await tester.pump();
+    expect(workspace.active, tab);
+    final container = find.descendant(
+      of: chip,
+      matching: find.byType(AnimatedContainer),
+    );
+    expect(
+      (tester.widget<AnimatedContainer>(container).decoration! as BoxDecoration)
+          .color,
+      Theme.of(tester.element(chip)).colorScheme.surface,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets(
     'menu Save As uses the active document',
     (tester) async {
       final tab = workspace.newDocument()!..editor.text.text = 'menu text';

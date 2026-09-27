@@ -508,61 +508,13 @@ class _DocumentShellState extends State<_DocumentShell> {
                         children: [
                           const SizedBox(width: 8),
                           for (final tab in tabs)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Tooltip(
-                                message: tab.path ?? tab.name,
-                                child: Semantics(
-                                  selected: tab == active,
-                                  child: Material(
-                                    color: tab == active
-                                        ? scheme.surface
-                                        : Colors.transparent,
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(8),
-                                    ),
-                                    child: InkWell(
-                                      onTap: workspace.interactionLocked
-                                          ? null
-                                          : () => _select(tab),
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 14,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Text(
-                                              '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: tab == active
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            IconButton(
-                                              key: ValueKey('close-${tab.id}'),
-                                              tooltip: 'Close ${tab.name}',
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              iconSize: 16,
-                                              onPressed:
-                                                  workspace.interactionLocked ||
-                                                      tab.busy
-                                                  ? null
-                                                  : () => unawaited(
-                                                      workspace.closeTab(tab),
-                                                    ),
-                                              icon: const Icon(Icons.close),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                            _TabChip(
+                              key: ValueKey('tab-${tab.id}'),
+                              tab: tab,
+                              isActive: tab == active,
+                              enabled: !workspace.interactionLocked,
+                              onSelect: () => _select(tab),
+                              onClose: () => unawaited(workspace.closeTab(tab)),
                             ),
                         ],
                       ),
@@ -653,6 +605,130 @@ class _DocumentShellState extends State<_DocumentShell> {
     workspace.removeListener(_changed);
     FocusManager.instance.removeListener(_rememberTextFocus);
     super.dispose();
+  }
+}
+
+/// One document tab.
+///
+/// Opening a document the workspace already holds activates its tab instead
+/// of adding one, which looks like nothing happening. [DocumentTab.flashRequest]
+/// marks that case, and the chip answers with a short pulse so the user can
+/// see where the open landed. The pulse is decoration: activation happens
+/// either way, and it is skipped entirely when the platform reports that
+/// animation is disabled.
+class _TabChip extends StatefulWidget {
+  const _TabChip({
+    super.key,
+    required this.tab,
+    required this.isActive,
+    required this.enabled,
+    required this.onSelect,
+    required this.onClose,
+  });
+
+  final DocumentTab tab;
+  final bool isActive;
+  final bool enabled;
+  final VoidCallback onSelect;
+  final VoidCallback onClose;
+
+  @override
+  State<_TabChip> createState() => _TabChipState();
+}
+
+class _TabChipState extends State<_TabChip> {
+  /// Long enough to notice between two glances, short enough not to linger.
+  static const _flashDuration = Duration(milliseconds: 700);
+
+  bool _flashing = false;
+
+  /// The last flash request this chip reacted to. Zero is also the value a
+  /// freshly mounted tab has, and a new tab has nothing to point at.
+  int _seenFlash = 0;
+  Timer? _flashTimer;
+
+  @override
+  void didUpdateWidget(_TabChip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Compare against the value this state last saw, not against
+    // oldWidget.tab: the tab is a mutable object, so the old widget reads the
+    // new value too and the request would look unchanged.
+    if (widget.tab.flashRequest == _seenFlash) return;
+    _seenFlash = widget.tab.flashRequest;
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    _flashTimer?.cancel();
+    // No setState: didUpdateWidget is followed immediately by this element's
+    // own build, which is the frame the flash should first appear in. Only the
+    // timer needs a new frame, to take it away again.
+    _flashing = true;
+    _flashTimer = Timer(_flashDuration, () {
+      if (mounted) setState(() => _flashing = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _flashTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tab = widget.tab;
+    final scheme = Theme.of(context).colorScheme;
+    final base = widget.isActive ? scheme.surface : Colors.transparent;
+    return Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Tooltip(
+        message: tab.path ?? tab.name,
+        child: Semantics(
+          selected: widget.isActive,
+          child: AnimatedContainer(
+            duration: _flashDuration,
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: _flashing ? scheme.secondaryContainer : base,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(8),
+              ),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                onTap: widget.enabled ? widget.onSelect : null,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 14),
+                  child: Row(
+                    children: [
+                      Text(
+                        '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: widget.isActive
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      IconButton(
+                        key: ValueKey('close-${tab.id}'),
+                        tooltip: 'Close ${tab.name}',
+                        visualDensity: VisualDensity.compact,
+                        iconSize: 16,
+                        onPressed: widget.enabled && !tab.busy
+                            ? widget.onClose
+                            : null,
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
