@@ -45,4 +45,38 @@ void main() {
     expect(tab.editor.isDirty, isTrue);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('Revert to Saved is disabled once the file is gone', (
+    tester,
+  ) async {
+    final store = MemoryDocuments();
+    final workspace = DocumentWorkspace(store: store, dialogs: FakeDialogs());
+    addTearDown(workspace.dispose);
+    final path = testPath('gone.txt');
+    store.files[path] = document('gone.txt', 'original', digest: 'v1');
+    await tester.binding.setSurfaceSize(const Size(1000, 720));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+    );
+    await tester.runAsync(() => workspace.open(path));
+    await tester.pumpAndSettle();
+
+    MenuItemButton revert() => tester.widget<MenuItemButton>(
+      find.widgetWithText(MenuItemButton, 'Revert to Saved'),
+    );
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    expect(revert().onPressed, isNotNull);
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+
+    store.files.remove(path);
+    await tester.runAsync(workspace.checkDisk);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    expect(revert().onPressed, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/services/document_workspace.dart';
@@ -91,6 +93,37 @@ void main() {
     expect(store.writes.last.digest, isNull);
     expect(store.files[path]!.text, 'original');
     expect(tab.disk, DiskState.current);
+  });
+
+  test(
+    'a file that reappears is never overwritten by recreate-on-save',
+    () async {
+      final tab = await open('original');
+      tab.editor.text.text = 'mine';
+      store.files.remove(path);
+      await workspace.checkDisk();
+      expect(tab.disk, DiskState.missing);
+
+      changeOnDisk('restored by a sync client', digest: 'v3');
+      // Recreating uses exclusive creation, so it refuses the new file and
+      // the notice turns into a conflict instead of a silent overwrite.
+      expect(await workspace.save(tab), isFalse);
+      expect(store.files[path]!.text, 'restored by a sync client');
+      expect(tab.disk, DiskState.changed);
+      expect(workspace.error, isNull);
+    },
+  );
+
+  test('an unrelated save failure stays visible behind a notice', () async {
+    final tab = await open('original');
+    store.files.remove(path);
+    await workspace.checkDisk();
+    expect(tab.disk, DiskState.missing);
+
+    store.writeError = const FileSystemException('Permission denied');
+    expect(await workspace.save(tab), isFalse);
+    expect(tab.disk, DiskState.missing);
+    expect(workspace.error, contains('Permission denied'));
   });
 
   test('Revert asks only when there are edits to lose', () async {

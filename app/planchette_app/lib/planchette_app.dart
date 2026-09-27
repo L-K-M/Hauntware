@@ -183,10 +183,15 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
         const _Separator(),
-        _Command('Revert to Saved', () {
-          final tab = workspace.active;
-          if (tab != null) unawaited(workspace.revert(tab));
-        }, enabled: ready && active.path != null),
+        _Command(
+          'Revert to Saved',
+          () {
+            final tab = workspace.active;
+            if (tab != null) unawaited(workspace.revert(tab));
+          },
+          enabled:
+              ready && active.path != null && active.disk != DiskState.missing,
+        ),
         const _Separator(),
         _Command(
           'Close Tab',

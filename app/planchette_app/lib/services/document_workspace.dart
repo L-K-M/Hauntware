@@ -394,10 +394,13 @@ final class DocumentWorkspace extends ChangeNotifier {
       return result != null;
     } catch (error) {
       _error = 'Could not save ${tab.name}: $error';
-      // An outside change or deletion is the usual cause. The document's own
-      // notice then explains it and offers Reload or Keep Mine.
+      // An outside change or deletion is the usual cause. When this check
+      // raises or changes the document's notice, the notice explains the
+      // failure and offers Reload or Keep Mine; any other failure, such as a
+      // permission error behind an existing notice, keeps its message.
+      final before = tab.disk;
       await _checkTab(tab, _CleanTabChange.flag);
-      if (tab.disk != DiskState.current) _error = null;
+      if (tab.disk != before && tab.disk != DiskState.current) _error = null;
       return false;
     } finally {
       _saveTargets.remove(tab);

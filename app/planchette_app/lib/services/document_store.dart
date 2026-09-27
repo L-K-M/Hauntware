@@ -5,6 +5,8 @@ import 'package:planchette_core/planchette_core.dart';
 
 /// A cheap summary of a file's state. Two equal stamps mean the file almost
 /// certainly did not change; unequal stamps call for a digest comparison.
+/// A same-size rewrite within the file system's timestamp granularity can
+/// slip past a check; the digest guard at save time still catches it.
 typedef FileStamp = ({DateTime modified, int size});
 
 /// The shell's filesystem boundary. Tests substitute an in-memory store.
