@@ -370,6 +370,38 @@ void main() {
       ),
     );
   });
+
+  test('a save carrying a NUL byte is refused, not written', () async {
+    // The load guard calls such a file binary, so writing one would leave a
+    // file the editor can no longer reopen.
+    await expectLater(
+      _save(file, 'text\u0000more\n'),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The text contains a NUL byte, so it cannot be saved as text.',
+        ),
+      ),
+    );
+    expect(await file.readAsString(), 'one\ntwo\n');
+    expect(await _loadText(file), 'one\ntwo\n');
+  });
+
+  test('a create carrying a NUL byte is refused, not written', () async {
+    final created = File('${directory.path}/fresh.txt');
+    await expectLater(
+      createTextDocument(created, 'fresh\u0000'),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The text contains a NUL byte, so it cannot be saved as text.',
+        ),
+      ),
+    );
+    expect(await created.exists(), isFalse);
+  });
 }
 
 Future<String> _loadText(

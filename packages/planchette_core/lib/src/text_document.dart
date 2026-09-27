@@ -9,6 +9,15 @@ import 'native_file_operations.dart';
 const int textDocumentMaximumBytes = 4 * 1024 * 1024;
 const int defaultTextDocumentMaximumBytes = textDocumentMaximumBytes;
 
+const String _nul = '\u0000';
+const String _binaryMessage =
+    'This file appears to be binary, not editable text.';
+
+/// A NUL byte is refused in both directions: a file written with one is one
+/// this editor then refuses to load, so the save has to fail first.
+const String _nulOnSaveMessage =
+    'The text contains a NUL byte, so it cannot be saved as text.';
+
 /// The dominant on-disk line ending. Ties and single-line files use LF.
 enum LineEnding { lf, crlf }
 
@@ -124,10 +133,8 @@ Future<TextDocument> loadTextDocument(
   } on FormatException {
     throw const TextDocumentException('This file is not valid UTF-8 text.');
   }
-  if (raw.contains('\u0000')) {
-    throw const TextDocumentException(
-      'This file appears to be binary, not editable text.',
-    );
+  if (raw.contains(_nul)) {
+    throw const TextDocumentException(_binaryMessage);
   }
   final crlfCount = RegExp(r'\r\n').allMatches(raw).length;
   final lfCount = RegExp(r'(?<!\r)\n').allMatches(raw).length;
@@ -213,6 +220,9 @@ Future<String> _writeTextDocument(
   final normalized = normalization == TextNormalization.preserve
       ? text
       : _normalizeLineEndings(text, lineEnding);
+  if (normalized.contains(_nul)) {
+    throw const TextDocumentException(_nulOnSaveMessage);
+  }
   final bytes = <int>[if (hasUtf8Bom) ..._utf8Bom, ...utf8.encode(normalized)];
   if (bytes.length > maximumBytes) {
     throw TextDocumentException(
