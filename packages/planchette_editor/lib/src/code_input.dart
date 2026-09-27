@@ -44,14 +44,15 @@ const Set<String> _closers = {')', ']', '}', '"', "'", '`'};
 
 /// Language families where a trailing colon opens an indented block. Everywhere
 /// else a colon is punctuation, and indenting after one is wrong.
-const Set<String> _colonOpensBlock = {
-  'yaml',
-  'ini',
-  'dotenv',
-  'xml',
-  'markdown',
-  'css',
-};
+///
+/// The list is deliberately short, because the two failure modes are not
+/// symmetric: a missed indent is obvious while typing and costs nothing, while
+/// a spurious one silently reformats prose. XML and Markdown are out because a
+/// line rarely *ends* in a colon there, and in Markdown it happens in ordinary
+/// prose — a bare "TODO:" line would gain an indent nobody asked for. CSS is in
+/// because a line-ending colon there really does continue an indented block, as
+/// in a `grid-template-areas:` value.
+const Set<String> _colonOpensBlock = {'yaml', 'ini', 'dotenv', 'css'};
 
 /// Whether a trailing colon should indent the next line for [language].
 bool colonOpensBlock(SyntaxLanguage? language) =>
@@ -88,6 +89,9 @@ bool movesOverCloser(
   String text,
   int offset,
 ) {
+  // The same gate as `opensPair`. In prose a brace is a character, and stepping
+  // over one would delete what the user just typed.
+  if (!pairsBrackets(language)) return false;
   if (!_closers.contains(character) || offset >= text.length) return false;
   if (text[offset] != character) return false;
   return _isOpenerFor(language, character, text, offset);
@@ -154,9 +158,17 @@ TextEditingValue _shiftIndent(
   while (true) {
     final range = indentRange(text, line);
     final existing = text.substring(range.start, range.end);
+    // A dedent removes one level, and at most one. If the file's indent does
+    // not match the setting — tabs against spaces, or a width from another
+    // project — removing nothing would leave the user with no way to outdent
+    // their own file, so one character goes.
     final after = forwards
         ? existing.length + unit.length
-        : (existing.startsWith(unit) ? existing.length - unit.length : 0);
+        : existing.startsWith(unit)
+        ? existing.length - unit.length
+        : existing.startsWith('\t')
+        ? existing.length - 1
+        : existing.length;
     buffer
       ..write(text.substring(copied, range.start))
       ..write(
@@ -173,18 +185,24 @@ TextEditingValue _shiftIndent(
   buffer.write(text.substring(copied));
 
   final shifted = buffer.toString();
+  // The last shifted line moved by everything shifted *before* it; its own shift
+  // only moves offsets inside it, and the selection should not reach past its
+  // end. `lastLine` is an offset in the old text, so it has to be carried into
+  // the new one before it can be used to find that end.
+  final beforeLast = shifts
+      .sublist(0, shifts.length - 1)
+      .fold(0, (a, b) => a + b);
+  final newLastLine = lastLine + beforeLast;
   return value.copyWith(
     text: shifted,
     selection: TextSelection(
       // A caret stays on the line it was on, at the end of that line's new
-      // indentation; a selection ends up covering the same lines, which is what
-      // indenting a block is for.
-      baseOffset: collapsed
-          ? firstLine + indents.first
-          : firstLine + shifts.first,
+      // indentation. A selection covers the same lines, from the first one's
+      // start to the last one's end, which is what indenting a block is for.
+      baseOffset: collapsed ? firstLine + indents.first : firstLine,
       extentOffset: collapsed
           ? firstLine + indents.first
-          : _lineEndAt(shifted, lastLine) + shifts.reduce((a, b) => a + b),
+          : _lineEndAt(shifted, newLastLine),
     ),
     composing: TextRange.empty,
   );
