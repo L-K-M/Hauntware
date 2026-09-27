@@ -208,6 +208,7 @@ and review status live on the PRs.
 | [#51](https://github.com/L-K-M/Planchette/pull/51) `claude/kind-mendel-urd9v5-reopen` | A7's Reopen half, **path-only**: a 20-entry stack of files the user closed through `closeTab`, File › Reopen Closed Tab (Cmd/Ctrl+Shift+T), skipping entries opened again. Duplicates #18, which restores text, selection and dirty state from snapshots and so supersedes it; merge one (see Overlaps). App 42 + 2 skipped |
 | [#52](https://github.com/L-K-M/Planchette/pull/52) `claude/kind-mendel-urd9v5-ghost` | Q5: `PlanchetteEditor.placeholder` (faint italic, editor face, gone on the first keystroke) and one of five "Start typing. The board is waiting…" lines per untitled tab; opened files show none. Editor 21, app 39 + 2 skipped |
 | [#53](https://github.com/L-K-M/Planchette/pull/53) `claude/kind-mendel-urd9v5-plurals` | Every new document's status bar read `1 lines · 0 bytes`; `documentPosition` now says `1 line`, `1 byte`. Editor 20 |
+| [#54](https://github.com/L-K-M/Planchette/pull/54) `claude/kind-mendel-urd9v5-locks` | B17 (**confirmed**: three of its four lock tests fail on main). The controller keeps the host's lock and each mounted view's lock apart; `editingLocked` reports either and every guard reads it. Each view registers itself, so a same-frame remount under another parent keeps its lock (a review finding on the first version, fixed with a regression test). Editor 24, app 38 + 2 skipped |
 
 **Overlaps between PRs.** Findings were repeated across parallel review passes — and are addressed by more than one open
 PR. Merge coordination should retain the intended behaviors and acceptance
@@ -375,6 +376,12 @@ single `\n` inserted at a collapsed caret with no composing range, and
 rewrite it with `core.insertNewline`. Do not do this while composing.
 Validate in Poltergeist and Séance before merging; IMEs are the risk.
 
+### FU8a. No extra indent after a comment ending in a colon (after #14) — S
+Deferred from #14's second review: with `indentAfterColon` (Python, YAML),
+Enter after `# TODO:` indents the next line. Skip the colon rule when the text
+before the caret on that line is a line comment for the language, and test
+`# note:|` in both languages.
+
 ### FU8. Keyboard escape from indent mode (after #14) — S
 With `EditorTabKeyBehavior.indent`, keyboard-only users can't Tab out of
 the document. **Plan:** add Ctrl+M (VS Code's "Toggle Tab Key Moves
@@ -419,6 +426,10 @@ not resurrect the previous document. Preserve listener detachment and
 mid-frame lifetime safety; profile accumulation after many reloads.
 
 ### FU11. Verify bounded shell notifications (after #17) — M
+Deferred from #17's second review: the title cache's stale-failure guard
+(`if (title == _title)` in `DesktopWindow.setTitle`'s error path) has no
+test. Add one where an older title fails after a newer one is sent, and
+check the newer one is not resent.
 Baseline editor notifications fan out through `DocumentWorkspace._notify`,
 loop all tabs, rebuild the shell/IndexedStack and resend the native title
 (`document_workspace.dart:108,358`, `main.dart:31`, **read**). #17 reports a fix.
@@ -605,13 +616,11 @@ Today the existing tab is simply activated. Add a short highlight
 animation on that tab so it's clear why nothing new appeared.
 Keep it optional and respect reduced motion; activation must work without it.
 
-### B17. Preserve independently owned editing locks — M (read, high priority)
-`editor_view.dart:67,93` copies the widget's default false into the controller
-on mount/update, although package guidance also permits hosts to set the
-controller lock. An unrelated rebuild can remove that independently owned
-lock; app hosts currently mirror it, masking the shared-package defect.
-Combine widget/controller lock ownership explicitly. Test pre-mount locks,
-rebuilds, controller swaps, replace/undo/save and confirmed-close saving.
+### B17. Preserve independently owned editing locks — assigned to #54
+**Still open after merge:** guards added by #14 (`_canEditText`) and #47
+(`canEditText`) read the private `_editingLocked` field; switch them to
+`editingLocked` so they honor the view's lock too. Hosts that listen for lock
+changes are not notified when only the view lock changes (as before #54).
 
 ### B18. Reserve Save As identities during async work — M (investigate, high priority)
 `document_workspace.dart` checks ownership before async digest, confirmation
