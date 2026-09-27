@@ -224,14 +224,6 @@ void main() {
       TargetPlatform.windows,
     }),
   );
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-    variant: const TargetPlatformVariant({
-      TargetPlatform.linux,
-      TargetPlatform.windows,
-    }),
-  );
 
   testWidgets(
     'menu Save As uses the active document',
