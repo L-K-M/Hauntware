@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
@@ -82,6 +84,45 @@ void main() {
     c.undoController.redo();
     await tester.pump();
     expect(c.text.text, 'dog dog');
+  });
+  testWidgets('a confirmed reload clears undo at the buffer boundary', (
+    tester,
+  ) async {
+    final c = EditorController(
+      displayPath: 'test',
+      loadDocument: () async => TextDocument(
+        file: File('/tmp/boundary.txt'),
+        text: 'original',
+        hasUtf8Bom: false,
+        lineEnding: LineEnding.lf,
+        sha256: 'v1',
+      ),
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await c.initialize();
+    await tester.pump();
+    expect(c.text.text, 'original');
+    await tester.enterText(
+      find.byKey(const ValueKey('planchette.document')),
+      'edited',
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    c.adoptDocument(
+      TextDocument(
+        file: File('/tmp/boundary.txt'),
+        text: 'reloaded',
+        hasUtf8Bom: false,
+        lineEnding: LineEnding.lf,
+        sha256: 'v2',
+      ),
+      replaceText: true,
+    );
+    await tester.pump();
+    expect(c.text.text, 'reloaded');
+    c.undoController.undo();
+    await tester.pump();
+    expect(c.text.text, 'reloaded');
   });
   testWidgets('IME composing text retains framework rendering', (tester) async {
     final c = EditorController(displayPath: '.env', initialText: 'KEY=value');

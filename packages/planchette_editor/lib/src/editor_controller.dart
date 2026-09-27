@@ -44,7 +44,9 @@ class EditorController extends ChangeNotifier {
   saveDocument;
   Future<void> Function()? onSaved;
   Future<bool> Function()? onPublish;
-  late final CodeEditingController text;
+  /// Replaced on every document install to sever the undo stack, which
+  /// UndoHistory binds to the controller instance itself.
+  late CodeEditingController text;
   final search = TextEditingController();
   final replacement = TextEditingController();
   final editorFocus = FocusNode();
@@ -176,10 +178,18 @@ class EditorController extends ChangeNotifier {
   void _installText(String value) {
     _savedText = value;
     _lastText = value;
-    text.value = TextEditingValue(
-      text: value,
-      selection: const TextSelection.collapsed(offset: 0),
-    );
+    // UndoHistory ties its stack to the TextEditingController instance, so
+    // a fresh buffer gets a fresh controller: this severs undo at the
+    // boundary — undoing across it would resurrect the previous buffer or
+    // revert a loaded document to empty.
+    final outgoing = text;
+    text = CodeEditingController()
+      ..addListener(_textChanged)
+      ..value = TextEditingValue(
+        text: value,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+    outgoing.dispose();
     _detectLanguage();
     if (_searchOpen) _updateMatches(resetActive: true);
     if (scroll.hasClients) scroll.jumpTo(0);
