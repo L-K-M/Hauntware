@@ -225,4 +225,28 @@ void main() {
     },
     variant: const TargetPlatformVariant({TargetPlatform.macOS}),
   );
+
+  testWidgets(
+    'reopen closed tab restores the buffer from keyboard',
+    (tester) async {
+      final tab = workspace.newDocument()!
+        ..editor.text.text = 'bring me back';
+      dialogs.choices.add(CloseChoice.discard);
+      await mount(tester);
+      expect(tab.editor.isDirty, isTrue);
+
+      await chord(tester, LogicalKeyboardKey.keyW);
+      expect(workspace.documents, isEmpty);
+      await chord(tester, LogicalKeyboardKey.keyT, shift: true);
+      expect(workspace.documents, hasLength(1));
+      expect(workspace.active!.editor.text.text, 'bring me back');
+      expect(workspace.active!.editor.isDirty, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 }

@@ -168,6 +168,17 @@ void main() {
     editor.replaceAll();
     expect(editor.text.text, 'dog CAT dog');
   });
+  test('restored snapshots read dirty against the saved revision', () {
+    final editor = EditorController(displayPath: 'test', initialText: '');
+    addTearDown(editor.dispose);
+    editor.restoreSnapshot('edited', savedText: 'saved', selectionOffset: 3);
+    expect(editor.text.text, 'edited');
+    expect(editor.isDirty, isTrue);
+    expect(editor.text.selection, const TextSelection.collapsed(offset: 3));
+    editor.restoreSnapshot('saved', savedText: 'saved', selectionOffset: 99);
+    expect(editor.isDirty, isFalse);
+    expect(editor.text.selection, const TextSelection.collapsed(offset: 5));
+  });
   test('Save As metadata preserves selection and detects the new language', () {
     final editor = EditorController(
       displayPath: 'Untitled',

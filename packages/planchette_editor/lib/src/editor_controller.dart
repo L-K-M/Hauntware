@@ -358,6 +358,22 @@ class EditorController extends ChangeNotifier {
     }
   }
 
+  /// Restore a previously closed buffer without a disk round-trip. The live
+  /// text and caret come from the snapshot; [savedText] is the revision the
+  /// buffer reads clean against (the last written text, or '' for documents
+  /// that were never saved).
+  void restoreSnapshot(
+    String value, {
+    required String savedText,
+    int selectionOffset = 0,
+  }) {
+    _installText(value);
+    _savedText = savedText;
+    text.selection = TextSelection.collapsed(
+      offset: selectionOffset.clamp(0, value.length),
+    );
+  }
+
   void nextMatch() => _stepMatch(1);
   void previousMatch() => _stepMatch(-1);
   void _stepMatch(int delta) {

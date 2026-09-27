@@ -109,6 +109,11 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (tab != null) unawaited(workspace.closeTab(tab));
   }
 
+  void _reopen() {
+    final tab = workspace.reopenLastClosed();
+    if (tab != null) _focusAfterFrame(tab);
+  }
+
   void _new() {
     final tab = workspace.newDocument();
     if (tab != null) _focusAfterFrame(tab);
@@ -188,6 +193,12 @@ class _DocumentShellState extends State<_DocumentShell> {
           _close,
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
           enabled: ready,
+        ),
+        _Command(
+          'Reopen Closed Tab',
+          _reopen,
+          shortcut: _shortcut(LogicalKeyboardKey.keyT, shift: true),
+          enabled: unlocked && workspace.canReopenClosed,
         ),
         if (!mac && widget.onQuit != null) ...[
           const _Separator(),

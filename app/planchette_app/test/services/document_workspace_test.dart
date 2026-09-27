@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_core/planchette_core.dart';
@@ -318,6 +319,62 @@ void main() {
     dialogs.choiceGate!.complete(CloseChoice.discard);
     expect(await closing, isFalse);
     expect(workspace.documents, [tab]);
+  });
+
+  test('reopen resurrects text, identity, caret and dirty state', () async {
+    store.files[testPath('notes.txt')] = document('notes.txt', 'on disk');
+    await workspace.open(testPath('notes.txt'));
+    final tab = workspace.active!
+      ..editor.text.text = 'on disk edited'
+      ..editor.text.selection = const TextSelection.collapsed(offset: 4);
+    dialogs.choices.add(CloseChoice.discard);
+    expect(await workspace.closeTab(tab), isTrue);
+    expect(workspace.documents, isEmpty);
+
+    final reopened = workspace.reopenLastClosed()!;
+    expect(reopened, isNot(tab));
+    expect(workspace.active, reopened);
+    expect(reopened.editor.text.text, 'on disk edited');
+    expect(reopened.path, testPath('notes.txt'));
+    expect(reopened.editor.isDirty, isTrue);
+    expect(
+      reopened.editor.text.selection,
+      const TextSelection.collapsed(offset: 4),
+    );
+    expect(workspace.reopenLastClosed(), isNull);
+
+    expect(await workspace.save(reopened), isTrue);
+    expect(store.files[testPath('notes.txt')]!.text, 'on disk edited');
+    expect(reopened.editor.isDirty, isFalse);
+  });
+
+  test('reopen of a clean tab is clean and defers to an open path', () async {
+    store.files[testPath('again.txt')] = document('again.txt', 'v1');
+    await workspace.open(testPath('again.txt'));
+    final first = workspace.active!;
+    expect(await workspace.closeTab(first), isTrue);
+    await workspace.open(testPath('again.txt'));
+    final second = workspace.active!;
+    expect(second, isNot(first));
+    expect(workspace.reopenLastClosed(), same(second));
+    expect(workspace.documents, hasLength(1));
+
+    expect(await workspace.closeTab(second), isTrue);
+    final third = workspace.reopenLastClosed()!;
+    expect(third.editor.isDirty, isFalse);
+    expect(third.editor.text.text, 'v1');
+  });
+
+  test('recently closed stack keeps only the last ten tabs', () async {
+    for (var i = 0; i < 11; i++) {
+      final tab = workspace.newDocument()!..editor.text.text = 'doc $i';
+      dialogs.choices.add(CloseChoice.discard);
+      expect(await workspace.closeTab(tab), isTrue);
+    }
+    for (var i = 10; i >= 1; i--) {
+      expect(workspace.reopenLastClosed()!.editor.text.text, 'doc $i');
+    }
+    expect(workspace.reopenLastClosed(), isNull);
   });
 
   test(

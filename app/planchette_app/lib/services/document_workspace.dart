@@ -8,6 +8,9 @@ import 'document_store.dart';
 
 enum CloseChoice { save, discard, cancel }
 
+/// How many closed tabs Reopen Closed Tab can bring back.
+const int recentlyClosedCapacity = 10;
+
 abstract interface class DocumentDialogs {
   Future<List<String>> pickOpenFiles();
   Future<String?> pickSavePath(String suggestedName);
@@ -30,6 +33,23 @@ final class DocumentTab {
   String get name => path == null ? untitledName : paths.basename(path!);
 }
 
+/// Enough to resurrect a closed tab without a disk round-trip. The save
+/// guard still applies on the next write: a file changed behind our back
+/// reports a conflict instead of silently overwriting.
+final class _ClosedDocument {
+  const _ClosedDocument({
+    required this.text,
+    required this.path,
+    required this.baseline,
+    required this.selectionOffset,
+  });
+
+  final String text;
+  final String? path;
+  final TextDocument? baseline;
+  final int selectionOffset;
+}
+
 final class DocumentWorkspace extends ChangeNotifier {
   DocumentWorkspace({
     required this.store,
@@ -44,6 +64,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   final Map<String, Future<void>> _opening = {};
   final Set<DocumentTab> _closingTabs = {};
   final Map<DocumentTab, Future<bool>> _saves = {};
+  final List<_ClosedDocument> _recentlyClosed = [];
   int _nextId = 1;
   int _dialogCount = 0;
   bool _closingAll = false;
@@ -57,6 +78,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   List<DocumentTab> get documents => List.unmodifiable(_documents);
   DocumentTab? get active => _active;
   String? get error => _error;
+  bool get canReopenClosed => _recentlyClosed.isNotEmpty;
   bool get interactionLocked =>
       _dialogCount > 0 || _closingAll || _quitAccepted;
   String get windowTitle {
@@ -251,12 +273,51 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
     try {
       if (!await _confirmTab(tab) || tab.busy) return false;
+      _recentlyClosed.add(
+        _ClosedDocument(
+          text: tab.editor.text.text,
+          path: tab.path,
+          baseline: tab.baseline,
+          selectionOffset: tab.editor.text.selection.start,
+        ),
+      );
+      while (_recentlyClosed.length > recentlyClosedCapacity) {
+        _recentlyClosed.removeAt(0);
+      }
       _remove(tab);
       _notify();
       return true;
     } finally {
       _closingTabs.remove(tab);
     }
+  }
+
+  /// Resurrect the most recently closed tab, preserving its text, save
+  /// identity and caret. A path reopened meanwhile is selected instead of
+  /// duplicating its buffer. Returns null when locked or when the stack is
+  /// empty.
+  DocumentTab? reopenLastClosed() {
+    if (interactionLocked || _recentlyClosed.isEmpty) return null;
+    final snapshot = _recentlyClosed.removeLast();
+    if (snapshot.path != null) {
+      final existing = _findPath(snapshot.path!);
+      if (existing != null) {
+        _active = existing;
+        _notify();
+        return existing;
+      }
+    }
+    final tab = _makeTab(path: snapshot.path, initialText: '');
+    tab.baseline = snapshot.baseline;
+    tab.editor.restoreSnapshot(
+      snapshot.text,
+      savedText: snapshot.baseline?.text ?? '',
+      selectionOffset: snapshot.selectionOffset,
+    );
+    _documents.add(tab);
+    _active = tab;
+    _notify();
+    return tab;
   }
 
   Future<bool> _confirmTab(DocumentTab tab) async {
