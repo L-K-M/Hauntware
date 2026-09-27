@@ -36,6 +36,11 @@ class MemoryDocuments implements DocumentStore {
   Object? writeError;
   int version = 0;
 
+  /// Set when two writes overlap in time, which leaves their commit order to
+  /// the event loop rather than to the request order.
+  bool sawOverlappingWrite = false;
+  int _activeWrites = 0;
+
   @override
   Future<TextDocument> load(String path) async {
     await loadGate?.future;
@@ -61,20 +66,26 @@ class MemoryDocuments implements DocumentStore {
     required String? expectedSha256,
   }) async {
     writes.add((path: path, text: text, digest: expectedSha256));
-    await writeGate?.future;
-    if (writeError case final error?) throw error;
-    if (files[path]?.sha256 != expectedSha256) {
-      throw StateError('Changed externally');
+    _activeWrites++;
+    if (_activeWrites > 1) sawOverlappingWrite = true;
+    try {
+      await writeGate?.future;
+      if (writeError case final error?) throw error;
+      if (files[path]?.sha256 != expectedSha256) {
+        throw StateError('Changed externally');
+      }
+      final saved = TextDocument(
+        file: File(path),
+        text: text,
+        hasUtf8Bom: source?.hasUtf8Bom ?? false,
+        lineEnding: source?.lineEnding ?? LineEnding.lf,
+        sha256: 'saved-${++version}',
+      );
+      files[path] = saved;
+      return saved;
+    } finally {
+      _activeWrites--;
     }
-    final saved = TextDocument(
-      file: File(path),
-      text: text,
-      hasUtf8Bom: source?.hasUtf8Bom ?? false,
-      lineEnding: source?.lineEnding ?? LineEnding.lf,
-      sha256: 'saved-${++version}',
-    );
-    files[path] = saved;
-    return saved;
   }
 }
 
@@ -220,6 +231,30 @@ void main() {
       expect(tab.editor.isDirty, isFalse);
     },
   );
+
+  test('saves queued behind one in-flight save run in request order', () async {
+    final tab = await openOne();
+    tab.editor.text.text = 'edited';
+    store.writeGate = Completer<void>();
+    final first = workspace.save(tab);
+    await pumpEventQueue();
+
+    // Both requests arrive while the first write is still gated, so both read
+    // the same in-flight future.
+    dialogs.savePath = testPath('copy.txt');
+    final saveAs = workspace.save(tab, saveAs: true);
+    final second = workspace.save(tab);
+    store.writeGate!.complete();
+    expect(await first, isTrue);
+    expect(await saveAs, isTrue);
+    expect(await second, isTrue);
+    expect(store.sawOverlappingWrite, isFalse);
+    expect(store.writes.map((write) => write.path), [
+      testPath('one.txt'),
+      testPath('copy.txt'),
+      testPath('copy.txt'),
+    ]);
+  });
 
   test(
     'New Save creates an absent target and records the saved identity',

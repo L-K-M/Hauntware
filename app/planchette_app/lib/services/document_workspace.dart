@@ -208,12 +208,18 @@ final class DocumentWorkspace extends ChangeNotifier {
     required bool saveAs,
     required EditorSaveAccess access,
   }) async {
-    if (inFlight != null) await inFlight;
+    // Several callers can queue behind the same in-flight save, so re-read the
+    // slot after every wait instead of trusting the future captured on entry.
+    // Whoever claims the slot next becomes the new predecessor.
+    while (inFlight != null) {
+      await inFlight;
 
-    // The wait above is an await point, so the tab may be gone by now. The
-    // close and quit decisions call _save directly while they hold the
-    // interaction lock, so only tab membership is re-checked here.
-    if (!_documents.contains(tab)) return false;
+      // The wait above is an await point, so the tab may be gone by now. The
+      // close and quit decisions call _save directly while they hold the
+      // interaction lock, so only tab membership is re-checked here.
+      if (!_documents.contains(tab)) return false;
+      inFlight = _saves[tab];
+    }
 
     final save = _saveOnce(tab, saveAs: saveAs, access: access);
     _saves[tab] = save;
