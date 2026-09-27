@@ -253,4 +253,37 @@ void main() {
     // The language is not claimed while the file is too big to highlight.
     expect(find.textContaining('python'), findsNothing);
   });
+  testWidgets('a reveal finds the last line of a folded large file', (
+    tester,
+  ) async {
+    // Past the highlighting cap with a first line long enough to fold, and a
+    // match on the last line of a file with no trailing newline. This is the
+    // shape that used to underflow the fallback's line index, and it pins the
+    // reachable path so a refactor cannot quietly break it.
+    final long = List.filled(9000, 'word ').join();
+    final text =
+        '$long\n${'filler ' * 6000}\n'
+        'the needle is here';
+    expect(text.length, greaterThan(syntaxHighlightingMaxChars));
+    expect(text.endsWith('\n'), isFalse);
+
+    final c = EditorController(displayPath: 'a.txt', initialText: text);
+    addTearDown(c.dispose);
+    tester.view.physicalSize = const Size(500, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.reset());
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+
+    c.openSearch();
+    c.search.text = 'needle';
+    await tester.pump();
+    expect(c.matches, hasLength(1));
+    await tester.pumpAndSettle();
+
+    // The last line is far down the document, so a correct reveal leaves the
+    // viewport well past the top. An underflowed line index would clamp to 0.
+    expect(tester.takeException(), isNull);
+    expect(c.scroll.offset, greaterThan(100));
+  });
 }

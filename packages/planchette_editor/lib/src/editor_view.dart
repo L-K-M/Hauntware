@@ -161,6 +161,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// The cached gutter already knows where every logical line begins, so a
   /// reveal normally costs a binary search rather than a fresh layout.
   double? _rowTopFor(int offset) {
+    if (!identical(_gutterText, c.text.text)) return null;
     final tops = _gutterTops;
     if (tops.length != c.lineStarts.length) return null;
     final starts = c.lineStarts;
@@ -183,7 +184,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// painter's scroll back-off already assumes.
   double? _measuredTopFor(int offset) {
     if (c.text.text.length > _gutterMeasurementMaxChars || _textWidth == null) {
-      final line = c.lineStarts.indexWhere((start) => start > offset) - 1;
+      // `indexWhere(start > offset) - 1` underflows on the last line of a file
+      // with no trailing newline, where no line start is greater than the
+      // offset. `lastIndexWhere` is total: `lineStarts[0]` is always 0.
+      final line = c.lineStarts.lastIndexWhere((start) => start <= offset);
       return line *
           MediaQuery.textScalerOf(context).scale(_style.fontSize!) *
           _style.height!;
@@ -629,7 +633,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       return _uniformTops(lineCount, lineHeight);
     }
     _gutterPainter
-      ..textScaler = MediaQuery.textScalerOf(context)
+      ..textScaler = scaler
       ..text = c.text.buildTextSpan(
         context: context,
         style: _style,
@@ -650,12 +654,17 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       }
       return tops;
     }
-    return [
+    final foldedTops = [
       for (final offset in c.lineStarts)
         _gutterPainter
             .getOffsetForCaret(TextPosition(offset: offset), Rect.zero)
             .dy,
     ];
+    // Release the paragraph rather than hold the document until the next
+    // invalidation. The folded case is the expensive one, so it is the one that
+    // must not sit on a large span tree.
+    _gutterPainter.text = const TextSpan(text: '');
+    return foldedTops;
   }
 }
 
