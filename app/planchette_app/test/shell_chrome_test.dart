@@ -285,6 +285,12 @@ void main() {
     ]);
   });
 
+  // `toFilePath` is the conversion being tested, so the expectation is built
+  // with it rather than spelled out: it yields `/home/me/one.txt` on Linux and
+  // macOS and `\\home\\me\\one.txt` on Windows, and a hardcoded POSIX
+  // expectation fails on the runner that proves the conversion happened.
+  String fromUri(String uri) => Uri.parse(uri).toFilePath();
+
   test('a desktop drop arrives as URIs, with comment lines', () {
     // This is the actual payload: text/uri-list, one file: URI per line, with
     // comment lines a file manager is free to include. Handing a URI straight
@@ -293,10 +299,13 @@ void main() {
       droppedPaths(
         'file:///home/me/one.txt\r\nfile:///home/me/two%20three.txt\r\n',
       ),
-      ['/home/me/one.txt', '/home/me/two three.txt'],
+      [
+        fromUri('file:///home/me/one.txt'),
+        fromUri('file:///home/me/two three.txt'),
+      ],
     );
     expect(droppedPaths('//comment\r\nfile:///home/me/one.txt\r\n'), [
-      '/home/me/one.txt',
+      fromUri('file:///home/me/one.txt'),
     ]);
     // A plain path still works, so a test-supplied or hand-made drop is fine.
     expect(droppedPaths('/home/me/one.txt'), ['/home/me/one.txt']);
@@ -310,10 +319,10 @@ void main() {
     // RFC 2483 marks comments in text/uri-list with a number sign; some file
     // managers send two slashes. A real comment must not become a file to open.
     expect(droppedPaths('#rfc comment\r\nfile:///home/me/one.txt'), [
-      '/home/me/one.txt',
+      fromUri('file:///home/me/one.txt'),
     ]);
     expect(droppedPaths('//practical comment\r\nfile:///home/me/one.txt'), [
-      '/home/me/one.txt',
+      fromUri('file:///home/me/one.txt'),
     ]);
     expect(droppedPaths('#a\r\n//b\r\n'), isEmpty);
   });
