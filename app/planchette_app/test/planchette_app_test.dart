@@ -127,6 +127,11 @@ void main() {
       await chord(tester, LogicalKeyboardKey.keyO);
       expect(workspace.documents, hasLength(1));
       expect(workspace.active!.editor.text.text, 'on disk');
+
+      await chord(tester, LogicalKeyboardKey.keyW);
+      expect(workspace.documents, isEmpty);
+      await chord(tester, LogicalKeyboardKey.keyT, shift: true);
+      expect(workspace.active!.path, testPath('reopen.txt'));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

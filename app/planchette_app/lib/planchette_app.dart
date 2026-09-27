@@ -189,6 +189,12 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
           enabled: ready,
         ),
+        _Command(
+          'Reopen Closed Tab',
+          () => unawaited(workspace.reopenClosed()),
+          shortcut: _shortcut(LogicalKeyboardKey.keyT, shift: true),
+          enabled: workspace.canReopenClosed,
+        ),
         if (!mac && widget.onQuit != null) ...[
           const _Separator(),
           _Command(
