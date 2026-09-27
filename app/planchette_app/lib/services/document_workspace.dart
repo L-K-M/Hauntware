@@ -242,6 +242,55 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
   }
 
+  /// Writes [tab] as a highlighted HTML page, by default beside the file.
+  /// A page is never written over a document open in a tab, and replacing
+  /// an existing file asks first, as Save As does. Returns whether a page
+  /// was written.
+  Future<bool> exportHtml(DocumentTab tab, HtmlPalette palette) async {
+    if (interactionLocked ||
+        !_documents.contains(tab) ||
+        tab.editor.isLoading ||
+        tab.editor.error != null) {
+      return false;
+    }
+    try {
+      final selected = await _dialog(
+        () => dialogs.pickSavePath('${tab.path ?? tab.name}.html'),
+      );
+      if (selected == null) return false;
+      final target = await store.canonicalSavePath(selected);
+      final open = _findPath(target);
+      if (open != null) {
+        _error = '${open.name} is open in a tab. Export to another file.';
+        return false;
+      }
+      final digest = await store.existingDigest(target);
+      if (digest != null &&
+          !await _dialog(() => dialogs.confirmReplace(target))) {
+        return false;
+      }
+      final text = tab.editor.text.text;
+      final language = tab.editor.text.language;
+      await store.write(
+        path: target,
+        text: highlightedHtml(
+          text: text,
+          tokens: language == null ? const [] : tokenizeSyntax(text, language),
+          palette: palette,
+          title: tab.name,
+        ),
+        source: null,
+        expectedSha256: digest,
+      );
+      return true;
+    } catch (error) {
+      _error = 'Could not export ${tab.name}: $error';
+      return false;
+    } finally {
+      _notify();
+    }
+  }
+
   Future<bool> closeTab(DocumentTab tab) async {
     if (interactionLocked ||
         tab.busy ||

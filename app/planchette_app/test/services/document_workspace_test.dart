@@ -162,6 +162,58 @@ void main() {
     },
   );
 
+  group('export as HTML', () {
+    const palette = HtmlPalette(
+      background: '#ffffff',
+      foreground: '#000000',
+      tokens: {SyntaxTokenType.comment: '#777777'},
+    );
+    late DocumentTab tab;
+    setUp(() async {
+      store.files[testPath('main.dart')] = document(
+        'main.dart',
+        '// hi <there>\nvoid main() {}\n',
+      );
+      await workspace.open(testPath('main.dart'));
+      tab = workspace.active!..editor.text.text += '// unsaved\n';
+    });
+
+    test('writes the buffer, unsaved edits included, as a page', () async {
+      dialogs.savePath = testPath('main.dart.html');
+      expect(await workspace.exportHtml(tab, palette), isTrue);
+
+      final page = store.files[testPath('main.dart.html')]!.text;
+      expect(page, contains('<title>main.dart</title>'));
+      expect(page, contains('<span class="c">// hi &lt;there&gt;</span>'));
+      expect(page, contains('<span class="c">// unsaved</span>'));
+      expect(tab.path, testPath('main.dart'));
+      expect(tab.editor.isDirty, isTrue);
+    });
+
+    test(
+      'writes nothing when cancelled or when replacing is declined',
+      () async {
+        dialogs.savePath = null;
+        expect(await workspace.exportHtml(tab, palette), isFalse);
+
+        store.files[testPath('old.html')] = document('old.html', 'keep');
+        dialogs
+          ..savePath = testPath('old.html')
+          ..replace = false;
+        expect(await workspace.exportHtml(tab, palette), isFalse);
+        expect(store.files[testPath('old.html')]!.text, 'keep');
+        expect(store.writes, isEmpty);
+      },
+    );
+
+    test('never writes over a document open in a tab', () async {
+      dialogs.savePath = testPath('main.dart');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(workspace.error, contains('open in a tab'));
+      expect(store.writes, isEmpty);
+    });
+  });
+
   test('canceling Save As keeps a new document dirty and unnamed', () async {
     final tab = workspace.newDocument()!;
     tab.editor.text.text = 'keep me';

@@ -2,5 +2,6 @@
 library;
 
 export 'src/editor_syntax.dart';
+export 'src/html_export.dart';
 export 'src/text_document.dart';
 export 'src/text_metrics.dart';
