@@ -421,10 +421,29 @@ class EditorController extends ChangeNotifier {
   }
 
   void nextMatch() => _stepMatch(1);
+
   void previousMatch() => _stepMatch(-1);
+
+  /// The find bar holds one window of matches, capped so a minified file cannot
+  /// flood it with spans. Stepping inside the window is instant; stepping off
+  /// its end pages the query, so every occurrence in the document is reachable
+  /// instead of only the first [searchMatchLimit] of them.
   void _stepMatch(int delta) {
     if (_matches.isEmpty) return;
-    _activeMatch = (_activeMatch + delta + _matches.length) % _matches.length;
+    final stepped = _activeMatch + delta;
+    if (stepped >= 0 && stepped < _matches.length) {
+      _selectMatch(stepped);
+      return;
+    }
+    if (delta > 0) {
+      _pageForward();
+    } else {
+      _pageBackward();
+    }
+  }
+
+  void _selectMatch(int index) {
+    _activeMatch = index;
     text.setSearchMatches(_matches, _activeMatch);
     final match = _matches[_activeMatch];
     text.selection = TextSelection(
@@ -434,6 +453,39 @@ class EditorController extends ChangeNotifier {
     _revealRequest++;
     _notify();
   }
+
+  /// Adopts a fresh window of matches, replacing the highlighted set so what
+  /// is painted stays the window the user is stepping through.
+  void _adoptWindow(List<TextRange> window) {
+    _matches = window;
+  }
+
+  void _pageForward() {
+    // Matches at or after the end of this window, or the first page again when
+    // the document is exhausted.
+    final next = _window(start: _matches.last.end);
+    _adoptWindow(next.isEmpty ? _window() : next);
+    if (_matches.isEmpty) return;
+    _selectMatch(0);
+  }
+
+  void _pageBackward() {
+    // Matches strictly before this window, or the last page in the document
+    // when there is nothing earlier left.
+    final previous = _window(start: _matches.first.start, reverse: true);
+    _adoptWindow(previous.isEmpty ? _window(reverse: true) : previous);
+    if (_matches.isEmpty) return;
+    _selectMatch(_matches.length - 1);
+  }
+
+  List<TextRange> _window({int? start, bool reverse = false}) =>
+      findSearchMatches(
+        text.text,
+        search.text,
+        caseSensitive: _caseSensitive,
+        start: start,
+        reverse: reverse,
+      );
 
   void replaceCurrent() {
     if (_editingLocked || isBusy || _activeMatch < 0 || _matches.isEmpty) {

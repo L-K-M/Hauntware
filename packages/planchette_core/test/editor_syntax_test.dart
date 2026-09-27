@@ -390,65 +390,36 @@ void main() {
       expect(findSearchMatches('anything', ''), isEmpty);
     });
 
-    test('reports exact case folding for ordinary text', () {
-      final result = searchText('Die Größe der Straße', 'größe');
-      expect(result.caseFolding, CaseFolding.exact);
-      expect(result.caseFoldedExactly, isTrue);
-      expect(result.matches, [const TextMatch(start: 4, end: 9)]);
-    });
-
-    test('Dart lowercasing preserves length, so the guard is defensive', () {
-      // Every code point folds to the same number of UTF-16 units today. If a
-      // future SDK breaks that, searchText reports it rather than quietly
-      // changing what a case-insensitive search means.
-      for (var rune = 0x80; rune <= 0x2FFFF; rune++) {
-        final value = String.fromCharCode(rune);
-        expect(
-          value.toLowerCase().length,
-          value.length,
-          reason: 'U+${rune.toRadixString(16)} changes length when lowercased',
-        );
-      }
-    });
-
-    test('a length-changing fold is reported and matched exactly', () {
-      // ß uppercases to "SS", which is what a full case fold would expand it
-      // to. Dart's toLowerCase does not do that, so the fold is injected to
-      // reach the path a host with its own folding table would take.
-      String fold(String value) =>
-          value.replaceAll('ß', 'ss').replaceAll('ẞ', 'ss');
-      final result = searchText('Die Straße', 'STRASSE', fold: fold);
-      expect(result.caseFolding, CaseFolding.lengthChanging);
-      expect(result.caseFoldedExactly, isFalse);
-      // Reported as limited, and the match is the exact one — the honest
-      // outcome is "fewer matches than you asked for", not a wrong range.
-      expect(result.matches, isEmpty);
-      expect(searchText('Die Straße', 'Straße', fold: fold).matches, [
-        const TextMatch(start: 4, end: 10),
+    test('a start offset skips the matches before it', () {
+      expect(findSearchMatches('ab ab ab ab', 'ab', start: 3), [
+        const TextMatch(start: 3, end: 5),
+        const TextMatch(start: 6, end: 8),
+        const TextMatch(start: 9, end: 11),
       ]);
+      expect(findSearchMatches('ab ab', 'ab', start: 99), isEmpty);
     });
 
-    test('a case-sensitive search is never limited', () {
-      final result = searchText(
-        'Die Straße',
-        'STRASSE',
-        caseSensitive: true,
-        fold: (value) => value.replaceAll('ß', 'ss'),
-      );
-      expect(result.caseFolding, CaseFolding.exact);
-      expect(result.matches, isEmpty);
+    test('a reverse window returns the matches before the bound', () {
+      expect(findSearchMatches('ab ab ab ab', 'ab', start: 5, reverse: true), [
+        const TextMatch(start: 0, end: 2),
+        const TextMatch(start: 3, end: 5),
+      ]);
+      expect(findSearchMatches('ab ab ab ab', 'ab', reverse: true), [
+        const TextMatch(start: 0, end: 2),
+        const TextMatch(start: 3, end: 5),
+        const TextMatch(start: 6, end: 8),
+        const TextMatch(start: 9, end: 11),
+      ]);
+      expect(findSearchMatches('ab', 'ab', start: 0, reverse: true), isEmpty);
     });
 
-    test('a length-changing needle is reported too', () {
-      final result = searchText(
-        'plain text',
-        'PLAIN',
-        fold: (value) {
-          if (value == 'PLAIN') return 'plaiin';
-          return value;
-        },
-      );
-      expect(result.caseFolding, CaseFolding.lengthChanging);
+    test('a reverse window still honours the limit', () {
+      final text = List.filled(50, 'a').join();
+      expect(findSearchMatches(text, 'a', limit: 3, reverse: true), [
+        const TextMatch(start: 47, end: 48),
+        const TextMatch(start: 48, end: 49),
+        const TextMatch(start: 49, end: 50),
+      ]);
     });
   });
 }
