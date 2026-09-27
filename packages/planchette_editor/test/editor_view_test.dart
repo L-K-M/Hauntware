@@ -99,17 +99,17 @@ void main() {
       offset: c.text.text.length,
     );
     await tester.pump();
-    final painter =
-        tester.widget<CustomPaint>(
-          find.byKey(const ValueKey('editor-caret-band')),
-        ).painter.toString();
+    // The painter is library-private; read its fields dynamically rather
+    // than parsing a toString() contract.
+    final painter = tester
+        .widget<CustomPaint>(find.byKey(const ValueKey('editor-caret-band')))
+        .painter!;
+    final lineTops = (painter as dynamic).lineTops as List<double>;
+    final lineHeight = (painter as dynamic).lineHeight as double;
+    final documentHeight = (painter as dynamic).documentHeight as double;
     // The only line wraps, so the laid-out height must exceed one row.
-    expect(painter, contains('lines: 2'));
-    final height = double.parse(
-      RegExp(r'documentHeight: ([0-9.]+)').firstMatch(painter)!.group(1)!,
-    );
-    final lastLineTopEstimate = 1 * 14 * 1.35;
-    expect(height, greaterThan(lastLineTopEstimate * 3));
+    expect(lineTops.length, 2);
+    expect(documentHeight, greaterThan(lineHeight * 3));
   });
 
   testWidgets('caret-line band can be disabled by hosts', (tester) async {
