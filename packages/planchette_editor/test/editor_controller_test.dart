@@ -298,5 +298,11 @@ void _gotoLineRevealTests() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pumpAndSettle();
     expect(editor.scroll.offset, greaterThan(0));
+
+    // And back up: the first line must be reachable again.
+    editor.gotoLine(1);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(editor.scroll.offset, 0);
   });
 }

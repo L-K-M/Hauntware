@@ -101,8 +101,9 @@ final class AppDocumentDialogs implements DocumentDialogs {
           keyboardType: TextInputType.number,
           inputFormatters: [
             FilteringTextInputFormatter.digitsOnly,
-            // Keep the answer inside int; longer input is meaningless for
-            // a line number and would otherwise parse to null (cancel).
+            // Cap the field far below any real line count so every value
+            // the user can enter still parses; a huge paste would
+            // otherwise fail int.tryParse and silently act like Cancel.
             LengthLimitingTextInputFormatter(9),
           ],
           decoration: InputDecoration(
@@ -116,10 +117,18 @@ final class AppDocumentDialogs implements DocumentDialogs {
             onPressed: () => Navigator.pop(dialogContext, null),
             child: const Text('Cancel'),
           ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, int.tryParse(input.text)),
-            child: const Text('Go'),
+          // Go stays disabled until the field holds a parseable number.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: input,
+            builder: (context, value, _) {
+              final line = int.tryParse(value.text);
+              return FilledButton(
+                onPressed: line == null
+                    ? null
+                    : () => Navigator.pop(dialogContext, line),
+                child: const Text('Go'),
+              );
+            },
           ),
         ],
       ),
