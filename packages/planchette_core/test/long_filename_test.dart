@@ -74,5 +74,37 @@ void main() {
       expect(await file.readAsString(), 'external');
       expect(await directory.list().length, 1);
     });
+
+    test('identifies retained backup for a long $kind filename', () async {
+      final file = File('${directory.path}/$name');
+      await file.writeAsString('original');
+      final document = await loadTextDocument(file);
+      late File backup;
+
+      // A writer recreating the target must keep its bytes while the error
+      // points to the exact shortened recovery name holding the original.
+      await expectLater(
+        saveTextDocument(
+          file,
+          'edited',
+          expectedSha256: document.sha256,
+          observeBackup: (savedOriginal) async {
+            backup = savedOriginal;
+            await file.writeAsString('concurrent');
+          },
+        ),
+        throwsA(
+          isA<TextDocumentException>().having(
+            (error) => error.message,
+            'retained recovery path',
+            predicate<String>((message) => message.contains(backup.path)),
+          ),
+        ),
+      );
+
+      expect(await file.readAsString(), 'concurrent');
+      expect(await backup.readAsString(), 'original');
+      expect(await directory.list().length, 2);
+    });
   }
 }
