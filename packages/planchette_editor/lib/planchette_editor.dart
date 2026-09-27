@@ -1,7 +1,8 @@
 /// Embeddable editor UI shared by Planchette, Poltergeist, and Seance.
 library;
 
-export 'package:planchette_core/planchette_core.dart' hide findSearchMatches;
+export 'package:planchette_core/planchette_core.dart'
+    hide SearchResult, findSearchMatches, searchText;
 export 'src/code_editing_controller.dart';
 export 'src/editor_controller.dart';
 export 'src/editor_strings.dart';

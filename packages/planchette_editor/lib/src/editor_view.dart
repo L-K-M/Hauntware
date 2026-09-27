@@ -267,6 +267,18 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(counter, style: theme.textTheme.labelSmall),
                       ),
+                    if (c.caseFoldingLimited)
+                      Tooltip(
+                        message: strings.caseFoldLimited,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: theme.colorScheme.tertiary,
+                          ),
+                        ),
+                      ),
                     IconButton(
                       tooltip: strings.matchCase,
                       visualDensity: VisualDensity.compact,

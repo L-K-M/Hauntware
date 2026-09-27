@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:planchette_core/planchette_core.dart' hide findSearchMatches;
+import 'package:planchette_core/planchette_core.dart'
+    hide SearchResult, findSearchMatches, searchText;
 
 import 'code_editing_controller.dart';
 
@@ -28,7 +29,9 @@ class EditorController extends ChangeNotifier {
     this.saveDocument,
     this.onSaved,
     this.onPublish,
-  }) : _displayPath = displayPath {
+    CaseFolder? caseFolder,
+  }) : _displayPath = displayPath,
+       _fold = caseFolder ?? _defaultCaseFolder {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
@@ -44,6 +47,17 @@ class EditorController extends ChangeNotifier {
   saveDocument;
   Future<void> Function()? onSaved;
   Future<bool> Function()? onPublish;
+
+  /// How a case-insensitive find compares text. Defaults to
+  /// [String.toLowerCase]; a host that folds case more thoroughly (Unicode
+  /// full folding, so `STRASSE` finds `straße`) can supply its own. When the
+  /// fold changes a string's length, match offsets would no longer address the
+  /// original, so the search compares exactly and says so — see
+  /// [caseFoldingLimited].
+  final CaseFolder _fold;
+
+  static String _defaultCaseFolder(String value) => value.toLowerCase();
+
   late final CodeEditingController text;
   final search = TextEditingController();
   final replacement = TextEditingController();
@@ -64,6 +78,7 @@ class EditorController extends ChangeNotifier {
   bool _searchOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
+  CaseFolding _caseFolding = CaseFolding.exact;
   bool _updatingSearch = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
@@ -96,6 +111,12 @@ class EditorController extends ChangeNotifier {
   bool get searchOpen => _searchOpen;
   bool get replaceOpen => _replaceOpen;
   bool get caseSensitive => _caseSensitive;
+
+  /// True when the last case-insensitive search had to compare exactly
+  /// because this text could not be lowercased without moving its offsets.
+  /// The find bar says so rather than showing a short count as if it were
+  /// complete.
+  bool get caseFoldingLimited => _caseFolding == CaseFolding.lengthChanging;
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
@@ -308,6 +329,7 @@ class EditorController extends ChangeNotifier {
     _matches = const [];
     _activeMatch = -1;
     _lastQuery = null;
+    _caseFolding = CaseFolding.exact;
     text.setSearchMatches(const [], -1);
     editorFocus.requestFocus();
     _notify();
@@ -334,13 +356,18 @@ class EditorController extends ChangeNotifier {
 
   void _updateMatches({required bool resetActive}) {
     _lastQuery = search.text;
-    _matches = _searchOpen
-        ? findSearchMatches(
+    final result = _searchOpen
+        ? searchText(
             text.text,
             search.text,
             caseSensitive: _caseSensitive,
+            fold: _fold,
           )
-        : const [];
+        : const SearchResult(matches: [], caseFolding: CaseFolding.exact);
+    // Reported, not hidden: a case-insensitive search that could not fold this
+    // text found fewer matches than the user asked for.
+    _caseFolding = result.caseFolding;
+    _matches = result.matches;
     if (_matches.isEmpty) {
       _activeMatch = -1;
     } else if (resetActive ||
@@ -404,6 +431,7 @@ class EditorController extends ChangeNotifier {
       search.text,
       caseSensitive: _caseSensitive,
       limit: source.length + 1,
+      fold: _fold,
     );
     if (matches.isEmpty) return;
     final buffer = StringBuffer();

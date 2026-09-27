@@ -1156,24 +1156,59 @@ final class TextMatch {
   String toString() => 'TextMatch($start, $end)';
 }
 
-/// Substring search used by the editor's find bar. Case-insensitive matching
-/// lowercases both sides; if lowering changes the haystack length (a handful
-/// of Unicode characters do), it falls back to case-sensitive search rather
-/// than report misaligned ranges. Capped at [limit] matches.
-List<TextMatch> findSearchMatches(
+/// How faithfully a case-insensitive search could compare the document.
+enum CaseFolding {
+  /// Both sides were lowercased and every match offset still addresses the
+  /// original text.
+  exact,
+
+  /// Lowercasing changed the text's length, so offsets into the folded text
+  /// would not address the original. The search compared case-sensitively
+  /// instead, which finds fewer matches than the user asked for, and says so.
+  lengthChanging,
+}
+
+/// A search outcome plus the case handling that produced it. Hosts that show a
+/// match count can report [caseFolding] instead of quietly claiming a
+/// case-insensitive result they did not deliver.
+final class SearchResult {
+  const SearchResult({required this.matches, required this.caseFolding});
+
+  final List<TextMatch> matches;
+  final CaseFolding caseFolding;
+
+  bool get caseFoldedExactly => caseFolding == CaseFolding.exact;
+}
+
+/// Lowercases one side of a case-insensitive comparison. Injectable so the
+/// [CaseFolding.lengthChanging] path can be exercised: Dart's `toLowerCase`
+/// preserves length for every code point today, which leaves the guard in
+/// [searchText] defensive and otherwise untestable.
+typedef CaseFolder = String Function(String value);
+
+/// Substring search used by the editor's find bar, reporting how the case
+/// handling went. Capped at [limit] matches.
+SearchResult searchText(
   String text,
   String query, {
   bool caseSensitive = false,
   int limit = searchMatchLimit,
+  CaseFolder fold = _lowercase,
 }) {
-  if (query.isEmpty) return const [];
+  if (query.isEmpty) {
+    return const SearchResult(matches: [], caseFolding: CaseFolding.exact);
+  }
   var haystack = text;
   var needle = query;
+  var caseFolding = CaseFolding.exact;
   if (!caseSensitive) {
-    final lowered = text.toLowerCase();
-    if (lowered.length == text.length) {
+    final lowered = fold(text);
+    final loweredNeedle = fold(query);
+    if (lowered.length == text.length && loweredNeedle.length == query.length) {
       haystack = lowered;
-      needle = query.toLowerCase();
+      needle = loweredNeedle;
+    } else {
+      caseFolding = CaseFolding.lengthChanging;
     }
   }
   final matches = <TextMatch>[];
@@ -1184,5 +1219,18 @@ List<TextMatch> findSearchMatches(
     matches.add(TextMatch(start: at, end: at + needle.length));
     from = at + needle.length;
   }
-  return matches;
+  return SearchResult(matches: matches, caseFolding: caseFolding);
 }
+
+String _lowercase(String value) => value.toLowerCase();
+
+/// The matches only. Hosts that do not report case handling can use this, but
+/// prefer [searchText]: it is the difference between "no matches" and "no
+/// matches because this text cannot be compared case-insensitively".
+List<TextMatch> findSearchMatches(
+  String text,
+  String query, {
+  bool caseSensitive = false,
+  int limit = searchMatchLimit,
+}) =>
+    searchText(text, query, caseSensitive: caseSensitive, limit: limit).matches;
