@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart' hide findSearchMatches;
 
 import 'code_editing_controller.dart';
+import 'code_input.dart';
 
 enum EditorSaveMode { local, primary }
 
@@ -24,6 +25,7 @@ class EditorController extends ChangeNotifier {
   EditorController({
     required String displayPath,
     String? initialText,
+    this.indent = const EditorIndent(),
     this.loadDocument,
     this.saveDocument,
     this.onSaved,
@@ -39,6 +41,8 @@ class EditorController extends ChangeNotifier {
     }
   }
 
+  /// One indent level. A host can change it while documents are open.
+  EditorIndent indent;
   final Future<TextDocument> Function()? loadDocument;
   final Future<String> Function(String text, TextDocument? baseline)?
   saveDocument;
@@ -65,6 +69,7 @@ class EditorController extends ChangeNotifier {
   bool _replaceOpen = false;
   bool _caseSensitive = false;
   bool _updatingSearch = false;
+  bool _applyingCodeInput = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
   int _revision = 0;
@@ -203,13 +208,86 @@ class EditorController extends ChangeNotifier {
   }
 
   void _textChanged() {
-    if (_updatingSearch || _disposed) return;
+    if (_updatingSearch || _applyingCodeInput || _disposed) return;
     if (text.text != _lastText) {
-      _lastText = text.text;
+      final previous = _lastText;
+      final typed = text.text;
+      _lastText = typed;
       _revision++;
+      _applyCodeInput(previous, typed);
       if (_searchOpen) _updateMatches(resetActive: false);
     }
     _notify();
+  }
+
+  /// Bring in what a programmer expects typing to do on its own: a new line
+  /// carries the current indentation, and a bracket brings its closer with it.
+  ///
+  /// Both run on the change the platform already made rather than by
+  /// intercepting keys, because Enter and the bracket keys reach the buffer
+  /// through the platform's text input and a shortcut would only be a second
+  /// path to the same edit.
+  ///
+  /// Only a single character inserted where the caret was counts. A paste, a
+  /// composition, an undo and a replaced selection all arrive as more than that
+  /// and are left exactly as they came, which is what keeps this from rewriting
+  /// someone else's text.
+  void _applyCodeInput(String previous, String typed) {
+    if (_editingLocked || isBusy) return;
+    final selection = text.selection;
+    if (typed.length != previous.length + 1) return;
+    if (!selection.isValid || !selection.isCollapsed) return;
+    if (text.value.isComposingRangeValid) return;
+
+    final at = selection.extentOffset - 1;
+    if (at < 0 || at > previous.length) return;
+    if (!typed.startsWith(previous.substring(0, at), 0)) return;
+    if (!typed.endsWith(previous.substring(at))) return;
+
+    _applyingCodeInput = true;
+    try {
+      final character = typed[at];
+      if (character == '\n') {
+        _indentAfterNewLine(previous, at);
+      } else {
+        _pairIfExpected(previous, at, character);
+      }
+    } finally {
+      _applyingCodeInput = false;
+      _lastText = text.text;
+    }
+  }
+
+  void _indentAfterNewLine(String previous, int at) {
+    final carried = indentForNewLine(
+      previous,
+      at,
+      unit: indent.unit,
+      afterColon: colonOpensBlock(text.language),
+    );
+    if (carried.isEmpty) return;
+    text.value = text.value.copyWith(
+      text: text.text.replaceRange(at, at + 1, '\n$carried'),
+      selection: TextSelection.collapsed(offset: at + 1 + carried.length),
+    );
+  }
+
+  void _pairIfExpected(String previous, int at, String character) {
+    // The platform has already inserted the character. Closing a pair means
+    // taking back that character and stepping over the one already there.
+    if (movesOverCloser(text.language, character, previous, at)) {
+      text.value = text.value.copyWith(
+        text: text.text.replaceRange(at, at + 1, ''),
+        selection: TextSelection.collapsed(offset: at + 1),
+      );
+      return;
+    }
+    if (!opensPair(text.language, character, previous, at)) return;
+    final closer = closerFor(character)!;
+    text.value = text.value.copyWith(
+      text: text.text.replaceRange(at, at + 1, '$character$closer'),
+      selection: TextSelection.collapsed(offset: at + 1),
+    );
   }
 
   Future<EditorSaveResult?> save({

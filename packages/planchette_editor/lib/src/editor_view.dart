@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:planchette_core/planchette_core.dart';
 
 import 'code_editing_controller.dart';
+import 'code_input.dart';
 import 'editor_controller.dart';
 import 'editor_strings.dart';
 
@@ -23,6 +24,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.editingLocked = false,
     this.showLineNumbers = true,
     this.showStatus = true,
+    this.indent = const EditorIndent(),
     this.banner,
     this.statusBuilder,
   });
@@ -35,6 +37,11 @@ class PlanchetteEditor extends StatefulWidget {
   final bool editingLocked;
   final bool showLineNumbers;
   final bool showStatus;
+
+  /// One indent level for Tab, Shift+Tab and automatic indentation. The
+  /// controller keeps its own copy, which is what the buffer edits read; a host
+  /// that changes this for a live document sets both.
+  final EditorIndent indent;
   final Widget? banner;
   final Widget Function(BuildContext context, EditorController controller)?
   statusBuilder;
@@ -199,6 +206,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             c.previousMatch,
         if (c.searchOpen)
           const SingleActivator(LogicalKeyboardKey.escape): c.closeSearch,
+        // Tab and Shift+Tab indent and dedent rather than moving focus. A text
+        // editor that cannot be indented with the keyboard is not usable for
+        // code, and every other key that would use Tab still has a shortcut.
+        if (!_locked) const SingleActivator(LogicalKeyboardKey.tab): _indent,
+        if (!_locked)
+          const SingleActivator(LogicalKeyboardKey.tab, shift: true): _dedent,
       },
       child: Column(
         children: [
@@ -216,6 +229,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         ],
       ),
     );
+  }
+
+  void _indent() {
+    c.text.value = indentSelection(c.text.value, unit: widget.indent.unit);
+  }
+
+  void _dedent() {
+    c.text.value = dedentSelection(c.text.value, unit: widget.indent.unit);
   }
 
   Widget _searchBar(BuildContext context) {
