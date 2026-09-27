@@ -178,9 +178,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   }
 
   /// Fallback for a document whose rows and logical lines disagree, which only
-  /// happens once a long line has soft-wrapped.
+  /// happens once a long line has soft-wrapped, or for one too large for the
+  /// gutter to measure. The estimate is the same uniform row height the
+  /// painter's scroll back-off already assumes.
   double? _measuredTopFor(int offset) {
-    if (c.text.text.length > syntaxHighlightingMaxChars || _textWidth == null) {
+    if (c.text.text.length > _gutterMeasurementMaxChars || _textWidth == null) {
       final line = c.lineStarts.indexWhere((start) => start > offset) - 1;
       return line *
           MediaQuery.textScalerOf(context).scale(_style.fontSize!) *

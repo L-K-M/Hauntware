@@ -37,16 +37,16 @@ class PlanchetteApp extends StatelessWidget {
       seedColor: const Color(0xff245b5c),
       brightness: brightness,
     );
-    // Planchette means a little slate, so the seed is pushed towards the
-    // neutral blue-greys an editor wants behind text and the accent is
-    // reserved for the things that need attention: the caret line, the dirty
-    // marker, the active search match.
-    final surface = scheme.surface;
+    // The seed stays the muted teal it has always been; what an editor needs
+    // is that the accent is reserved for things that deserve attention — the
+    // dirty marker, the active search match — and that the surfaces behind
+    // text are quiet. Everything below is chrome, and stock M3 chrome is
+    // rounded, floating and slow to appear.
     return ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
       visualDensity: VisualDensity.compact,
-      scaffoldBackgroundColor: surface,
+      scaffoldBackgroundColor: scheme.surface,
       // Stock M3 dialogs float in a lot of roundness and shadow. A text
       // editor wants a compact, flat confirmation.
       dialogTheme: DialogThemeData(
