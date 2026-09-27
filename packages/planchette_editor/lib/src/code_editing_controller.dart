@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart' hide findSearchMatches;
 import 'package:planchette_core/planchette_core.dart' as core;
 
-class EditorSyntaxTheme {
+/// Token and search-match colors. Pass one to [PlanchetteEditor.syntaxTheme],
+/// or add it to a host's `ThemeData.extensions` to style every editor.
+class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
   final Color comment;
   final Color string;
   final Color number;
@@ -52,6 +54,52 @@ class EditorSyntaxTheme {
 
   static EditorSyntaxTheme of(Brightness brightness) =>
       brightness == Brightness.dark ? dark : light;
+
+  @override
+  EditorSyntaxTheme copyWith({
+    Color? comment,
+    Color? string,
+    Color? number,
+    Color? keyword,
+    Color? meta,
+    Color? matchBackground,
+    Color? matchForeground,
+    Color? activeMatchBackground,
+    Color? activeMatchForeground,
+  }) => EditorSyntaxTheme(
+    comment: comment ?? this.comment,
+    string: string ?? this.string,
+    number: number ?? this.number,
+    keyword: keyword ?? this.keyword,
+    meta: meta ?? this.meta,
+    matchBackground: matchBackground ?? this.matchBackground,
+    matchForeground: matchForeground ?? this.matchForeground,
+    activeMatchBackground: activeMatchBackground ?? this.activeMatchBackground,
+    activeMatchForeground: activeMatchForeground ?? this.activeMatchForeground,
+  );
+
+  @override
+  EditorSyntaxTheme lerp(EditorSyntaxTheme? other, double t) {
+    if (other == null) return this;
+    Color mix(Color a, Color b) => Color.lerp(a, b, t)!;
+    return EditorSyntaxTheme(
+      comment: mix(comment, other.comment),
+      string: mix(string, other.string),
+      number: mix(number, other.number),
+      keyword: mix(keyword, other.keyword),
+      meta: mix(meta, other.meta),
+      matchBackground: mix(matchBackground, other.matchBackground),
+      matchForeground: mix(matchForeground, other.matchForeground),
+      activeMatchBackground: mix(
+        activeMatchBackground,
+        other.activeMatchBackground,
+      ),
+      activeMatchForeground: mix(
+        activeMatchForeground,
+        other.activeMatchForeground,
+      ),
+    );
+  }
 
   Color colorFor(SyntaxTokenType type) => switch (type) {
     SyntaxTokenType.comment => comment,

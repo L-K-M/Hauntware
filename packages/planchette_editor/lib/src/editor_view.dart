@@ -60,6 +60,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
   bool get _locked => widget.editingLocked || c.editingLocked;
 
+  /// The widget's own theme, else the host theme's extension, else the
+  /// built-in palette for the current brightness.
+  EditorSyntaxTheme get _syntaxTheme {
+    final theme = Theme.of(context);
+    return widget.syntaxTheme ??
+        theme.extension<EditorSyntaxTheme>() ??
+        EditorSyntaxTheme.of(theme.brightness);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -73,9 +82,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    c.text.theme =
-        widget.syntaxTheme ??
-        EditorSyntaxTheme.of(Theme.of(context).brightness);
+    c.text.theme = _syntaxTheme;
   }
 
   @override
@@ -91,9 +98,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       });
     }
     c.setEditingLocked(widget.editingLocked, notify: false);
-    c.text.theme =
-        widget.syntaxTheme ??
-        EditorSyntaxTheme.of(Theme.of(context).brightness);
+    c.text.theme = _syntaxTheme;
     if (oldWidget.isActive != widget.isActive || oldWidget.controller != c) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
