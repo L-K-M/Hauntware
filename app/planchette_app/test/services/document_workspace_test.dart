@@ -64,7 +64,7 @@ class MemoryDocuments implements DocumentStore {
   @override
   Future<String?> existingDigest(String path) async {
     digests++;
-    return files[path]?.sha256;
+    return files[aliases[path] ?? path]?.sha256;
   }
 
   int digests = 0;
