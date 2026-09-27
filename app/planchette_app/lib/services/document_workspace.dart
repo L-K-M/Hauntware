@@ -361,10 +361,18 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   Future<bool> _confirmQuit() async {
     if (_quitAccepted) return true;
-    if (_dialogCount > 0 ||
-        _closingTabs.isNotEmpty ||
-        _opening.isNotEmpty ||
-        _documents.any((tab) => tab.busy || tab.editor.isSaving)) {
+
+    // A busy window cannot ask about its tabs, and refusing in silence looks
+    // like a broken Quit button. Say what to wait for instead.
+    if (_dialogCount > 0 || _closingTabs.isNotEmpty || _opening.isNotEmpty) {
+      _error = 'A document is still opening or a dialog is waiting. '
+          'Quit again once it finishes.';
+      _notify();
+      return false;
+    }
+    if (_documents.any((tab) => tab.busy || tab.editor.isSaving)) {
+      _error = 'A save is still running. Quit again once it finishes.';
+      _notify();
       return false;
     }
     _closingAll = true;

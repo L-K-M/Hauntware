@@ -30,6 +30,7 @@ class MemoryDocuments implements DocumentStore {
   final files = <String, TextDocument>{};
   final writes = <({String path, String text, String? digest})>[];
   final aliases = <String, String>{};
+  Completer<void>? loadGate;
   Completer<void>? writeGate;
   Completer<void>? loadGate;
   Completer<void>? savePathGate;
@@ -302,6 +303,33 @@ void main() {
       expect(tab.editor.isDirty, isTrue);
     },
   );
+
+  test('quit during a save says why the window stays open', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'saving';
+    dialogs.savePath = testPath('one.txt');
+    store.writeGate = Completer<void>();
+    final saving = workspace.save(tab);
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('save'));
+    store.writeGate!.complete();
+    expect(await saving, isTrue);
+    workspace.clearError();
+    expect(await workspace.confirmQuit(), isTrue);
+  });
+
+  test('quit during an open says why the window stays open', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    store.loadGate = Completer<void>();
+    final opening = workspace.open(testPath('one.txt'));
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('open'));
+    store.loadGate!.complete();
+    await opening;
+    workspace.clearError();
+    expect(await workspace.confirmQuit(), isTrue);
+  });
 
   test(
     'Save in dirty close handles unnamed files and only closes after commit',
