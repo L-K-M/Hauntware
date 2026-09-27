@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
@@ -138,68 +137,81 @@ void main() {
       Rect tabBox(String name) => tester.getRect(
         find.ancestor(of: find.text(name), matching: find.byType(InkWell)),
       );
+      ScrollPosition stripPosition() => tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byKey(const ValueKey('planchette.tabs')),
+              matching: find.byType(Scrollable),
+            ),
+          )
+          .position;
+
       String geometry(String name) {
-        final strip = stripBox();
-        final box = tabBox(name);
-        final position = tester
-            .state<ScrollableState>(
-              find.descendant(
-                of: find.byKey(const ValueKey('planchette.tabs')),
-                matching: find.byType(Scrollable),
-              ),
-            )
-            .position;
-        // ignore: avoid_print
-        print(
-          'DIAG $name platform=${debugDefaultTargetPlatformOverride} '
-          'strip=$strip tab=$box pixels=${position.pixels} '
-          'max=${position.maxScrollExtent} '
-          'viewport=${position.viewportDimension} '
-          'dims=${position.hasContentDimensions}',
-        );
-        return 'tab=$box strip=$strip pixels=${position.pixels} '
-            'max=${position.maxScrollExtent} '
+        final position = stripPosition();
+        return 'tab=${tabBox(name)} strip=${stripBox()} '
+            'pixels=${position.pixels} max=${position.maxScrollExtent} '
             'viewport=${position.viewportDimension}';
       }
 
-      void expectInView(String name) {
-        final box = tabBox(name);
-        final why = geometry(name);
-        expect(
-          box.left,
-          greaterThanOrEqualTo(stripBox().left - 1),
-          reason: '$name $why',
-        );
-        expect(
-          box.right,
-          lessThanOrEqualTo(stripBox().right + 1),
-          reason: '$name $why',
-        );
-      }
-
-      // The last file opened is the active one, and it is off the end of the strip
-      // until something brings it into view.
-      //
-      // Pumped in steps rather than one large jump: the reveal is scheduled from
-      // a post-frame callback and then animated, so a single big pump can sample
-      // the strip mid-flight. That is what the macOS and Windows runners saw —
-      // the tab 27 pixels short of the edge — and a test that only passes when
-      // the animation happens to finish in one step is measuring the runner.
+      // Pump until the strip stops moving rather than for a fixed span: the
+      // reveal is scheduled from a post-frame callback, animated, and then
+      // re-clamped when the surface settles, so any fixed number of frames is
+      // a guess about the runner.
       Future<void> settleStrip() async {
         await tester.pump();
-        for (var i = 0; i < 20; i++) {
+        var previous = double.nan;
+        for (var i = 0; i < 60; i++) {
           await tester.pump(const Duration(milliseconds: 50));
+          final pixels = stripPosition().pixels;
+          if (pixels == previous) return;
+          previous = pixels;
         }
       }
 
+      // The active tab is scrolled to, and is on screen. Not that it is wholly
+      // visible: a tab is wider than the strip on a narrow window, so nothing
+      // can show all of it, and demanding that only measures the runner's
+      // surface size. The macOS and Windows jobs report a 150-pixel strip
+      // where Linux reports 361, which is how this was found.
+      void expectRevealed(String name) {
+        final why = geometry(name);
+        final box = tabBox(name);
+        final strip = stripBox();
+        expect(box.left, lessThan(strip.right + 1), reason: '$name $why');
+        expect(box.right, greaterThan(strip.left - 1), reason: '$name $why');
+        expect(tester.takeException(), isNull);
+      }
+
+      void expectScrolledToEnd() {
+        final position = stripPosition();
+        expect(
+          position.pixels,
+          greaterThanOrEqualTo(position.maxScrollExtent - 0.5),
+          reason:
+              'not scrolled to the end: ${position.pixels} of '
+              '${position.maxScrollExtent}',
+        );
+      }
+
+      void expectScrolledToStart() {
+        expect(
+          stripPosition().pixels,
+          lessThanOrEqualTo(0.5),
+          reason:
+              'not at '
+              'the start: ${stripPosition().pixels}',
+        );
+      }
+
       await settleStrip();
-      expectInView('file-23.txt');
+      expectRevealed('file-23.txt');
+      expectScrolledToEnd();
 
       // And back to the other end.
       workspace.select(workspace.documents.first);
       await settleStrip();
-      expectInView('file-0.txt');
-      expect(tester.takeException(), isNull);
+      expectRevealed('file-0.txt');
+      expectScrolledToStart();
     },
     variant: const TargetPlatformVariant(<TargetPlatform>{
       TargetPlatform.android,
