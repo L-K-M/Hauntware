@@ -168,11 +168,14 @@ void main() {
   test('same-basename failures fall back to full paths', () async {
     final first = paths.join(Directory.systemTemp.path, 'dir-a', 'same.txt');
     final second = paths.join(Directory.systemTemp.path, 'dir-b', 'same.txt');
-    dialogs.openPaths = [first, second];
+    // Case variants are distinct files but indistinguishable as basenames.
+    final cased = paths.join(Directory.systemTemp.path, 'dir-c', 'Same.txt');
+    dialogs.openPaths = [first, second, cased];
     await workspace.openDialog();
     final error = workspace.error!;
     expect(error, contains(first));
     expect(error, contains(second));
+    expect(error, contains(cased));
   });
 
   test('a single failed batch open keeps the one-file message', () async {

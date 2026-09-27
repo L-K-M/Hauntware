@@ -134,11 +134,12 @@ final class DocumentWorkspace extends ChangeNotifier {
           }
         } catch (error, stackTrace) {
           // One exceptional path must not abort the rest of the batch, but a
-          // non-OS throwable is likely a bug — keep it diagnosable.
-          FlutterError.reportError(
-            FlutterErrorDetails(exception: error, stack: stackTrace),
-          );
+          // non-OS throwable is likely a bug — keep it diagnosable. The same
+          // `reported` set dedupes the diagnostic with the visible failure.
           if (reported.add(_pathKey(path))) {
+            FlutterError.reportError(
+              FlutterErrorDetails(exception: error, stack: stackTrace),
+            );
             failures.add((
               path: path,
               name: _paths.basename(path),
@@ -175,18 +176,22 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
     const maxListed = 5;
     // Two files from different folders can share a basename; fall back to
-    // the full path for those so each failure names its file.
+    // the full path for those so each failure names its file. Compared
+    // case-insensitively — on case-insensitive volumes 'Notes.txt' and
+    // 'notes.txt' are different files that read identically in the list.
     final ambiguous = <String>{};
     final seen = <String>{};
     for (final failure in failures) {
-      if (!seen.add(failure.name)) ambiguous.add(failure.name);
+      final key = failure.name.toLowerCase();
+      if (!seen.add(key)) ambiguous.add(key);
     }
+    String label(_OpenFailure failure) =>
+        ambiguous.contains(failure.name.toLowerCase())
+            ? failure.path
+            : failure.name;
     final listed = failures
         .take(maxListed)
-        .map(
-          (failure) => '${ambiguous.contains(failure.name) ? failure.path : failure.name} '
-              '(${failure.message})',
-        )
+        .map((failure) => '${label(failure)} (${failure.message})')
         .join(', ');
     final extra = failures.length - maxListed;
     return 'Could not open ${failures.length} files: '
@@ -225,7 +230,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     final error = tab.editor.error;
     _OpenFailure? failure;
     if (error != null) {
-      failure = (path: tab.path!, name: tab.name, message: error);
+      failure = (path: tab.path ?? tab.name, name: tab.name, message: error);
       _remove(tab);
     } else {
       // A symlink may resolve onto an already-open document. Keep the existing
