@@ -353,7 +353,7 @@ void main() {
       await tester.pumpAndSettle();
       store.files.remove(testPath('gone.txt'));
       await workspace.active!.editor.reload();
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(workspace.active!.editor.error, isNotNull);
       await tester.tap(find.text('File'));
       await tester.pump();
@@ -361,6 +361,15 @@ void main() {
         find.widgetWithText(MenuItemButton, 'Close Tab'),
       );
       expect(item.onPressed, isNotNull);
+      // The tab's × follows the same availability rule as the menu command.
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(ValueKey('close-${workspace.active!.id}')),
+            )
+            .onPressed,
+        isNotNull,
+      );
       await tester.tap(find.text('Close Tab'));
       await tester.pump();
       expect(workspace.documents, isEmpty);
