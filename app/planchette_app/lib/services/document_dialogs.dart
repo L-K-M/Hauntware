@@ -138,6 +138,9 @@ class _LineNumberDialogState extends State<_LineNumberDialog> {
           hintText: 'Line 1–${widget.maxLines}',
           errorText: _error,
         ),
+        onChanged: (_) {
+          if (_error != null) setState(() => _error = null);
+        },
         onSubmitted: (_) => _submit(),
       ),
     ),
