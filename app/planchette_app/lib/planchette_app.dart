@@ -53,9 +53,14 @@ class _DocumentShell extends StatefulWidget {
 }
 
 class _DocumentShellState extends State<_DocumentShell> {
+  static const _defaultFontSize = 14.0;
+  static const _minFontSize = 8.0;
+  static const _maxFontSize = 32.0;
+
   DocumentWorkspace get workspace => widget.workspace;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   FocusNode? _lastTextFocus;
+  double _fontSize = _defaultFontSize;
 
   @override
   void initState() {
@@ -138,6 +143,20 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (!workspace.interactionLocked) {
       workspace.active?.editor.openSearch(replace: replace);
     }
+  }
+
+  void _zoom(double delta) {
+    if (workspace.interactionLocked) return;
+    setState(() {
+      _fontSize = (_fontSize + delta).clamp(_minFontSize, _maxFontSize);
+    });
+  }
+
+  void _resetZoom() {
+    if (workspace.interactionLocked) return;
+    setState(() {
+      _fontSize = _defaultFontSize;
+    });
   }
 
   SingleActivator _shortcut(
@@ -278,8 +297,27 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: ready,
         ),
       ]),
-      _ShellMenu('Window', [
+      _ShellMenu('View', [
         _Command(
+          'Zoom In',
+          () => _zoom(1),
+          shortcut: _shortcut(LogicalKeyboardKey.equal),
+          enabled: unlocked,
+        ),
+        _Command(
+          'Zoom Out',
+          () => _zoom(-1),
+          shortcut: _shortcut(LogicalKeyboardKey.minus),
+          enabled: unlocked,
+        ),
+        _Command(
+          'Reset Zoom',
+          _resetZoom,
+          shortcut: _shortcut(LogicalKeyboardKey.digit0),
+          enabled: unlocked && _fontSize != _defaultFontSize,
+        ),
+      ]),
+      _ShellMenu('Window', [        _Command(
           'Next Tab',
           _nextTab,
           shortcut: const SingleActivator(
@@ -427,6 +465,9 @@ class _DocumentShellState extends State<_DocumentShell> {
             entry.shortcut!: () {
               if (entry.enabled) entry.run();
             },
+      // Typing "+" on most layouts needs Shift, which the menu shortcut
+      // does not include; accept it as Zoom In too.
+      _shortcut(LogicalKeyboardKey.equal, shift: true): () => _zoom(1),
     };
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
@@ -635,6 +676,11 @@ class _DocumentShellState extends State<_DocumentShell> {
                               controller: tab.editor,
                               isActive: tab == active,
                               editingLocked: workspace.interactionLocked,
+                              textStyle: TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: _fontSize,
+                                height: 1.35,
+                              ),
                             ),
                         ],
                       ),

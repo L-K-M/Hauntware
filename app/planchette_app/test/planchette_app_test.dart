@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
+import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
@@ -224,5 +225,44 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
     variant: const TargetPlatformVariant({TargetPlatform.macOS}),
+  );
+
+  testWidgets(
+    'view zoom adjusts every open editor and resets',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+      Finder editors() => find.byType(PlanchetteEditor);
+
+      expect(
+        tester.widget<PlanchetteEditor>(editors().first).textStyle.fontSize,
+        14,
+      );
+      await chord(tester, LogicalKeyboardKey.equal, shift: true);
+      expect(
+        tester.widget<PlanchetteEditor>(editors().first).textStyle.fontSize,
+        15,
+      );
+      await chord(tester, LogicalKeyboardKey.minus);
+      await chord(tester, LogicalKeyboardKey.minus);
+      expect(
+        tester.widget<PlanchetteEditor>(editors().first).textStyle.fontSize,
+        13,
+      );
+      await tester.tap(find.text('View'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Reset Zoom'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<PlanchetteEditor>(editors().first).textStyle.fontSize,
+        14,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
   );
 }
