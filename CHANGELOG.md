@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- The editing surface now defaults to a real monospace family per platform
+  (Menlo, Consolas, or the resolved generic) with a shared fallback chain;
+  the previous `'monospace'` family name alone fell back to a proportional
+  font on macOS and Windows.
+
 ### Added
 - Standalone desktop editor for macOS, Linux and Windows, with document tabs,
   New/Open/Save/Save As, native menus, file-open events and guarded close/quit.

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_core/planchette_core.dart';
@@ -5,6 +6,7 @@ import 'package:planchette_core/planchette_core.dart';
 import 'code_editing_controller.dart';
 import 'editor_controller.dart';
 import 'editor_strings.dart';
+import 'editor_typography.dart';
 
 /// The shared document surface. Its host supplies app chrome, file commands,
 /// notifications and close decisions; no navigation or native menu is installed.
@@ -13,11 +15,9 @@ class PlanchetteEditor extends StatefulWidget {
     super.key,
     required this.controller,
     this.strings = const EditorStrings(),
-    this.textStyle = const TextStyle(
-      fontFamily: 'monospace',
-      fontSize: 14,
-      height: 1.35,
-    ),
+    // Null resolves per platform: 'monospace' alone is not a real family on
+    // macOS or Windows, so the default must name one that exists there.
+    this.textStyle,
     this.syntaxTheme,
     this.isActive = true,
     this.editingLocked = false,
@@ -29,7 +29,7 @@ class PlanchetteEditor extends StatefulWidget {
 
   final EditorController controller;
   final EditorStrings strings;
-  final TextStyle textStyle;
+  final TextStyle? textStyle;
   final EditorSyntaxTheme? syntaxTheme;
   final bool isActive;
   final bool editingLocked;
@@ -56,8 +56,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   int _lastReveal = -1;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
-  TextStyle get _style =>
-      const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
+  TextStyle get _style => const TextStyle(
+    fontSize: EditorTypography.defaultFontSize,
+    height: EditorTypography.defaultLineHeight,
+  ).merge(
+    widget.textStyle ?? EditorTypography.monospace(defaultTargetPlatform),
+  );
   bool get _locked => widget.editingLocked || c.editingLocked;
 
   @override
