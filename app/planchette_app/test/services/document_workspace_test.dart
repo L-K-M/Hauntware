@@ -32,7 +32,6 @@ class MemoryDocuments implements DocumentStore {
   final aliases = <String, String>{};
   Completer<void>? loadGate;
   Completer<void>? writeGate;
-  Completer<void>? loadGate;
   Completer<void>? savePathGate;
   Object? writeError;
   int version = 0;
