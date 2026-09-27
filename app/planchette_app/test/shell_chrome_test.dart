@@ -113,8 +113,12 @@ void main() {
 
     // Both basenames are index.js, so the strip has to disambiguate them with
     // enough of the path to tell the two apart.
-    expect(find.textContaining('a/index.js'), findsOneWidget);
-    expect(find.textContaining('b/index.js'), findsOneWidget);
+    // The separator is the host's: a Windows path is spelled with backslashes
+    // and the tab label is built from the path, so a hardcoded forward slash
+    // matches nothing there.
+    final sep = Platform.pathSeparator;
+    expect(find.textContaining('a${sep}index.js'), findsOneWidget);
+    expect(find.textContaining('b${sep}index.js'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
