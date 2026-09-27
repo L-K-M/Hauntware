@@ -326,12 +326,26 @@ trailing comment. `AGENTS.md` asks for descriptive constants. **Plan:** a
 `_ownerOnlyMode` and a `_permissionBits` const, or `package:ffi`'s
 constants if they cover it.
 
-### B15. Only the last error survives a multi-file open — S (read)
+### B15. `DesktopWindow` is never disposed — S (read)
+`main()` builds a `DesktopWindow`, hands it to `PlanchetteApp`, and drops the
+reference. `windowManager.removeListener` and `AppLifecycleListener.dispose`
+never run. Harmless for a single-window app that quits, but the hosts mirror
+this file, and the leak grows with every window. **Plan:** own the
+`DesktopWindow` in a `State`ful root so `dispose` runs, or have `PlanchetteApp`
+take it as a disposable collaborator.
+
+### B16. `Cmd/Ctrl+N` stacks empty untitled buffers — S (read)
+`newDocument` always creates a tab, so pressing it four times gives four
+`Untitled 1…4` buffers with nothing in them. #35 reuses the name; the reuse
+of the *tab* is separate. **Plan:** if the active document is untitled, empty
+and not dirty, focus it instead of creating another.
+
+### B17. Only the last error survives a multi-file open — S (read)
 `DocumentWorkspace.openDialog` overwrites `error` for each failing file.
 Collect the failures and show "2 files could not be opened: a.bin (binary),
 b.txt (not UTF-8)".
 
-### B16. Opening a file that is already open should flash its tab — S (idea)
+### B18. Opening a file that is already open should flash its tab — S (idea)
 Today the existing tab is simply activated. Add a short highlight
 animation on that tab so it's clear why nothing new appeared.
 
@@ -520,7 +534,10 @@ resurrect discarded edits.
 ### A3. Open Recent and a recent list in the empty state — M
 Keep the last 20 paths in settings. Show them in File › Open Recent (on
 macOS, prefer `NSDocumentController`'s recents) and in the empty state.
-Remove entries whose files are gone.
+Remove entries whose files are gone. While the list is there, also
+remember the last directory used per file type and pass it as
+`FilePicker.saveFile`'s `initialDirectory` — today every Save As starts in
+the document's own directory or nowhere at all.
 
 ### A4. Drag and drop files onto the window — M
 Use the `desktop_drop` plugin. Open each dropped file through
@@ -638,6 +655,12 @@ primary. **Plan:** darken the light active-match background to about
 `#2F6E5E` and add a contrast test in the editor package that checks every
 token against both the surface and the current-line band.
 
+**With #41:** that PR's Parchment and Séance themes are AA-checked, so the
+fix is probably theirs to make. What is still needed either way is the
+*test* — #41 adds the colours, but nothing stops the next one from shipping
+a 4.1:1 pair. Add the contrast test to the editor package once the theme
+extension exists, and check the current-line band as well as the surface.
+
 ### V7. Scroll past the end — S
 The last line sits at the bottom edge. Add bottom padding of about half
 the viewport to the document field. The gutter geometry from #22 already
@@ -671,6 +694,46 @@ as covered by the existing test.
 "or drop a file here to open it". Drag and drop is not implemented. A claim
 the app cannot honour is worse than its absence — do not ship copy for a
 feature that is not in the build.
+
+### V12. The editor is nearly invisible to a screen reader — M (read)
+`packages/planchette_editor/lib/src/editor_view.dart` renders a bare
+`TextField` with no label, so a screen reader announces an unlabelled
+multiline field. The status bar is not wrapped in `ExcludeSemantics`, so
+`Ln 4, Col 12 · 88 lines · 2,913 bytes · CRLF · UTF-8` is read unprompted
+on every caret move, and the workspace error banner is not a live region,
+so a failure to open a file is silent. macOS has an accessibility fixture
+(`scripts/test-macos-accessibility.sh`) but it tests lifecycle, not content,
+so none of this is caught. **Plan:** give the document field a semantics
+label, `ExcludeSemantics` the status bar, wrap the error banner in
+`Semantics(liveRegion: true)`, and add a semantics test asserting the
+editor's node exposes a label.
+
+### V13. The editor and its chrome use two unrelated typefaces — S (read)
+The document uses `fontFamily: 'monospace'` while the status bar, find bar
+and gutter numbers use the platform UI font. The find fields were moved to
+the editor's face in #36, which makes the mismatch sharper rather than
+solving it: a search pattern is now shaped the way it will match while the
+match counter beside it is not. Either commit to the mono face for
+everything that describes the buffer (gutter, status, find) or keep the UI
+font throughout and accept the difference. #36 also applies
+`visualDensity: VisualDensity.compact` globally, which leaves the find
+fields under-padded next to their own buttons.
+
+### V14. The window flashes white before the first frame on Windows and Linux — S (read)
+`DesktopWindow.initialize` sets the size, position and title but never
+`windowManager.setBackgroundColor`, so the native window shows the default
+white until Flutter's first frame. Painful in dark mode.
+**Plan:** call `setBackgroundColor` with the surface colour for the current
+brightness before `waitUntilReadyToShow`, and consider keeping the window
+hidden until it is shown (which also fixes B4's startup jump).
+
+### V15. The tab strip needs a defined container — S (idea)
+#36 gave the strip a full-width surface and a fixed row, which is most of
+what it needed, but the inactive tabs still have no background and the
+active one is a white rounded rectangle with no rule tying it to the editor
+below. A subtle inset border around the strip, or a hairline under it, would
+make it read as a bar rather than a row of pills. Paint it in the same place
+as the rest of the chrome so it is one decision, not three.
 
 ## 9. Delightful and quirky ideas
 
