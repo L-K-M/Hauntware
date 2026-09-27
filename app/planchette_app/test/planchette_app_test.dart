@@ -165,6 +165,10 @@ void main() {
       await mount(tester);
 
       await chord(tester, LogicalKeyboardKey.keyP, shift: true);
+      expect(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        findsOneWidget,
+      );
       expect(find.text('Command Palette…'), findsNothing);
       await tester.enterText(
         find.byKey(const ValueKey('planchette.palette.query')),

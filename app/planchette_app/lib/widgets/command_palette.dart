@@ -83,6 +83,9 @@ Future<void> showCommandPalette(
 }
 
 const _wordStartBonus = 8;
+
+/// Below any label match, which scores at least one per character.
+const _menuNameScore = -1;
 const _consecutiveBonus = 6;
 const _maximumGapPenalty = 3;
 
@@ -177,7 +180,12 @@ class _CommandPaletteState extends State<CommandPalette> {
     final scored = <({_Row row, int score, int order})>[];
     for (var i = 0; i < widget.commands.length; i++) {
       final command = widget.commands[i];
-      final match = fuzzyMatch(_query.text, command.label);
+      var match = fuzzyMatch(_query.text, command.label);
+      // Typing a menu's name lists that menu, after every label match and
+      // with nothing highlighted, since the name is not in the label.
+      if (match == null && fuzzyMatch(_query.text, command.group) != null) {
+        match = (score: _menuNameScore, positions: const []);
+      }
       if (match == null) continue;
       scored.add((
         row: (command: command, positions: match.positions),
@@ -189,7 +197,7 @@ class _CommandPaletteState extends State<CommandPalette> {
     // empty query lists the menus as they are.
     scored.sort((a, b) {
       if (a.score != b.score) return b.score.compareTo(a.score);
-      if (_query.text.isNotEmpty) {
+      if (_query.text.isNotEmpty && a.score != _menuNameScore) {
         final shorter = a.row.command.label.length.compareTo(
           b.row.command.label.length,
         );

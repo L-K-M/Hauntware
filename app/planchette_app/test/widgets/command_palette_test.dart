@@ -53,6 +53,7 @@ void main() {
         command('File', 'Save As…'),
         command('Edit', 'Select All'),
         command('Find', 'Find Next'),
+        command('Find', 'Replace…'),
       ];
     });
 
@@ -89,8 +90,26 @@ void main() {
         labels.where(
           (label) => commands.any((command) => command.label == label),
         ),
-        ['New', 'Save', 'Save As…', 'Select All', 'Find Next'],
+        ['New', 'Save', 'Save As…', 'Select All', 'Find Next', 'Replace…'],
       );
+    });
+
+    testWidgets('a menu name lists its commands after label matches', (
+      tester,
+    ) async {
+      await open(tester);
+      List<String> listed() => [
+        for (final command in commands)
+          if (find.text(command.label).evaluate().isNotEmpty) command.label,
+      ];
+
+      await type(tester, 'file');
+      expect(listed(), ['New', 'Save', 'Save As…']);
+
+      await type(tester, 'find');
+      final next = tester.getTopLeft(find.text('Find Next')).dy;
+      final replace = tester.getTopLeft(find.text('Replace…')).dy;
+      expect(next, lessThan(replace), reason: 'label match first');
     });
 
     testWidgets('Enter runs the best match after the palette closes', (
@@ -117,7 +136,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      expect(ran, ['Find Next']);
+      expect(ran, ['Replace…']);
     });
 
     testWidgets('a click runs that command', (tester) async {
