@@ -56,6 +56,11 @@ class EditorController extends ChangeNotifier {
   TextDocument? _document;
   String _displayPath;
   String _savedText = '';
+  // A full-buffer comparison per call is O(document); the shell and status
+  // bar ask several times per frame, so remember the answer per text pair.
+  String? _dirtyText;
+  String? _dirtySavedText;
+  bool _dirty = false;
   String? _error;
   bool _loading = false;
   bool _saving = false;
@@ -90,7 +95,17 @@ class EditorController extends ChangeNotifier {
   bool get isLoading => _loading;
   bool get isSaving => _saving;
   bool get isBusy => _loading || _saving;
-  bool get isDirty => !_loading && text.text != _savedText;
+  bool get isDirty {
+    if (_loading) return false;
+    final current = text.text;
+    if (!identical(current, _dirtyText) ||
+        !identical(_savedText, _dirtySavedText)) {
+      _dirtyText = current;
+      _dirtySavedText = _savedText;
+      _dirty = current != _savedText;
+    }
+    return _dirty;
+  }
   bool get canSave => !isBusy && !_editingLocked && _error == null;
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;

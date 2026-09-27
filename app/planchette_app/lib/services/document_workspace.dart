@@ -23,12 +23,24 @@ final class DocumentTab {
   final int id;
   final String untitledName;
   late final EditorController editor;
+  late final VoidCallback _editorListener;
+  _ShellState? _shown;
   TextDocument? baseline;
   String? path;
   bool busy = false;
 
   String get name => path == null ? untitledName : paths.basename(path!);
 }
+
+/// The part of a tab's editor state that the shell draws: its label, dirty
+/// marker, window title and menu enablement.
+typedef _ShellState = ({
+  bool dirty,
+  bool loading,
+  bool saving,
+  String? error,
+  String? path,
+});
 
 final class DocumentWorkspace extends ChangeNotifier {
   DocumentWorkspace({
@@ -105,8 +117,28 @@ final class DocumentWorkspace extends ChangeNotifier {
         tab.editor.displayPath = document.file.path;
         return document.sha256;
       },
-    )..addListener(_notify);
+    );
+    tab._editorListener = () => _editorChanged(tab);
+    tab.editor.addListener(tab._editorListener);
     return tab;
+  }
+
+  /// Editors notify on every keystroke and caret move. Forwarding those would
+  /// rebuild the whole shell (every tab's editor, the menus, and the native
+  /// macOS menu bar) and reset the window title each time, so only changes
+  /// the shell actually draws are passed on.
+  void _editorChanged(DocumentTab tab) {
+    final editor = tab.editor;
+    final state = (
+      dirty: editor.isDirty,
+      loading: editor.isLoading,
+      saving: editor.isSaving,
+      error: editor.error,
+      path: tab.path,
+    );
+    if (state == tab._shown) return;
+    tab._shown = state;
+    _notify();
   }
 
   final Map<DocumentTab, ({String path, String? digest})> _saveTargets = {};
@@ -351,7 +383,7 @@ final class DocumentWorkspace extends ChangeNotifier {
           ? null
           : _documents[index.clamp(0, _documents.length - 1)];
     }
-    tab.editor.removeListener(_notify);
+    tab.editor.removeListener(tab._editorListener);
     tab.editor.dispose();
   }
 
@@ -376,7 +408,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     _unlocked?.complete();
     _unlocked = null;
     for (final tab in _documents) {
-      tab.editor.removeListener(_notify);
+      tab.editor.removeListener(tab._editorListener);
       tab.editor.dispose();
     }
     super.dispose();

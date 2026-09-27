@@ -36,6 +36,21 @@ void main() {
     },
   );
 
+  test('an unchanged title is not sent to the window again', () {
+    final titles = <String>[];
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) async => titles.add(title),
+    );
+    desktop
+      ..setTitle('a — Planchette')
+      ..setTitle('a — Planchette')
+      ..setTitle('● a — Planchette')
+      ..setTitle('● a — Planchette');
+    expect(titles, ['a — Planchette', '● a — Planchette']);
+  });
+
   test('overlapping close callbacks request native destruction once', () async {
     final decision = Completer<bool>();
     var destroys = 0;

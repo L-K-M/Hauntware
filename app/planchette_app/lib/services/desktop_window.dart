@@ -10,12 +10,16 @@ final class DesktopWindow with WindowListener {
     required this.confirmQuit,
     required this.onQuitFailed,
     Future<void> Function()? destroyWindow,
-  }) : _destroyWindow = destroyWindow ?? windowManager.destroy;
+    Future<void> Function(String title)? setWindowTitle,
+  }) : _destroyWindow = destroyWindow ?? windowManager.destroy,
+       _setWindowTitle = setWindowTitle ?? windowManager.setTitle;
   final Future<bool> Function() confirmQuit;
   final void Function(Object error) onQuitFailed;
   final Future<void> Function() _destroyWindow;
+  final Future<void> Function(String title) _setWindowTitle;
   AppLifecycleListener? _lifecycle;
   bool _destroying = false;
+  String? _title;
 
   Future<void> initialize() async {
     await windowManager.ensureInitialized();
@@ -58,7 +62,13 @@ final class DesktopWindow with WindowListener {
   @override
   void onWindowClose() => unawaited(requestQuit());
 
-  void setTitle(String title) => unawaited(windowManager.setTitle(title));
+  /// Each call is a platform channel message; skip the ones that would not
+  /// change what the window shows.
+  void setTitle(String title) {
+    if (title == _title) return;
+    _title = title;
+    unawaited(_setWindowTitle(title));
+  }
 
   void dispose() {
     windowManager.removeListener(this);
