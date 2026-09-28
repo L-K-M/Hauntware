@@ -317,6 +317,62 @@ void main() {
     }),
   );
 
+  testWidgets('untitled documents get a ghost line, opened files do not', (
+    tester,
+  ) async {
+    final first = workspace.newDocument()!;
+    store.files[testPath('empty.txt')] = document('empty.txt', '');
+    await mount(tester);
+    TextField field(DocumentTab tab) =>
+        tester.widget<TextField>(editorField(tab));
+
+    expect(field(first).decoration!.hintText, ghostLineFor(first.id));
+    expect(ghostLineFor(first.id), startsWith('Start typing.'));
+    final second = workspace.newDocument()!;
+    await tester.pumpAndSettle();
+    expect(field(second).decoration!.hintText, ghostLineFor(second.id));
+    expect(ghostLineFor(second.id), isNot(ghostLineFor(first.id)));
+
+    await workspace.open(testPath('empty.txt'));
+    await tester.pumpAndSettle();
+    expect(field(workspace.active!).decoration!.hintText, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('the ghost line hides while the workspace is locked', (
+    tester,
+  ) async {
+    final empty = workspace.newDocument()!;
+    workspace.newDocument()!.editor.text.text = 'unsaved';
+    dialogs.choiceGate = Completer<CloseChoice>();
+    await mount(tester);
+    // The quit prompt activates the dirty tab, so the empty one is offstage.
+    String? hint() => tester
+        .widget<TextField>(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField &&
+                identical(widget.controller, empty.editor.text),
+            skipOffstage: false,
+          ),
+        )
+        .decoration!
+        .hintText;
+    expect(hint(), ghostLineFor(empty.id));
+
+    final quitting = workspace.confirmQuit();
+    await tester.pump();
+    expect(workspace.interactionLocked, isTrue);
+    expect(hint(), isNull);
+
+    dialogs.choiceGate!.complete(CloseChoice.cancel);
+    expect(await quitting, isFalse);
+    await tester.pumpAndSettle();
+    expect(hint(), ghostLineFor(empty.id));
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets(
     'Close Tab stays available while a document is loading',
     (tester) async {

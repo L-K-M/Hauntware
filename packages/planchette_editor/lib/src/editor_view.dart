@@ -27,6 +27,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.banner,
     this.statusBuilder,
     this.currentLineColor,
+    this.placeholder,
   });
 
   final EditorController controller;
@@ -44,6 +45,11 @@ class PlanchetteEditor extends StatefulWidget {
   /// The band behind the caret's line. Defaults to a faint tint of the
   /// theme's text color; pass [Colors.transparent] to turn it off.
   final Color? currentLineColor;
+
+  /// Faint text shown whenever the document is empty: it goes on the first
+  /// keystroke and returns if the text is deleted. Screen readers announce it
+  /// as the field's hint.
+  final String? placeholder;
 
   @override
   State<PlanchetteEditor> createState() => _PlanchetteEditorState();
@@ -483,9 +489,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     smartDashesType: SmartDashesType.disabled,
                     smartQuotesType: SmartQuotesType.disabled,
                     style: _style,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       border: InputBorder.none,
-                      contentPadding: EdgeInsets.all(_padding),
+                      contentPadding: const EdgeInsets.all(_padding),
+                      hintText: widget.placeholder,
+                      hintStyle: _style.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ),
                 ),
