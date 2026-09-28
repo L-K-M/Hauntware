@@ -20,5 +20,6 @@ class EditorStrings {
   String matchCount(int current, int total, {bool capped = false}) =>
       '$current/$total${capped ? '+' : ''}';
   String documentPosition(int line, int column, int lines, int bytes) =>
-      'Ln $line, Col $column · $lines lines · $bytes bytes';
+      'Ln $line, Col $column · $lines ${lines == 1 ? 'line' : 'lines'} · '
+      '$bytes ${bytes == 1 ? 'byte' : 'bytes'}';
 }
