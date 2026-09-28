@@ -15,8 +15,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   again from disk, up to twenty back, with the caret where it was.
 - File › Revert to Saved reads the file again, asking first when there
   are unsaved changes (Cancel is the default). It keeps the document on
-  screen while it reads, keeps the edits if the read fails, and cannot be
-  undone: Undo stops at the reverted text.
+  screen, locked, while it reads, keeps the edits if the read fails, keeps
+  the caret and scroll position, and cannot be undone: Undo stops at the
+  reverted text.
 - Standalone desktop editor for macOS, Linux and Windows, with document tabs,
   New/Open/Save/Save As, native menus, file-open events and guarded close/quit.
 - Shared pure-Dart `planchette_core` and Flutter `planchette_editor` packages
@@ -157,7 +158,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   document had before its file was read again, which then saved over the
   newer file without a conflict warning. `EditorController` exposes
   `installGeneration`, and the view gives each installed buffer its own
-  document field.
+  document field, carrying focus, the caret and the scroll position over.
 - Opening a file that no longer exists says so, instead of showing
   `dart:io`'s `PathNotFoundException` with its errno.
 - The window opens on the app's own background in the current light or

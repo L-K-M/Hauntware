@@ -542,14 +542,26 @@ class EditorController extends ChangeNotifier {
   void _installText(String value) {
     _savedText = value;
     _lastText = value;
+    // A reload or revert keeps the reader's place as far as the new text
+    // reaches, never between the halves of a surrogate pair; the view
+    // carries the scroll offset over to the new document field.
+    final previous = text.selection;
+    var caret = previous.isValid
+        ? previous.extentOffset.clamp(0, value.length)
+        : 0;
+    if (caret > 0 &&
+        caret < value.length &&
+        _isLowSurrogate(value.codeUnitAt(caret)) &&
+        _isHighSurrogate(value.codeUnitAt(caret - 1))) {
+      caret--;
+    }
     text.value = TextEditingValue(
       text: value,
-      selection: const TextSelection.collapsed(offset: 0),
+      selection: TextSelection.collapsed(offset: caret),
     );
     _detectLanguage();
     _detectIndentation(reset: true);
     if (_searchOpen) _updateMatches(resetActive: true);
-    if (scroll.hasClients) scroll.jumpTo(0);
     _revealRequest++;
     _installGeneration++;
   }

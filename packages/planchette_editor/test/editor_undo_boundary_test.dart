@@ -106,4 +106,64 @@ void main() {
     await tester.pump();
     expect(c.text.text, 'reloaded more+');
   });
+
+  TextDocument disk(String text) => TextDocument(
+    file: File('/tmp/installed.txt'),
+    text: text,
+    hasUtf8Bom: false,
+    lineEnding: LineEnding.lf,
+    sha256: 'x',
+  );
+
+  testWidgets('review fix: the document takes typing right after an install', (
+    tester,
+  ) async {
+    // The new field inherited focus without a focus change, so it never
+    // opened an input connection: typing was dropped until a click.
+    final c = EditorController(displayPath: 'a.txt', initialText: 'v1');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.showKeyboard(
+      find.byKey(const ValueKey('planchette.document')),
+    );
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+
+    c.adoptDocument(disk('v2'), replaceText: true);
+    await tester.pumpAndSettle();
+    expect(c.editorFocus.hasFocus, isTrue);
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'v2!',
+        selection: TextSelection.collapsed(offset: 3),
+      ),
+    );
+    await tester.pump();
+    expect(c.text.text, 'v2!');
+  });
+
+  testWidgets('review fix: an install keeps the caret and the scroll', (
+    tester,
+  ) async {
+    // A revert or reload reset both, losing the reader's place.
+    final lines = List.generate(400, (i) => 'line $i').join('\n');
+    final c = EditorController(displayPath: 'a.txt', initialText: lines);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    c.goToLine(300, column: 3);
+    await tester.pumpAndSettle();
+    final offset = c.scroll.offset;
+    final caret = c.text.selection;
+    expect(offset, greaterThan(0));
+
+    c.adoptDocument(disk(lines), replaceText: true);
+    await tester.pumpAndSettle();
+    expect(c.text.selection, caret);
+    expect(c.scroll.offset, offset);
+
+    // A shorter file keeps as much of the place as it has.
+    c.adoptDocument(disk('short'), replaceText: true);
+    await tester.pumpAndSettle();
+    expect(c.text.selection, const TextSelection.collapsed(offset: 5));
+  });
 }

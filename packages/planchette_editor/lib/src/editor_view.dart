@@ -89,6 +89,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     skipTraversal: true,
   );
   int _lastReveal = -1;
+  late int _installSeen = c.installGeneration;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
@@ -146,6 +147,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       c.addListener(_changed);
       _lastReveal = -1;
       _lastCaretReveal = c.caretRevealRequest;
+      _installSeen = c.installGeneration;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) c.initialize();
       });
@@ -168,6 +170,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
 
   void _changed() {
     if (!mounted) return;
+    if (_installSeen != c.installGeneration) {
+      _installSeen = c.installGeneration;
+      _carryOverInstall();
+    }
     setState(() {});
     if (_lastCaretReveal != c.caretRevealRequest) {
       _lastCaretReveal = c.caretRevealRequest;
@@ -184,6 +190,27 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         _revealMatch();
       });
     }
+  }
+
+  /// Each install gets a new document field (see the [KeyedSubtree] in the
+  /// build), which starts unscrolled and, since its focus node already has
+  /// focus, never sees the focus change that opens an input connection:
+  /// typing would go nowhere. Hand focus off now and back to the new field
+  /// once it is built, and restore the scroll offset.
+  void _carryOverInstall() {
+    final offset = c.scroll.hasClients ? c.scroll.offset : null;
+    final focused = c.editorFocus.hasFocus;
+    if (focused) c.editorFocus.unfocus(disposition: UnfocusDisposition.scope);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (offset != null && c.scroll.hasClients) {
+        final position = c.scroll.position;
+        c.scroll.jumpTo(
+          offset.clamp(position.minScrollExtent, position.maxScrollExtent),
+        );
+      }
+      if (focused) c.editorFocus.requestFocus();
+    });
   }
 
   /// Scrolls to a caret that a command moved, since only typing scrolls by
