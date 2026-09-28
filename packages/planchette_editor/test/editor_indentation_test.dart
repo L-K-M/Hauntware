@@ -227,12 +227,30 @@ void main() {
   testWidgets('status shows the indentation and follows new documents', (
     tester,
   ) async {
-    final c = await mount(tester, '', path: 'Makefile');
-    expect(find.textContaining('Tab Size: 4'), findsOneWidget);
+    final c = await mount(tester, '');
+    expect(find.textContaining('Spaces: 4'), findsOneWidget);
     c.text.text = 'all:\n  cc main.c\n';
     await tester.pump();
     expect(c.indentation, const Indentation.spaces(2));
     expect(find.textContaining('Spaces: 2'), findsOneWidget);
+  });
+
+  testWidgets('review fix: a Makefile keeps tabs whatever its lines use', (
+    tester,
+  ) async {
+    // Continuation lines indented with spaces used to win detection, and
+    // Tab then put spaces before a recipe, which make rejects.
+    final c = await mount(tester, '', path: 'Makefile');
+    expect(find.textContaining('Tab Size: 4'), findsOneWidget);
+    c.text.value = const TextEditingValue(
+      text: 'SRCS = a.c \\\n       b.c \\\n       c.c\n\nall:\n',
+      selection: TextSelection.collapsed(offset: 43),
+    );
+    await tester.pump();
+    expect(c.indentation, const Indentation.tabs());
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(c.text.text, endsWith('all:\n\t'));
   });
 
   // Ported from the duplicate indentation PRs (#24, #34, #21) and from review
