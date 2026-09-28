@@ -95,4 +95,16 @@ void main() {
     await mount(tester, theme: ThemeData(platform: TargetPlatform.android));
     expect(documentStyle(tester).fontFamily, 'Menlo');
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  test('review fix: every platform falls back to a fixed-width face', () {
+    // A host family replaces the first choice; if it is not installed and
+    // no listed face is either, the generic alias still finds one.
+    for (final platform in TargetPlatform.values) {
+      expect(
+        editorMonospaceFor(platform).fontFamilyFallback,
+        contains('monospace'),
+        reason: '$platform',
+      );
+    }
+  });
 }
