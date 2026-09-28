@@ -256,4 +256,25 @@ void main() {
         .map((item) => item.label);
     expect(items, contains('Settings…'));
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  testWidgets('review fix: a second Settings request keeps the first dialog', (
+    tester,
+  ) async {
+    // The native menu stays live under the dialog; a second dialog on top
+    // made the first one's Cancel restore the previewed values.
+    workspace.newDocument();
+    await mount(tester);
+    final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+    final app = bar.menus.whereType<PlatformMenu>().first;
+    final item = app.menus
+        .whereType<PlatformMenuItemGroup>()
+        .expand((group) => group.members)
+        .whereType<PlatformMenuItem>()
+        .firstWhere((item) => item.label == 'Settings…');
+    item.onSelected!();
+    await tester.pumpAndSettle();
+    item.onSelected!();
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsDialog), findsOneWidget);
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 }
