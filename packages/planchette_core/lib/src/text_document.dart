@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
-import 'package:meta/meta.dart';
 import 'package:uuid/uuid.dart';
 
 import 'native_file_operations.dart';
@@ -261,11 +260,15 @@ Future<String> _writeTextDocument(
     } on FileSystemException catch (error, stackTrace) {
       // The guarded design needs a sibling staging file, so an unwritable
       // folder blocks every save; name the actionable cause, not the syscall.
+      // A folder deleted since the document opened is a different cause and
+      // needs a different remedy than fixing permissions.
       Error.throwWithStackTrace(
         TextDocumentException(
-          'A temporary file could not be created beside the document. '
-          'Check that its folder is writable. '
-          '${error.osError?.message ?? error.message}',
+          isVanishedPathError(error)
+              ? 'The folder containing the document no longer exists. '
+                    '${_osDetail(error)}'
+              : 'A temporary file could not be created beside the document. '
+                    'Check that its folder is writable. ${_osDetail(error)}',
         ),
         stackTrace,
       );
@@ -296,6 +299,9 @@ Future<String> _writeTextDocument(
     await _requireRegularFile(file);
     try {
       renameFileWithoutReplacing(file.path, backup.path);
+    } on HardLinkCleanupException {
+      // Both names are retained and the exception already identifies them.
+      rethrow;
     } on FileSystemException catch (error, stackTrace) {
       // A vanished destination or parent means a mid-save conflict;
       // anything else (permissions, quota) keeps its real OS error
@@ -304,11 +310,11 @@ Future<String> _writeTextDocument(
         isVanishedPathError(error)
             ? TextDocumentException(
                 'The local copy changed while it was being saved. '
-                '${error.osError?.message ?? error.message}',
+                '${_osDetail(error)}',
               )
             : TextDocumentException(
                 'The original file could not be moved aside for '
-                'replacement. ${error.osError?.message ?? error.message}',
+                'replacement. ${_osDetail(error)}',
               ),
         stackTrace,
       );
@@ -403,32 +409,20 @@ String _tooLargeMessage(int maximumBytes) =>
 
 const _utf8Bom = [0xef, 0xbb, 0xbf];
 
+/// Native operations name the call, not the cause; keep the OS error code so
+/// a sharing violation or EPERM stays diagnosable.
+String _osDetail(FileSystemException error) {
+  final os = error.osError;
+  if (os == null) return error.message;
+  return '${os.message} (OS error ${os.errorCode}).';
+}
+
 /// chmod 0600: temporary plaintext is owner-only until it inherits the
 /// destination's mode below.
 const int _ownerReadWriteMode = 0x180;
 
 /// chmod 0777 mask: only the portable permission bits survive a save.
 const int _posixPermissionMask = 0x1ff;
-
-/// ENOENT on POSIX; ERROR_FILE_NOT_FOUND on Windows. Coincidentally 2 on
-/// both — the destination file itself vanished mid-save, not a permission
-/// or quota failure.
-const int _errorNoSuchFile = 2;
-
-/// Windows ERROR_PATH_NOT_FOUND: a parent directory in the path vanished.
-/// POSIX reports the same situation as ENOENT ([_errorNoSuchFile]).
-const int _errorPathNotFound = 3;
-
-/// Whether [error] means a path vanished mid-operation — the destination
-/// file itself ([_errorNoSuchFile]) or, on Windows, a parent directory
-/// ([_errorPathNotFound]). Everything else (permissions, quota) is a real
-/// failure, not a concurrent-modification signal.
-@visibleForTesting
-bool isVanishedPathError(FileSystemException error, {bool? isWindows}) {
-  final code = error.osError?.errorCode;
-  return code == _errorNoSuchFile ||
-      ((isWindows ?? Platform.isWindows) && code == _errorPathNotFound);
-}
 
 bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes.length >= offset + _utf8Bom.length &&

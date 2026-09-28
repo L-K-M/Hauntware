@@ -119,6 +119,28 @@ void setFilePermissions(String path, int mode) {
   }
 }
 
+/// ENOENT on POSIX; ERROR_FILE_NOT_FOUND on Windows. Coincidentally 2 on
+/// both — the destination file itself vanished mid-save, not a permission
+/// or quota failure.
+const int _errorNoSuchFile = 2;
+
+/// Windows ERROR_PATH_NOT_FOUND: a parent directory in the path vanished.
+/// POSIX reports the same situation as ENOENT ([_errorNoSuchFile]).
+const int _errorPathNotFound = 3;
+
+/// Whether [error] means a path vanished mid-operation — the destination
+/// file itself ([_errorNoSuchFile]) or, on Windows, a parent directory
+/// ([_errorPathNotFound]). Everything else (permissions, quota) is a real
+/// failure, not a concurrent-modification signal.
+///
+/// Lives in this unexported library so hosts do not see it as package API;
+/// tests import it from `src/` directly.
+bool isVanishedPathError(FileSystemException error, {bool? isWindows}) {
+  final code = error.osError?.errorCode;
+  return code == _errorNoSuchFile ||
+      ((isWindows ?? Platform.isWindows) && code == _errorPathNotFound);
+}
+
 void _checkPath(String path) {
   if (path.contains('\u0000')) throw ArgumentError.value(path, 'path');
 }

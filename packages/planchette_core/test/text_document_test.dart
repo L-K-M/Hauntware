@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:planchette_core/planchette_core.dart';
+import 'package:planchette_core/src/native_file_operations.dart'
+    show isVanishedPathError;
 import 'package:test/test.dart';
 
 void main() {
@@ -431,10 +433,6 @@ void main() {
   test(
     'an unwritable folder fails the save with an actionable error',
     () async {
-      if (!Platform.isLinux && !Platform.isMacOS) return;
-      // Root bypasses directory mode bits; the precondition cannot hold there.
-      final uid = await Process.run('id', ['-u']);
-      if (uid.stdout.toString().trim() == '0') return;
       final originalMode = (await directory.stat()).mode & 0x1ff;
       final restrict = await Process.run('chmod', ['555', directory.path]);
       if (restrict.exitCode != 0) {
@@ -468,7 +466,28 @@ void main() {
       expect(await file.readAsString(), 'one\ntwo\n');
       expect(await directory.list().length, 1);
     },
+    skip: _directoryModesUnenforced,
   );
+
+  test('a vanished folder is reported as missing, not unwritable', () async {
+    final gone = Directory('${directory.path}/gone');
+    await gone.create();
+    final orphan = File('${gone.path}/doc.txt');
+    await orphan.writeAsString('one\n');
+    final digest = await textDocumentSha256(orphan);
+    await gone.delete(recursive: true);
+
+    await expectLater(
+      saveTextDocument(orphan, 'edit\n', expectedSha256: digest),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          startsWith('The folder containing the document no longer exists.'),
+        ),
+      ),
+    );
+  });
 
   test('vanished-path classification is platform-aware', () {
     FileSystemException withCode(int code) =>
@@ -504,3 +523,14 @@ Future<String> _save(
   lineEnding: lineEnding,
   observeTemporary: observeTemporary,
 );
+
+/// Directory mode bits bind only on POSIX hosts and only for non-root users,
+/// so the unwritable-folder precondition cannot be arranged elsewhere. A
+/// reason string reports the test as skipped rather than silently passing.
+final Object _directoryModesUnenforced = () {
+  if (!Platform.isLinux && !Platform.isMacOS) {
+    return 'directory mode bits are POSIX-only';
+  }
+  final uid = Process.runSync('id', ['-u']).stdout.toString().trim();
+  return uid == '0' ? 'root bypasses directory mode bits' : false;
+}();
