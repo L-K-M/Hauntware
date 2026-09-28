@@ -243,4 +243,16 @@ void main() {
     expect(prose.canToggleComment, isFalse);
     expect(prose.toggleComment(), isFalse);
   });
+
+  test('review fix: a .env file comments with #', () {
+    // Its own tokenizer already highlighted # lines as comments.
+    final editor = EditorController(displayPath: '.env', initialText: 'KEY=1');
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 0);
+    expect(editor.canToggleComment, isTrue);
+    expect(editor.toggleComment(), isTrue);
+    expect(editor.text.text, '# KEY=1');
+    expect(editor.toggleComment(), isTrue);
+    expect(editor.text.text, 'KEY=1');
+  });
 }
