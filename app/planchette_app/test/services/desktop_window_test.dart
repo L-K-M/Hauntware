@@ -79,6 +79,42 @@ void main() {
       );
     },
   );
+  test('an unchanged title is not sent to the window again', () {
+    final titles = <String>[];
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) async => titles.add(title),
+    );
+    desktop
+      ..setTitle('a — Planchette')
+      ..setTitle('a — Planchette')
+      ..setTitle('● a — Planchette')
+      ..setTitle('● a — Planchette');
+    expect(titles, ['a — Planchette', '● a — Planchette']);
+  });
+
+  test('a title that failed to arrive is sent again', () async {
+    final titles = <String>[];
+    var failNext = true;
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) async {
+        titles.add(title);
+        if (failNext) {
+          failNext = false;
+          throw StateError('channel closed');
+        }
+      },
+    );
+    desktop.setTitle('a — Planchette');
+    await Future<void>.delayed(Duration.zero);
+    desktop.setTitle('a — Planchette');
+    await Future<void>.delayed(Duration.zero);
+    desktop.setTitle('a — Planchette');
+    expect(titles, ['a — Planchette', 'a — Planchette']);
+  });
 
   test('overlapping close callbacks request native destruction once', () async {
     final decision = Completer<bool>();
