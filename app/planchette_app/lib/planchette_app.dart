@@ -117,6 +117,8 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (tab != null) unawaited(workspace.save(tab, saveAs: saveAs));
   }
 
+  void _saveAll() => unawaited(workspace.saveAll());
+
   void _close() {
     final tab = workspace.active;
     if (tab != null) unawaited(workspace.closeTab(tab));
@@ -143,7 +145,12 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
     if (tabs.isEmpty || workspace.interactionLocked) return;
-    final index = tabs.indexOf(workspace.active!);
+    final active = workspace.active;
+    if (active == null) {
+      _select(tabs.first);
+      return;
+    }
+    final index = tabs.indexOf(active);
     _select(tabs[(index + (previous ? -1 : 1)) % tabs.length]);
   }
 
@@ -163,6 +170,10 @@ class _DocumentShellState extends State<_DocumentShell> {
     final active = workspace.active;
     final unlocked = !workspace.interactionLocked;
     final ready = _documentReady;
+    // The tab's × is available whenever no save is in flight and the
+    // workspace isn't interaction-locked — including during load or after
+    // a load error — so the menu command follows the same rule.
+    final closable = active != null && unlocked && !active.busy;
     return [
       _ShellMenu('File', [
         _Command(
@@ -190,12 +201,21 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyS, shift: true),
           enabled: ready,
         ),
+        _Command(
+          'Save All',
+          _saveAll,
+          // Menu-only off macOS: Windows reports AltGr as Ctrl+Alt, so
+          // Ctrl+Alt+S would swallow text such as Polish AltGr+S.
+          shortcut: mac ? _shortcut(LogicalKeyboardKey.keyS, alt: true) : null,
+          enabled:
+              unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
+        ),
         const _Separator(),
         _Command(
           'Close Tab',
           _close,
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
-          enabled: ready,
+          enabled: closable,
         ),
         if (!mac && widget.onQuit != null) ...[
           const _Separator(),
@@ -539,24 +559,28 @@ class _DocumentShellState extends State<_DocumentShell> {
                   ),
                 ),
               if (workspace.error case final error?)
-                Material(
-                  color: scheme.errorContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            error,
-                            style: TextStyle(color: scheme.onErrorContainer),
+                Semantics(
+                  key: const ValueKey('workspace-error-banner'),
+                  liveRegion: true,
+                  child: Material(
+                    color: scheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              error,
+                              style: TextStyle(color: scheme.onErrorContainer),
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          tooltip: 'Dismiss error',
-                          onPressed: workspace.clearError,
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
+                          IconButton(
+                            tooltip: 'Dismiss error',
+                            onPressed: workspace.clearError,
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

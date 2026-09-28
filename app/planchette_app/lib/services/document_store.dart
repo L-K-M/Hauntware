@@ -8,6 +8,10 @@ abstract interface class DocumentStore {
   Future<TextDocument> load(String path);
   Future<String> canonicalSavePath(String path);
   Future<String?> existingDigest(String path);
+
+  /// Whether the file at [path] is marked read-only. A save would still
+  /// replace it, so the workspace asks first.
+  Future<bool> isWriteProtected(String path);
   Future<TextDocument> write({
     required String path,
     required String text,
@@ -48,6 +52,10 @@ final class LocalDocumentStore implements DocumentStore {
     ).resolveSymbolicLinks();
     return paths.join(parent, paths.basename(absolute));
   }
+
+  @override
+  Future<bool> isWriteProtected(String path) =>
+      isTextDocumentWriteProtected(File(path));
 
   @override
   Future<String?> existingDigest(String path) async {

@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:planchette_core/planchette_core.dart';
+import 'package:planchette_core/src/native_file_operations.dart'
+    show isVanishedPathError;
 import 'package:test/test.dart';
 
 void main() {
@@ -30,6 +32,25 @@ void main() {
     expect(await file.readAsString(), 'changed\n');
     expect(await directory.list().length, 1);
   });
+
+  test(
+    'the dominant line ending wins, a tie is LF, and lone CRs are not counted',
+    () async {
+      Future<LineEnding> endingOf(String text) async {
+        await file.writeAsString(text);
+        return (await loadTextDocument(file)).lineEnding;
+      }
+
+      expect(await endingOf('a\r\nb\r\nc\n'), LineEnding.crlf);
+      expect(await endingOf('a\r\nb\nc\n'), LineEnding.lf);
+      expect(await endingOf('a\r\nb\n'), LineEnding.lf, reason: 'a tie');
+      expect(await endingOf('\r\n\r\n'), LineEnding.crlf);
+      expect(await endingOf('\n\r\n'), LineEnding.lf, reason: 'a tie');
+      expect(await endingOf('a\rb\r\n'), LineEnding.crlf);
+      expect(await endingOf('a\rb'), LineEnding.lf, reason: 'nothing counted');
+      expect(await endingOf('single line'), LineEnding.lf);
+    },
+  );
 
   test('preserves a UTF-8 BOM and CRLF line endings byte-for-byte', () async {
     await file.writeAsBytes([0xef, 0xbb, 0xbf, ...'one\r\ntwo\r\n'.codeUnits]);
@@ -358,6 +379,35 @@ void main() {
     expect(saved.mode & 0x1ff, 0x180);
   });
 
+  test('reports a read-only file, which a save still replaces', () async {
+    expect(await isTextDocumentWriteProtected(file), isFalse);
+    await _setReadOnly(file, true);
+    try {
+      expect(await isTextDocumentWriteProtected(file), isTrue);
+      // Replacement renames a sibling into place, so only the directory's
+      // permission is checked; this is why hosts must ask first. The file
+      // stays read-only, and no backup is left behind, on every platform.
+      final document = await loadTextDocument(file);
+      await _save(file, 'edit\n', expectedSha256: document.sha256);
+      expect(await file.readAsString(), 'edit\n');
+      expect(await isTextDocumentWriteProtected(file), isTrue);
+      expect(directory.listSync().map((entry) => entry.uri.pathSegments.last), [
+        'config.txt',
+      ]);
+    } finally {
+      await _setReadOnly(file, false);
+    }
+    expect(await isTextDocumentWriteProtected(file), isFalse);
+  });
+
+  test('a missing file or a directory is not write-protected', () async {
+    expect(
+      await isTextDocumentWriteProtected(File('${file.path}.gone')),
+      isFalse,
+    );
+    expect(await isTextDocumentWriteProtected(File(directory.path)), isFalse);
+  });
+
   test('the encoded output is size-checked too', () async {
     await expectLater(
       _save(file, 'x' * (textDocumentMaximumBytes + 1)),
@@ -369,6 +419,117 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('a save containing NUL refuses before touching the original', () async {
+    const expected = 'binary \u0000 content\n';
+    // The CRLF folds under default normalization, so 'code unit 6' pins the
+    // reported offset to the caller's input text, not the normalized bytes.
+    await expectLater(
+      _save(file, 'safe\r\n\u0000 edit\n', expectedSha256: 'ignored'),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('NUL'), contains('code unit 6')),
+        ),
+      ),
+    );
+    // The original is untouched and no save sibling escaped cleanup.
+    expect(await file.readAsString(), 'one\ntwo\n');
+    expect(await directory.list().length, 1);
+    // The refusal protects the loader's contract: the file still opens.
+    expect(await _loadText(file), 'one\ntwo\n');
+
+    // A create would publish a file the loader rejects as binary; refuse
+    // that too — also under `preserve` normalization, which skips folding.
+    final created = File('${directory.path}/new.bin');
+    for (final normalization in TextNormalization.values) {
+      await expectLater(
+        createTextDocument(created, expected, normalization: normalization),
+        throwsA(
+          isA<TextDocumentException>().having(
+            (error) => error.message,
+            'message',
+            contains('NUL'),
+          ),
+        ),
+      );
+    }
+    expect(await created.exists(), isFalse);
+    expect(await directory.list().length, 1);
+  });
+
+  test(
+    'an unwritable folder fails the save with an actionable error',
+    () async {
+      final originalMode = (await directory.stat()).mode & 0x1ff;
+      final restrict = await Process.run('chmod', ['555', directory.path]);
+      if (restrict.exitCode != 0) {
+        fail('chmod 555 failed: ${restrict.stderr}');
+      }
+      addTearDown(() async {
+        final restore = await Process.run('chmod', [
+          originalMode.toRadixString(8),
+          directory.path,
+        ]);
+        expect(
+          restore.exitCode,
+          0,
+          reason: 'chmod restore failed: ${restore.stderr}',
+        );
+      });
+
+      await expectLater(
+        _save(file, 'edit\n'),
+        throwsA(
+          isA<TextDocumentException>().having(
+            (error) => error.message,
+            'message',
+            startsWith(
+              'A temporary file could not be created beside the document.',
+            ),
+          ),
+        ),
+      );
+      // The guarded path refuses before renaming: the original stays intact.
+      expect(await file.readAsString(), 'one\ntwo\n');
+      expect(await directory.list().length, 1);
+    },
+    skip: _directoryModesUnenforced,
+  );
+
+  test('a vanished folder is reported as missing, not unwritable', () async {
+    final gone = Directory('${directory.path}/gone');
+    await gone.create();
+    final orphan = File('${gone.path}/doc.txt');
+    await orphan.writeAsString('one\n');
+    final digest = await textDocumentSha256(orphan);
+    await gone.delete(recursive: true);
+
+    await expectLater(
+      saveTextDocument(orphan, 'edit\n', expectedSha256: digest),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          startsWith('The folder containing the document no longer exists.'),
+        ),
+      ),
+    );
+  });
+
+  test('vanished-path classification is platform-aware', () {
+    FileSystemException withCode(int code) =>
+        FileSystemException('rename', 'doc.txt', OSError('failed', code));
+    expect(isVanishedPathError(withCode(2)), isTrue);
+    // ERROR_PATH_NOT_FOUND counts only on Windows; POSIX code 3 is ESRCH.
+    // Both sides of the gate are pinned regardless of the host running this.
+    expect(isVanishedPathError(withCode(3), isWindows: true), isTrue);
+    expect(isVanishedPathError(withCode(3), isWindows: false), isFalse);
+    expect(isVanishedPathError(withCode(3)), Platform.isWindows);
+    // EACCES stays a real failure, not a concurrent-modification signal.
+    expect(isVanishedPathError(withCode(13)), isFalse);
   });
 }
 
@@ -392,3 +553,25 @@ Future<String> _save(
   lineEnding: lineEnding,
   observeTemporary: observeTemporary,
 );
+
+/// Directory mode bits bind only on POSIX hosts and only for non-root users,
+/// so the unwritable-folder precondition cannot be arranged elsewhere. A
+/// reason string reports the test as skipped rather than silently passing.
+final Object _directoryModesUnenforced = () {
+  if (!Platform.isLinux && !Platform.isMacOS) {
+    return 'directory mode bits are POSIX-only';
+  }
+  final uid = Process.runSync('id', ['-u']).stdout.toString().trim();
+  return uid == '0' ? 'root bypasses directory mode bits' : false;
+}();
+
+/// Marks [file] read-only the way a user would: `chmod a-w`, or the
+/// read-only attribute on Windows.
+Future<void> _setReadOnly(File file, bool readOnly) async {
+  final result = Platform.isWindows
+      ? await Process.run('attrib', [readOnly ? '+r' : '-r', file.path])
+      : await Process.run('chmod', [readOnly ? 'a-w' : 'u+w', file.path]);
+  if (result.exitCode != 0) {
+    throw StateError('Could not change ${file.path}: ${result.stderr}');
+  }
+}

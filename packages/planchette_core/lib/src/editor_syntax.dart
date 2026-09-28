@@ -9,6 +9,7 @@
 /// cannot consume later lines.
 library;
 
+part 'diff_syntax.dart';
 part 'dotenv_syntax.dart';
 
 /// Above this size the editor skips syntax highlighting (and the precise
@@ -74,6 +75,23 @@ class SyntaxLanguage {
   /// Single-line string quotes; a missing closer ends the token at newline.
   final List<String> strings;
 
+  /// Quotes from [strings] whose contents take no backslash escapes, such as
+  /// shell and SQL single quotes: `'C:\'` closes at its second quote.
+  final List<String> rawQuotes;
+
+  /// Prefixes that open a raw string: the prefix, any number of `#`, then
+  /// `"`. It closes at `"` and the same number of `#`, with no escapes, and
+  /// may span lines, as Rust's `r"…"`, `r#"…"#` and `br"…"` do.
+  final List<String> rawStringPrefixes;
+
+  /// Whether `'` opens a one-character literal rather than a string, as in
+  /// Rust and Go. A `'` that does not close as a character (a Rust lifetime
+  /// or label such as `'a` or `'static`) highlights its name as meta.
+  final bool charLiterals;
+
+  /// Whether a quoted string followed by `:` is a key (meta), as in JSON.
+  final bool quotedKeys;
+
   /// Optional extra pattern matched over the whole text (use `multiLine` for
   /// anchors); matches that don't overlap scanner tokens become [meta] tokens.
   final RegExp? metaPattern;
@@ -95,6 +113,10 @@ class SyntaxLanguage {
     this.multilineStrings = const [],
     this.multilineStringPairs = const [],
     this.strings = const [],
+    this.rawQuotes = const [],
+    this.rawStringPrefixes = const [],
+    this.charLiterals = false,
+    this.quotedKeys = false,
     this.metaPattern,
     this.metaGroup,
     this.highlightNumbers = true,
@@ -149,6 +171,7 @@ class SyntaxLanguages {
     lineComments: const ['#'],
     lineCommentNeedsBoundary: true,
     strings: const ["'", '"'],
+    rawQuotes: const ["'"],
     metaPattern: RegExp(r'\$\{?[A-Za-z_][A-Za-z0-9_]*\}?|\$[0-9@#?*!$-]'),
   );
 
@@ -194,6 +217,8 @@ class SyntaxLanguages {
       'case',
       'self',
     },
+    // Decorators; the line anchor keeps `a @ b` matrix products plain.
+    metaPattern: RegExp(r'^[ \t]*@[A-Za-z_][\w.]*', multiLine: true),
     lineComments: const ['#'],
     multilineStrings: const ["'''", '"""'],
     strings: const ["'", '"'],
@@ -342,11 +367,14 @@ class SyntaxLanguages {
     id: 'json',
     keywords: const {'true', 'false', 'null'},
     strings: const ['"'],
+    quotedKeys: true,
   );
 
   static final yaml = SyntaxLanguage(
     id: 'yaml',
     keywords: const {'true', 'false', 'null'},
+    rawQuotes: const ["'"],
+    quotedKeys: true,
     lineComments: const ['#'],
     lineCommentNeedsBoundary: true,
     strings: const ["'", '"'],
@@ -395,6 +423,7 @@ class SyntaxLanguages {
     lineComments: const ['#'],
     lineCommentNeedsBoundary: true,
     strings: const ["'", '"'],
+    rawQuotes: const ["'"],
     metaPattern: RegExp(r'\$\{?[A-Za-z_][A-Za-z0-9_]*\}?'),
   );
 
@@ -461,6 +490,7 @@ class SyntaxLanguages {
       ['/*', '*/'],
     ],
     strings: const ["'", '"'],
+    rawQuotes: const ["'", '"'],
   );
 
   static final cFamily = SyntaxLanguage(
@@ -549,7 +579,121 @@ class SyntaxLanguages {
       ['/*', '*/'],
     ],
     strings: const ["'", '"'],
+    // Preprocessor directives (C, C++, C#'s #nullable, Swift's #elseif, GCC's
+    // #include_next). Named, so that a PHP `# comment` at the start of a line
+    // is not mistaken for one.
+    metaPattern: RegExp(
+      r'^[ \t]*#[ \t]*(?:if|ifdef|ifndef|elif|elseif|elifdef|elifndef|else|'
+      r'endif|define|undef|include|include_next|import|embed|pragma|line|'
+      r'error|warning|region|endregion|nullable)\b',
+      multiLine: true,
+    ),
   );
+
+  static final rust = SyntaxLanguage(
+    id: 'rust',
+    keywords: const {
+      'as',
+      'async',
+      'await',
+      'break',
+      'const',
+      'continue',
+      'crate',
+      'dyn',
+      'else',
+      'enum',
+      'extern',
+      'false',
+      'fn',
+      'for',
+      'if',
+      'impl',
+      'in',
+      'let',
+      'loop',
+      'match',
+      'mod',
+      'move',
+      'mut',
+      'pub',
+      'ref',
+      'return',
+      'self',
+      'Self',
+      'static',
+      'struct',
+      'super',
+      'trait',
+      'true',
+      'type',
+      'unsafe',
+      'use',
+      'where',
+      'while',
+    },
+    lineComments: const ['//'],
+    blockComments: const [
+      ['/*', '*/'],
+    ],
+    strings: const ["'", '"'],
+    rawStringPrefixes: const ['r', 'br'],
+    charLiterals: true,
+    // Attributes: #[derive(Debug)] and #![allow(...)]. An attribute holding a
+    // string literal (#[cfg(feature = "x")]) keeps only the string's color:
+    // meta matches that overlap scanner tokens are dropped when merging.
+    // The body stops at the next '[' too, so a line of unclosed '#[' costs
+    // linear time; bare nested brackets in an attribute go uncolored.
+    metaPattern: RegExp(r'#!?\[[^\[\]\n]*\]'),
+  );
+
+  /// Go: backquoted raw strings may span lines and take no escapes.
+  static final go = SyntaxLanguage(
+    id: 'go',
+    keywords: const {
+      'break',
+      'case',
+      'chan',
+      'const',
+      'continue',
+      'default',
+      'defer',
+      'else',
+      'fallthrough',
+      'false',
+      'for',
+      'func',
+      'go',
+      'goto',
+      'if',
+      'import',
+      'interface',
+      'iota',
+      'map',
+      'nil',
+      'package',
+      'range',
+      'return',
+      'select',
+      'struct',
+      'switch',
+      'true',
+      'type',
+      'var',
+    },
+    lineComments: const ['//'],
+    blockComments: const [
+      ['/*', '*/'],
+    ],
+    multilineStringPairs: const [
+      ['`', '`'],
+    ],
+    strings: const ["'", '"'],
+    charLiterals: true,
+  );
+
+  /// Unified diffs and patches use a dedicated line scanner.
+  static const diff = SyntaxLanguage(id: 'diff', highlightNumbers: false);
 
   static final xml = SyntaxLanguage(
     id: 'xml',
@@ -602,7 +746,9 @@ class SyntaxLanguages {
       ['/*', '*/'],
     ],
     strings: const ["'", '"'],
-    metaPattern: RegExp(r'([-a-zA-Z]+)[ \t]*:'),
+    // Start once per identifier; retrying every suffix makes missing colons
+    // quadratic on long selectors and values.
+    metaPattern: RegExp(r'(?<![-a-zA-Z])([-a-zA-Z]+)[ \t]*:'),
     metaGroup: 1,
   );
 
@@ -827,13 +973,14 @@ const Map<String, String> _extensionLanguages = {
   'socket': 'ini', 'timer': 'ini',
   'sql': 'sql',
   'c': 'c-family', 'h': 'c-family', 'cpp': 'c-family', 'cc': 'c-family',
-  'cxx': 'c-family', 'hpp': 'c-family', 'hh': 'c-family', 'go': 'c-family',
-  'rs': 'c-family', 'java': 'c-family', 'kt': 'c-family', 'kts': 'c-family',
+  'cxx': 'c-family', 'hpp': 'c-family', 'hh': 'c-family', 'go': 'go',
+  'rs': 'rust', 'java': 'c-family', 'kt': 'c-family', 'kts': 'c-family',
   'swift': 'c-family', 'cs': 'c-family', 'scala': 'c-family',
   'php': 'c-family',
   'xml': 'xml', 'html': 'xml', 'htm': 'xml', 'xhtml': 'xml', 'svg': 'xml',
   'plist': 'xml',
   'md': 'markdown', 'markdown': 'markdown',
+  'diff': 'diff', 'patch': 'diff',
   // 06 §7's additions.
   'css': 'css', 'scss': 'css', 'less': 'css',
   'rb': 'ruby', 'rake': 'ruby', 'gemspec': 'ruby',
@@ -873,6 +1020,9 @@ SyntaxLanguage? _languageById(String id) => switch (id) {
   'dockerfile' => SyntaxLanguages.dockerfile,
   'sql' => SyntaxLanguages.sql,
   'c-family' => SyntaxLanguages.cFamily,
+  'rust' => SyntaxLanguages.rust,
+  'go' => SyntaxLanguages.go,
+  'diff' => SyntaxLanguages.diff,
   'xml' => SyntaxLanguages.xml,
   'markdown' => SyntaxLanguages.markdown,
   'css' => SyntaxLanguages.css,
@@ -935,6 +1085,7 @@ bool _isDigit(int c) => c >= 0x30 && c <= 0x39;
 /// Scan [text] into non-overlapping, ordered [SyntaxToken]s.
 List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
   if (language.id == 'dotenv') return _tokenizeDotenv(text);
+  if (language.id == 'diff') return _tokenizeDiff(text);
   final tokens = <SyntaxToken>[];
   final n = text.length;
   var i = 0;
@@ -984,10 +1135,49 @@ List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
       }
     }
 
+    for (final prefix in language.rawStringPrefixes) {
+      final end = _rawStringEnd(text, i, prefix);
+      if (end != null) {
+        tokens.add(SyntaxToken(i, end, SyntaxTokenType.string));
+        i = end;
+        continue outer;
+      }
+    }
+
     for (final quote in language.strings) {
       if (text.startsWith(quote, i)) {
-        final end = _scanString(text, i, quote, stopAtNewline: true);
-        tokens.add(SyntaxToken(i, end, SyntaxTokenType.string));
+        if (language.charLiterals && quote == "'") {
+          final end = _charLiteralEnd(text, i);
+          if (end != null) {
+            tokens.add(SyntaxToken(i, end, SyntaxTokenType.string));
+            i = end;
+            continue outer;
+          }
+          var nameEnd = i + 1;
+          while (nameEnd < n && _isIdentPart(text.codeUnitAt(nameEnd))) {
+            nameEnd++;
+          }
+          if (nameEnd > i + 1) {
+            tokens.add(SyntaxToken(i, nameEnd, SyntaxTokenType.meta));
+          }
+          i = nameEnd;
+          continue outer;
+        }
+        final end = _scanString(
+          text,
+          i,
+          quote,
+          stopAtNewline: true,
+          escapes: !language.rawQuotes.contains(quote),
+        );
+        final key = language.quotedKeys && _colonFollows(text, end);
+        tokens.add(
+          SyntaxToken(
+            i,
+            end,
+            key ? SyntaxTokenType.meta : SyntaxTokenType.string,
+          ),
+        );
         i = end;
         continue outer;
       }
@@ -1026,20 +1216,22 @@ List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
 
 bool _isWhitespace(int c) => c == 0x20 || c == 0x09 || c == 0x0a || c == 0x0d;
 
-/// End index of a string starting at [start] with [delimiter]; a backslash
-/// escapes the next character. Unterminated single-line strings stop at the
-/// newline; unterminated multiline strings run to the end of the text.
+/// End index of a string starting at [start] with [delimiter]; with
+/// [escapes], a backslash escapes the next character. Unterminated
+/// single-line strings stop at the newline; unterminated multiline strings
+/// run to the end of the text.
 int _scanString(
   String text,
   int start,
   String delimiter, {
   required bool stopAtNewline,
+  bool escapes = true,
 }) {
   final n = text.length;
   var i = start + delimiter.length;
   while (i < n) {
     final c = text.codeUnitAt(i);
-    if (c == 0x5c /* backslash */ ) {
+    if (escapes && c == 0x5c /* backslash */ ) {
       i += 2;
       continue;
     }
@@ -1048,6 +1240,55 @@ int _scanString(
     i++;
   }
   return n;
+}
+
+/// The end of a character literal opening at [start] (`'x'`, `'\n'`,
+/// `'\u{1F600}'`, `'\x7f'`), or null when the quote does not close as one.
+int? _charLiteralEnd(String text, int start) {
+  final n = text.length;
+  var i = start + 1;
+  if (i >= n) return null;
+  final c = text.codeUnitAt(i);
+  if (c == 0x5c /* backslash */ ) {
+    // The escaped character itself, then any hex digits or braces after it.
+    i += 2;
+    while (i < n && i - start < 14) {
+      final tail = text.codeUnitAt(i);
+      if (!_isIdentPart(tail) && tail != 0x7b && tail != 0x7d) break;
+      i++;
+    }
+  } else if (c == 0x0a || c == 0x27 /* ' */ ) {
+    return null;
+  } else {
+    // A supplementary-plane character is two UTF-16 code units.
+    i += c >= 0xd800 && c <= 0xdbff ? 2 : 1;
+  }
+  return i < n && text.codeUnitAt(i) == 0x27 ? i + 1 : null;
+}
+
+/// The end of a raw string opening at [start] with [prefix], or null when
+/// none opens there (for example the raw identifier `r#type`).
+int? _rawStringEnd(String text, int start, String prefix) {
+  if (!text.startsWith(prefix, start)) return null;
+  var i = start + prefix.length;
+  var hashes = 0;
+  while (i < text.length && text.codeUnitAt(i) == 0x23 /* # */ ) {
+    hashes++;
+    i++;
+  }
+  if (i >= text.length || text.codeUnitAt(i) != 0x22 /* " */ ) return null;
+  final closer = '"${'#' * hashes}';
+  final close = text.indexOf(closer, i + 1);
+  return close < 0 ? text.length : close + closer.length;
+}
+
+bool _colonFollows(String text, int from) {
+  var i = from;
+  while (i < text.length &&
+      (text.codeUnitAt(i) == 0x20 || text.codeUnitAt(i) == 0x09)) {
+    i++;
+  }
+  return i < text.length && text.codeUnitAt(i) == 0x3a /* : */;
 }
 
 int _scanNumber(String text, int start) {
@@ -1162,9 +1403,15 @@ enum CaseFolding {
   /// original text.
   exact,
 
-  /// Lowercasing changed the text's length, so offsets into the folded text
-  /// would not address the original. The search compared case-sensitively
-  /// instead, which finds fewer matches than the user asked for, and says so.
+  /// Lowercasing changed the *document's* length, so offsets into the folded
+  /// text would not address the original. The search compared
+  /// case-sensitively instead, which finds fewer matches than the user asked
+  /// for, and says so.
+  ///
+  /// The query's own length is irrelevant here. A match spans whatever the
+  /// folded document holds at that offset, which is what case-insensitive
+  /// matching means: `Straße` may match `strasse` because the two are case
+  /// equivalents, not because they are the same string.
   lengthChanging,
 }
 
@@ -1180,10 +1427,29 @@ final class SearchResult {
   bool get caseFoldedExactly => caseFolding == CaseFolding.exact;
 }
 
-/// Lowercases one side of a case-insensitive comparison. Injectable so the
-/// [CaseFolding.lengthChanging] path can be exercised: Dart's `toLowerCase`
-/// preserves length for every code point today, which leaves the guard in
-/// [searchText] defensive and otherwise untestable.
+/// Folds one side of a case-insensitive comparison.
+///
+/// A fold that preserves the document's length — and is *index-wise*, its
+/// output character at position *i* standing for the input character at *i* —
+/// is applied as-is, and can fix case differences [String.toLowerCase] misses
+/// while keeping match offsets valid: Greek final sigma (`toLowerCase` maps `Σ`
+/// to `σ` and never to the final `ς` a Greek word actually ends with), a
+/// locale's dotted and dotless i, canonical Cherokee forms.
+///
+/// Both halves are required. Length alone is not enough: a length-preserving
+/// fold that is not index-wise — one that reorders characters, say — would
+/// satisfy the length check and return confidently wrong ranges. Depending on
+/// surrounding context is fine, so long as output position *i* still stands
+/// for input *i*: Unicode's final-sigma rule (σ → ς at a word's end) is
+/// exactly such a fold, and it is the one worth having. Injectable so the
+/// guarded paths are testable at all.
+///
+/// A fold that *changes* the length cannot be used on a document: matches are
+/// located in the folded text, so their offsets would address the wrong
+/// characters. [searchText] then compares exactly and reports
+/// [CaseFolding.lengthChanging]. Expanding `ß` to `ss`, which is what Unicode
+/// *full* case folding does, therefore needs a folded-offset map rather than
+/// a different fold — see ANALYSIS.md B37.
 typedef CaseFolder = String Function(String value);
 
 /// Substring search used by the editor's find bar, reporting how the case
@@ -1202,11 +1468,18 @@ SearchResult searchText(
   var needle = query;
   var caseFolding = CaseFolding.exact;
   if (!caseSensitive) {
+    // Only the haystack's length matters: a match is located in the folded
+    // document and spans what is there, so its offsets address the original
+    // exactly when the fold preserved the document's length.
     final lowered = fold(text);
-    final loweredNeedle = fold(query);
-    if (lowered.length == text.length && loweredNeedle.length == query.length) {
+    if (lowered.length == text.length) {
       haystack = lowered;
-      needle = loweredNeedle;
+      needle = fold(query);
+      // A fold may erase characters. An empty needle would "match" at every
+      // offset, and Replace All would insert its text at each of them.
+      if (needle.isEmpty) {
+        return const SearchResult(matches: [], caseFolding: CaseFolding.exact);
+      }
     } else {
       caseFolding = CaseFolding.lengthChanging;
     }

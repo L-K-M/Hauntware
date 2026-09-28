@@ -14,7 +14,10 @@ void main() {
       expect(syntaxLanguageFor('/etc/nginx/nginx.conf')?.id, 'ini');
       expect(syntaxLanguageFor('/tmp/data.json')?.id, 'json');
       expect(syntaxLanguageFor('compose.yaml')?.id, 'yaml');
-      expect(syntaxLanguageFor('main.go')?.id, 'c-family');
+      expect(syntaxLanguageFor('main.go')?.id, 'go');
+      expect(syntaxLanguageFor('lib.rs')?.id, 'rust');
+      expect(syntaxLanguageFor('fix.patch')?.id, 'diff');
+      expect(syntaxLanguageFor('changes.diff')?.id, 'diff');
       expect(syntaxLanguageFor('query.sql')?.id, 'sql');
       expect(syntaxLanguageFor('notes.xyz'), isNull);
       expect(syntaxLanguageFor('README'), isNull);
@@ -234,6 +237,18 @@ void main() {
       );
     });
 
+    test('yaml: meta token offsets skip every dash prefix', () {
+      // Regression: a key inside a nested list must start at the key
+      // itself, not at either of the leading '-' list markers.
+      const text = '- - name: x\n';
+      final tokens = tokenizeSyntax(text, SyntaxLanguages.yaml);
+      final meta = _ofType(tokens, SyntaxTokenType.meta);
+      expect(meta, hasLength(1));
+      expect(meta.single.start, text.indexOf('name'));
+      expect(meta.single.end, text.indexOf('name') + 'name'.length);
+      expect(text.substring(meta.single.start, meta.single.end), 'name');
+    });
+
     test('ini: sections, comments, booleans', () {
       const text = '[core]\n; note\nenabled = TRUE\n';
       final tokens = tokenizeSyntax(text, SyntaxLanguages.ini);
@@ -277,6 +292,64 @@ void main() {
         contains('media'),
       );
     });
+
+    test('CSS scans long colonless identifiers without stalling', () {
+      const identifierLength = 20 * 1000;
+      const maximumScanTime = Duration(seconds: 1);
+      final text = '${'a' * identifierLength}\ncolor: red;';
+      final stopwatch = Stopwatch()..start();
+      final tokens = tokenizeSyntax(text, SyntaxLanguages.css);
+      stopwatch.stop();
+
+      expect(tokens, [
+        SyntaxToken(
+          identifierLength + 1,
+          identifierLength + 1 + 'color'.length,
+          SyntaxTokenType.meta,
+        ),
+      ]);
+      // A generous ceiling detects quadratic retries, not normal CI variance.
+      expect(stopwatch.elapsed, lessThan(maximumScanTime));
+    });
+
+    test('Rust attributes scan a line of unclosed openers linearly', () {
+      // Every '#[' starts a candidate; letting the candidate run past the
+      // next '[' made each one rescan to the end of the line.
+      const repetitions = 20 * 1000;
+      const maximumScanTime = Duration(seconds: 1);
+      final text = '${'#[' * repetitions}\n#[derive(Debug)]';
+      final stopwatch = Stopwatch()..start();
+      final tokens = tokenizeSyntax(text, SyntaxLanguages.rust);
+      stopwatch.stop();
+
+      expect(
+        _ofType(tokens, SyntaxTokenType.meta).map((t) => _slice(text, t)),
+        ['#[derive(Debug)]'],
+      );
+      // A generous ceiling detects quadratic retries, not normal CI variance.
+      expect(stopwatch.elapsed, lessThan(maximumScanTime));
+    });
+
+    test(
+      'CSS meta boundaries preserve custom properties and token priority',
+      () {
+        const text =
+            ':root { --accent-color: red; -webkit-transform: none; }\n'
+            'a:hover { color: "ignored: value"; /* hidden: value */ }';
+        final tokens = tokenizeSyntax(text, SyntaxLanguages.css);
+
+        expect(
+          _ofType(
+            tokens,
+            SyntaxTokenType.meta,
+          ).map((token) => _slice(text, token)),
+          ['--accent-color', '-webkit-transform', 'a', 'color'],
+        );
+        for (var i = 1; i < tokens.length; i++) {
+          expect(tokens[i].start, greaterThanOrEqualTo(tokens[i - 1].end));
+        }
+      },
+    );
 
     test('§7 ruby: bounded hash comments, keywords, strings', () {
       const text = '# note\ndef greet\n  puts "hi"\nend\n';
@@ -401,17 +474,32 @@ void main() {
       // Every code point folds to the same number of UTF-16 units today. If a
       // future SDK breaks that, searchText reports it rather than quietly
       // changing what a case-insensitive search means.
-      for (var rune = 0x80; rune <= 0x2FFFF; rune++) {
+      // Every code point, surrogates included: a lone surrogate is a valid
+      // Dart string unit too. Fail only on a mismatch, so the scan does not
+      // build a million reason strings.
+      for (var rune = 0x80; rune <= 0x10FFFF; rune++) {
         final value = String.fromCharCode(rune);
-        expect(
-          value.toLowerCase().length,
-          value.length,
-          reason: 'U+${rune.toRadixString(16)} changes length when lowercased',
-        );
+        if (value.toLowerCase().length != value.length) {
+          fail('U+${rune.toRadixString(16)} changes length when lowercased');
+        }
       }
     });
 
-    test('a length-changing fold is reported and matched exactly', () {
+    test('a fold that erases the whole query finds nothing', () {
+      // A folding table may drop characters (default-ignorable marks, say).
+      // An empty needle would match at every offset and hand Replace All a
+      // list of zero-width matches to insert its replacement at.
+      // The document holds no soft hyphen, so its fold keeps its length and
+      // the folded path is taken; only the query vanishes.
+      String fold(String value) => value.replaceAll('\u00AD', '');
+      final result = searchText('plain text', '\u00AD', fold: fold);
+      expect(result.caseFolding, CaseFolding.exact);
+      expect(result.matches, isEmpty);
+    });
+
+    // The document side of the guard. Paired with 'a length-changing query is
+    // still folded' below, which is the side that must NOT report limited.
+    test('a length-changing document is reported and matched exactly', () {
       // ß uppercases to "SS", which is what a full case fold would expand it
       // to. Dart's toLowerCase does not do that, so the fold is injected to
       // reach the path a host with its own folding table would take.
@@ -433,22 +521,214 @@ void main() {
         'Die Straße',
         'STRASSE',
         caseSensitive: true,
-        fold: (value) => value.replaceAll('ß', 'ss'),
+        fold: (value) => value.toLowerCase().replaceAll('ß', 'ss'),
       );
       expect(result.caseFolding, CaseFolding.exact);
       expect(result.matches, isEmpty);
     });
 
-    test('a length-changing needle is reported too', () {
+    test('a length-changing query is still folded', () {
+      // Only the document's length decides whether offsets stay valid. A
+      // query whose fold is longer matches the longer region the document
+      // actually has, which is what case-insensitive matching means: `Straße`
+      // and `strasse` are case equivalents, not the same string.
       final result = searchText(
-        'plain text',
-        'PLAIN',
-        fold: (value) {
-          if (value == 'PLAIN') return 'plaiin';
-          return value;
-        },
+        'die strasse',
+        'Straße',
+        fold: (value) => value.toLowerCase().replaceAll('ß', 'ss'),
       );
-      expect(result.caseFolding, CaseFolding.lengthChanging);
+      expect(result.caseFolding, CaseFolding.exact);
+      expect(result.matches, [const TextMatch(start: 4, end: 11)]);
+    });
+
+    test('a length-preserving fold fixes what toLowerCase misses', () {
+      // Greek words end in the final sigma, which `toLowerCase` never
+      // produces: it maps capital sigma to plain sigma unconditionally.
+      const text = 'η σοφος';
+      expect(findSearchMatches(text, 'ΣΟΦΟΣ'), isEmpty);
+      expect(
+        searchText(
+          text,
+          'ΣΟΦΟΣ',
+          fold: (value) => value.toLowerCase().replaceAll('ς', 'σ'),
+        ).matches,
+        [const TextMatch(start: 2, end: 7)],
+      );
+    });
+  });
+
+  group('language fixes', () {
+    List<String> slices(
+      String text,
+      SyntaxLanguage language,
+      SyntaxTokenType type,
+    ) => [
+      for (final token in _ofType(tokenizeSyntax(text, language), type))
+        _slice(text, token),
+    ];
+
+    test('Rust lifetimes are names, not strings that eat the line', () {
+      const text = "fn f<'a>(x: &'a str) -> &'static str { x }";
+      final rust = syntaxLanguageFor('lib.rs')!;
+      expect(slices(text, rust, SyntaxTokenType.string), isEmpty);
+      expect(slices(text, rust, SyntaxTokenType.meta), ["'a", "'a", "'static"]);
+      expect(slices(text, rust, SyntaxTokenType.keyword), ['fn']);
+    });
+
+    test('Rust and Go character literals, escapes included', () {
+      const text =
+          r"let c = 'x'; let n = '\n'; let q = '\''; let e = '\u{1F600}';";
+      expect(slices(text, SyntaxLanguages.rust, SyntaxTokenType.string), [
+        "'x'",
+        r"'\n'",
+        r"'\''",
+        r"'\u{1F600}'",
+      ]);
+      expect(
+        slices(
+          "r := 'é' + '\\x41'",
+          SyntaxLanguages.go,
+          SyntaxTokenType.string,
+        ),
+        ["'é'", r"'\x41'"],
+      );
+    });
+
+    test('Rust raw strings take no escapes; raw identifiers are not strings', () {
+      const text =
+          r'let a = r"C:\"; let b = r#"x"\y"#; let c = br"\d"; let r#type = 1;';
+      expect(slices(text, SyntaxLanguages.rust, SyntaxTokenType.string), [
+        r'r"C:\"',
+        r'r#"x"\y"#',
+        r'br"\d"',
+      ]);
+      expect(
+        slices(text, SyntaxLanguages.rust, SyntaxTokenType.keyword),
+        contains('let'),
+      );
+    });
+
+    test('Rust attributes holding a string keep only the string colored', () {
+      // A known limit of the meta merge: overlapping matches are dropped.
+      const text = '#[cfg(feature = "serde")]\nfn f() {}';
+      expect(slices(text, SyntaxLanguages.rust, SyntaxTokenType.meta), isEmpty);
+      expect(slices(text, SyntaxLanguages.rust, SyntaxTokenType.string), [
+        '"serde"',
+      ]);
+    });
+
+    test('Go raw strings span lines and take no escapes', () {
+      // The backslash before the line break and before the closing backtick
+      // are both plain text.
+      const text = 'p := `C:\\dir\\\nD:\\`\nq := "a\\"b"';
+      expect(slices(text, SyntaxLanguages.go, SyntaxTokenType.string), [
+        '`C:\\dir\\\nD:\\`',
+        '"a\\"b"',
+      ]);
+    });
+
+    test('shell and SQL single quotes take no backslash escapes', () {
+      const shell = r"echo 'C:\' && ls # done";
+      expect(slices(shell, SyntaxLanguages.shell, SyntaxTokenType.string), [
+        r"'C:\'",
+      ]);
+      expect(slices(shell, SyntaxLanguages.shell, SyntaxTokenType.comment), [
+        '# done',
+      ]);
+      const sql = r"SELECT '\' AS slash -- note";
+      expect(slices(sql, SyntaxLanguages.sql, SyntaxTokenType.comment), [
+        '-- note',
+      ]);
+    });
+
+    test('JSON and YAML quoted keys are keys, values stay strings', () {
+      const json = '{"name": "Ada", "tags": ["a:b"]}';
+      expect(slices(json, SyntaxLanguages.json, SyntaxTokenType.meta), [
+        '"name"',
+        '"tags"',
+      ]);
+      expect(slices(json, SyntaxLanguages.json, SyntaxTokenType.string), [
+        '"Ada"',
+        '"a:b"',
+      ]);
+      expect(
+        slices("'quoted key' : x", SyntaxLanguages.yaml, SyntaxTokenType.meta),
+        ["'quoted key'"],
+      );
+    });
+
+    test('C preprocessor, Rust attributes and Python decorators', () {
+      expect(
+        slices(
+          '#include <stdio.h>\n  #  define X 1\nint a = b # c;',
+          SyntaxLanguages.cFamily,
+          SyntaxTokenType.meta,
+        ),
+        ['#include', '  #  define'],
+      );
+      expect(
+        slices(
+          '<?php\n# TODO tidy this\n#pragma once\n',
+          SyntaxLanguages.cFamily,
+          SyntaxTokenType.meta,
+        ),
+        ['#pragma'],
+      );
+      expect(
+        slices(
+          '#elseif os(macOS)\n#nullable enable\n#include_next <limits.h>\n',
+          SyntaxLanguages.cFamily,
+          SyntaxTokenType.meta,
+        ),
+        ['#elseif', '#nullable', '#include_next'],
+      );
+      expect(
+        slices(
+          '#[derive(Debug)]\n#![allow(dead_code)]',
+          SyntaxLanguages.rust,
+          SyntaxTokenType.meta,
+        ),
+        ['#[derive(Debug)]', '#![allow(dead_code)]'],
+      );
+      expect(
+        slices(
+          '@app.route("/")\ndef f(): return a @ b',
+          SyntaxLanguages.python,
+          SyntaxTokenType.meta,
+        ),
+        ['@app.route'],
+      );
+    });
+
+    test('diffs separate headers, hunks, additions and removals', () {
+      const text =
+          'diff --git a/x b/x\n'
+          'index 1..2 100644\n'
+          '--- a/x\n'
+          '+++ b/x\n'
+          '@@ -1,3 +1,3 @@\n'
+          ' same\n'
+          '--- removed SQL comment\n'
+          '+++ added counter\n'
+          '\\ No newline at end of file\n'
+          '\n'
+          'diff --git a/y b/y\n';
+      final diff = SyntaxLanguages.diff;
+      expect(slices(text, diff, SyntaxTokenType.keyword), [
+        'diff --git a/x b/x',
+        'index 1..2 100644',
+        '--- a/x',
+        '+++ b/x',
+        'diff --git a/y b/y',
+      ]);
+      expect(slices(text, diff, SyntaxTokenType.meta), ['@@ -1,3 +1,3 @@']);
+      expect(slices(text, diff, SyntaxTokenType.number), [
+        '--- removed SQL comment',
+      ]);
+      expect(slices(text, diff, SyntaxTokenType.string), ['+++ added counter']);
+      expect(slices(text, diff, SyntaxTokenType.comment), [
+        '\\ No newline at end of file',
+      ]);
     });
   });
 }

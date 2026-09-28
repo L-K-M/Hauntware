@@ -49,11 +49,15 @@ class EditorController extends ChangeNotifier {
   Future<bool> Function()? onPublish;
 
   /// How a case-insensitive find compares text. Defaults to
-  /// [String.toLowerCase]; a host that folds case more thoroughly (Unicode
-  /// full folding, so `STRASSE` finds `straße`) can supply its own. When the
-  /// fold changes a string's length, match offsets would no longer address the
-  /// original, so the search compares exactly and says so — see
-  /// [caseFoldingLimited].
+  /// [String.toLowerCase]; a host can supply a fold that fixes case
+  /// differences the default misses while keeping the document's length —
+  /// Greek final sigma, a locale's dotted and dotless i, canonical Cherokee
+  /// forms. A fold that changes the *document's* length cannot be applied,
+  /// because matches are located in the folded text and their offsets would
+  /// stop addressing the original; the search then compares exactly and says
+  /// so through [caseFoldingLimited]. Expanding `ß` to `ss` — what Unicode
+  /// *full* case folding does — needs a folded-offset map, not a different
+  /// fold, so do not promise it here.
   final CaseFolder _fold;
 
   static String _defaultCaseFolder(String value) => value.toLowerCase();

@@ -119,6 +119,67 @@ void setFilePermissions(String path, int mode) {
   }
 }
 
+/// ENOENT on POSIX; ERROR_FILE_NOT_FOUND on Windows. Coincidentally 2 on
+/// both — the destination file itself vanished mid-save, not a permission
+/// or quota failure.
+const int _errorNoSuchFile = 2;
+
+/// Windows ERROR_PATH_NOT_FOUND: a parent directory in the path vanished.
+/// POSIX reports the same situation as ENOENT ([_errorNoSuchFile]).
+const int _errorPathNotFound = 3;
+
+/// Whether [error] means a path vanished mid-operation: the destination or a
+/// parent directory. POSIX reports both as [_errorNoSuchFile]; Windows
+/// reports a missing parent as [_errorPathNotFound]. Everything else
+/// (permissions, quota) is a real failure, not a concurrent-modification
+/// signal.
+///
+/// Lives in this unexported library so hosts do not see it as package API;
+/// tests import it from `src/` directly.
+bool isVanishedPathError(FileSystemException error, {bool? isWindows}) {
+  final code = error.osError?.errorCode;
+  return code == _errorNoSuchFile ||
+      ((isWindows ?? Platform.isWindows) && code == _errorPathNotFound);
+}
+
+/// Sets or clears the Windows read-only attribute, which Dart reports as a
+/// mode without write bits, keeping the file's other attributes.
+void setWindowsReadOnly(String path, {required bool readOnly}) {
+  _checkPath(path);
+  final nativePath = _windowsExtendedPath(path).toNativeUtf16();
+  try {
+    final lastError = _getLastError;
+    final attributes = _getFileAttributes(nativePath);
+    if (attributes == _invalidFileAttributes) {
+      throw FileSystemException(
+        'Could not read the document file attributes.',
+        path,
+        OSError('GetFileAttributesW failed', lastError()),
+      );
+    }
+    final updated = readOnly
+        ? attributes | _fileAttributeReadOnly
+        : attributes & ~_fileAttributeReadOnly;
+    if (updated == attributes) return;
+    // FILE_ATTRIBUTE_NORMAL stands for "no attributes" and must be used alone.
+    final value = updated == 0 ? _fileAttributeNormal : updated;
+    if (_setFileAttributes(nativePath, value) == 0) {
+      throw FileSystemException(
+        'Could not set the document file attributes.',
+        path,
+        OSError('SetFileAttributesW failed', lastError()),
+      );
+    }
+  } finally {
+    calloc.free(nativePath);
+  }
+}
+
+// https://learn.microsoft.com/windows/win32/fileio/file-attribute-constants
+const _fileAttributeReadOnly = 0x1;
+const _fileAttributeNormal = 0x80;
+const _invalidFileAttributes = 0xffffffff;
+
 void _checkPath(String path) {
   if (path.contains('\u0000')) throw ArgumentError.value(path, 'path');
 }
@@ -165,6 +226,16 @@ final _moveFileEx = _kernel32
     >('MoveFileExW');
 final _getLastError = _kernel32
     .lookupFunction<Uint32 Function(), int Function()>('GetLastError');
+final _getFileAttributes = _kernel32
+    .lookupFunction<
+      Uint32 Function(Pointer<Utf16>),
+      int Function(Pointer<Utf16>)
+    >('GetFileAttributesW');
+final _setFileAttributes = _kernel32
+    .lookupFunction<
+      Int32 Function(Pointer<Utf16>, Uint32),
+      int Function(Pointer<Utf16>, int)
+    >('SetFileAttributesW');
 
 void _renameWindows(String source, String destination) {
   final oldPath = _windowsExtendedPath(source).toNativeUtf16();

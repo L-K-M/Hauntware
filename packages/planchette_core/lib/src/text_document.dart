@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:uuid/uuid.dart';
@@ -78,6 +79,22 @@ Future<File> resolveTextDocumentTarget(
   return file;
 }
 
+/// Whether [file] is marked read-only: no write permission for anyone on
+/// POSIX, or the read-only attribute on Windows, which Dart reports the same
+/// way. A save replaces the document through a sibling and restores its
+/// mode (on Windows, the attribute), so the file's own permission never
+/// stops a save; hosts ask this to warn before replacing a file someone
+/// deliberately protected. Ownership is not considered: a file only its
+/// owner may write reads as unprotected.
+Future<bool> isTextDocumentWriteProtected(File file) async {
+  final stat = await file.stat();
+  return stat.type == FileSystemEntityType.file &&
+      stat.mode & _writePermissionBits == 0;
+}
+
+/// POSIX write permission for owner, group and others: 0222.
+const _writePermissionBits = 0x92;
+
 /// Reads bounded, strict UTF-8, retaining one leading BOM as metadata and
 /// every additional U+FEFF as content. Digest checks reject changing snapshots.
 Future<TextDocument> loadTextDocument(
@@ -94,13 +111,16 @@ Future<TextDocument> loadTextDocument(
   }
   final digestOf = sha256Of ?? textDocumentSha256;
   final before = await digestOf(file);
-  final bytes = <int>[];
+  // A growable List<int> stores each byte as a full integer; a byte buffer
+  // is several times faster to fill, hash and decode.
+  final builder = BytesBuilder(copy: false);
   await for (final chunk in file.openRead()) {
-    if (bytes.length + chunk.length > maximumBytes) {
+    if (builder.length + chunk.length > maximumBytes) {
       throw TextDocumentException(_tooLargeMessage(maximumBytes));
     }
-    bytes.addAll(chunk);
+    builder.add(chunk);
   }
+  final bytes = builder.takeBytes();
   final after = await digestOf(file);
   await _requireRegularFile(file);
   if (before != after || crypto.sha256.convert(bytes).toString() != after) {
@@ -124,13 +144,20 @@ Future<TextDocument> loadTextDocument(
   } on FormatException {
     throw const TextDocumentException('This file is not valid UTF-8 text.');
   }
-  if (raw.contains('\u0000')) {
+  if (_firstNulIndex(raw) >= 0) {
     throw const TextDocumentException(
       'This file appears to be binary, not editable text.',
     );
   }
-  final crlfCount = RegExp(r'\r\n').allMatches(raw).length;
-  final lfCount = RegExp(r'(?<!\r)\n').allMatches(raw).length;
+  var crlfCount = 0;
+  var lfCount = 0;
+  for (var i = raw.indexOf('\n'); i >= 0; i = raw.indexOf('\n', i + 1)) {
+    if (i > 0 && raw.codeUnitAt(i - 1) == 0x0d) {
+      crlfCount++;
+    } else {
+      lfCount++;
+    }
+  }
   return TextDocument(
     file: file,
     text: normalization == TextNormalization.preserve ? raw : _foldToLf(raw),
@@ -210,10 +237,28 @@ Future<String> _writeTextDocument(
   if (!RegExp(r'^\.[a-zA-Z0-9_-]+$').hasMatch(temporaryPrefix)) {
     throw ArgumentError.value(temporaryPrefix, 'temporaryPrefix');
   }
+  // Loading rejects NUL as binary; writing it would produce a file this
+  // editor can never reopen. Reject before publication, while the original
+  // destination is still untouched. Scan the input, not the normalized
+  // text: normalization never adds or removes a NUL, and this keeps the
+  // reported offset pointing into the text the caller actually edited.
+  final nulIndex = _firstNulIndex(text);
+  if (nulIndex >= 0) {
+    throw TextDocumentException(
+      'The edited text contains a NUL character at code unit $nulIndex. '
+      'Loading treats that as binary content, so saving it would create a '
+      'file the editor cannot reopen.',
+    );
+  }
   final normalized = normalization == TextNormalization.preserve
       ? text
       : _normalizeLineEndings(text, lineEnding);
-  final bytes = <int>[if (hasUtf8Bom) ..._utf8Bom, ...utf8.encode(normalized)];
+  final encoded = utf8.encode(normalized);
+  final bytes = hasUtf8Bom
+      ? (Uint8List(_utf8Bom.length + encoded.length)
+          ..setAll(0, _utf8Bom)
+          ..setAll(_utf8Bom.length, encoded))
+      : encoded;
   if (bytes.length > maximumBytes) {
     throw TextDocumentException(
       'The edited file exceeds the '
@@ -221,17 +266,32 @@ Future<String> _writeTextDocument(
       'limit.',
     );
   }
-  final temporary = File(
-    '${file.path}$temporaryPrefix-${const Uuid().v4()}.edit',
-  );
-  final backup = File(
-    '${file.path}$temporaryPrefix-${const Uuid().v4()}.backup',
-  );
+  final temporary = _recoverySibling(file, temporaryPrefix, 'edit');
+  final backup = _recoverySibling(file, temporaryPrefix, 'backup');
   RandomAccessFile? handle;
   var retainTemporary = false;
+  var windowsReadOnly = false;
   try {
-    await temporary.create(exclusive: true);
-    setFilePermissions(temporary.path, 0x180); // 0600, before any plaintext.
+    try {
+      await temporary.create(exclusive: true);
+    } on FileSystemException catch (error, stackTrace) {
+      // The guarded design needs a sibling staging file, so an unwritable
+      // folder blocks every save; name the actionable cause, not the syscall.
+      // A folder deleted since the document opened is a different cause and
+      // needs a different remedy than fixing permissions.
+      Error.throwWithStackTrace(
+        TextDocumentException(
+          isVanishedPathError(error)
+              ? 'The folder containing the document no longer exists. '
+                    '${_osDetail(error)}'
+              : 'A temporary file could not be created beside the document. '
+                    'Check that its folder is writable. ${_osDetail(error)}',
+        ),
+        stackTrace,
+      );
+    }
+    // Owner-only before any plaintext reaches the file.
+    setFilePermissions(temporary.path, _ownerReadWriteMode);
     handle = await temporary.open(mode: FileMode.writeOnly);
     await handle.writeFrom(bytes);
     await handle.flush();
@@ -254,7 +314,28 @@ Future<String> _writeTextDocument(
     }
 
     await _requireRegularFile(file);
-    renameFileWithoutReplacing(file.path, backup.path);
+    try {
+      renameFileWithoutReplacing(file.path, backup.path);
+    } on HardLinkCleanupException {
+      // Both names are retained and the exception already identifies them.
+      rethrow;
+    } on FileSystemException catch (error, stackTrace) {
+      // A vanished destination or parent means a mid-save conflict;
+      // anything else (permissions, quota) keeps its real OS error
+      // instead of being misreported as concurrent modification.
+      Error.throwWithStackTrace(
+        isVanishedPathError(error)
+            ? TextDocumentException(
+                'The local copy changed while it was being saved. '
+                '${_osDetail(error)}',
+              )
+            : TextDocumentException(
+                'The original file could not be moved aside for '
+                'replacement. ${_osDetail(error)}',
+              ),
+        stackTrace,
+      );
+    }
     try {
       await observeBackup?.call(backup);
       await _requireRegularFile(backup);
@@ -265,7 +346,9 @@ Future<String> _writeTextDocument(
         );
       }
       final stat = await backup.stat();
-      setFilePermissions(temporary.path, stat.mode & 0x1ff);
+      setFilePermissions(temporary.path, stat.mode & _posixPermissionMask);
+      windowsReadOnly =
+          Platform.isWindows && stat.mode & _writePermissionBits == 0;
       renameFileWithoutReplacing(temporary.path, file.path);
     } catch (error) {
       if (error is HardLinkCleanupException) retainTemporary = true;
@@ -281,6 +364,7 @@ Future<String> _writeTextDocument(
       }
       rethrow;
     }
+    if (windowsReadOnly) _keepWindowsReadOnly(file, backup);
     try {
       await backup.delete();
     } on FileSystemException {
@@ -291,6 +375,51 @@ Future<String> _writeTextDocument(
   } finally {
     await handle?.close();
     if (!retainTemporary && await temporary.exists()) await temporary.delete();
+  }
+}
+
+// Common desktop filesystems limit a component to 255 bytes. Counting UTF-8
+// is also conservative for filesystems that count UTF-16 code units instead.
+const _maximumRecoveryNameBytes = 255;
+
+File _recoverySibling(File file, String prefix, String extension) {
+  final suffix = '$prefix-${const Uuid().v4()}.$extension';
+  final available = _maximumRecoveryNameBytes - utf8.encode(suffix).length;
+  if (available < 0) {
+    throw ArgumentError.value(prefix, 'temporaryPrefix', 'Prefix is too long.');
+  }
+
+  // Retain recognizable names and host recovery suffixes without splitting
+  // Unicode characters when a valid destination nearly fills the limit.
+  final originalName = file.uri.pathSegments.last;
+  final stem = StringBuffer();
+  var used = 0;
+  for (final rune in originalName.runes) {
+    final character = String.fromCharCode(rune);
+    used += utf8.encode(character).length;
+    if (used > available) break;
+    stem.write(character);
+  }
+  // Keep the caller's directory spelling, including root and relative paths.
+  final parent = file.path.substring(0, file.path.length - originalName.length);
+  return File('$parent$stem$suffix');
+}
+
+/// Windows has no mode bits to restore, so a read-only original's attribute
+/// goes back on the new file, and comes off the backup, which could not be
+/// deleted otherwise. The new file is already committed: a failure here
+/// leaves the attribute off or the backup in place rather than reporting a
+/// failed save.
+void _keepWindowsReadOnly(File file, File backup) {
+  try {
+    setWindowsReadOnly(file.path, readOnly: true);
+  } on FileSystemException {
+    // The saved text stands; only the attribute is lost.
+  }
+  try {
+    setWindowsReadOnly(backup.path, readOnly: false);
+  } on FileSystemException {
+    // The backup delete below then fails and keeps the recovery sibling.
   }
 }
 
@@ -318,11 +447,31 @@ String _tooLargeMessage(int maximumBytes) =>
 
 const _utf8Bom = [0xef, 0xbb, 0xbf];
 
+/// Native operations name the call, not the cause; keep the OS error code so
+/// a sharing violation or EPERM stays diagnosable.
+String _osDetail(FileSystemException error) {
+  final os = error.osError;
+  if (os == null) return error.message;
+  return '${os.message} (OS error ${os.errorCode}).';
+}
+
+/// chmod 0600: temporary plaintext is owner-only until it inherits the
+/// destination's mode below.
+const int _ownerReadWriteMode = 0x180;
+
+/// chmod 0777 mask: only the portable permission bits survive a save.
+const int _posixPermissionMask = 0x1ff;
+
 bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes.length >= offset + _utf8Bom.length &&
     bytes[offset] == _utf8Bom[0] &&
     bytes[offset + 1] == _utf8Bom[1] &&
     bytes[offset + 2] == _utf8Bom[2];
+
+/// The load- and write-side binary rule, shared so a save can never emit a
+/// file the loader would then reject. Broadening the binary heuristic must
+/// update this one place.
+int _firstNulIndex(String text) => text.indexOf('\u0000');
 
 String _foldToLf(String text) =>
     text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');

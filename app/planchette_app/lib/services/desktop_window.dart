@@ -30,6 +30,9 @@ final class DesktopWindow with WindowListener {
     );
     await windowManager.waitUntilReadyToShow(
       const WindowOptions(
+        // The Linux and Windows runners open the window at this size,
+        // centered, so it has its final geometry before this applies. Change
+        // them together.
         size: Size(1080, 760),
         minimumSize: Size(640, 400),
         center: true,
