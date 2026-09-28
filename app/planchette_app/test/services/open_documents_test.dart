@@ -52,7 +52,68 @@ void main() {
   test('non-macOS argv does not require the native document channel', () async {
     final seen = <String>[];
     final intake = OpenDocuments(open: (path) async => seen.add(path));
-    await intake.start(['--flag', '/document.txt'], macOS: false);
+    // A dash-named file is a valid path, not a flag: nothing injects argv
+    // flags on Linux or Windows, so every entry reaches open().
+    await intake.start(['-draft.txt', '/document.txt'], macOS: false);
+    expect(seen, ['-draft.txt', '/document.txt']);
+    intake.dispose();
+  });
+
+  test('macOS argv skips only the Finder process-serial argument', () async {
+    final seen = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async => null);
+    final intake = OpenDocuments(open: (path) async => seen.add(path));
+    await intake.start(['-psn_0_12345', '-draft.txt'], macOS: true);
+    expect(seen, ['-draft.txt']);
+    intake.dispose();
+  });
+
+  test('macOS argv keeps a file whose name only resembles a serial', () async {
+    final seen = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async => null);
+    final intake = OpenDocuments(open: (path) async => seen.add(path));
+    await intake.start(['-psn_notes.txt'], macOS: true);
+    expect(seen, ['-psn_notes.txt']);
+    intake.dispose();
+  });
+
+  test('macOS argv drops injected debug and restoration flag pairs', () async {
+    final seen = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async => null);
+    final intake = OpenDocuments(open: (path) async => seen.add(path));
+    await intake.start([
+      '-NSDocumentRevisionsDebugMode',
+      'YES',
+      '/document.txt',
+      '-ApplePersistenceIgnoreState',
+      'NO',
+      '-draft.txt',
+    ], macOS: true);
+    expect(seen, ['/document.txt', '-draft.txt']);
+    intake.dispose();
+  });
+
+  test('macOS argv keeps a file after a valueless injected flag', () async {
+    final seen = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async => null);
+    final intake = OpenDocuments(open: (path) async => seen.add(path));
+    // '-draft.txt' is not YES/NO, so the flag must not consume it.
+    await intake.start([
+      '-ApplePersistenceIgnoreState',
+      '-draft.txt',
+    ], macOS: true);
+    expect(seen, ['-draft.txt']);
+    intake.dispose();
+  });
+
+  test('macOS argv drops an injected flag at the end', () async {
+    final seen = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async => null);
+    final intake = OpenDocuments(open: (path) async => seen.add(path));
+    await intake.start([
+      '/document.txt',
+      '-NSDocumentRevisionsDebugMode',
+    ], macOS: true);
     expect(seen, ['/document.txt']);
     intake.dispose();
   });
