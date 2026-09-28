@@ -879,14 +879,40 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// name, so two index.js tabs can be told apart. Ported from #43.
   String labelFor(DocumentTab tab) {
     final path = tab.path;
-    if (path == null ||
-        !_documents.any((other) => other != tab && other.name == tab.name)) {
-      return tab.name;
+    if (path == null) return tab.name;
+    final others = [
+      for (final other in _documents)
+        if (other != tab && other.name == tab.name && other.path != null)
+          _folders(other.path!),
+    ];
+    if (others.isEmpty) return tab.name;
+    // As few folders as tell this tab from every other of the same name:
+    // x/src/index.js and y/src/index.js need two, a/b.txt and c/b.txt one.
+    final mine = _folders(path);
+    for (var count = 1; count <= mine.length; count++) {
+      final suffix = mine.sublist(mine.length - count).join('/');
+      final unique = others.every(
+        (theirs) =>
+            theirs.length < count ||
+            theirs.sublist(theirs.length - count).join('/') != suffix,
+      );
+      if (unique) {
+        return _paths.joinAll([...mine.sublist(mine.length - count), tab.name]);
+      }
     }
-    final folder = _paths.basename(_paths.dirname(path));
-    return folder.isEmpty || folder == '.'
-        ? tab.name
-        : _paths.join(folder, tab.name);
+    // Every folder is shared, as with /a/index.js beside /x/a/index.js:
+    // show them all, which the longer path's label then extends.
+    return _paths.joinAll([...mine, tab.name]);
+  }
+
+  /// The folders above [path]'s file, outermost first, without the root.
+  List<String> _folders(String path) {
+    final parts = _paths.split(_paths.dirname(path));
+    final root = _paths.rootPrefix(path);
+    return [
+      for (final part in parts)
+        if (part.isNotEmpty && part != root && part != '.') part,
+    ];
   }
 
   String _pathKey(String path) => _paths.canonicalize(path);
