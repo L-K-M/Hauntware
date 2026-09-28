@@ -278,6 +278,46 @@ void main() {
       );
     });
 
+    test('CSS scans long colonless identifiers without stalling', () {
+      const identifierLength = 20 * 1000;
+      const maximumScanTime = Duration(seconds: 1);
+      final text = '${'a' * identifierLength}\ncolor: red;';
+      final stopwatch = Stopwatch()..start();
+      final tokens = tokenizeSyntax(text, SyntaxLanguages.css);
+      stopwatch.stop();
+
+      expect(tokens, [
+        SyntaxToken(
+          identifierLength + 1,
+          identifierLength + 1 + 'color'.length,
+          SyntaxTokenType.meta,
+        ),
+      ]);
+      // A generous ceiling detects quadratic retries, not normal CI variance.
+      expect(stopwatch.elapsed, lessThan(maximumScanTime));
+    });
+
+    test(
+      'CSS meta boundaries preserve custom properties and token priority',
+      () {
+        const text =
+            ':root { --accent-color: red; -webkit-transform: none; }\n'
+            'a:hover { color: "ignored: value"; /* hidden: value */ }';
+        final tokens = tokenizeSyntax(text, SyntaxLanguages.css);
+
+        expect(
+          _ofType(
+            tokens,
+            SyntaxTokenType.meta,
+          ).map((token) => _slice(text, token)),
+          ['--accent-color', '-webkit-transform', 'a', 'color'],
+        );
+        for (var i = 1; i < tokens.length; i++) {
+          expect(tokens[i].start, greaterThanOrEqualTo(tokens[i - 1].end));
+        }
+      },
+    );
+
     test('§7 ruby: bounded hash comments, keywords, strings', () {
       const text = '# note\ndef greet\n  puts "hi"\nend\n';
       final tokens = tokenizeSyntax(text, SyntaxLanguages.ruby);
