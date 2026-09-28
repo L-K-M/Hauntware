@@ -392,7 +392,9 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Save All',
           _saveAll,
-          shortcut: _shortcut(LogicalKeyboardKey.keyS, alt: true),
+          // Menu-only off macOS: Windows reports AltGr as Ctrl+Alt, so
+          // Ctrl+Alt+S would swallow text such as Polish AltGr+S.
+          shortcut: mac ? _shortcut(LogicalKeyboardKey.keyS, alt: true) : null,
           enabled:
               unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
         ),

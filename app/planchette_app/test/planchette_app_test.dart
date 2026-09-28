@@ -706,8 +706,10 @@ void main() {
   );
 
   testWidgets(
-    'the Save All shortcut writes every dirty document',
+    'review fix: Ctrl+Alt+S is left to AltGr text off macOS',
     (tester) async {
+      // Windows reports AltGr as Ctrl+Alt, so a Ctrl+Alt+S binding would
+      // swallow characters such as Polish AltGr+S, and Save it instead.
       store.files[testPath('one.txt')] = document('one.txt', 'original one');
       store.files[testPath('two.txt')] = document('two.txt', 'original two');
       await workspace.open(testPath('one.txt'));
@@ -719,10 +721,17 @@ void main() {
       await mount(tester);
 
       await chord(tester, LogicalKeyboardKey.keyS, alt: true);
-      expect(store.files[testPath('one.txt')]!.text, 'edited one');
-      expect(store.files[testPath('two.txt')]!.text, 'edited two');
-      expect(workspace.documents.every((tab) => !tab.editor.isDirty), isTrue);
-      expect(workspace.error, isNull);
+      expect(store.files[testPath('one.txt')]!.text, 'original one');
+      expect(store.files[testPath('two.txt')]!.text, 'original two');
+      expect(workspace.documents.every((tab) => tab.editor.isDirty), isTrue);
+
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      final saveAllButton = find.ancestor(
+        of: find.text('Save All'),
+        matching: find.byType(MenuItemButton),
+      );
+      expect(tester.widget<MenuItemButton>(saveAllButton).shortcut, isNull);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

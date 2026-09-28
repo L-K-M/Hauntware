@@ -30,9 +30,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // 1080x760 centered on the work area instead of 1280x720 at (10, 10).
   Win32Window::Size size(1080, 760);
   RECT work_area{};
-  if (!::SystemParametersInfoW(SPI_GETWORKAREA, 0, &work_area, 0)) {
-    // Center on the primary screen instead: an empty rectangle would park
-    // the window in the top-left corner.
+  if (!::SystemParametersInfoW(SPI_GETWORKAREA, 0, &work_area, 0) ||
+      work_area.right <= work_area.left || work_area.bottom <= work_area.top) {
+    // Center on the primary screen instead: an empty rectangle, failed or
+    // reported, would park the window in the top-left corner.
     work_area = {0, 0, ::GetSystemMetrics(SM_CXSCREEN),
                  ::GetSystemMetrics(SM_CYSCREEN)};
   }
