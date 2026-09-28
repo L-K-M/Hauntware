@@ -728,4 +728,48 @@ void main() {
       expect(counter(editor).$1, number);
     });
   });
+
+  // From #12.
+  test('whole word search filters partial hits and replace all', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'cat concat cat',
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch(replace: true);
+    editor.search.text = 'cat';
+    expect(editor.matches.length, 3);
+    final revealed = editor.revealRequest;
+    editor.toggleWholeWord();
+    expect(editor.wholeWord, isTrue);
+    expect(editor.revealRequest, revealed + 1);
+    editor.toggleCaseSensitive();
+    expect(editor.revealRequest, revealed + 2);
+    expect(editor.matches.length, 2);
+    editor.replacement.text = 'dog';
+    editor.replaceAll();
+    expect(editor.text.text, 'dog concat dog');
+  });
+
+  test('whole-word paging never offers a partial word', () {
+    final editor = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(searchMatchLimit + 3, 'cat concat').join('\n'),
+    );
+    addTearDown(editor.dispose);
+    editor
+      ..openSearch()
+      ..search.text = 'cat'
+      ..toggleWholeWord();
+    // From the first match, Find Previous wraps to the last page.
+    editor.previousMatch();
+    expect(editor.matches, hasLength(searchMatchLimit));
+    for (final match in editor.matches) {
+      expect(
+        match.start == 0 || editor.text.text[match.start - 1] == '\n',
+        isTrue,
+        reason: 'partial word at ${match.start}',
+      );
+    }
+  });
 }

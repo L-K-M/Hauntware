@@ -636,6 +636,88 @@ void main() {
       );
     });
 
+    // From #12, with a Unicode word classifier.
+    test('whole words respect boundaries, edges and underscore', () {
+      const text = 'cat concat cat. (cat) cat_cat café cat';
+      expect(findSearchMatches(text, 'cat', wholeWord: true), const [
+        TextMatch(start: 0, end: 3),
+        TextMatch(start: 11, end: 14),
+        TextMatch(start: 17, end: 20),
+        TextMatch(start: 35, end: 38),
+      ]);
+      expect(
+        findSearchMatches('cat cat', 'cat', wholeWord: true),
+        hasLength(2),
+      );
+      expect(findSearchMatches('concat', 'cat', wholeWord: true), isEmpty);
+      expect(findSearchMatches('cat_cat', 'cat', wholeWord: true), isEmpty);
+      expect(
+        findSearchMatches('Cat CAT', 'cat', wholeWord: true),
+        hasLength(2),
+      );
+      expect(findSearchMatches('a == b', '==', wholeWord: true), hasLength(1));
+      // Emoji are boundaries, as with \b in other editors.
+      expect(findSearchMatches('cat🙂', 'cat', wholeWord: true), const [
+        TextMatch(start: 0, end: 3),
+      ]);
+      expect(findSearchMatches('🙂cat', 'cat', wholeWord: true), const [
+        TextMatch(start: 2, end: 5),
+      ]);
+    });
+
+    test('prose punctuation ends a word, letters of any script do not', () {
+      for (final text in ['“cat”', 'cat—dog', 'le cat\u00A0!', '«cat»']) {
+        expect(
+          findSearchMatches(text, 'cat', wholeWord: true),
+          hasLength(1),
+          reason: text,
+        );
+      }
+      expect(findSearchMatches('catécat', 'cat', wholeWord: true), isEmpty);
+      expect(findSearchMatches('猫猫', '猫', wholeWord: true), isEmpty);
+      expect(findSearchMatches('猫、犬', '猫', wholeWord: true), hasLength(1));
+      // An astral letter is word content too, read as one code point.
+      expect(findSearchMatches('𝒜cat', 'cat', wholeWord: true), isEmpty);
+    });
+
+    test('a match edge that is not a word character needs no boundary', () {
+      expect(findSearchMatches('a==b', '==', wholeWord: true), hasLength(1));
+      expect(findSearchMatches('cat ', 'cat ', wholeWord: true), hasLength(1));
+      expect(findSearchMatches('cat x', 'cat ', wholeWord: true), hasLength(1));
+      expect(findSearchMatches('concat x', 'cat ', wholeWord: true), isEmpty);
+    });
+
+    test('a rejected hit can hide a whole word that starts inside it', () {
+      expect(findSearchMatches('xab ab ab', 'ab ab', wholeWord: true), const [
+        TextMatch(start: 4, end: 9),
+      ]);
+    });
+
+    test('whole words page the same way in both directions', () {
+      for (final text in ['cat concat cat', 'cat_cat cat', 'aa aaa aa']) {
+        for (final query in ['cat', 'aa']) {
+          expect(
+            findSearchMatches(text, query, wholeWord: true, reverse: true),
+            findSearchMatches(text, query, wholeWord: true),
+            reason: 'reverse whole-word window of "$query" in "$text"',
+          );
+        }
+      }
+    });
+
+    test('whole words work with a case fold', () {
+      String fold(String value) => value.toLowerCase().replaceAll('ς', 'σ');
+      expect(
+        searchText(
+          'σοφος σοφοςx',
+          'ΣΟΦΟΣ',
+          wholeWord: true,
+          fold: fold,
+        ).matches,
+        const [TextMatch(start: 0, end: 5)],
+      );
+    });
+
     test('a reverse window over many matches takes linear time', () {
       // Evicting the oldest hit from the front of a list is O(limit) per
       // match: Find Previous from the first match of a 2 MB run of one

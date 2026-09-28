@@ -145,6 +145,7 @@ class EditorController extends ChangeNotifier {
   String? _invalidGoToLine;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
+  bool _wholeWord = false;
   CaseFolding _caseFolding = CaseFolding.exact;
   bool _updatingSearch = false;
   bool _updatingQuery = false;
@@ -196,6 +197,10 @@ class EditorController extends ChangeNotifier {
   bool get goToLineInputInvalid => _invalidGoToLine != null;
   bool get replaceOpen => _replaceOpen;
   bool get caseSensitive => _caseSensitive;
+
+  /// Whether find and Replace All skip hits that run on into a word, such as
+  /// `cat` inside `concat`.
+  bool get wholeWord => _wholeWord;
 
   /// True when the last case-insensitive search had to compare exactly
   /// because this text could not be lowercased without moving its offsets.
@@ -847,6 +852,13 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  void toggleWholeWord() {
+    _wholeWord = !_wholeWord;
+    _updateMatches(resetActive: true);
+    _revealRequest++;
+    _notify();
+  }
+
   void _queryChanged() {
     if (!_searchOpen ||
         _disposed ||
@@ -1009,6 +1021,7 @@ class EditorController extends ChangeNotifier {
       text.text,
       search.text,
       caseSensitive: _caseSensitive,
+      wholeWord: _wholeWord,
       fold: _fold,
       limit: limit,
       start: start,
@@ -1050,6 +1063,7 @@ class EditorController extends ChangeNotifier {
       source,
       search.text,
       caseSensitive: _caseSensitive,
+      wholeWord: _wholeWord,
       limit: source.length + 1,
       fold: _fold,
     );

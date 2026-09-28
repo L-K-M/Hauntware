@@ -134,6 +134,15 @@ void main() {
       isSemantics(isSelected: true, isButton: true),
     );
 
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(controller.wholeWord, isTrue);
+    expect(
+      tester.getSemantics(find.byTooltip('Whole words')),
+      isSemantics(isSelected: true, isButton: true),
+    );
+
     // Traverse previous, next, replace toggle, close, replacement, replace, all.
     for (var step = 0; step < 7; step++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -198,7 +207,8 @@ void main() {
     await tester.pumpAndSettle();
     final selection = controller.search.selection;
 
-    for (var step = 0; step < 4; step++) {
+    // Match case, whole words, previous, next, then the replace toggle.
+    for (var step = 0; step < 5; step++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     }
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);

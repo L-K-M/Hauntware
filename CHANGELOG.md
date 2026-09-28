@@ -58,6 +58,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Find Next and Find Previous reach every match in a large file: past the
   1,000 matches the find bar highlights, they page on, and the counter
   numbers each match within the whole document.
+- The find bar's Whole words toggle (`ab`) skips hits that run on into a
+  word, in find, paging and Replace All. Letters of any script are part of
+  a word; curly quotes, dashes, no-break spaces and emoji end one.
 - Every find and replace control can be reached with Tab and tells screen
   readers whether it is on, and on a narrow window the bar puts its
   controls under the field.

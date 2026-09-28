@@ -7,6 +7,7 @@ class EditorStrings {
 
   String get findHint => 'Find in file';
   String get matchCase => 'Match case';
+  String get wholeWords => 'Whole words';
   String get previousMatch => 'Previous match';
   String get nextMatch => 'Next match';
   String get closeSearch => 'Close search';

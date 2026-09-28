@@ -275,6 +275,7 @@ List<TextRange> findSearchMatches(
   String text,
   String query, {
   bool caseSensitive = false,
+  bool wholeWord = false,
   int limit = searchMatchLimit,
   CaseFolder fold = _defaultCaseFolder,
   int? start,
@@ -284,6 +285,7 @@ List<TextRange> findSearchMatches(
       text,
       query,
       caseSensitive: caseSensitive,
+      wholeWord: wholeWord,
       limit: limit,
       fold: fold,
       start: start,
@@ -319,6 +321,7 @@ SearchResult searchText(
   String text,
   String query, {
   bool caseSensitive = false,
+  bool wholeWord = false,
   int limit = searchMatchLimit,
   CaseFolder fold = _defaultCaseFolder,
   int? start,
@@ -328,6 +331,7 @@ SearchResult searchText(
     text,
     query,
     caseSensitive: caseSensitive,
+    wholeWord: wholeWord,
     limit: limit,
     fold: fold,
     start: start,

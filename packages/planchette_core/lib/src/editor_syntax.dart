@@ -1469,7 +1469,8 @@ final class SearchResult {
 typedef CaseFolder = String Function(String value);
 
 /// Substring search used by the editor's find bar, reporting how the case
-/// handling went. Capped at [limit] matches.
+/// handling went. Capped at [limit] matches. With [wholeWord], a hit counts
+/// only where no word character runs on across its edges.
 ///
 /// [start] is where the scan begins, and with [reverse] it is instead the
 /// exclusive upper bound: the window is the last [limit] matches before it,
@@ -1481,6 +1482,7 @@ SearchResult searchText(
   String text,
   String query, {
   bool caseSensitive = false,
+  bool wholeWord = false,
   int limit = searchMatchLimit,
   CaseFolder fold = _lowercase,
   int? start,
@@ -1525,6 +1527,19 @@ SearchResult searchText(
       precedingCount: reverse ? null : counted,
     );
   }
+  // One enumeration serves both directions and every option, so Find
+  // Previous can never offer an occurrence Find Next would not.
+  int next(int from) {
+    var at = haystack.indexOf(needle, from);
+    while (at >= 0 &&
+        wholeWord &&
+        !_isWholeWordMatch(text, at, at + needle.length)) {
+      // A rejected hit can hide a whole word that starts inside it.
+      at = haystack.indexOf(needle, at + 1);
+    }
+    return at;
+  }
+
   if (reverse) {
     // A sliding window over the forward enumeration. Scanning backwards with
     // lastIndexOf would instead report overlapping occurrences — 'aa' in
@@ -1535,9 +1550,9 @@ SearchResult searchText(
     final ring = List<int>.filled(limit, 0);
     var count = 0;
     for (
-      var at = haystack.indexOf(needle);
+      var at = next(0);
       at >= 0 && at < bound;
-      at = haystack.indexOf(needle, at + needle.length)
+      at = next(at + needle.length)
     ) {
       ring[count % limit] = at;
       count++;
@@ -1558,7 +1573,7 @@ SearchResult searchText(
   final matches = <TextMatch>[];
   var from = (start ?? 0).clamp(0, haystack.length);
   while (matches.length < limit) {
-    final at = haystack.indexOf(needle, from);
+    final at = next(from);
     if (at < 0) break;
     matches.add(TextMatch(start: at, end: at + needle.length));
     from = at + needle.length;
@@ -1579,6 +1594,7 @@ List<TextMatch> findSearchMatches(
   String text,
   String query, {
   bool caseSensitive = false,
+  bool wholeWord = false,
   int limit = searchMatchLimit,
   int? start,
   bool reverse = false,
@@ -1586,7 +1602,65 @@ List<TextMatch> findSearchMatches(
   text,
   query,
   caseSensitive: caseSensitive,
+  wholeWord: wholeWord,
   limit: limit,
   start: start,
   reverse: reverse,
 ).matches;
+
+/// Whether the match from [start] to [end] stands as whole words: no word
+/// character runs on across either edge. An edge only needs a boundary where
+/// the match's own character there is a word character, so `==` is found
+/// between `a` and `b` the way `\b==\b` finds it. Checked on the original
+/// text, whose offsets a length-preserving fold keeps.
+bool _isWholeWordMatch(String text, int start, int end) {
+  if (start > 0 &&
+      _isWordRune(_runeAt(text, start)) &&
+      _isWordRune(_runeBefore(text, start))) {
+    return false;
+  }
+  return end >= text.length ||
+      !_isWordRune(_runeBefore(text, end)) ||
+      !_isWordRune(_runeAt(text, end));
+}
+
+/// A word character is a letter, mark, number or connector punctuation such
+/// as `_`, read by code point: accented and CJK letters are word content,
+/// while curly quotes, dashes, no-break spaces, full-width punctuation and
+/// emoji are boundaries.
+bool _isWordRune(int rune) {
+  if (rune < 0x80) {
+    return (rune >= 0x30 && rune <= 0x39) ||
+        (rune >= 0x41 && rune <= 0x5a) ||
+        (rune >= 0x61 && rune <= 0x7a) ||
+        rune == 0x5f;
+  }
+  return _wordRune.hasMatch(String.fromCharCode(rune));
+}
+
+final _wordRune = RegExp(r'[\p{L}\p{M}\p{N}\p{Pc}]', unicode: true);
+
+int _runeAt(String text, int index) {
+  final unit = text.codeUnitAt(index);
+  if (_isHighSurrogate(unit) && index + 1 < text.length) {
+    final low = text.codeUnitAt(index + 1);
+    if (_isLowSurrogate(low)) return _combine(unit, low);
+  }
+  return unit;
+}
+
+int _runeBefore(String text, int index) {
+  final unit = text.codeUnitAt(index - 1);
+  if (_isLowSurrogate(unit) && index >= 2) {
+    final high = text.codeUnitAt(index - 2);
+    if (_isHighSurrogate(high)) return _combine(high, unit);
+  }
+  return unit;
+}
+
+int _combine(int high, int low) =>
+    0x10000 + ((high - 0xd800) << 10) + (low - 0xdc00);
+
+bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
+
+bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
