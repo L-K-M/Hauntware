@@ -104,6 +104,11 @@ final class DocumentWorkspace extends ChangeNotifier {
   final Map<String, Future<_OpenFailure?>> _opening = {};
   final Set<DocumentTab> _closingTabs = {};
   final Map<DocumentTab, Future<bool>> _saves = {};
+
+  /// Files whose tabs the user closed, most recent last, for Reopen Closed
+  /// Tab. Bounded so a long session does not keep every path it touched.
+  final List<String> _closedPaths = [];
+  static const _closedPathLimit = 20;
   int _nextId = 1;
   int _dialogCount = 0;
   Indentation? _indentationPreference;
@@ -343,6 +348,33 @@ final class DocumentWorkspace extends ChangeNotifier {
         _notify();
       }),
     );
+  }
+
+  /// Whether Reopen Closed Tab has a closed file that is not open again.
+  bool get canReopenClosed =>
+      !interactionLocked && _closedPaths.any((path) => _findPath(path) == null);
+
+  /// Reopens the most recently closed file. Entries opened again some other
+  /// way are skipped, so the command always brings back a closed tab.
+  Future<void> reopenClosed() async {
+    if (interactionLocked) return;
+    while (_closedPaths.isNotEmpty) {
+      final path = _closedPaths.removeLast();
+      if (_findPath(path) != null) continue;
+      _notify();
+      await open(path);
+      return;
+    }
+  }
+
+  void _rememberClosed(DocumentTab tab) {
+    final path = tab.path;
+    if (path == null) return;
+    final key = _pathKey(path);
+    _closedPaths
+      ..removeWhere((closed) => _pathKey(closed) == key)
+      ..add(path);
+    if (_closedPaths.length > _closedPathLimit) _closedPaths.removeAt(0);
   }
 
   Future<_OpenFailure?> _open(String path) async {
@@ -630,6 +662,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       // anymore, so its banner goes with it. Path-scoped and scope-less
       // errors are untouched.
       _clearScope(tab);
+      _rememberClosed(tab);
       _notify();
       return true;
     } finally {

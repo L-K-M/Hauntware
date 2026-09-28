@@ -509,6 +509,68 @@ void main() {
     });
   });
 
+  group('reopen closed tab', () {
+    setUp(() {
+      for (final name in ['one.txt', 'two.txt']) {
+        store.files[testPath(name)] = document(name, name);
+      }
+    });
+
+    Future<DocumentTab> openFile(String name) async {
+      await workspace.open(testPath(name));
+      return workspace.active!;
+    }
+
+    test('brings back the most recently closed file, newest first', () async {
+      expect(workspace.canReopenClosed, isFalse);
+      await workspace.closeTab(await openFile('one.txt'));
+      await workspace.closeTab(await openFile('two.txt'));
+      expect(workspace.documents, isEmpty);
+      expect(workspace.canReopenClosed, isTrue);
+
+      await workspace.reopenClosed();
+      expect(workspace.active!.path, testPath('two.txt'));
+      await workspace.reopenClosed();
+      expect(workspace.active!.path, testPath('one.txt'));
+      expect(workspace.documents, hasLength(2));
+      expect(workspace.canReopenClosed, isFalse);
+    });
+
+    test('skips a file that was opened again some other way', () async {
+      await workspace.closeTab(await openFile('one.txt'));
+      await workspace.closeTab(await openFile('two.txt'));
+      await openFile('two.txt');
+
+      await workspace.reopenClosed();
+      expect(workspace.documents.map((tab) => tab.path), [
+        testPath('two.txt'),
+        testPath('one.txt'),
+      ]);
+      expect(workspace.canReopenClosed, isFalse);
+    });
+
+    test('ignores untitled tabs and closes the user cancelled', () async {
+      final untitled = workspace.newDocument()!;
+      await workspace.closeTab(untitled);
+      final kept = await openFile('one.txt');
+      kept.editor.text.text = 'unsaved';
+      dialogs.choices.add(CloseChoice.cancel);
+      expect(await workspace.closeTab(kept), isFalse);
+
+      expect(workspace.canReopenClosed, isFalse);
+    });
+
+    test('reports a closed file that has since disappeared', () async {
+      await workspace.closeTab(await openFile('one.txt'));
+      store.files.remove(testPath('one.txt'));
+
+      await workspace.reopenClosed();
+      expect(workspace.documents, isEmpty);
+      expect(workspace.error, contains('one.txt'));
+      expect(workspace.canReopenClosed, isFalse);
+    });
+  });
+
   test('canceling Save As keeps a new document dirty and unnamed', () async {
     final tab = workspace.newDocument()!;
     tab.editor.text.text = 'keep me';
