@@ -18,9 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   them: the matching success retires only its own failure, so a retried save
   or open clears a stale banner while unrelated failures stay visible, and
   the banner announces itself to screen readers.
-- File Save All (`Ctrl+Alt+S` on Windows and Linux, `Cmd+Opt+S` on macOS)
-  writes every dirty document in one action and reports partial failures as a
-  single message naming what was written and what was not.
+- File Save All (`Cmd+Opt+S` on macOS; menu-only on Windows and Linux, where
+  Ctrl+Alt is AltGr on many layouts) writes every dirty document in one action
+  and reports partial failures as a single message naming what was written
+  and what was not.
 - Repo scaffolding: Dart pub workspace, `packages/planchette_core` package
   skeleton, CI/release/review workflows, build/release/package scripts, and
   the agent operating manual.
