@@ -7,11 +7,16 @@ TextStyle documentStyle(WidgetTester tester) => tester
     .widget<TextField>(find.byKey(const ValueKey('planchette.document')))
     .style!;
 
-Future<void> mount(WidgetTester tester, {TextStyle? style}) async {
+Future<void> mount(
+  WidgetTester tester, {
+  TextStyle? style,
+  ThemeData? theme,
+}) async {
   final c = EditorController(displayPath: 'a.txt', initialText: 'text');
   addTearDown(c.dispose);
   await tester.pumpWidget(
     MaterialApp(
+      theme: theme,
       home: Scaffold(
         body: style == null
             ? PlanchetteEditor(controller: c)
@@ -60,4 +65,34 @@ void main() {
     // The platform stack remains behind a host family that may be missing.
     expect(style.fontFamilyFallback, isNotEmpty);
   });
+
+  // Ported from #15.
+  testWidgets('a size-only host style keeps the platform family', (
+    tester,
+  ) async {
+    await mount(tester, style: const TextStyle(fontSize: 16));
+    final style = documentStyle(tester);
+    expect(style.fontFamily, 'Menlo');
+    expect(style.fontSize, 16);
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  testWidgets('the generic monospace name means the platform family', (
+    tester,
+  ) async {
+    // Hosts written for the old default pass the generic name, which only
+    // fontconfig and Android resolve.
+    for (final generic in ['monospace', 'Monospace']) {
+      await mount(tester, style: TextStyle(fontFamily: generic));
+      expect(documentStyle(tester).fontFamily, 'Menlo');
+      expect(documentStyle(tester).fontFamilyFallback, isNotEmpty);
+    }
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  testWidgets('the family follows the operating system, not the theme', (
+    tester,
+  ) async {
+    // Installed fonts belong to the OS; a theme may style another platform.
+    await mount(tester, theme: ThemeData(platform: TargetPlatform.android));
+    expect(documentStyle(tester).fontFamily, 'Menlo');
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 }

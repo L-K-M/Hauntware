@@ -53,6 +53,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and says what it takes when the input is not a number. The status bar
   also shows the selection's size and lines, the size the file has once
   saved, the indentation and the language.
+- View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
+  (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
 - A faint band marks the caret's line. It is on by default in the shared
   editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
   `Colors.transparent` to turn it off.
@@ -96,3 +98,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the gutter. Find reveals a match on its real row in large wrapped files.
 - On macOS, `Ctrl+F`, `Ctrl+H` and `Ctrl+G` keep their text-editing meaning
   instead of opening find, replace or Go to Line.
+- Documents use a monospace font on macOS (Menlo) and Windows (Cascadia
+  Mono, or Consolas where it is missing). The generic `monospace` name the
+  editor used to request resolves only on Linux and Android, so the text
+  fell back to the proportional system font. `PlanchetteEditor.textStyle`
+  now merges over the platform's family (`editorMonospaceFor`), and a host
+  passing the generic name gets that family too.

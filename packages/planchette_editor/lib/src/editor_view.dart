@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -43,7 +44,8 @@ class PlanchetteEditor extends StatefulWidget {
   final EditorStrings strings;
 
   /// Merged over the platform's monospace family ([editorMonospaceFor]), a
-  /// 14 px size and 1.35 line height. A `fontFamily` here is tried first;
+  /// 14 px size and 1.35 line height. A `fontFamily` here is tried first,
+  /// except the generic `monospace`, which selects the platform family;
   /// the platform stack stays as its fallback unless `fontFamilyFallback`
   /// is set too, so a missing host font still lands on a monospace face.
   final TextStyle textStyle;
@@ -82,9 +84,19 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
-  TextStyle get _style => editorMonospaceFor(
-    Theme.of(context).platform,
-  ).merge(const TextStyle(fontSize: 14, height: 1.35)).merge(widget.textStyle);
+  TextStyle get _style {
+    // Installed fonts follow the operating system, not a theme's platform.
+    final base = editorMonospaceFor(
+      defaultTargetPlatform,
+    ).merge(const TextStyle(fontSize: 14, height: 1.35));
+    final style = base.merge(widget.textStyle);
+    // Hosts written for the old default pass the generic name, which only
+    // fontconfig and Android resolve; it means the platform's own family.
+    return style.fontFamily?.toLowerCase() == 'monospace'
+        ? style.copyWith(fontFamily: base.fontFamily)
+        : style;
+  }
+
   bool get _locked => widget.editingLocked || c.editingLocked;
   bool get _apple => switch (Theme.of(context).platform) {
     TargetPlatform.macOS || TargetPlatform.iOS => true,
