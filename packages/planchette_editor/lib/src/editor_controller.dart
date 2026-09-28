@@ -83,15 +83,20 @@ class EditorController extends ChangeNotifier {
   /// switch restore a focused find field instead of always the document.
   /// Falls back to the document when the remembered node is detached —
   /// the find or replace field it belonged to may have closed.
-  FocusNode get focusTarget =>
+  FocusNode get _focusTarget =>
       _focusMemory?.context != null ? _focusMemory! : editorFocus;
 
-  /// Restores [focusTarget] after the frame's focus bookkeeping settles.
-  /// A same-frame `unfocus` marks the enclosing scope for focus and would
+  /// Focuses the field that last had focus in this editor (the document, or
+  /// an open find or replace field), for a host showing this editor again.
+  ///
+  /// The request runs after the current frame's focus bookkeeping: a
+  /// same-frame `unfocus` marks the enclosing scope for focus and would
   /// overwrite a request issued right now — last mark wins.
   void restoreFocus() {
-    final target = focusTarget;
-    scheduleMicrotask(target.requestFocus);
+    final target = _focusTarget;
+    scheduleMicrotask(() {
+      if (!_disposed) target.requestFocus();
+    });
   }
 
   TextDocument? _document;
