@@ -81,18 +81,26 @@ class _TabStripState extends State<TabStrip> {
     final ids = {for (final tab in widget.tabs) tab.id};
     _keys.removeWhere((id, _) => !ids.contains(id));
     if (oldWidget.activeId != widget.activeId ||
-        oldWidget.tabs.length != widget.tabs.length ||
-        _activeName(oldWidget) != _activeName(widget)) {
+        oldWidget.busy != widget.busy ||
+        !_sameLayout(oldWidget.tabs, widget.tabs)) {
       _revealActiveAfterFrame();
     }
   }
 
-  /// A renamed tab, after Save As, can grow past the strip's edge.
-  static String? _activeName(TabStrip strip) {
-    for (final tab in strip.tabs) {
-      if (tab.id == strip.activeId) return tab.name;
+  /// Whether the tabs lay out as before. A renamed tab, active or not, moves
+  /// the tabs after it, and the save spinner narrows the strip, either of
+  /// which can push the active tab past the edge; a pulsing tab asks to be
+  /// seen.
+  static bool _sameLayout(List<TabStripItem> before, List<TabStripItem> now) {
+    if (before.length != now.length) return false;
+    for (var i = 0; i < now.length; i++) {
+      if (before[i].id != now[i].id ||
+          before[i].name != now[i].name ||
+          before[i].flashRequest != now[i].flashRequest) {
+        return false;
+      }
     }
-    return null;
+    return true;
   }
 
   double? _revealedWidth;
