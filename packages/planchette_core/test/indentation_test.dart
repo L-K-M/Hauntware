@@ -262,4 +262,28 @@ void main() {
       expect(outdent(']    a\n    b['), ']a\nb[');
     });
   });
+
+  group('review fixes', () {
+    test('Tab on a whole CRLF line indents it instead of replacing it', () {
+      const spaces = Indentation.spaces(4);
+      expect(indentLines('abc\r\ndef', 0, 3, spaces).text, '    abc\r\ndef');
+      expect(indentLines('a\r\nb', 0, 4, spaces).text, '    a\r\n    b');
+    });
+
+    test('Enter on an indentation-only CRLF line keeps its CR', () {
+      final edit = insertIndentedNewline(
+        '    \r\nx',
+        4,
+        4,
+        const Indentation.spaces(4),
+      );
+      expect(edit.text, '\n    \r\nx');
+      expect(edit.selectionBase, 5);
+    });
+
+    test('an indentation level is at least one column wide', () {
+      expect(() => Indentation.spaces(0), throwsA(isA<AssertionError>()));
+      expect(() => Indentation.tabs(width: 0), throwsA(isA<AssertionError>()));
+    });
+  });
 }
