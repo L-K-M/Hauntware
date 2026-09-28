@@ -30,7 +30,7 @@ void main() {
     expect(html, contains('.k{color:#8a3fa8}'));
     expect(html, contains('.s{color:green}'));
     expect(html, isNot(contains('.c{')));
-    expect(html, contains('background:#fffaf0'));
+    expect(html, contains('background-color:#fffaf0'));
   });
 
   test('escapes markup in the text and the title', () {
@@ -104,5 +104,21 @@ void main() {
         tokens: {},
       ),
     );
+  });
+
+  test('a page background can only be a colour', () {
+    // The colour pattern admits url(...), and the background shorthand
+    // would fetch it; background-color ignores anything but a colour.
+    final html = highlightedHtml(
+      text: 'a',
+      tokens: const [],
+      palette: const HtmlPalette(
+        background: 'url(//example.com/x)',
+        foreground: '#000',
+        tokens: {},
+      ),
+    );
+    expect(html, contains('background-color:url(//example.com/x)'));
+    expect(html, isNot(contains(';background:')));
   });
 }

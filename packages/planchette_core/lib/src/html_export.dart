@@ -44,7 +44,7 @@ String highlightedHtml({
     ..writeln('<title>${_escape(title)}</title>')
     ..writeln('<style>')
     ..writeln(
-      'body{margin:0;background:${palette.background};'
+      'body{margin:0;background-color:${palette.background};'
       'color:${palette.foreground}}',
     )
     ..writeln(
