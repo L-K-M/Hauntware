@@ -1403,9 +1403,15 @@ enum CaseFolding {
   /// original text.
   exact,
 
-  /// Lowercasing changed the text's length, so offsets into the folded text
-  /// would not address the original. The search compared case-sensitively
-  /// instead, which finds fewer matches than the user asked for, and says so.
+  /// Lowercasing changed the *document's* length, so offsets into the folded
+  /// text would not address the original. The search compared
+  /// case-sensitively instead, which finds fewer matches than the user asked
+  /// for, and says so.
+  ///
+  /// The query's own length is irrelevant here. A match spans whatever the
+  /// folded document holds at that offset, which is what case-insensitive
+  /// matching means: `Straße` may match `strasse` because the two are case
+  /// equivalents, not because they are the same string.
   lengthChanging,
 }
 
@@ -1421,10 +1427,29 @@ final class SearchResult {
   bool get caseFoldedExactly => caseFolding == CaseFolding.exact;
 }
 
-/// Lowercases one side of a case-insensitive comparison. Injectable so the
-/// [CaseFolding.lengthChanging] path can be exercised: Dart's `toLowerCase`
-/// preserves length for every code point today, which leaves the guard in
-/// [searchText] defensive and otherwise untestable.
+/// Folds one side of a case-insensitive comparison.
+///
+/// A fold that preserves the document's length — and is *index-wise*, its
+/// output character at position *i* standing for the input character at *i* —
+/// is applied as-is, and can fix case differences [String.toLowerCase] misses
+/// while keeping match offsets valid: Greek final sigma (`toLowerCase` maps `Σ`
+/// to `σ` and never to the final `ς` a Greek word actually ends with), a
+/// locale's dotted and dotless i, canonical Cherokee forms.
+///
+/// Both halves are required. Length alone is not enough: a length-preserving
+/// fold that is not index-wise — one that reorders characters, say — would
+/// satisfy the length check and return confidently wrong ranges. Depending on
+/// surrounding context is fine, so long as output position *i* still stands
+/// for input *i*: Unicode's final-sigma rule (σ → ς at a word's end) is
+/// exactly such a fold, and it is the one worth having. Injectable so the
+/// guarded paths are testable at all.
+///
+/// A fold that *changes* the length cannot be used on a document: matches are
+/// located in the folded text, so their offsets would address the wrong
+/// characters. [searchText] then compares exactly and reports
+/// [CaseFolding.lengthChanging]. Expanding `ß` to `ss`, which is what Unicode
+/// *full* case folding does, therefore needs a folded-offset map rather than
+/// a different fold — see ANALYSIS.md B35.
 typedef CaseFolder = String Function(String value);
 
 /// Substring search used by the editor's find bar, reporting how the case
@@ -1443,11 +1468,13 @@ SearchResult searchText(
   var needle = query;
   var caseFolding = CaseFolding.exact;
   if (!caseSensitive) {
+    // Only the haystack's length matters: a match is located in the folded
+    // document and spans what is there, so its offsets address the original
+    // exactly when the fold preserved the document's length.
     final lowered = fold(text);
-    final loweredNeedle = fold(query);
-    if (lowered.length == text.length && loweredNeedle.length == query.length) {
+    if (lowered.length == text.length) {
       haystack = lowered;
-      needle = loweredNeedle;
+      needle = fold(query);
     } else {
       caseFolding = CaseFolding.lengthChanging;
     }

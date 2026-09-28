@@ -484,7 +484,9 @@ void main() {
       }
     });
 
-    test('a length-changing fold is reported and matched exactly', () {
+    // The document side of the guard. Paired with 'a length-changing query is
+    // still folded' below, which is the side that must NOT report limited.
+    test('a length-changing document is reported and matched exactly', () {
       // ß uppercases to "SS", which is what a full case fold would expand it
       // to. Dart's toLowerCase does not do that, so the fold is injected to
       // reach the path a host with its own folding table would take.
@@ -506,22 +508,39 @@ void main() {
         'Die Straße',
         'STRASSE',
         caseSensitive: true,
-        fold: (value) => value.replaceAll('ß', 'ss'),
+        fold: (value) => value.toLowerCase().replaceAll('ß', 'ss'),
       );
       expect(result.caseFolding, CaseFolding.exact);
       expect(result.matches, isEmpty);
     });
 
-    test('a length-changing needle is reported too', () {
+    test('a length-changing query is still folded', () {
+      // Only the document's length decides whether offsets stay valid. A
+      // query whose fold is longer matches the longer region the document
+      // actually has, which is what case-insensitive matching means: `Straße`
+      // and `strasse` are case equivalents, not the same string.
       final result = searchText(
-        'plain text',
-        'PLAIN',
-        fold: (value) {
-          if (value == 'PLAIN') return 'plaiin';
-          return value;
-        },
+        'die strasse',
+        'Straße',
+        fold: (value) => value.toLowerCase().replaceAll('ß', 'ss'),
       );
-      expect(result.caseFolding, CaseFolding.lengthChanging);
+      expect(result.caseFolding, CaseFolding.exact);
+      expect(result.matches, [const TextMatch(start: 4, end: 11)]);
+    });
+
+    test('a length-preserving fold fixes what toLowerCase misses', () {
+      // Greek words end in the final sigma, which `toLowerCase` never
+      // produces: it maps capital sigma to plain sigma unconditionally.
+      const text = 'η σοφος';
+      expect(findSearchMatches(text, 'ΣΟΦΟΣ'), isEmpty);
+      expect(
+        searchText(
+          text,
+          'ΣΟΦΟΣ',
+          fold: (value) => value.toLowerCase().replaceAll('ς', 'σ'),
+        ).matches,
+        [const TextMatch(start: 2, end: 7)],
+      );
     });
   });
 
