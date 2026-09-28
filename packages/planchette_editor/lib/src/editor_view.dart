@@ -234,7 +234,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         children: [
           if (widget.banner != null) widget.banner!,
           if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
-          Expanded(child: _decorated(context, _lineCommands(context, _body()))),
+          Expanded(
+            child: _decorated(
+              context,
+              _lineCommands(context, _bracketCommands(context, _body())),
+            ),
+          ),
           if (widget.showStatus && !c.isLoading && c.error == null) ...[
             const Divider(height: 1),
             SafeArea(
@@ -626,6 +631,43 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     };
   }
 
+  /// Go to Matching Bracket, bound around the document field only so the
+  /// find fields keep their own keys.
+  Widget _bracketCommands(BuildContext context, Widget document) {
+    final apple = switch (Theme.of(context).platform) {
+      TargetPlatform.iOS || TargetPlatform.macOS => true,
+      _ => false,
+    };
+    return Shortcuts(
+      shortcuts: apple ? _appleBracketShortcuts : _bracketShortcuts,
+      child: Actions(actions: _bracketActions, child: document),
+    );
+  }
+
+  // Built once: a new map or action on every keystroke's rebuild would make
+  // the shortcut manager re-index and the actions notify their dependents.
+  late final Map<Type, Action<Intent>> _bracketActions = {
+    _BracketJumpIntent: _BracketJumpAction(() => c),
+  };
+  static final _appleBracketShortcuts = _bracketJumpShortcuts(apple: true);
+  static final _bracketShortcuts = _bracketJumpShortcuts(apple: false);
+
+  /// Command+B on Apple platforms and Control+B elsewhere; Shift selects.
+  static Map<ShortcutActivator, Intent> _bracketJumpShortcuts({
+    required bool apple,
+  }) => {
+    SingleActivator(LogicalKeyboardKey.keyB, meta: apple, control: !apple):
+        const _BracketJumpIntent(extend: false),
+    SingleActivator(
+      LogicalKeyboardKey.keyB,
+      meta: apple,
+      control: !apple,
+      shift: true,
+    ): const _BracketJumpIntent(
+      extend: true,
+    ),
+  };
+
   bool _composing() => c.text.value.composing.isValid;
 
   double _measureGutter(TextScaler scaler) {
@@ -984,4 +1026,26 @@ class _LineCommandAction extends Action<_LineCommandIntent> {
       _LineCommand.join => controller.joinLines(),
     };
   }
+}
+
+class _BracketJumpIntent extends Intent {
+  const _BracketJumpIntent({required this.extend});
+  final bool extend;
+}
+
+/// Runs Go to Matching Bracket. While the caret cannot move (loading, or an
+/// input method composing) the key is left to the text field. With nowhere
+/// to jump, the key is still consumed rather than reaching an unrelated
+/// binding.
+class _BracketJumpAction extends Action<_BracketJumpIntent> {
+  // Read on each use, since the view can be handed another controller.
+  _BracketJumpAction(this._controller);
+  final EditorController Function() _controller;
+
+  @override
+  bool isEnabled(_BracketJumpIntent intent) => _controller().canMoveCaret;
+
+  @override
+  bool invoke(_BracketJumpIntent intent) =>
+      _controller().goToMatchingBracket(extend: intent.extend);
 }

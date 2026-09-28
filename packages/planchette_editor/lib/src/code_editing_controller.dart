@@ -140,9 +140,15 @@ class CodeEditingController extends TextEditingController {
     notifyListeners();
   }
 
-  List<SyntaxToken> _tokensFor(String text) {
+  /// The syntax tokens of the whole text, for a command that must tell code
+  /// from strings and comments. Past [syntaxHighlightingMaxChars] the text is
+  /// not painted in colour, but one command can still afford one scan.
+  List<SyntaxToken> get syntaxTokens => _tokensFor(text, capped: false);
+
+  List<SyntaxToken> _tokensFor(String text, {bool capped = true}) {
     final language = this.language;
-    if (language == null || text.length > syntaxHighlightingMaxChars) {
+    if (language == null ||
+        (capped && text.length > syntaxHighlightingMaxChars)) {
       return const [];
     }
     if (!identical(_tokenizedText, text) ||

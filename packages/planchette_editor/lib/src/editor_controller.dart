@@ -127,6 +127,7 @@ class EditorController extends ChangeNotifier {
   int _revision = 0;
   int _revealRequest = 0;
   int _caretRevealRequest = 0;
+  ({String text, int offset, int bracket})? _lastBracketJump;
   String _lastText = '';
   String? _lastQuery;
   String _languageProbe = '';
@@ -308,6 +309,15 @@ class EditorController extends ChangeNotifier {
       text.selection.isValid &&
       !text.value.composing.isValid;
 
+  /// Whether a command may move the caret now: not while the document loads
+  /// or failed to load, and not while an input method composes. Moving the
+  /// caret is not an edit, so a locked document allows it.
+  bool get canMoveCaret =>
+      !_loading &&
+      _error == null &&
+      text.selection.isValid &&
+      !text.value.composing.isValid;
+
   /// Copies the selected lines, or the caret's line, below themselves.
   bool duplicateLines() => _applyLineEdit(core.duplicateLines);
 
@@ -342,6 +352,37 @@ class EditorController extends ChangeNotifier {
         extentOffset: edit.selectionExtent,
       ),
     );
+    return true;
+  }
+
+  /// Moves the caret to the partner of the bracket beside it, on the same
+  /// side, so a second jump returns; away from a bracket, to the closing
+  /// bracket around it. With [extend] the other end of the selection stays.
+  /// Returns false when there is nowhere to go.
+  bool goToMatchingBracket({bool extend = false}) {
+    if (!canMoveCaret) return false;
+    final source = text.text;
+    final selection = text.selection;
+    final caret = selection.extentOffset;
+    final last = _lastBracketJump;
+    final jump = bracketJump(
+      source,
+      caret,
+      text.syntaxTokens,
+      preferred: last != null && last.text == source && last.offset == caret
+          ? last.bracket
+          : null,
+    );
+    if (jump == null) return false;
+    _lastBracketJump = (
+      text: source,
+      offset: jump.offset,
+      bracket: jump.bracket,
+    );
+    _caretRevealRequest++;
+    text.selection = extend
+        ? selection.extendTo(TextPosition(offset: jump.offset))
+        : TextSelection.collapsed(offset: jump.offset);
     return true;
   }
 
