@@ -333,128 +333,118 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: c.search,
-                  focusNode: c.searchFocus,
-                  autofocus: true,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  style: theme.textTheme.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: strings.findHint,
-                    isDense: true,
-                    border: InputBorder.none,
-                  ),
-                  onSubmitted: (_) {
-                    if (HardwareKeyboard.instance.isShiftPressed) {
-                      c.previousMatch();
-                    } else {
-                      c.nextMatch();
-                    }
-                    c.searchFocus.requestFocus();
-                  },
-                ),
+          _searchRow(
+            field: TextField(
+              controller: c.search,
+              focusNode: c.searchFocus,
+              autofocus: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              style: theme.textTheme.bodyMedium,
+              decoration: InputDecoration(
+                hintText: strings.findHint,
+                isDense: true,
+                border: InputBorder.none,
               ),
-              ExcludeFocus(
-                child: Row(
-                  children: [
-                    if (counter.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(counter, style: theme.textTheme.labelSmall),
-                      ),
-                    if (c.caseFoldingLimited)
-                      Tooltip(
-                        message: strings.caseFoldLimited,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Icon(
-                            Icons.info_outline,
-                            size: 16,
-                            color: theme.colorScheme.tertiary,
-                          ),
-                        ),
-                      ),
-                    IconButton(
-                      tooltip: strings.matchCase,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.toggleCaseSensitive,
-                      icon: Text(
-                        'Aa',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: c.caseSensitive
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: strings.previousMatch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.matches.isEmpty ? null : c.previousMatch,
-                      icon: const Icon(Icons.keyboard_arrow_up),
-                    ),
-                    IconButton(
-                      tooltip: strings.nextMatch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.matches.isEmpty ? null : c.nextMatch,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                    ),
-                    IconButton(
-                      tooltip: strings.showReplace,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.toggleReplace,
-                      icon: const Icon(Icons.find_replace),
-                    ),
-                    IconButton(
-                      tooltip: strings.closeSearch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.closeSearch,
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
+              onSubmitted: (_) {
+                if (HardwareKeyboard.instance.isShiftPressed) {
+                  c.previousMatch();
+                } else {
+                  c.nextMatch();
+                }
+                c.searchFocus.requestFocus();
+              },
+            ),
+            controls: [
+              if (counter.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(counter, style: theme.textTheme.labelSmall),
                 ),
+              if (c.caseFoldingLimited)
+                Tooltip(
+                  message: strings.caseFoldLimited,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: theme.colorScheme.tertiary,
+                    ),
+                  ),
+                ),
+              Wrap(
+                children: [
+                  IconButton(
+                    isSelected: c.caseSensitive,
+                    tooltip: strings.matchCase,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.toggleCaseSensitive,
+                    icon: Text(
+                      'Aa',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: c.caseSensitive
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: strings.previousMatch,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.matches.isEmpty ? null : c.previousMatch,
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                  ),
+                  IconButton(
+                    tooltip: strings.nextMatch,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.matches.isEmpty ? null : c.nextMatch,
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                  ),
+                  IconButton(
+                    isSelected: c.replaceOpen,
+                    tooltip: strings.showReplace,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.toggleReplace,
+                    icon: const Icon(Icons.find_replace),
+                  ),
+                  IconButton(
+                    tooltip: strings.closeSearch,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.closeSearch,
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
               ),
             ],
           ),
           if (c.replaceOpen)
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: c.replacement,
-                    focusNode: c.replacementFocus,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: InputDecoration(
-                      hintText: strings.replaceHint,
-                      isDense: true,
-                      border: InputBorder.none,
-                    ),
-                    onSubmitted: (_) => c.replaceCurrent(),
-                  ),
+            _searchRow(
+              field: TextField(
+                controller: c.replacement,
+                focusNode: c.replacementFocus,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  hintText: strings.replaceHint,
+                  isDense: true,
+                  border: InputBorder.none,
                 ),
-                ExcludeFocus(
-                  child: Row(
-                    children: [
-                      TextButton(
-                        onPressed: _locked || c.isBusy || c.matches.isEmpty
-                            ? null
-                            : c.replaceCurrent,
-                        child: Text(strings.replace),
-                      ),
-                      TextButton(
-                        onPressed: _locked || c.isBusy || c.matches.isEmpty
-                            ? null
-                            : c.replaceAll,
-                        child: Text(strings.replaceAll),
-                      ),
-                    ],
-                  ),
+                onSubmitted: (_) => c.replaceCurrent(),
+              ),
+              controls: [
+                TextButton(
+                  onPressed: _locked || c.isBusy || c.matches.isEmpty
+                      ? null
+                      : c.replaceCurrent,
+                  child: Text(strings.replace),
+                ),
+                TextButton(
+                  onPressed: _locked || c.isBusy || c.matches.isEmpty
+                      ? null
+                      : c.replaceAll,
+                  child: Text(strings.replaceAll),
                 ),
               ],
             ),
@@ -462,6 +452,38 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       ),
     );
   }
+
+  Widget _searchRow({
+    required Widget field,
+    required List<Widget> controls,
+  }) => LayoutBuilder(
+    builder: (context, constraints) {
+      const inlineWidth = 600.0;
+      final fontSize = Theme.of(context).textTheme.bodyMedium!.fontSize!;
+      final textScale =
+          MediaQuery.textScalerOf(context).scale(fontSize) / fontSize;
+      final inline = constraints.maxWidth >= inlineWidth * textScale;
+      final actions = Wrap(
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: controls,
+      );
+
+      // Stack narrow layouts without replacing field elements, preserving the
+      // input connection and composition while resizing. Long labels wrap.
+      return Flex(
+        direction: inline ? Axis.horizontal : Axis.vertical,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: inline
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: inline ? 1 : 0, child: field),
+          Expanded(flex: inline ? 1 : 0, child: actions),
+        ],
+      );
+    },
+  );
 
   Widget _goToLineBar(BuildContext context) {
     final strings = widget.strings;
