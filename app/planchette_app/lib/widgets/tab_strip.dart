@@ -377,8 +377,19 @@ class _TabState extends State<_Tab> {
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: widget.enabled ? widget.onSelect : null,
-              // A middle click closes on release, like any click.
-              onTertiaryTapUp: canClose ? (_) => widget.onClose() : null,
+              // A middle click closes on release, like any click, and only
+              // on this tab: the tap slop would accept a release beside it.
+              onTertiaryTapUp: canClose
+                  ? (details) {
+                      final size = context.size;
+                      if (size != null &&
+                          (Offset.zero & size).contains(
+                            details.localPosition,
+                          )) {
+                        widget.onClose();
+                      }
+                    }
+                  : null,
               onSecondaryTapUp: switch (widget.onContextMenu) {
                 final menu? when widget.enabled => (details) => menu(
                   details.globalPosition,
