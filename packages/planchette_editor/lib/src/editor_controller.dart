@@ -606,11 +606,12 @@ class EditorController extends ChangeNotifier {
   void _textChanged() {
     if (_updatingSearch || _disposed) return;
     if (text.text != _lastText) {
+      final before = _lastText;
       _lastText = text.text;
       _revision++;
       _refreshLanguage();
       _detectIndentation();
-      if (_searchOpen) _updateMatches(resetActive: false);
+      if (_searchOpen) _followEdit(before);
     }
     _notify();
   }
@@ -898,7 +899,7 @@ class EditorController extends ChangeNotifier {
     _lastQuery = search.text;
     if (_searchOpen) {
       // Stay on the user's page: a new query or a replacement starts from
-      // the caret, and an edit keeps the page that was showing.
+      // the caret.
       final caret = text.selection.isValid ? text.selection.start : 0;
       _showPageAt(
         resetActive || _matches.isEmpty ? caret : _matches.first.start,
@@ -916,6 +917,45 @@ class EditorController extends ChangeNotifier {
       final index = _matches.indexWhere((match) => match.start >= caret);
       _activeMatch = index < 0 ? 0 : index;
     }
+    _updatingSearch = true;
+    try {
+      text.setSearchMatches(_matches, _activeMatch);
+    } finally {
+      _updatingSearch = false;
+    }
+  }
+
+  /// Searches again after an edit without moving the user: the page and the
+  /// active match are found again at their offsets carried through the edit,
+  /// so typing anywhere keeps the find bar on the same occurrence.
+  void _followEdit(String before) {
+    if (_matches.isEmpty ||
+        _activeMatch < 0 ||
+        _activeMatch >= _matches.length) {
+      _updateMatches(resetActive: false);
+      return;
+    }
+    _lastQuery = search.text;
+    final edit = _Edit.between(before, text.text);
+    final active = edit.map(_matches[_activeMatch].start);
+    if (_matchOffset == 0) {
+      _showPage(_page(), offset: 0);
+    } else {
+      _showPageFrom(edit.map(_matches.first.start));
+    }
+    // Matches added earlier on the page can push the active one past it.
+    if (_matches.isEmpty ||
+        (_matchesMayContinue && _matches.last.start < active)) {
+      _showPageFrom(active);
+    }
+    final index = _matches.indexWhere((match) => match.start >= active);
+    // With the active occurrence gone and nothing after it, the nearest
+    // earlier match takes its place.
+    _activeMatch = _matches.isEmpty
+        ? -1
+        : index < 0
+        ? _matches.length - 1
+        : index;
     _updatingSearch = true;
     try {
       text.setSearchMatches(_matches, _activeMatch);
@@ -1013,24 +1053,41 @@ class EditorController extends ChangeNotifier {
   /// Shows the first page of matches, unless [anchor] lies past it: then the
   /// page that starts with the first match at or after [anchor].
   void _showPageAt(int anchor) {
-    var page = _page();
-    var offset = 0;
-    if (page.matches.length >= searchMatchLimit &&
-        page.matches.last.start < anchor) {
-      // Some match starts before the anchor, so this finds the last one.
-      final before = _page(start: anchor, reverse: true, limit: 1);
-      final after = _page(start: before.matches.last.end);
-      if (after.matches.isNotEmpty) {
-        page = after;
-        offset = before.precedingCount! + 1;
+    final first = _page();
+    if (first.matches.length >= searchMatchLimit &&
+        first.matches.last.start < anchor) {
+      final later = _pageFrom(anchor);
+      if (later.page.matches.isNotEmpty) {
+        _showPage(later.page, offset: later.offset);
+        return;
       }
     }
-    _adoptPage(
-      page.matches,
-      offset: offset,
-      mayContinue: page.matches.length >= searchMatchLimit,
+    _showPage(first, offset: 0);
+  }
+
+  /// The page that starts with the first match at or after [anchor]. It
+  /// continues the enumeration after the last match before the anchor, so it
+  /// never overlaps the page before it, and [offset] counts the matches
+  /// before it.
+  ({SearchResult page, int offset}) _pageFrom(int anchor) {
+    final before = _page(start: anchor, reverse: true, limit: 1);
+    if (before.matches.isEmpty) return (page: _page(), offset: 0);
+    return (
+      page: _page(start: before.matches.last.end),
+      offset: before.precedingCount! + 1,
     );
   }
+
+  void _showPageFrom(int anchor) {
+    final later = _pageFrom(anchor);
+    _showPage(later.page, offset: later.offset);
+  }
+
+  void _showPage(SearchResult page, {required int offset}) => _adoptPage(
+    page.matches,
+    offset: offset,
+    mayContinue: page.matches.length >= searchMatchLimit,
+  );
 
   void _pageForward() {
     // Matches at or after the end of this page, or the first page again when
@@ -1171,3 +1228,45 @@ class EditorController extends ChangeNotifier {
 bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
 
 bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
+
+/// Where one edit changed the text, found by comparing it before and after:
+/// the unchanged runs at both ends are the prefix and suffix, and the rest
+/// is what the edit replaced. Lets offsets from before the edit be carried
+/// to where the same text sits after it.
+final class _Edit {
+  _Edit._(this._start, this._end, this._delta);
+
+  factory _Edit.between(String before, String after) {
+    final shorter = before.length < after.length ? before.length : after.length;
+    var prefix = 0;
+    while (prefix < shorter &&
+        before.codeUnitAt(prefix) == after.codeUnitAt(prefix)) {
+      prefix++;
+    }
+    var suffix = 0;
+    while (suffix < shorter - prefix &&
+        before.codeUnitAt(before.length - 1 - suffix) ==
+            after.codeUnitAt(after.length - 1 - suffix)) {
+      suffix++;
+    }
+    return _Edit._(
+      prefix,
+      before.length - suffix,
+      after.length - before.length,
+    );
+  }
+
+  /// The replaced run in the text before the edit.
+  final int _start;
+  final int _end;
+  final int _delta;
+
+  /// [offset], from the text before the edit, in the text after it. Text
+  /// typed at the offset lands before it; an offset inside the replaced run
+  /// moves to the end of what replaced it.
+  int map(int offset) {
+    if (offset >= _end) return offset + _delta;
+    if (offset <= _start) return offset;
+    return _end + _delta;
+  }
+}
