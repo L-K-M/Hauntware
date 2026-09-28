@@ -510,11 +510,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                       enabled: () => !_locked,
                       run: c.indent,
                       heldWhileComposing: _composing,
+                      keepsKey: true,
                     ),
                     _OutdentIntent: _EditAction<_OutdentIntent>(
                       enabled: () => !_locked,
                       run: c.outdent,
                       heldWhileComposing: _composing,
+                      keepsKey: true,
                     ),
                     _NewlineIntent: _EditAction<_NewlineIntent>(
                       enabled: () => !_locked,
@@ -668,6 +670,7 @@ final class _EditAction<T extends Intent> extends Action<T> {
     required this.enabled,
     required this.run,
     this.heldWhileComposing,
+    this.keepsKey = false,
   });
 
   final bool Function() enabled;
@@ -677,6 +680,12 @@ final class _EditAction<T extends Intent> extends Action<T> {
   /// the edit must not let focus traversal take the key and pull focus out of
   /// the document mid-composition, so the key goes on to the platform.
   final bool Function()? heldWhileComposing;
+
+  /// For Tab and Shift+Tab, which the document claims in indent mode: an
+  /// edit with nothing to change, such as Shift+Tab on an unindented line,
+  /// still keeps the key, or focus traversal would carry focus out of the
+  /// document.
+  final bool keepsKey;
 
   @override
   bool isEnabled(T intent) => enabled();
@@ -690,7 +699,7 @@ final class _EditAction<T extends Intent> extends Action<T> {
     if (heldWhileComposing?.call() ?? false) {
       return KeyEventResult.skipRemainingHandlers;
     }
-    return KeyEventResult.ignored;
+    return keepsKey ? KeyEventResult.handled : KeyEventResult.ignored;
   }
 }
 
