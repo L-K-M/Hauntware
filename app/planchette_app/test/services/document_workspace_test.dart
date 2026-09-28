@@ -665,6 +665,53 @@ void main() {
       expect(workspace.error, contains('open in a tab'));
       expect(store.writes, isEmpty);
     });
+
+    test('review fix: a failed export retires when the export works', () async {
+      // Export failures set the banner outside the error scopes, so a later
+      // export that worked left the old failure up.
+      store.writeFailures[testPath('out.html')] = const FileSystemException(
+        'Disk full',
+      );
+      dialogs.savePath = testPath('out.html');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(workspace.error, contains('Could not export main.dart'));
+
+      store.writeFailures.clear();
+      expect(await workspace.exportHtml(tab, palette), isTrue);
+      expect(workspace.error, isNull);
+    });
+
+    test('review fix: an export failure outlives an unrelated save', () async {
+      store.files[testPath('one.txt')] = document('one.txt', 'disk');
+      await workspace.open(testPath('one.txt'));
+      final other = workspace.active!..editor.text.text = 'edited';
+      store.writeFailures[testPath('one.txt')] = const FileSystemException(
+        'Disk full',
+      );
+      expect(await workspace.save(other), isFalse);
+
+      dialogs.savePath = testPath('main.dart');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(workspace.error, contains('open in a tab'));
+      store.writeFailures.clear();
+      expect(await workspace.save(other), isTrue);
+      expect(workspace.error, contains('open in a tab'));
+    });
+
+    test('review fix: exporting over a read-only file asks first', () async {
+      store.files[testPath('locked.html')] = document('locked.html', 'keep');
+      store.writeProtected.add(testPath('locked.html'));
+      dialogs.savePath = testPath('locked.html');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(dialogs.readOnlyAsked, ['locked.html']);
+      expect(store.files[testPath('locked.html')]!.text, 'keep');
+
+      // Save Anyway has agreed to replace it; Replace is not asked again.
+      dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAnyway);
+      expect(await workspace.exportHtml(tab, palette), isTrue);
+      expect(dialogs.replaceAsked, isEmpty);
+      expect(store.files[testPath('locked.html')]!.text, contains('<html'));
+    });
   });
 
   group('reopen closed tab', () {

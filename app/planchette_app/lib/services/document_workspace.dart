@@ -710,21 +710,38 @@ final class DocumentWorkspace extends ChangeNotifier {
         tab.editor.error != null) {
       return false;
     }
+    final scope = _exportScope(tab);
     try {
-      final selected = await _dialog(
-        () => dialogs.pickSavePath('${tab.path ?? tab.name}.html'),
-      );
-      if (selected == null) return false;
-      final target = await store.canonicalSavePath(selected);
-      final open = _findPath(target);
-      if (open != null) {
-        _error = '${open.name} is open in a tab. Export to another file.';
-        return false;
-      }
-      final digest = await store.existingDigest(target);
-      if (digest != null &&
-          !await _dialog(() => dialogs.confirmReplace(target))) {
-        return false;
+      String target;
+      String? digest;
+      while (true) {
+        final selected = await _dialog(
+          () => dialogs.pickSavePath('${tab.path ?? tab.name}.html'),
+        );
+        if (selected == null) return false;
+        target = await store.canonicalSavePath(selected);
+        final open = _findPath(target);
+        if (open != null) {
+          _reportError(
+            '${open.name} is open in a tab. Export to another file.',
+            scope: scope,
+          );
+          return false;
+        }
+        digest = await store.existingDigest(target);
+        // A protected page is asked about as a save would be; Save Anyway
+        // already agrees to replace it.
+        if (await store.isWriteProtected(target)) {
+          final choice = await _dialog(
+            () => dialogs.chooseReadOnlySave(_paths.basename(target)),
+          );
+          if (choice == ReadOnlyChoice.cancel) return false;
+          if (choice == ReadOnlyChoice.saveAs) continue;
+        } else if (digest != null &&
+            !await _dialog(() => dialogs.confirmReplace(target))) {
+          return false;
+        }
+        break;
       }
       final text = tab.editor.text.text;
       final language = tab.editor.text.language;
@@ -739,14 +756,19 @@ final class DocumentWorkspace extends ChangeNotifier {
         source: null,
         expectedSha256: digest,
       );
+      _clearScope(scope);
       return true;
     } catch (error) {
-      _error = 'Could not export ${tab.name}: $error';
+      _reportError('Could not export ${tab.name}: $error', scope: scope);
       return false;
     } finally {
       _notify();
     }
   }
+
+  /// A tab's export failures, apart from its save failures: saving the
+  /// document says nothing about an export that did not work.
+  static Object _exportScope(DocumentTab tab) => (exportOf: tab);
 
   Future<bool> closeTab(DocumentTab tab) async {
     if (interactionLocked ||
@@ -1099,6 +1121,11 @@ final class DocumentWorkspace extends ChangeNotifier {
     _documents.remove(tab);
     _saveFailures.remove(tab);
     _declinedSaves.remove(tab);
+    // An export of a closed tab cannot be retried from it.
+    if (_errorScope == _exportScope(tab)) {
+      _error = null;
+      _errorScope = null;
+    }
     if (_active == tab) {
       _active = _documents.isEmpty
           ? null
