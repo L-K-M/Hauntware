@@ -1237,4 +1237,67 @@ void main() {
     dialogs.choiceGate!.complete(CloseChoice.cancel);
     expect(await closing, isFalse);
   });
+
+  test('a retried save keeps a Save All summary naming others', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final first = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final second = workspace.active!..editor.text.text = 'edited two';
+    store.writeFailures[first.path!] = const FileSystemException('Disk full');
+    store.writeFailures[second.path!] = const FileSystemException('Disk full');
+    expect(await workspace.saveAll(), isFalse);
+    expect(workspace.error, contains('Saved 0 of 2'));
+
+    // two.txt then saves on its own, but one.txt is still unsaved and the
+    // summary is the only thing still saying so.
+    store.writeFailures.remove(second.path!);
+    expect(await workspace.save(second), isTrue);
+    expect(workspace.error, contains('one.txt'));
+  });
+
+  test(
+    'a tab saved and closed while Save All waited is not a failure',
+    () async {
+      store.files[testPath('two.txt')] = document('two.txt', 'original two');
+      store.files[testPath('three.txt')] = document('three.txt', 'original 3');
+      await workspace.open(testPath('two.txt'));
+      final second = workspace.active!..editor.text.text = 'edited two';
+      await workspace.open(testPath('three.txt'));
+      final third = workspace.active!..editor.text.text = 'edited three';
+
+      // Close two.txt with Save and hold its write, so Save All queues its own
+      // request for two.txt behind the close's save.
+      dialogs.choices.add(CloseChoice.save);
+      store.writeGate = Completer<void>();
+      final closing = workspace.closeTab(second);
+      await pumpEventQueue();
+      final all = workspace.saveAll();
+      await pumpEventQueue();
+      store.writeGate!.complete();
+
+      expect(await closing, isTrue);
+      expect(await all, isTrue);
+      expect(workspace.documents, [third]);
+      expect(store.files[testPath('two.txt')]!.text, 'edited two');
+      expect(store.files[testPath('three.txt')]!.text, 'edited three');
+      expect(workspace.error, isNull);
+    },
+  );
+
+  test('a Save All summary quotes each failure with one full stop', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final first = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final second = workspace.active!..editor.text.text = 'edited two';
+    store.writeFailures[first.path!] = StateError('Changed externally.');
+    store.writeFailures[second.path!] = StateError('Changed externally.');
+
+    expect(await workspace.saveAll(), isFalse);
+    expect(workspace.error, contains('(Bad state: Changed externally)'));
+    expect(workspace.error, isNot(contains('.)')));
+  });
 }

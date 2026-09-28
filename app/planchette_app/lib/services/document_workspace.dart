@@ -454,8 +454,12 @@ final class DocumentWorkspace extends ChangeNotifier {
         }
         if (await _save(tab)) {
           saved++;
+        } else if (!_documents.contains(tab)) {
+          // Closed while this request waited behind the tab's own in-flight
+          // save, typically a close that saved it first.
+          vanished++;
         } else if (_saveFailures[tab] case final detail?) {
-          failures.add('${tab.name} ($detail)');
+          failures.add('${tab.name} (${_withoutFinalStop(detail)})');
         } else if (tab.path != null) {
           failures.add(tab.name);
         }
@@ -464,17 +468,19 @@ final class DocumentWorkspace extends ChangeNotifier {
       // never reached. A declined destination is attempted, so it stays out
       // of the parts and only shares the denominator like any not-saved tab.
       final skipped = dirty.length - attempted;
+      // Unscoped: a summary names several documents, so no single one of
+      // them saving later makes it untrue.
       if (failures.isNotEmpty && dirty.length > 1) {
-        _error =
-            'Saved $saved of ${dirty.length}. '
-            'Could not save: ${failures.join(', ')}.';
-        _notify();
+        _reportError(
+          'Saved $saved of ${dirty.length}. '
+          'Could not save: ${failures.join(', ')}.',
+        );
       } else if (skipped > 0 && dirty.length > 1) {
         final notSaved = dirty.sublist(attempted).map((tab) => tab.name);
-        _error =
-            'Save All stopped with $skipped document'
-            '${skipped == 1 ? '' : 's'} not saved: ${notSaved.join(', ')}.';
-        _notify();
+        _reportError(
+          'Save All stopped with $skipped document'
+          '${skipped == 1 ? '' : 's'} not saved: ${notSaved.join(', ')}.',
+        );
       }
       return failures.isEmpty && saved + vanished == dirty.length;
     } finally {
@@ -633,6 +639,11 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// Replace the banner with [message], remembering what it is about so the
   /// matching success can retire it. Failures with no retry counterpart pass
   /// no scope and stay until dismissed.
+  /// A failure detail quoted inside a sentence keeps that sentence's own
+  /// full stop only.
+  static String _withoutFinalStop(String detail) =>
+      detail.endsWith('.') ? detail.substring(0, detail.length - 1) : detail;
+
   void _reportError(String message, {Object? scope}) {
     _error = message;
     _errorScope = scope;
