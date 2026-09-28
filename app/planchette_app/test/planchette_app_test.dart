@@ -314,6 +314,86 @@ void main() {
   );
 
   testWidgets(
+    'Close Tab stays available while a document is loading',
+    (tester) async {
+      store.files[testPath('slow.txt')] = document('slow.txt', 'slow');
+      store.loadGate = Completer<void>();
+      await mount(tester);
+      final opening = workspace.open(testPath('slow.txt'));
+      // pump only: the loading spinner never lets pumpAndSettle finish.
+      await tester.pump();
+      expect(workspace.active!.editor.isLoading, isTrue);
+      await tester.tap(find.text('File'));
+      await tester.pump();
+      final item = tester.widget<MenuItemButton>(
+        find.widgetWithText(MenuItemButton, 'Close Tab'),
+      );
+      expect(item.onPressed, isNotNull);
+      // The tab's × follows the same availability rule as the menu command.
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(ValueKey('close-${workspace.active!.id}')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.text('Close Tab'));
+      await tester.pump();
+      expect(workspace.documents, isEmpty);
+      expect(workspace.active, isNull);
+      store.loadGate!.complete();
+      await opening;
+      expect(workspace.documents, isEmpty);
+      expect(workspace.active, isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'Close Tab stays available after a reload error',
+    (tester) async {
+      store.files[testPath('gone.txt')] = document('gone.txt', 'ok');
+      await mount(tester);
+      await workspace.open(testPath('gone.txt'));
+      await tester.pumpAndSettle();
+      store.files.remove(testPath('gone.txt'));
+      await workspace.active!.editor.reload();
+      await tester.pumpAndSettle();
+      expect(workspace.active!.editor.error, isNotNull);
+      await tester.tap(find.text('File'));
+      await tester.pump();
+      final item = tester.widget<MenuItemButton>(
+        find.widgetWithText(MenuItemButton, 'Close Tab'),
+      );
+      expect(item.onPressed, isNotNull);
+      // The tab's × follows the same availability rule as the menu command.
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byKey(ValueKey('close-${workspace.active!.id}')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.text('Close Tab'));
+      await tester.pump();
+      expect(workspace.documents, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!
