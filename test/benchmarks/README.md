@@ -124,8 +124,12 @@ drift skips never redden in any mode). Main-branch runs pass
 invocations are read-only: they may inspect persisted history but never
 grade a hypothetical next main count — six actual main runs stay six
 for a PR, and only an actual main run can reach the escalation
-threshold. The same tier-B drift notice firing on ≥ 7 consecutive main
-runs reddens with `baseline stale — refresh required` once
+threshold. A tier-A-only invocation reports persisted stale tier-B
+history as a notice and leaves it unchanged. Tier-B staleness is graded
+only when tier B is declared, so its main-branch history cannot prevent
+the corrective baseline or performance PR from passing its tier-A gate.
+The same tier-B drift notice firing on ≥ 7 consecutive main
+runs reddens tier-B invocations with `baseline stale — refresh required` once
 `BENCH_ENFORCE_B` is set. Only a genuinely clean main run — no graded
 failures, no fresh drift, and every expected tier-B comparison actually
 observed (at least one) — may reset prior counts; failed, missing, or
@@ -206,6 +210,14 @@ runs on a PR — PR invocations must not write drift state). Since the
 M9 flip P1/P2/P4 are landed and trend-checked against the committed
 baseline (below); P6 remains unlanded — reported, never judged —
 because every run so far produced insufficient-frame error rows.
+
+To collect tier-B profile evidence on a branch while running all regular
+CI checks, dispatch with `skip_m0=true`. This skips only the historical
+M0 SSH measurement shards; dispatch without the input still runs them:
+
+```bash
+gh workflow run CI --ref codex/fix-d12-benchmark -f skip_m0=true
+```
 
 Local iteration needs a display plus the Linux toolchain; the same
 script honors `XVFB_RUN`/`FLUTTER_BIN`/`DART_BIN` overrides, e.g.

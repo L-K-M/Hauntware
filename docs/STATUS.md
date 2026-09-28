@@ -4,6 +4,33 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 drift scope and tab-switch work (2026-09-28)
+
+Tier-A-only benchmark runs now report persisted tier-B drift as a notice,
+so pull requests are graded on the scenarios they actually run. Tier-B
+enforcement, historical drift counts, thresholds, and baselines are unchanged.
+Only a clean main-branch tier-B observation may clear stale history.
+
+Automatic local watch refreshes are retired when their tab leaves the
+foreground. Their cached rows and selection remain intact, late responses
+skip sorting and rebuilding inactive listings, and activation still re-arms
+the watch before re-listing. Explicit navigation and refresh continue in
+background tabs. The P4 collector logs scheduling, build, and raster phases
+to distinguish regressions. Manual CI dispatch accepts `skip_m0=true` to
+collect all D12 scenarios without the historical M0 SSH measurement shards.
+
+Workspace layout updates now follow visibility changes, and pane workspace
+updates follow active-pane treatment and paired sync-chip visibility. A tab
+switch no longer rebuilds the surrounding layout or the unchanged opposite
+listing; tab content, focus, sync state, and inspector updates keep their own
+listeners.
+
+Regressions reproduced the stale-history scope failure and unnecessary
+background refresh before the fixes. All 154 watch, tab-controller, and pane
+controller tests and 139 benchmark tests pass locally, with one existing
+host-dependent benchmark skip. Benchmark checker analysis is clean. Further
+UI validation and Linux profile evidence are recorded with the PR.
+
 ## Upload permissions on ACL-managed servers (2026-09-28)
 
 Ordinary local-to-server uploads now follow Séance's permission policy: new

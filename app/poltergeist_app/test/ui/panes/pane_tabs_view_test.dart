@@ -17,8 +17,9 @@ Future<void> _pumpPane(
   WidgetTester tester,
   PaneTabsController strip,
   WorkspaceController workspace,
-  FocusNode focusNode,
-) {
+  FocusNode focusNode, {
+  DateTime Function()? clock,
+}) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -29,6 +30,7 @@ Future<void> _pumpPane(
           focusNode: focusNode,
           onSwapFocus: () {},
           onCancelRecovery: () {},
+          clock: clock,
         ),
       ),
     ),
@@ -36,6 +38,53 @@ Future<void> _pumpPane(
 }
 
 void main() {
+  testWidgets('switching the other pane tab does not rebuild listing rows', (
+    tester,
+  ) async {
+    final lanes = FakePaneLanes();
+    final leftStrip = testPaneStrip(
+      PaneController(paneTabId: 'pane.left', lanes: lanes),
+    );
+    final first = leftStrip.activeTab!;
+    leftStrip.newTab(target: NewTabTarget.launcher);
+    lanes.nextLocalChannel = FakePaneChannel('/home/tester')
+      ..listings['/home/tester'] = [
+        RemoteFileEntry(
+          path: '/home/tester/report.txt',
+          name: 'report.txt',
+          type: RemoteFileType.file,
+          size: 8,
+        ),
+      ];
+    final right = PaneController(paneTabId: 'pane.right', lanes: lanes);
+    await right.openLocalHome();
+    final rightStrip = testPaneStrip(right);
+    final workspace = WorkspaceController(left: leftStrip, right: rightStrip);
+    addTearDown(workspace.dispose);
+    final focusNode = FocusNode(debugLabel: 'pane.right.listing');
+    addTearDown(focusNode.dispose);
+    var rowBuilds = 0;
+    await _pumpPane(
+      tester,
+      rightStrip,
+      workspace,
+      focusNode,
+      clock: () {
+        rowBuilds++;
+        return DateTime(2026, 9, 28);
+      },
+    );
+    await tester.pumpAndSettle();
+    expect(rowBuilds, greaterThan(0));
+    rowBuilds = 0;
+
+    leftStrip.activateTab(first);
+    await tester.pumpAndSettle();
+
+    expect(rowBuilds, 0);
+    expect(find.text('report.txt'), findsOneWidget);
+  });
+
   testWidgets('closing the last tab returns focus to the launcher', (
     tester,
   ) async {

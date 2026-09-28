@@ -1251,6 +1251,17 @@ class PaneController extends ChangeNotifier {
     _tabActive = active;
     if (!active) {
       _dropWatch();
+      if (_loadingActive() && _issuedGeneration == _watchRefreshGeneration) {
+        // An automatic refresh is useful only while this tab is visible.
+        // Keep its existing cache and selection without rebuilding them;
+        // late replies must not sort thousands of inactive rows on the UI
+        // isolate. Activation always starts a fresh watched listing. User
+        // navigation and explicit refreshes still finish in the background.
+        _issuedGeneration++;
+        _answeredGeneration = _issuedGeneration;
+        _snapshot = null;
+        notifyListeners();
+      }
       return;
     }
     _watchLosses = 0;

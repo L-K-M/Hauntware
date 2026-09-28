@@ -399,6 +399,55 @@ void main() {
     expect(commits, isEmpty);
   });
 
+  test('a backgrounded watch refresh keeps its cache and drops late rows',
+      () async {
+    final (controller, channel, _) = await _watchedPane();
+    final cached = controller.entries;
+    controller.setCursorIndex(0);
+    final hold = Completer<void>();
+    channel.holdNext = hold;
+    channel.emitWatch(DirectoryWatchSignal.changed);
+    await _settle();
+    expect(controller.loading, isTrue);
+
+    controller.setTabActive(false);
+    expect(controller.loading, isFalse);
+    expect(controller.entries, same(cached));
+    expect(controller.cursorIndex, 0);
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    channel.listings['/home/tester'] = [_entry('b.txt')];
+    hold.complete();
+    await _settle();
+    expect(controller.entries, same(cached));
+    expect(notifications, 0);
+
+    // Returning still re-arms before a fresh listing, so missed changes
+    // become visible even though the background response was ignored.
+    controller.setTabActive(true);
+    await _settle();
+    expect(controller.entries.single.name, 'b.txt');
+    expect(channel.listCalls, hasLength(3));
+    expect(channel.watchCalls, hasLength(2));
+  });
+
+  test('backgrounding preserves an explicit navigation in flight',
+      () async {
+    final (controller, channel, _) =
+        await _watchedPane(dirs: ['/home/tester/docs']);
+    final hold = Completer<void>();
+    channel.holdNext = hold;
+    controller.navigate('/home/tester/docs');
+    await _settle();
+    controller.setTabActive(false);
+    expect(controller.loading, isTrue);
+    hold.complete();
+    await _settle();
+    expect(controller.loading, isFalse);
+    expect(controller.entries.single.name, 'in-docs');
+    expect(controller.location, const LocalPaneLocation('/home/tester/docs'));
+  });
+
   test('Esc re-arms the restored directory without re-listing it',
       () async {
     final (controller, channel, _) =
