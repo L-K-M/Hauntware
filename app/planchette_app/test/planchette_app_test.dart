@@ -455,4 +455,43 @@ void main() {
       TargetPlatform.windows,
     }),
   );
+
+  testWidgets('the Save All accelerator is Command+Option+S on macOS', (
+    tester,
+  ) async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    await workspace.open(testPath('one.txt'));
+    workspace.active!.editor.text.text = 'edited one';
+    await mount(tester);
+
+    // macOS shortcuts live on the native menu, which intercepts no widget
+    // events, so the accelerator is asserted on the registered menu item
+    // and exercised through its own selection.
+    final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+    final file = bar.menus.whereType<PlatformMenu>().firstWhere(
+      (menu) => menu.label == 'File',
+    );
+    final saveAll = file.menus
+        .whereType<PlatformMenuItemGroup>()
+        .expand((group) => group.members)
+        .firstWhere((item) => item.label == 'Save All');
+    // SingleActivator has no value equality, so the binding is compared
+    // field by field.
+    final shortcut = saveAll.shortcut;
+    expect(shortcut, isA<SingleActivator>());
+    final keys = shortcut! as SingleActivator;
+    expect(keys.trigger, LogicalKeyboardKey.keyS);
+    expect(keys.meta, isTrue);
+    expect(keys.alt, isTrue);
+    expect(keys.control, isFalse);
+    expect(keys.shift, isFalse);
+    saveAll.onSelected!();
+    await tester.pumpAndSettle();
+
+    expect(store.files[testPath('one.txt')]!.text, 'edited one');
+    expect(workspace.active!.editor.isDirty, isFalse);
+    expect(workspace.error, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 }

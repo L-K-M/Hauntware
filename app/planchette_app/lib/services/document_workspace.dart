@@ -123,6 +123,11 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// into one message; a tab's entry is replaced by every attempt it makes.
   final Map<DocumentTab, String> _saveFailures = {};
 
+  /// Set while [saveAll] walks its snapshot so a second trigger — a repeated
+  /// shortcut or another menu activation — cannot start a second pass over
+  /// the same tabs and interleave its result.
+  bool _savingAll = false;
+
   void select(DocumentTab tab) {
     if (interactionLocked || !_documents.contains(tab)) return;
     _active = tab;
@@ -273,8 +278,10 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   /// Saves every dirty tab, one after another through the same serialization
   /// a single [save] uses, so concurrent writes never race on the digest
-  /// guard. The dirty set is taken up front: a tab that closes or changes
-  /// while the loop yields is left to the user's next action.
+  /// guard. The dirty set is taken up front: a tab that closes while the
+  /// loop yields was the user's decision and does not fail the run. A second
+  /// call while one is running is refused, and a modal that opens mid-run
+  /// stops the walk short of a success rather than saving underneath it.
   ///
   /// A partial failure is reported once, counting what was written and
   /// naming each document that was not, in the shape multi-open aggregation
@@ -283,30 +290,40 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// With a single dirty tab there is nothing to aggregate, so the individual
   /// save's own message stands.
   Future<bool> saveAll() async {
-    if (interactionLocked) return false;
-    final dirty = [
-      for (final tab in _documents)
-        if (tab.editor.isDirty) tab,
-    ];
-    var saved = 0;
-    final failures = <String>[];
-    for (final tab in dirty) {
-      if (!_documents.contains(tab)) continue;
-      if (await _save(tab)) {
-        saved++;
-      } else if (_saveFailures[tab] case final detail?) {
-        failures.add('${tab.name} ($detail)');
-      } else if (tab.path != null) {
-        failures.add(tab.name);
+    if (interactionLocked || _savingAll) return false;
+    _savingAll = true;
+    try {
+      final dirty = [
+        for (final tab in _documents)
+          if (tab.editor.isDirty) tab,
+      ];
+      var saved = 0;
+      var vanished = 0;
+      final failures = <String>[];
+      for (final tab in dirty) {
+        if (interactionLocked) break;
+        if (!_documents.contains(tab)) {
+          vanished++;
+          continue;
+        }
+        if (await _save(tab)) {
+          saved++;
+        } else if (_saveFailures[tab] case final detail?) {
+          failures.add('${tab.name} ($detail)');
+        } else if (tab.path != null) {
+          failures.add(tab.name);
+        }
       }
+      if (failures.isNotEmpty && dirty.length > 1) {
+        _error =
+            'Saved $saved of ${saved + failures.length}. '
+            'Could not save: ${failures.join(', ')}.';
+        _notify();
+      }
+      return failures.isEmpty && saved + vanished == dirty.length;
+    } finally {
+      _savingAll = false;
     }
-    if (failures.isNotEmpty && dirty.length > 1) {
-      _error =
-          'Saved $saved of ${saved + failures.length}. '
-          'Could not save: ${failures.join(', ')}.';
-      _notify();
-    }
-    return failures.isEmpty && saved == dirty.length;
   }
 
   Future<bool> closeTab(DocumentTab tab) async {

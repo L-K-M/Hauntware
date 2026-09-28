@@ -749,4 +749,47 @@ void main() {
     dialogs.choiceGate!.complete(CloseChoice.cancel);
     expect(await closing, isFalse);
   });
+
+  test('a second Save All cannot interleave with a running one', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final first = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final second = workspace.active!..editor.text.text = 'edited two';
+    store.writeGate = Completer<void>();
+
+    final run = workspace.saveAll();
+    await Future<void>.delayed(Duration.zero);
+    final overlap = workspace.saveAll();
+    store.writeGate!.complete();
+
+    expect(await run, isTrue);
+    expect(await overlap, isFalse);
+    expect(store.writes, hasLength(2));
+    expect(first.editor.isDirty, isFalse);
+    expect(second.editor.isDirty, isFalse);
+    expect(workspace.error, isNull);
+  });
+
+  test('a tab closed mid Save All does not fail the run', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final file = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final closing = workspace.active!..editor.text.text = 'edited two';
+    dialogs.choices.add(CloseChoice.discard);
+    store.writeGate = Completer<void>();
+
+    final run = workspace.saveAll();
+    await Future<void>.delayed(Duration.zero);
+    expect(await workspace.closeTab(closing), isTrue);
+    store.writeGate!.complete();
+
+    expect(await run, isTrue);
+    expect(workspace.error, isNull);
+    expect(file.editor.isDirty, isFalse);
+    expect(workspace.documents, [file]);
+  });
 }
