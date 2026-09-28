@@ -1449,7 +1449,7 @@ final class SearchResult {
 /// characters. [searchText] then compares exactly and reports
 /// [CaseFolding.lengthChanging]. Expanding `ß` to `ss`, which is what Unicode
 /// *full* case folding does, therefore needs a folded-offset map rather than
-/// a different fold — see ANALYSIS.md B35.
+/// a different fold — see ANALYSIS.md B37.
 typedef CaseFolder = String Function(String value);
 
 /// Substring search used by the editor's find bar, reporting how the case
@@ -1475,6 +1475,11 @@ SearchResult searchText(
     if (lowered.length == text.length) {
       haystack = lowered;
       needle = fold(query);
+      // A fold may erase characters. An empty needle would "match" at every
+      // offset, and Replace All would insert its text at each of them.
+      if (needle.isEmpty) {
+        return const SearchResult(matches: [], caseFolding: CaseFolding.exact);
+      }
     } else {
       caseFolding = CaseFolding.lengthChanging;
     }

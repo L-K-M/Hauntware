@@ -474,14 +474,27 @@ void main() {
       // Every code point folds to the same number of UTF-16 units today. If a
       // future SDK breaks that, searchText reports it rather than quietly
       // changing what a case-insensitive search means.
-      for (var rune = 0x80; rune <= 0x2FFFF; rune++) {
+      // Every code point, surrogates included: a lone surrogate is a valid
+      // Dart string unit too. Fail only on a mismatch, so the scan does not
+      // build a million reason strings.
+      for (var rune = 0x80; rune <= 0x10FFFF; rune++) {
         final value = String.fromCharCode(rune);
-        expect(
-          value.toLowerCase().length,
-          value.length,
-          reason: 'U+${rune.toRadixString(16)} changes length when lowercased',
-        );
+        if (value.toLowerCase().length != value.length) {
+          fail('U+${rune.toRadixString(16)} changes length when lowercased');
+        }
       }
+    });
+
+    test('a fold that erases the whole query finds nothing', () {
+      // A folding table may drop characters (default-ignorable marks, say).
+      // An empty needle would match at every offset and hand Replace All a
+      // list of zero-width matches to insert its replacement at.
+      // The document holds no soft hyphen, so its fold keeps its length and
+      // the folded path is taken; only the query vanishes.
+      String fold(String value) => value.replaceAll('\u00AD', '');
+      final result = searchText('plain text', '\u00AD', fold: fold);
+      expect(result.caseFolding, CaseFolding.exact);
+      expect(result.matches, isEmpty);
     });
 
     // The document side of the guard. Paired with 'a length-changing query is
