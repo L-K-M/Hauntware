@@ -201,13 +201,14 @@ class EditorController extends ChangeNotifier {
 
   /// One level of indentation for Tab, Shift+Tab and Enter, from the most
   /// specific source that has one: a level chosen for this document, the
-  /// level its own lines use (re-checked after edits until they show one),
-  /// the level its format mandates (tabs for Makefiles and Go), the host's
-  /// [indentationPreference], and finally four spaces.
+  /// level its format mandates (tabs for Makefiles and Go, whatever some of
+  /// their lines use), the level its own lines use (re-checked after edits
+  /// until they show one), the host's [indentationPreference], and finally
+  /// four spaces.
   Indentation get indentation =>
       _chosenIndentation ??
-      _detectedIndentation ??
       requiredIndentationFor(_displayPath) ??
+      _detectedIndentation ??
       _preferredIndentation ??
       const Indentation.spaces();
 
