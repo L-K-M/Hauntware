@@ -300,9 +300,9 @@ final class PlanEntryRecord extends TransferJournalRecord {
   }
 }
 
-/// `destinationClaimed` — an item reserved a resolved target that differs
-/// from its planned path. The queue fsyncs this record before committing so
-/// recovery can protect the output even when completion never journaled.
+/// `destinationClaimed` — a move or renamed output reserved its exact target.
+/// The queue fsyncs this record before committing so recovery can protect the
+/// output even when completion never journaled.
 final class DestinationClaimedRecord extends TransferJournalRecord {
   DestinationClaimedRecord({
     required super.taskId,
@@ -939,8 +939,9 @@ final class TransferJournalReplay {
 ///
 /// Ordinary `append*` calls enqueue onto the store's single writer before
 /// their in-memory transitions; the hot path fsyncs on a bounded interval.
-/// [appendJournalDurably] is the narrow exception: destructive work awaits
-/// its resolved-target claim so a crash cannot erase ownership evidence.
+/// [appendJournalDurably] is the narrow exception: a move or renamed output
+/// awaits its resolved-target claim so a crash cannot erase ownership
+/// evidence.
 abstract interface class TransferPersistence {
   /// What recovery found at open — the task set [TransferQueue.restore]
   /// adopts plus the corruption accounting the UI surfaces.

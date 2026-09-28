@@ -1,15 +1,18 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 
 /// Flushes a local directory entry where the platform exposes a proven
 /// primitive. Linux uses `open(O_DIRECTORY)` plus `fsync`; other platforms
 /// retain the explicit unsupported-handle behavior tracked by PGE-03a.
-/// Linux performs those blocking syscalls on the calling isolate.
+/// The blocking Linux syscalls run off-isolate so a slow metadata flush does
+/// not stall the app event loop.
 Future<void> syncLocalDirectory(Directory directory) async {
   if (Platform.isLinux) {
-    _syncLinuxDirectory(directory.path);
+    final path = directory.path;
+    await Isolate.run(() => _syncLinuxDirectory(path));
     return;
   }
 

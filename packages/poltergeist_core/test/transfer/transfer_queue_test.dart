@@ -16,6 +16,7 @@ import 'dart:io';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
+import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
 import 'transfer_fakes.dart';
 
@@ -1616,6 +1617,26 @@ void main() {
       expect(probing.state, TransferTaskState.completed);
     });
 
+    test('a probe-shaped directory stays a directory row', () async {
+      const artifactPath =
+          '/src/.poltergeist-nameprobe-0123456789abcdef-\u00e9';
+      s1.addDirectory(artifactPath);
+
+      final task = enqueue(
+        copySpec(
+          source: const ServerFsLocation('s1'),
+          destination: const ServerFsLocation('s2'),
+          rootPaths: const [artifactPath],
+          destinationDir: '/dst',
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.items.single.isDirectory, isTrue);
+      expect(task.totalDirectories, 1);
+      expect(task.totalFiles, 0);
+    });
+
     test(
       'a move waits for a source-directory name probe to clean up',
       () async {
@@ -1843,6 +1864,78 @@ void main() {
         expect(survivingPayloads, {'upper', 'lower'});
       },
     );
+
+    for (final (label, firstName, secondName) in const [
+      ('full-fold', 'stra\u00dfe.txt', 'strasse.txt'),
+      ('default-ignorable', 'soft\u00adhyphen.txt', 'softhyphen.txt'),
+    ]) {
+      test(
+        'move refuses $label aliases before replace deletes sources',
+        () async {
+          queue = newQueue(maxInFlightFiles: 2);
+          s2
+            ..caseInsensitive = true
+            ..normalizationInsensitive = true
+            ..identityKeyOverride = _linuxNfdCaseFold;
+          final firstPath = '/left/$firstName';
+          final secondPath = '/right/$secondName';
+          s1
+            ..addFile(firstPath, 'first'.codeUnits)
+            ..addFile(secondPath, 'second'.codeUnits);
+
+          final task = enqueue(
+            copySpec(
+              source: const ServerFsLocation('s1'),
+              destination: const ServerFsLocation('s2'),
+              rootPaths: [firstPath, secondPath],
+              destinationDir: '/dst',
+              files: ConflictResolution.replace,
+              operation: TransferOperation.move,
+            ),
+          );
+          await awaitTaskDone(task);
+
+          final survivingPayloads = <String>{
+            for (final bytes in s1.fileBytes.values)
+              String.fromCharCodes(bytes),
+            for (final bytes in s2.fileBytes.values)
+              String.fromCharCodes(bytes),
+          };
+          expect(task.state, TransferTaskState.failed);
+          expect(survivingPayloads, {'first', 'second'});
+        },
+      );
+    }
+
+    test('normalized upcase table keeps full-fold twins distinct', () async {
+      queue = newQueue(maxInFlightFiles: 2);
+      s2
+        ..caseInsensitive = true
+        ..normalizationInsensitive = true
+        ..identityKeyOverride = _normalizedSimpleFold;
+      s1
+        ..addFile('/left/stra\u00dfe.txt', 'sharp'.codeUnits)
+        ..addFile('/right/strasse.txt', 'expanded'.codeUnits);
+
+      final task = enqueue(
+        copySpec(
+          source: const ServerFsLocation('s1'),
+          destination: const ServerFsLocation('s2'),
+          rootPaths: const [
+            '/left/stra\u00dfe.txt',
+            '/right/strasse.txt',
+          ],
+          destinationDir: '/dst',
+          files: ConflictResolution.replace,
+          operation: TransferOperation.move,
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      expect(s2.fileBytes['/dst/stra\u00dfe.txt'], 'sharp'.codeUnits);
+      expect(s2.fileBytes['/dst/strasse.txt'], 'expanded'.codeUnits);
+    });
 
     test(
       'move stays safe when a nested destination mount folds names',
@@ -2980,6 +3073,17 @@ void main() {
     });
   });
 }
+
+/// Independent model of Linux NFDICF name identity.
+String _linuxNfdCaseFold(String path) => unorm.nfc(
+  path
+      .toLowerCase()
+      .replaceAll('\u00df', 'ss')
+      .replaceAll('\u00ad', ''),
+);
+
+/// Independent model of HFS+-style normalized one-code-point folding.
+String _normalizedSimpleFold(String path) => unorm.nfc(path.toLowerCase());
 
 /// A destination whose `createDirectory` loses the stat→mkdir race on
 /// [racePath]: the entry materializes between the queue's absent-stat and

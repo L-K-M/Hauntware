@@ -1,4 +1,4 @@
-import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:poltergeist_core/src/transfer/destination_name_key.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -50,7 +50,7 @@ void main() {
     );
   });
 
-  test('normalizes aliases created by simple case folding', () {
+  test('normalizes aliases created during case folding', () {
     expect(
       destinationNameKey(
         'J\u030c',
@@ -59,6 +59,46 @@ void main() {
       destinationNameKey(
         '\u01f0',
         DestinationNameComparison.normalizedCaseInsensitive,
+      ),
+    );
+  });
+
+  test('keeps exact trait keys narrower than the conservative key', () {
+    for (final comparison in const [
+      DestinationNameComparison.caseInsensitive,
+      DestinationNameComparison.normalizedCaseInsensitive,
+    ]) {
+      expect(
+        destinationNameKey('stra\u00dfe.txt', comparison),
+        isNot(destinationNameKey('strasse.txt', comparison)),
+      );
+      expect(
+        destinationNameKey('soft\u00adhyphen.txt', comparison),
+        isNot(destinationNameKey('softhyphen.txt', comparison)),
+      );
+    }
+
+    expect(
+      conservativeDestinationNameKey('stra\u00dfe.txt'),
+      conservativeDestinationNameKey('strasse.txt'),
+    );
+    expect(
+      conservativeDestinationNameKey('soft\u00adhyphen.txt'),
+      conservativeDestinationNameKey('softhyphen.txt'),
+    );
+  });
+
+  test('keeps NTFS and exFAT dotless i distinct from ASCII i', () {
+    expect(
+      destinationNameKey(
+        'file\u0131.txt',
+        DestinationNameComparison.caseInsensitive,
+      ),
+      isNot(
+        destinationNameKey(
+          'filei.txt',
+          DestinationNameComparison.caseInsensitive,
+        ),
       ),
     );
   });

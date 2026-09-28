@@ -153,6 +153,9 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   /// Nested mount/share identity overrides, keyed by their root path.
   final Map<String, DestinationNameComparison> nameComparisonsByRoot = {};
 
+  /// Optional independent filesystem identity model for collision tests.
+  String Function(String path)? identityKeyOverride;
+
   DestinationNameComparison get _nameComparison => destinationNameComparisonFor(
     FileSystemNameTraits(
       caseSensitivity: caseInsensitive
@@ -177,8 +180,12 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     return comparison;
   }
 
-  String _identityKey(String path) =>
-      destinationNameKey(path, _comparisonForPath(path));
+  String _identityKey(String path) {
+    final override = identityKeyOverride;
+    if (override != null) return override(path);
+
+    return destinationNameKey(path, _comparisonForPath(path));
+  }
 
   bool _matches(String a, String b) => _identityKey(a) == _identityKey(b);
 
@@ -267,12 +274,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   }) {
     final parent = remoteParent(path);
     addDirectory(parent);
-    final replacedKey = _fileKey(path);
-    if (replacedKey != null) {
-      fileBytes.remove(replacedKey);
-      mtimes.remove(replacedKey);
-      modes.remove(replacedKey);
-    }
+    _removeFileAliases(path);
     fileBytes[path] = bytes;
     directories[_dirKey(parent) ?? parent]!
       ..removeWhere((e) => _matches(e.path, path))
@@ -332,6 +334,17 @@ class FakeTreeFileSystem implements RemoteFileSystem {
       if (_matches(child.path, path)) return child;
     }
     return null;
+  }
+
+  void _removeFileAliases(String path) {
+    final aliases = fileBytes.keys
+        .where((candidate) => _matches(candidate, path))
+        .toList();
+    for (final alias in aliases) {
+      fileBytes.remove(alias);
+      mtimes.remove(alias);
+      modes.remove(alias);
+    }
   }
 
   RemoteFileException _notFound(String operation, String path) =>
@@ -822,12 +835,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
       }
       directories.remove(dirKey ?? entry.path);
     }
-    final fileKey = _fileKey(existing.path);
-    if (fileKey != null) {
-      fileBytes.remove(fileKey);
-      mtimes.remove(fileKey);
-      modes.remove(fileKey);
-    }
+    _removeFileAliases(existing.path);
     final parentKey = _dirKey(remoteParent(entry.path));
     if (parentKey != null) {
       directories[parentKey]!.removeWhere((e) => _matches(e.path, entry.path));

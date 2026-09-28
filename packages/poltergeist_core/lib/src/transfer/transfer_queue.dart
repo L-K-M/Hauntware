@@ -1863,6 +1863,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           sourcePath: entry.path,
           destinationPath: plannedDest,
           size: entry.size,
+          isDirectory: entry.isDirectory,
           state: TransferItemState.skipped,
           error: event.detail ?? 'reserved filesystem-name probe artifact',
         );
@@ -2170,7 +2171,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       final registryPath = claimedPath ?? destinationPath;
       registryKey = (
         _endpointKey(task.destination),
-        _fold(runtime, registryPath),
+        _fold(registryPath),
       );
       while (true) {
         await _waitForAdmission(runtime);
@@ -2318,7 +2319,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       sourcePath,
     );
     final existing = await _statOrNull(dstFs, destination);
-    if (_hasForeignDestinationOwner(runtime, destination, sourcePath)) {
+    if (_hasObservedForeignDestinationOwner(
+      runtime,
+      destination,
+      sourcePath,
+      existing,
+    )) {
       if (folderVerb == ConflictResolution.keepBoth) {
         await _materializeNumbered(runtime, directory, dstFs, containerPath);
         return;
@@ -2462,7 +2468,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       );
       final key = (
         _endpointKey(runtime.task.destination),
-        _fold(runtime, candidate),
+        _fold(candidate),
       );
       final holder = _registry[key];
       if (holder != null && !holder.committed.isCompleted) continue;
@@ -2950,7 +2956,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     // re-queues behind the holder's commit instead.
     final key = (
       _endpointKey(task.destination),
-      _fold(runtime, destinationPath),
+      _fold(destinationPath),
     );
     final holder = _registry[key];
     if (holder != null && !holder.committed.isCompleted) {
@@ -3063,7 +3069,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
             ):
               final commitKey = (
                 _endpointKey(task.destination),
-                _fold(runtime, commitPath),
+                _fold(commitPath),
               );
               _RegistryClaim? commitClaim;
               if (commitKey != key) {
@@ -3477,7 +3483,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         expectedTarget: null,
       );
     }
-    if (_hasForeignDestinationOwner(runtime, candidate, file.source.path)) {
+    if (_hasObservedForeignDestinationOwner(
+      runtime,
+      candidate,
+      file.source.path,
+      existing,
+    )) {
       if (verb == ConflictResolution.keepBoth) {
         return _decideKeepBothFile(runtime, dstFs, work, containerPath);
       }
@@ -3569,7 +3580,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       // without waiting with a transfer slot and channel lease held.
       final numberedKey = (
         _endpointKey(task.destination),
-        _fold(runtime, numbered),
+        _fold(numbered),
       );
       final claimed = _registry[numberedKey];
       if (claimed != null && !claimed.committed.isCompleted) continue;
@@ -5849,10 +5860,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
 
   /// The commit registry serializes every plausible alias. Filesystems that
   /// prove the spellings distinct still commit both, one after the other.
-  String _fold(_TaskRuntime runtime, String path) => destinationNameKey(
-    path,
-    DestinationNameComparison.normalizedCaseInsensitive,
-  );
+  String _fold(String path) => conservativeDestinationNameKey(path);
 
   _DestinationOwnershipKey _destinationOwnershipKey(
     _TaskRuntime runtime,
@@ -5976,21 +5984,35 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     _TaskRuntime runtime,
     String destinationPath,
     String sourcePath,
-  ) {
-    final candidate = destinationNameKey(
-      destinationPath,
-      DestinationNameComparison.normalizedCaseInsensitive,
-    );
-    for (final claim in <_DestinationClaim>[
+  ) => _hasPotentialAlias(
+    destinationPath,
+    sourcePath,
+    <_DestinationClaim>[
       ...runtime.rawOutputDestinationClaims,
       ...runtime.rawPlannedDestinationClaims,
-    ]) {
+    ],
+  );
+
+  bool _hasPotentialOutputAlias(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+  ) => _hasPotentialAlias(
+    destinationPath,
+    sourcePath,
+    runtime.rawOutputDestinationClaims,
+  );
+
+  bool _hasPotentialAlias(
+    String destinationPath,
+    String sourcePath,
+    Iterable<_DestinationClaim> claims,
+  ) {
+    final candidate = conservativeDestinationNameKey(destinationPath);
+    for (final claim in claims) {
       if (claim.sourcePath == sourcePath) continue;
 
-      final claimed = destinationNameKey(
-        claim.destinationPath,
-        DestinationNameComparison.normalizedCaseInsensitive,
-      );
+      final claimed = conservativeDestinationNameKey(claim.destinationPath);
       if (claimed == candidate) return true;
     }
     return false;
@@ -6088,6 +6110,26 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   ) {
     final owner = _destinationOwner(runtime, destinationPath);
     return owner != null && owner.sourcePath != sourcePath;
+  }
+
+  bool _hasObservedForeignDestinationOwner(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+    RemoteFileEntry? existing,
+  ) {
+    if (_hasForeignDestinationOwner(runtime, destinationPath, sourcePath)) {
+      return true;
+    }
+    if (existing == null) return false;
+
+    // A broad alias becomes ownership evidence only after stat sees an
+    // occupant and another item has reserved output there.
+    return _hasPotentialOutputAlias(
+      runtime,
+      destinationPath,
+      sourcePath,
+    );
   }
 
   bool _reserveOutputDestination(

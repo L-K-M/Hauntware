@@ -947,17 +947,22 @@ ownership
   amends 03 §4.2).** A destination key, after applying that filesystem's
   independently probed case and canonical-normalization rules, belongs to
   one source for the task's lifetime. Traits are resolved at each actual
-  destination container because a nested mount can differ from the task
-  root; an unprovable result uses the conservative case-and-normalization
-  folding. `replace` and `replaceIfNewer` resolve external or cross-task
-  occupants, never output owned by another item in the same task. `skip`
+  destination container because a nested mount can differ from the task root.
+  Trait keys use canonical normalization and simple upcase-table folding, so
+  absent HFS+/NTFS names remain distinct. Because the exact fold table is not
+  probed, the queue serializes a broader Linux NFDICF identity (canonical
+  decomposition, default-ignorable removal, then full Unicode folding). If a
+  later stat observes that alias at a key already reserved as output by this
+  task, ownership wins. `replace` and `replaceIfNewer` resolve external or
+  cross-task occupants, never output owned by another item in the same task.
+  `skip`
   skips that item; `ask` may choose `keepBoth` or `skip`; `keepBoth` claims
-  the first unowned numbered key. Cross-task aliases serialize, then re-stat
-  under the ordinary conflict policy. A destructive or renamed commit
-  fsyncs its selected key to the versioned queue journal before acting. If
-  recovery or retry cannot prove that an occupant at that key is this
-  item's output, the item fails terminally: repeating an ambiguous write
-  cannot make it safe.
+  the first stat-free, unowned numbered key. Cross-task aliases serialize,
+  then re-stat under the ordinary conflict policy. A move or renamed-output
+  commit fsyncs its selected key to the versioned queue journal before
+  acting. If recovery or retry cannot prove that an occupant at that key is
+  this item's output, the item fails terminally: repeating an ambiguous
+  write cannot make it safe.
 
 ### Security, trust, distribution
 

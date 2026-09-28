@@ -8,13 +8,13 @@ enum DestinationNameComparison {
   /// Byte-distinct names remain distinct.
   exact,
 
-  /// Case variants refer to one entry; canonical Unicode variants do not.
+  /// Upcase-table variants refer to one entry; canonical variants do not.
   caseInsensitive,
 
   /// Canonically equivalent Unicode names refer to one entry.
   normalized,
 
-  /// Canonically equivalent case variants refer to one entry.
+  /// Canonically equivalent upcase-table variants refer to one entry.
   normalizedCaseInsensitive,
 }
 
@@ -32,6 +32,10 @@ String destinationNameKey(String value, DestinationNameComparison comparison) =>
         simpleCaseFold(unorm.nfc(value)),
       ),
     };
+
+/// Builds the broad alias key used because the exact fold table is not probed.
+String conservativeDestinationNameKey(String value) =>
+    unorm.nfc(fullCaseFold(removeDefaultIgnorableCodePoints(unorm.nfd(value))));
 
 /// Selects the identity operation matching both filesystem name axes.
 DestinationNameComparison destinationNameComparisonFor(

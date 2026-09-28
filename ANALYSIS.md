@@ -138,10 +138,10 @@ of its work is in review.
 1. **Land what is in flight.** #218 (P1-02), #222 (P2-07), #223 (X-02,
  X-05), #224 (P4-01/P4-02), #225 (P1-03).
 2. **P0 data safety, all small:** P2-11 (restored delete identity check),
- P1-04 (normalized pin lookup), the P2-04 residual (backup rollback after
- a failed replacement).
-3. **P1 sync and recovery safety:** PGE-02 (enforce the reviewed
- snapshot), PGE-04 (revalidate roots and source ancestors), PGE-06
+ P1-04 (normalized pin lookup).
+3. **P1 data safety and recovery:** P2-04 (backup rollback after a failed
+ replacement), PGE-02 (enforce the reviewed snapshot), PGE-04 (revalidate
+ roots and source ancestors), PGE-06
  (restore across volumes), PGE-03a (platform durability), PG-REV-004
  (persist before publish).
 4. **P1 reliability and stores:** P2-01 (parked-folder subfolders), P3-05 /
@@ -301,12 +301,12 @@ and the original name.
 ### PGE-03a · P1 · Platform durability guarantees are incomplete
 - **Problem.** Residual of merged #213 (PGE-03), which added the shared
 local file/parent flush barrier before deleting a cross-device trash
-source; do not reimplement it. P2-06 now uses native Linux directory handles
-and propagates operational open/fsync/close failures for journal rewrites and
-local Move cleanup. macOS, Windows, and Android retain explicit unsupported
-behavior, and remote durability has no VFS primitive. #213 honors post-copy
-cancellation for remote copies but skips the local barrier for them, and adds
-no remote fsync guarantee.
+source; do not reimplement it. #230 (P2-06) uses native Linux directory
+handles and propagates operational open/fsync/close failures for journal
+rewrites and local Move cleanup. macOS, Windows, and Android retain explicit
+unsupported behavior, and remote durability has no VFS primitive. #213
+honors post-copy cancellation for remote copies but skips the local barrier
+for them, and adds no remote fsync guarantee.
 - **Next.** Define and test the remaining platform guarantees. Remote fsync
 needs its own capability (see the `fsync@openssh.com` idea) and must not be
 implied by the Linux fix. Follow-up regression from #213's review:
@@ -367,6 +367,21 @@ retries on each append once the trigger holds. Next: back off after a
 failed rewrite (retry after N appends or T seconds) and surface it with
 P2-18's warning event. Gate: scripted IO whose `atomicRewrite` throws is
 called at most once per backoff window.
+
+### P2-06a · P3 · Destination fold profile is not probed
+- **Problem.** P2-06 probes case and canonical normalization, not the
+filesystem's fold table. Its NFDICF registry and post-stat output check
+prevent destructive overwrite, while the narrower trait key lets absent
+HFS+/NTFS full-fold twins coexist. If one twin already exists externally
+after this task reserved output at the other, the safe check can refuse an
+otherwise valid replacement. This is refusal-only, not data loss.
+- **Next.** Add an expansion/default-ignorable probe and a
+backwards-compatible persisted fold profile; keep unknown profiles on the
+current conservative path.
+- **Gate.** Independent Linux NFDICF, HFS+-style normalized-simple, and
+NTFS-style case-simple fakes cover absent twins, observed aliases, restore,
+and an external exact occupant.
+- **Refs.** Effort S-M. Residual of #230.
 
 ### P2-09 · P1 · Retry after compaction orphans the task's journal; duplicate history rows
 - **Problem.** Compaction migrates finished tasks to history; a retry
@@ -2040,7 +2055,7 @@ names where the plan already places it; anything in D25 needs a 00 edit.
 | Adaptive off-isolate local copy with live throughput ("kernel copy" hint) | P1 | P1-07 (b) chunk timing budget | D8 |
 | ssh_config import "explain" view (effective directives with file:line) | P1 | Carry `sourcePath:line` in `SshConfigImportRow` | D22 |
 | Plan-time collision lens for transfers ("2 items map to one name") | P2 | Preview the task-local collision that D40 fails terminally at execution | |
-| Per-server filesystem traits probed once (setstat, posix-rename) | P2 | Extend D40's case/normalization probe to the remaining traits | |
+| Per-server protocol capabilities probed once (setstat, posix-rename) | P2 | Cache capability discovery beside D40's separate per-container name traits | |
 | Opt-in NFC-on-upload from macOS, per server | P2 | Transform in the walker's `plannedDest` with a flagged row | |
 | Transfer receipts (JSONL manifest per task, "export receipt") | P2, sibling | Manifest for completed items from `fileCompleted`: exact destination, counts, skips/failures, verification and retained backups, Reveal and Retry failed; partial/cancelled runs never look successful; respect disabled history | SR-01 |
 | Chaos property test for moves (seeded tree, fault injection, byte conservation) | P2 | Move-only, disconnect and cancel faults | |
@@ -2124,7 +2139,7 @@ Merged work from both reviews. Residuals stay as active entries above.
 | PGE-03 | [#213](https://github.com/L-K-M/Poltergeist/pull/213) | Merged | Shared file/parent flush ordering before deleting a local cross-volume trash source; originals preserved on reported flush failure | PGE-03a (non-Linux and remote durability, remote-cancel regression) |
 | P2-02, P2-03 | [#216](https://github.com/L-K-M/Poltergeist/pull/216) | Merged | Mirror never deletes beneath a symlink on either side; a replaced directory subsumes its destination-only descendants (05 §3, §6 rule 4); engine now agrees with the rsync exporter | P2-02a hazard counterpart, P2-02b scan-error prefix, P2-02c plan-view label, P2-03a one-way source dir, P2-03b app override verbs |
 | P2-05 | [#217](https://github.com/L-K-M/Poltergeist/pull/217) | Merged | Compaction only when reclaimable bytes pay for the rewrite | P2-09 (with duplicate history rows), P2-05a memory, P2-05b failing rewrite backoff |
-| P2-06 | [#230](https://github.com/L-K-M/Poltergeist/pull/230) | Merged | Task-lifetime destination ownership across case and normalization aliases; durable claims and per-container probes prevent destructive overwrite | PGE-03a (non-Linux and remote durability) |
+| P2-06 | [#230](https://github.com/L-K-M/Poltergeist/pull/230) | Merged | Task-lifetime destination ownership across case and normalization aliases; durable claims and per-container probes prevent destructive overwrite | P2-06a (exact fold-profile fidelity), PGE-03a (non-Linux and remote durability) |
 
 ### Review record for the sibling review's merged PRs
 

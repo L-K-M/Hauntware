@@ -1002,20 +1002,23 @@ non-negotiable:
   Before any entry owns an output, execution write-probes that resolved
   destination container for independent case and canonical-normalization
   sensitivity. Results are cached per container and a potential alias
-  re-probes before use. Probe failure that cannot establish traits folds on
-  both axes. Exact generated probe artifacts are reported as skipped rows,
-  never mistaken for user files sharing only the prefix; destructive
+  re-probes before use. Trait keys use canonical normalization and simple
+  one-code-point folding, preserving distinct names on normalized HFS+ and
+  upcase-table NTFS/exFAT. The separate conservative registry uses Linux
+  NFDICF: canonical decomposition, default-ignorable removal, then full
+  Unicode folding. Exact generated probe artifacts are reported as skipped
+  rows, never mistaken for user files sharing only the prefix; destructive
   directory mutation waits a bounded period for active probe cleanup and
   otherwise fails without acting.
 
   The task then claims **(destination endpoint id, resolved container,
   trait-keyed leaf)** for the source. Container identity is segment-wise:
   each component uses its parent's probed traits, including across nested
-  mounts. Output ownership outranks planned intent and covers in-flight,
-  completed, restored, and failed attempts until every terminal attempt and
-  cleanup operation drains. A later task item that aliases an output is
-  not an ordinary external conflict: `replace` and `replaceIfNewer` fail
-  terminally rather than erase it. This is v1's first
+  mounts. Output ownership outranks planned intent and lasts for the task
+  runtime, including terminal items, until that task is removed. A later
+  task item that aliases an output is not an ordinary external conflict:
+  `replace` and `replaceIfNewer` fail terminally rather than erase it. This is
+  v1's first
   terminal-fail-with-`conflict` escape hatch: the item emits a failed
   `TransferQueueItemEvent` and a `fileFailed` journal record with
   `withinTaskDestinationCollisionMessage`, `conflict` kind, and a
@@ -1031,10 +1034,13 @@ non-negotiable:
   A waiter holds no §4.3 slot or channel lease. Once the holder releases,
   the waiter re-stats and applies its ordinary conflict policy under the
   actual container traits, so exact-sensitive filesystems may still commit
-  both spellings. The registry holds only active claims and cannot grow
-  across a long session. The scan concurrently grows `plan`; `totalBytes`
-  is a running total rendered as `N+`, and both finalize when
-  `scanComplete` flips.
+  both spellings. If stat observes an occupant and another item in that task
+  already reserved output at the conservative alias, output ownership wins
+  even when the narrower trait key differs. This catches Linux fold-table
+  aliases without refusing two absent HFS+/NTFS names. The registry holds
+  only active claims and cannot grow across a long session. The scan
+  concurrently grows `plan`; `totalBytes` is a running total rendered as
+  `N+`, and both finalize when `scanComplete` flips.
 - **Execute** creates directories in order (**mkdir-then-classify**:
   "already exists as a directory" — including one a concurrent task
   created between check and call — is success, so two of the app's own
@@ -1341,8 +1347,8 @@ app-provided support directory (`EngineConfig`, §5):
   secondary lookup index for UI display, never the record's identity, so a post-crash
   re-scan's re-appended entries collapse onto the journaled ones instead of
   duplicating plan items or inflating totalBytes),
-  `destinationClaimed` (the exact selected path for a destructive or
-  renamed commit), `scanComplete` (including the probed root comparison),
+  `destinationClaimed` (the exact selected path for a move or renamed-output
+  commit), `scanComplete` (including the probed root comparison),
   `taskState`, `fileCompleted`, `fileFailed` (terminal per-item outcome,
   with error text and retry policy), `itemRemoved` (per-item cancel or skip,
   §4.4), `taskRemoved`. A `destinationClaimed` record is fsynced before the
@@ -1407,9 +1413,10 @@ app-provided support directory (`EngineConfig`, §5):
   replay never guesses that the path belongs to the interrupted attempt.
   Journal schema v2 adds these claims. Opening a v1 store atomically rewrites
   the **entire** recovered journal prefix to v2 before migrating finished
-  tasks, rewriting history, or compacting. An older build therefore sees a
-  v2 record at the front and fails closed after any crash in the migration,
-  rather than replaying a partially upgraded v1 queue. Unknown fields remain
+  tasks, rewriting history, or compacting. The atomic rewrite leaves the
+  journal wholly v1 or wholly v2, so a partially upgraded queue cannot be
+  replayed: after a crash, an older build either replays the intact v1 journal
+  or sees the leading v2 record and fails closed. Unknown fields remain
   attached to their raw journal/history lines through upgrade, compaction,
   and history trimming. A legacy `fileFailed` row without a retry policy
   restores terminally because recovery cannot prove that repeating its write
