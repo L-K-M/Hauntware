@@ -2679,6 +2679,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           // A completed op proves connectivity — the retry budget
           // bounds consecutive losses, not lifetime ones (03 §3.3).
           task.retryCount = 0;
+          if (outcome == null) return;
+
           _finishDeleteItem(runtime, work, outcome);
           return;
         } on RemoteFileException catch (error) {
@@ -2735,7 +2737,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// the trash path (remote) or the OS-reported trashed location (Put
   /// Back anchor — best-effort, often null); for the permanent path it
   /// is the source path itself.
-  Future<({String resolvedPath, ItemDisposition disposition})> _executeDelete(
+  Future<({String resolvedPath, ItemDisposition disposition})?> _executeDelete(
     _TaskRuntime runtime,
     RemoteFileSystem fs,
     _DeleteWork work,
@@ -2748,6 +2750,24 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         'delete task ${task.id} has no disposition; refusing to guess',
       );
     }
+
+    // A restored path can name different data than the user confirmed.
+    if (task.wasRestored) {
+      final current = await _statOrNull(fs, entry.path);
+      if (!_sameDeleteIdentity(entry, current)) {
+        _finishItem(
+          runtime,
+          work.item,
+          TransferItemState.skipped,
+          error: _deleteIdentityChangedDetail,
+        );
+        return null;
+      }
+
+      // Cancellation during the stat must not fall through to mutation.
+      if (work.item.isTerminal || task.cancellation.isCancelled) return null;
+    }
+
     switch (disposition) {
       case DeleteDisposition.permanent:
         await fs.delete(entry);
@@ -2774,6 +2794,15 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         return (resolvedPath: target, disposition: ItemDisposition.remoteTrash);
     }
   }
+
+  static bool _sameDeleteIdentity(
+    RemoteFileEntry confirmed,
+    RemoteFileEntry? current,
+  ) =>
+      current != null &&
+      current.type == confirmed.type &&
+      current.size == confirmed.size &&
+      current.modifiedAt == confirmed.modifiedAt;
 
   /// A delete item's completion: journal the trashed-vs-permanent
   /// outcome before the row flips (D15's per-item disposition record —
@@ -4864,6 +4893,28 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       runtime.notPaused = Completer();
     }
 
+    if (!restored.scanComplete &&
+        task.operation == TransferOperation.delete &&
+        task.spec.disposition == DeleteDisposition.permanent) {
+      // Replay cannot prove which unjournaled descendants were confirmed.
+      task.scanComplete = true;
+      _rebuildScannedDeletePlan(
+        runtime,
+        restored,
+        _RestoredDeletePendingMode.refuse,
+      );
+      task.plan!.skippedSymlinks = restored.skippedSymlinks;
+      _failTask(
+        runtime,
+        const RemoteFileException(
+          kind: RemoteFileErrorKind.conflict,
+          operation: 'delete',
+          message: _interruptedDeleteConfirmationDetail,
+        ),
+      );
+      return task;
+    }
+
     if (restored.scanComplete) {
       // Totals land BEFORE the rebuild: terminal-item bookkeeping inside
       // `_rebuildScannedPlan` can finish the task, and the finish path
@@ -4871,7 +4922,11 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       task.scanComplete = true;
       task.totalBytes = restored.totalBytes;
       if (restored.spec.operation == TransferOperation.delete) {
-        _rebuildScannedDeletePlan(runtime, restored);
+        _rebuildScannedDeletePlan(
+          runtime,
+          restored,
+          _RestoredDeletePendingMode.resume,
+        );
       } else {
         _rebuildScannedPlan(runtime, restored);
       }
@@ -5059,6 +5114,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   void _rebuildScannedDeletePlan(
     _TaskRuntime runtime,
     RestoredTransferTask restored,
+    _RestoredDeletePendingMode pendingMode,
   ) {
     final task = runtime.task;
     task.plan = TransferPlan();
@@ -5107,6 +5163,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
             item.failureKind = RemoteFileErrorKind.other;
             task.failedItems++;
           } else {
+            if (pendingMode == _RestoredDeletePendingMode.refuse) continue;
+
             _armDelete(runtime, _DeleteWork(item: item, entry: source));
           }
       }
@@ -6375,6 +6433,10 @@ const _maxCommitRetries = 8;
 /// Poll interval for probes started outside this queue's in-process gate.
 const _nameProbePollInterval = Duration(milliseconds: 10);
 
+const _deleteIdentityChangedDetail = 'changed since the delete was confirmed';
+const _interruptedDeleteConfirmationDetail =
+    'the interrupted permanent delete must be confirmed again';
+
 /// NUL cannot occur in a filesystem component, so nested ownership keys
 /// remain unambiguous without leaking platform separators into identity.
 const _destinationOwnershipPathSeparator = '\u0000';
@@ -6569,6 +6631,8 @@ class _DirState {
 enum _DirOutcome { pending, ready, skipped, failed, cancelled }
 
 enum _DestinationTraitRefreshMode { missingOnly, revalidate }
+
+enum _RestoredDeletePendingMode { resume, refuse }
 
 /// Serializes name probes with directory mutations on one endpoint.
 final class _AsyncGate {

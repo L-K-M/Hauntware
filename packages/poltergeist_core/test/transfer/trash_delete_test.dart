@@ -795,6 +795,250 @@ void main() {
       expect(confirmation.totalItems, isNull);
     });
 
+    test('a restored permanent delete skips changed path identities', () async {
+      final confirmedAt = DateTime.utc(2026, 9, 18);
+      final changedAt = confirmedAt.add(const Duration(seconds: 1));
+      const paths = [
+        '/data/size.txt',
+        '/data/mtime.txt',
+        '/data/type.txt',
+        '/data/missing.txt',
+        '/data/unchanged.txt',
+      ];
+      RemoteFileEntry confirmedEntry(String path) => RemoteFileEntry(
+        path: path,
+        name: remoteBasename(path),
+        type: RemoteFileType.file,
+        size: 1,
+        modifiedAt: confirmedAt,
+      );
+
+      remoteFs.addFile(paths[0], [1, 2], modifiedAt: confirmedAt);
+      remoteFs.addFile(paths[1], [1], modifiedAt: changedAt);
+      remoteFs.addSymlink(paths[2]);
+      remoteFs.addFile(paths[4], [1], modifiedAt: confirmedAt);
+
+      persistence.replayValue = TransferJournalReplay(
+        tasks: [
+          RestoredTransferTask(
+            taskId: 'restored-delete',
+            spec: TransferTaskSpec(
+              source: const ServerFsLocation('srv1'),
+              destination: const ServerFsLocation('srv1'),
+              rootPaths: paths,
+              destinationDir: '/data',
+              policy: ResolvedConflictPolicy(),
+              operation: TransferOperation.delete,
+              disposition: DeleteDisposition.permanent,
+            ),
+            enqueuedAt: confirmedAt,
+            wasPaused: false,
+            scanComplete: true,
+            totalBytes: paths.length,
+            skippedSymlinks: 0,
+            items: [
+              for (var index = 0; index < paths.length; index++)
+                RestoredPlanItem(
+                  itemId: 'item-$index',
+                  isDirectory: false,
+                  sourcePath: paths[index],
+                  destinationPath: paths[index],
+                  containerKey: null,
+                  name: remoteBasename(paths[index]),
+                  source: confirmedEntry(paths[index]),
+                  existing: null,
+                  outcome: null,
+                  error: null,
+                  failureKind: null,
+                  resolvedPath: null,
+                ),
+            ],
+            sweepDirectories: const {},
+          ),
+        ],
+      );
+
+      final queue = newQueue();
+      await queue.restore();
+      queue.resumeQueue();
+      final task = queue.tasks.single;
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      for (final item in task.items.take(4)) {
+        expect(item.state, TransferItemState.skipped);
+        expect(item.error, 'changed since the delete was confirmed');
+      }
+      for (final path in paths.take(3)) {
+        expect(remoteFs.entryAt(path), isNotNull);
+      }
+      expect(remoteFs.entryAt(paths[3]), isNull);
+      expect(task.items.last.state, TransferItemState.completed);
+      expect(remoteFs.entryAt(paths.last), isNull);
+      expect(remoteFs.deleteCalls, 1);
+    });
+
+    test(
+      'cancelling a restored delete during its identity check is inert',
+      () async {
+        final confirmedAt = DateTime.utc(2026, 9, 18);
+        const path = '/data/cancel.txt';
+        remoteFs.addFile(path, [1], modifiedAt: confirmedAt);
+        final statGate = Completer<void>();
+        remoteFs.statGate = (candidate) => candidate == path ? statGate : null;
+        persistence.replayValue = TransferJournalReplay(
+          tasks: [
+            RestoredTransferTask(
+              taskId: 'restored-delete',
+              spec: TransferTaskSpec(
+                source: const ServerFsLocation('srv1'),
+                destination: const ServerFsLocation('srv1'),
+                rootPaths: const [path],
+                destinationDir: '/data',
+                policy: ResolvedConflictPolicy(),
+                operation: TransferOperation.delete,
+                disposition: DeleteDisposition.permanent,
+              ),
+              enqueuedAt: confirmedAt,
+              wasPaused: false,
+              scanComplete: true,
+              totalBytes: 1,
+              skippedSymlinks: 0,
+              items: [
+                RestoredPlanItem(
+                  itemId: 'item-0',
+                  isDirectory: false,
+                  sourcePath: path,
+                  destinationPath: path,
+                  containerKey: null,
+                  name: 'cancel.txt',
+                  source: RemoteFileEntry(
+                    path: path,
+                    name: 'cancel.txt',
+                    type: RemoteFileType.file,
+                    size: 1,
+                    modifiedAt: confirmedAt,
+                  ),
+                  existing: null,
+                  outcome: null,
+                  error: null,
+                  failureKind: null,
+                  resolvedPath: null,
+                ),
+              ],
+              sweepDirectories: const {},
+            ),
+          ],
+        );
+
+        final queue = newQueue();
+        await queue.restore();
+        queue.resumeQueue();
+        final task = queue.tasks.single;
+        await pumpUntil(
+          () => remoteFs.calls.contains('stat:$path'),
+          reason: 'the restored identity check never started',
+        );
+
+        expect(queue.cancelItem(task.id, task.items.single.id), isTrue);
+        remoteFs.statGate = null;
+        statGate.complete();
+        await awaitTaskDone(task);
+
+        expect(task.items.single.state, TransferItemState.cancelled);
+        expect(remoteFs.entryAt(path), isNotNull);
+        expect(remoteFs.deleteCalls, 0);
+      },
+    );
+
+    test(
+      'a restored mid-scan permanent delete requires confirmation again',
+      () async {
+        final confirmedAt = DateTime.utc(2026, 9, 18);
+        const completedPath = '/data/completed.txt';
+        const pendingPath = '/data/pending.txt';
+        remoteFs.addFile(pendingPath, [1], modifiedAt: confirmedAt);
+        RemoteFileEntry confirmedEntry(String path) => RemoteFileEntry(
+          path: path,
+          name: remoteBasename(path),
+          type: RemoteFileType.file,
+          size: 1,
+          modifiedAt: confirmedAt,
+        );
+        persistence.replayValue = TransferJournalReplay(
+          tasks: [
+            RestoredTransferTask(
+              taskId: 'restored-delete',
+              spec: TransferTaskSpec(
+                source: const ServerFsLocation('srv1'),
+                destination: const ServerFsLocation('srv1'),
+                rootPaths: const [completedPath, pendingPath],
+                destinationDir: '/data',
+                policy: ResolvedConflictPolicy(),
+                operation: TransferOperation.delete,
+                disposition: DeleteDisposition.permanent,
+              ),
+              enqueuedAt: confirmedAt,
+              wasPaused: false,
+              scanComplete: false,
+              totalBytes: null,
+              skippedSymlinks: 0,
+              items: [
+                RestoredPlanItem(
+                  itemId: 'completed-item',
+                  isDirectory: false,
+                  sourcePath: completedPath,
+                  destinationPath: completedPath,
+                  containerKey: null,
+                  name: 'completed.txt',
+                  source: confirmedEntry(completedPath),
+                  existing: null,
+                  outcome: RestoredItemOutcome.completed,
+                  error: null,
+                  failureKind: null,
+                  resolvedPath: completedPath,
+                  disposition: ItemDisposition.permanent,
+                ),
+                RestoredPlanItem(
+                  itemId: 'pending-item',
+                  isDirectory: false,
+                  sourcePath: pendingPath,
+                  destinationPath: pendingPath,
+                  containerKey: null,
+                  name: 'pending.txt',
+                  source: confirmedEntry(pendingPath),
+                  existing: null,
+                  outcome: null,
+                  error: null,
+                  failureKind: null,
+                  resolvedPath: null,
+                ),
+              ],
+              sweepDirectories: const {},
+            ),
+          ],
+        );
+
+        final queue = newQueue();
+        await queue.restore();
+        queue.resumeQueue();
+        final task = queue.tasks.single;
+        await awaitTaskDone(task);
+
+        expect(task.state, TransferTaskState.failed);
+        expect(task.error, contains('confirm'));
+        expect(task.items, hasLength(2));
+        expect(task.items[0].state, TransferItemState.completed);
+        expect(task.items[0].disposition, ItemDisposition.permanent);
+        expect(task.items[1].state, TransferItemState.failed);
+        expect(task.totalFiles, 2);
+        expect(task.completedFiles, 1);
+        expect(persistence.historyEntries.single.completedFiles, 1);
+        expect(remoteFs.entryAt(pendingPath), isNotNull);
+        expect(remoteFs.deleteCalls, 0);
+      },
+    );
+
     test('a restored delete task resumes pending items, terminal rows '
         'never resurrect', () async {
       // Phase 1: a persisted delete task that ran to completion.

@@ -4,6 +4,20 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Restored delete identity safety (2026-09-28)
+
+Restored delete tasks now stat each pending path without following links and
+require its type, size, and modification time to match the journaled entry.
+Changed or missing paths are skipped instead of deleting replacement data.
+An interrupted permanent delete whose scan was incomplete now fails and must
+be confirmed again while retaining its journaled Activity rows; interrupted
+trash moves may still resume. Cancellation during revalidation is inert.
+
+The regression first reproduced deletion of changed paths and resumption of an
+incomplete permanent scan. It now covers size, modification-time, type, and
+missing-path changes plus an unchanged control. Core analysis is clean; all
+1,706 core tests pass with 27 environment skips. Import boundaries are clean.
+
 ## Destination collision ownership (2026-09-28)
 
 Transfer tasks now probe each resolved destination container for independent
