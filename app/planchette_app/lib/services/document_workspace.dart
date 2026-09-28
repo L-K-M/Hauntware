@@ -679,9 +679,10 @@ final class DocumentWorkspace extends ChangeNotifier {
               (tab) => reviewed[tab] != tab.editor.text.text,
             );
             if (changed.isNotEmpty) {
-              _reportError(
+              _reportTabRefusal(
                 '${changed.first.name} changed while the prompt was open, so '
                 'nothing was discarded. Review it, then quit again.',
+                changed.first,
               );
               return false;
             }
