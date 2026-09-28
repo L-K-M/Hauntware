@@ -62,6 +62,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   final _decorationsKey = GlobalKey();
   int _lastReveal = -1;
   bool _revealQueued = false;
+  int _lastCaretReveal = 0;
   EditorController get c => widget.controller;
   TextStyle get _style =>
       const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
@@ -71,6 +72,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void initState() {
     super.initState();
     c.addListener(_changed);
+    _lastCaretReveal = c.caretRevealRequest;
     c.setViewEditingLocked(this, widget.editingLocked);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) c.initialize();
@@ -93,6 +95,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       oldWidget.controller.setViewEditingLocked(this, false);
       c.addListener(_changed);
       _lastReveal = -1;
+      _lastCaretReveal = c.caretRevealRequest;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) c.initialize();
       });
@@ -118,6 +121,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void _changed() {
     if (!mounted) return;
     setState(() {});
+    if (_lastCaretReveal != c.caretRevealRequest) {
+      _lastCaretReveal = c.caretRevealRequest;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _revealCaret();
+      });
+    }
     if (_lastReveal != c.revealRequest && !_revealQueued) {
       _revealQueued = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -127,6 +136,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         _revealMatch();
       });
     }
+  }
+
+  /// Scrolls just far enough to show a caret that a command moved, the way
+  /// typing does.
+  void _revealCaret() {
+    final selection = c.text.selection;
+    if (!selection.isValid) return;
+    c.editorFocus.context
+        ?.findAncestorStateOfType<EditableTextState>()
+        ?.bringIntoView(selection.extent);
   }
 
   void _revealMatch() {
@@ -199,7 +218,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         children: [
           if (widget.banner != null) widget.banner!,
           if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
-          Expanded(child: _decorated(context, _body())),
+          Expanded(child: _decorated(context, _lineCommands(context, _body()))),
           if (widget.showStatus && !c.isLoading && c.error == null) ...[
             const Divider(height: 1),
             SafeArea(
@@ -510,6 +529,51 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     );
   }
 
+  /// Line commands, bound around the document field only so the find fields
+  /// keep their own arrow keys.
+  Widget _lineCommands(BuildContext context, Widget document) {
+    final apple = switch (Theme.of(context).platform) {
+      TargetPlatform.iOS || TargetPlatform.macOS => true,
+      _ => false,
+    };
+    return Shortcuts(
+      shortcuts: apple ? _appleLineShortcuts : _lineShortcuts,
+      child: Actions(actions: _lineActions, child: document),
+    );
+  }
+
+  // Built once: a new map or action on every keystroke's rebuild would make
+  // the shortcut manager re-index and the actions notify their dependents.
+  late final Map<Type, Action<Intent>> _lineActions = {
+    _LineCommandIntent: _LineCommandAction(() => c),
+  };
+  static final _appleLineShortcuts = _lineCommandShortcuts(apple: true);
+  static final _lineShortcuts = _lineCommandShortcuts(apple: false);
+
+  /// Command on Apple platforms and Control elsewhere; Option or Alt with an
+  /// arrow moves lines on every platform.
+  static Map<ShortcutActivator, Intent> _lineCommandShortcuts({
+    required bool apple,
+  }) {
+    SingleActivator primary(LogicalKeyboardKey key, {bool shift = false}) =>
+        SingleActivator(key, meta: apple, control: !apple, shift: shift);
+    return {
+      primary(LogicalKeyboardKey.keyD, shift: true): const _LineCommandIntent(
+        _LineCommand.duplicate,
+      ),
+      const SingleActivator(LogicalKeyboardKey.arrowUp, alt: true):
+          const _LineCommandIntent(_LineCommand.moveUp),
+      const SingleActivator(LogicalKeyboardKey.arrowDown, alt: true):
+          const _LineCommandIntent(_LineCommand.moveDown),
+      primary(LogicalKeyboardKey.keyK, shift: true): const _LineCommandIntent(
+        _LineCommand.delete,
+      ),
+      primary(LogicalKeyboardKey.keyJ): const _LineCommandIntent(
+        _LineCommand.join,
+      ),
+    };
+  }
+
   double _measureGutter(TextScaler scaler) {
     final painter = TextPainter(
       text: TextSpan(
@@ -782,4 +846,37 @@ final class _LineGeometry {
 
   double topOf(int offset) =>
       editable.getLocalRectForCaret(TextPosition(offset: offset)).top - _bias;
+}
+
+enum _LineCommand { duplicate, moveUp, moveDown, delete, join }
+
+class _LineCommandIntent extends Intent {
+  const _LineCommandIntent(this.command);
+  final _LineCommand command;
+}
+
+/// Runs a line command. While the buffer cannot be edited (read-only,
+/// loading, or an input method composing) the key is left to the text
+/// field, so Option+arrow still moves the caret in a locked document. A
+/// command that does not apply, such as moving the first line up, still
+/// consumes its key rather than falling through to an unrelated binding.
+class _LineCommandAction extends Action<_LineCommandIntent> {
+  // Read on each use, since the view can be handed another controller.
+  _LineCommandAction(this._controller);
+  final EditorController Function() _controller;
+
+  @override
+  bool isEnabled(_LineCommandIntent intent) => _controller().canEditText;
+
+  @override
+  bool invoke(_LineCommandIntent intent) {
+    final controller = _controller();
+    return switch (intent.command) {
+      _LineCommand.duplicate => controller.duplicateLines(),
+      _LineCommand.moveUp => controller.moveLines(LineDirection.up),
+      _LineCommand.moveDown => controller.moveLines(LineDirection.down),
+      _LineCommand.delete => controller.deleteLines(),
+      _LineCommand.join => controller.joinLines(),
+    };
+  }
 }

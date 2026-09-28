@@ -454,6 +454,33 @@ void main() {
   );
 
   testWidgets(
+    'line commands run once from the Edit menu and the keyboard',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'one\ntwo';
+      await mount(tester);
+      tab.editor.text.selection = const TextSelection.collapsed(offset: 1);
+      await tester.pump();
+
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move Line Down'));
+      await tester.pumpAndSettle();
+      expect(tab.editor.text.text, 'two\none');
+
+      tab.editor.editorFocus.requestFocus();
+      await tester.pump();
+      await chord(tester, LogicalKeyboardKey.keyD, shift: true);
+      expect(tab.editor.text.text, 'two\none\none');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!
