@@ -772,4 +772,65 @@ void main() {
       );
     }
   });
+
+  // From #21: Find Next after the find bar closed did nothing.
+  group('Find Next with the bar closed', () {
+    EditorController closedOn(String text, String query) {
+      final editor = EditorController(displayPath: 'a.txt', initialText: text);
+      addTearDown(editor.dispose);
+      editor
+        ..openSearch()
+        ..search.text = query
+        ..closeSearch();
+      return editor;
+    }
+
+    test('goes on from the match it left selected', () {
+      final editor = closedOn('cat dog cat dog cat', 'cat')
+        ..text.selection = const TextSelection(baseOffset: 8, extentOffset: 11);
+      editor.nextMatch();
+      expect(editor.searchOpen, isTrue);
+      expect(editor.search.text, 'cat');
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 16, extentOffset: 19),
+      );
+    });
+
+    test('takes the nearest match on either side of a moved caret', () {
+      final editor = closedOn('cat dog cat dog cat', 'cat')
+        ..text.selection = const TextSelection.collapsed(offset: 5);
+      editor.nextMatch();
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 8, extentOffset: 11),
+      );
+      editor
+        ..closeSearch()
+        ..text.selection = const TextSelection.collapsed(offset: 5)
+        ..previousMatch();
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 0, extentOffset: 3),
+      );
+    });
+
+    test('keeps the remembered query rather than the selection', () {
+      final editor = closedOn('Cat cat', 'cat')
+        ..text.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+      editor.nextMatch();
+      expect(editor.search.text, 'cat');
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 4, extentOffset: 7),
+      );
+    });
+
+    test('with nothing remembered, opens the find field', () {
+      final editor = closedOn('cat', '');
+      editor.nextMatch();
+      expect(editor.searchOpen, isTrue);
+      expect(editor.search.text, isEmpty);
+    });
+  });
 }

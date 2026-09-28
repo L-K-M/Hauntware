@@ -901,9 +901,43 @@ class EditorController extends ChangeNotifier {
     }
   }
 
-  void nextMatch() => _stepMatch(1);
+  void nextMatch() => _findAgain(1);
 
-  void previousMatch() => _stepMatch(-1);
+  void previousMatch() => _findAgain(-1);
+
+  /// Find Next and Find Previous. With the find bar closed, they reopen it
+  /// on the remembered query and step from the caret, leaving focus in the
+  /// document so typing still edits it; with nothing remembered, they open
+  /// the find field to type a query.
+  void _findAgain(int delta) {
+    if (!_searchOpen) {
+      if (search.text.isEmpty) {
+        openSearch();
+        return;
+      }
+      if (_loading || _error != null) return;
+      final selection = text.selection;
+      _searchOpen = true;
+      // Makes the first match at or after the caret active.
+      _updateMatches(resetActive: true);
+      if (_matches.isEmpty) {
+        _notify();
+        return;
+      }
+      final active = _matches[_activeMatch];
+      final onActive =
+          selection.isValid &&
+          selection.start == active.start &&
+          selection.end == active.end;
+      // Unless it is the match an earlier find left selected, Find Next
+      // takes that match as it is.
+      if (delta > 0 && !onActive) {
+        _selectMatch(_activeMatch);
+        return;
+      }
+    }
+    _stepMatch(delta);
+  }
 
   /// The find bar holds one window of matches, capped so a minified file cannot
   /// flood it with spans. Stepping inside the window is instant; stepping off

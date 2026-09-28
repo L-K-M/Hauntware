@@ -292,4 +292,39 @@ void main() {
     // 1,001st to 1,003rd, and nothing follows them.
     expect(find.text('1001/1003'), findsOneWidget);
   });
+
+  testWidgets('F3 after closing find leaves typing in the document', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat dog cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller
+      ..openSearch()
+      ..search.text = 'cat';
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isFalse);
+    expect(controller.editorFocus.hasFocus, isTrue);
+
+    // The caret never left the start, so the first match is next.
+    await tester.sendKeyEvent(LogicalKeyboardKey.f3);
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isTrue);
+    expect(controller.editorFocus.hasFocus, isTrue);
+    expect(
+      controller.text.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 3),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.f3);
+    await tester.pumpAndSettle();
+    expect(
+      controller.text.selection,
+      const TextSelection(baseOffset: 8, extentOffset: 11),
+    );
+  });
 }

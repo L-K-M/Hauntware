@@ -117,6 +117,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fell back to the proportional system font. `PlanchetteEditor.textStyle`
   now merges over the platform's family (`editorMonospaceFor`), and a host
   passing the generic name gets that family too.
+- Find Next and Find Previous work after the find bar is closed: they
+  reopen it on the last query and move from the caret, leaving the cursor
+  in the document.
 - Opening a file that no longer exists says so, instead of showing
   `dart:io`'s `PathNotFoundException` with its errno.
 - The window opens on the app's own background in the current light or
