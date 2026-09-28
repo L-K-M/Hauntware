@@ -381,4 +381,21 @@ void main() {
     },
     variant: const TargetPlatformVariant({TargetPlatform.macOS}),
   );
+
+  testWidgets('the error banner announces itself as a live region', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await mount(tester);
+    await workspace.open(testPath('missing.txt'));
+    await tester.pumpAndSettle();
+
+    final message = find.textContaining('Could not open');
+    expect(message, findsOneWidget);
+    final banner = find.byKey(const ValueKey('workspace-error-banner'));
+    expect(tester.getSemantics(banner), isSemantics(isLiveRegion: true));
+    semantics.dispose();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 }

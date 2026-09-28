@@ -660,4 +660,76 @@ void main() {
       expect(tab.path, isNull);
     },
   );
+
+  test('a failed save retires its banner when that document saves', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original');
+    await workspace.open(testPath('one.txt'));
+    final tab = workspace.active!..editor.text.text = 'edited';
+    store.writeError = const FileSystemException('Disk full');
+    expect(await workspace.save(tab), isFalse);
+    expect(workspace.error, contains('Disk full'));
+
+    store.writeError = null;
+    expect(await workspace.save(tab), isTrue);
+    expect(workspace.error, isNull);
+  });
+
+  test('a success on one document keeps another failure visible', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original');
+    await workspace.open(testPath('one.txt'));
+    final opened = workspace.active!;
+    final draft = workspace.newDocument()!..editor.text.text = 'draft';
+    dialogs.savePath = testPath('one.txt');
+    expect(await workspace.save(draft), isFalse);
+    expect(workspace.error, contains('already open'));
+
+    opened.editor.text.text = 'edited';
+    expect(await workspace.save(opened), isTrue);
+    expect(workspace.error, contains('already open'));
+  });
+
+  test('a failed open retires its banner when that path opens', () async {
+    await workspace.open(testPath('missing.txt'));
+    expect(workspace.error, contains('Could not open'));
+
+    store.files[testPath('missing.txt')] = document('missing.txt', 'arrived');
+    await workspace.open(testPath('missing.txt'));
+    expect(workspace.error, isNull);
+  });
+
+  test('a save success does not clear an unrelated open failure', () async {
+    await workspace.open(testPath('missing.txt'));
+    expect(workspace.error, contains('Could not open'));
+
+    final tab = workspace.newDocument()!..editor.text.text = 'draft';
+    dialogs.savePath = testPath('draft.txt');
+    expect(await workspace.save(tab), isTrue);
+    expect(workspace.error, contains('missing.txt'));
+  });
+
+  test('a quit failure survives unrelated successes', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'draft';
+    dialogs.savePath = testPath('draft.txt');
+    workspace.quitFailed(StateError('destroy failed'));
+    expect(workspace.error, contains('Could not close Planchette'));
+
+    expect(await workspace.save(tab), isTrue);
+    expect(workspace.error, contains('Could not close Planchette'));
+  });
+
+  test('a still-opening refusal clears when the load completes', () async {
+    store.files[testPath('slow.txt')] = document('slow.txt', 'on disk');
+    store.loadGate = Completer<void>();
+    final opening = workspace.open(testPath('slow.txt'));
+    await Future<void>.delayed(Duration.zero);
+    final tab = workspace.active!;
+    expect(tab.editor.isLoading, isTrue);
+
+    expect(await workspace.save(tab), isFalse);
+    expect(workspace.error, contains('still opening'));
+
+    store.loadGate!.complete();
+    await opening;
+    expect(workspace.error, isNull);
+  });
 }
