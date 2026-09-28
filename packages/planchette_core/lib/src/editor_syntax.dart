@@ -1460,12 +1460,21 @@ typedef CaseFolder = String Function(String value);
 
 /// Substring search used by the editor's find bar, reporting how the case
 /// handling went. Capped at [limit] matches.
+///
+/// [start] is where the scan begins, and with [reverse] it is instead the
+/// exclusive upper bound: the window is the last [limit] matches before it,
+/// still in document order and enumerated exactly as a forward scan would.
+/// Null, the default, means the whole haystack. A find bar that only highlights
+/// its first page of matches needs both directions, and both must describe the
+/// same occurrences or stepping back offers matches stepping forward never did.
 SearchResult searchText(
   String text,
   String query, {
   bool caseSensitive = false,
   int limit = searchMatchLimit,
   CaseFolder fold = _lowercase,
+  int? start,
+  bool reverse = false,
 }) {
   if (query.isEmpty) {
     return const SearchResult(matches: [], caseFolding: CaseFolding.exact);
@@ -1491,7 +1500,23 @@ SearchResult searchText(
     }
   }
   final matches = <TextMatch>[];
-  var from = 0;
+  if (reverse) {
+    // A sliding window over the forward enumeration. Scanning backwards with
+    // lastIndexOf would instead report overlapping occurrences — 'aa' in
+    // 'aaaa' is [0, 2] forwards and [0, 1, 2] backwards — so Find Previous
+    // would offer hits Find Next never had.
+    final bound = (start ?? haystack.length).clamp(0, haystack.length);
+    var windowFrom = 0;
+    while (true) {
+      final at = haystack.indexOf(needle, windowFrom);
+      if (at < 0 || at >= bound) break;
+      if (matches.length == limit) matches.removeAt(0);
+      matches.add(TextMatch(start: at, end: at + needle.length));
+      windowFrom = at + needle.length;
+    }
+    return SearchResult(matches: matches, caseFolding: caseFolding);
+  }
+  var from = (start ?? 0).clamp(0, haystack.length);
   while (matches.length < limit) {
     final at = haystack.indexOf(needle, from);
     if (at < 0) break;
@@ -1511,5 +1536,14 @@ List<TextMatch> findSearchMatches(
   String query, {
   bool caseSensitive = false,
   int limit = searchMatchLimit,
+  int? start,
+  bool reverse = false,
 }) =>
-    searchText(text, query, caseSensitive: caseSensitive, limit: limit).matches;
+    searchText(
+      text,
+      query,
+      caseSensitive: caseSensitive,
+      limit: limit,
+      start: start,
+      reverse: reverse,
+    ).matches;

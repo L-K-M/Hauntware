@@ -277,13 +277,21 @@ List<TextRange> findSearchMatches(
   bool caseSensitive = false,
   int limit = searchMatchLimit,
   CaseFolder fold = _defaultCaseFolder,
-}) => searchText(
-  text,
-  query,
-  caseSensitive: caseSensitive,
-  limit: limit,
-  fold: fold,
-).matches;
+  int? start,
+  bool reverse = false,
+}) => core
+    .searchText(
+      text,
+      query,
+      caseSensitive: caseSensitive,
+      limit: limit,
+      fold: fold,
+      start: start,
+      reverse: reverse,
+    )
+    .matches
+    .map((match) => TextRange(start: match.start, end: match.end))
+    .toList(growable: false);
 
 String _defaultCaseFolder(String value) => value.toLowerCase();
 

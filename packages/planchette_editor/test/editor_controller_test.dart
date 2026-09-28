@@ -208,6 +208,74 @@ void main() {
     editor.replaceAll();
     expect(editor.text.text, 'dog CAT dog');
   });
+  test('Find Next reaches matches beyond the highlight cap', () {
+    final occurrences = searchMatchLimit + 3;
+    final editor = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(occurrences, 'hit').join('\n'),
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.search.text = 'hit';
+    expect(editor.matches.length, searchMatchLimit);
+
+    // The first page is already selected; step to the end of the document.
+    for (var i = 1; i < occurrences; i++) {
+      editor.nextMatch();
+    }
+    final last = editor.matches.last;
+    expect(
+      editor.text.selection,
+      TextSelection(baseOffset: last.start, extentOffset: last.end),
+    );
+    expect(editor.matches.first.start, greaterThan(0));
+
+    // One more step wraps back to the first occurrence in the document.
+    editor.nextMatch();
+    expect(editor.text.selection.baseOffset, 0);
+  });
+
+  test('Find Previous walks back through the whole document', () {
+    final occurrences = searchMatchLimit + 3;
+    final editor = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(occurrences, 'hit').join('\n'),
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.search.text = 'hit';
+
+    // From the first match, stepping back lands on the last occurrence.
+    editor.previousMatch();
+    final last = editor.matches.last;
+    expect(
+      editor.text.selection,
+      TextSelection(baseOffset: last.start, extentOffset: last.end),
+    );
+
+    for (var i = 1; i < occurrences; i++) {
+      editor.previousMatch();
+    }
+    expect(editor.text.selection.baseOffset, 0);
+  });
+
+  test('a window smaller than the cap wraps in both directions', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'cat CAT cat',
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.search.text = 'cat';
+
+    for (var i = 0; i < 3; i++) {
+      editor.nextMatch();
+    }
+    expect(editor.text.selection.baseOffset, 0);
+    editor.previousMatch();
+    expect(editor.text.selection.baseOffset, 8);
+  });
+
   test('Save As metadata preserves selection and detects the new language', () {
     final editor = EditorController(
       displayPath: 'Untitled',
