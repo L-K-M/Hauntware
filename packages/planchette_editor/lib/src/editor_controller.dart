@@ -145,9 +145,13 @@ class EditorController extends ChangeNotifier {
   }
 
   (int, int) get caretLineColumn {
-    // An invalid selection means the caret was elsewhere — report the last
-    // one _textChanged observed instead of a plausible-looking (1, 1).
-    final offset = _lastCaretOffset.clamp(0, text.text.length);
+    // A valid selection is ground truth; an invalid one means the caret was
+    // elsewhere — report the last offset _textChanged observed instead of a
+    // plausible-looking (1, 1).
+    final selection = text.selection;
+    final offset =
+        (selection.isValid ? selection.extentOffset : _lastCaretOffset)
+            .clamp(0, text.text.length);
     final starts = lineStarts;
     var lo = 0;
     var hi = starts.length - 1;
