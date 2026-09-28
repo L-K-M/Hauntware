@@ -317,6 +317,33 @@ void main() {
       expect((await store.load())?.fontSize, 16);
     });
 
+    test(
+      'review fix: a linked settings file stays a link',
+      () async {
+        // Renaming over the link replaced it with a regular file, so a
+        // dotfiles copy the link points at stopped receiving changes.
+        final directory = await Directory.systemTemp.createTemp(
+          'planchette-settings-link-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final dotfiles = await Directory('${directory.path}/dotfiles').create();
+        final real = File('${dotfiles.path}/settings.json');
+        await real.writeAsString('{"fontSize": 20}');
+        final config = await Directory('${directory.path}/config').create();
+        final linked = File('${config.path}/settings.json');
+        await Link(linked.path).create('../dotfiles/settings.json');
+
+        final store = LocalSettingsStore(linked);
+        expect((await store.load())?.fontSize, 20);
+        await store.save(const AppSettings(fontSize: 22));
+        expect(FileSystemEntity.isLinkSync(linked.path), isTrue);
+        expect(jsonDecode(await real.readAsString())['fontSize'], 22);
+      },
+      skip: Platform.isWindows
+          ? 'Creating symbolic links needs extra rights on Windows.'
+          : null,
+    );
+
     test('an unwritable destination reports rather than throws', () async {
       // The parent is a regular file, so the path cannot be created on any
       // platform. An absolute path under the drive root is not enough: on a
