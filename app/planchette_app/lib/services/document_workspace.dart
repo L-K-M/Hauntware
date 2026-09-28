@@ -56,6 +56,10 @@ final class DocumentTab {
   String? path;
   bool busy = false;
 
+  /// Set while a confirmed revert reads the file. The buffer is about to be
+  /// replaced, so it takes no edits and no save may write it.
+  bool _reverting = false;
+
   /// Bumped when the tab is chosen by opening a document it already holds, so
   /// the shell can point at it. Monotonic, never reset: a view compares it to
   /// the previous build's value.
@@ -500,6 +504,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   }) async {
     _saveFailures.remove(tab);
     _declinedSaves.remove(tab);
+    if (tab._reverting) {
+      // Reachable only through a shortcut pressed before the menus caught up;
+      // writing now would put the discarded edits back on disk.
+      _saveFailures[tab] = 'it is being reverted';
+      return false;
+    }
     if (tab.editor.isLoading || tab.editor.error != null) {
       // Reachable from a close, where a refusal needs an outcome. A document
       // that failed to load has already reported its own error, so only the
@@ -624,9 +634,10 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (interactionLocked || _savingAll) return false;
     _savingAll = true;
     try {
+      // A tab being reverted is dirty only with edits the user discarded.
       final dirty = [
         for (final tab in _documents)
-          if (tab.editor.isDirty) tab,
+          if (tab.editor.isDirty && !tab._reverting) tab,
       ];
       return await _saveEach(dirty, _SaveRun.saveAll);
     } finally {
@@ -869,6 +880,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       if (!confirmed) return false;
     }
     tab.busy = true;
+    tab._reverting = true;
     _notify();
     try {
       // Read here rather than through the editor's loader: the document
@@ -892,6 +904,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       return false;
     } finally {
       tab.busy = false;
+      tab._reverting = false;
       _notify();
     }
   }
@@ -1102,7 +1115,10 @@ final class DocumentWorkspace extends ChangeNotifier {
       _errorScope = null;
     }
     for (final tab in _documents) {
-      tab.editor.setEditingLocked(interactionLocked, notify: false);
+      tab.editor.setEditingLocked(
+        interactionLocked || tab._reverting,
+        notify: false,
+      );
     }
     if (interactionLocked) {
       _unlocked ??= Completer<void>();

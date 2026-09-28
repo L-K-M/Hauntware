@@ -1094,6 +1094,40 @@ void main() {
     expect(tab.editor.isDirty, isFalse);
   });
 
+  test('review fix: a save cannot write edits a revert discards', () async {
+    // The buffer stayed dirty while the file was read, so Save All wrote
+    // the edits the user had just chosen to discard over the file.
+    final tab = await openOne();
+    tab.editor.text.text = 'discard me';
+    store.loadGate = Completer<void>();
+    final reverting = workspace.revert(tab);
+    await pumpEventQueue();
+    final savingAll = workspace.saveAll();
+    final saving = workspace.save(tab);
+    await pumpEventQueue();
+    store.loadGate!.complete();
+    expect(await reverting, isTrue);
+    await savingAll;
+    expect(await saving, isFalse);
+    expect(store.writes, isEmpty);
+    expect(store.files[testPath('one.txt')]!.text, 'disk');
+    expect(tab.editor.text.text, 'disk');
+    expect(tab.editor.isDirty, isFalse);
+  });
+
+  test('review fix: a tab being reverted takes no edits', () async {
+    // Typing during the read was replaced by the file without a word.
+    final tab = await openOne();
+    store.loadGate = Completer<void>();
+    final reverting = workspace.revert(tab);
+    await pumpEventQueue();
+    expect(tab.editor.editingLocked, isTrue);
+    expect(tab.editor.canEditText, isFalse);
+    store.loadGate!.complete();
+    expect(await reverting, isTrue);
+    expect(tab.editor.editingLocked, isFalse);
+  });
+
   test('revert follows a Save As retarget', () async {
     store.files[testPath('a.txt')] = document('a.txt', 'content a');
     await workspace.open(testPath('a.txt'));
