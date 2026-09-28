@@ -27,6 +27,8 @@ class EditorStrings {
   String get goToLine => 'Go to line';
   String get closeGoToLine => 'Close go to line';
   String goToLineHint(int lines) => 'Line or line:column, 1 to $lines';
+  String goToLineInvalid(int lines) =>
+      'Enter a line from 1 to $lines, or line:column.';
   String selectionSummary(int characters, int lines) => lines > 1
       ? '$characters selected on $lines lines'
       : '$characters selected';

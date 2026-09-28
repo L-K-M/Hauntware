@@ -48,6 +48,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Find › Go to Matching Bracket (`Cmd/Ctrl+B`, with Shift to select) jumps
   to the partner of the bracket beside the caret, skipping brackets in
   strings and comments.
+- Find › Go to Line (`Cmd+L` on macOS, `Ctrl+G` elsewhere, or a click on
+  the caret position in the status bar) jumps to a line or `line:column`,
+  and says what it takes when the input is not a number. The status bar
+  also shows the selection's size and lines, the size the file has once
+  saved, the indentation and the language.
 - A faint band marks the caret's line. It is on by default in the shared
   editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
   `Colors.transparent` to turn it off.
@@ -89,3 +94,5 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Line numbers stay on their lines when lines soft-wrap, at any document
   size, and typing no longer lays the whole document out a second time for
   the gutter. Find reveals a match on its real row in large wrapped files.
+- On macOS, `Ctrl+F`, `Ctrl+H` and `Ctrl+G` keep their text-editing meaning
+  instead of opening find, replace or Go to Line.

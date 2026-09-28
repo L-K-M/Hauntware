@@ -139,6 +139,88 @@ void main() {
     expect(c.editorFocus.hasFocus, isTrue);
   });
 
+  testWidgets('unreadable input says what the field takes until edited', (
+    tester,
+  ) async {
+    final c = await mount(tester, text: 'ab\ncdef\ng');
+    c.openGoToLine();
+    await tester.pump();
+    final field = find.byWidgetPredicate(
+      (w) => w is TextField && w.controller == c.goToLineInput,
+    );
+    const message = 'Enter a line from 1 to 3, or line:column.';
+    await tester.enterText(field, 'twelve');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(c.goToLineInputInvalid, isTrue);
+    expect(find.text(message), findsOneWidget);
+
+    // Selecting the rejected text keeps the message; editing it clears it.
+    c.goToLineInput.selection = const TextSelection.collapsed(offset: 2);
+    await tester.pump();
+    expect(find.text(message), findsOneWidget);
+    await tester.enterText(field, '2');
+    await tester.pump();
+    expect(c.goToLineInputInvalid, isFalse);
+    expect(find.text(message), findsNothing);
+
+    // A line past the end is not an error: it goes to the last line.
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(c.goToLineOpen, isFalse);
+    c.openGoToLine();
+    await tester.pump();
+    await tester.enterText(field, '99');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(c.goToLineOpen, isFalse);
+    expect(c.caretLineColumn, (3, 1));
+
+    // Closing forgets the message.
+    c.openGoToLine();
+    await tester.pump();
+    await tester.enterText(field, 'x');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(find.text(message), findsOneWidget);
+    c.closeGoToLine();
+    c.openGoToLine();
+    await tester.pump();
+    expect(find.text(message), findsNothing);
+  });
+
+  testWidgets('Escape closes the bar that has focus', (tester) async {
+    final c = await mount(tester, text: 'one\ntwo');
+    c.openGoToLine();
+    c.openSearch();
+    await tester.pump();
+    expect(c.searchFocus.hasFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(c.searchOpen, isFalse);
+    expect(c.goToLineOpen, isTrue);
+
+    // Let the reopened find field take its focus before moving it.
+    c.openSearch();
+    await tester.pump();
+    c.goToLineFocus.requestFocus();
+    await tester.pump();
+    expect(c.goToLineFocus.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(c.goToLineOpen, isFalse);
+    expect(c.searchOpen, isTrue);
+  });
+
+  testWidgets('a column inside a character lands before it', (tester) async {
+    final c = await mount(tester, text: 'a\u{1F600}b');
+    c.goToLine(1, column: 3);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 1));
+    c.goToLine(1, column: 4);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 3));
+  });
+
   test('submitting while the document reloads keeps the field', () async {
     final loading = Completer<TextDocument>();
     final c = EditorController(
@@ -187,9 +269,39 @@ void main() {
     c.text.selection = const TextSelection(baseOffset: 1, extentOffset: 4);
     await tester.pump();
     expect(find.textContaining('3 selected on 2 lines'), findsOneWidget);
+    // A selection ending at a line's start does not reach into that line.
+    c.text.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+    await tester.pump();
+    expect(find.textContaining('3 selected ·'), findsOneWidget);
 
     final python = await mount(tester, text: 'x = 1', path: 'a.py');
     expect(python.text.language?.id, 'python');
     expect(find.textContaining('Python'), findsOneWidget);
+  });
+
+  test('the saved size counts each line break once', () async {
+    Future<int> savedSize(String text, LineEnding ending) async {
+      final c = EditorController(
+        displayPath: 'a.txt',
+        loadDocument: () async => TextDocument(
+          file: File('a.txt'),
+          text: text,
+          hasUtf8Bom: false,
+          lineEnding: ending,
+          sha256: 'x',
+        ),
+      );
+      addTearDown(c.dispose);
+      await c.initialize();
+      return c.fileByteCount;
+    }
+
+    // Saving writes every break as the document's own ending, whether the
+    // buffer holds LF (loaded normalized) or CRLF (loaded as it was, as some
+    // hosts do), and a lone CR becomes a break too.
+    expect(await savedSize('ab\ncd\n', LineEnding.crlf), 8);
+    expect(await savedSize('ab\r\ncd\r\n', LineEnding.crlf), 8);
+    expect(await savedSize('ab\r\ncd', LineEnding.lf), 5);
+    expect(await savedSize('ab\rcd', LineEnding.crlf), 6);
   });
 }

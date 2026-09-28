@@ -56,6 +56,7 @@ class EditorController extends ChangeNotifier {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
+    goToLineInput.addListener(_goToLineEdited);
     for (final node in textFocusNodes) {
       node.addListener(() {
         if (node.hasFocus) _focusMemory = node;
@@ -141,6 +142,7 @@ class EditorController extends ChangeNotifier {
   final Set<Object> _viewLocks = {};
   bool _searchOpen = false;
   bool _goToLineOpen = false;
+  String? _invalidGoToLine;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
   CaseFolding _caseFolding = CaseFolding.exact;
@@ -159,6 +161,8 @@ class EditorController extends ChangeNotifier {
   String? _metricsText;
   List<int> _lineStarts = const [0];
   int _bytes = 0;
+  int _returns = 0;
+  int _returnNewlines = 0;
   Future<void>? _initialization;
   Future<bool>? _closeDecision;
   Indentation? _chosenIndentation;
@@ -183,6 +187,10 @@ class EditorController extends ChangeNotifier {
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;
   bool get goToLineOpen => _goToLineOpen;
+
+  /// Whether the Go to Line field holds input [submitGoToLine] could not
+  /// read, until that input is edited or the field closes.
+  bool get goToLineInputInvalid => _invalidGoToLine != null;
   bool get replaceOpen => _replaceOpen;
   bool get caseSensitive => _caseSensitive;
 
@@ -281,14 +289,21 @@ class EditorController extends ChangeNotifier {
     return _bytes;
   }
 
-  /// The size the document has once saved: the buffer holds LF line endings
-  /// and no byte-order mark, but a CRLF or BOM document writes them back.
+  /// The size the document has once saved: the buffer holds no byte-order
+  /// mark, and saving writes each line break as the document's own ending,
+  /// as `saveTextDocument` does by default. The buffer may hold LF breaks
+  /// (loaded normalized), CRLF breaks (loaded as they were, or pasted), or
+  /// a lone CR; each counts once. A host that saves raw line endings writes
+  /// exactly [byteCount] bytes plus any byte-order mark instead.
   int get fileByteCount {
     final document = _document;
     if (document == null) return byteCount;
-    final newlines = lineStarts.length - 1;
-    return byteCount +
-        (document.lineEnding == LineEnding.crlf ? newlines : 0) +
+    _updateMetrics();
+    // Folding to LF drops the CR of each CRLF and turns a lone CR into LF.
+    final breaks = lineStarts.length - 1 + _returns - _returnNewlines;
+    return byteCount -
+        _returnNewlines +
+        (document.lineEnding == LineEnding.crlf ? breaks : 0) +
         (document.hasUtf8Bom ? 3 : 0);
   }
 
@@ -296,6 +311,31 @@ class EditorController extends ChangeNotifier {
     final selection = text.selection;
     if (!selection.isValid) return (1, 1);
     final offset = selection.extentOffset.clamp(0, text.text.length);
+    final line = _lineIndexOf(offset);
+    return (line + 1, offset - lineStarts[line] + 1);
+  }
+
+  /// The UTF-16 code units a selection covers and the lines it touches, in
+  /// either direction; zero for a collapsed selection. Like the line
+  /// commands, a selection that ends at the start of a line does not touch
+  /// that line.
+  ({int characters, int lines}) get selectionStats {
+    final selection = text.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      return (characters: 0, lines: 0);
+    }
+    final length = text.text.length;
+    final start = selection.start.clamp(0, length);
+    final end = selection.end.clamp(0, length);
+    if (end <= start) return (characters: 0, lines: 0);
+    return (
+      characters: end - start,
+      lines: _lineIndexOf(end - 1) - _lineIndexOf(start) + 1,
+    );
+  }
+
+  /// The 0-based line holding [offset], by binary search over [lineStarts].
+  int _lineIndexOf(int offset) {
     final starts = lineStarts;
     var lo = 0;
     var hi = starts.length - 1;
@@ -307,7 +347,7 @@ class EditorController extends ChangeNotifier {
         hi = mid - 1;
       }
     }
-    return (lo + 1, offset - starts[lo] + 1);
+    return lo;
   }
 
   Future<void> initialize() =>
@@ -509,6 +549,15 @@ class EditorController extends ChangeNotifier {
     _metricsText = text.text;
     _lineStarts = lineStartOffsets(text.text);
     _bytes = utf8EncodedLength(text.text);
+    _returns = 0;
+    _returnNewlines = 0;
+    final value = text.text;
+    for (var i = value.indexOf('\r'); i >= 0; i = value.indexOf('\r', i + 1)) {
+      _returns++;
+      if (i + 1 < value.length && value.codeUnitAt(i + 1) == 0x0a) {
+        _returnNewlines++;
+      }
+    }
   }
 
   void _textChanged() {
@@ -678,6 +727,7 @@ class EditorController extends ChangeNotifier {
   void openGoToLine() {
     if (_loading || _error != null) return;
     _goToLineOpen = true;
+    _invalidGoToLine = null;
     final (line, _) = caretLineColumn;
     goToLineInput.value = TextEditingValue(
       text: '$line',
@@ -690,23 +740,39 @@ class EditorController extends ChangeNotifier {
   void closeGoToLine() {
     if (!_goToLineOpen) return;
     _goToLineOpen = false;
+    _invalidGoToLine = null;
     if (_focusMemory == goToLineFocus) _focusMemory = null;
     editorFocus.requestFocus();
     _notify();
   }
 
+  void _goToLineEdited() {
+    if (_invalidGoToLine == null || goToLineInput.text == _invalidGoToLine) {
+      return;
+    }
+    _invalidGoToLine = null;
+    _notify();
+  }
+
   /// Jumps to the go-to-line field's `line` or `line:column` and closes it.
-  /// Returns false, leaving the field open, when the input is not a number
-  /// or the document cannot be navigated right now.
+  /// Returns false, leaving the field open, when the input is not a number,
+  /// which [goToLineInputInvalid] then reports, or when the document cannot
+  /// be navigated right now.
   bool submitGoToLine() {
+    if (_loading || _error != null) return false;
     final match = RegExp(
       r'^\s*(\d+)\s*(?:[:,]\s*(\d+)\s*)?$',
     ).firstMatch(goToLineInput.text);
-    if (match == null || _loading || _error != null) return false;
+    if (match == null) {
+      _invalidGoToLine = goToLineInput.text;
+      _notify();
+      return false;
+    }
     // Digits too many for an int still mean "past the end"; goToLine clamps.
     int number(String? digits) =>
         digits == null ? 1 : int.tryParse(digits) ?? 0x7fffffff;
     _goToLineOpen = false;
+    _invalidGoToLine = null;
     if (_focusMemory == goToLineFocus) _focusMemory = null;
     goToLine(number(match[1]), column: number(match[2]));
     return true;
@@ -722,9 +788,16 @@ class EditorController extends ChangeNotifier {
     final end = index + 1 < starts.length
         ? starts[index + 1] - 1
         : text.text.length;
-    text.selection = TextSelection.collapsed(
-      offset: (start + column - 1).clamp(start, end),
-    );
+    var offset = (start + column - 1).clamp(start, end);
+    // Columns count UTF-16 code units, like the status bar's; one that
+    // falls between the halves of a surrogate pair lands before the pair.
+    if (offset > start &&
+        offset < text.text.length &&
+        _isLowSurrogate(text.text.codeUnitAt(offset)) &&
+        _isHighSurrogate(text.text.codeUnitAt(offset - 1))) {
+      offset--;
+    }
+    text.selection = TextSelection.collapsed(offset: offset);
     _requestCaretReveal(CaretReveal.upperThird);
     editorFocus.requestFocus();
     _notify();
@@ -864,6 +937,7 @@ class EditorController extends ChangeNotifier {
     _disposed = true;
     text.removeListener(_textChanged);
     search.removeListener(_queryChanged);
+    goToLineInput.removeListener(_goToLineEdited);
     text.dispose();
     search.dispose();
     replacement.dispose();
@@ -877,3 +951,7 @@ class EditorController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
+
+bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;

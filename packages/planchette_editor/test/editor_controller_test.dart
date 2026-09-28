@@ -482,4 +482,37 @@ void main() {
     closed.closeSearch();
     expect(closed.caseFoldingLimited, isFalse);
   });
+
+  // Ported from #67, which counted the selection the way the line commands
+  // pick their lines.
+  group('selectionStats', () {
+    ({int characters, int lines}) stats(String text, int base, int extent) {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: text,
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = TextSelection(
+        baseOffset: base,
+        extentOffset: extent,
+      );
+      return editor.selectionStats;
+    }
+
+    test('counts code units and touched lines in either direction', () {
+      expect(stats('one\ntwo\nthree', 2, 10), (characters: 8, lines: 3));
+      expect(stats('one\ntwo\nthree', 10, 2), (characters: 8, lines: 3));
+      expect(stats('one\ntwo\nthree', 0, 13), (characters: 13, lines: 3));
+    });
+
+    test('a selection ending at a line start does not count that line', () {
+      expect(stats('one\ntwo\nthree', 0, 4), (characters: 4, lines: 1));
+      expect(stats('one\ntwo\n', 0, 8), (characters: 8, lines: 2));
+      expect(stats('one\n\ntwo', 3, 5), (characters: 2, lines: 2));
+    });
+
+    test('a collapsed selection counts nothing', () {
+      expect(stats('one', 1, 1), (characters: 0, lines: 0));
+    });
+  });
 }

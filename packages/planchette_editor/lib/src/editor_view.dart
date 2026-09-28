@@ -186,8 +186,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     }
   }
 
+  /// Closes the bar that has focus, or from the document the Go to Line
+  /// bar first, since it opens above the find bar.
   void _escape() {
-    if (c.goToLineOpen) {
+    final inSearch = c.searchFocus.hasFocus || c.replacementFocus.hasFocus;
+    if (c.goToLineOpen && !inSearch) {
       c.closeGoToLine();
     } else {
       c.closeSearch();
@@ -465,6 +468,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               style: theme.textTheme.bodyMedium,
               decoration: InputDecoration(
                 hintText: strings.goToLineHint(c.lineStarts.length),
+                errorText: c.goToLineInputInvalid
+                    ? strings.goToLineInvalid(c.lineStarts.length)
+                    : null,
                 isDense: true,
                 border: InputBorder.none,
               ),
@@ -495,16 +501,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   Widget _statusBar(BuildContext context) {
     final (line, column) = c.caretLineColumn;
     final document = c.document;
-    final selection = c.text.selection;
-    final selected = selection.isValid && !selection.isCollapsed
-        ? selection.textInside(c.text.text)
-        : '';
+    final selected = c.selectionStats;
     final status = [
-      if (selected.isNotEmpty)
-        widget.strings.selectionSummary(
-          selected.length,
-          '\n'.allMatches(selected).length + 1,
-        ),
+      if (selected.characters > 0)
+        widget.strings.selectionSummary(selected.characters, selected.lines),
       if (c.isSaving) widget.strings.saving,
       if (c.isDirty) widget.strings.unsaved,
       document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
