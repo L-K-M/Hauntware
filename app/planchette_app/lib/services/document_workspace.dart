@@ -293,6 +293,10 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
       _remove(tab);
       _clearCloseRefusal();
+      // A save or destination failure about this tab cannot be retried
+      // anymore, so its banner goes with it. Path-scoped and scope-less
+      // errors are untouched.
+      _clearScope(tab);
       _notify();
       return true;
     } finally {
@@ -439,13 +443,16 @@ final class DocumentWorkspace extends ChangeNotifier {
   }
 
   /// Drop the banner only when it belongs to [scope]: the operation that
-  /// failed has now succeeded. An unrelated failure keeps its message — a
-  /// generic success must never hide another document's error.
+  /// failed has now succeeded, or its tab is gone. An unrelated failure
+  /// keeps its message — a generic success must never hide another
+  /// document's error. Notify here so the helper stands on its own and no
+  /// caller can clear the state without updating the banner.
   void _clearScope(Object scope) {
     if (_errorScope != scope) return;
     if (_error == _tabRefusal) _tabRefusal = null;
     _error = null;
     _errorScope = null;
+    _notify();
   }
 
   void clearError() {

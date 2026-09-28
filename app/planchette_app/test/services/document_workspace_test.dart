@@ -732,4 +732,33 @@ void main() {
     await opening;
     expect(workspace.error, isNull);
   });
+
+  test('closing a tab retires its own save failure', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original');
+    await workspace.open(testPath('one.txt'));
+    final tab = workspace.active!..editor.text.text = 'edited';
+    store.writeError = const FileSystemException('Disk full');
+    expect(await workspace.save(tab), isFalse);
+    expect(workspace.error, contains('Disk full'));
+
+    dialogs.choices.add(CloseChoice.discard);
+    expect(await workspace.closeTab(tab), isTrue);
+    expect(workspace.error, isNull);
+  });
+
+  test('closing an unrelated tab keeps another document failure', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final file = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final other = workspace.active!;
+    store.writeError = const FileSystemException('Disk full');
+    expect(await workspace.save(file), isFalse);
+    expect(workspace.error, contains('one.txt'));
+
+    expect(await workspace.closeTab(other), isTrue);
+    expect(workspace.error, contains('one.txt'));
+    expect(workspace.documents, [file]);
+  });
 }
