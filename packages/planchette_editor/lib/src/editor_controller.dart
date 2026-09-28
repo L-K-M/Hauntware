@@ -994,6 +994,11 @@ class EditorController extends ChangeNotifier {
       if (_loading || _error != null) return;
       final selection = text.selection;
       _searchOpen = true;
+      // With nothing focused, the reopened find field would take focus as it
+      // appears, and typing would edit the query instead of the document.
+      if (!textFocusNodes.any((node) => node.hasFocus)) {
+        editorFocus.requestFocus();
+      }
       // Makes the first match at or after the caret active.
       _updateMatches(resetActive: true);
       if (_matches.isEmpty) {
