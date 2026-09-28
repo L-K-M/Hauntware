@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
@@ -305,6 +306,34 @@ void main() {
       find.semantics.byPredicate((node) => node.tooltip == 'Close Untitled'),
     );
     await tester.pumpAndSettle();
+    expect(workspace.documents.contains(first), isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    semantics.dispose();
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('review fix: a screen reader can close a dirty tab', (
+    tester,
+  ) async {
+    // A dirty tab shows its dot in place of the close button until hovered
+    // or focused, which a screen reader's cursor is not; the tab itself now
+    // carries the close action.
+    final dialogs = FakeDialogs()..choices.add(CloseChoice.discard);
+    workspace.dispose();
+    workspace = DocumentWorkspace(store: MemoryDocuments(), dialogs: dialogs);
+    final semantics = tester.ensureSemantics();
+    final first = workspace.newDocument()!;
+    workspace.newDocument();
+    await mount(tester);
+    first.editor.text.text = 'edited';
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Close Untitled'), findsNothing);
+
+    tester.semantics.customAction(
+      find.semantics.byLabel('Untitled, unsaved changes'),
+      const CustomSemanticsAction(label: 'Close Untitled'),
+    );
+    await tester.pumpAndSettle();
+    expect(dialogs.asked, ['Untitled']);
     expect(workspace.documents.contains(first), isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
     semantics.dispose();

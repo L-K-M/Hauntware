@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 /// What the strip shows for one document.
 typedef TabStripItem = ({
@@ -343,6 +344,11 @@ class _TabState extends State<_Tab> {
       button: true,
       label: item.dirty ? '${item.name}, unsaved changes' : item.name,
       onTap: widget.enabled ? widget.onSelect : null,
+      // While the dot stands in for the close button, which a screen
+      // reader's cursor never hovers or focuses, the tab carries the action.
+      customSemanticsActions: canClose && !offerClose
+          ? {CustomSemanticsAction(label: 'Close ${item.name}'): widget.onClose}
+          : null,
       child: FocusableActionDetector(
         enabled: widget.enabled,
         actions: {
