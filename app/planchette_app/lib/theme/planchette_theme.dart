@@ -5,8 +5,9 @@ import 'package:planchette_editor/planchette_editor.dart';
 /// warm paper and ink, for light mode; Séance, a candle-lit room, for dark.
 ///
 /// Every syntax color keeps at least 4.5:1 contrast (WCAG AA) against the
-/// page, the current-line band and the chrome; `planchette_theme_test.dart`
-/// checks it.
+/// page, the current-line band, the chrome and the selection, and the
+/// selection is a cool tint so it never looks like a gold search hit;
+/// `planchette_theme_test.dart` checks both.
 abstract final class PlanchettePalette {
   static const parchment = (
     page: Color(0xFFF7F1E3),
@@ -16,7 +17,7 @@ abstract final class PlanchettePalette {
     faded: Color(0xFF665A4E),
     rule: Color(0xFFD6C8AB),
     accent: Color(0xFF8B2E3C),
-    selection: Color(0x66E2B865),
+    selection: Color(0x5961C4D8),
   );
 
   static const seance = (
@@ -27,7 +28,7 @@ abstract final class PlanchettePalette {
     faded: Color(0xFFB8AA99),
     rule: Color(0xFF3D3431),
     accent: Color(0xFFE6B56A),
-    selection: Color(0x55E6B56A),
+    selection: Color(0x66333E72),
   );
 
   /// Sepia comments, verdigris strings, brass numbers, oxblood keywords.

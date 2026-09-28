@@ -55,6 +55,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   saved, the indentation and the language.
 - View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
   (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
+- Planchette has its own looks: Parchment for light mode and Séance for
+  dark, with syntax colors that keep 4.5:1 contrast on the page, the
+  current line and the selection. Hosts can style the shared editor through
+  `ThemeData.extensions`, since `EditorSyntaxTheme` is a `ThemeExtension`.
 - A faint band marks the caret's line. It is on by default in the shared
   editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
   `Colors.transparent` to turn it off.
