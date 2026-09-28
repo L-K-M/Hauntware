@@ -198,8 +198,10 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Revert to Saved',
           _revert,
+          // Cmd/Ctrl+R is reserved for Revert to Saved; do not reuse keyR
+          // elsewhere (e.g. a future Replace accelerator).
           shortcut: _shortcut(LogicalKeyboardKey.keyR),
-          enabled: ready && active.path != null,
+          enabled: ready && active?.path != null,
         ),
         const _Separator(),
         _Command(

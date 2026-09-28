@@ -92,6 +92,8 @@ final class DocumentWorkspace extends ChangeNotifier {
       loadDocument: () async {
         final target = tab.path;
         if (target == null) {
+          // Unreachable via DocumentWorkspace.revert (guarded by
+          // tab.path == null); keep the throw as a tripwire for other callers.
           throw StateError('${tab.name} has no saved location yet.');
         }
         final document = await store.load(target);
