@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -461,4 +462,49 @@ void main() {
     },
     variant: const TargetPlatformVariant({TargetPlatform.macOS}),
   );
+
+  testWidgets('the error banner announces itself as a live region', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await mount(tester);
+    await workspace.open(testPath('missing.txt'));
+    await tester.pumpAndSettle();
+
+    final message = find.textContaining('Could not open');
+    expect(message, findsOneWidget);
+    final banner = find.byKey(const ValueKey('workspace-error-banner'));
+    expect(tester.getSemantics(banner), isSemantics(isLiveRegion: true));
+    semantics.dispose();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('a retried save retires its error banner in the UI', (
+    tester,
+  ) async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original');
+    await workspace.open(testPath('one.txt'));
+    final tab = workspace.active!..editor.text.text = 'edited';
+    store.writeError = const FileSystemException('Disk full');
+    await mount(tester);
+
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    final banner = find.byKey(const ValueKey('workspace-error-banner'));
+    expect(banner, findsOneWidget);
+    expect(find.textContaining('Disk full'), findsOneWidget);
+
+    store.writeError = null;
+    await tester.tap(find.text('File'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(banner, findsNothing);
+    expect(tab.editor.isDirty, isFalse);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 }

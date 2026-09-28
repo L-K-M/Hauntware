@@ -548,24 +548,28 @@ class _DocumentShellState extends State<_DocumentShell> {
                   ),
                 ),
               if (workspace.error case final error?)
-                Material(
-                  color: scheme.errorContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            error,
-                            style: TextStyle(color: scheme.onErrorContainer),
+                Semantics(
+                  key: const ValueKey('workspace-error-banner'),
+                  liveRegion: true,
+                  child: Material(
+                    color: scheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              error,
+                              style: TextStyle(color: scheme.onErrorContainer),
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          tooltip: 'Dismiss error',
-                          onPressed: workspace.clearError,
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
+                          IconButton(
+                            tooltip: 'Dismiss error',
+                            onPressed: workspace.clearError,
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

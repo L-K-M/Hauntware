@@ -66,6 +66,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   Completer<void>? _unlocked;
   DocumentTab? _active;
   String? _error;
+
+  /// What the current [_error] is about: the tab or the path key that failed,
+  /// or null for failures with no retry counterpart (quit, the picker). The
+  /// matching success clears its own scope and nothing else, so a resolved
+  /// failure retires its banner without hiding another document's.
+  Object? _errorScope;
   String? _tabRefusal;
 
   List<DocumentTab> get documents => List.unmodifiable(_documents);
@@ -139,8 +145,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         await open(path);
       }
     } catch (error) {
-      _error = 'Could not open documents: $error';
-      _notify();
+      _reportError('Could not open documents: $error');
     }
   }
 
@@ -176,7 +181,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (_disposed || !_documents.contains(tab)) return;
     final error = tab.editor.error;
     if (error != null) {
-      _error = 'Could not open ${tab.name}: $error';
+      _reportError('Could not open ${tab.name}: $error', scope: _pathKey(path));
       _remove(tab);
     } else {
       // A symlink may resolve onto an already-open document. Keep the existing
@@ -190,6 +195,10 @@ final class DocumentWorkspace extends ChangeNotifier {
       } else {
         tab.editor.displayPath = tab.path!;
       }
+      // The path opened: any earlier failure about it (and any
+      // still-opening refusal raised against this tab) has been resolved.
+      _clearScope(_pathKey(path));
+      _clearScope(tab);
     }
     _notify();
   }
@@ -280,7 +289,10 @@ final class DocumentWorkspace extends ChangeNotifier {
         target = await store.canonicalSavePath(selected);
         final other = _findPath(target, except: tab);
         if (other != null) {
-          _error = '${other.name} is already open in another tab.';
+          _reportError(
+            '${other.name} is already open in another tab.',
+            scope: tab,
+          );
           return false;
         }
         if (tab.path != null && _pathKey(target) == _pathKey(tab.path!)) {
@@ -303,9 +315,10 @@ final class DocumentWorkspace extends ChangeNotifier {
       if (acceptedReadOnly != null) {
         tab._acceptedReadOnlyPath = acceptedReadOnly;
       }
+      _clearScope(tab);
       return true;
     } catch (error) {
-      _error = 'Could not save ${tab.name}: $error';
+      _reportError('Could not save ${tab.name}: $error', scope: tab);
       return false;
     } finally {
       _saveTargets.remove(tab);
@@ -335,6 +348,10 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
       _remove(tab);
       _clearCloseRefusal();
+      // A save or destination failure about this tab cannot be retried
+      // anymore, so its banner goes with it. Path-scoped and scope-less
+      // errors are untouched.
+      _clearScope(tab);
       _notify();
       return true;
     } finally {
@@ -367,6 +384,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         _reportTabRefusal(
           '${tab.name} changed while the prompt was open, so nothing was '
           'discarded. Review it, then close again.',
+          tab,
         );
         return false;
       case CloseChoice.save:
@@ -383,26 +401,31 @@ final class DocumentWorkspace extends ChangeNotifier {
         ? '${tab.name} is still being saved. Close it again once the save '
               'finishes.'
         : '${tab.name} is busy. Close it again in a moment.',
+    tab,
   );
 
   /// Copy that fits both a refused close and a refused save: the document is
   /// not ready yet, and it will be.
-  void _reportNotReady(DocumentTab tab) =>
-      _reportTabRefusal('${tab.name} is still opening. Try again in a moment.');
+  void _reportNotReady(DocumentTab tab) => _reportTabRefusal(
+    '${tab.name} is still opening. Try again in a moment.',
+    tab,
+  );
 
   /// A retryable refusal names the tab it is about, so it stops being true
   /// the moment that tab closes. Tracking the last one keeps a stale excuse
   /// from outliving its cause without clearing errors the workspace owns —
   /// a failed save, a missing file and a declined destination still persist
   /// until they are replaced or dismissed.
-  void _reportTabRefusal(String message) {
+  void _reportTabRefusal(String message, DocumentTab tab) {
     _tabRefusal = message;
-    _error = message;
-    _notify();
+    _reportError(message, scope: tab);
   }
 
   void _clearCloseRefusal() {
-    if (_error == _tabRefusal) _error = null;
+    if (_error == _tabRefusal) {
+      _error = null;
+      _errorScope = null;
+    }
     _tabRefusal = null;
   }
 
@@ -462,12 +485,34 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// A failed native destruction must not leave the surviving window locked.
   void quitFailed(Object error) {
     _quitAccepted = false;
-    _error = 'Could not close Planchette: $error';
+    _reportError('Could not close Planchette: $error');
+  }
+
+  /// Replace the banner with [message], remembering what it is about so the
+  /// matching success can retire it. Failures with no retry counterpart pass
+  /// no scope and stay until dismissed.
+  void _reportError(String message, {Object? scope}) {
+    _error = message;
+    _errorScope = scope;
+    _notify();
+  }
+
+  /// Drop the banner only when it belongs to [scope]: the operation that
+  /// failed has now succeeded, or its tab is gone. An unrelated failure
+  /// keeps its message — a generic success must never hide another
+  /// document's error. Notify here so the helper stands on its own and no
+  /// caller can clear the state without updating the banner.
+  void _clearScope(Object scope) {
+    if (_errorScope != scope) return;
+    if (_error == _tabRefusal) _tabRefusal = null;
+    _error = null;
+    _errorScope = null;
     _notify();
   }
 
   void clearError() {
     _error = null;
+    _errorScope = null;
     _tabRefusal = null;
     _notify();
   }
