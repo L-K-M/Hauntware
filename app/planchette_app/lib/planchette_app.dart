@@ -201,6 +201,30 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (tab != null) unawaited(workspace.revert(tab));
   }
 
+  /// Exports in the colors the editor is showing: its syntax theme and the
+  /// page behind it.
+  void _exportHtml() {
+    final tab = workspace.active;
+    if (tab == null) return;
+    String css(Color color) =>
+        '#${(color.toARGB32() & 0xffffff).toRadixString(16).padLeft(6, '0')}';
+    final scheme = Theme.of(context).colorScheme;
+    final syntax = tab.editor.text.theme;
+    unawaited(
+      workspace.exportHtml(
+        tab,
+        HtmlPalette(
+          background: css(scheme.surface),
+          foreground: css(scheme.onSurface),
+          tokens: {
+            for (final type in SyntaxTokenType.values)
+              type: css(syntax.colorFor(type)),
+          },
+        ),
+      ),
+    );
+  }
+
   void _close() {
     final tab = workspace.active;
     if (tab != null) unawaited(workspace.closeTab(tab));
@@ -353,6 +377,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           _revert,
           enabled: ready && active?.path != null,
         ),
+        _Command('Export as HTML…', _exportHtml, enabled: ready),
         const _Separator(),
         // macOS keeps Settings in the application menu instead.
         if (!mac)
