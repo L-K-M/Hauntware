@@ -112,6 +112,22 @@ void main() {
       expect(next, lessThan(replace), reason: 'label match first');
     });
 
+    testWidgets('any label match outranks a menu-name match', (tester) async {
+      // 'pe' is scattered in 'Replace…' and scores -1, the value menu-name
+      // matches were given, so the two tied and menu order decided.
+      expect(fuzzyMatch('pe', 'Replace…')!.score, lessThanOrEqualTo(-1));
+      commands = [
+        PaletteCommand(group: 'Open', label: 'Recent', run: () {}),
+        PaletteCommand(group: 'Find', label: 'Replace…', run: () {}),
+      ];
+      await open(tester);
+      await type(tester, 'pe');
+      expect(
+        tester.getTopLeft(find.text('Replace…')).dy,
+        lessThan(tester.getTopLeft(find.text('Recent')).dy),
+      );
+    });
+
     testWidgets('Enter runs the best match after the palette closes', (
       tester,
     ) async {

@@ -84,8 +84,6 @@ Future<void> showCommandPalette(
 
 const _wordStartBonus = 8;
 
-/// Below any label match, which scores at least one per character.
-const _menuNameScore = -1;
 const _consecutiveBonus = 6;
 const _maximumGapPenalty = 3;
 
@@ -177,27 +175,36 @@ class _CommandPaletteState extends State<CommandPalette> {
 
   void _filter() {
     _filtered = _query.text;
-    final scored = <({_Row row, int score, int order})>[];
+    final scored = <({_Row row, bool byMenu, int score, int order})>[];
     for (var i = 0; i < widget.commands.length; i++) {
       final command = widget.commands[i];
-      var match = fuzzyMatch(_query.text, command.label);
-      // Typing a menu's name lists that menu, after every label match and
-      // with nothing highlighted, since the name is not in the label.
-      if (match == null && fuzzyMatch(_query.text, command.group) != null) {
-        match = (score: _menuNameScore, positions: const []);
+      final match = fuzzyMatch(_query.text, command.label);
+      if (match != null) {
+        scored.add((
+          row: (command: command, positions: match.positions),
+          byMenu: false,
+          score: match.score,
+          order: i,
+        ));
+      } else if (fuzzyMatch(_query.text, command.group) != null) {
+        // Typing a menu's name lists that menu, after every label match and
+        // with nothing highlighted, since the name is not in the label. A
+        // flag, not a low score: a scattered label match can score below
+        // zero too.
+        scored.add((
+          row: (command: command, positions: const []),
+          byMenu: true,
+          score: 0,
+          order: i,
+        ));
       }
-      if (match == null) continue;
-      scored.add((
-        row: (command: command, positions: match.positions),
-        score: match.score,
-        order: i,
-      ));
     }
     // A shorter label is the closer match on a tie; then menu order, so an
     // empty query lists the menus as they are.
     scored.sort((a, b) {
+      if (a.byMenu != b.byMenu) return a.byMenu ? 1 : -1;
       if (a.score != b.score) return b.score.compareTo(a.score);
-      if (_query.text.isNotEmpty && a.score != _menuNameScore) {
+      if (_query.text.isNotEmpty && !a.byMenu) {
         final shorter = a.row.command.label.length.compareTo(
           b.row.command.label.length,
         );

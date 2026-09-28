@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- A command palette (`Cmd/Ctrl+Shift+P`) finds any available menu command
+  by a few letters of its name or its menu's.
+- File › Export as HTML… writes the document, unsaved edits included, as a
+  page in the colours the editor shows, and never over an open document.
 - File › Reopen Closed Tab (`Cmd/Ctrl+Shift+T`) opens the last closed file
   again from disk, up to twenty back, with the caret where it was.
 - File › Revert to Saved reads the file again, asking first when there
