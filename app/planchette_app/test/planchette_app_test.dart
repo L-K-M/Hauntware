@@ -114,6 +114,34 @@ void main() {
   );
 
   testWidgets(
+    'Tab indents the document while Ctrl+Tab still switches tabs',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      workspace.newDocument();
+      workspace.select(first);
+      await mount(tester);
+      first.editor.editorFocus.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(first.editor.text.text, '    ');
+      expect(first.editor.editorFocus.hasFocus, isTrue);
+
+      await chord(tester, LogicalKeyboardKey.tab);
+      expect(workspace.active, isNot(first));
+      expect(first.editor.text.text, '    ');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    // Next Tab is Control+Tab on every platform, including macOS.
+    variant: const TargetPlatformVariant({
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'New and Open shortcuts remain available after closing the last tab',
     (tester) async {
       workspace.newDocument();

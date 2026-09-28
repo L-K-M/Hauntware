@@ -5,7 +5,13 @@ import 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
 import 'package:planchette_core/planchette_core.dart'
     as core
-    show deleteLines, duplicateLines, joinLines, moveLines;
+    show
+        deleteIndentBackward,
+        deleteLines,
+        duplicateLines,
+        insertNewline,
+        joinLines,
+        moveLines;
 
 import 'code_editing_controller.dart';
 
@@ -130,12 +136,15 @@ class EditorController extends ChangeNotifier {
   int _bytes = 0;
   Future<void>? _initialization;
   Future<bool>? _closeDecision;
+  Indentation? _chosenIndentation;
+  Indentation? _detectedIndentation;
 
   String get displayPath => _displayPath;
   set displayPath(String value) {
     if (_displayPath == value) return;
     _displayPath = value;
     _detectLanguage();
+    _syncTabWidth();
     _notify();
   }
 
@@ -190,6 +199,29 @@ class EditorController extends ChangeNotifier {
   /// [setEditingLocked] instead.
   void setViewEditingLocked(Object view, bool value) =>
       value ? _viewLocks.add(view) : _viewLocks.remove(view);
+
+  /// One level of indentation for Tab, Shift+Tab and Enter. It is learned
+  /// from the document's own lines (re-checked after edits until they show
+  /// one) unless a host chooses it explicitly.
+  Indentation get indentation =>
+      _chosenIndentation ??
+      _detectedIndentation ??
+      defaultIndentationFor(_displayPath);
+  set indentation(Indentation value) {
+    if (_chosenIndentation == value) return;
+    _chosenIndentation = value;
+    _syncTabWidth();
+    _notify();
+  }
+
+  void _detectIndentation({bool reset = false}) {
+    if (reset) _detectedIndentation = null;
+    if (_chosenIndentation != null || _detectedIndentation != null) return;
+    _detectedIndentation = detectIndentation(text.text);
+    _syncTabWidth();
+  }
+
+  void _syncTabWidth() => text.tabWidth = indentation.width;
 
   List<int> get lineStarts {
     _updateMetrics();
@@ -309,6 +341,7 @@ class EditorController extends ChangeNotifier {
       selection: const TextSelection.collapsed(offset: 0),
     );
     _detectLanguage();
+    _detectIndentation(reset: true);
     if (_searchOpen) _updateMatches(resetActive: true);
     if (scroll.hasClients) scroll.jumpTo(0);
     _revealRequest++;
@@ -369,9 +402,84 @@ class EditorController extends ChangeNotifier {
       _lastText = text.text;
       _revision++;
       _refreshLanguage();
+      _detectIndentation();
       if (_searchOpen) _updateMatches(resetActive: false);
     }
     _notify();
+  }
+
+  bool get _canEditText => !_loading && !_editingLocked && _error == null;
+
+  /// Tab. Indents every selected line, or inserts indentation at the caret.
+  bool indent() => _applyIndentEdit(
+    (text, base, extent) => indentSelection(text, base, extent, indentation),
+  );
+
+  /// Shift+Tab. Removes one level of indentation from every selected line.
+  bool outdent() => _applyIndentEdit(
+    (text, base, extent) => outdentSelection(text, base, extent, indentation),
+  );
+
+  /// Enter. Starts the new line at the current indentation, one level deeper
+  /// after an opening bracket, and splits an empty bracket pair. The view
+  /// calls this for hardware Enter; a newline that a software keyboard or
+  /// input method inserts arrives as text and is not indented.
+  bool insertNewline() => _applyIndentEdit(
+    (text, base, extent) => core.insertNewline(
+      text,
+      base,
+      extent,
+      indentation,
+      indentAfterColon: this.text.language?.indentAfterColon ?? false,
+    ),
+  );
+
+  /// Whether Backspace at the caret removes a whole level of space
+  /// indentation rather than one character.
+  bool get canDeleteIndentBackward => _indentBackward() != null;
+
+  /// Backspace inside space indentation. Returns false when an ordinary
+  /// one-character Backspace applies instead.
+  bool deleteIndentBackward() {
+    final edit = _indentBackward();
+    return edit != null && _applyIndentEdit((_, _, _) => edit);
+  }
+
+  IndentEdit? _indentBackward() {
+    final selection = text.selection;
+    if (!_canEditText || !selection.isValid || !selection.isCollapsed) {
+      return null;
+    }
+    return core.deleteIndentBackward(
+      text.text,
+      selection.baseOffset,
+      indentation,
+    );
+  }
+
+  bool _applyIndentEdit(
+    IndentEdit? Function(String text, int base, int extent) edit,
+  ) {
+    final value = text.value;
+    // An input method owns the text while it composes; Tab and Enter belong
+    // to it until the composition is committed.
+    if (!_canEditText || !value.selection.isValid || value.composing.isValid) {
+      return false;
+    }
+    final result = edit(
+      value.text,
+      value.selection.baseOffset,
+      value.selection.extentOffset,
+    );
+    if (result == null) return false;
+    text.value = TextEditingValue(
+      text: result.text,
+      selection: TextSelection(
+        baseOffset: result.selectionBase,
+        extentOffset: result.selectionExtent,
+      ),
+    );
+    return true;
   }
 
   Future<EditorSaveResult?> save({

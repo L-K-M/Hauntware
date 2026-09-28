@@ -7,6 +7,17 @@ import 'code_editing_controller.dart';
 import 'editor_controller.dart';
 import 'editor_strings.dart';
 
+/// What the Tab key does inside the document.
+enum EditorTabKeyBehavior {
+  /// Tab and Shift+Tab indent and outdent, as in a code editor. Neither
+  /// traverses focus then; a host whose keyboard-only users need Tab to leave
+  /// the document should offer another shortcut or choose [moveFocus].
+  indent,
+
+  /// Tab and Shift+Tab move keyboard focus, as in an ordinary text field.
+  moveFocus,
+}
+
 /// The shared document surface. Its host supplies app chrome, file commands,
 /// notifications and close decisions; no navigation or native menu is installed.
 class PlanchetteEditor extends StatefulWidget {
@@ -28,6 +39,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.statusBuilder,
     this.currentLineColor,
     this.placeholder,
+    this.tabKeyBehavior = EditorTabKeyBehavior.indent,
   });
 
   final EditorController controller;
@@ -50,6 +62,10 @@ class PlanchetteEditor extends StatefulWidget {
   /// keystroke and returns if the text is deleted. Screen readers announce it
   /// as the field's hint.
   final String? placeholder;
+
+  /// Enter and Backspace always follow the document's indentation; this only
+  /// decides whether Tab indents or leaves the editor.
+  final EditorTabKeyBehavior tabKeyBehavior;
 
   @override
   State<PlanchetteEditor> createState() => _PlanchetteEditorState();
@@ -386,6 +402,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       if (c.isDirty) widget.strings.unsaved,
       document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
       document?.hasUtf8Bom == true ? 'UTF-8 BOM' : 'UTF-8',
+      widget.strings.indentation(c.indentation),
       if (c.text.language case final language?) language.id,
     ];
     return Padding(
@@ -489,34 +506,67 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                         onInvoke: (_) => null,
                       ),
                     },
+                    _IndentIntent: _EditAction<_IndentIntent>(
+                      enabled: () => !_locked,
+                      run: c.indent,
+                    ),
+                    _OutdentIntent: _EditAction<_OutdentIntent>(
+                      enabled: () => !_locked,
+                      run: c.outdent,
+                    ),
+                    _NewlineIntent: _EditAction<_NewlineIntent>(
+                      enabled: () => !_locked,
+                      run: c.insertNewline,
+                    ),
+                    _DeleteIndentIntent: _EditAction<_DeleteIndentIntent>(
+                      enabled: () => !_locked && c.canDeleteIndentBackward,
+                      run: c.deleteIndentBackward,
+                    ),
                   },
-                  child: TextField(
-                    key: const ValueKey('planchette.document'),
-                    controller: c.text,
-                    undoController: c.undoController,
-                    readOnly: _locked,
-                    focusNode: c.editorFocus,
-                    scrollController: c.scroll,
-                    autofocus: widget.isActive,
-                    expands: true,
-                    maxLines: null,
-                    minLines: null,
-                    keyboardType: TextInputType.multiline,
-                    textAlignVertical: TextAlignVertical.top,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    smartDashesType: SmartDashesType.disabled,
-                    smartQuotesType: SmartQuotesType.disabled,
-                    style: _style,
-                    decoration: InputDecoration(
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.all(_padding),
-                      hintText: widget.placeholder,
-                      hintStyle: _style.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                        fontStyle: FontStyle.italic,
+                  child: Shortcuts(
+                    shortcuts: {
+                      if (widget.tabKeyBehavior ==
+                          EditorTabKeyBehavior.indent) ...const {
+                        SingleActivator(LogicalKeyboardKey.tab):
+                            _IndentIntent(),
+                        SingleActivator(LogicalKeyboardKey.tab, shift: true):
+                            _OutdentIntent(),
+                      },
+                      const SingleActivator(LogicalKeyboardKey.enter):
+                          const _NewlineIntent(),
+                      const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                          const _NewlineIntent(),
+                      const SingleActivator(LogicalKeyboardKey.backspace):
+                          const _DeleteIndentIntent(),
+                    },
+                    child: TextField(
+                      key: const ValueKey('planchette.document'),
+                      controller: c.text,
+                      undoController: c.undoController,
+                      readOnly: _locked,
+                      focusNode: c.editorFocus,
+                      scrollController: c.scroll,
+                      autofocus: widget.isActive,
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      keyboardType: TextInputType.multiline,
+                      textAlignVertical: TextAlignVertical.top,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      style: _style,
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(_padding),
+                        hintText: widget.placeholder,
+                        hintStyle: _style.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     ),
                   ),
@@ -587,6 +637,43 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     painter.dispose();
     return _gutterInset * 2 + width + 1;
   }
+}
+
+final class _IndentIntent extends Intent {
+  const _IndentIntent();
+}
+
+final class _OutdentIntent extends Intent {
+  const _OutdentIntent();
+}
+
+final class _NewlineIntent extends Intent {
+  const _NewlineIntent();
+}
+
+final class _DeleteIndentIntent extends Intent {
+  const _DeleteIndentIntent();
+}
+
+/// A disabled or declined edit lets its key fall through to Flutter's default
+/// text handling, so ordinary typing, focus traversal and input methods keep
+/// working whenever the indentation-aware edit does not apply. An edit
+/// declines, for example, while an input method is composing.
+final class _EditAction<T extends Intent> extends Action<T> {
+  _EditAction({required this.enabled, required this.run});
+
+  final bool Function() enabled;
+  final bool Function() run;
+
+  @override
+  bool isEnabled(T intent) => enabled();
+
+  @override
+  Object? invoke(T intent) => run();
+
+  @override
+  KeyEventResult toKeyEventResult(T intent, Object? invokeResult) =>
+      invokeResult == true ? KeyEventResult.handled : KeyEventResult.ignored;
 }
 
 /// Paints the line-number gutter and the current-line band behind [child],
