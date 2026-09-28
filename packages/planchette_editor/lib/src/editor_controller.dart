@@ -18,6 +18,17 @@ enum EditorSaveMode { local, primary }
 
 enum EditorSaveAccess { normal, confirmedClose }
 
+/// How the view scrolls to a caret that a command moved.
+enum CaretReveal {
+  /// Just far enough to show it, the way typing does: an edit or a jump the
+  /// user can see the start of.
+  nearest,
+
+  /// A third of the way down the view, unless it is already in view: a jump
+  /// to somewhere the user named, which may be far away.
+  upperThird,
+}
+
 class EditorSaveResult {
   const EditorSaveResult({
     required this.publishRequested,
@@ -80,9 +91,11 @@ class EditorController extends ChangeNotifier {
   late final CodeEditingController text;
   final search = TextEditingController();
   final replacement = TextEditingController();
+  final goToLineInput = TextEditingController();
   final editorFocus = FocusNode();
   final searchFocus = FocusNode();
   final replacementFocus = FocusNode();
+  final goToLineFocus = FocusNode();
   final scroll = ScrollController();
   final undoController = UndoHistoryController();
 
@@ -117,6 +130,7 @@ class EditorController extends ChangeNotifier {
   bool _editingLocked = false;
   final Set<Object> _viewLocks = {};
   bool _searchOpen = false;
+  bool _goToLineOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
   CaseFolding _caseFolding = CaseFolding.exact;
@@ -127,6 +141,7 @@ class EditorController extends ChangeNotifier {
   int _revision = 0;
   int _revealRequest = 0;
   int _caretRevealRequest = 0;
+  CaretReveal _caretRevealPlacement = CaretReveal.nearest;
   ({String text, int offset, int bracket})? _lastBracketJump;
   String _lastText = '';
   String? _lastQuery;
@@ -157,6 +172,7 @@ class EditorController extends ChangeNotifier {
   bool get canSave => !isBusy && !editingLocked && _error == null;
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;
+  bool get goToLineOpen => _goToLineOpen;
   bool get replaceOpen => _replaceOpen;
   bool get caseSensitive => _caseSensitive;
 
@@ -169,9 +185,18 @@ class EditorController extends ChangeNotifier {
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
 
-  /// Increments when an edit moved the caret somewhere the view should
-  /// scroll to; typing scrolls by itself, but a programmatic edit does not.
+  /// Increments when a command moved the caret somewhere the view should
+  /// scroll to; typing scrolls by itself, but a programmatic change does not.
   int get caretRevealRequest => _caretRevealRequest;
+
+  /// How the view should scroll to the caret for the latest
+  /// [caretRevealRequest].
+  CaretReveal get caretRevealPlacement => _caretRevealPlacement;
+
+  void _requestCaretReveal(CaretReveal placement) {
+    _caretRevealPlacement = placement;
+    _caretRevealRequest++;
+  }
 
   /// Whether edits, saves and reloads are refused. Two owners can lock: the
   /// host, through [setEditingLocked], and the mounted [PlanchetteEditor],
@@ -244,6 +269,17 @@ class EditorController extends ChangeNotifier {
   int get byteCount {
     _updateMetrics();
     return _bytes;
+  }
+
+  /// The size the document has once saved: the buffer holds LF line endings
+  /// and no byte-order mark, but a CRLF or BOM document writes them back.
+  int get fileByteCount {
+    final document = _document;
+    if (document == null) return byteCount;
+    final newlines = lineStarts.length - 1;
+    return byteCount +
+        (document.lineEnding == LineEnding.crlf ? newlines : 0) +
+        (document.hasUtf8Bom ? 3 : 0);
   }
 
   (int, int) get caretLineColumn {
@@ -360,7 +396,7 @@ class EditorController extends ChangeNotifier {
       selection.extentOffset,
     );
     if (edit == null) return false;
-    _caretRevealRequest++;
+    _requestCaretReveal(CaretReveal.nearest);
     text.value = TextEditingValue(
       text: edit.text,
       selection: TextSelection(
@@ -395,7 +431,7 @@ class EditorController extends ChangeNotifier {
       offset: jump.offset,
       bracket: jump.bracket,
     );
-    _caretRevealRequest++;
+    _requestCaretReveal(CaretReveal.nearest);
     text.selection = extend
         ? selection.extendTo(TextPosition(offset: jump.offset))
         : TextSelection.collapsed(offset: jump.offset);
@@ -629,6 +665,59 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  void openGoToLine() {
+    if (_loading || _error != null) return;
+    _goToLineOpen = true;
+    final (line, _) = caretLineColumn;
+    goToLineInput.value = TextEditingValue(
+      text: '$line',
+      selection: TextSelection(baseOffset: 0, extentOffset: '$line'.length),
+    );
+    goToLineFocus.requestFocus();
+    _notify();
+  }
+
+  void closeGoToLine() {
+    if (!_goToLineOpen) return;
+    _goToLineOpen = false;
+    editorFocus.requestFocus();
+    _notify();
+  }
+
+  /// Jumps to the go-to-line field's `line` or `line:column` and closes it.
+  /// Returns false, leaving the field open, when the input is not a number
+  /// or the document cannot be navigated right now.
+  bool submitGoToLine() {
+    final match = RegExp(
+      r'^\s*(\d+)\s*(?:[:,]\s*(\d+)\s*)?$',
+    ).firstMatch(goToLineInput.text);
+    if (match == null || _loading || _error != null) return false;
+    // Digits too many for an int still mean "past the end"; goToLine clamps.
+    int number(String? digits) =>
+        digits == null ? 1 : int.tryParse(digits) ?? 0x7fffffff;
+    _goToLineOpen = false;
+    goToLine(number(match[1]), column: number(match[2]));
+    return true;
+  }
+
+  /// Places the caret at 1-based [line] and [column], clamped to the
+  /// document, focuses the editor and asks the view to scroll there.
+  void goToLine(int line, {int column = 1}) {
+    if (_loading || _error != null) return;
+    final starts = lineStarts;
+    final index = (line - 1).clamp(0, starts.length - 1);
+    final start = starts[index];
+    final end = index + 1 < starts.length
+        ? starts[index + 1] - 1
+        : text.text.length;
+    text.selection = TextSelection.collapsed(
+      offset: (start + column - 1).clamp(start, end),
+    );
+    _requestCaretReveal(CaretReveal.upperThird);
+    editorFocus.requestFocus();
+    _notify();
+  }
+
   void toggleReplace() {
     _replaceOpen = !_replaceOpen;
     if (!_replaceOpen && _focusMemory == replacementFocus) {
@@ -766,9 +855,11 @@ class EditorController extends ChangeNotifier {
     text.dispose();
     search.dispose();
     replacement.dispose();
+    goToLineInput.dispose();
     editorFocus.dispose();
     searchFocus.dispose();
     replacementFocus.dispose();
+    goToLineFocus.dispose();
     scroll.dispose();
     undoController.dispose();
     super.dispose();

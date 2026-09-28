@@ -362,6 +362,15 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyB, shift: true),
           enabled: ready,
         ),
+        const _Separator(),
+        _Command(
+          'Go to Line…',
+          () => workspace.active?.editor.openGoToLine(),
+          shortcut: _shortcut(
+            mac ? LogicalKeyboardKey.keyL : LogicalKeyboardKey.keyG,
+          ),
+          enabled: ready,
+        ),
       ]),
       _ShellMenu('Window', [
         _Command(
