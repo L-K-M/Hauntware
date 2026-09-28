@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as paths;
 import 'package:planchette_editor/planchette_editor.dart';
 
 /// What the user chose, as one immutable value.
@@ -157,13 +158,32 @@ final class LocalSettingsStore implements SettingsStore {
   /// none at all.
   @override
   Future<void> save(AppSettings settings) async {
-    await file.parent.create(recursive: true);
-    final staging = File('${file.path}.tmp');
+    final target = await _destination();
+    await target.parent.create(recursive: true);
+    final staging = File('${target.path}.tmp');
     await staging.writeAsString(
       '${const JsonEncoder.withIndent('  ').convert(settings.toJson())}\n',
       flush: true,
     );
-    await staging.rename(file.path);
+    await staging.rename(target.path);
+  }
+
+  /// The file a save replaces: where a link at [file] points, so settings
+  /// kept elsewhere, such as in a dotfiles folder, stay linked instead of
+  /// being replaced by a copy.
+  Future<File> _destination() async {
+    if (!await FileSystemEntity.isLink(file.path)) return file;
+    try {
+      return File(await file.resolveSymbolicLinks());
+    } on FileSystemException {
+      // A link to a file that does not exist yet: write where it points.
+      final target = await Link(file.path).target();
+      return File(
+        paths.isAbsolute(target)
+            ? target
+            : paths.join(file.parent.path, target),
+      );
+    }
   }
 
   static String? _defaultPath() {
@@ -178,8 +198,10 @@ final class LocalSettingsStore implements SettingsStore {
         return '$appData\\Planchette\\settings.json';
       }
     }
+    // The XDG base directory spec says to ignore a relative value, which
+    // would otherwise put the settings under the working directory.
     if (environment['XDG_CONFIG_HOME'] case final config?
-        when config.isNotEmpty) {
+        when paths.isAbsolute(config)) {
       return '$config/planchette/settings.json';
     }
     if (environment['HOME'] case final home? when home.isNotEmpty) {
