@@ -509,10 +509,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     _IndentIntent: _EditAction<_IndentIntent>(
                       enabled: () => !_locked,
                       run: c.indent,
+                      heldWhileComposing: _composing,
                     ),
                     _OutdentIntent: _EditAction<_OutdentIntent>(
                       enabled: () => !_locked,
                       run: c.outdent,
+                      heldWhileComposing: _composing,
                     ),
                     _NewlineIntent: _EditAction<_NewlineIntent>(
                       enabled: () => !_locked,
@@ -624,6 +626,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     };
   }
 
+  bool _composing() => c.text.value.composing.isValid;
+
   double _measureGutter(TextScaler scaler) {
     final painter = TextPainter(
       text: TextSpan(
@@ -660,10 +664,19 @@ final class _DeleteIndentIntent extends Intent {
 /// working whenever the indentation-aware edit does not apply. An edit
 /// declines, for example, while an input method is composing.
 final class _EditAction<T extends Intent> extends Action<T> {
-  _EditAction({required this.enabled, required this.run});
+  _EditAction({
+    required this.enabled,
+    required this.run,
+    this.heldWhileComposing,
+  });
 
   final bool Function() enabled;
   final bool Function() run;
+
+  /// For Tab: while an input method composes, the key belongs to it. Declining
+  /// the edit must not let focus traversal take the key and pull focus out of
+  /// the document mid-composition, so the key goes on to the platform.
+  final bool Function()? heldWhileComposing;
 
   @override
   bool isEnabled(T intent) => enabled();
@@ -672,8 +685,13 @@ final class _EditAction<T extends Intent> extends Action<T> {
   Object? invoke(T intent) => run();
 
   @override
-  KeyEventResult toKeyEventResult(T intent, Object? invokeResult) =>
-      invokeResult == true ? KeyEventResult.handled : KeyEventResult.ignored;
+  KeyEventResult toKeyEventResult(T intent, Object? invokeResult) {
+    if (invokeResult == true) return KeyEventResult.handled;
+    if (heldWhileComposing?.call() ?? false) {
+      return KeyEventResult.skipRemainingHandlers;
+    }
+    return KeyEventResult.ignored;
+  }
 }
 
 /// Paints the line-number gutter and the current-line band behind [child],

@@ -217,18 +217,172 @@ void main() {
     expect(find.textContaining('Spaces: 2'), findsOneWidget);
   });
 
-  testWidgets('tabs render as wide as the indentation', (tester) async {
-    final c = await mount(tester, 'x\tx', path: 'Makefile');
-    final span = c.text.buildTextSpan(
-      context: tester.element(find.byType(PlanchetteEditor)),
-      style: const TextStyle(fontSize: 10),
-      withComposing: false,
+  // Ported from the duplicate indentation PRs (#24, #34, #21) and from review
+  // probes; #14 is the implementation that was kept.
+
+  testWidgets(
+    'Alt+Tab never indents',
+    (tester) async {
+      final c = await mount(tester, 'x');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.pump();
+      expect(c.text.text, 'x');
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+      TargetPlatform.macOS,
+    }),
+  );
+
+  testWidgets('a locked document leaves Tab to focus traversal', (
+    tester,
+  ) async {
+    final c = await mount(tester, 'x', locked: true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(c.text.text, 'x');
+    expect(c.editorFocus.hasFocus, isFalse);
+  });
+
+  testWidgets('Tab during a composition keeps focus in the document', (
+    tester,
+  ) async {
+    final c = await mount(tester, 'ab');
+    c.text.value = const TextEditingValue(
+      text: 'ab',
+      selection: TextSelection.collapsed(offset: 2),
+      composing: TextRange(start: 0, end: 2),
     );
-    final painter = TextPainter(text: span, textDirection: TextDirection.ltr)
-      ..layout();
-    addTearDown(painter.dispose);
-    // Two glyphs plus one tab of four spaces, in a 10 px square test font.
-    expect(painter.width, 60);
-    expect(span.toPlainText(), 'x\tx');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    // The input method owns the key: no indent, and no traversal either.
+    expect(c.text.text, 'ab');
+    expect(c.editorFocus.hasFocus, isTrue);
+  });
+
+  testWidgets('Tab moves on from the find and replace fields', (tester) async {
+    final c = await mount(tester, 'cat');
+    c.openSearch(replace: true);
+    await tester.pump();
+    expect(c.searchFocus.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(c.searchFocus.hasFocus, isFalse);
+    expect(c.text.text, 'cat');
+
+    c.replacementFocus.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(c.replacementFocus.hasFocus, isFalse);
+    expect(c.text.text, 'cat');
+  });
+
+  testWidgets('Tab moves on from a button in the host banner', (tester) async {
+    final c = EditorController(displayPath: 'a.txt', initialText: 'cat');
+    addTearDown(c.dispose);
+    final button = FocusNode();
+    addTearDown(button.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlanchetteEditor(
+            controller: c,
+            banner: TextButton(
+              focusNode: button,
+              onPressed: () {},
+              child: const Text('Reload'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    button.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(button.hasFocus, isFalse);
+    expect(c.text.text, 'cat');
+  });
+
+  testWidgets('a colon opens a block only where the language says so', (
+    tester,
+  ) async {
+    for (final (path, line) in [
+      ('notes.md', '  Note: see below'),
+      ('main.dart', '  x ? a :'),
+      ('page.xml', '  <a:b'),
+    ]) {
+      final c = await mount(
+        tester,
+        line,
+        path: path,
+        selection: TextSelection.collapsed(offset: line.length),
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(c.text.text, '$line\n  ', reason: path);
+    }
+  });
+
+  testWidgets('a pasted block is left exactly as it arrived', (tester) async {
+    final c = await mount(tester, '    x');
+    // Text the platform inserts (a paste or a software keyboard) is not a
+    // hardware Enter, so none of it is re-indented.
+    const pasted = '    x\nfirst\n  second\n';
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: pasted,
+        selection: TextSelection.collapsed(offset: pasted.length),
+      ),
+    );
+    await tester.pump();
+    expect(c.text.text, pasted);
+  });
+
+  testWidgets('undo removes an automatic indent', (tester) async {
+    final c = await mount(
+      tester,
+      '    foo',
+      selection: const TextSelection.collapsed(offset: 7),
+    );
+    // Undo history batches changes 500 ms apart; pause like a person would.
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(c.text.text, '    foo\n    ');
+    await tester.pump(const Duration(milliseconds: 600));
+    c.undoController.undo();
+    await tester.pump();
+    expect(c.text.text, '    foo');
+  });
+
+  testWidgets('the caret stays in view after repeated Enter', (tester) async {
+    // A key edit is programmatic, and the field only scrolls to the caret for
+    // typing; without a reveal the caret walks off the bottom of the view.
+    await tester.binding.setSurfaceSize(const Size(500, 400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final text = List.generate(40, (i) => 'line $i').join('\n');
+    final c = await mount(
+      tester,
+      text,
+      selection: TextSelection.collapsed(offset: text.indexOf('line 21') + 7),
+    );
+    for (var i = 0; i < 15; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    final field = tester.state<EditableTextState>(find.byType(EditableText));
+    final caret = field.renderEditable.getLocalRectForCaret(
+      c.text.selection.extent,
+    );
+    expect(caret.top, greaterThanOrEqualTo(0));
+    expect(caret.bottom, lessThanOrEqualTo(field.renderEditable.size.height));
   });
 }

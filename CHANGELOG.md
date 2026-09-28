@@ -32,6 +32,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Save All reports a partial failure the way File › Save All does.
 - Diff and patch highlighting, plus Rust attributes and lifetimes, Go raw
   strings, JSON and YAML keys, C preprocessor lines and Python decorators.
+- Tab and Shift+Tab indent and outdent the document instead of moving focus
+  out of it, Enter keeps the line's indentation (one level more after an
+  opening bracket), and Backspace in leading spaces removes a whole level.
+  The level is learned from each file, and Makefiles and Go keep tabs.
+  Hosts choose what Tab does (`PlanchetteEditor.tabKeyBehavior`), a level
+  for one document (`EditorController.indentation`) or a fallback for files
+  that have none yet (`EditorController.indentationPreference`).
+- Line commands in the Edit menu: Duplicate Line (`Cmd/Ctrl+Shift+D`),
+  Move Line Up/Down (`Option/Alt+↑/↓`), Delete Line (`Cmd/Ctrl+Shift+K`)
+  and Join Lines (`Cmd/Ctrl+J`). They keep a CRLF line's break intact.
 - A faint band marks the caret's line. It is on by default in the shared
   editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
   `Colors.transparent` to turn it off.

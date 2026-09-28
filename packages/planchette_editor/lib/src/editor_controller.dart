@@ -9,7 +9,6 @@ import 'package:planchette_core/planchette_core.dart'
         deleteIndentBackward,
         deleteLines,
         duplicateLines,
-        insertNewline,
         joinLines,
         moveLines;
 
@@ -138,13 +137,13 @@ class EditorController extends ChangeNotifier {
   Future<bool>? _closeDecision;
   Indentation? _chosenIndentation;
   Indentation? _detectedIndentation;
+  Indentation? _preferredIndentation;
 
   String get displayPath => _displayPath;
   set displayPath(String value) {
     if (_displayPath == value) return;
     _displayPath = value;
     _detectLanguage();
-    _syncTabWidth();
     _notify();
   }
 
@@ -200,17 +199,33 @@ class EditorController extends ChangeNotifier {
   void setViewEditingLocked(Object view, bool value) =>
       value ? _viewLocks.add(view) : _viewLocks.remove(view);
 
-  /// One level of indentation for Tab, Shift+Tab and Enter. It is learned
-  /// from the document's own lines (re-checked after edits until they show
-  /// one) unless a host chooses it explicitly.
+  /// One level of indentation for Tab, Shift+Tab and Enter, from the most
+  /// specific source that has one: a level chosen for this document, the
+  /// level its own lines use (re-checked after edits until they show one),
+  /// the level its format mandates (tabs for Makefiles and Go), the host's
+  /// [indentationPreference], and finally four spaces.
   Indentation get indentation =>
       _chosenIndentation ??
       _detectedIndentation ??
-      defaultIndentationFor(_displayPath);
+      requiredIndentationFor(_displayPath) ??
+      _preferredIndentation ??
+      const Indentation.spaces();
+
+  /// Chooses the level for this document, overriding what its lines use.
+  /// A host applying one setting to every document sets
+  /// [indentationPreference] instead, so each file's convention still wins.
   set indentation(Indentation value) {
     if (_chosenIndentation == value) return;
     _chosenIndentation = value;
-    _syncTabWidth();
+    _notify();
+  }
+
+  /// The host's level for documents that neither use nor mandate one yet,
+  /// such as a new untitled document.
+  Indentation? get indentationPreference => _preferredIndentation;
+  set indentationPreference(Indentation? value) {
+    if (_preferredIndentation == value) return;
+    _preferredIndentation = value;
     _notify();
   }
 
@@ -218,10 +233,7 @@ class EditorController extends ChangeNotifier {
     if (reset) _detectedIndentation = null;
     if (_chosenIndentation != null || _detectedIndentation != null) return;
     _detectedIndentation = detectIndentation(text.text);
-    _syncTabWidth();
   }
-
-  void _syncTabWidth() => text.tabWidth = indentation.width;
 
   List<int> get lineStarts {
     _updateMetrics();
@@ -408,24 +420,26 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
-  bool get _canEditText => !_loading && !_editingLocked && _error == null;
+  // The indentation keys go through _applyLineEdit like the line commands:
+  // one lock and composition check, and a caret reveal, since a programmatic
+  // edit does not scroll the field the way typing does.
 
   /// Tab. Indents every selected line, or inserts indentation at the caret.
-  bool indent() => _applyIndentEdit(
-    (text, base, extent) => indentSelection(text, base, extent, indentation),
+  bool indent() => _applyLineEdit(
+    (text, base, extent) => indentLines(text, base, extent, indentation),
   );
 
   /// Shift+Tab. Removes one level of indentation from every selected line.
-  bool outdent() => _applyIndentEdit(
-    (text, base, extent) => outdentSelection(text, base, extent, indentation),
+  bool outdent() => _applyLineEdit(
+    (text, base, extent) => outdentLines(text, base, extent, indentation),
   );
 
   /// Enter. Starts the new line at the current indentation, one level deeper
   /// after an opening bracket, and splits an empty bracket pair. The view
   /// calls this for hardware Enter; a newline that a software keyboard or
   /// input method inserts arrives as text and is not indented.
-  bool insertNewline() => _applyIndentEdit(
-    (text, base, extent) => core.insertNewline(
+  bool insertNewline() => _applyLineEdit(
+    (text, base, extent) => insertIndentedNewline(
       text,
       base,
       extent,
@@ -442,44 +456,17 @@ class EditorController extends ChangeNotifier {
   /// one-character Backspace applies instead.
   bool deleteIndentBackward() {
     final edit = _indentBackward();
-    return edit != null && _applyIndentEdit((_, _, _) => edit);
+    return edit != null && _applyLineEdit((_, _, _) => edit);
   }
 
-  IndentEdit? _indentBackward() {
+  LineEdit? _indentBackward() {
     final selection = text.selection;
-    if (!_canEditText || !selection.isValid || !selection.isCollapsed) {
-      return null;
-    }
+    if (!canEditText || !selection.isCollapsed) return null;
     return core.deleteIndentBackward(
       text.text,
       selection.baseOffset,
       indentation,
     );
-  }
-
-  bool _applyIndentEdit(
-    IndentEdit? Function(String text, int base, int extent) edit,
-  ) {
-    final value = text.value;
-    // An input method owns the text while it composes; Tab and Enter belong
-    // to it until the composition is committed.
-    if (!_canEditText || !value.selection.isValid || value.composing.isValid) {
-      return false;
-    }
-    final result = edit(
-      value.text,
-      value.selection.baseOffset,
-      value.selection.extentOffset,
-    );
-    if (result == null) return false;
-    text.value = TextEditingValue(
-      text: result.text,
-      selection: TextSelection(
-        baseOffset: result.selectionBase,
-        extentOffset: result.selectionExtent,
-      ),
-    );
-    return true;
   }
 
   Future<EditorSaveResult?> save({

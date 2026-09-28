@@ -3,6 +3,8 @@
 /// identical behavior and they can be tested without Flutter.
 library;
 
+import 'line_operations.dart' show LineEdit;
+
 enum IndentStyle { tabs, spaces }
 
 /// One level of indentation. [width] is the visual width of a tab stop, and
@@ -38,10 +40,11 @@ const int defaultIndentWidth = 4;
 const int _detectionLineLimit = 10000;
 const int _detectionCharLimit = 256 * 1024;
 
-/// The indentation for a document that has none yet. Makefile recipes must
-/// start with a tab and gofmt indents Go with tabs; everything else uses
-/// [defaultIndentWidth] spaces.
-Indentation defaultIndentationFor(String path) {
+/// The indentation a file's format mandates, or null when the format leaves
+/// it to the author: Makefile recipes must start with a tab, and gofmt
+/// indents Go with tabs. A host's preferred indentation applies only below
+/// this, so it can never turn a Makefile's tabs into spaces.
+Indentation? requiredIndentationFor(String path) {
   final separator = path.lastIndexOf(RegExp(r'[/\\]'));
   final basename = path.substring(separator + 1).toLowerCase();
   if (basename == 'makefile' ||
@@ -50,7 +53,7 @@ Indentation defaultIndentationFor(String path) {
       basename.endsWith('.go')) {
     return const Indentation.tabs();
   }
-  return const Indentation.spaces();
+  return null;
 }
 
 /// Guesses the indentation a document already uses, or null when it has no
@@ -116,40 +119,16 @@ bool _isBlank(String text, int from, int to) {
   return true;
 }
 
-/// A replacement buffer with the selection to install alongside it.
-/// [selectionBase] and [selectionExtent] keep the original direction.
-final class IndentEdit {
-  const IndentEdit(this.text, this.selectionBase, this.selectionExtent);
-
-  final String text;
-  final int selectionBase;
-  final int selectionExtent;
-
-  @override
-  bool operator ==(Object other) =>
-      other is IndentEdit &&
-      other.text == text &&
-      other.selectionBase == selectionBase &&
-      other.selectionExtent == selectionExtent;
-
-  @override
-  int get hashCode => Object.hash(text, selectionBase, selectionExtent);
-
-  @override
-  String toString() =>
-      'IndentEdit($selectionBase, $selectionExtent, '
-      '${text.replaceAll('\t', r'\t').replaceAll('\n', r'\n')})';
-}
-
 /// Tab. A caret or a partial selection within one line is replaced by
 /// whitespace up to the next tab stop, like typing. A selection that spans
 /// lines, or covers one whole line, indents each touched line instead.
-IndentEdit indentSelection(
+LineEdit indentLines(
   String text,
   int base,
   int extent,
   Indentation indentation,
 ) {
+  _checkSelection(text, base, extent);
   final start = base < extent ? base : extent;
   final end = base < extent ? extent : base;
   final firstLine = _lineStart(text, start);
@@ -164,7 +143,7 @@ IndentEdit indentSelection(
       insert = ' ' * (indentation.width - column % indentation.width);
     }
     final caret = start + insert.length;
-    return IndentEdit(text.replaceRange(start, end, insert), caret, caret);
+    return LineEdit(text.replaceRange(start, end, insert), caret, caret);
   }
   final starts = _touchedLineStarts(text, start, end);
   final unit = indentation.unit;
@@ -195,18 +174,19 @@ IndentEdit indentSelection(
   final newStart = map(start, isStart: true);
   final newEnd = map(end, isStart: false);
   return base <= extent
-      ? IndentEdit(buffer.toString(), newStart, newEnd)
-      : IndentEdit(buffer.toString(), newEnd, newStart);
+      ? LineEdit(buffer.toString(), newStart, newEnd)
+      : LineEdit(buffer.toString(), newEnd, newStart);
 }
 
 /// Shift+Tab. Removes one level from every touched line: a leading tab, or
 /// spaces back to the previous tab stop. Returns null when nothing changes.
-IndentEdit? outdentSelection(
+LineEdit? outdentLines(
   String text,
   int base,
   int extent,
   Indentation indentation,
 ) {
+  _checkSelection(text, base, extent);
   final start = base < extent ? base : extent;
   final end = base < extent ? extent : base;
   final removals = <(int, int)>[];
@@ -231,7 +211,7 @@ IndentEdit? outdentSelection(
     return shifted;
   }
 
-  return IndentEdit(buffer.toString(), map(base), map(extent));
+  return LineEdit(buffer.toString(), map(base), map(extent));
 }
 
 int _outdentWidth(String text, int lineStart, int width) {
@@ -251,13 +231,14 @@ int _outdentWidth(String text, int lineStart, int width) {
 /// level, and a bracket pair such as `{|}` splits onto three lines. A line
 /// holding only indentation is emptied, so repeated Enters leave no trailing
 /// whitespace behind.
-IndentEdit insertNewline(
+LineEdit insertIndentedNewline(
   String text,
   int base,
   int extent,
   Indentation indentation, {
   bool indentAfterColon = false,
 }) {
+  _checkSelection(text, base, extent);
   final start = base < extent ? base : extent;
   final end = base < extent ? extent : base;
   final lineStart = _lineStart(text, start);
@@ -272,7 +253,7 @@ IndentEdit insertNewline(
     // indentation to the new line instead of leaving it behind.
     final replaced = text.replaceRange(lineStart, restEnd, '\n$leading');
     final caret = lineStart + 1 + leading.length;
-    return IndentEdit(replaced, caret, caret);
+    return LineEdit(replaced, caret, caret);
   }
   var before = start;
   while (before > indentEnd && _isIndentUnit(text.codeUnitAt(before - 1))) {
@@ -296,18 +277,19 @@ IndentEdit insertNewline(
   final replaceEnd = closes ? after : end;
   final replaced = text.replaceRange(start, replaceEnd, insert);
   final caret = start + 1 + inner.length;
-  return IndentEdit(replaced, caret, caret);
+  return LineEdit(replaced, caret, caret);
 }
 
 const _closers = {'{': '}', '[': ']', '(': ')'};
 
 /// Backspace inside space indentation deletes back to the previous tab stop.
 /// Returns null when ordinary Backspace applies.
-IndentEdit? deleteIndentBackward(
+LineEdit? deleteIndentBackward(
   String text,
   int caret,
   Indentation indentation,
 ) {
+  RangeError.checkValueInInterval(caret, 0, text.length, 'caret');
   if (indentation.style != IndentStyle.spaces || caret <= 0) return null;
   final lineStart = _lineStart(text, caret);
   final column = caret - lineStart;
@@ -319,7 +301,12 @@ IndentEdit? deleteIndentBackward(
   final count = remainder == 0 ? indentation.width : remainder;
   if (count <= 1) return null;
   final from = caret - count;
-  return IndentEdit(text.replaceRange(from, caret, ''), from, from);
+  return LineEdit(text.replaceRange(from, caret, ''), from, from);
+}
+
+void _checkSelection(String text, int base, int extent) {
+  RangeError.checkValueInInterval(base, 0, text.length, 'base');
+  RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
 }
 
 bool _isIndentUnit(int codeUnit) => codeUnit == 0x20 || codeUnit == 0x09;

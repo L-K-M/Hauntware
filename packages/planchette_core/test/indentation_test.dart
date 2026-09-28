@@ -14,7 +14,7 @@ import 'package:test/test.dart';
   return open < close ? (text, open, close - 1) : (text, open - 1, close);
 }
 
-String show(IndentEdit edit) {
+String show(LineEdit edit) {
   final base = edit.selectionBase;
   final extent = edit.selectionExtent;
   if (base == extent) return edit.text.replaceRange(base, base, '|');
@@ -30,7 +30,7 @@ String tab(
   Indentation indentation = const Indentation.spaces(),
 ]) {
   final (text, base, extent) = parse(marked);
-  return show(indentSelection(text, base, extent, indentation));
+  return show(indentLines(text, base, extent, indentation));
 }
 
 String? outdent(
@@ -38,7 +38,7 @@ String? outdent(
   Indentation indentation = const Indentation.spaces(),
 ]) {
   final (text, base, extent) = parse(marked);
-  final edit = outdentSelection(text, base, extent, indentation);
+  final edit = outdentLines(text, base, extent, indentation);
   return edit == null ? null : show(edit);
 }
 
@@ -49,7 +49,13 @@ String enter(
 }) {
   final (text, base, extent) = parse(marked);
   return show(
-    insertNewline(text, base, extent, indentation, indentAfterColon: colon),
+    insertIndentedNewline(
+      text,
+      base,
+      extent,
+      indentation,
+      indentAfterColon: colon,
+    ),
   );
 }
 
@@ -84,14 +90,14 @@ void main() {
       expect(detectIndentation('$head    a\n        b\n'), isNull);
     });
 
-    test('defaults to tabs only where the format requires them', () {
-      expect(defaultIndentationFor('/src/Makefile'), const Indentation.tabs());
+    test('requires tabs only where the format mandates them', () {
+      expect(requiredIndentationFor('/src/Makefile'), const Indentation.tabs());
       expect(
-        defaultIndentationFor(r'C:\src\main.go'),
+        requiredIndentationFor(r'C:\src\main.go'),
         const Indentation.tabs(),
       );
-      expect(defaultIndentationFor('notes.txt'), const Indentation.spaces());
-      expect(defaultIndentationFor('Untitled 1'), const Indentation.spaces());
+      expect(requiredIndentationFor('notes.txt'), isNull);
+      expect(requiredIndentationFor('Untitled 1'), isNull);
     });
 
     test('returns null without any indented line', () {
@@ -100,7 +106,7 @@ void main() {
     });
   });
 
-  group('indentSelection', () {
+  group('indentLines', () {
     test('a caret inserts spaces up to the next tab stop', () {
       expect(tab('|x'), '    |x');
       expect(tab('ab|c'), 'ab  |c');
@@ -133,7 +139,7 @@ void main() {
     });
   });
 
-  group('outdentSelection', () {
+  group('outdentLines', () {
     test('removes spaces back to the previous tab stop', () {
       expect(outdent('      |x'), '    |x');
       expect(outdent('    x|'), 'x|');
@@ -157,7 +163,7 @@ void main() {
     });
   });
 
-  group('insertNewline', () {
+  group('insertIndentedNewline', () {
     test('repeats the leading whitespace before the caret', () {
       expect(enter('    foo|'), '    foo\n    |');
       expect(enter('\tfoo|bar'), '\tfoo\n\t|bar');
@@ -213,6 +219,47 @@ void main() {
       expect(backspace('     |'), isNull);
       expect(backspace('|x'), isNull);
       expect(backspace('\t|x', const Indentation.tabs()), isNull);
+    });
+  });
+
+  // Ported from the duplicate indentation PRs (#21, #34) and from review
+  // probes; #14 is the implementation that was kept.
+  group('ported cases', () {
+    test('a caret after a leading tab is still inside the indentation', () {
+      expect(tab('\t|'), '\t    |');
+    });
+
+    test('a tab before the caret counts as a whole stop of columns', () {
+      // The tab puts the caret at column 4 after 'a', so the next stop is 8.
+      expect(tab('\ta|b'), '\ta   |b');
+    });
+
+    test('rejects an out-of-range selection', () {
+      const spaces = Indentation.spaces();
+      expect(() => indentLines('abc', 0, 9, spaces), throwsRangeError);
+      expect(() => outdentLines('abc', 9, 0, spaces), throwsRangeError);
+      expect(
+        () => insertIndentedNewline('abc', 0, 9, spaces),
+        throwsRangeError,
+      );
+      expect(() => deleteIndentBackward('abc', 9, spaces), throwsRangeError);
+    });
+
+    test('Enter at column 0 does not double the indentation', () {
+      expect(enter('|    foo'), '\n|    foo');
+    });
+
+    test('Shift+Tab still dedents a file indented the other way', () {
+      expect(outdent('\t|x'), '|x');
+      expect(outdent('    |x', const Indentation.tabs()), '|x');
+    });
+
+    test('outdent keeps a caret inside a later line on that line', () {
+      expect(outdent('x\n  |  b'), 'x\n|b');
+    });
+
+    test('outdent keeps a backward selection backward', () {
+      expect(outdent(']    a\n    b['), ']a\nb[');
     });
   });
 }
