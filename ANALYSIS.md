@@ -137,8 +137,7 @@ of its work is in review.
 
 1. **Land what is in flight.** #218 (P1-02), #222 (P2-07), #223 (X-02,
  X-05), #224 (P4-01/P4-02), #225 (P1-03).
-2. **P0 data safety, all small:** P2-11 (restored delete identity check),
- P1-04 (normalized pin lookup).
+2. **P0 data safety:** P1-04 (normalized pin lookup).
 3. **P1 data safety and recovery:** P2-04 (backup rollback after a failed
  replacement), PGE-02 (enforce the reviewed snapshot), PGE-04 (revalidate
  roots and source ancestors), PGE-06
@@ -209,26 +208,6 @@ rename also fails: `restoreTrashedFiles` restores it (this half already
 passes after #209). Kill between rename and journal append: the backup is
 found and offered, never lost.
 - **Refs.** Effort S-M. D15, 05 §8 rail 9.
-
-### P2-11 · P0 · Restored delete tasks act on current paths without re-verifying identity
-- **Problem.** A restored delete arms `_DeleteWork(entry: journaled source)`
-and `_executeDelete` calls `fs.delete(entry)` with no stat.
-`_finishDeleteItem` journals after the unlink, and appends fsync only
-every 64 records or 250 ms, so a crash can leave already-deleted items
-pending. Days later, Resume permanently deletes a new file at the same
-path with no re-confirmation. A mid-scan restore re-walks the current
-tree and deletes what is there now, not what the dialog counted.
-`core: transfer/transfer_queue.dart:4497-4551`, `:2454-2473`,
-`:4359-4369`. VERIFIED (code trace).
-- **Next.** Before acting on a restored (or any) delete item,
-`stat(followLinks: false)` and require `type`, `size`, `modifiedAt` to
-match the journaled planEntry (`sourceType`, `sourceSize`,
-`sourceModifiedAt`); otherwise skip "changed since the delete was
-confirmed". A restored mid-scan permanent delete re-confirms or refuses;
-trash disposition may proceed.
-- **Gate.** Journal a delete task, replace the file with new content,
-restore, resume: file survives, row skipped.
-- **Refs.** Effort S. Rule 5 (02 §10 confirmation quantifies what is lost).
 
 ### P2-07 · P0 · rsync exporter mis-escapes filters and remote paths for remote pairs
 - **In review: #222** (https://github.com/L-K-M/Poltergeist/pull/222).
@@ -2140,6 +2119,7 @@ Merged work from both reviews. Residuals stay as active entries above.
 | P2-02, P2-03 | [#216](https://github.com/L-K-M/Poltergeist/pull/216) | Merged | Mirror never deletes beneath a symlink on either side; a replaced directory subsumes its destination-only descendants (05 §3, §6 rule 4); engine now agrees with the rsync exporter | P2-02a hazard counterpart, P2-02b scan-error prefix, P2-02c plan-view label, P2-03a one-way source dir, P2-03b app override verbs |
 | P2-05 | [#217](https://github.com/L-K-M/Poltergeist/pull/217) | Merged | Compaction only when reclaimable bytes pay for the rewrite | P2-09 (with duplicate history rows), P2-05a memory, P2-05b failing rewrite backoff |
 | P2-06 | [#230](https://github.com/L-K-M/Poltergeist/pull/230) | Merged | Task-lifetime destination ownership across case and normalization aliases; durable claims and per-container probes prevent destructive overwrite | P2-06a (exact fold-profile fidelity), PGE-03a (non-Linux and remote durability) |
+| P2-11 | [#231](https://github.com/L-K-M/Poltergeist/pull/231) | Merged | Revalidate restored delete identities before mutation; refuse incomplete permanent scan replay | — |
 
 ### Review record for the sibling review's merged PRs
 
