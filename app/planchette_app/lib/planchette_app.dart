@@ -8,6 +8,26 @@ import 'package:planchette_editor/planchette_editor.dart';
 import 'services/document_workspace.dart';
 import 'theme/planchette_theme.dart';
 
+/// The color the native window shows before the first Flutter frame. Must be
+/// the same surface the app paints, or the window flashes a different color on
+/// the way in.
+Color windowBackdrop(Brightness brightness) =>
+    planchetteTheme(brightness).scaffoldBackgroundColor;
+
+/// Resolves the theme mode to the brightness the app will actually paint with,
+/// so the window backdrop and the theme cannot disagree. Read the system
+/// brightness through `PlatformDispatcher`, which needs no binding, because the
+/// window is created before `runApp`.
+///
+/// A future persisted theme (A1) has to be resolved here, before the window
+/// exists: passing one mode to [PlanchetteApp] and another here would bring the
+/// flash straight back.
+Brightness effectiveBrightness(ThemeMode mode) => switch (mode) {
+  ThemeMode.light => Brightness.light,
+  ThemeMode.dark => Brightness.dark,
+  ThemeMode.system => PlatformDispatcher.instance.platformBrightness,
+};
+
 class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
     super.key,

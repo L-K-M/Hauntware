@@ -9,13 +9,29 @@ final class DesktopWindow with WindowListener {
   DesktopWindow({
     required this.confirmQuit,
     required this.onQuitFailed,
+    this.windowBackgroundColor,
     Future<void> Function()? destroyWindow,
   }) : _destroyWindow = destroyWindow ?? windowManager.destroy;
   final Future<bool> Function() confirmQuit;
   final void Function(Object error) onQuitFailed;
+
+  /// The color the native window paints before the first Flutter frame. Left
+  /// unset the platform shows its own default, which reads as a white flash on
+  /// a dark desktop.
+  final Color? windowBackgroundColor;
   final Future<void> Function() _destroyWindow;
   AppLifecycleListener? _lifecycle;
   bool _destroying = false;
+
+  /// Public rather than inline in [initialize] so the geometry and the
+  /// pre-paint backdrop can be asserted without the platform channel.
+  WindowOptions get windowOptions => WindowOptions(
+    size: const Size(1080, 760),
+    minimumSize: const Size(640, 400),
+    center: true,
+    title: 'Planchette',
+    backgroundColor: windowBackgroundColor,
+  );
 
   Future<void> initialize() async {
     await windowManager.ensureInitialized();
@@ -28,18 +44,10 @@ final class DesktopWindow with WindowListener {
             : AppExitResponse.cancel;
       },
     );
-    await windowManager.waitUntilReadyToShow(
-      const WindowOptions(
-        size: Size(1080, 760),
-        minimumSize: Size(640, 400),
-        center: true,
-        title: 'Planchette',
-      ),
-      () async {
-        await windowManager.show();
-        await windowManager.focus();
-      },
-    );
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
   }
 
   Future<void> requestQuit() async {
