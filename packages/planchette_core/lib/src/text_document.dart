@@ -237,12 +237,8 @@ Future<String> _writeTextDocument(
       'limit.',
     );
   }
-  final temporary = File(
-    '${file.path}$temporaryPrefix-${const Uuid().v4()}.edit',
-  );
-  final backup = File(
-    '${file.path}$temporaryPrefix-${const Uuid().v4()}.backup',
-  );
+  final temporary = _recoverySibling(file, temporaryPrefix, 'edit');
+  final backup = _recoverySibling(file, temporaryPrefix, 'backup');
   RandomAccessFile? handle;
   var retainTemporary = false;
   try {
@@ -308,6 +304,33 @@ Future<String> _writeTextDocument(
     await handle?.close();
     if (!retainTemporary && await temporary.exists()) await temporary.delete();
   }
+}
+
+// Common desktop filesystems limit a component to 255 bytes. Counting UTF-8
+// is also conservative for filesystems that count UTF-16 code units instead.
+const _maximumRecoveryNameBytes = 255;
+
+File _recoverySibling(File file, String prefix, String extension) {
+  final suffix = '$prefix-${const Uuid().v4()}.$extension';
+  final available = _maximumRecoveryNameBytes - utf8.encode(suffix).length;
+  if (available < 0) {
+    throw ArgumentError.value(prefix, 'temporaryPrefix', 'Prefix is too long.');
+  }
+
+  // Retain recognizable names and host recovery suffixes without splitting
+  // Unicode characters when a valid destination nearly fills the limit.
+  final originalName = file.uri.pathSegments.last;
+  final stem = StringBuffer();
+  var used = 0;
+  for (final rune in originalName.runes) {
+    final character = String.fromCharCode(rune);
+    used += utf8.encode(character).length;
+    if (used > available) break;
+    stem.write(character);
+  }
+  // Keep the caller's directory spelling, including root and relative paths.
+  final parent = file.path.substring(0, file.path.length - originalName.length);
+  return File('$parent$stem$suffix');
 }
 
 Future<void> _requireRegularFile(File file) async {
