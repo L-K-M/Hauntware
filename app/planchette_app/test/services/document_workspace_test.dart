@@ -105,10 +105,11 @@ class FakeDialogs implements DocumentDialogs {
   Completer<CloseChoice>? choiceGate;
   Future<void> Function()? beforeReplace;
   final readOnlyChoices = <ReadOnlyChoice>[];
+  Completer<List<String>>? openGate;
   final readOnlyAsked = <String>[];
 
   @override
-  Future<List<String>> pickOpenFiles() async => openPaths;
+  Future<List<String>> pickOpenFiles() async => openGate?.future ?? openPaths;
   @override
   Future<String?> pickSavePath(String suggestedName) async => savePath;
   @override
@@ -1330,29 +1331,33 @@ void main() {
     expect(await workspace.confirmQuit(), isTrue);
   });
 
-  test('clearing a stale quit refusal reaches the listeners', () async {
-    final tab = workspace.newDocument()!;
-    store.files[testPath('one.txt')] = document('one.txt', 'disk');
-    store.loadGate = Completer<void>();
-    final opening = workspace.open(testPath('one.txt'));
-    await pumpEventQueue();
-    expect(await workspace.confirmQuit(), isFalse);
-    expect(workspace.error, contains('open'));
+  test(
+    'a quit notice retires, with a notification, when its wait ends',
+    () async {
+      final tab = workspace.newDocument()!;
+      store.files[testPath('one.txt')] = document('one.txt', 'disk');
+      store.loadGate = Completer<void>();
+      final opening = workspace.open(testPath('one.txt'));
+      await pumpEventQueue();
+      expect(await workspace.confirmQuit(), isFalse);
+      expect(workspace.error, contains('open'));
 
-    // The close notifies when it removes the tab, before the notice is
-    // dropped, so the clearing needs its own notification or the banner stays.
-    var afterClearing = 0;
-    workspace.addListener(() {
-      if (workspace.error == null) afterClearing++;
-    });
-    expect(await workspace.closeTab(tab), isTrue);
-    // Asserted while the load is still gated: the open's own completion would
-    // otherwise notify after the notice is gone and mask the close path.
-    expect(workspace.error, isNull);
-    expect(afterClearing, greaterThan(0));
-    store.loadGate!.complete();
-    await opening;
-  });
+      var afterClearing = 0;
+      workspace.addListener(() {
+        if (workspace.error == null) afterClearing++;
+      });
+      // Closing an unrelated tab ends nothing the notice is waiting on: the
+      // open is still running, so a quit would still be refused.
+      expect(await workspace.closeTab(tab), isTrue);
+      expect(workspace.error, contains('open'));
+      expect(afterClearing, 0);
+
+      store.loadGate!.complete();
+      await opening;
+      expect(workspace.error, isNull);
+      expect(afterClearing, greaterThan(0));
+    },
+  );
 
   test('a quit refusal never buries a failure the user must act on', () async {
     final failed = workspace.newDocument()!..editor.text.text = 'doomed';
@@ -1411,5 +1416,33 @@ void main() {
     store.writeGate!.complete();
     expect(await saving, isFalse);
     expect(workspace.error, contains('Disk full'));
+  });
+
+  test('a quit notice about a dialog retires once the dialog ends', () async {
+    store.files[testPath('target.txt')] = document('target.txt', 'exists');
+    final tab = workspace.newDocument()!..editor.text.text = 'new';
+    dialogs.savePath = testPath('target.txt');
+    final gate = Completer<void>();
+    dialogs.beforeReplace = () => gate.future;
+    final saving = workspace.save(tab);
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('dialog'));
+
+    gate.complete();
+    expect(await saving, isTrue);
+    expect(workspace.error, isNull);
+  });
+
+  test('a quit notice about a cancelled Open dialog retires', () async {
+    dialogs.openGate = Completer<List<String>>();
+    final opening = workspace.openDialog();
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('dialog'));
+
+    dialogs.openGate!.complete(const []);
+    await opening;
+    expect(workspace.error, isNull);
   });
 }
