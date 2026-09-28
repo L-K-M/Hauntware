@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 
@@ -8,24 +9,20 @@ final class OpenDocuments {
   OpenDocuments({
     required this.open,
     this.channel = const MethodChannel('planchette/documents'),
+    this.pathExists = _existsOnDisk,
   });
 
   final Future<void> Function(String path) open;
   final MethodChannel channel;
+
+  /// Whether a launch argument names an existing file or folder, which is
+  /// what tells a dash-named document from an option. Injectable for tests.
+  final bool Function(String path) pathExists;
+
+  static bool _existsOnDisk(String path) =>
+      FileSystemEntity.typeSync(path) != FileSystemEntityType.notFound;
   Future<void> _tail = Future.value();
   bool _disposed = false;
-
-  /// Launch Services' process-serial argument, e.g. `-psn_0_12345`. The
-  /// exact shape is required so a file actually named `-psn_notes.txt`
-  /// still opens.
-  static final _psnArgument = RegExp(r'^-psn_\d+_\d+$');
-
-  /// Flags Xcode's "Document Versions" run option and legacy state
-  /// restoration inject into argv, each followed by a YES/NO value token.
-  static const _injectedFlags = {
-    '-NSDocumentRevisionsDebugMode',
-    '-ApplePersistenceIgnoreState',
-  };
 
   Future<void> start(List<String> arguments, {required bool macOS}) async {
     if (macOS) {
@@ -35,33 +32,45 @@ final class OpenDocuments {
       final pending = await channel.invokeMethod<Object?>('ready');
       await accept(pending);
     }
-    await accept(_userArguments(arguments, macOS: macOS));
+    await accept(_documentArguments(arguments, macOS: macOS));
   }
 
-  /// argv entries that are not documents are macOS-only injections:
-  /// Launch Services' `-psn_*` serial and the debug/restoration flag
-  /// pairs in [_injectedFlags]. Everything else is a user-supplied path —
-  /// a file may legitimately be named "-draft.txt".
-  static List<String> _userArguments(
+  /// The launch arguments that name documents.
+  ///
+  /// Everything after a bare `--` does. Before it, a dash-led entry is an
+  /// option unless a file by that name exists: `--help` is not a document,
+  /// but `planchette -draft.txt` opens one. On macOS, Launch Services and
+  /// Xcode inject user-defaults options such as `-psn_0_12345`,
+  /// `-NSDocumentRevisionsDebugMode YES` or `-AppleLanguages (de)`; such an
+  /// option takes the next entry as its value unless that entry is itself
+  /// dash-led or an existing file.
+  List<String> _documentArguments(
     List<String> arguments, {
     required bool macOS,
   }) {
-    if (!macOS) return arguments;
-    final files = <String>[];
+    final documents = <String>[];
     for (var i = 0; i < arguments.length; i++) {
       final argument = arguments[i];
-      if (_psnArgument.hasMatch(argument)) continue;
-      if (_injectedFlags.contains(argument)) {
-        if (i + 1 < arguments.length &&
-            (arguments[i + 1] == 'YES' || arguments[i + 1] == 'NO')) {
-          i++;
-        }
+      if (argument == '--') {
+        documents.addAll(arguments.skip(i + 1));
+        break;
+      }
+      if (!argument.startsWith('-') || pathExists(argument)) {
+        documents.add(argument);
         continue;
       }
-      files.add(argument);
+      if (macOS && _takesDefaultsValue(argument) && i + 1 < arguments.length) {
+        final value = arguments[i + 1];
+        if (value != '--' && !value.startsWith('-') && !pathExists(value)) i++;
+      }
     }
-    return files;
+    return documents;
   }
+
+  /// A macOS user-defaults option is `-Name value`; the process serial
+  /// `-psn_…` and GNU-style `--long` options carry no separate value.
+  static bool _takesDefaultsValue(String option) =>
+      !option.startsWith('--') && !option.startsWith('-psn_');
 
   Future<void> accept(Object? paths) {
     if (_disposed || paths is! List) return Future.value();
