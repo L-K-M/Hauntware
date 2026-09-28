@@ -642,7 +642,9 @@ class SyntaxLanguages {
     // Attributes: #[derive(Debug)] and #![allow(...)]. An attribute holding a
     // string literal (#[cfg(feature = "x")]) keeps only the string's color:
     // meta matches that overlap scanner tokens are dropped when merging.
-    metaPattern: RegExp(r'#!?\[[^\]\n]*\]'),
+    // The body stops at the next '[' too, so a line of unclosed '#[' costs
+    // linear time; bare nested brackets in an attribute go uncolored.
+    metaPattern: RegExp(r'#!?\[[^\[\]\n]*\]'),
   );
 
   /// Go: backquoted raw strings may span lines and take no escapes.

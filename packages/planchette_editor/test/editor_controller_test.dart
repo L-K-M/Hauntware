@@ -305,6 +305,8 @@ void main() {
       '.env',
       'Dockerfile.dev',
       'Makefile',
+      'a.diff',
+      'a.patch',
     ];
     // Intended to be every member of `SyntaxLanguages`; this test cannot
     // enforce that, because the class exposes no list of its instances. When
@@ -330,6 +332,9 @@ void main() {
       SyntaxLanguages.perl,
       SyntaxLanguages.lua,
       SyntaxLanguages.cFamily,
+      SyntaxLanguages.rust,
+      SyntaxLanguages.go,
+      SyntaxLanguages.diff,
     ];
     for (final path in paths) {
       final language = syntaxLanguageFor(path);

@@ -312,6 +312,24 @@ void main() {
       expect(stopwatch.elapsed, lessThan(maximumScanTime));
     });
 
+    test('Rust attributes scan a line of unclosed openers linearly', () {
+      // Every '#[' starts a candidate; letting the candidate run past the
+      // next '[' made each one rescan to the end of the line.
+      const repetitions = 20 * 1000;
+      const maximumScanTime = Duration(seconds: 1);
+      final text = '${'#[' * repetitions}\n#[derive(Debug)]';
+      final stopwatch = Stopwatch()..start();
+      final tokens = tokenizeSyntax(text, SyntaxLanguages.rust);
+      stopwatch.stop();
+
+      expect(
+        _ofType(tokens, SyntaxTokenType.meta).map((t) => _slice(text, t)),
+        ['#[derive(Debug)]'],
+      );
+      // A generous ceiling detects quadratic retries, not normal CI variance.
+      expect(stopwatch.elapsed, lessThan(maximumScanTime));
+    });
+
     test(
       'CSS meta boundaries preserve custom properties and token priority',
       () {
