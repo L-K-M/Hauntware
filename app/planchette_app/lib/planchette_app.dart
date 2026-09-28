@@ -207,9 +207,20 @@ class _DocumentShellState extends State<_DocumentShell> {
           child: const Text('Close Others'),
         ),
         PopupMenuItem(
-          enabled: hasOthers && !workspace.interactionLocked,
+          enabled: !workspace.interactionLocked,
           onTap: () => unawaited(workspace.closeAllTabs()),
           child: const Text('Close All Tabs'),
+        ),
+        const PopupMenuDivider(),
+        // From #66.
+        PopupMenuItem(
+          enabled: tab.path != null,
+          onTap: () {
+            if (tab.path case final path?) {
+              unawaited(Clipboard.setData(ClipboardData(text: path)));
+            }
+          },
+          child: const Text('Copy Full Path'),
         ),
       ],
     );

@@ -1682,6 +1682,27 @@ void main() {
     },
   );
 
+  test('a cancelled Close Others leaves the refused tab active', () async {
+    workspace.newDocument();
+    final keep = workspace.newDocument()!;
+    final refused = workspace.newDocument()!..editor.text.text = 'unsaved';
+    dialogs.choices.add(CloseChoice.cancel);
+    expect(await workspace.closeOthers(keep), isFalse);
+    // The prompt showed the refused tab; the user is still looking at it.
+    expect(workspace.documents, [keep, refused]);
+    expect(workspace.active, refused);
+  });
+
+  test('a completed Close Others reports it and selects the kept tab', () {
+    workspace.newDocument();
+    final keep = workspace.newDocument()!;
+    workspace.newDocument();
+    return workspace.closeOthers(keep).then((closed) {
+      expect(closed, isTrue);
+      expect(workspace.active, keep);
+    });
+  });
+
   test(
     'closeAllTabs confirms each dirty tab and a cancel stops the sweep',
     () async {

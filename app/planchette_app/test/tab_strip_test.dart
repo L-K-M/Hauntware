@@ -180,6 +180,60 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('the tab menu offers Close All Tabs for a single tab', (
+    tester,
+  ) async {
+    workspace.newDocument();
+    await mount(tester);
+    await tester.tap(find.text('Untitled'), buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close All Tabs'));
+    await tester.pumpAndSettle();
+    expect(workspace.documents, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  // From #66.
+  testWidgets('the tab menu copies a saved document\'s full path', (
+    tester,
+  ) async {
+    String? copied;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    final store = workspace.store as MemoryDocuments;
+    store.files[testPath('context.txt')] = document('context.txt', 'body');
+    workspace.newDocument()!.editor.text.text = 'unsaved';
+    await workspace.open(testPath('context.txt'));
+    await mount(tester);
+
+    await tester.tap(find.text('context.txt'), buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Copy Full Path'));
+    await tester.pumpAndSettle();
+    expect(copied, testPath('context.txt'));
+
+    // An untitled document has no path to copy.
+    await tester.tap(find.text('Untitled'), buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    final item = tester.widget<PopupMenuItem<void>>(
+      find.ancestor(
+        of: find.text('Copy Full Path'),
+        matching: find.byType(PopupMenuItem<void>),
+      ),
+    );
+    expect(item.enabled, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('chrome rows start at the leading edge', (tester) async {
     workspace.newDocument();
     await mount(tester);

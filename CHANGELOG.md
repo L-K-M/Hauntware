@@ -82,7 +82,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that turns into its close button under the pointer, a middle click
   closes a tab, and the active tab stays in view through resizing, text
   scaling and renames. Two tabs for files with the same name show their
-  folders.
+  folders. A right click on a tab offers Close, Close Others, Close All
+  Tabs and Copy Full Path.
 - Untitled documents are named "Untitled", "Untitled 2" and so on, taking
   the lowest number no open tab shows, and opening a file from an
   untouched untitled tab replaces that tab.
