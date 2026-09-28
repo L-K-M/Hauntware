@@ -133,7 +133,12 @@ class SyntaxLanguage {
 /// the files edited over SFTP are overwhelmingly configs and scripts.
 class SyntaxLanguages {
   /// Dotenv's value boundaries require the dedicated assignment scanner.
-  static const dotenv = SyntaxLanguage(id: 'dotenv', highlightNumbers: false);
+  // Its own tokenizer finds the comments; the marker is for Toggle Comment.
+  static const dotenv = SyntaxLanguage(
+    id: 'dotenv',
+    highlightNumbers: false,
+    lineComments: ['#'],
+  );
 
   static final shell = SyntaxLanguage(
     id: 'shell',
