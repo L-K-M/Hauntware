@@ -851,14 +851,19 @@ class _DocumentShellState extends State<_DocumentShell> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // Offered only when they would act, like the
+                                // strip's buttons (from #36).
                                 FilledButton(
-                                  onPressed: _new,
+                                  onPressed: workspace.interactionLocked
+                                      ? null
+                                      : _new,
                                   child: const Text('New document'),
                                 ),
                                 const SizedBox(width: 12),
                                 OutlinedButton(
-                                  onPressed: () =>
-                                      unawaited(workspace.openDialog()),
+                                  onPressed: workspace.interactionLocked
+                                      ? null
+                                      : () => unawaited(workspace.openDialog()),
                                   child: const Text('Open…'),
                                 ),
                               ],

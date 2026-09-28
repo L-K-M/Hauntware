@@ -988,4 +988,30 @@ void main() {
       TargetPlatform.windows,
     }),
   );
+
+  // Ported from #36.
+  testWidgets('the empty window offers New and Open only while unlocked', (
+    tester,
+  ) async {
+    await mount(tester);
+    ButtonStyleButton button(String label) => tester.widget<ButtonStyleButton>(
+      find.ancestor(
+        of: find.text(label),
+        matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+      ),
+    );
+    expect(button('New document').onPressed, isNotNull);
+    expect(button('Open…').onPressed, isNotNull);
+
+    // An open dialog holds the lock.
+    dialogs.openGate = Completer<List<String>>();
+    final opening = workspace.openDialog();
+    await tester.pump();
+    expect(workspace.interactionLocked, isTrue);
+    expect(button('New document').onPressed, isNull);
+    expect(button('Open…').onPressed, isNull);
+    dialogs.openGate!.complete(const []);
+    await opening;
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }
