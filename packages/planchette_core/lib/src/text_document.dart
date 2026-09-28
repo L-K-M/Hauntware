@@ -73,7 +73,20 @@ Future<File> resolveTextDocumentTarget(
   if (symlinkPolicy == SymlinkPolicy.resolveOnce) {
     // Resolve ancestors as well, so a later retargeted directory link cannot
     // silently move a local document's save identity to another directory.
-    file = File(await file.resolveSymbolicLinks());
+    try {
+      file = File(await file.resolveSymbolicLinks());
+    } on FileSystemException catch (error, stackTrace) {
+      // dart:io names the call, the path and the errno; say what happened,
+      // keeping the OS error code when the cause is not simply a missing file.
+      Error.throwWithStackTrace(
+        TextDocumentException(
+          isVanishedPathError(error)
+              ? 'The file no longer exists.'
+              : "The file's location could not be read. ${_osDetail(error)}",
+        ),
+        stackTrace,
+      );
+    }
   }
   await _requireRegularFile(file);
   return file;
