@@ -23,11 +23,13 @@ TextStyle editorMonospaceFor(TargetPlatform platform) => switch (platform) {
   TargetPlatform.android ||
   TargetPlatform.fuchsia => const TextStyle(
     fontFamily: 'monospace',
+    // The alias again last: a host family replaces it as the first choice.
     fontFamilyFallback: [
       'DejaVu Sans Mono',
       'Liberation Mono',
       'Noto Sans Mono',
       'Droid Sans Mono',
+      'monospace',
     ],
   ),
 };

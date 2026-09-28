@@ -289,13 +289,14 @@ class EditorController extends ChangeNotifier {
 
   /// One level of indentation for Tab, Shift+Tab and Enter, from the most
   /// specific source that has one: a level chosen for this document, the
-  /// level its own lines use (re-checked after edits until they show one),
-  /// the level its format mandates (tabs for Makefiles and Go), the host's
-  /// [indentationPreference], and finally four spaces.
+  /// level its format mandates (tabs for Makefiles and Go, whatever some of
+  /// their lines use), the level its own lines use (re-checked after edits
+  /// until they show one), the host's [indentationPreference], and finally
+  /// four spaces.
   Indentation get indentation =>
       _chosenIndentation ??
-      _detectedIndentation ??
       requiredIndentationFor(_displayPath) ??
+      _detectedIndentation ??
       _preferredIndentation ??
       const Indentation.spaces();
 
@@ -343,18 +344,18 @@ class EditorController extends ChangeNotifier {
   /// mark, and saving writes each line break as the document's own ending,
   /// as `saveTextDocument` does by default. The buffer may hold LF breaks
   /// (loaded normalized), CRLF breaks (loaded as they were, or pasted), or
-  /// a lone CR; each counts once. A host that saves raw line endings writes
-  /// exactly [byteCount] bytes plus any byte-order mark instead.
+  /// a lone CR; each counts once. An untitled buffer counts as a new file is
+  /// saved, with LF breaks and no mark. A host that saves raw line endings
+  /// writes exactly [byteCount] bytes plus any byte-order mark instead.
   int get fileByteCount {
     final document = _document;
-    if (document == null) return byteCount;
     _updateMetrics();
     // Folding to LF drops the CR of each CRLF and turns a lone CR into LF.
     final breaks = lineStarts.length - 1 + _returns - _returnNewlines;
     return byteCount -
         _returnNewlines +
-        (document.lineEnding == LineEnding.crlf ? breaks : 0) +
-        (document.hasUtf8Bom ? 3 : 0);
+        (document?.lineEnding == LineEnding.crlf ? breaks : 0) +
+        (document?.hasUtf8Bom ?? false ? 3 : 0);
   }
 
   (int, int) get caretLineColumn {
@@ -614,11 +615,12 @@ class EditorController extends ChangeNotifier {
   void _textChanged() {
     if (_updatingSearch || _disposed) return;
     if (text.text != _lastText) {
+      final before = _lastText;
       _lastText = text.text;
       _revision++;
       _refreshLanguage();
       _detectIndentation();
-      if (_searchOpen) _updateMatches(resetActive: false);
+      if (_searchOpen) _followEdit(before);
     }
     _notify();
   }
@@ -773,7 +775,9 @@ class EditorController extends ChangeNotifier {
     if (!_searchOpen) return;
     _searchOpen = false;
     _replaceOpen = false;
-    if (_focusMemory != editorFocus) _focusMemory = null;
+    if (_focusMemory == searchFocus || _focusMemory == replacementFocus) {
+      _focusMemory = null;
+    }
     _matches = const [];
     _matchOffset = 0;
     _matchesMayContinue = false;
@@ -781,7 +785,8 @@ class EditorController extends ChangeNotifier {
     _lastQuery = null;
     _caseFolding = CaseFolding.exact;
     text.setSearchMatches(const [], -1);
-    editorFocus.requestFocus();
+    // Go to Line may stay open with the user typing in it.
+    if (!goToLineFocus.hasFocus) editorFocus.requestFocus();
     _notify();
   }
 
@@ -803,7 +808,10 @@ class EditorController extends ChangeNotifier {
     _goToLineOpen = false;
     _invalidGoToLine = null;
     if (_focusMemory == goToLineFocus) _focusMemory = null;
-    editorFocus.requestFocus();
+    // The find bar may stay open with the user typing in it.
+    if (!searchFocus.hasFocus && !replacementFocus.hasFocus) {
+      editorFocus.requestFocus();
+    }
     _notify();
   }
 
@@ -846,9 +854,15 @@ class EditorController extends ChangeNotifier {
     final starts = lineStarts;
     final index = (line - 1).clamp(0, starts.length - 1);
     final start = starts[index];
-    final end = index + 1 < starts.length
+    var end = index + 1 < starts.length
         ? starts[index + 1] - 1
         : text.text.length;
+    // A CRLF break is one break: past the line's end is before its CR.
+    if (end > start &&
+        end < text.text.length &&
+        text.text.codeUnitAt(end - 1) == 0x0d) {
+      end--;
+    }
     var offset = (start + column - 1).clamp(start, end);
     // Columns count UTF-16 code units, like the status bar's; one that
     // falls between the halves of a surrogate pair lands before the pair.
@@ -906,7 +920,7 @@ class EditorController extends ChangeNotifier {
     _lastQuery = search.text;
     if (_searchOpen) {
       // Stay on the user's page: a new query or a replacement starts from
-      // the caret, and an edit keeps the page that was showing.
+      // the caret.
       final caret = text.selection.isValid ? text.selection.start : 0;
       _showPageAt(
         resetActive || _matches.isEmpty ? caret : _matches.first.start,
@@ -932,6 +946,45 @@ class EditorController extends ChangeNotifier {
     }
   }
 
+  /// Searches again after an edit without moving the user: the page and the
+  /// active match are found again at their offsets carried through the edit,
+  /// so typing anywhere keeps the find bar on the same occurrence.
+  void _followEdit(String before) {
+    if (_matches.isEmpty ||
+        _activeMatch < 0 ||
+        _activeMatch >= _matches.length) {
+      _updateMatches(resetActive: false);
+      return;
+    }
+    _lastQuery = search.text;
+    final edit = _Edit.between(before, text.text);
+    final active = edit.map(_matches[_activeMatch].start);
+    if (_matchOffset == 0) {
+      _showPage(_page(), offset: 0);
+    } else {
+      _showPageFrom(edit.map(_matches.first.start));
+    }
+    // Matches added earlier on the page can push the active one past it.
+    if (_matches.isEmpty ||
+        (_matchesMayContinue && _matches.last.start < active)) {
+      _showPageFrom(active);
+    }
+    final index = _matches.indexWhere((match) => match.start >= active);
+    // With the active occurrence gone and nothing after it, the nearest
+    // earlier match takes its place.
+    _activeMatch = _matches.isEmpty
+        ? -1
+        : index < 0
+        ? _matches.length - 1
+        : index;
+    _updatingSearch = true;
+    try {
+      text.setSearchMatches(_matches, _activeMatch);
+    } finally {
+      _updatingSearch = false;
+    }
+  }
+
   void nextMatch() => _findAgain(1);
 
   void previousMatch() => _findAgain(-1);
@@ -949,6 +1002,11 @@ class EditorController extends ChangeNotifier {
       if (_loading || _error != null) return;
       final selection = text.selection;
       _searchOpen = true;
+      // With nothing focused, the reopened find field would take focus as it
+      // appears, and typing would edit the query instead of the document.
+      if (!textFocusNodes.any((node) => node.hasFocus)) {
+        editorFocus.requestFocus();
+      }
       // Makes the first match at or after the caret active.
       _updateMatches(resetActive: true);
       if (_matches.isEmpty) {
@@ -1021,24 +1079,41 @@ class EditorController extends ChangeNotifier {
   /// Shows the first page of matches, unless [anchor] lies past it: then the
   /// page that starts with the first match at or after [anchor].
   void _showPageAt(int anchor) {
-    var page = _page();
-    var offset = 0;
-    if (page.matches.length >= searchMatchLimit &&
-        page.matches.last.start < anchor) {
-      // Some match starts before the anchor, so this finds the last one.
-      final before = _page(start: anchor, reverse: true, limit: 1);
-      final after = _page(start: before.matches.last.end);
-      if (after.matches.isNotEmpty) {
-        page = after;
-        offset = before.precedingCount! + 1;
+    final first = _page();
+    if (first.matches.length >= searchMatchLimit &&
+        first.matches.last.start < anchor) {
+      final later = _pageFrom(anchor);
+      if (later.page.matches.isNotEmpty) {
+        _showPage(later.page, offset: later.offset);
+        return;
       }
     }
-    _adoptPage(
-      page.matches,
-      offset: offset,
-      mayContinue: page.matches.length >= searchMatchLimit,
+    _showPage(first, offset: 0);
+  }
+
+  /// The page that starts with the first match at or after [anchor]. It
+  /// continues the enumeration after the last match before the anchor, so it
+  /// never overlaps the page before it, and [offset] counts the matches
+  /// before it.
+  ({SearchResult page, int offset}) _pageFrom(int anchor) {
+    final before = _page(start: anchor, reverse: true, limit: 1);
+    if (before.matches.isEmpty) return (page: _page(), offset: 0);
+    return (
+      page: _page(start: before.matches.last.end),
+      offset: before.precedingCount! + 1,
     );
   }
+
+  void _showPageFrom(int anchor) {
+    final later = _pageFrom(anchor);
+    _showPage(later.page, offset: later.offset);
+  }
+
+  void _showPage(SearchResult page, {required int offset}) => _adoptPage(
+    page.matches,
+    offset: offset,
+    mayContinue: page.matches.length >= searchMatchLimit,
+  );
 
   void _pageForward() {
     // Matches at or after the end of this page, or the first page again when
@@ -1179,3 +1254,45 @@ class EditorController extends ChangeNotifier {
 bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
 
 bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
+
+/// Where one edit changed the text, found by comparing it before and after:
+/// the unchanged runs at both ends are the prefix and suffix, and the rest
+/// is what the edit replaced. Lets offsets from before the edit be carried
+/// to where the same text sits after it.
+final class _Edit {
+  _Edit._(this._start, this._end, this._delta);
+
+  factory _Edit.between(String before, String after) {
+    final shorter = before.length < after.length ? before.length : after.length;
+    var prefix = 0;
+    while (prefix < shorter &&
+        before.codeUnitAt(prefix) == after.codeUnitAt(prefix)) {
+      prefix++;
+    }
+    var suffix = 0;
+    while (suffix < shorter - prefix &&
+        before.codeUnitAt(before.length - 1 - suffix) ==
+            after.codeUnitAt(after.length - 1 - suffix)) {
+      suffix++;
+    }
+    return _Edit._(
+      prefix,
+      before.length - suffix,
+      after.length - before.length,
+    );
+  }
+
+  /// The replaced run in the text before the edit.
+  final int _start;
+  final int _end;
+  final int _delta;
+
+  /// [offset], from the text before the edit, in the text after it. Text
+  /// typed at the offset lands before it; an offset inside the replaced run
+  /// moves to the end of what replaced it.
+  int map(int offset) {
+    if (offset >= _end) return offset + _delta;
+    if (offset <= _start) return offset;
+    return _end + _delta;
+  }
+}

@@ -11,9 +11,11 @@ enum IndentStyle { tabs, spaces }
 /// for [IndentStyle.spaces] also the number of spaces inserted per level.
 final class Indentation {
   const Indentation.tabs({this.width = defaultIndentWidth})
-    : style = IndentStyle.tabs;
+    : assert(width > 0, 'a tab stop is at least one column wide'),
+      style = IndentStyle.tabs;
   const Indentation.spaces([this.width = defaultIndentWidth])
-    : style = IndentStyle.spaces;
+    : assert(width > 0, 'a level is at least one space wide'),
+      style = IndentStyle.spaces;
 
   final IndentStyle style;
   final int width;
@@ -314,9 +316,14 @@ bool _isIndentUnit(int codeUnit) => codeUnit == 0x20 || codeUnit == 0x09;
 int _lineStart(String text, int offset) =>
     offset == 0 ? 0 : text.lastIndexOf('\n', offset - 1) + 1;
 
+/// Where the line holding [offset] ends. A `\r\n` break is one break, as in
+/// the line commands, so its CR is not part of the line.
 int _lineEnd(String text, int offset) {
   final newline = text.indexOf('\n', offset);
-  return newline < 0 ? text.length : newline;
+  if (newline < 0) return text.length;
+  return newline > offset && text.codeUnitAt(newline - 1) == 0x0d
+      ? newline - 1
+      : newline;
 }
 
 /// The starts of lines a selection touches. A multi-line selection that ends

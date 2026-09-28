@@ -80,6 +80,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   static const _gutterInset = 8.0;
   final _gutterRepaint = ValueNotifier<int>(0);
   final _decorationsKey = GlobalKey();
+
+  /// Holds focus while anything in the find bar does, its buttons included,
+  /// so Escape can tell which open bar the user is in.
+  final _searchBarFocus = FocusNode(
+    debugLabel: 'find bar',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
   int _lastReveal = -1;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
@@ -209,8 +217,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// Closes the bar that has focus, or from the document the Go to Line
   /// bar first, since it opens above the find bar.
   void _escape() {
-    final inSearch = c.searchFocus.hasFocus || c.replacementFocus.hasFocus;
-    if (c.goToLineOpen && !inSearch) {
+    if (c.goToLineOpen && !_searchBarFocus.hasFocus) {
       c.closeGoToLine();
     } else {
       c.closeSearch();
@@ -248,6 +255,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     c.removeListener(_changed);
     c.setViewEditingLocked(this, false);
     _gutterRepaint.dispose();
+    _searchBarFocus.dispose();
     super.dispose();
   }
 
@@ -297,7 +305,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             const Divider(height: 1),
           ],
           if (widget.banner != null) widget.banner!,
-          if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
+          if (c.searchOpen) ...[
+            Focus(
+              focusNode: _searchBarFocus,
+              canRequestFocus: false,
+              skipTraversal: true,
+              child: _searchBar(context),
+            ),
+            const Divider(height: 1),
+          ],
           Expanded(
             child: _decorated(
               context,
@@ -693,11 +709,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                         enabled: () => !_locked,
                         run: c.indent,
                         heldWhileComposing: _composing,
+                        keepsKey: true,
                       ),
                       _OutdentIntent: _EditAction<_OutdentIntent>(
                         enabled: () => !_locked,
                         run: c.outdent,
                         heldWhileComposing: _composing,
+                        keepsKey: true,
                       ),
                       _NewlineIntent: _EditAction<_NewlineIntent>(
                         enabled: () => !_locked,
@@ -893,6 +911,7 @@ final class _EditAction<T extends Intent> extends Action<T> {
     required this.enabled,
     required this.run,
     this.heldWhileComposing,
+    this.keepsKey = false,
   });
 
   final bool Function() enabled;
@@ -902,6 +921,12 @@ final class _EditAction<T extends Intent> extends Action<T> {
   /// the edit must not let focus traversal take the key and pull focus out of
   /// the document mid-composition, so the key goes on to the platform.
   final bool Function()? heldWhileComposing;
+
+  /// For Tab and Shift+Tab, which the document claims in indent mode: an
+  /// edit with nothing to change, such as Shift+Tab on an unindented line,
+  /// still keeps the key, or focus traversal would carry focus out of the
+  /// document.
+  final bool keepsKey;
 
   @override
   bool isEnabled(T intent) => enabled();
@@ -915,7 +940,7 @@ final class _EditAction<T extends Intent> extends Action<T> {
     if (heldWhileComposing?.call() ?? false) {
       return KeyEventResult.skipRemainingHandlers;
     }
-    return KeyEventResult.ignored;
+    return keepsKey ? KeyEventResult.handled : KeyEventResult.ignored;
   }
 }
 

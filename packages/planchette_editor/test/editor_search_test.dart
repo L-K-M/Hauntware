@@ -327,4 +327,59 @@ void main() {
       const TextSelection(baseOffset: 8, extentOffset: 11),
     );
   });
+
+  testWidgets('review fix: Escape on a find bar button closes the find bar', (
+    tester,
+  ) async {
+    // With both bars open, the find bar's controls are part of it too.
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat dog cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller.openGoToLine();
+    await tester.pumpAndSettle();
+    controller
+      ..openSearch()
+      ..search.text = 'cat';
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(controller.searchFocus.hasFocus, isFalse);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isFalse);
+    expect(controller.goToLineOpen, isTrue);
+  });
+
+  testWidgets(
+    'review fix: Find Next with nothing focused types into the text',
+    (tester) async {
+      // The reopened find field autofocused when nothing held focus, such as
+      // after a click outside the document, so typing edited the query.
+      final controller = EditorController(
+        displayPath: 'test.txt',
+        initialText: 'cat dog cat',
+      );
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_app(controller));
+      controller
+        ..openSearch()
+        ..search.text = 'cat';
+      await tester.pumpAndSettle();
+      controller.closeSearch();
+      await tester.pumpAndSettle();
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(controller.editorFocus.hasFocus, isFalse);
+
+      controller.nextMatch();
+      await tester.pumpAndSettle();
+      expect(controller.searchOpen, isTrue);
+      expect(controller.searchFocus.hasFocus, isFalse);
+      expect(controller.editorFocus.hasFocus, isTrue);
+    },
+  );
 }

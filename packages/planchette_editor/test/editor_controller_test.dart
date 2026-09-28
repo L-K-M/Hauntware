@@ -642,6 +642,46 @@ void main() {
       editor.matchesMayContinue,
     );
 
+    test('review fix: an edit keeps a page reached backward', () {
+      // Wrapping backward shows the last page, which starts mid-document.
+      final editor = hits(searchMatchLimit + 3)..previousMatch();
+      final before = editor.matches[editor.activeMatch];
+      expect(counter(editor).$1, searchMatchLimit + 3);
+      editor.text.value = TextEditingValue(
+        text: '${editor.text.text}\nx',
+        selection: editor.text.selection,
+      );
+      expect(editor.matches[editor.activeMatch], before);
+      expect(counter(editor).$1, searchMatchLimit + 3);
+    });
+
+    test('review fix: typing above a later page keeps the active match', () {
+      final editor = hits(searchMatchLimit + 5);
+      for (var i = 0; i < searchMatchLimit + 1; i++) {
+        editor.nextMatch();
+      }
+      final before = editor.matches[editor.activeMatch];
+      editor.text.value = TextEditingValue(
+        text: 'note: ${editor.text.text}',
+        selection: const TextSelection.collapsed(offset: 6),
+      );
+      expect(editor.matches[editor.activeMatch].start, before.start + 6);
+      expect(counter(editor).$1, searchMatchLimit + 2);
+    });
+
+    test('review fix: Replace after an edit replaces the active match', () {
+      final editor = hits(searchMatchLimit + 3)..previousMatch();
+      editor.replacement.text = 'HIT';
+      editor.text.value = TextEditingValue(
+        text: '${editor.text.text}\n',
+        selection: editor.text.selection,
+      );
+      editor.replaceCurrent();
+      final lines = editor.text.text.split('\n');
+      expect(lines[searchMatchLimit + 2], 'HIT');
+      expect(lines.where((line) => line == 'HIT'), hasLength(1));
+    });
+
     test('paging back and forth returns to the same match', () {
       final editor = hits(searchMatchLimit + 2);
       for (var i = 0; i < searchMatchLimit + 1; i++) {
