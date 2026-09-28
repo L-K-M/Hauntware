@@ -141,7 +141,8 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   DocumentTab _makeTab({String? path, String? initialText}) {
     final id = _nextId++;
-    final tab = DocumentTab._(id, 'Untitled $id')..path = path;
+    final tab = DocumentTab._(id, path == null ? _freeUntitledName() : '')
+      ..path = path;
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,
@@ -208,6 +209,16 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// shortcut or another menu activation — cannot start a second pass over
   /// the same tabs and interleave its result.
   bool _savingAll = false;
+
+  /// "Untitled", then "Untitled 2" and so on, reusing the lowest number no
+  /// open tab currently shows, a saved file called "Untitled 2" included.
+  String _freeUntitledName() {
+    final used = {for (final tab in _documents) tab.name};
+    for (var number = 1; ; number++) {
+      final name = number == 1 ? 'Untitled' : 'Untitled $number';
+      if (!used.contains(name)) return name;
+    }
+  }
 
   void select(DocumentTab tab) {
     if (interactionLocked || !_documents.contains(tab)) return;

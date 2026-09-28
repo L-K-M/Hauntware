@@ -7,6 +7,7 @@ import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace.dart';
 import 'theme/planchette_theme.dart';
+import 'widgets/tab_strip.dart';
 
 /// The color the native window shows before the first Flutter frame. Must be
 /// the same surface the app paints, or the window flashes a different color on
@@ -170,6 +171,19 @@ class _DocumentShellState extends State<_DocumentShell> {
     workspace.select(tab);
     _focusAfterFrame(tab);
   }
+
+  /// Cmd/Ctrl+1…8 select that tab and 9 the last one, as in browsers.
+  void _selectNumbered(int number) {
+    final tabs = workspace.documents;
+    if (tabs.isEmpty || workspace.interactionLocked) return;
+    if (number == 9) {
+      _select(tabs.last);
+    } else if (number <= tabs.length) {
+      _select(tabs[number - 1]);
+    }
+  }
+
+  String _keyLabel(String key) => mac ? '⌘$key' : 'Ctrl+$key';
 
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
@@ -580,6 +594,8 @@ class _DocumentShellState extends State<_DocumentShell> {
               shortcut: () {
                 if (entry.enabled) entry.run();
               },
+      for (var number = 1; number <= 9; number++)
+        _shortcut(_digits[number]): () => _selectNumbered(number),
     };
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
@@ -588,101 +604,37 @@ class _DocumentShellState extends State<_DocumentShell> {
         autofocus: true,
         child: Scaffold(
           body: Column(
+            // Chrome rows span the window and start at the leading edge;
+            // a centered column floated the menu bar mid-window.
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (!mac) _menuBar(menus),
-              Material(
-                color: scheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_note_rounded, color: scheme.primary),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Planchette',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 20),
-                      IconButton(
-                        tooltip: 'New',
-                        onPressed: workspace.interactionLocked ? null : _new,
-                        icon: const Icon(Icons.add),
-                      ),
-                      IconButton(
-                        tooltip: 'Open…',
-                        onPressed: workspace.interactionLocked
-                            ? null
-                            : () => unawaited(workspace.openDialog()),
-                        icon: const Icon(Icons.folder_open_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Save',
-                        onPressed: _documentReady ? _save : null,
-                        icon: const Icon(Icons.save_outlined),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        // A full path is more useful than a bare name here —
-                        // which directory is open is worth knowing — but it
-                        // truncates on narrow windows, so the tooltip carries
-                        // the whole thing.
-                        child: Tooltip(
-                          message: active?.path ?? '',
-                          child: Text(
-                            // `path` and `name` are null or non-empty by
-                            // construction: `name` is 'Untitled <id>' or
-                            // basename of a normalised path, and a directory
-                            // can never become a document path.
-                            active?.path ??
-                                active?.name ??
-                                'A place for your words.',
-                            key: const ValueKey('active-document-label'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: scheme.onSurfaceVariant,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (active?.busy == true)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              if (tabs.isNotEmpty)
-                Material(
-                  color: scheme.surfaceContainerLow,
-                  child: SizedBox(
-                    height: 40,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 8),
-                          for (final tab in tabs)
-                            _TabChip(
-                              key: ValueKey('tab-${tab.id}'),
-                              tab: tab,
-                              isActive: tab == active,
-                              enabled: !workspace.interactionLocked,
-                              onSelect: () => _select(tab),
-                              onClose: () => unawaited(workspace.closeTab(tab)),
-                            ),
-                        ],
-                      ),
+              TabStrip(
+                tabs: [
+                  for (final tab in tabs)
+                    (
+                      id: tab.id,
+                      name: tab.name,
+                      tooltip: tab.path ?? tab.name,
+                      dirty: tab.editor.isDirty,
+                      closable: !tab.busy,
+                      flashRequest: tab.flashRequest,
                     ),
-                  ),
+                ],
+                activeId: active?.id,
+                enabled: !workspace.interactionLocked,
+                busy: active?.busy == true,
+                onSelect: (id) => _select(tabs.firstWhere((t) => t.id == id)),
+                onClose: (id) => unawaited(
+                  workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
                 ),
+                onNew: _new,
+                onOpen: () => unawaited(workspace.openDialog()),
+                onSave: _documentReady ? _save : null,
+                newTooltip: 'New (${_keyLabel('N')})',
+                openTooltip: 'Open… (${_keyLabel('O')})',
+                saveTooltip: 'Save (${_keyLabel('S')})',
+              ),
               if (workspace.error case final error?)
                 Semantics(
                   key: const ValueKey('workspace-error-banner'),
@@ -787,130 +739,6 @@ class _DocumentShellState extends State<_DocumentShell> {
   }
 }
 
-/// One document tab.
-///
-/// Opening a document the workspace already holds activates its tab instead
-/// of adding one, which looks like nothing happening. [DocumentTab.flashRequest]
-/// marks that case, and the chip answers with a short pulse so the user can
-/// see where the open landed. The pulse is decoration: activation happens
-/// either way, and it is skipped entirely when the platform reports that
-/// animation is disabled.
-class _TabChip extends StatefulWidget {
-  const _TabChip({
-    super.key,
-    required this.tab,
-    required this.isActive,
-    required this.enabled,
-    required this.onSelect,
-    required this.onClose,
-  });
-
-  final DocumentTab tab;
-  final bool isActive;
-  final bool enabled;
-  final VoidCallback onSelect;
-  final VoidCallback onClose;
-
-  @override
-  State<_TabChip> createState() => _TabChipState();
-}
-
-class _TabChipState extends State<_TabChip> {
-  /// Long enough to notice between two glances, short enough not to linger.
-  static const _flashDuration = Duration(milliseconds: 700);
-
-  bool _flashing = false;
-
-  /// The last flash request this chip reacted to. Zero is also the value a
-  /// freshly mounted tab has, and a new tab has nothing to point at.
-  int _seenFlash = 0;
-  Timer? _flashTimer;
-
-  @override
-  void didUpdateWidget(_TabChip oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Compare against the value this state last saw, not against
-    // oldWidget.tab: the tab is a mutable object, so the old widget reads the
-    // new value too and the request would look unchanged.
-    if (widget.tab.flashRequest == _seenFlash) return;
-    _seenFlash = widget.tab.flashRequest;
-    if (MediaQuery.disableAnimationsOf(context)) return;
-    _flashTimer?.cancel();
-    // No setState: didUpdateWidget is followed immediately by this element's
-    // own build, which is the frame the flash should first appear in. Only the
-    // timer needs a new frame, to take it away again.
-    _flashing = true;
-    _flashTimer = Timer(_flashDuration, () {
-      if (mounted) setState(() => _flashing = false);
-    });
-  }
-
-  @override
-  void dispose() {
-    _flashTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tab = widget.tab;
-    final scheme = Theme.of(context).colorScheme;
-    final base = widget.isActive ? scheme.surface : Colors.transparent;
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: Tooltip(
-        message: tab.path ?? tab.name,
-        child: Semantics(
-          selected: widget.isActive,
-          child: AnimatedContainer(
-            duration: _flashDuration,
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              color: _flashing ? scheme.secondaryContainer : base,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(8),
-              ),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: widget.enabled ? widget.onSelect : null,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 14),
-                  child: Row(
-                    children: [
-                      Text(
-                        '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: widget.isActive
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        key: ValueKey('close-${tab.id}'),
-                        tooltip: 'Close ${tab.name}',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 16,
-                        onPressed: widget.enabled && !tab.busy
-                            ? widget.onClose
-                            : null,
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// What an untitled document shows while it is empty. Each line leads with
 /// the instruction, which is what a screen reader announces first; the rest
 /// is the board talking.
@@ -926,6 +754,19 @@ const _ghostLines = [
 /// created right after it.
 @visibleForTesting
 String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
+
+const _digits = [
+  LogicalKeyboardKey.digit0,
+  LogicalKeyboardKey.digit1,
+  LogicalKeyboardKey.digit2,
+  LogicalKeyboardKey.digit3,
+  LogicalKeyboardKey.digit4,
+  LogicalKeyboardKey.digit5,
+  LogicalKeyboardKey.digit6,
+  LogicalKeyboardKey.digit7,
+  LogicalKeyboardKey.digit8,
+  LogicalKeyboardKey.digit9,
+];
 
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);
