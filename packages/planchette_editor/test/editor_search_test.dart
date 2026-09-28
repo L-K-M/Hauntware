@@ -327,4 +327,30 @@ void main() {
       const TextSelection(baseOffset: 8, extentOffset: 11),
     );
   });
+
+  testWidgets('review fix: Escape on a find bar button closes the find bar', (
+    tester,
+  ) async {
+    // With both bars open, the find bar's controls are part of it too.
+    final controller = EditorController(
+      displayPath: 'test.txt',
+      initialText: 'cat dog cat',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller.openGoToLine();
+    await tester.pumpAndSettle();
+    controller
+      ..openSearch()
+      ..search.text = 'cat';
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(controller.searchFocus.hasFocus, isFalse);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(controller.searchOpen, isFalse);
+    expect(controller.goToLineOpen, isTrue);
+  });
 }

@@ -80,6 +80,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   static const _gutterInset = 8.0;
   final _gutterRepaint = ValueNotifier<int>(0);
   final _decorationsKey = GlobalKey();
+
+  /// Holds focus while anything in the find bar does, its buttons included,
+  /// so Escape can tell which open bar the user is in.
+  final _searchBarFocus = FocusNode(
+    debugLabel: 'find bar',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
   int _lastReveal = -1;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
@@ -209,8 +217,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// Closes the bar that has focus, or from the document the Go to Line
   /// bar first, since it opens above the find bar.
   void _escape() {
-    final inSearch = c.searchFocus.hasFocus || c.replacementFocus.hasFocus;
-    if (c.goToLineOpen && !inSearch) {
+    if (c.goToLineOpen && !_searchBarFocus.hasFocus) {
       c.closeGoToLine();
     } else {
       c.closeSearch();
@@ -248,6 +255,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     c.removeListener(_changed);
     c.setViewEditingLocked(this, false);
     _gutterRepaint.dispose();
+    _searchBarFocus.dispose();
     super.dispose();
   }
 
@@ -297,7 +305,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             const Divider(height: 1),
           ],
           if (widget.banner != null) widget.banner!,
-          if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
+          if (c.searchOpen) ...[
+            Focus(
+              focusNode: _searchBarFocus,
+              canRequestFocus: false,
+              skipTraversal: true,
+              child: _searchBar(context),
+            ),
+            const Divider(height: 1),
+          ],
           Expanded(
             child: _decorated(
               context,
