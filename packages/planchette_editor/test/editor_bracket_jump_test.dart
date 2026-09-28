@@ -160,13 +160,27 @@ void main() {
     });
   });
 
-  test('commands see tokens past the highlighting cap', () {
+  test('commands see no tokens past the highlighting cap', () {
     final text = '${'x' * syntaxHighlightingMaxChars}")"';
     final code = CodeEditingController(language: syntaxLanguageFor('a.js'))
       ..text = text;
     addTearDown(code.dispose);
 
-    expect(code.syntaxTokens, isNotEmpty);
-    expect(code.syntaxTokens.last.type, SyntaxTokenType.string);
+    expect(code.syntaxTokens, isEmpty);
+    code.text = '"(" + x';
+    expect(code.syntaxTokens.first.type, SyntaxTokenType.string);
+  });
+
+  testWidgets('past the highlighting cap every bracket counts as code', (
+    tester,
+  ) async {
+    // Tokenizing a document this large for one jump took up to half a
+    // second, so the jump reads it as code: the ")" inside the string now
+    // pairs, where below the cap the string's bracket is skipped.
+    final padding = ' ' * syntaxHighlightingMaxChars;
+    final text = '($padding")")';
+    final editor = await pumpEditor(tester, text, caret: 1);
+    expect(editor.goToMatchingBracket(), isTrue);
+    expect(editor.text.selection.extentOffset, text.indexOf(')') + 1);
   });
 }

@@ -68,6 +68,7 @@ BracketMatch? matchBracket(
   List<SyntaxToken> tokens, {
   int? preferred,
 }) {
+  RangeError.checkValueInInterval(caret, 0, text.length, 'caret');
   final candidates = [
     if (preferred == caret - 1 || preferred == caret) preferred!,
     caret - 1,
@@ -94,6 +95,7 @@ BracketJump? bracketJump(
   List<SyntaxToken> tokens, {
   int? preferred,
 }) {
+  RangeError.checkValueInInterval(caret, 0, text.length, 'caret');
   final match = matchBracket(text, caret, tokens, preferred: preferred);
   if (match != null) {
     final after = match.bracket == caret - 1;

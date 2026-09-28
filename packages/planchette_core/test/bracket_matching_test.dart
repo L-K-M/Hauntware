@@ -136,4 +136,10 @@ void main() {
       expect(_jump('(a|'), isNull);
     });
   });
+
+  test('a caret outside the text is rejected at the entry points', () {
+    expect(() => matchBracket('ab', 5, const []), throwsRangeError);
+    expect(() => bracketJump('ab', 5, const []), throwsRangeError);
+    expect(() => bracketJump('ab', -1, const []), throwsRangeError);
+  });
 }
