@@ -53,6 +53,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and says what it takes when the input is not a number. The status bar
   also shows the selection's size and lines, the size the file has once
   saved, the indentation and the language.
+- Past 200,000 characters, where syntax colours stop, the status bar says
+  "Large file: no highlighting".
 - View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
   (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
 - Find Next and Find Previous reach every match in a large file: past the

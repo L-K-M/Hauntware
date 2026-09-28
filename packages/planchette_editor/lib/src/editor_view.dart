@@ -571,6 +571,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       document?.hasUtf8Bom == true ? 'UTF-8 BOM' : 'UTF-8',
       widget.strings.indentation(c.indentation),
       widget.strings.languageName(c.text.language),
+      if (!c.highlightingEnabled) widget.strings.largeFile,
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

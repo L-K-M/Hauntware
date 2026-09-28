@@ -326,6 +326,12 @@ class EditorController extends ChangeNotifier {
     return _bytes;
   }
 
+  /// Whether the buffer is small enough to highlight. Above
+  /// [syntaxHighlightingMaxChars] it edits as plain text, and the status bar
+  /// says so rather than leaving the missing colours unexplained.
+  bool get highlightingEnabled =>
+      text.text.length <= syntaxHighlightingMaxChars;
+
   /// The size the document has once saved: the buffer holds no byte-order
   /// mark, and saving writes each line break as the document's own ending,
   /// as `saveTextDocument` does by default. The buffer may hold LF breaks
