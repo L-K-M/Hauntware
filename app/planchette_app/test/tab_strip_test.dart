@@ -146,6 +146,35 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('review fix: same-named folders show as much path as needed', (
+    tester,
+  ) async {
+    // Both labels read src/index.js, which told nothing apart.
+    final store = workspace.store as MemoryDocuments;
+    final sep = Platform.pathSeparator;
+    final x = ['x', 'src', 'index.js'].join(sep);
+    final y = ['y', 'src', 'index.js'].join(sep);
+    final z = ['z', 'lib', 'index.js'].join(sep);
+    for (final path in [x, y, z]) {
+      store.files[testPath(path)] = document(path, path);
+      await workspace.open(testPath(path));
+    }
+    await mount(tester);
+
+    expect(find.text(x), findsOneWidget);
+    expect(find.text(y), findsOneWidget);
+    expect(find.text(['lib', 'index.js'].join(sep)), findsOneWidget);
+
+    // A path whose folders all end another one's shows every folder.
+    final short = ['src', 'index.js'].join(sep);
+    store.files[testPath(short)] = document(short, short);
+    await workspace.open(testPath(short));
+    await tester.pumpAndSettle();
+    final root = testPath('').split(sep).where((part) => part.isNotEmpty);
+    expect(find.text([...root, short].join(sep)), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('a tab keeps its width when it becomes dirty', (tester) async {
     final tab = workspace.newDocument()!;
     workspace.newDocument();
