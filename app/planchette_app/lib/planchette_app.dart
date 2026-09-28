@@ -9,6 +9,7 @@ import 'services/app_settings.dart';
 import 'services/document_workspace.dart';
 import 'services/settings_dialog.dart';
 import 'theme/planchette_theme.dart';
+import 'widgets/command_palette.dart';
 import 'widgets/tab_strip.dart';
 
 /// The color the native window shows before the first Flutter frame. Must be
@@ -314,6 +315,31 @@ class _DocumentShellState extends State<_DocumentShell> {
     _select(tabs[(index + (previous ? -1 : 1)) % tabs.length]);
   }
 
+  bool _paletteOpen = false;
+
+  /// Lists every command the menus enable right now. The native macOS menu
+  /// stays live under the palette, so a second request is ignored.
+  Future<void> _openPalette() async {
+    if (_paletteOpen || workspace.interactionLocked) return;
+    final commands = [
+      for (final menu in _menus())
+        for (final entry in menu.items)
+          if (entry is _Command && entry.enabled && entry.run != _openPalette)
+            PaletteCommand(
+              group: menu.label,
+              label: entry.label,
+              run: entry.run,
+              shortcut: entry.shortcut,
+            ),
+    ];
+    _paletteOpen = true;
+    try {
+      await showCommandPalette(context, commands);
+    } finally {
+      _paletteOpen = false;
+    }
+  }
+
   void _find({bool replace = false}) {
     if (!workspace.interactionLocked) {
       workspace.active?.editor.openSearch(replace: replace);
@@ -584,6 +610,13 @@ class _DocumentShellState extends State<_DocumentShell> {
         ),
       ]),
       _ShellMenu('Window', [
+        _Command(
+          'Command Palette…',
+          _openPalette,
+          shortcut: _shortcut(LogicalKeyboardKey.keyP, shift: true),
+          enabled: unlocked,
+        ),
+        const _Separator(),
         _Command(
           'Next Tab',
           _nextTab,

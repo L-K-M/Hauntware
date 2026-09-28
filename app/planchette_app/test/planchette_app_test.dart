@@ -518,6 +518,37 @@ void main() {
   );
 
   testWidgets(
+    'the command palette runs a menu command by name',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'palette text';
+      dialogs.savePath = testPath('palette.txt');
+      await mount(tester);
+
+      await chord(tester, LogicalKeyboardKey.keyP, shift: true);
+      expect(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        findsOneWidget,
+      );
+      expect(find.text('Command Palette…'), findsNothing);
+      await tester.enterText(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        'save as',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(tab.path, testPath('palette.txt'));
+      expect(store.files[testPath('palette.txt')]!.text, 'palette text');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!
