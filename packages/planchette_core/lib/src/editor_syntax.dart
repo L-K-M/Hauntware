@@ -9,6 +9,8 @@
 /// cannot consume later lines.
 library;
 
+import 'dart:typed_data';
+
 part 'diff_syntax.dart';
 part 'dotenv_syntax.dart';
 
@@ -1635,10 +1637,24 @@ bool _isWordRune(int rune) {
         (rune >= 0x61 && rune <= 0x7a) ||
         rune == 0x5f;
   }
-  return _wordRune.hasMatch(String.fromCharCode(rune));
+  if (rune > 0xffff) return _wordRune.hasMatch(String.fromCharCode(rune));
+  final known = _bmpWordRunes[rune];
+  if (known != _unclassified) return known == _word;
+  final word = _wordRune.hasMatch(String.fromCharCode(rune));
+  _bmpWordRunes[rune] = word ? _word : _boundary;
+  return word;
 }
 
 final _wordRune = RegExp(r'[\p{L}\p{M}\p{N}\p{Pc}]', unicode: true);
+
+/// The Basic Multilingual Plane's answers, filled in as characters are met.
+/// A whole-word search in Cyrillic or Greek asks about the same few letters
+/// at every candidate, and a regular expression test per question made it
+/// several times slower than in ASCII.
+final _bmpWordRunes = Uint8List(0x10000);
+const _unclassified = 0;
+const _word = 1;
+const _boundary = 2;
 
 int _runeAt(String text, int index) {
   final unit = text.codeUnitAt(index);
