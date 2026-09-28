@@ -147,6 +147,7 @@ class EditorController extends ChangeNotifier {
   bool _caseSensitive = false;
   CaseFolding _caseFolding = CaseFolding.exact;
   bool _updatingSearch = false;
+  bool _updatingQuery = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
   FocusNode? _focusMemory;
@@ -697,9 +698,17 @@ class EditorController extends ChangeNotifier {
         prefill = selected;
       }
     }
+    // Assign the prefill while the query listener cannot scan — still
+    // closed on a fresh open, guarded on re-entry — so the explicit call
+    // below stays the single whole-document scan on every path.
+    _updatingQuery = true;
+    try {
+      if (prefill != null) search.text = prefill;
+    } finally {
+      _updatingQuery = false;
+    }
     _searchOpen = true;
     _replaceOpen = replace || _replaceOpen;
-    if (prefill != null) search.text = prefill;
     _updateMatches(resetActive: true);
     search.selection = TextSelection(
       baseOffset: 0,
@@ -823,7 +832,12 @@ class EditorController extends ChangeNotifier {
   }
 
   void _queryChanged() {
-    if (!_searchOpen || _disposed || search.text == _lastQuery) return;
+    if (!_searchOpen ||
+        _disposed ||
+        _updatingQuery ||
+        search.text == _lastQuery) {
+      return;
+    }
     _updateMatches(resetActive: true);
     _revealRequest++;
     _notify();
