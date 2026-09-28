@@ -427,6 +427,61 @@ void main() {
     expect(await created.exists(), isFalse);
     expect(await directory.list().length, 1);
   });
+
+  test(
+    'an unwritable folder fails the save with an actionable error',
+    () async {
+      if (!Platform.isLinux && !Platform.isMacOS) return;
+      // Root bypasses directory mode bits; the precondition cannot hold there.
+      final uid = await Process.run('id', ['-u']);
+      if (uid.stdout.toString().trim() == '0') return;
+      final originalMode = (await directory.stat()).mode & 0x1ff;
+      final restrict = await Process.run('chmod', ['555', directory.path]);
+      if (restrict.exitCode != 0) {
+        fail('chmod 555 failed: ${restrict.stderr}');
+      }
+      addTearDown(() async {
+        final restore = await Process.run('chmod', [
+          originalMode.toRadixString(8),
+          directory.path,
+        ]);
+        expect(
+          restore.exitCode,
+          0,
+          reason: 'chmod restore failed: ${restore.stderr}',
+        );
+      });
+
+      await expectLater(
+        _save(file, 'edit\n'),
+        throwsA(
+          isA<TextDocumentException>().having(
+            (error) => error.message,
+            'message',
+            startsWith(
+              'A temporary file could not be created beside the document.',
+            ),
+          ),
+        ),
+      );
+      // The guarded path refuses before renaming: the original stays intact.
+      expect(await file.readAsString(), 'one\ntwo\n');
+      expect(await directory.list().length, 1);
+    },
+  );
+
+  test('vanished-path classification is platform-aware', () {
+    FileSystemException withCode(int code) =>
+        FileSystemException('rename', 'doc.txt', OSError('failed', code));
+    expect(isVanishedPathError(withCode(2)), isTrue);
+    // ERROR_PATH_NOT_FOUND counts only on Windows; POSIX code 3 is ESRCH.
+    // Both sides of the gate are pinned regardless of the host running this.
+    expect(isVanishedPathError(withCode(3), isWindows: true), isTrue);
+    expect(isVanishedPathError(withCode(3), isWindows: false), isFalse);
+    expect(isVanishedPathError(withCode(3)), Platform.isWindows);
+    // EACCES stays a real failure, not a concurrent-modification signal.
+    expect(isVanishedPathError(withCode(13)), isFalse);
+  });
 }
 
 Future<String> _loadText(

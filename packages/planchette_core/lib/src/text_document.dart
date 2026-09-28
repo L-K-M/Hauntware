@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
+import 'package:meta/meta.dart';
 import 'package:uuid/uuid.dart';
 
 import 'native_file_operations.dart';
@@ -255,7 +256,20 @@ Future<String> _writeTextDocument(
   RandomAccessFile? handle;
   var retainTemporary = false;
   try {
-    await temporary.create(exclusive: true);
+    try {
+      await temporary.create(exclusive: true);
+    } on FileSystemException catch (error, stackTrace) {
+      // The guarded design needs a sibling staging file, so an unwritable
+      // folder blocks every save; name the actionable cause, not the syscall.
+      Error.throwWithStackTrace(
+        TextDocumentException(
+          'A temporary file could not be created beside the document. '
+          'Check that its folder is writable. '
+          '${error.osError?.message ?? error.message}',
+        ),
+        stackTrace,
+      );
+    }
     // Owner-only before any plaintext reaches the file.
     setFilePermissions(temporary.path, _ownerReadWriteMode);
     handle = await temporary.open(mode: FileMode.writeOnly);
@@ -280,7 +294,25 @@ Future<String> _writeTextDocument(
     }
 
     await _requireRegularFile(file);
-    renameFileWithoutReplacing(file.path, backup.path);
+    try {
+      renameFileWithoutReplacing(file.path, backup.path);
+    } on FileSystemException catch (error, stackTrace) {
+      // A vanished destination or parent means a mid-save conflict;
+      // anything else (permissions, quota) keeps its real OS error
+      // instead of being misreported as concurrent modification.
+      Error.throwWithStackTrace(
+        isVanishedPathError(error)
+            ? TextDocumentException(
+                'The local copy changed while it was being saved. '
+                '${error.osError?.message ?? error.message}',
+              )
+            : TextDocumentException(
+                'The original file could not be moved aside for '
+                'replacement. ${error.osError?.message ?? error.message}',
+              ),
+        stackTrace,
+      );
+    }
     try {
       await observeBackup?.call(backup);
       await _requireRegularFile(backup);
@@ -377,6 +409,26 @@ const int _ownerReadWriteMode = 0x180;
 
 /// chmod 0777 mask: only the portable permission bits survive a save.
 const int _posixPermissionMask = 0x1ff;
+
+/// ENOENT on POSIX; ERROR_FILE_NOT_FOUND on Windows. Coincidentally 2 on
+/// both — the destination file itself vanished mid-save, not a permission
+/// or quota failure.
+const int _errorNoSuchFile = 2;
+
+/// Windows ERROR_PATH_NOT_FOUND: a parent directory in the path vanished.
+/// POSIX reports the same situation as ENOENT ([_errorNoSuchFile]).
+const int _errorPathNotFound = 3;
+
+/// Whether [error] means a path vanished mid-operation — the destination
+/// file itself ([_errorNoSuchFile]) or, on Windows, a parent directory
+/// ([_errorPathNotFound]). Everything else (permissions, quota) is a real
+/// failure, not a concurrent-modification signal.
+@visibleForTesting
+bool isVanishedPathError(FileSystemException error, {bool? isWindows}) {
+  final code = error.osError?.errorCode;
+  return code == _errorNoSuchFile ||
+      ((isWindows ?? Platform.isWindows) && code == _errorPathNotFound);
+}
 
 bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes.length >= offset + _utf8Bom.length &&
