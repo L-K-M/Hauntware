@@ -8,11 +8,15 @@ import 'document_store.dart';
 
 enum CloseChoice { save, discard, cancel }
 
+/// The answer to saving over a read-only file.
+enum ReadOnlyChoice { saveAs, saveAnyway, cancel }
+
 abstract interface class DocumentDialogs {
   Future<List<String>> pickOpenFiles();
   Future<String?> pickSavePath(String suggestedName);
   Future<bool> confirmReplace(String path);
   Future<CloseChoice> chooseClose(String name);
+  Future<ReadOnlyChoice> chooseReadOnlySave(String name);
 }
 
 /// One controller survives tab switches, retaining undo, selection, find and
@@ -31,6 +35,10 @@ final class DocumentTab {
   /// the shell can point at it. Monotonic, never reset: a view compares it to
   /// the previous build's value.
   int flashRequest = 0;
+
+  /// The read-only file the user already agreed to save over, so each later
+  /// save does not ask again. A Save As to another file asks afresh.
+  String? _acceptedReadOnlyPath;
 
   String get name => path == null ? untitledName : paths.basename(path!);
 }
@@ -221,7 +229,20 @@ final class DocumentWorkspace extends ChangeNotifier {
     try {
       String target;
       String? digest;
-      if (saveAs || tab.path == null) {
+      var chooseTarget = saveAs || tab.path == null;
+      if (!chooseTarget &&
+          tab._acceptedReadOnlyPath != tab.path &&
+          await store.isWriteProtected(tab.path!)) {
+        switch (await _dialog(() => dialogs.chooseReadOnlySave(tab.name))) {
+          case ReadOnlyChoice.cancel:
+            return false;
+          case ReadOnlyChoice.saveAs:
+            chooseTarget = true;
+          case ReadOnlyChoice.saveAnyway:
+            tab._acceptedReadOnlyPath = tab.path;
+        }
+      }
+      if (chooseTarget) {
         final selected = await _dialog(
           () => dialogs.pickSavePath(tab.path ?? tab.name),
         );

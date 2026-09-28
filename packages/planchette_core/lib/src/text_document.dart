@@ -79,6 +79,22 @@ Future<File> resolveTextDocumentTarget(
   return file;
 }
 
+/// Whether [file] is marked read-only: no write permission for anyone on
+/// POSIX, or the read-only attribute on Windows, which Dart reports the same
+/// way. A save replaces the document through a sibling and restores its
+/// mode (on Windows, the attribute), so the file's own permission never
+/// stops a save; hosts ask this to
+/// warn before replacing a file someone deliberately protected. Ownership is
+/// not considered: a file only its owner may write reads as unprotected.
+Future<bool> isTextDocumentWriteProtected(File file) async {
+  final stat = await file.stat();
+  return stat.type == FileSystemEntityType.file &&
+      stat.mode & _writePermissionBits == 0;
+}
+
+/// POSIX write permission for owner, group and others: 0222.
+const _writePermissionBits = 0x92;
+
 /// Reads bounded, strict UTF-8, retaining one leading BOM as metadata and
 /// every additional U+FEFF as content. Digest checks reject changing snapshots.
 Future<TextDocument> loadTextDocument(
@@ -254,6 +270,7 @@ Future<String> _writeTextDocument(
   final backup = _recoverySibling(file, temporaryPrefix, 'backup');
   RandomAccessFile? handle;
   var retainTemporary = false;
+  var windowsReadOnly = false;
   try {
     try {
       await temporary.create(exclusive: true);
@@ -330,6 +347,8 @@ Future<String> _writeTextDocument(
       }
       final stat = await backup.stat();
       setFilePermissions(temporary.path, stat.mode & _posixPermissionMask);
+      windowsReadOnly =
+          Platform.isWindows && stat.mode & _writePermissionBits == 0;
       renameFileWithoutReplacing(temporary.path, file.path);
     } catch (error) {
       if (error is HardLinkCleanupException) retainTemporary = true;
@@ -345,6 +364,7 @@ Future<String> _writeTextDocument(
       }
       rethrow;
     }
+    if (windowsReadOnly) _keepWindowsReadOnly(file, backup);
     try {
       await backup.delete();
     } on FileSystemException {
@@ -383,6 +403,24 @@ File _recoverySibling(File file, String prefix, String extension) {
   // Keep the caller's directory spelling, including root and relative paths.
   final parent = file.path.substring(0, file.path.length - originalName.length);
   return File('$parent$stem$suffix');
+}
+
+/// Windows has no mode bits to restore, so a read-only original's attribute
+/// goes back on the new file, and comes off the backup, which could not be
+/// deleted otherwise. The new file is already committed: a failure here
+/// leaves the attribute off or the backup in place rather than reporting a
+/// failed save.
+void _keepWindowsReadOnly(File file, File backup) {
+  try {
+    setWindowsReadOnly(file.path, readOnly: true);
+  } on FileSystemException {
+    // The saved text stands; only the attribute is lost.
+  }
+  try {
+    setWindowsReadOnly(backup.path, readOnly: false);
+  } on FileSystemException {
+    // The backup delete below then fails and keeps the recovery sibling.
+  }
 }
 
 Future<void> _requireRegularFile(File file) async {

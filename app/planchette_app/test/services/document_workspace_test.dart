@@ -30,6 +30,7 @@ class MemoryDocuments implements DocumentStore {
   final files = <String, TextDocument>{};
   final writes = <({String path, String text, String? digest})>[];
   final aliases = <String, String>{};
+  final writeProtected = <String>{};
   Completer<void>? writeGate;
   Completer<void>? loadGate;
   Completer<void>? savePathGate;
@@ -52,6 +53,10 @@ class MemoryDocuments implements DocumentStore {
 
   @override
   Future<String?> existingDigest(String path) async => files[path]?.sha256;
+
+  @override
+  Future<bool> isWriteProtected(String path) async =>
+      writeProtected.contains(path);
 
   @override
   Future<TextDocument> write({
@@ -86,6 +91,8 @@ class FakeDialogs implements DocumentDialogs {
   final asked = <String>[];
   Completer<CloseChoice>? choiceGate;
   Future<void> Function()? beforeReplace;
+  final readOnlyChoices = <ReadOnlyChoice>[];
+  final readOnlyAsked = <String>[];
 
   @override
   Future<List<String>> pickOpenFiles() async => openPaths;
@@ -102,6 +109,14 @@ class FakeDialogs implements DocumentDialogs {
     asked.add(name);
     return choiceGate?.future ??
         (choices.isEmpty ? CloseChoice.cancel : choices.removeAt(0));
+  }
+
+  @override
+  Future<ReadOnlyChoice> chooseReadOnlySave(String name) async {
+    readOnlyAsked.add(name);
+    return readOnlyChoices.isEmpty
+        ? ReadOnlyChoice.cancel
+        : readOnlyChoices.removeAt(0);
   }
 }
 
@@ -188,6 +203,57 @@ void main() {
       expect(tab.editor.isDirty, isFalse);
     },
   );
+
+  group('saving a read-only file', () {
+    late DocumentTab tab;
+    setUp(() async {
+      store.files[testPath('locked.txt')] = document('locked.txt', 'disk');
+      store.writeProtected.add(testPath('locked.txt'));
+      await workspace.open(testPath('locked.txt'));
+      tab = workspace.active!..editor.text.text = 'edited';
+    });
+
+    test('asks first, and Cancel leaves the file alone', () async {
+      expect(await workspace.save(tab), isFalse);
+      expect(dialogs.readOnlyAsked, ['locked.txt']);
+      expect(store.writes, isEmpty);
+      expect(tab.editor.isDirty, isTrue);
+    });
+
+    test('Save Anyway replaces it and is not asked again', () async {
+      dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAnyway);
+      expect(await workspace.save(tab), isTrue);
+      expect(store.files[testPath('locked.txt')]!.text, 'edited');
+
+      tab.editor.text.text = 'edited again';
+      expect(await workspace.save(tab), isTrue);
+      expect(dialogs.readOnlyAsked, hasLength(1));
+      expect(store.files[testPath('locked.txt')]!.text, 'edited again');
+    });
+
+    test('Save As writes a new file and keeps the original', () async {
+      dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAs);
+      dialogs.savePath = testPath('copy.txt');
+      expect(await workspace.save(tab), isTrue);
+      expect(store.files[testPath('locked.txt')]!.text, 'disk');
+      expect(store.files[testPath('copy.txt')]!.text, 'edited');
+      expect(tab.path, testPath('copy.txt'));
+    });
+
+    test('an explicit Save As does not ask', () async {
+      dialogs.savePath = testPath('copy.txt');
+      expect(await workspace.save(tab, saveAs: true), isTrue);
+      expect(dialogs.readOnlyAsked, isEmpty);
+    });
+
+    test('a close that saves asks too', () async {
+      dialogs.choices.add(CloseChoice.save);
+      expect(await workspace.closeTab(tab), isFalse);
+      expect(dialogs.readOnlyAsked, ['locked.txt']);
+      expect(workspace.documents, [tab]);
+      expect(store.writes, isEmpty);
+    });
+  });
 
   test('canceling Save As keeps a new document dirty and unnamed', () async {
     final tab = workspace.newDocument()!;
