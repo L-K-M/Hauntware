@@ -58,7 +58,7 @@ or a colon in Python and YAML), and Backspace in space indentation removes a
 whole level. The unit is learned from the document and exposed as
 `EditorController.indentation`; hosts may set it. Pass
 `tabKeyBehavior: EditorTabKeyBehavior.moveFocus` where Tab must traverse focus
-instead. Tabs render at the indentation width rather than one space wide.
+instead.
 
 `EditorSyntaxTheme` is a `ThemeExtension`: add one to a host's
 `ThemeData.extensions` to style every editor, and it animates with theme
