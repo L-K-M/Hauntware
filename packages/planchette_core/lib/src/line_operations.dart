@@ -210,6 +210,105 @@ LineEdit? joinLines(String text, int base, int extent) {
   return LineEdit(result, mapped(base), mapped(extent));
 }
 
+/// Comments or uncomments the touched lines with a language's line-comment
+/// [markers], such as `['//']` or `['#', ';']`.
+///
+/// When every non-blank touched line already starts, after its indentation,
+/// with one of the markers, that marker and one following space are removed
+/// from each line. Otherwise the first marker and a space go in front of each
+/// non-blank line's text, at its indentation. Blank lines in a selection stay
+/// as they are, but a caret on a blank line comments it. A caret keeps its
+/// place in the text; a selection grows to cover the touched lines whole,
+/// keeping its direction. Returns null when [markers] is empty or nothing
+/// would change.
+LineEdit? toggleLineComments(
+  String text,
+  int base,
+  int extent,
+  List<String> markers,
+) {
+  if (markers.isEmpty) return null;
+  final lines = _touchedLines(text, base, extent);
+  final collapsed = base == extent;
+  // Longest first, so a marker that begins with another one is removed whole.
+  final byLength = [...markers]..sort((a, b) => b.length - a.length);
+  String? markerAt(int offset) {
+    for (final marker in byLength) {
+      if (text.startsWith(marker, offset)) return marker;
+    }
+    return null;
+  }
+
+  // The text start (after indentation) and content end of each touched line.
+  final touched = <({int text, int end})>[];
+  for (var start = lines.start; ;) {
+    final end = _contentEnd(text, start);
+    var at = start;
+    while (at < end && _isIndent(text.codeUnitAt(at))) {
+      at++;
+    }
+    touched.add((text: at, end: end));
+    if (end >= lines.end) break;
+    start = end + _separatorAt(text, end).length;
+  }
+  final written = [
+    for (final line in touched)
+      if (line.text < line.end) line,
+  ];
+  if (written.isEmpty && !collapsed) return null;
+  final uncomment =
+      written.isNotEmpty &&
+      written.every((line) => markerAt(line.text) != null);
+
+  final edits = <({int at, int remove, String insert})>[];
+  for (final line in touched) {
+    if (uncomment) {
+      final marker = markerAt(line.text);
+      if (marker == null) continue;
+      var remove = marker.length;
+      if (line.text + remove < line.end &&
+          text.codeUnitAt(line.text + remove) == _space) {
+        remove++;
+      }
+      edits.add((at: line.text, remove: remove, insert: ''));
+    } else if (line.text < line.end || collapsed) {
+      edits.add((at: line.text, remove: 0, insert: '${markers.first} '));
+    }
+  }
+  if (edits.isEmpty) return null;
+
+  final result = StringBuffer();
+  var copied = 0;
+  var delta = 0;
+  for (final edit in edits) {
+    result
+      ..write(text.substring(copied, edit.at))
+      ..write(edit.insert);
+    copied = edit.at + edit.remove;
+    delta += edit.insert.length - edit.remove;
+  }
+  result.write(text.substring(copied));
+
+  if (collapsed) {
+    var shift = 0;
+    for (final edit in edits) {
+      if (base < edit.at) break;
+      if (base < edit.at + edit.remove) {
+        // A caret inside a removed marker lands where the marker began.
+        final caret = edit.at + shift;
+        return LineEdit(result.toString(), caret, caret);
+      }
+      shift += edit.insert.length - edit.remove;
+    }
+    return LineEdit(result.toString(), base + shift, base + shift);
+  }
+  final start = lines.start;
+  final end = lines.end + delta;
+  return base < extent
+      ? LineEdit(result.toString(), start, end)
+      : LineEdit(result.toString(), end, start);
+}
+
 const _newline = 0x0a;
 const _return = 0x0d;
 const _space = 0x20;

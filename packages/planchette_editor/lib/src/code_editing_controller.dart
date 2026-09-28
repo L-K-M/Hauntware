@@ -4,7 +4,9 @@ import 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
 import 'package:planchette_core/planchette_core.dart' as core;
 
-class EditorSyntaxTheme {
+/// Token and search-match colors. Pass one to [PlanchetteEditor.syntaxTheme],
+/// or add it to a host's `ThemeData.extensions` to style every editor.
+class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
   final Color comment;
   final Color string;
   final Color number;
@@ -47,12 +49,88 @@ class EditorSyntaxTheme {
     meta: Color(0xFF2B4FBF),
     matchBackground: Color(0x80F5D89B),
     matchForeground: Color(0xFF233028),
-    activeMatchBackground: Color(0xFF3D8A78),
+    // Darkened from 0xFF3D8A78, which held white text at 4.11:1 — the least
+    // readable pair in either theme. 0xFF377A69 clears AA at 5.06:1.
+    activeMatchBackground: Color(0xFF377A69),
     activeMatchForeground: Color(0xFFFFFFFF),
   );
 
   static EditorSyntaxTheme of(Brightness brightness) =>
       brightness == Brightness.dark ? dark : light;
+
+  @override
+  EditorSyntaxTheme copyWith({
+    Color? comment,
+    Color? string,
+    Color? number,
+    Color? keyword,
+    Color? meta,
+    Color? matchBackground,
+    Color? matchForeground,
+    Color? activeMatchBackground,
+    Color? activeMatchForeground,
+  }) => EditorSyntaxTheme(
+    comment: comment ?? this.comment,
+    string: string ?? this.string,
+    number: number ?? this.number,
+    keyword: keyword ?? this.keyword,
+    meta: meta ?? this.meta,
+    matchBackground: matchBackground ?? this.matchBackground,
+    matchForeground: matchForeground ?? this.matchForeground,
+    activeMatchBackground: activeMatchBackground ?? this.activeMatchBackground,
+    activeMatchForeground: activeMatchForeground ?? this.activeMatchForeground,
+  );
+
+  @override
+  EditorSyntaxTheme lerp(EditorSyntaxTheme? other, double t) {
+    if (other == null) return this;
+    Color mix(Color a, Color b) => Color.lerp(a, b, t)!;
+    return EditorSyntaxTheme(
+      comment: mix(comment, other.comment),
+      string: mix(string, other.string),
+      number: mix(number, other.number),
+      keyword: mix(keyword, other.keyword),
+      meta: mix(meta, other.meta),
+      matchBackground: mix(matchBackground, other.matchBackground),
+      matchForeground: mix(matchForeground, other.matchForeground),
+      activeMatchBackground: mix(
+        activeMatchBackground,
+        other.activeMatchBackground,
+      ),
+      activeMatchForeground: mix(
+        activeMatchForeground,
+        other.activeMatchForeground,
+      ),
+    );
+  }
+
+  // Value equality, so ThemeData built afresh in a host's build compares
+  // equal and does not restart the theme animation.
+  @override
+  bool operator ==(Object other) =>
+      other is EditorSyntaxTheme &&
+      other.comment == comment &&
+      other.string == string &&
+      other.number == number &&
+      other.keyword == keyword &&
+      other.meta == meta &&
+      other.matchBackground == matchBackground &&
+      other.matchForeground == matchForeground &&
+      other.activeMatchBackground == activeMatchBackground &&
+      other.activeMatchForeground == activeMatchForeground;
+
+  @override
+  int get hashCode => Object.hash(
+    comment,
+    string,
+    number,
+    keyword,
+    meta,
+    matchBackground,
+    matchForeground,
+    activeMatchBackground,
+    activeMatchForeground,
+  );
 
   Color colorFor(SyntaxTokenType type) => switch (type) {
     SyntaxTokenType.comment => comment,
@@ -139,6 +217,13 @@ class CodeEditingController extends TextEditingController {
     _activeMatchIndex = activeIndex;
     notifyListeners();
   }
+
+  /// The syntax tokens of the whole text, for a command that must tell code
+  /// from strings and comments. Empty past [syntaxHighlightingMaxChars], as
+  /// for painting: tokenizing a document that large took up to half a second
+  /// after every edit and could meet a tokenizer's worst case, so commands
+  /// then treat the whole text as code.
+  List<SyntaxToken> get syntaxTokens => _tokensFor(text);
 
   List<SyntaxToken> _tokensFor(String text) {
     final language = this.language;

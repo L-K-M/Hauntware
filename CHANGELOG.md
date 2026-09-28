@@ -44,6 +44,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Line commands in the Edit menu: Duplicate Line (`Cmd/Ctrl+Shift+D`),
   Move Line Up/Down (`Option/Alt+↑/↓`), Delete Line (`Cmd/Ctrl+Shift+K`)
   and Join Lines (`Cmd/Ctrl+J`). They keep a CRLF line's break intact.
+- Edit › Toggle Comment (`Cmd/Ctrl+/`) comments or uncomments the touched
+  lines with the language's line-comment marker, keeping indentation; it is
+  offered only for languages that have one.
+- Find › Go to Matching Bracket (`Cmd/Ctrl+B`, with Shift to select) jumps
+  to the partner of the bracket beside the caret, skipping brackets in
+  strings and comments.
+- Find › Go to Line (`Cmd+L` on macOS, `Ctrl+G` elsewhere, or a click on
+  the caret position in the status bar) jumps to a line or `line:column`,
+  and says what it takes when the input is not a number. The status bar
+  also shows the selection's size and lines, the size the file has once
+  saved, the indentation and the language.
+- View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
+  (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
+- Planchette has its own looks: Parchment for light mode and Séance for
+  dark, with syntax colors that keep 4.5:1 contrast on the page, the
+  current line and the selection. Hosts can style the shared editor through
+  `ThemeData.extensions`, since `EditorSyntaxTheme` is a `ThemeExtension`.
 - A faint band marks the caret's line. It is on by default in the shared
   editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
   `Colors.transparent` to turn it off.
@@ -85,3 +102,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Line numbers stay on their lines when lines soft-wrap, at any document
   size, and typing no longer lays the whole document out a second time for
   the gutter. Find reveals a match on its real row in large wrapped files.
+- On macOS, `Ctrl+F`, `Ctrl+H` and `Ctrl+G` keep their text-editing meaning
+  instead of opening find, replace or Go to Line.
+- Documents use a monospace font on macOS (Menlo) and Windows (Cascadia
+  Mono, or Consolas where it is missing). The generic `monospace` name the
+  editor used to request resolves only on Linux and Android, so the text
+  fell back to the proportional system font. `PlanchetteEditor.textStyle`
+  now merges over the platform's family (`editorMonospaceFor`), and a host
+  passing the generic name gets that family too.
+- The window opens on the app's own background in the current light or
+  dark mode, instead of the platform's default colour before the first
+  frame and while resizing.

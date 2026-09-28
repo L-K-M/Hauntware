@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -5,6 +6,7 @@ import 'package:planchette_core/planchette_core.dart';
 
 import 'code_editing_controller.dart';
 import 'editor_controller.dart';
+import 'editor_fonts.dart';
 import 'editor_strings.dart';
 
 /// What the Tab key does inside the document.
@@ -25,11 +27,7 @@ class PlanchetteEditor extends StatefulWidget {
     super.key,
     required this.controller,
     this.strings = const EditorStrings(),
-    this.textStyle = const TextStyle(
-      fontFamily: 'monospace',
-      fontSize: 14,
-      height: 1.35,
-    ),
+    this.textStyle = const TextStyle(fontSize: 14, height: 1.35),
     this.syntaxTheme,
     this.isActive = true,
     this.editingLocked = false,
@@ -44,6 +42,12 @@ class PlanchetteEditor extends StatefulWidget {
 
   final EditorController controller;
   final EditorStrings strings;
+
+  /// Merged over the platform's monospace family ([editorMonospaceFor]), a
+  /// 14 px size and 1.35 line height. A `fontFamily` here is tried first,
+  /// except the generic `monospace`, which selects the platform family;
+  /// the platform stack stays as its fallback unless `fontFamilyFallback`
+  /// is set too, so a missing host font still lands on a monospace face.
   final TextStyle textStyle;
   final EditorSyntaxTheme? syntaxTheme;
   final bool isActive;
@@ -77,12 +81,36 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   final _gutterRepaint = ValueNotifier<int>(0);
   final _decorationsKey = GlobalKey();
   int _lastReveal = -1;
-  bool _revealQueued = false;
   int _lastCaretReveal = 0;
+  bool _revealQueued = false;
   EditorController get c => widget.controller;
-  TextStyle get _style =>
-      const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
+  TextStyle get _style {
+    // Installed fonts follow the operating system, not a theme's platform.
+    final base = editorMonospaceFor(
+      defaultTargetPlatform,
+    ).merge(const TextStyle(fontSize: 14, height: 1.35));
+    final style = base.merge(widget.textStyle);
+    // Hosts written for the old default pass the generic name, which only
+    // fontconfig and Android resolve; it means the platform's own family.
+    return style.fontFamily?.toLowerCase() == 'monospace'
+        ? style.copyWith(fontFamily: base.fontFamily)
+        : style;
+  }
+
   bool get _locked => widget.editingLocked || c.editingLocked;
+  bool get _apple => switch (Theme.of(context).platform) {
+    TargetPlatform.macOS || TargetPlatform.iOS => true,
+    _ => false,
+  };
+
+  /// The widget's own theme, else the host theme's extension, else the
+  /// built-in palette for the current brightness.
+  EditorSyntaxTheme get _syntaxTheme {
+    final theme = Theme.of(context);
+    return widget.syntaxTheme ??
+        theme.extension<EditorSyntaxTheme>() ??
+        EditorSyntaxTheme.of(theme.brightness);
+  }
 
   @override
   void initState() {
@@ -98,9 +126,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    c.text.theme =
-        widget.syntaxTheme ??
-        EditorSyntaxTheme.of(Theme.of(context).brightness);
+    c.text.theme = _syntaxTheme;
   }
 
   @override
@@ -117,18 +143,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       });
     }
     c.setViewEditingLocked(this, widget.editingLocked);
-    c.text.theme =
-        widget.syntaxTheme ??
-        EditorSyntaxTheme.of(Theme.of(context).brightness);
+    c.text.theme = _syntaxTheme;
     if (oldWidget.isActive != widget.isActive || oldWidget.controller != c) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (widget.isActive) {
           c.restoreFocus();
         } else {
-          c.editorFocus.unfocus();
-          c.searchFocus.unfocus();
-          c.replacementFocus.unfocus();
+          for (final node in c.textFocusNodes) {
+            node.unfocus();
+          }
         }
       });
     }
@@ -154,14 +178,43 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     }
   }
 
-  /// Scrolls just far enough to show a caret that a command moved, the way
-  /// typing does.
+  /// Scrolls to a caret that a command moved, since only typing scrolls by
+  /// itself: just far enough for an edit or a bracket jump, the way typing
+  /// does, and for Go to Line, whose target may be far away, a third of the
+  /// way down the view unless it is already in view.
   void _revealCaret() {
     final selection = c.text.selection;
     if (!selection.isValid) return;
-    c.editorFocus.context
-        ?.findAncestorStateOfType<EditableTextState>()
-        ?.bringIntoView(selection.extent);
+    final field = c.editorFocus.context
+        ?.findAncestorStateOfType<EditableTextState>();
+    if (field == null) return;
+    switch (c.caretRevealPlacement) {
+      case CaretReveal.nearest:
+        field.bringIntoView(selection.extent);
+      case CaretReveal.upperThird:
+        final editable = field.renderEditable;
+        if (!editable.hasSize || !c.scroll.hasClients) return;
+        final caret = editable.getLocalRectForCaret(selection.extent);
+        if (caret.top >= 0 && caret.bottom <= editable.size.height) return;
+        final position = c.scroll.positions.last;
+        c.scroll.jumpTo(
+          (caret.top + position.pixels - position.viewportDimension / 3).clamp(
+            0.0,
+            position.maxScrollExtent,
+          ),
+        );
+    }
+  }
+
+  /// Closes the bar that has focus, or from the document the Go to Line
+  /// bar first, since it opens above the find bar.
+  void _escape() {
+    final inSearch = c.searchFocus.hasFocus || c.replacementFocus.hasFocus;
+    if (c.goToLineOpen && !inSearch) {
+      c.closeGoToLine();
+    } else {
+      c.closeSearch();
+    }
   }
 
   void _revealMatch() {
@@ -201,40 +254,56 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   @override
   Widget build(BuildContext context) {
     return CallbackShortcuts(
+      // Command on Apple platforms and Control elsewhere, never both: Control
+      // chords are Cocoa text bindings on macOS (Ctrl+F moves forward, Ctrl+H
+      // deletes backward), and Ctrl+G is Go to Line on Windows and Linux.
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
-            c.openSearch,
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-            c.openSearch,
-        const SingleActivator(LogicalKeyboardKey.keyH, control: true): () =>
-            c.openSearch(replace: true),
-        const SingleActivator(
-          LogicalKeyboardKey.keyF,
-          meta: true,
-          alt: true,
-        ): () =>
-            c.openSearch(replace: true),
-        const SingleActivator(LogicalKeyboardKey.keyG, meta: true): c.nextMatch,
-        const SingleActivator(LogicalKeyboardKey.keyG, control: true):
-            c.nextMatch,
-        const SingleActivator(LogicalKeyboardKey.keyG, meta: true, shift: true):
-            c.previousMatch,
-        const SingleActivator(
-          LogicalKeyboardKey.keyG,
-          control: true,
-          shift: true,
-        ): c.previousMatch,
+        if (_apple) ...{
+          const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
+              c.openSearch,
+          const SingleActivator(
+            LogicalKeyboardKey.keyF,
+            meta: true,
+            alt: true,
+          ): () =>
+              c.openSearch(replace: true),
+          const SingleActivator(LogicalKeyboardKey.keyG, meta: true):
+              c.nextMatch,
+          const SingleActivator(
+            LogicalKeyboardKey.keyG,
+            meta: true,
+            shift: true,
+          ): c.previousMatch,
+          const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
+              c.openGoToLine,
+        } else ...{
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+              c.openSearch,
+          const SingleActivator(LogicalKeyboardKey.keyH, control: true): () =>
+              c.openSearch(replace: true),
+          const SingleActivator(LogicalKeyboardKey.keyG, control: true):
+              c.openGoToLine,
+        },
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             c.previousMatch,
-        if (c.searchOpen)
-          const SingleActivator(LogicalKeyboardKey.escape): c.closeSearch,
+        if (c.searchOpen || c.goToLineOpen)
+          const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
       child: Column(
         children: [
+          if (c.goToLineOpen) ...[
+            _goToLineBar(context),
+            const Divider(height: 1),
+          ],
           if (widget.banner != null) widget.banner!,
           if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
-          Expanded(child: _decorated(context, _lineCommands(context, _body()))),
+          Expanded(
+            child: _decorated(
+              context,
+              _lineCommands(context, _bracketCommands(context, _body())),
+            ),
+          ),
           if (widget.showStatus && !c.isLoading && c.error == null) ...[
             const Divider(height: 1),
             SafeArea(
@@ -394,32 +463,100 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     );
   }
 
+  Widget _goToLineBar(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+      child: Row(
+        children: [
+          Icon(
+            Icons.format_list_numbered,
+            size: 18,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: c.goToLineInput,
+              focusNode: c.goToLineFocus,
+              autofocus: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              // A text keyboard, so touch devices can type line:column.
+              keyboardType: TextInputType.text,
+              style: theme.textTheme.bodyMedium,
+              decoration: InputDecoration(
+                hintText: strings.goToLineHint(c.lineStarts.length),
+                errorText: c.goToLineInputInvalid
+                    ? strings.goToLineInvalid(c.lineStarts.length)
+                    : null,
+                isDense: true,
+                border: InputBorder.none,
+              ),
+              onSubmitted: (_) {
+                if (c.submitGoToLine()) return;
+                // Keep the field and select its text, so typing replaces it.
+                c.goToLineInput.selection = TextSelection(
+                  baseOffset: 0,
+                  extentOffset: c.goToLineInput.text.length,
+                );
+                c.goToLineFocus.requestFocus();
+              },
+            ),
+          ),
+          ExcludeFocus(
+            child: IconButton(
+              tooltip: strings.closeGoToLine,
+              visualDensity: VisualDensity.compact,
+              onPressed: c.closeGoToLine,
+              icon: const Icon(Icons.close),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _statusBar(BuildContext context) {
     final (line, column) = c.caretLineColumn;
     final document = c.document;
+    final selected = c.selectionStats;
     final status = [
+      if (selected.characters > 0)
+        widget.strings.selectionSummary(selected.characters, selected.lines),
       if (c.isSaving) widget.strings.saving,
       if (c.isDirty) widget.strings.unsaved,
       document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
       document?.hasUtf8Bom == true ? 'UTF-8 BOM' : 'UTF-8',
       widget.strings.indentation(c.indentation),
-      if (c.text.language case final language?) language.id,
+      widget.strings.languageName(c.text.language),
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              widget.strings.documentPosition(
-                line,
-                column,
-                c.lineStarts.length,
-                c.byteCount,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Tooltip(
+                message: widget.strings.goToLine,
+                child: InkWell(
+                  onTap: c.openGoToLine,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Text(
+                    widget.strings.documentPosition(
+                      line,
+                      column,
+                      c.lineStarts.length,
+                      c.fileByteCount,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall,
             ),
           ),
           Flexible(
@@ -625,8 +762,48 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       primary(LogicalKeyboardKey.keyJ): const _LineCommandIntent(
         _LineCommand.join,
       ),
+      primary(LogicalKeyboardKey.slash): const _LineCommandIntent(
+        _LineCommand.toggleComment,
+      ),
     };
   }
+
+  /// Go to Matching Bracket, bound around the document field only so the
+  /// find fields keep their own keys.
+  Widget _bracketCommands(BuildContext context, Widget document) {
+    final apple = switch (Theme.of(context).platform) {
+      TargetPlatform.iOS || TargetPlatform.macOS => true,
+      _ => false,
+    };
+    return Shortcuts(
+      shortcuts: apple ? _appleBracketShortcuts : _bracketShortcuts,
+      child: Actions(actions: _bracketActions, child: document),
+    );
+  }
+
+  // Built once: a new map or action on every keystroke's rebuild would make
+  // the shortcut manager re-index and the actions notify their dependents.
+  late final Map<Type, Action<Intent>> _bracketActions = {
+    _BracketJumpIntent: _BracketJumpAction(() => c),
+  };
+  static final _appleBracketShortcuts = _bracketJumpShortcuts(apple: true);
+  static final _bracketShortcuts = _bracketJumpShortcuts(apple: false);
+
+  /// Command+B on Apple platforms and Control+B elsewhere; Shift selects.
+  static Map<ShortcutActivator, Intent> _bracketJumpShortcuts({
+    required bool apple,
+  }) => {
+    SingleActivator(LogicalKeyboardKey.keyB, meta: apple, control: !apple):
+        const _BracketJumpIntent(extend: false),
+    SingleActivator(
+      LogicalKeyboardKey.keyB,
+      meta: apple,
+      control: !apple,
+      shift: true,
+    ): const _BracketJumpIntent(
+      extend: true,
+    ),
+  };
 
   bool _composing() => c.text.value.composing.isValid;
 
@@ -962,7 +1139,7 @@ final class _LineGeometry {
       editable.getLocalRectForCaret(TextPosition(offset: offset)).top - _bias;
 }
 
-enum _LineCommand { duplicate, moveUp, moveDown, delete, join }
+enum _LineCommand { duplicate, moveUp, moveDown, delete, join, toggleComment }
 
 class _LineCommandIntent extends Intent {
   const _LineCommandIntent(this.command);
@@ -980,7 +1157,10 @@ class _LineCommandAction extends Action<_LineCommandIntent> {
   final EditorController Function() _controller;
 
   @override
-  bool isEnabled(_LineCommandIntent intent) => _controller().canEditText;
+  bool isEnabled(_LineCommandIntent intent) =>
+      intent.command == _LineCommand.toggleComment
+      ? _controller().canToggleComment
+      : _controller().canEditText;
 
   @override
   bool invoke(_LineCommandIntent intent) {
@@ -991,6 +1171,29 @@ class _LineCommandAction extends Action<_LineCommandIntent> {
       _LineCommand.moveDown => controller.moveLines(LineDirection.down),
       _LineCommand.delete => controller.deleteLines(),
       _LineCommand.join => controller.joinLines(),
+      _LineCommand.toggleComment => controller.toggleComment(),
     };
   }
+}
+
+class _BracketJumpIntent extends Intent {
+  const _BracketJumpIntent({required this.extend});
+  final bool extend;
+}
+
+/// Runs Go to Matching Bracket. While the caret cannot move (loading, or an
+/// input method composing) the key is left to the text field. With nowhere
+/// to jump, the key is still consumed rather than reaching an unrelated
+/// binding.
+class _BracketJumpAction extends Action<_BracketJumpIntent> {
+  // Read on each use, since the view can be handed another controller.
+  _BracketJumpAction(this._controller);
+  final EditorController Function() _controller;
+
+  @override
+  bool isEnabled(_BracketJumpIntent intent) => _controller().canMoveCaret;
+
+  @override
+  bool invoke(_BracketJumpIntent intent) =>
+      _controller().goToMatchingBracket(extend: intent.extend);
 }
