@@ -584,6 +584,42 @@ class _RenderDocumentDecorations extends RenderProxyBox {
     super.detach();
   }
 
+  // Unscrolled line tops for the current layout. Each caret query walks every
+  // row of the paragraph, which made scroll frames on 100,000-line documents
+  // cost about 90 ms; scrolling does not move a line's unscrolled top, so each
+  // line is measured once per layout instead of once per frame.
+  Object? _topsText;
+  RenderEditable? _topsEditable;
+  Size? _topsSize;
+  TextStyle? _topsStyle;
+  TextScaler? _topsScaler;
+  double _topsBias = 0;
+  final Map<int, double> _tops = {};
+
+  double _unscrolledTop(RenderEditable editable, List<int> starts, int line) {
+    final config = _configuration;
+    final text = config.controller.text.text;
+    if (!identical(text, _topsText) ||
+        !identical(editable, _topsEditable) ||
+        editable.size != _topsSize ||
+        config.textStyle != _topsStyle ||
+        config.textScaler != _topsScaler) {
+      _tops.clear();
+      _topsText = text;
+      _topsEditable = editable;
+      _topsSize = editable.size;
+      _topsStyle = config.textStyle;
+      _topsScaler = config.textScaler;
+      _topsBias =
+          editable.getLocalRectForCaret(const TextPosition(offset: 0)).top +
+          editable.offset.pixels;
+    }
+    return _tops[line] ??=
+        editable.getLocalRectForCaret(TextPosition(offset: starts[line])).top +
+        editable.offset.pixels -
+        _topsBias;
+  }
+
   /// The document field's text render object, or null before it is laid out.
   RenderEditable? _editable() {
     final pending = <RenderObject>[?child];
@@ -623,6 +659,9 @@ class _RenderDocumentDecorations extends RenderProxyBox {
     final lines = _LineGeometry(editable);
     final origin = offset + editable.localToGlobal(Offset.zero, ancestor: this);
     double topOf(int offset) => origin.dy + lines.topOf(offset);
+    final pixels = editable.offset.pixels;
+    double lineTop(int line) =>
+        origin.dy + _unscrolledTop(editable, starts, line) - pixels;
 
     // Clip to the text's own viewport so numbers never show for lines whose
     // text has scrolled into the field's padding.
@@ -657,16 +696,23 @@ class _RenderDocumentDecorations extends RenderProxyBox {
     }
 
     if (config.gutterWidth > 0) {
-      // The last line starting at or above the viewport's top edge.
+      // The last line starting at or above the viewport's top edge: one hit
+      // test finds the text at the top row, then a search of the line starts.
+      final atTop = editable
+          .getPositionForPoint(editable.localToGlobal(Offset.zero))
+          .offset;
       var first = 0;
       var last = starts.length - 1;
       while (first < last) {
         final middle = (first + last + 1) >> 1;
-        if (topOf(starts[middle]) <= viewport.top) {
+        if (starts[middle] <= atTop) {
           first = middle;
         } else {
           last = middle - 1;
         }
+      }
+      while (first > 0 && lineTop(first) > viewport.top) {
+        first--;
       }
       final painter = TextPainter(
         textDirection: TextDirection.ltr,
@@ -674,7 +720,7 @@ class _RenderDocumentDecorations extends RenderProxyBox {
       );
       final right = offset.dx + config.gutterWidth - 1 - config.rightInset;
       for (var line = first; line < starts.length; line++) {
-        final top = topOf(starts[line]);
+        final top = lineTop(line);
         if (top > viewport.bottom) break;
         painter
           ..text = TextSpan(

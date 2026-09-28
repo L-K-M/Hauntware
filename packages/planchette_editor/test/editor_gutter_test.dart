@@ -122,4 +122,83 @@ void main() {
     expect(between, lessThan(before.first.$2));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('the band covers every row of a wrapped final line', (
+    tester,
+  ) async {
+    // No trailing newline: the band has to end where the text ends.
+    final c = await mount(tester, 'short\n${'word ' * 7}');
+    final height = editable(tester).preferredLineHeight;
+    c.text.selection = TextSelection.collapsed(offset: c.text.text.length);
+    await tester.pump();
+    final result = painted(tester);
+    expect(result.bands, hasLength(1));
+    expect(result.bands.single.height, moreOrLessEquals(2 * height));
+  });
+
+  testWidgets('numbers follow lines that only just wrap', (tester) async {
+    // The text field keeps a caret's width free at the end of every row, so a
+    // line that fits the bare width can still wrap. A gutter measured apart
+    // from the field lost a row at each such line; this one reads the field.
+    await tester.binding.setSurfaceSize(const Size(900, 700));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    Future<EditorController> mountAt(String text) async {
+      final c = EditorController(displayPath: 'notes.txt', initialText: text);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PlanchetteEditor(controller: c)),
+        ),
+      );
+      await tester.pump();
+      return c;
+    }
+
+    await mountAt('x');
+    final probe = TextPainter(
+      text: TextSpan(text: 'y', style: editable(tester).text!.style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final advance = probe.width;
+    probe.dispose();
+    final width = editable(tester).size.width;
+    final glyphs = (width / advance).floor();
+    // Resize so that the line's glyphs sit just inside the field's width.
+    await tester.binding.setSurfaceSize(
+      Size(900 + glyphs * advance + 1.5 - width, 700),
+    );
+    final c = await mountAt(
+      List.generate(40, (i) => i.isEven ? 'y' * glyphs : 'line $i').join('\n'),
+    );
+
+    final field = editable(tester);
+    double rowOf(int line) => field
+        .getLocalRectForCaret(TextPosition(offset: c.lineStarts[line]))
+        .top;
+    expect(rowOf(1) - rowOf(0), greaterThan(field.preferredLineHeight * 1.5));
+    // Only paragraphs painted inside the gutter are numbers. The document's
+    // own text is painted afterwards on the field's layer, at its origin.
+    final gutter = tester.getSize(
+      find.byKey(const ValueKey('editor-line-gutter')),
+    );
+    final tops = <double>[];
+    expect(
+      decorations(tester),
+      paints..everything((method, arguments) {
+        if (method == #drawParagraph) {
+          final at = arguments[1] as Offset;
+          if (at.dx > 0 && at.dx < gutter.width) tops.add(at.dy);
+        }
+        return true;
+      }),
+    );
+    expect(tops.length, greaterThan(4));
+    for (var line = 1; line < tops.length; line++) {
+      expect(
+        tops[line] - tops[line - 1],
+        moreOrLessEquals(rowOf(line) - rowOf(line - 1), epsilon: 0.5),
+        reason: 'line ${line + 1}',
+      );
+    }
+  });
 }

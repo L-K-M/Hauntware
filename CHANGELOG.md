@@ -32,6 +32,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Save All reports a partial failure the way File › Save All does.
 - Diff and patch highlighting, plus Rust attributes and lifetimes, Go raw
   strings, JSON and YAML keys, C preprocessor lines and Python decorators.
+- A faint band marks the caret's line. It is on by default in the shared
+  editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
+  `Colors.transparent` to turn it off.
 
 ### Changed
 - Loading and saving a large file takes about half the time and a third of
@@ -61,3 +64,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of matching at every position.
 - The Linux package's metadata describes Planchette, and a failed
   `objdump` stops the build instead of passing silently.
+- Line numbers stay on their lines when lines soft-wrap, at any document
+  size, and typing no longer lays the whole document out a second time for
+  the gutter. Find reveals a match on its real row in large wrapped files.
