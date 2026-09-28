@@ -153,10 +153,7 @@ void main() {
       initialText: 'cat dog cat',
     );
     addTearDown(editor.dispose);
-    editor.text.selection = const TextSelection(
-      baseOffset: 0,
-      extentOffset: 3,
-    );
+    editor.text.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
     var notifications = 0;
     editor.addListener(() => notifications++);
     editor.openSearch();
@@ -621,6 +618,114 @@ void main() {
 
     test('a collapsed selection counts nothing', () {
       expect(stats('one', 1, 1), (characters: 0, lines: 0));
+    });
+  });
+
+  // Review fixes for #85's paging, and the test its force-push lost.
+  group('paging past the highlight cap', () {
+    EditorController hits(int count, {CaseFolder? fold, String word = 'hit'}) {
+      final editor = EditorController(
+        displayPath: 'log.txt',
+        initialText: List.filled(count, word).join('\n'),
+        caseFolder: fold,
+      );
+      addTearDown(editor.dispose);
+      editor.openSearch(replace: true);
+      editor.search.text = word;
+      return editor;
+    }
+
+    /// The document-wide number of the active match, and the count so far.
+    (int, int, bool) counter(EditorController editor) => (
+      editor.matchOffset + editor.activeMatch + 1,
+      editor.matchOffset + editor.matches.length,
+      editor.matchesMayContinue,
+    );
+
+    test('paging back and forth returns to the same match', () {
+      final editor = hits(searchMatchLimit + 2);
+      for (var i = 0; i < searchMatchLimit + 1; i++) {
+        editor.nextMatch();
+      }
+      final last = editor.text.selection;
+      editor
+        ..previousMatch()
+        ..previousMatch()
+        ..nextMatch()
+        ..nextMatch();
+      expect(editor.text.selection, last);
+    });
+
+    test('later pages use the host fold too', () {
+      // Final sigma folded like sigma, which keeps the length.
+      final editor = hits(
+        searchMatchLimit + 3,
+        fold: (value) => value.toLowerCase().replaceAll('ς', 'σ'),
+        word: 'σοφος',
+      );
+      editor.search.text = 'ΣΟΦΟΣ';
+      expect(editor.matches, hasLength(searchMatchLimit));
+      for (var i = 0; i < searchMatchLimit; i++) {
+        editor.nextMatch();
+      }
+      expect(editor.matches, hasLength(3));
+      expect(editor.activeMatch, 0);
+    });
+
+    test('the counter numbers matches across the whole document', () {
+      final editor = hits(searchMatchLimit + 3);
+      expect(counter(editor), (1, searchMatchLimit, true));
+      for (var i = 0; i < searchMatchLimit; i++) {
+        editor.nextMatch();
+      }
+      expect(counter(editor), (
+        searchMatchLimit + 1,
+        searchMatchLimit + 3,
+        false,
+      ));
+      editor.previousMatch();
+      expect(counter(editor), (searchMatchLimit, searchMatchLimit, true));
+
+      // Back from the first match wraps to the last page, which ends the
+      // document, so its total is exact.
+      for (var i = 0; i < searchMatchLimit - 1; i++) {
+        editor.previousMatch();
+      }
+      expect(counter(editor), (1, searchMatchLimit, true));
+      editor.previousMatch();
+      expect(counter(editor), (
+        searchMatchLimit + 3,
+        searchMatchLimit + 3,
+        false,
+      ));
+    });
+
+    test('Replace on a later page moves on to the next match', () {
+      final editor = hits(searchMatchLimit + 5)..replacement.text = 'HOT';
+      for (var i = 0; i < searchMatchLimit + 1; i++) {
+        editor.nextMatch();
+      }
+      final replaced = editor.text.selection.start;
+      expect(replaced, (searchMatchLimit + 1) * 4);
+      editor.replaceCurrent();
+      final active = editor.matches[editor.activeMatch];
+      expect(active.start, replaced + 4);
+      expect(counter(editor).$1, searchMatchLimit + 2);
+    });
+
+    test('typing on a later page keeps the active match', () {
+      final editor = hits(searchMatchLimit + 5);
+      for (var i = 0; i < searchMatchLimit + 1; i++) {
+        editor.nextMatch();
+      }
+      final before = editor.matches[editor.activeMatch];
+      final number = counter(editor).$1;
+      editor.text.value = TextEditingValue(
+        text: '${editor.text.text}\nx',
+        selection: editor.text.selection,
+      );
+      expect(editor.matches[editor.activeMatch], before);
+      expect(counter(editor).$1, number);
     });
   });
 }

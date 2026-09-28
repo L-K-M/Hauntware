@@ -55,6 +55,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   saved, the indentation and the language.
 - View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
   (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
+- Find Next and Find Previous reach every match in a large file: past the
+  1,000 matches the find bar highlights, they page on, and the counter
+  numbers each match within the whole document.
+- Every find and replace control can be reached with Tab and tells screen
+  readers whether it is on, and on a narrow window the bar puts its
+  controls under the field.
 - Planchette has its own looks: Parchment for light mode and Séance for
   dark, with syntax colors that keep 4.5:1 contrast on the page, the
   current line and the selection. Hosts can style the shared editor through

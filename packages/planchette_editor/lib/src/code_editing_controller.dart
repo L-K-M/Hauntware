@@ -298,10 +298,18 @@ String _defaultCaseFolder(String value) => value.toLowerCase();
 /// A search outcome in Flutter ranges, carrying the case-handling report that
 /// the pure-Dart [core.SearchResult] gives its callers.
 final class SearchResult {
-  const SearchResult({required this.matches, required this.caseFolding});
+  const SearchResult({
+    required this.matches,
+    required this.caseFolding,
+    this.precedingCount,
+  });
 
   final List<TextRange> matches;
   final CaseFolding caseFolding;
+
+  /// How many matches come before the first of [matches], when the search
+  /// counted them; see [core.SearchResult.precedingCount].
+  final int? precedingCount;
 
   bool get caseFoldedExactly => caseFolding == CaseFolding.exact;
 }
@@ -313,6 +321,8 @@ SearchResult searchText(
   bool caseSensitive = false,
   int limit = searchMatchLimit,
   CaseFolder fold = _defaultCaseFolder,
+  int? start,
+  bool reverse = false,
 }) {
   final result = core.searchText(
     text,
@@ -320,6 +330,8 @@ SearchResult searchText(
     caseSensitive: caseSensitive,
     limit: limit,
     fold: fold,
+    start: start,
+    reverse: reverse,
   );
   return SearchResult(
     matches: [
@@ -327,5 +339,6 @@ SearchResult searchText(
         TextRange(start: match.start, end: match.end),
     ],
     caseFolding: result.caseFolding,
+    precedingCount: result.precedingCount,
   );
 }

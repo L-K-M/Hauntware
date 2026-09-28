@@ -1425,10 +1425,20 @@ enum CaseFolding {
 /// match count can report [caseFolding] instead of quietly claiming a
 /// case-insensitive result they did not deliver.
 final class SearchResult {
-  const SearchResult({required this.matches, required this.caseFolding});
+  const SearchResult({
+    required this.matches,
+    required this.caseFolding,
+    this.precedingCount,
+  });
 
   final List<TextMatch> matches;
   final CaseFolding caseFolding;
+
+  /// How many of the text's matches come before the first one in [matches],
+  /// when the search counted them: 0 for a forward search from the start of
+  /// the text, and every match before the window for a reverse one. Null for
+  /// a forward search that began mid-text, which did not look back.
+  final int? precedingCount;
 
   bool get caseFoldedExactly => caseFolding == CaseFolding.exact;
 }
@@ -1477,8 +1487,13 @@ SearchResult searchText(
   bool reverse = false,
 }) {
   if (query.isEmpty) {
-    return const SearchResult(matches: [], caseFolding: CaseFolding.exact);
+    return const SearchResult(
+      matches: [],
+      caseFolding: CaseFolding.exact,
+      precedingCount: 0,
+    );
   }
+  final counted = reverse || (start ?? 0) <= 0 ? 0 : null;
   var haystack = text;
   var needle = query;
   var caseFolding = CaseFolding.exact;
@@ -1493,29 +1508,54 @@ SearchResult searchText(
       // A fold may erase characters. An empty needle would "match" at every
       // offset, and Replace All would insert its text at each of them.
       if (needle.isEmpty) {
-        return const SearchResult(matches: [], caseFolding: CaseFolding.exact);
+        return const SearchResult(
+          matches: [],
+          caseFolding: CaseFolding.exact,
+          precedingCount: 0,
+        );
       }
     } else {
       caseFolding = CaseFolding.lengthChanging;
     }
   }
-  final matches = <TextMatch>[];
+  if (limit <= 0) {
+    return SearchResult(
+      matches: const [],
+      caseFolding: caseFolding,
+      precedingCount: reverse ? null : counted,
+    );
+  }
   if (reverse) {
     // A sliding window over the forward enumeration. Scanning backwards with
     // lastIndexOf would instead report overlapping occurrences — 'aa' in
     // 'aaaa' is [0, 2] forwards and [0, 1, 2] backwards — so Find Previous
-    // would offer hits Find Next never had.
+    // would offer hits Find Next never had. The window is a ring of starts,
+    // so dropping the oldest hit costs nothing however many matches pass.
     final bound = (start ?? haystack.length).clamp(0, haystack.length);
-    var windowFrom = 0;
-    while (true) {
-      final at = haystack.indexOf(needle, windowFrom);
-      if (at < 0 || at >= bound) break;
-      if (matches.length == limit) matches.removeAt(0);
-      matches.add(TextMatch(start: at, end: at + needle.length));
-      windowFrom = at + needle.length;
+    final ring = List<int>.filled(limit, 0);
+    var count = 0;
+    for (
+      var at = haystack.indexOf(needle);
+      at >= 0 && at < bound;
+      at = haystack.indexOf(needle, at + needle.length)
+    ) {
+      ring[count % limit] = at;
+      count++;
     }
-    return SearchResult(matches: matches, caseFolding: caseFolding);
+    final kept = count < limit ? count : limit;
+    return SearchResult(
+      matches: [
+        for (var i = count - kept; i < count; i++)
+          TextMatch(
+            start: ring[i % limit],
+            end: ring[i % limit] + needle.length,
+          ),
+      ],
+      caseFolding: caseFolding,
+      precedingCount: count - kept,
+    );
   }
+  final matches = <TextMatch>[];
   var from = (start ?? 0).clamp(0, haystack.length);
   while (matches.length < limit) {
     final at = haystack.indexOf(needle, from);
@@ -1523,7 +1563,11 @@ SearchResult searchText(
     matches.add(TextMatch(start: at, end: at + needle.length));
     from = at + needle.length;
   }
-  return SearchResult(matches: matches, caseFolding: caseFolding);
+  return SearchResult(
+    matches: matches,
+    caseFolding: caseFolding,
+    precedingCount: counted,
+  );
 }
 
 String _lowercase(String value) => value.toLowerCase();
@@ -1538,12 +1582,11 @@ List<TextMatch> findSearchMatches(
   int limit = searchMatchLimit,
   int? start,
   bool reverse = false,
-}) =>
-    searchText(
-      text,
-      query,
-      caseSensitive: caseSensitive,
-      limit: limit,
-      start: start,
-      reverse: reverse,
-    ).matches;
+}) => searchText(
+  text,
+  query,
+  caseSensitive: caseSensitive,
+  limit: limit,
+  start: start,
+  reverse: reverse,
+).matches;

@@ -325,9 +325,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         : c.matches.isEmpty
         ? strings.noMatches
         : strings.matchCount(
-            c.activeMatch + 1,
-            c.matches.length,
-            capped: c.matches.length >= searchMatchLimit,
+            c.matchOffset + c.activeMatch + 1,
+            c.matchOffset + c.matches.length,
+            capped: c.matchesMayContinue,
           );
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),

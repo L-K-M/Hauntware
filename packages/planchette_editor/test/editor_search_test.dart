@@ -258,4 +258,28 @@ void main() {
       }
     },
   );
+
+  testWidgets('the counter numbers a later page within the document', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(searchMatchLimit + 3, 'hit').join('\n'),
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(_app(controller));
+    controller
+      ..openSearch()
+      ..search.text = 'hit';
+    await tester.pump();
+    expect(find.text('1/1000+'), findsOneWidget);
+
+    for (var i = 0; i < searchMatchLimit; i++) {
+      controller.nextMatch();
+    }
+    await tester.pump();
+    // The second page holds three matches, but they are the document's
+    // 1,001st to 1,003rd, and nothing follows them.
+    expect(find.text('1001/1003'), findsOneWidget);
+  });
 }
