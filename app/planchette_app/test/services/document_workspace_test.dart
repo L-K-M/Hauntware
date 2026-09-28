@@ -1670,4 +1670,29 @@ void main() {
     expect(workspace.error, isNull);
     expect(workspace.interactionLocked, isFalse);
   });
+  test(
+    'closeOthers removes the rest and lands selection on the kept tab',
+    () async {
+      workspace.newDocument();
+      final keep = workspace.newDocument()!;
+      workspace.newDocument();
+      await workspace.closeOthers(keep);
+      expect(workspace.documents, [keep]);
+      expect(workspace.active, keep);
+    },
+  );
+
+  test(
+    'closeAllTabs confirms each dirty tab and a cancel stops the sweep',
+    () async {
+      workspace.newDocument()!.editor.text.text = 'first';
+      final second = workspace.newDocument()!..editor.text.text = 'second';
+      final third = workspace.newDocument()!..editor.text.text = 'third';
+      dialogs.choices.addAll([CloseChoice.discard, CloseChoice.cancel]);
+      await workspace.closeAllTabs();
+      expect(workspace.documents, [second, third]);
+      expect(second.editor.isDirty, isTrue);
+      expect(workspace.interactionLocked, isFalse);
+    },
+  );
 }

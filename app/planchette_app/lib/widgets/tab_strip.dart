@@ -19,8 +19,9 @@ typedef TabStripItem = ({
 /// The window's single chrome row: document tabs with a new-tab button, and
 /// the file actions at the trailing edge. The active tab joins the editor
 /// surface below it and carries an accent; a dirty tab shows a dot where its
-/// close button appears on hover. Middle-click closes a tab, a mouse wheel
-/// scrolls the strip, and a newly active tab scrolls into view.
+/// close button appears on hover. Middle-click closes a tab, a right click
+/// asks the host for its tab menu, a mouse wheel scrolls the strip, and a
+/// newly active tab scrolls into view.
 class TabStrip extends StatefulWidget {
   const TabStrip({
     super.key,
@@ -30,6 +31,7 @@ class TabStrip extends StatefulWidget {
     required this.busy,
     required this.onSelect,
     required this.onClose,
+    this.onContextMenu,
     required this.onNew,
     required this.onOpen,
     required this.onSave,
@@ -44,6 +46,9 @@ class TabStrip extends StatefulWidget {
   final bool busy;
   final void Function(int id) onSelect;
   final void Function(int id) onClose;
+
+  /// A right click on a tab, with the pointer's global position for a menu.
+  final void Function(int id, Offset position)? onContextMenu;
   final VoidCallback onNew;
   final VoidCallback onOpen;
 
@@ -177,6 +182,13 @@ class _TabStripState extends State<TabStrip> {
                             enabled: widget.enabled,
                             onSelect: () => widget.onSelect(tab.id),
                             onClose: () => widget.onClose(tab.id),
+                            onContextMenu: switch (widget.onContextMenu) {
+                              final menu? => (position) => menu(
+                                tab.id,
+                                position,
+                              ),
+                              null => null,
+                            },
                           ),
                         ),
                       Center(
@@ -232,6 +244,7 @@ class _Tab extends StatefulWidget {
     required this.enabled,
     required this.onSelect,
     required this.onClose,
+    required this.onContextMenu,
   });
 
   final TabStripItem item;
@@ -239,6 +252,7 @@ class _Tab extends StatefulWidget {
   final bool enabled;
   final VoidCallback onSelect;
   final VoidCallback onClose;
+  final ValueChanged<Offset>? onContextMenu;
 
   @override
   State<_Tab> createState() => _TabState();
@@ -351,6 +365,12 @@ class _TabState extends State<_Tab> {
               onTap: widget.enabled ? widget.onSelect : null,
               // A middle click closes on release, like any click.
               onTertiaryTapUp: canClose ? (_) => widget.onClose() : null,
+              onSecondaryTapUp: switch (widget.onContextMenu) {
+                final menu? when widget.enabled => (details) => menu(
+                  details.globalPosition,
+                ),
+                _ => null,
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 120),
                 constraints: const BoxConstraints(minWidth: 96, maxWidth: 220),

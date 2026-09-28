@@ -156,6 +156,30 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  // From #42, whose tab actions moved into the strip.
+  testWidgets('the tab menu closes others and all', (tester) async {
+    workspace
+      ..newDocument()
+      ..newDocument()
+      ..newDocument();
+    await mount(tester);
+
+    await tester.tap(find.text('Untitled'), buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close Others'));
+    await tester.pumpAndSettle();
+    expect(workspace.documents.map((tab) => tab.name), ['Untitled']);
+
+    workspace.newDocument();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Untitled'), buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close All Tabs'));
+    await tester.pumpAndSettle();
+    expect(workspace.documents, isEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('chrome rows start at the leading edge', (tester) async {
     workspace.newDocument();
     await mount(tester);

@@ -185,6 +185,36 @@ class _DocumentShellState extends State<_DocumentShell> {
 
   String _keyLabel(String key) => mac ? '⌘$key' : 'Ctrl+$key';
 
+  void _showTabMenu(Offset position, DocumentTab tab) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final hasOthers = workspace.documents.length > 1;
+    showMenu<void>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(position, position),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          enabled: !workspace.interactionLocked && !tab.busy,
+          onTap: () => unawaited(workspace.closeTab(tab)),
+          child: const Text('Close'),
+        ),
+        PopupMenuItem(
+          enabled: hasOthers && !workspace.interactionLocked,
+          onTap: () => unawaited(workspace.closeOthers(tab)),
+          child: const Text('Close Others'),
+        ),
+        PopupMenuItem(
+          enabled: hasOthers && !workspace.interactionLocked,
+          onTap: () => unawaited(workspace.closeAllTabs()),
+          child: const Text('Close All Tabs'),
+        ),
+      ],
+    );
+  }
+
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
     if (tabs.isEmpty || workspace.interactionLocked) return;
@@ -628,6 +658,8 @@ class _DocumentShellState extends State<_DocumentShell> {
                 onClose: (id) => unawaited(
                   workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
                 ),
+                onContextMenu: (id, position) =>
+                    _showTabMenu(position, tabs.firstWhere((t) => t.id == id)),
                 onNew: _new,
                 onOpen: () => unawaited(workspace.openDialog()),
                 onSave: _documentReady ? _save : null,
