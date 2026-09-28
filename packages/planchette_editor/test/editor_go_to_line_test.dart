@@ -319,6 +319,24 @@ void main() {
     expect(unsavedSize('a\nb'), 3);
   });
 
+  // From #28: past the highlighting cap the colours go, and the status bar
+  // says why instead of leaving it unexplained.
+  testWidgets('a document past the highlight cap says so', (tester) async {
+    final small = await mount(tester, text: 'x = 1', path: 'a.py');
+    expect(small.highlightingEnabled, isTrue);
+    expect(find.textContaining('no highlighting'), findsNothing);
+
+    final large = await mount(
+      tester,
+      text: 'x' * (syntaxHighlightingMaxChars + 1),
+      path: 'a.py',
+    );
+    expect(large.highlightingEnabled, isFalse);
+    expect(find.textContaining('Large file: no highlighting'), findsOneWidget);
+    // The language still decides comments and indentation.
+    expect(find.textContaining('Python'), findsOneWidget);
+  });
+
   testWidgets('review fix: closing one bar leaves focus in the other', (
     tester,
   ) async {

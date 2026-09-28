@@ -11,7 +11,9 @@ final class DesktopWindow with WindowListener {
     required this.onQuitFailed,
     this.windowBackgroundColor,
     Future<void> Function()? destroyWindow,
-  }) : _destroyWindow = destroyWindow ?? windowManager.destroy;
+    Future<void> Function(String title)? setWindowTitle,
+  }) : _destroyWindow = destroyWindow ?? windowManager.destroy,
+       _setWindowTitle = setWindowTitle ?? windowManager.setTitle;
   final Future<bool> Function() confirmQuit;
   final void Function(Object error) onQuitFailed;
 
@@ -20,8 +22,10 @@ final class DesktopWindow with WindowListener {
   /// a dark desktop.
   final Color? windowBackgroundColor;
   final Future<void> Function() _destroyWindow;
+  final Future<void> Function(String title) _setWindowTitle;
   AppLifecycleListener? _lifecycle;
   bool _destroying = false;
+  String? _title;
 
   /// Public rather than inline in [initialize] so the geometry and the
   /// pre-paint backdrop can be asserted without the platform channel.
@@ -68,7 +72,18 @@ final class DesktopWindow with WindowListener {
   @override
   void onWindowClose() => unawaited(requestQuit());
 
-  void setTitle(String title) => unawaited(windowManager.setTitle(title));
+  /// Each call is a platform channel message; skip the ones that would not
+  /// change what the window shows.
+  void setTitle(String title) {
+    if (title == _title) return;
+    _title = title;
+    unawaited(
+      _setWindowTitle(title).catchError((Object _) {
+        // Forget a title that never arrived so the next request retries it.
+        if (title == _title) _title = null;
+      }),
+    );
+  }
 
   void dispose() {
     windowManager.removeListener(this);

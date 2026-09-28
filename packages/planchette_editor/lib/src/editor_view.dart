@@ -80,6 +80,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   static const _gutterInset = 8.0;
   final _gutterRepaint = ValueNotifier<int>(0);
   final _decorationsKey = GlobalKey();
+
+  /// Holds focus while anything in the find bar does, its buttons included,
+  /// so Escape can tell which open bar the user is in.
+  final _searchBarFocus = FocusNode(
+    debugLabel: 'find bar',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
   int _lastReveal = -1;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
@@ -209,8 +217,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// Closes the bar that has focus, or from the document the Go to Line
   /// bar first, since it opens above the find bar.
   void _escape() {
-    final inSearch = c.searchFocus.hasFocus || c.replacementFocus.hasFocus;
-    if (c.goToLineOpen && !inSearch) {
+    if (c.goToLineOpen && !_searchBarFocus.hasFocus) {
       c.closeGoToLine();
     } else {
       c.closeSearch();
@@ -248,6 +255,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     c.removeListener(_changed);
     c.setViewEditingLocked(this, false);
     _gutterRepaint.dispose();
+    _searchBarFocus.dispose();
     super.dispose();
   }
 
@@ -297,7 +305,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             const Divider(height: 1),
           ],
           if (widget.banner != null) widget.banner!,
-          if (c.searchOpen) ...[_searchBar(context), const Divider(height: 1)],
+          if (c.searchOpen) ...[
+            Focus(
+              focusNode: _searchBarFocus,
+              canRequestFocus: false,
+              skipTraversal: true,
+              child: _searchBar(context),
+            ),
+            const Divider(height: 1),
+          ],
           Expanded(
             child: _decorated(
               context,
@@ -325,136 +341,144 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         : c.matches.isEmpty
         ? strings.noMatches
         : strings.matchCount(
-            c.activeMatch + 1,
-            c.matches.length,
-            capped: c.matches.length >= searchMatchLimit,
+            c.matchOffset + c.activeMatch + 1,
+            c.matchOffset + c.matches.length,
+            capped: c.matchesMayContinue,
           );
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: c.search,
-                  focusNode: c.searchFocus,
-                  autofocus: true,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  style: theme.textTheme.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: strings.findHint,
-                    isDense: true,
-                    border: InputBorder.none,
-                  ),
-                  onSubmitted: (_) {
-                    if (HardwareKeyboard.instance.isShiftPressed) {
-                      c.previousMatch();
-                    } else {
-                      c.nextMatch();
-                    }
-                    c.searchFocus.requestFocus();
-                  },
-                ),
+          _searchRow(
+            field: TextField(
+              controller: c.search,
+              focusNode: c.searchFocus,
+              autofocus: true,
+              autocorrect: false,
+              enableSuggestions: false,
+              style: theme.textTheme.bodyMedium,
+              decoration: InputDecoration(
+                hintText: strings.findHint,
+                isDense: true,
+                border: InputBorder.none,
               ),
-              ExcludeFocus(
-                child: Row(
-                  children: [
-                    if (counter.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(counter, style: theme.textTheme.labelSmall),
-                      ),
-                    if (c.caseFoldingLimited)
-                      Tooltip(
-                        message: strings.caseFoldLimited,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Icon(
-                            Icons.info_outline,
-                            size: 16,
-                            color: theme.colorScheme.tertiary,
-                          ),
-                        ),
-                      ),
-                    IconButton(
-                      tooltip: strings.matchCase,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.toggleCaseSensitive,
-                      icon: Text(
-                        'Aa',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: c.caseSensitive
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: strings.previousMatch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.matches.isEmpty ? null : c.previousMatch,
-                      icon: const Icon(Icons.keyboard_arrow_up),
-                    ),
-                    IconButton(
-                      tooltip: strings.nextMatch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.matches.isEmpty ? null : c.nextMatch,
-                      icon: const Icon(Icons.keyboard_arrow_down),
-                    ),
-                    IconButton(
-                      tooltip: strings.showReplace,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.toggleReplace,
-                      icon: const Icon(Icons.find_replace),
-                    ),
-                    IconButton(
-                      tooltip: strings.closeSearch,
-                      visualDensity: VisualDensity.compact,
-                      onPressed: c.closeSearch,
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
+              onSubmitted: (_) {
+                if (HardwareKeyboard.instance.isShiftPressed) {
+                  c.previousMatch();
+                } else {
+                  c.nextMatch();
+                }
+                c.searchFocus.requestFocus();
+              },
+            ),
+            controls: [
+              if (counter.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(counter, style: theme.textTheme.labelSmall),
                 ),
+              if (c.caseFoldingLimited)
+                Tooltip(
+                  message: strings.caseFoldLimited,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: theme.colorScheme.tertiary,
+                    ),
+                  ),
+                ),
+              Wrap(
+                children: [
+                  IconButton(
+                    isSelected: c.caseSensitive,
+                    tooltip: strings.matchCase,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.toggleCaseSensitive,
+                    icon: Text(
+                      'Aa',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: c.caseSensitive
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    isSelected: c.wholeWord,
+                    tooltip: strings.wholeWords,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.toggleWholeWord,
+                    icon: Text(
+                      'ab',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        decoration: c.wholeWord
+                            ? TextDecoration.underline
+                            : TextDecoration.none,
+                        color: c.wholeWord
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: strings.previousMatch,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.matches.isEmpty ? null : c.previousMatch,
+                    icon: const Icon(Icons.keyboard_arrow_up),
+                  ),
+                  IconButton(
+                    tooltip: strings.nextMatch,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.matches.isEmpty ? null : c.nextMatch,
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                  ),
+                  IconButton(
+                    isSelected: c.replaceOpen,
+                    tooltip: strings.showReplace,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.toggleReplace,
+                    icon: const Icon(Icons.find_replace),
+                  ),
+                  IconButton(
+                    tooltip: strings.closeSearch,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.closeSearch,
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
               ),
             ],
           ),
           if (c.replaceOpen)
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: c.replacement,
-                    focusNode: c.replacementFocus,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: InputDecoration(
-                      hintText: strings.replaceHint,
-                      isDense: true,
-                      border: InputBorder.none,
-                    ),
-                    onSubmitted: (_) => c.replaceCurrent(),
-                  ),
+            _searchRow(
+              field: TextField(
+                controller: c.replacement,
+                focusNode: c.replacementFocus,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  hintText: strings.replaceHint,
+                  isDense: true,
+                  border: InputBorder.none,
                 ),
-                ExcludeFocus(
-                  child: Row(
-                    children: [
-                      TextButton(
-                        onPressed: _locked || c.isBusy || c.matches.isEmpty
-                            ? null
-                            : c.replaceCurrent,
-                        child: Text(strings.replace),
-                      ),
-                      TextButton(
-                        onPressed: _locked || c.isBusy || c.matches.isEmpty
-                            ? null
-                            : c.replaceAll,
-                        child: Text(strings.replaceAll),
-                      ),
-                    ],
-                  ),
+                onSubmitted: (_) => c.replaceCurrent(),
+              ),
+              controls: [
+                TextButton(
+                  onPressed: _locked || c.isBusy || c.matches.isEmpty
+                      ? null
+                      : c.replaceCurrent,
+                  child: Text(strings.replace),
+                ),
+                TextButton(
+                  onPressed: _locked || c.isBusy || c.matches.isEmpty
+                      ? null
+                      : c.replaceAll,
+                  child: Text(strings.replaceAll),
                 ),
               ],
             ),
@@ -462,6 +486,38 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       ),
     );
   }
+
+  Widget _searchRow({
+    required Widget field,
+    required List<Widget> controls,
+  }) => LayoutBuilder(
+    builder: (context, constraints) {
+      const inlineWidth = 600.0;
+      final fontSize = Theme.of(context).textTheme.bodyMedium!.fontSize!;
+      final textScale =
+          MediaQuery.textScalerOf(context).scale(fontSize) / fontSize;
+      final inline = constraints.maxWidth >= inlineWidth * textScale;
+      final actions = Wrap(
+        alignment: WrapAlignment.end,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: controls,
+      );
+
+      // Stack narrow layouts without replacing field elements, preserving the
+      // input connection and composition while resizing. Long labels wrap.
+      return Flex(
+        direction: inline ? Axis.horizontal : Axis.vertical,
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: inline
+            ? CrossAxisAlignment.center
+            : CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: inline ? 1 : 0, child: field),
+          Expanded(flex: inline ? 1 : 0, child: actions),
+        ],
+      );
+    },
+  );
 
   Widget _goToLineBar(BuildContext context) {
     final strings = widget.strings;
@@ -531,6 +587,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       document?.hasUtf8Bom == true ? 'UTF-8 BOM' : 'UTF-8',
       widget.strings.indentation(c.indentation),
       widget.strings.languageName(c.text.language),
+      if (!c.highlightingEnabled) widget.strings.largeFile,
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

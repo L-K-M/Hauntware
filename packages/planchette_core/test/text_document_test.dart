@@ -531,6 +531,43 @@ void main() {
     // EACCES stays a real failure, not a concurrent-modification signal.
     expect(isVanishedPathError(withCode(13)), isFalse);
   });
+
+  // From #21: opening resolves the path first, and dart:io's failure there
+  // names the call and the errno instead of what happened.
+  test('opening a missing file says it no longer exists', () async {
+    await expectLater(
+      loadTextDocument(
+        File('${directory.path}/absent.txt'),
+        symlinkPolicy: SymlinkPolicy.resolveOnce,
+      ),
+      throwsA(
+        isA<TextDocumentException>().having(
+          (error) => error.message,
+          'message',
+          'The file no longer exists.',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'an unresolvable path keeps its OS error but not the raw call',
+    () async {
+      // A path through a regular file cannot be resolved.
+      Object? thrown;
+      try {
+        await loadTextDocument(
+          File('${file.path}/nested.txt'),
+          symlinkPolicy: SymlinkPolicy.resolveOnce,
+        );
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, isA<TextDocumentException>());
+      expect('$thrown', isNot(contains('errno')));
+      expect('$thrown', isNot(contains('Exception')));
+    },
+  );
 }
 
 Future<String> _loadText(
