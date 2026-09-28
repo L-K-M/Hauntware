@@ -117,6 +117,12 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   final Map<DocumentTab, ({String path, String? digest})> _saveTargets = {};
 
+  /// The reason each tab's most recent [_saveOnce] failed, keyed by tab so a
+  /// concurrent save of another tab cannot be read as this one's reason.
+  /// [saveAll] reads it directly after its own await to fold several failures
+  /// into one message; a tab's entry is replaced by every attempt it makes.
+  final Map<DocumentTab, String> _saveFailures = {};
+
   void select(DocumentTab tab) {
     if (interactionLocked || !_documents.contains(tab)) return;
     _active = tab;
@@ -209,11 +215,15 @@ final class DocumentWorkspace extends ChangeNotifier {
     required bool saveAs,
     required EditorSaveAccess access,
   }) async {
+    _saveFailures.remove(tab);
     if (tab.editor.isLoading || tab.editor.error != null) {
       // Reachable from a close, where a refusal needs an outcome. A document
       // that failed to load has already reported its own error, so only the
       // still-opening case speaks.
-      if (tab.editor.error == null) _reportNotReady(tab);
+      if (tab.editor.error == null) {
+        _reportNotReady(tab);
+        _saveFailures[tab] = 'still opening';
+      }
       return false;
     }
     tab.busy = true;
@@ -230,6 +240,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         final other = _findPath(target, except: tab);
         if (other != null) {
           _error = '${other.name} is already open in another tab.';
+          _saveFailures[tab] = _error!;
           return false;
         }
         if (tab.path != null && _pathKey(target) == _pathKey(tab.path!)) {
@@ -251,12 +262,51 @@ final class DocumentWorkspace extends ChangeNotifier {
       return result != null;
     } catch (error) {
       _error = 'Could not save ${tab.name}: $error';
+      _saveFailures[tab] = '$error';
       return false;
     } finally {
       _saveTargets.remove(tab);
       tab.busy = false;
       _notify();
     }
+  }
+
+  /// Saves every dirty tab, one after another through the same serialization
+  /// a single [save] uses, so concurrent writes never race on the digest
+  /// guard. The dirty set is taken up front: a tab that closes or changes
+  /// while the loop yields is left to the user's next action.
+  ///
+  /// A partial failure is reported once, counting what was written and
+  /// naming each document that was not, in the shape multi-open aggregation
+  /// uses. A destination the user declines is a decision, not a failure: it
+  /// is neither written nor named, and the result simply is not a success.
+  /// With a single dirty tab there is nothing to aggregate, so the individual
+  /// save's own message stands.
+  Future<bool> saveAll() async {
+    if (interactionLocked) return false;
+    final dirty = [
+      for (final tab in _documents)
+        if (tab.editor.isDirty) tab,
+    ];
+    var saved = 0;
+    final failures = <String>[];
+    for (final tab in dirty) {
+      if (!_documents.contains(tab)) continue;
+      if (await _save(tab)) {
+        saved++;
+      } else if (_saveFailures[tab] case final detail?) {
+        failures.add('${tab.name} ($detail)');
+      } else if (tab.path != null) {
+        failures.add(tab.name);
+      }
+    }
+    if (failures.isNotEmpty && dirty.length > 1) {
+      _error =
+          'Saved $saved of ${saved + failures.length}. '
+          'Could not save: ${failures.join(', ')}.';
+      _notify();
+    }
+    return failures.isEmpty && saved == dirty.length;
   }
 
   Future<bool> closeTab(DocumentTab tab) async {
@@ -420,6 +470,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   void _remove(DocumentTab tab) {
     final index = _documents.indexOf(tab);
     _documents.remove(tab);
+    _saveFailures.remove(tab);
     if (_active == tab) {
       _active = _documents.isEmpty
           ? null

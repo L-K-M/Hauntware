@@ -34,6 +34,7 @@ class MemoryDocuments implements DocumentStore {
   Completer<void>? loadGate;
   Completer<void>? savePathGate;
   Object? writeError;
+  final Map<String, Object> writeFailures = {};
   int version = 0;
 
   @override
@@ -62,6 +63,7 @@ class MemoryDocuments implements DocumentStore {
   }) async {
     writes.add((path: path, text: text, digest: expectedSha256));
     await writeGate?.future;
+    if (writeFailures[path] case final error?) throw error;
     if (writeError case final error?) throw error;
     if (files[path]?.sha256 != expectedSha256) {
       throw StateError('Changed externally');
@@ -660,4 +662,91 @@ void main() {
       expect(tab.path, isNull);
     },
   );
+
+  test('Save All writes every dirty document', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original');
+    await workspace.open(testPath('one.txt'));
+    final file = workspace.active!..editor.text.text = 'edited';
+    final draft = workspace.newDocument()!..editor.text.text = 'fresh draft';
+    dialogs.savePath = testPath('draft.txt');
+
+    expect(await workspace.saveAll(), isTrue);
+    expect(store.files[testPath('one.txt')]!.text, 'edited');
+    expect(store.files[testPath('draft.txt')]!.text, 'fresh draft');
+    expect(file.editor.isDirty, isFalse);
+    expect(draft.editor.isDirty, isFalse);
+    expect(workspace.error, isNull);
+  });
+
+  test('Save All reports partial failures with the saved count', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final first = workspace.active!;
+    await workspace.open(testPath('two.txt'));
+    final second = workspace.active!;
+    first.editor.text.text = 'edited one';
+    second.editor.text.text = 'edited two';
+    store.writeFailures[second.path!] = const FileSystemException('Disk full');
+
+    expect(await workspace.saveAll(), isFalse);
+    expect(store.files[testPath('one.txt')]!.text, 'edited one');
+    expect(store.files[testPath('two.txt')]!.text, 'original two');
+    expect(workspace.error, contains('Saved 1 of 2'));
+    expect(workspace.error, contains('two.txt ('));
+    expect(workspace.error, contains('Disk full'));
+    expect(first.editor.isDirty, isFalse);
+    expect(second.editor.isDirty, isTrue);
+  });
+
+  test('a lone Save All failure keeps the individual save message', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original');
+    await workspace.open(testPath('one.txt'));
+    final tab = workspace.active!..editor.text.text = 'edited';
+    store.writeError = const FileSystemException('Disk full');
+
+    expect(await workspace.saveAll(), isFalse);
+    expect(workspace.error, contains('Could not save one.txt'));
+    expect(workspace.error, contains('Disk full'));
+    expect(workspace.error, isNot(contains('Saved')));
+    expect(tab.editor.isDirty, isTrue);
+  });
+
+  test('Save All keeps a declined destination out of the report', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original');
+    await workspace.open(testPath('one.txt'));
+    final file = workspace.active!..editor.text.text = 'edited';
+    final draft = workspace.newDocument()!..editor.text.text = 'fresh draft';
+    // The save-path prompt returns null: the untitled draft is declined.
+
+    expect(await workspace.saveAll(), isFalse);
+    expect(file.editor.isDirty, isFalse);
+    expect(draft.editor.isDirty, isTrue);
+    expect(store.writes, hasLength(1));
+    expect(workspace.error, isNull);
+  });
+
+  test('Save All with nothing dirty succeeds as a no-op', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'on disk');
+    await workspace.open(testPath('one.txt'));
+    workspace.newDocument();
+
+    expect(await workspace.saveAll(), isTrue);
+    expect(store.writes, isEmpty);
+    expect(workspace.error, isNull);
+  });
+
+  test('Save All stays silent while the workspace is locked', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'keep me';
+    dialogs.choiceGate = Completer<CloseChoice>();
+    final closing = workspace.closeTab(tab);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(await workspace.saveAll(), isFalse);
+    expect(store.writes, isEmpty);
+    expect(workspace.error, isNull);
+
+    dialogs.choiceGate!.complete(CloseChoice.cancel);
+    expect(await closing, isFalse);
+  });
 }

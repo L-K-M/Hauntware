@@ -40,11 +40,14 @@ void main() {
     WidgetTester tester,
     LogicalKeyboardKey key, {
     bool shift = false,
+    bool alt = false,
   }) async {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    if (alt) await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
     if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(key);
     if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    if (alt) await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
   }
@@ -380,5 +383,76 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
     variant: const TargetPlatformVariant({TargetPlatform.macOS}),
+  );
+
+  testWidgets(
+    'menu Save All writes every dirty document',
+    (tester) async {
+      store.files[testPath('one.txt')] = document('one.txt', 'original one');
+      store.files[testPath('two.txt')] = document('two.txt', 'original two');
+      await workspace.open(testPath('one.txt'));
+      final first = workspace.active!;
+      await workspace.open(testPath('two.txt'));
+      final second = workspace.active!;
+      await mount(tester);
+
+      // Nothing is dirty, so the command offers nothing to do.
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      final saveAllButton = find.ancestor(
+        of: find.text('Save All'),
+        matching: find.byType(MenuItemButton),
+      );
+      expect(tester.widget<MenuItemButton>(saveAllButton).onPressed, isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      first.editor.text.text = 'edited one';
+      second.editor.text.text = 'edited two';
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save All'));
+      await tester.pumpAndSettle();
+      expect(store.files[testPath('one.txt')]!.text, 'edited one');
+      expect(store.files[testPath('two.txt')]!.text, 'edited two');
+      expect(first.editor.isDirty, isFalse);
+      expect(second.editor.isDirty, isFalse);
+      expect(workspace.error, isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'the Save All shortcut writes every dirty document',
+    (tester) async {
+      store.files[testPath('one.txt')] = document('one.txt', 'original one');
+      store.files[testPath('two.txt')] = document('two.txt', 'original two');
+      await workspace.open(testPath('one.txt'));
+      final first = workspace.active!;
+      await workspace.open(testPath('two.txt'));
+      final second = workspace.active!;
+      first.editor.text.text = 'edited one';
+      second.editor.text.text = 'edited two';
+      await mount(tester);
+
+      await chord(tester, LogicalKeyboardKey.keyS, alt: true);
+      expect(store.files[testPath('one.txt')]!.text, 'edited one');
+      expect(store.files[testPath('two.txt')]!.text, 'edited two');
+      expect(workspace.documents.every((tab) => !tab.editor.isDirty), isTrue);
+      expect(workspace.error, isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
   );
 }
