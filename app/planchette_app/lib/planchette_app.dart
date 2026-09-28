@@ -269,7 +269,12 @@ class _DocumentShellState extends State<_DocumentShell> {
 
   void _focusAfterFrame(DocumentTab tab) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && workspace.active == tab && !workspace.interactionLocked) {
+      // Under a dialog such as the command palette, the editor focuses
+      // itself once the dialog is gone rather than taking the dialog's.
+      if (mounted &&
+          workspace.active == tab &&
+          !workspace.interactionLocked &&
+          (ModalRoute.isCurrentOf(context) ?? true)) {
         tab.editor.restoreFocus();
       }
     });
@@ -359,7 +364,7 @@ class _DocumentShellState extends State<_DocumentShell> {
             PaletteCommand(
               group: menu.label,
               label: entry.label,
-              run: entry.run,
+              run: () => _runCurrent(menu.label, entry.label),
               shortcut: entry.shortcut,
             ),
     ];
@@ -368,6 +373,22 @@ class _DocumentShellState extends State<_DocumentShell> {
       await showCommandPalette(context, commands);
     } finally {
       _paletteOpen = false;
+    }
+  }
+
+  /// Runs a command the palette offered as the menus define it now: the
+  /// native menu stays live under the palette, so the active tab, or whether
+  /// the command still applies, may have changed since it opened.
+  void _runCurrent(String menuLabel, String label) {
+    if (!mounted) return;
+    for (final menu in _menus()) {
+      if (menu.label != menuLabel) continue;
+      for (final entry in menu.items) {
+        if (entry is _Command && entry.label == label) {
+          if (entry.enabled) entry.run();
+          return;
+        }
+      }
     }
   }
 

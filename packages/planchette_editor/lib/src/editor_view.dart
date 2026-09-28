@@ -95,6 +95,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// dialog is gone instead of taking the keyboard from it.
   bool _routeIsCurrent = true;
   bool _restoreWhenCurrent = false;
+  bool _routeSeen = false;
   late int _installSeen = c.installGeneration;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
@@ -143,6 +144,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     super.didChangeDependencies();
     c.text.theme = _syntaxTheme;
     final current = ModalRoute.isCurrentOf(context) ?? true;
+    if (!_routeSeen) {
+      _routeSeen = true;
+      _routeIsCurrent = current;
+      // An editor that appears active under a dialog, such as a tab the
+      // native menu opened under the command palette, does not autofocus
+      // over it: Flutter would let it take the dialog's focus. It focuses
+      // once its route is on top.
+      _restoreWhenCurrent = !current && widget.isActive;
+      return;
+    }
     if (current == _routeIsCurrent) return;
     _routeIsCurrent = current;
     if (!current || !_restoreWhenCurrent) return;
@@ -794,7 +805,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                         readOnly: _locked,
                         focusNode: c.editorFocus,
                         scrollController: c.scroll,
-                        autofocus: widget.isActive,
+                        autofocus: widget.isActive && _routeIsCurrent,
                         expands: true,
                         maxLines: null,
                         minLines: null,

@@ -518,6 +518,51 @@ void main() {
   );
 
   testWidgets(
+    'review fix: the palette acts on the window as it is when chosen',
+    (tester) async {
+      // The native menu stays live under the palette. Its commands closed
+      // over the tab active when it opened, so a New from the menu left
+      // Duplicate Line editing the hidden tab, and the new tab's editor
+      // took the palette's focus.
+      final first = workspace.newDocument()!..editor.text.text = 'one';
+      await mount(tester);
+      PlatformMenuItem item(String menuLabel, String label) {
+        final bar = tester.widget<PlatformMenuBar>(
+          find.byType(PlatformMenuBar),
+        );
+        final menu = bar.menus.whereType<PlatformMenu>().firstWhere(
+          (menu) => menu.label == menuLabel,
+        );
+        return menu.menus
+            .whereType<PlatformMenuItemGroup>()
+            .expand((group) => group.members)
+            .whereType<PlatformMenuItem>()
+            .firstWhere((item) => item.label == label);
+      }
+
+      first.editor.editorFocus.requestFocus();
+      await tester.pumpAndSettle();
+      item('Window', 'Command Palette…').onSelected!();
+      await tester.pumpAndSettle();
+      item('File', 'New').onSelected!();
+      await tester.pumpAndSettle();
+      final second = workspace.active!;
+      expect(second, isNot(first));
+      expect(second.editor.editorFocus.hasFocus, isFalse);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        'duplicate line',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(first.editor.text.text, 'one');
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({TargetPlatform.macOS}),
+  );
+
+  testWidgets(
     'the command palette runs a menu command by name',
     (tester) async {
       final tab = workspace.newDocument()!..editor.text.text = 'palette text';
