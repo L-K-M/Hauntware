@@ -321,11 +321,16 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (existing != null) {
       // No new tab will appear, so point at the one that already holds the
       // document. Activation is the whole behaviour; the flash is decoration.
+      // Activating a tab the window already shows still drops the empty
+      // scratch tab it replaces, so the outcome matches a fresh open.
+      final previous = _active;
       _active = existing;
       existing.flashRequest++;
+      _dropPristine(previous);
       _notify();
       return null;
     }
+    final previous = _active;
     final tab = _makeTab(path: _paths.normalize(_paths.absolute(path)));
     _documents.add(tab);
     _active = tab;
@@ -353,6 +358,9 @@ final class DocumentWorkspace extends ChangeNotifier {
       // still-opening refusal raised against this tab) has been resolved.
       _clearScope(_pathKey(path));
       _clearScope(tab);
+      // Opening into a fresh empty window replaces the empty tab instead
+      // of stranding it. A failed open above keeps it untouched.
+      _dropPristine(previous);
     }
     _notify();
     return failure;
@@ -757,6 +765,24 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  /// A New tab still in its initial state: never saved, nothing typed,
+  /// nothing to lose. Type-then-erase-all also reads pristine (the buffer is
+  /// empty and clean); its dropped undo tail is accepted and documented.
+  bool _isPristineTab(DocumentTab tab) =>
+      tab.path == null &&
+      !tab.busy &&
+      !tab.editor.isDirty &&
+      tab.editor.text.text.isEmpty;
+
+  /// Closes the scratch tab an open just replaced. Only the previously active
+  /// tab qualifies, and only while it is still open, unnamed, empty and
+  /// unedited: background scratch tabs belong to the user.
+  void _dropPristine(DocumentTab? tab) {
+    if (tab != null && _documents.contains(tab) && _isPristineTab(tab)) {
+      _remove(tab);
+    }
   }
 
   String _pathKey(String path) => _paths.canonicalize(path);
