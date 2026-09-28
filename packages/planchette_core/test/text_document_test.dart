@@ -406,6 +406,8 @@ void main() {
     // The original is untouched and no save sibling escaped cleanup.
     expect(await file.readAsString(), 'one\ntwo\n');
     expect(await directory.list().length, 1);
+    // The refusal protects the loader's contract: the file still opens.
+    expect(await _loadText(file), 'one\ntwo\n');
 
     // A create would publish a file the loader rejects as binary; refuse
     // that too — also under `preserve` normalization, which skips folding.
