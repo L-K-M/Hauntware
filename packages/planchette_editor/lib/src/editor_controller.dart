@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
@@ -35,6 +37,11 @@ class EditorController extends ChangeNotifier {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
+    for (final node in [editorFocus, searchFocus, replacementFocus]) {
+      node.addListener(() {
+        if (node.hasFocus) _focusMemory = node;
+      });
+    }
     if (initialText != null) {
       _installText(initialText);
     } else {
@@ -71,6 +78,22 @@ class EditorController extends ChangeNotifier {
   final scroll = ScrollController();
   final undoController = UndoHistoryController();
 
+  /// The node to focus when this editor's tab becomes active. Deactivation
+  /// unfocuses all three, so remembering the last-focused node lets a tab
+  /// switch restore a focused find field instead of always the document.
+  /// Falls back to the document when the remembered node is detached —
+  /// the find or replace field it belonged to may have closed.
+  FocusNode get focusTarget =>
+      _focusMemory?.context != null ? _focusMemory! : editorFocus;
+
+  /// Restores [focusTarget] after the frame's focus bookkeeping settles.
+  /// A same-frame `unfocus` marks the enclosing scope for focus and would
+  /// overwrite a request issued right now — last mark wins.
+  void restoreFocus() {
+    final target = focusTarget;
+    scheduleMicrotask(target.requestFocus);
+  }
+
   TextDocument? _document;
   String _displayPath;
   String _savedText = '';
@@ -87,6 +110,7 @@ class EditorController extends ChangeNotifier {
   bool _updatingSearch = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
+  FocusNode? _focusMemory;
   int _revision = 0;
   int _revealRequest = 0;
   String _lastText = '';
@@ -383,6 +407,7 @@ class EditorController extends ChangeNotifier {
     if (!_searchOpen) return;
     _searchOpen = false;
     _replaceOpen = false;
+    if (_focusMemory != editorFocus) _focusMemory = null;
     _matches = const [];
     _activeMatch = -1;
     _lastQuery = null;
@@ -394,6 +419,13 @@ class EditorController extends ChangeNotifier {
 
   void toggleReplace() {
     _replaceOpen = !_replaceOpen;
+    if (!_replaceOpen && _focusMemory == replacementFocus) {
+      _focusMemory = searchFocus;
+      // The collapsing field may hold focus; hand it to the find field now
+      // rather than leaving primary focus on the enclosing scope. Only
+      // steal when it really did — a host may share our focus scope.
+      if (replacementFocus.hasFocus) restoreFocus();
+    }
     _notify();
   }
 

@@ -619,4 +619,133 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  testWidgets(
+    'switching back to a tab restores find-field focus',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      final second = workspace.newDocument()!;
+      await mount(tester);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      first.editor.openSearch();
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isTrue);
+      workspace.select(second);
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isFalse);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'switching back after the find bar closed restores document focus',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      final second = workspace.newDocument()!;
+      await mount(tester);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      first.editor.openSearch();
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isTrue);
+      first.editor.closeSearch();
+      await tester.pumpAndSettle();
+      workspace.select(second);
+      await tester.pumpAndSettle();
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      expect(first.editor.editorFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'switching back to a tab restores replacement-field focus',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      final second = workspace.newDocument()!;
+      await mount(tester);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      first.editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      first.editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(first.editor.replacementFocus.hasFocus, isTrue);
+      workspace.select(second);
+      await tester.pumpAndSettle();
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      expect(first.editor.replacementFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'collapsing replace moves focus back to the find field',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+      final editor = workspace.active!.editor;
+      editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(editor.replacementFocus.hasFocus, isTrue);
+      editor.toggleReplace();
+      await tester.pumpAndSettle();
+      expect(editor.searchFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'collapsing replace does not steal focus it no longer holds',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+      final editor = workspace.active!.editor;
+      editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      // The field was the last focused node, but focus moved on before the
+      // collapse — a host may share the focus scope, so nothing is stolen.
+      editor.replacementFocus.unfocus();
+      await tester.pumpAndSettle();
+      editor.toggleReplace();
+      await tester.pumpAndSettle();
+      expect(editor.searchFocus.hasFocus, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 }
