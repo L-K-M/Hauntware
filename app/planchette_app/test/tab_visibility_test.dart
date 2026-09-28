@@ -1,5 +1,7 @@
 // Ported from #11, whose tab visibility the tab strip took over: the active
 // tab stays in view through commands, resizing and text scaling.
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -184,4 +186,77 @@ void main() {
     expectVisibleTab(tester, tab);
     await tester.pumpWidget(const SizedBox.shrink());
   });
+
+  testWidgets('review fix: a background rename keeps the active tab in view', (
+    tester,
+  ) async {
+    for (var index = 0; index < 15; index++) {
+      workspace.newDocument();
+    }
+    await mount(tester, size: const Size(640, 720));
+    final active = workspace.active!;
+    expectVisibleTab(tester, active);
+
+    // Save All names an earlier tab, which widens it and shifts the rest.
+    workspace.documents[2].editor.text.text = 'bg';
+    dialogs.savePath = testPath('${'a-much-longer-name-' * 6}.txt');
+    expect(await workspace.saveAll(), isTrue);
+    await tester.pumpAndSettle();
+    expectVisibleTab(tester, active);
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('review fix: the save spinner keeps the active tab in view', (
+    tester,
+  ) async {
+    for (var index = 0; index < 20; index++) {
+      workspace.newDocument()!.editor.text.text = 'dirty $index';
+    }
+    store.files[testPath('last.txt')] = document('last.txt', 'disk');
+    await workspace.open(testPath('last.txt'));
+    final active = workspace.active!..editor.text.text = 'edited';
+    await mount(tester, size: const Size(700, 720));
+    expectVisibleTab(tester, active);
+
+    store.writeGate = Completer<void>();
+    final saving = workspace.save(active);
+    // The spinner keeps animating, so the strip never settles meanwhile.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expectVisibleTab(tester, active);
+    store.writeGate!.complete();
+    expect(await saving, isTrue);
+    await tester.pumpAndSettle();
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('review fix: reopening the active file shows its tab', (
+    tester,
+  ) async {
+    for (var index = 0; index < 29; index++) {
+      workspace.newDocument();
+    }
+    store.files[testPath('here.txt')] = document('here.txt', 'disk');
+    await workspace.open(testPath('here.txt'));
+    final here = workspace.active!;
+    await mount(tester, size: const Size(700, 720));
+    tester
+        .state<ScrollableState>(
+          find.ancestor(
+            of: find.byTooltip(here.path!),
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Scrollable &&
+                  widget.axisDirection == AxisDirection.right,
+            ),
+          ),
+        )
+        .position
+        .jumpTo(0);
+    await tester.pumpAndSettle();
+
+    // The open lands on the tab it already has and pulses it; the pulse
+    // must be where the user can see it.
+    await workspace.open(testPath('here.txt'));
+    await tester.pumpAndSettle();
+    expectVisibleTab(tester, here);
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 }
