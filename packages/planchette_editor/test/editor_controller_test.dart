@@ -147,6 +147,43 @@ void main() {
       expect(editor.isDirty, isTrue);
     },
   );
+  test('opening search with a selection queries matches once', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'cat dog cat',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+    var notifications = 0;
+    editor.addListener(() => notifications++);
+    editor.openSearch();
+    // The prefill assignment must not fire a first whole-document scan on
+    // top of the explicit match update — one notification, two matches.
+    expect(notifications, 1);
+    expect(editor.search.text, 'cat');
+    expect(editor.matches.length, 2);
+  });
+
+  test('re-opening search with a new selection also queries once', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'cat dog cat',
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.text.selection = const TextSelection(
+      baseOffset: 8,
+      extentOffset: 11,
+    );
+    var notifications = 0;
+    editor.addListener(() => notifications++);
+    editor.openSearch();
+    // The prefill assignment goes through the live query listener on
+    // re-entry — the guard keeps the explicit update the single scan.
+    expect(notifications, 1);
+    expect(editor.search.text, 'cat');
+    expect(editor.matches.length, 2);
+  });
   test('replacement respects case mode and preserves search navigation', () {
     final editor = EditorController(
       displayPath: 'test',
@@ -168,6 +205,74 @@ void main() {
     editor.replaceAll();
     expect(editor.text.text, 'dog CAT dog');
   });
+  test('Find Next reaches matches beyond the highlight cap', () {
+    final occurrences = searchMatchLimit + 3;
+    final editor = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(occurrences, 'hit').join('\n'),
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.search.text = 'hit';
+    expect(editor.matches.length, searchMatchLimit);
+
+    // The first page is already selected; step to the end of the document.
+    for (var i = 1; i < occurrences; i++) {
+      editor.nextMatch();
+    }
+    final last = editor.matches.last;
+    expect(
+      editor.text.selection,
+      TextSelection(baseOffset: last.start, extentOffset: last.end),
+    );
+    expect(editor.matches.first.start, greaterThan(0));
+
+    // One more step wraps back to the first occurrence in the document.
+    editor.nextMatch();
+    expect(editor.text.selection.baseOffset, 0);
+  });
+
+  test('Find Previous walks back through the whole document', () {
+    final occurrences = searchMatchLimit + 3;
+    final editor = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(occurrences, 'hit').join('\n'),
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.search.text = 'hit';
+
+    // From the first match, stepping back lands on the last occurrence.
+    editor.previousMatch();
+    final last = editor.matches.last;
+    expect(
+      editor.text.selection,
+      TextSelection(baseOffset: last.start, extentOffset: last.end),
+    );
+
+    for (var i = 1; i < occurrences; i++) {
+      editor.previousMatch();
+    }
+    expect(editor.text.selection.baseOffset, 0);
+  });
+
+  test('a window smaller than the cap wraps in both directions', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'cat CAT cat',
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch();
+    editor.search.text = 'cat';
+
+    for (var i = 0; i < 3; i++) {
+      editor.nextMatch();
+    }
+    expect(editor.text.selection.baseOffset, 0);
+    editor.previousMatch();
+    expect(editor.text.selection.baseOffset, 8);
+  });
+
   test('Save As metadata preserves selection and detects the new language', () {
     final editor = EditorController(
       displayPath: 'Untitled',
@@ -210,6 +315,83 @@ void main() {
       expect(editor.canPublish, isFalse);
     },
   );
+  test('toggle comment marks then lifts a single caret line', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'a = 1\nb = 2\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 2);
+    editor.toggleComment();
+    expect(editor.text.text, '# a = 1\nb = 2\n');
+    expect(editor.text.selection.extentOffset, 4);
+    editor.toggleComment();
+    expect(editor.text.text, 'a = 1\nb = 2\n');
+    expect(editor.text.selection.extentOffset, 2);
+  });
+  test('toggle comment preserves indent and skips blank lines', () {
+    final editor = EditorController(
+      displayPath: 'x.dart',
+      initialText: 'void f() {\n  int a;\n\n  int b;\n}',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 31,
+    );
+    editor.toggleComment();
+    expect(editor.text.text, '// void f() {\n  // int a;\n\n  // int b;\n// }');
+  });
+  test('toggle comment skips whitespace-only lines like blank ones', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'one\n   \ntwo',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 11,
+    );
+    editor.toggleComment();
+    expect(editor.text.text, '# one\n   \n# two');
+  });
+  test('toggle comment keeps a backward selection pointing at its anchor', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'one\ntwo',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(baseOffset: 7, extentOffset: 0);
+    editor.toggleComment();
+    expect(editor.text.text, '# one\n# two');
+    expect(
+      editor.text.selection,
+      const TextSelection(baseOffset: 11, extentOffset: 0),
+    );
+  });
+  test('toggle comment lifts marker and one space per line', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: '# one\n  # two\n#three\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 21,
+    );
+    editor.toggleComment();
+    expect(editor.text.text, 'one\n  two\nthree\n');
+  });
+  test('toggle comment is a no-op without a line comment marker', () {
+    final editor = EditorController(
+      displayPath: 'x.json',
+      initialText: '{"a": 1}',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 1);
+    editor.toggleComment();
+    expect(editor.text.text, '{"a": 1}');
+  });
   test('statistics count UTF-8 and trailing empty lines', () {
     final editor = EditorController(
       displayPath: 'test',
@@ -404,5 +586,291 @@ void main() {
     closed.search.text = 'strasse';
     closed.closeSearch();
     expect(closed.caseFoldingLimited, isFalse);
+  });
+
+  // Ported from #67, which counted the selection the way the line commands
+  // pick their lines.
+  group('selectionStats', () {
+    ({int characters, int lines}) stats(String text, int base, int extent) {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: text,
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = TextSelection(
+        baseOffset: base,
+        extentOffset: extent,
+      );
+      return editor.selectionStats;
+    }
+
+    test('counts code units and touched lines in either direction', () {
+      expect(stats('one\ntwo\nthree', 2, 10), (characters: 8, lines: 3));
+      expect(stats('one\ntwo\nthree', 10, 2), (characters: 8, lines: 3));
+      expect(stats('one\ntwo\nthree', 0, 13), (characters: 13, lines: 3));
+    });
+
+    test('a selection ending at a line start does not count that line', () {
+      expect(stats('one\ntwo\nthree', 0, 4), (characters: 4, lines: 1));
+      expect(stats('one\ntwo\n', 0, 8), (characters: 8, lines: 2));
+      expect(stats('one\n\ntwo', 3, 5), (characters: 2, lines: 2));
+    });
+
+    test('a collapsed selection counts nothing', () {
+      expect(stats('one', 1, 1), (characters: 0, lines: 0));
+    });
+  });
+
+  // Review fixes for #85's paging, and the test its force-push lost.
+  group('paging past the highlight cap', () {
+    EditorController hits(int count, {CaseFolder? fold, String word = 'hit'}) {
+      final editor = EditorController(
+        displayPath: 'log.txt',
+        initialText: List.filled(count, word).join('\n'),
+        caseFolder: fold,
+      );
+      addTearDown(editor.dispose);
+      editor.openSearch(replace: true);
+      editor.search.text = word;
+      return editor;
+    }
+
+    /// The document-wide number of the active match, and the count so far.
+    (int, int, bool) counter(EditorController editor) => (
+      editor.matchOffset + editor.activeMatch + 1,
+      editor.matchOffset + editor.matches.length,
+      editor.matchesMayContinue,
+    );
+
+    test('review fix: an edit keeps a page reached backward', () {
+      // Wrapping backward shows the last page, which starts mid-document.
+      final editor = hits(searchMatchLimit + 3)..previousMatch();
+      final before = editor.matches[editor.activeMatch];
+      expect(counter(editor).$1, searchMatchLimit + 3);
+      editor.text.value = TextEditingValue(
+        text: '${editor.text.text}\nx',
+        selection: editor.text.selection,
+      );
+      expect(editor.matches[editor.activeMatch], before);
+      expect(counter(editor).$1, searchMatchLimit + 3);
+    });
+
+    test('review fix: typing above a later page keeps the active match', () {
+      final editor = hits(searchMatchLimit + 5);
+      for (var i = 0; i < searchMatchLimit + 1; i++) {
+        editor.nextMatch();
+      }
+      final before = editor.matches[editor.activeMatch];
+      editor.text.value = TextEditingValue(
+        text: 'note: ${editor.text.text}',
+        selection: const TextSelection.collapsed(offset: 6),
+      );
+      expect(editor.matches[editor.activeMatch].start, before.start + 6);
+      expect(counter(editor).$1, searchMatchLimit + 2);
+    });
+
+    test('review fix: Replace after an edit replaces the active match', () {
+      final editor = hits(searchMatchLimit + 3)..previousMatch();
+      editor.replacement.text = 'HIT';
+      editor.text.value = TextEditingValue(
+        text: '${editor.text.text}\n',
+        selection: editor.text.selection,
+      );
+      editor.replaceCurrent();
+      final lines = editor.text.text.split('\n');
+      expect(lines[searchMatchLimit + 2], 'HIT');
+      expect(lines.where((line) => line == 'HIT'), hasLength(1));
+    });
+
+    test('paging back and forth returns to the same match', () {
+      final editor = hits(searchMatchLimit + 2);
+      for (var i = 0; i < searchMatchLimit + 1; i++) {
+        editor.nextMatch();
+      }
+      final last = editor.text.selection;
+      editor
+        ..previousMatch()
+        ..previousMatch()
+        ..nextMatch()
+        ..nextMatch();
+      expect(editor.text.selection, last);
+    });
+
+    test('later pages use the host fold too', () {
+      // Final sigma folded like sigma, which keeps the length.
+      final editor = hits(
+        searchMatchLimit + 3,
+        fold: (value) => value.toLowerCase().replaceAll('ς', 'σ'),
+        word: 'σοφος',
+      );
+      editor.search.text = 'ΣΟΦΟΣ';
+      expect(editor.matches, hasLength(searchMatchLimit));
+      for (var i = 0; i < searchMatchLimit; i++) {
+        editor.nextMatch();
+      }
+      expect(editor.matches, hasLength(3));
+      expect(editor.activeMatch, 0);
+    });
+
+    test('the counter numbers matches across the whole document', () {
+      final editor = hits(searchMatchLimit + 3);
+      expect(counter(editor), (1, searchMatchLimit, true));
+      for (var i = 0; i < searchMatchLimit; i++) {
+        editor.nextMatch();
+      }
+      expect(counter(editor), (
+        searchMatchLimit + 1,
+        searchMatchLimit + 3,
+        false,
+      ));
+      editor.previousMatch();
+      expect(counter(editor), (searchMatchLimit, searchMatchLimit, true));
+
+      // Back from the first match wraps to the last page, which ends the
+      // document, so its total is exact.
+      for (var i = 0; i < searchMatchLimit - 1; i++) {
+        editor.previousMatch();
+      }
+      expect(counter(editor), (1, searchMatchLimit, true));
+      editor.previousMatch();
+      expect(counter(editor), (
+        searchMatchLimit + 3,
+        searchMatchLimit + 3,
+        false,
+      ));
+    });
+
+    test('Replace on a later page moves on to the next match', () {
+      final editor = hits(searchMatchLimit + 5)..replacement.text = 'HOT';
+      for (var i = 0; i < searchMatchLimit + 1; i++) {
+        editor.nextMatch();
+      }
+      final replaced = editor.text.selection.start;
+      expect(replaced, (searchMatchLimit + 1) * 4);
+      editor.replaceCurrent();
+      final active = editor.matches[editor.activeMatch];
+      expect(active.start, replaced + 4);
+      expect(counter(editor).$1, searchMatchLimit + 2);
+    });
+
+    test('typing on a later page keeps the active match', () {
+      final editor = hits(searchMatchLimit + 5);
+      for (var i = 0; i < searchMatchLimit + 1; i++) {
+        editor.nextMatch();
+      }
+      final before = editor.matches[editor.activeMatch];
+      final number = counter(editor).$1;
+      editor.text.value = TextEditingValue(
+        text: '${editor.text.text}\nx',
+        selection: editor.text.selection,
+      );
+      expect(editor.matches[editor.activeMatch], before);
+      expect(counter(editor).$1, number);
+    });
+  });
+
+  // From #12.
+  test('whole word search filters partial hits and replace all', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'cat concat cat',
+    );
+    addTearDown(editor.dispose);
+    editor.openSearch(replace: true);
+    editor.search.text = 'cat';
+    expect(editor.matches.length, 3);
+    final revealed = editor.revealRequest;
+    editor.toggleWholeWord();
+    expect(editor.wholeWord, isTrue);
+    expect(editor.revealRequest, revealed + 1);
+    editor.toggleCaseSensitive();
+    expect(editor.revealRequest, revealed + 2);
+    expect(editor.matches.length, 2);
+    editor.replacement.text = 'dog';
+    editor.replaceAll();
+    expect(editor.text.text, 'dog concat dog');
+  });
+
+  test('whole-word paging never offers a partial word', () {
+    final editor = EditorController(
+      displayPath: 'log.txt',
+      initialText: List.filled(searchMatchLimit + 3, 'cat concat').join('\n'),
+    );
+    addTearDown(editor.dispose);
+    editor
+      ..openSearch()
+      ..search.text = 'cat'
+      ..toggleWholeWord();
+    // From the first match, Find Previous wraps to the last page.
+    editor.previousMatch();
+    expect(editor.matches, hasLength(searchMatchLimit));
+    for (final match in editor.matches) {
+      expect(
+        match.start == 0 || editor.text.text[match.start - 1] == '\n',
+        isTrue,
+        reason: 'partial word at ${match.start}',
+      );
+    }
+  });
+
+  // From #21: Find Next after the find bar closed did nothing.
+  group('Find Next with the bar closed', () {
+    EditorController closedOn(String text, String query) {
+      final editor = EditorController(displayPath: 'a.txt', initialText: text);
+      addTearDown(editor.dispose);
+      editor
+        ..openSearch()
+        ..search.text = query
+        ..closeSearch();
+      return editor;
+    }
+
+    test('goes on from the match it left selected', () {
+      final editor = closedOn('cat dog cat dog cat', 'cat')
+        ..text.selection = const TextSelection(baseOffset: 8, extentOffset: 11);
+      editor.nextMatch();
+      expect(editor.searchOpen, isTrue);
+      expect(editor.search.text, 'cat');
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 16, extentOffset: 19),
+      );
+    });
+
+    test('takes the nearest match on either side of a moved caret', () {
+      final editor = closedOn('cat dog cat dog cat', 'cat')
+        ..text.selection = const TextSelection.collapsed(offset: 5);
+      editor.nextMatch();
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 8, extentOffset: 11),
+      );
+      editor
+        ..closeSearch()
+        ..text.selection = const TextSelection.collapsed(offset: 5)
+        ..previousMatch();
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 0, extentOffset: 3),
+      );
+    });
+
+    test('keeps the remembered query rather than the selection', () {
+      final editor = closedOn('Cat cat', 'cat')
+        ..text.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+      editor.nextMatch();
+      expect(editor.search.text, 'cat');
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 4, extentOffset: 7),
+      );
+    });
+
+    test('with nothing remembered, opens the find field', () {
+      final editor = closedOn('cat', '');
+      editor.nextMatch();
+      expect(editor.searchOpen, isTrue);
+      expect(editor.search.text, isEmpty);
+    });
   });
 }

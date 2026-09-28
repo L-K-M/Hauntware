@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/desktop_window.dart';
 import 'package:planchette_app/services/document_workspace.dart';
+import 'package:planchette_app/theme/planchette_theme.dart';
 
 import 'document_workspace_test.dart' show MemoryDocuments, FakeDialogs;
 
@@ -35,6 +38,104 @@ void main() {
       expect(attempts, 2);
     },
   );
+
+  test(
+    'the native window opens on the app surface, not the platform default',
+    () {
+      final desktop = DesktopWindow(
+        confirmQuit: () async => true,
+        onQuitFailed: (_) {},
+        windowBackgroundColor: const Color(0xff0e1415),
+      );
+      addTearDown(desktop.dispose);
+      expect(desktop.windowOptions.backgroundColor, const Color(0xff0e1415));
+      expect(desktop.windowOptions.size, const Size(1080, 760));
+      expect(desktop.windowOptions.minimumSize, const Size(640, 400));
+      expect(desktop.windowOptions.title, 'Planchette');
+    },
+  );
+
+  test('the window backdrop is the surface the app paints', () {
+    for (final brightness in Brightness.values) {
+      expect(
+        windowBackdrop(brightness),
+        planchetteTheme(brightness).scaffoldBackgroundColor,
+      );
+    }
+    // The app's own pages: a second theme builder shadowing the imported one
+    // would still pass the check above.
+    expect(windowBackdrop(Brightness.light), PlanchettePalette.parchment.page);
+    expect(windowBackdrop(Brightness.dark), PlanchettePalette.seance.page);
+  });
+
+  test(
+    'a forced theme mode paints the window that theme, not the system one',
+    () {
+      expect(effectiveBrightness(ThemeMode.light), Brightness.light);
+      expect(effectiveBrightness(ThemeMode.dark), Brightness.dark);
+      expect(
+        windowBackdrop(effectiveBrightness(ThemeMode.dark)),
+        windowBackdrop(Brightness.dark),
+      );
+    },
+  );
+  test('an unchanged title is not sent to the window again', () {
+    final titles = <String>[];
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) async => titles.add(title),
+    );
+    desktop
+      ..setTitle('a — Planchette')
+      ..setTitle('a — Planchette')
+      ..setTitle('● a — Planchette')
+      ..setTitle('● a — Planchette');
+    expect(titles, ['a — Planchette', '● a — Planchette']);
+  });
+
+  test('a late failure of an older title keeps the newer one', () async {
+    final titles = <String>[];
+    final older = Completer<void>();
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) {
+        titles.add(title);
+        return title == 'a — Planchette' ? older.future : Future.value();
+      },
+    );
+    desktop
+      ..setTitle('a — Planchette')
+      ..setTitle('b — Planchette');
+    older.completeError(StateError('channel closed'));
+    await Future<void>.delayed(Duration.zero);
+    // The window shows b; forgetting it because a failed would resend it.
+    desktop.setTitle('b — Planchette');
+    expect(titles, ['a — Planchette', 'b — Planchette']);
+  });
+
+  test('a title that failed to arrive is sent again', () async {
+    final titles = <String>[];
+    var failNext = true;
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) async {
+        titles.add(title);
+        if (failNext) {
+          failNext = false;
+          throw StateError('channel closed');
+        }
+      },
+    );
+    desktop.setTitle('a — Planchette');
+    await Future<void>.delayed(Duration.zero);
+    desktop.setTitle('a — Planchette');
+    await Future<void>.delayed(Duration.zero);
+    desktop.setTitle('a — Planchette');
+    expect(titles, ['a — Planchette', 'a — Planchette']);
+  });
 
   test('overlapping close callbacks request native destruction once', () async {
     final decision = Completer<bool>();

@@ -6,6 +6,27 @@ import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace.dart';
+import 'theme/planchette_theme.dart';
+
+/// The color the native window shows before the first Flutter frame. Must be
+/// the same surface the app paints, or the window flashes a different color on
+/// the way in.
+Color windowBackdrop(Brightness brightness) =>
+    planchetteTheme(brightness).scaffoldBackgroundColor;
+
+/// Resolves the theme mode to the brightness the app will actually paint with,
+/// so the window backdrop and the theme cannot disagree. Read the system
+/// brightness through `PlatformDispatcher`, which needs no binding, because the
+/// window is created before `runApp`.
+///
+/// A future persisted theme (A1) has to be resolved here, before the window
+/// exists: passing one mode to [PlanchetteApp] and another here would bring the
+/// flash straight back.
+Brightness effectiveBrightness(ThemeMode mode) => switch (mode) {
+  ThemeMode.light => Brightness.light,
+  ThemeMode.dark => Brightness.dark,
+  ThemeMode.system => PlatformDispatcher.instance.platformBrightness,
+};
 
 class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
@@ -26,20 +47,10 @@ class PlanchetteApp extends StatelessWidget {
     title: 'Planchette',
     navigatorKey: navigatorKey,
     debugShowCheckedModeBanner: false,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
+    theme: planchetteTheme(Brightness.light),
+    darkTheme: planchetteTheme(Brightness.dark),
     themeMode: themeMode,
     home: _DocumentShell(workspace: workspace, onQuit: onQuit),
-  );
-
-  ThemeData _theme(Brightness brightness) => ThemeData(
-    brightness: brightness,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xff245b5c),
-      brightness: brightness,
-    ),
-    useMaterial3: true,
-    visualDensity: VisualDensity.compact,
   );
 }
 
@@ -70,6 +81,32 @@ class _DocumentShellState extends State<_DocumentShell> {
         tab.editor.error == null;
   }
 
+  /// Editor font sizes for View › Zoom. The default is the editor's own 14.
+  static const _zoomSizes = [
+    9.0,
+    10.0,
+    11.0,
+    12.0,
+    13.0,
+    14.0,
+    16.0,
+    18.0,
+    20.0,
+    22.0,
+    24.0,
+    28.0,
+    32.0,
+    36.0,
+    48.0,
+  ];
+  static const _defaultZoom = 5;
+  int _zoom = _defaultZoom;
+
+  void _setZoom(int zoom) {
+    final next = zoom.clamp(0, _zoomSizes.length - 1);
+    if (next != _zoom) setState(() => _zoom = next);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -84,12 +121,28 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _rememberTextFocus() {
     final focus = FocusManager.instance.primaryFocus;
     final tab = workspace.active;
-    if (tab != null &&
-        (focus == tab.editor.editorFocus ||
-            focus == tab.editor.searchFocus ||
-            focus == tab.editor.replacementFocus)) {
-      _lastTextFocus = focus;
+    if (tab == null ||
+        !tab.editor.textFocusNodes.contains(focus) ||
+        focus == _lastTextFocus) {
+      return;
     }
+    final wasDocument = _documentInUse;
+    _lastTextFocus = focus;
+    // The menus offer document commands only while the document is in use.
+    if (_documentInUse != wasDocument) setState(() {});
+  }
+
+  /// Whether the text field in use is the document rather than a find or
+  /// Go to Line field. Commands that only edit the document, and their
+  /// shortcuts, are offered only then: a key those fields leave unhandled,
+  /// or the native menu's key equivalent, must not edit the hidden text.
+  bool get _documentInUse {
+    final tab = workspace.active;
+    if (tab == null) return false;
+    final remembered = _lastTextFocus;
+    return remembered == null ||
+        remembered == tab.editor.editorFocus ||
+        !tab.editor.textFocusNodes.contains(remembered);
   }
 
   void _textAction(Intent intent) {
@@ -98,12 +151,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (tab == null) return;
     final remembered = _lastTextFocus;
     final target =
-        remembered != null &&
-            [
-              tab.editor.editorFocus,
-              tab.editor.searchFocus,
-              tab.editor.replacementFocus,
-            ].contains(remembered)
+        remembered != null && tab.editor.textFocusNodes.contains(remembered)
         ? remembered
         : tab.editor.editorFocus;
     final context = target.context;
@@ -132,7 +180,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _focusAfterFrame(DocumentTab tab) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && workspace.active == tab && !workspace.interactionLocked) {
-        tab.editor.editorFocus.requestFocus();
+        tab.editor.restoreFocus();
       }
     });
   }
@@ -174,6 +222,9 @@ class _DocumentShellState extends State<_DocumentShell> {
     // workspace isn't interaction-locked — including during load or after
     // a load error — so the menu command follows the same rule.
     final closable = active != null && unlocked && !active.busy;
+    // A composing input method or a host lock refuses line edits too.
+    final inDocument = ready && _documentInUse;
+    final lineCommands = inDocument && (active?.editor.canEditText ?? false);
     return [
       _ShellMenu('File', [
         _Command(
@@ -273,6 +324,50 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyA),
           enabled: ready,
         ),
+        const _Separator(),
+        _Command(
+          'Duplicate Line',
+          () => active?.editor.duplicateLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyD, shift: true),
+          enabled: lineCommands,
+        ),
+        _Command(
+          'Move Line Up',
+          () => active?.editor.moveLines(LineDirection.up),
+          shortcut: const SingleActivator(
+            LogicalKeyboardKey.arrowUp,
+            alt: true,
+          ),
+          enabled: lineCommands,
+        ),
+        _Command(
+          'Move Line Down',
+          () => active?.editor.moveLines(LineDirection.down),
+          shortcut: const SingleActivator(
+            LogicalKeyboardKey.arrowDown,
+            alt: true,
+          ),
+          enabled: lineCommands,
+        ),
+        _Command(
+          'Delete Line',
+          () => active?.editor.deleteLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyK, shift: true),
+          enabled: lineCommands,
+        ),
+        _Command(
+          'Join Lines',
+          () => active?.editor.joinLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyJ),
+          enabled: lineCommands,
+        ),
+        const _Separator(),
+        _Command(
+          'Toggle Comment',
+          () => active?.editor.toggleComment(),
+          shortcut: _shortcut(LogicalKeyboardKey.slash),
+          enabled: inDocument && (active?.editor.canToggleComment ?? false),
+        ),
       ]),
       _ShellMenu('Find', [
         _Command(
@@ -304,6 +399,57 @@ class _DocumentShellState extends State<_DocumentShell> {
               ? _shortcut(LogicalKeyboardKey.keyG, shift: true)
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
           enabled: ready,
+        ),
+        const _Separator(),
+        _Command(
+          'Go to Matching Bracket',
+          () => active?.editor.goToMatchingBracket(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyB),
+          enabled: inDocument,
+        ),
+        _Command(
+          'Select to Matching Bracket',
+          () => active?.editor.goToMatchingBracket(extend: true),
+          shortcut: _shortcut(LogicalKeyboardKey.keyB, shift: true),
+          enabled: inDocument,
+        ),
+        const _Separator(),
+        _Command(
+          'Go to Line…',
+          () => workspace.active?.editor.openGoToLine(),
+          shortcut: _shortcut(
+            mac ? LogicalKeyboardKey.keyL : LogicalKeyboardKey.keyG,
+          ),
+          enabled: ready,
+        ),
+      ]),
+      _ShellMenu('View', [
+        _Command(
+          'Zoom In',
+          () => _setZoom(_zoom + 1),
+          shortcut: _shortcut(LogicalKeyboardKey.equal),
+          // `+` sits on different keys, shifted or not, across layouts.
+          aliases: [
+            _shortcut(LogicalKeyboardKey.equal, shift: true),
+            _shortcut(LogicalKeyboardKey.add),
+            _shortcut(LogicalKeyboardKey.add, shift: true),
+            _shortcut(LogicalKeyboardKey.numpadAdd),
+          ],
+          enabled: _zoom < _zoomSizes.length - 1,
+        ),
+        _Command(
+          'Zoom Out',
+          () => _setZoom(_zoom - 1),
+          shortcut: _shortcut(LogicalKeyboardKey.minus),
+          aliases: [_shortcut(LogicalKeyboardKey.numpadSubtract)],
+          enabled: _zoom > 0,
+        ),
+        _Command(
+          'Actual Size',
+          () => _setZoom(_defaultZoom),
+          shortcut: _shortcut(LogicalKeyboardKey.digit0),
+          aliases: [_shortcut(LogicalKeyboardKey.numpad0)],
+          enabled: _zoom != _defaultZoom,
         ),
       ]),
       _ShellMenu('Window', [
@@ -452,9 +598,10 @@ class _DocumentShellState extends State<_DocumentShell> {
           if (entry is _Command &&
               entry.shortcut != null &&
               menu.label != 'Edit')
-            entry.shortcut!: () {
-              if (entry.enabled) entry.run();
-            },
+            for (final shortcut in [entry.shortcut!, ...entry.aliases])
+              shortcut: () {
+                if (entry.enabled) entry.run();
+              },
     };
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
@@ -625,9 +772,22 @@ class _DocumentShellState extends State<_DocumentShell> {
                           for (final tab in tabs)
                             PlanchetteEditor(
                               key: ValueKey(tab.id),
+                              textStyle: TextStyle(fontSize: _zoomSizes[_zoom]),
                               controller: tab.editor,
                               isActive: tab == active,
-                              editingLocked: workspace.interactionLocked,
+                              // No editingLocked here: the workspace locks
+                              // each controller the moment a dialog opens
+                              // and unlocks it the moment it closes. A view
+                              // lock would clear only on the next rebuild,
+                              // refusing a save made before it.
+                              //
+                              // A locked field cannot take the typing the
+                              // placeholder invites.
+                              placeholder:
+                                  tab.path == null &&
+                                      !workspace.interactionLocked
+                                  ? ghostLineFor(tab.id)
+                                  : null,
                             ),
                         ],
                       ),
@@ -773,6 +933,22 @@ class _TabChipState extends State<_TabChip> {
   }
 }
 
+/// What an untitled document shows while it is empty. Each line leads with
+/// the instruction, which is what a screen reader announces first; the rest
+/// is the board talking.
+const _ghostLines = [
+  'Start typing. The spirits are listening…',
+  'Start typing. The board is waiting…',
+  'Start typing. Something wants to be written…',
+  'Start typing. Rest a finger on the planchette…',
+  'Start typing. Ask, and it will answer…',
+];
+
+/// The ghost line for a tab: fixed for that tab, and different for the tab
+/// created right after it.
+@visibleForTesting
+String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
+
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);
   final String label;
@@ -788,9 +964,18 @@ final class _Separator extends _MenuEntry {
 }
 
 final class _Command extends _MenuEntry {
-  const _Command(this.label, this.run, {this.shortcut, this.enabled = true});
+  const _Command(
+    this.label,
+    this.run, {
+    this.shortcut,
+    this.aliases = const [],
+    this.enabled = true,
+  });
   final String label;
   final VoidCallback run;
   final SingleActivator? shortcut;
+
+  /// More key combinations for the same command, not shown in menus.
+  final List<SingleActivator> aliases;
   final bool enabled;
 }

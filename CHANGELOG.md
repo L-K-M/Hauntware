@@ -34,10 +34,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Save All reports a partial failure the way File › Save All does.
 - Diff and patch highlighting, plus Rust attributes and lifetimes, Go raw
   strings, JSON and YAML keys, C preprocessor lines and Python decorators.
+- Tab and Shift+Tab indent and outdent the document instead of moving focus
+  out of it, Enter keeps the line's indentation (one level more after an
+  opening bracket), and Backspace in leading spaces removes a whole level.
+  The level is learned from each file, and Makefiles and Go keep tabs.
+  Hosts choose what Tab does (`PlanchetteEditor.tabKeyBehavior`), a level
+  for one document (`EditorController.indentation`) or a fallback for files
+  that have none yet (`EditorController.indentationPreference`).
+- Line commands in the Edit menu: Duplicate Line (`Cmd/Ctrl+Shift+D`),
+  Move Line Up/Down (`Option/Alt+↑/↓`), Delete Line (`Cmd/Ctrl+Shift+K`)
+  and Join Lines (`Cmd/Ctrl+J`). They keep a CRLF line's break intact.
+- Edit › Toggle Comment (`Cmd/Ctrl+/`) comments or uncomments the touched
+  lines with the language's line-comment marker, keeping indentation; it is
+  offered only for languages that have one.
+- Find › Go to Matching Bracket (`Cmd/Ctrl+B`, with Shift to select) jumps
+  to the partner of the bracket beside the caret, skipping brackets in
+  strings and comments.
+- Find › Go to Line (`Cmd+L` on macOS, `Ctrl+G` elsewhere, or a click on
+  the caret position in the status bar) jumps to a line or `line:column`,
+  and says what it takes when the input is not a number. The status bar
+  also shows the selection's size and lines, the size the file has once
+  saved, the indentation and the language.
+- Past 200,000 characters, where syntax colours stop, the status bar says
+  "Large file: no highlighting".
+- View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
+  (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
+- Find Next and Find Previous reach every match in a large file: past the
+  1,000 matches the find bar highlights, they page on, and the counter
+  numbers each match within the whole document.
+- The find bar's Whole words toggle (`ab`) skips hits that run on into a
+  word, in find, paging and Replace All. Letters of any script are part of
+  a word; curly quotes, dashes, no-break spaces and emoji end one.
+- Every find and replace control can be reached with Tab and tells screen
+  readers whether it is on, and on a narrow window the bar puts its
+  controls under the field.
+- Planchette has its own looks: Parchment for light mode and Séance for
+  dark, with syntax colors that keep 4.5:1 contrast on the page, the
+  current line and the selection. Hosts can style the shared editor through
+  `ThemeData.extensions`, since `EditorSyntaxTheme` is a `ThemeExtension`.
+- A faint band marks the caret's line. It is on by default in the shared
+  editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
+  `Colors.transparent` to turn it off.
 
 ### Changed
 - Loading and saving a large file takes about half the time and a third of
   the peak memory.
+- Typing no longer rebuilds the whole window: the tabs, menus and window
+  title update only when what they show changes.
 - Save errors name their cause: an unwritable or deleted folder, or the
   operating system's error code when the original cannot be moved aside.
 - A refused quit says what it is waiting for (a save, an open, a close or a
@@ -48,6 +91,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   can close, a saving one cannot.
 - The status bar says "1 line" and "1 byte".
 - On Linux and Windows the window opens at its final size and position.
+- The shared editor keeps a host's lock (`EditorController.setEditingLocked`)
+  apart from a view's `editingLocked` parameter, so rebuilding a view no
+  longer unlocks a document the host locked. A view lock clears only when
+  the view rebuilds, so a host should lock through one of the two: the app
+  now locks through the controller alone, which also fixes saves answered
+  before the next frame after a dialog being refused.
 
 ### Fixed
 - A file whose name nearly fills the 255-byte limit can be saved.
@@ -63,3 +112,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of matching at every position.
 - The Linux package's metadata describes Planchette, and a failed
   `objdump` stops the build instead of passing silently.
+- Line numbers stay on their lines when lines soft-wrap, at any document
+  size, and typing no longer lays the whole document out a second time for
+  the gutter. Find reveals a match on its real row in large wrapped files.
+- On macOS, `Ctrl+F`, `Ctrl+H` and `Ctrl+G` keep their text-editing meaning
+  instead of opening find, replace or Go to Line.
+- Documents use a monospace font on macOS (Menlo) and Windows (Cascadia
+  Mono, or Consolas where it is missing). The generic `monospace` name the
+  editor used to request resolves only on Linux and Android, so the text
+  fell back to the proportional system font. `PlanchetteEditor.textStyle`
+  now merges over the platform's family (`editorMonospaceFor`), and a host
+  passing the generic name gets that family too.
+- Find Next and Find Previous work after the find bar is closed: they
+  reopen it on the last query and move from the caret, leaving the cursor
+  in the document.
+- Opening a file that no longer exists says so, instead of showing
+  `dart:io`'s `PathNotFoundException` with its errno.
+- The window opens on the app's own background in the current light or
+  dark mode, instead of the platform's default colour before the first
+  frame and while resizing.
