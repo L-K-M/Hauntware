@@ -174,4 +174,70 @@ void main() {
     expect(() => duplicateLines('ab', 0, 3), throwsRangeError);
     expect(() => deleteLines('ab', -1, 0), throwsRangeError);
   });
+
+  group('CRLF buffers', () {
+    // Loading normalizes line endings but pasted text keeps its own, so each
+    // command must treat \r\n as one break: its answer on a CRLF buffer is
+    // exactly the CRLF form of its answer on the LF buffer, selection
+    // included. Every multi-line case above is replayed that way.
+    const inputs = [
+      'a\nb|c\nd',
+      'a\nb|',
+      'a[b\nc]d\ne',
+      'a]b\nc[d\ne',
+      '[a\n]b',
+      'a|\nb',
+      'a\nb[c\nd]e\nf',
+      'a\nb]c\nd[e\nf',
+      'a\n[b\n]c',
+      'a\n[b\n]c\nd',
+      'a|\n',
+      'a\n|',
+      'abc\nd|ef\nghi',
+      'abcdef|\nxy',
+      'abc\nd|e',
+      '|\n',
+      'abc|\nab😀xy',
+      'ab|c\nab😀xy',
+      'abcd|\nab😀xy',
+      'a|b\n    cd\ne',
+      'a |\nb',
+      'a\t|\nb',
+      'a|\n   \nb',
+      '|\n  b',
+      'x[a\n  b\n\t c]d\ny',
+      'x]a\n  b\n\t c[d\ny',
+      '[a\n\n  \nb]',
+      '[a\n  ]  b',
+      '[ab]\ncd',
+    ];
+    String crlf(String marked) => marked.replaceAll('\n', '\r\n');
+    final commands = <String, LineEdit? Function(String, int, int)>{
+      'duplicateLines': duplicateLines,
+      'moveLines up': (t, b, e) => moveLines(t, b, e, LineDirection.up),
+      'moveLines down': (t, b, e) => moveLines(t, b, e, LineDirection.down),
+      'deleteLines': deleteLines,
+      'joinLines': joinLines,
+    };
+    for (final MapEntry(key: name, value: command) in commands.entries) {
+      test('$name gives the CRLF form of its LF answer', () {
+        for (final input in inputs) {
+          expect(
+            run(command, crlf(input)),
+            crlf(run(command, input)),
+            reason: input,
+          );
+        }
+      });
+    }
+
+    test('a moved or joined line never keeps a stray carriage return', () {
+      expect(run(commands['moveLines up']!, 'a\r\nb|'), 'b|\r\na');
+      expect(run(joinLines, 'a|\r\nb'), 'a| b');
+    });
+
+    test('breaks of different kinds stay where they were', () {
+      expect(run(commands['moveLines up']!, 'a\r\nb|\nc'), 'b|\r\na\nc');
+    });
+  });
 }
