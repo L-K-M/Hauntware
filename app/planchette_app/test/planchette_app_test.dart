@@ -41,11 +41,14 @@ void main() {
     WidgetTester tester,
     LogicalKeyboardKey key, {
     bool shift = false,
+    bool alt = false,
   }) async {
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    if (alt) await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
     if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(key);
     if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    if (alt) await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
   }
@@ -507,4 +510,113 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+  testWidgets(
+    'menu Save All writes every dirty document',
+    (tester) async {
+      store.files[testPath('one.txt')] = document('one.txt', 'original one');
+      store.files[testPath('two.txt')] = document('two.txt', 'original two');
+      await workspace.open(testPath('one.txt'));
+      final first = workspace.active!;
+      await workspace.open(testPath('two.txt'));
+      final second = workspace.active!;
+      await mount(tester);
+
+      // Nothing is dirty, so the command offers nothing to do.
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      final saveAllButton = find.ancestor(
+        of: find.text('Save All'),
+        matching: find.byType(MenuItemButton),
+      );
+      expect(tester.widget<MenuItemButton>(saveAllButton).onPressed, isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+
+      first.editor.text.text = 'edited one';
+      second.editor.text.text = 'edited two';
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save All'));
+      await tester.pumpAndSettle();
+      expect(store.files[testPath('one.txt')]!.text, 'edited one');
+      expect(store.files[testPath('two.txt')]!.text, 'edited two');
+      expect(first.editor.isDirty, isFalse);
+      expect(second.editor.isDirty, isFalse);
+      expect(workspace.error, isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'the Save All shortcut writes every dirty document',
+    (tester) async {
+      store.files[testPath('one.txt')] = document('one.txt', 'original one');
+      store.files[testPath('two.txt')] = document('two.txt', 'original two');
+      await workspace.open(testPath('one.txt'));
+      final first = workspace.active!;
+      await workspace.open(testPath('two.txt'));
+      final second = workspace.active!;
+      first.editor.text.text = 'edited one';
+      second.editor.text.text = 'edited two';
+      await mount(tester);
+
+      await chord(tester, LogicalKeyboardKey.keyS, alt: true);
+      expect(store.files[testPath('one.txt')]!.text, 'edited one');
+      expect(store.files[testPath('two.txt')]!.text, 'edited two');
+      expect(workspace.documents.every((tab) => !tab.editor.isDirty), isTrue);
+      expect(workspace.error, isNull);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets('the Save All accelerator is Command+Option+S on macOS', (
+    tester,
+  ) async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    await workspace.open(testPath('one.txt'));
+    workspace.active!.editor.text.text = 'edited one';
+    await mount(tester);
+
+    // macOS shortcuts live on the native menu, which intercepts no widget
+    // events, so the accelerator is asserted on the registered menu item
+    // and exercised through its own selection.
+    final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+    final file = bar.menus.whereType<PlatformMenu>().firstWhere(
+      (menu) => menu.label == 'File',
+    );
+    final saveAll = file.menus
+        .whereType<PlatformMenuItemGroup>()
+        .expand((group) => group.members)
+        .firstWhere((item) => item.label == 'Save All');
+    // SingleActivator has no value equality, so the binding is compared
+    // field by field.
+    final shortcut = saveAll.shortcut;
+    expect(shortcut, isA<SingleActivator>());
+    final keys = shortcut! as SingleActivator;
+    expect(keys.trigger, LogicalKeyboardKey.keyS);
+    expect(keys.meta, isTrue);
+    expect(keys.alt, isTrue);
+    expect(keys.control, isFalse);
+    expect(keys.shift, isFalse);
+    saveAll.onSelected!();
+    await tester.pumpAndSettle();
+
+    expect(store.files[testPath('one.txt')]!.text, 'edited one');
+    expect(workspace.active!.editor.isDirty, isFalse);
+    expect(workspace.error, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 }

@@ -117,6 +117,8 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (tab != null) unawaited(workspace.save(tab, saveAs: saveAs));
   }
 
+  void _saveAll() => unawaited(workspace.saveAll());
+
   void _close() {
     final tab = workspace.active;
     if (tab != null) unawaited(workspace.closeTab(tab));
@@ -198,6 +200,13 @@ class _DocumentShellState extends State<_DocumentShell> {
           () => _save(saveAs: true),
           shortcut: _shortcut(LogicalKeyboardKey.keyS, shift: true),
           enabled: ready,
+        ),
+        _Command(
+          'Save All',
+          _saveAll,
+          shortcut: _shortcut(LogicalKeyboardKey.keyS, alt: true),
+          enabled:
+              unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
         ),
         const _Separator(),
         _Command(
