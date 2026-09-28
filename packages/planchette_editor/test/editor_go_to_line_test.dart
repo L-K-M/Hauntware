@@ -304,4 +304,48 @@ void main() {
     expect(await savedSize('ab\r\ncd', LineEnding.lf), 5);
     expect(await savedSize('ab\rcd', LineEnding.crlf), 6);
   });
+
+  test('review fix: an untitled size counts breaks as a new file saves', () {
+    // A new file is written with LF breaks and no mark, so pasted CRLF
+    // text shrinks by its CRs.
+    int unsavedSize(String text) {
+      final c = EditorController(displayPath: 'Untitled 1', initialText: text);
+      addTearDown(c.dispose);
+      return c.fileByteCount;
+    }
+
+    expect(unsavedSize('a\r\nb'), 3);
+    expect(unsavedSize('a\rb'), 3);
+    expect(unsavedSize('a\nb'), 3);
+  });
+
+  testWidgets('review fix: closing one bar leaves focus in the other', (
+    tester,
+  ) async {
+    // Both closes sent focus to the document, so the next digits typed
+    // for Go to Line edited the text.
+    final c = await mount(tester, text: 'one\ntwo');
+    c.openSearch();
+    await tester.pump();
+    c.openGoToLine();
+    await tester.pump();
+    expect(c.goToLineFocus.hasFocus, isTrue);
+    await tester.tap(find.byTooltip('Close search'));
+    await tester.pump();
+    expect(c.goToLineFocus.hasFocus, isTrue);
+
+    c.openSearch();
+    await tester.pump();
+    expect(c.searchFocus.hasFocus, isTrue);
+    await tester.tap(find.byTooltip('Close go to line'));
+    await tester.pump();
+    expect(c.searchFocus.hasFocus, isTrue);
+  });
+
+  test('review fix: a column past a CRLF line ends before its CR', () {
+    final c = EditorController(displayPath: 'a.txt', initialText: 'abc\r\ndef');
+    addTearDown(c.dispose);
+    c.goToLine(1, column: 99);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 3));
+  });
 }

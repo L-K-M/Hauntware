@@ -294,18 +294,18 @@ class EditorController extends ChangeNotifier {
   /// mark, and saving writes each line break as the document's own ending,
   /// as `saveTextDocument` does by default. The buffer may hold LF breaks
   /// (loaded normalized), CRLF breaks (loaded as they were, or pasted), or
-  /// a lone CR; each counts once. A host that saves raw line endings writes
-  /// exactly [byteCount] bytes plus any byte-order mark instead.
+  /// a lone CR; each counts once. An untitled buffer counts as a new file is
+  /// saved, with LF breaks and no mark. A host that saves raw line endings
+  /// writes exactly [byteCount] bytes plus any byte-order mark instead.
   int get fileByteCount {
     final document = _document;
-    if (document == null) return byteCount;
     _updateMetrics();
     // Folding to LF drops the CR of each CRLF and turns a lone CR into LF.
     final breaks = lineStarts.length - 1 + _returns - _returnNewlines;
     return byteCount -
         _returnNewlines +
-        (document.lineEnding == LineEnding.crlf ? breaks : 0) +
-        (document.hasUtf8Bom ? 3 : 0);
+        (document?.lineEnding == LineEnding.crlf ? breaks : 0) +
+        (document?.hasUtf8Bom ?? false ? 3 : 0);
   }
 
   (int, int) get caretLineColumn {
@@ -715,13 +715,16 @@ class EditorController extends ChangeNotifier {
     if (!_searchOpen) return;
     _searchOpen = false;
     _replaceOpen = false;
-    if (_focusMemory != editorFocus) _focusMemory = null;
+    if (_focusMemory == searchFocus || _focusMemory == replacementFocus) {
+      _focusMemory = null;
+    }
     _matches = const [];
     _activeMatch = -1;
     _lastQuery = null;
     _caseFolding = CaseFolding.exact;
     text.setSearchMatches(const [], -1);
-    editorFocus.requestFocus();
+    // Go to Line may stay open with the user typing in it.
+    if (!goToLineFocus.hasFocus) editorFocus.requestFocus();
     _notify();
   }
 
@@ -743,7 +746,10 @@ class EditorController extends ChangeNotifier {
     _goToLineOpen = false;
     _invalidGoToLine = null;
     if (_focusMemory == goToLineFocus) _focusMemory = null;
-    editorFocus.requestFocus();
+    // The find bar may stay open with the user typing in it.
+    if (!searchFocus.hasFocus && !replacementFocus.hasFocus) {
+      editorFocus.requestFocus();
+    }
     _notify();
   }
 
@@ -786,9 +792,15 @@ class EditorController extends ChangeNotifier {
     final starts = lineStarts;
     final index = (line - 1).clamp(0, starts.length - 1);
     final start = starts[index];
-    final end = index + 1 < starts.length
+    var end = index + 1 < starts.length
         ? starts[index + 1] - 1
         : text.text.length;
+    // A CRLF break is one break: past the line's end is before its CR.
+    if (end > start &&
+        end < text.text.length &&
+        text.text.codeUnitAt(end - 1) == 0x0d) {
+      end--;
+    }
     var offset = (start + column - 1).clamp(start, end);
     // Columns count UTF-16 code units, like the status bar's; one that
     // falls between the halves of a surrogate pair lands before the pair.
