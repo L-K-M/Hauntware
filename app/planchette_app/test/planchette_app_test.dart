@@ -934,4 +934,27 @@ void main() {
     expect(tab.editor.text.selection.isCollapsed, isTrue);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  // Ported from #18, reopening from disk as #51 does.
+  testWidgets(
+    'Reopen Closed Tab brings a closed file back from the keyboard',
+    (tester) async {
+      store.files[testPath('back.txt')] = document('back.txt', 'on disk');
+      await workspace.open(testPath('back.txt'));
+      await mount(tester);
+
+      await chord(tester, LogicalKeyboardKey.keyW);
+      expect(workspace.documents, isEmpty);
+      await chord(tester, LogicalKeyboardKey.keyT, shift: true);
+      expect(workspace.active?.path, testPath('back.txt'));
+      expect(workspace.active!.editor.text.text, 'on disk');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    // macOS drives the same command through native menus and Command.
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 }

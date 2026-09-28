@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- File › Reopen Closed Tab (`Cmd/Ctrl+Shift+T`) opens the last closed file
+  again from disk, up to twenty back, with the caret where it was.
 - File › Revert to Saved reads the file again, asking first when there
   are unsaved changes (Cancel is the default). It keeps the document on
   screen while it reads, keeps the edits if the read fails, and cannot be

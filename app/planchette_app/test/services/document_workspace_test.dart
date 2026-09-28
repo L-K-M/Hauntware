@@ -560,6 +560,39 @@ void main() {
       expect(workspace.canReopenClosed, isFalse);
     });
 
+    // Ported from #18.
+    test('puts the caret back, within the file as it is now', () async {
+      store.files[testPath('lines.txt')] = document(
+        'lines.txt',
+        'one\ntwo two\nthree',
+      );
+      final tab = await openFile('lines.txt');
+      tab.editor.goToLine(2, column: 5);
+      await workspace.closeTab(tab);
+      await workspace.reopenClosed();
+      expect(workspace.active!.editor.caretLineColumn, (2, 5));
+
+      // The file lost lines while closed: the caret goes as far as it can.
+      final again = workspace.active!;
+      await workspace.closeTab(again);
+      store.files[testPath('lines.txt')] = document('lines.txt', 'one');
+      await workspace.reopenClosed();
+      expect(workspace.active!.editor.caretLineColumn, (1, 4));
+    });
+
+    test('remembers the last twenty closed files', () async {
+      for (var i = 0; i < 25; i++) {
+        store.files[testPath('f$i.txt')] = document('f$i.txt', '$i');
+        await workspace.closeTab(await openFile('f$i.txt'));
+      }
+      for (var i = 0; i < 20; i++) {
+        await workspace.reopenClosed();
+      }
+      expect(workspace.documents, hasLength(20));
+      expect(workspace.canReopenClosed, isFalse);
+      expect(workspace.documents.last.path, testPath('f5.txt'));
+    });
+
     test('reports a closed file that has since disappeared', () async {
       await workspace.closeTab(await openFile('one.txt'));
       store.files.remove(testPath('one.txt'));

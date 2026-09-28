@@ -107,7 +107,9 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   /// Files whose tabs the user closed, most recent last, for Reopen Closed
   /// Tab. Bounded so a long session does not keep every path it touched.
-  final List<String> _closedPaths = [];
+  /// Closed files, oldest first, with where the caret was: a line and
+  /// column survive the file changing on disk better than an offset would.
+  final List<({String path, int line, int column})> _closedPaths = [];
   static const _closedPathLimit = 20;
   int _nextId = 1;
   int _dialogCount = 0;
@@ -352,17 +354,24 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   /// Whether Reopen Closed Tab has a closed file that is not open again.
   bool get canReopenClosed =>
-      !interactionLocked && _closedPaths.any((path) => _findPath(path) == null);
+      !interactionLocked &&
+      _closedPaths.any((closed) => _findPath(closed.path) == null);
 
   /// Reopens the most recently closed file. Entries opened again some other
   /// way are skipped, so the command always brings back a closed tab.
   Future<void> reopenClosed() async {
     if (interactionLocked) return;
     while (_closedPaths.isNotEmpty) {
-      final path = _closedPaths.removeLast();
-      if (_findPath(path) != null) continue;
+      final closed = _closedPaths.removeLast();
+      if (_findPath(closed.path) != null) continue;
       _notify();
-      await open(path);
+      await open(closed.path);
+      // Back where the caret was, clamped to the file as it is now. Only a
+      // tab this open created: a failed open shows nothing to move.
+      final reopened = _findPath(closed.path);
+      if (reopened != null && reopened == _active) {
+        reopened.editor.goToLine(closed.line, column: closed.column);
+      }
       return;
     }
   }
@@ -371,9 +380,10 @@ final class DocumentWorkspace extends ChangeNotifier {
     final path = tab.path;
     if (path == null) return;
     final key = _pathKey(path);
+    final (line, column) = tab.editor.caretLineColumn;
     _closedPaths
-      ..removeWhere((closed) => _pathKey(closed) == key)
-      ..add(path);
+      ..removeWhere((closed) => _pathKey(closed.path) == key)
+      ..add((path: path, line: line, column: column));
     if (_closedPaths.length > _closedPathLimit) _closedPaths.removeAt(0);
   }
 
