@@ -45,6 +45,19 @@ change, and how to know it is done. Read [AGENTS.md](AGENTS.md) first.
   are folded in below. Its PRs re-implement parts of #8/#13/#14/#16/#21/
   #22/#30/#33/#34/#35/#42/#44 — see the overlap rows. Its working notes
   (tmp.md) were discarded after this merge.
+- A **2026-09-28 pass** (this document's fourth merge) reviewed `e7ec67f`
+  again from scratch and opened #91/#92/#93 (Revert to Saved, File › Save
+  All, scoped workspace errors) from that review, each watched through GLM
+  rounds to a state with no outstanding important findings and left open
+  for owner review/merging. Baselines: Flutter 3.47.2 / Dart 3.13.2,
+  analyze clean, core 84 / editor 19 / app 38 + 2 case-insensitive skips
+  on `e7ec67f`; no GUI session, so this pass's visual claims are
+  code-reading. Its unique findings are folded in below: the measured
+  per-keystroke table and query shortcut under P1, notes under P3, P6,
+  A7, V5, V6 and V11, plus A15 and Q32; everything else in its scratch
+  notes was already covered by existing entries. Its Revert work
+  overlaps the inherited #26/#38 records — see the overlap row — and its
+  scratch notes (tmp.md) were discarded after this merge.
 - Measurement provenance is local to each table/probe. The newer inherited
   keystroke table uses a non-AOT `flutter test` harness; #39 reports file-load
   time/memory, and #5 uses standalone Dart tokenization timings. Do not label
@@ -123,7 +136,8 @@ restore its outstanding work to the backlog. Twenty-nine records below are
 inherited from those main-branch documents; their statuses and claims were not independently
 checked. Four additional PRs were implemented and monitored in an earlier session,
 seven more in the 2026-09-27 review pass, six more later the same day, and
-nine more in the parallel 2026-09-27 second pass.
+nine more in the parallel 2026-09-27 second pass, six in the GLM 4.7
+session and three in the 2026-09-28 pass.
 The newer inherited source warns that more parallel PRs may exist. This is
 not a complete ownership registry; refresh coordination from authorized
 repository records before duplicating work. The second pass listed the open
@@ -260,6 +274,19 @@ duplicate and mine only the unique pieces.
 | [#67](https://github.com/L-K-M/Planchette/pull/67), `feat/status-selection` | `EditorController.selectionStats` (UTF-16 units + touched lines, direction-independent, line-boundary rule) surfaced through `EditorStrings` (`documentPosition` gained optional selection counts via a Devin refinement at `37a143e`). Duplicates the selection-summary half of #33/#44 (E10b); unique: the touched-lines count. | One clean review round (0 actionable findings) on `37a143e`. |
 | [#68](https://github.com/L-K-M/Planchette/pull/68), `feat/caret-line-highlight` | Subtle (5% alpha) full-width caret-line band painting to the next line's visual top, bounded by the laid-out document height on the final line; shares the gutter's repaint listenable; layout runs when either consumer needs it; `highlightCaretLine` opt-out. A Devin pass added layout gating, `IgnorePointer` and style fallbacks at `d3194c7`/`6f20244`; accepted. Duplicates #22's current-line band. | Round 1 minor (wrapped final line) applied at `2f93955`; awaiting round 2. |
 
+### Implemented and monitored in the 2026-09-28 pass
+
+Three PRs from a fresh review of `e7ec67f`, kept to behaviors no other open
+PR claims — except Revert, which overlaps the inherited #26/#38 records
+(see the overlap row). Each was watched through GLM rounds to a state with
+no outstanding important findings and left open for owner review/merging.
+
+| PR / branch | Change and proof | Latest recorded status |
+|---|---|---|
+| [#91](https://github.com/L-K-M/Planchette/pull/91), `agent/revert-to-saved` | File › Revert to Saved (Cmd/Ctrl+R) reloads the active file-backed tab from disk: dirty buffers confirm first (Cancel autofocused), clean tabs reload without a prompt, untitled tabs are no-ops. A failed reload keeps the buffer, clears the editor's error and reports through the workspace banner, so a broken read never destroys unsaved text; the tab loader resolves its path at call time, so Save As retargets reloads and a saved untitled tab gains a loader (previously a silent no-op). Tests cover confirm/decline/clean/failure/untitled/retarget plus File-menu invocation and the untitled disabled state. CI on `9ffdfb6`: core 89, editor 27, app 63 + 2 skipped. | Open at `9ffdfb6`; all checks green (Linux/macOS/Windows). Round 1's findings applied at `b80493b`; round 2's major failure-path finding applied at `9ffdfb6`; round 3 reported 0 actionable suggestions. Steady — but overlaps #26/#38, coordinate per the Revert row before merging. |
+| [#92](https://github.com/L-K-M/Planchette/pull/92), `feat/save-all` | A7's File › Save All (Cmd/Ctrl+Alt+S / Cmd+Opt+S): every dirty tab saves through the existing `_save` serialization and the results aggregate into one message in the B15 shape ("Saved X of Y. Could not save: …"). Declined destinations are not errors; a modal taking the interaction lock stops the loop and the message names the tabs it never reached; a tab that vanishes mid-run counts in the failure total; `_savingAll` guards re-entrancy. macOS accelerators are asserted declaratively on `PlatformMenuItem`, because key events cannot reach `PlatformMenuBar` in a test. CI on `002f5ec`: app 68 + 2 skipped. | Open at `002f5ec`; all checks green. Round 1 (re-entrancy guard, mid-run modal stop, declarative macOS coverage) at `009e969`; round 2 (lock-break attempted/skipped accounting) at `bf939b8`; round 3 (failure and stopped totals naming their documents) at `002f5ec`; round 4 raised two minors only, deferred and declined as recorded in A7 and §11 — the second consecutive minor-only round, so minor nits stop here. Steady. |
+| [#93](https://github.com/L-K-M/Planchette/pull/93), `feat/scoped-errors` | V6's persistence and announcement halves: errors are scoped to their operation/document, `_clearScope` notifies itself, and `closeTab` retires its own tab's failure — so one document's success or a tab close can neither clear nor leave stale another document's error. The banner keeps `liveRegion: true` (SnackBar parity). Three new tests: closing a tab retires its own save failure (failed before the fix), closing an unrelated tab keeps another document's failure, and a widget test drives File-menu fail → retry → banner gone asserting `isSemantics(isLiveRegion: true)`. CI on `0c9a9f9`: app 62 + 2 skipped. | Open at `0c9a9f9`; all checks green. Round 1's findings (self-notifying `_clearScope`, `closeTab` scope clear, live-region matcher note) applied at `0c9a9f9`; round 2 reported 0 actionable suggestions. Steady. |
+
 ### Inherited PR records
 
 The evidence labels and measurements in this table belong to the inherited
@@ -346,7 +373,7 @@ tests, not blindly combine competing implementations:
 | Go to Line (parallel #8) | #16/#33 plus [#8](https://github.com/L-K-M/Planchette/pull/8) | #8 adds a Ctrl+L dialog on all platforms, clamp/scroll/focus semantics and a digits-only field. Reconcile shortcuts (Ctrl+G stays Find Next on macOS in #8) and keep one dialog. |
 | Font zoom | #25/#30/#37 | #25 scales text style with gutter/reveal; #30 adds platform monospace and Actual Size; #37 persists preferences. Reconcile shortcuts, scale and storage. |
 | Font zoom (parallel #9) | #25/#30/#37 plus [#9](https://github.com/L-K-M/Planchette/pull/9) | #9 ships Ctrl/Cmd+=/-/0, numpad +/-, a View menu, an 8–32 clamp and a rendered-style contract test; size is session-only. Persistence stays with #37/FU4; reconcile steps, Actual Size and storage on merge. |
-| Revert | #26/#38/#19 | #38 adds the File command; #26 reports disk notices/recreate-on-save; #19 fixes load-boundary undo. Preserve all safety/lifetime behavior. |
+| Revert | #26/#38/#19/#91 | #38 adds the File command; #26 reports disk notices/recreate-on-save; #19 fixes load-boundary undo; #91 independently re-implements the File command with failed-reload safety (buffer kept, editor error cleared, workspace banner) and call-time path resolution (Save As retargets the reload; a saved untitled tab gains a loader). Prefer the union: #38's enabled-state rules, #91's failure and retarget behavior, #26's disk notices, #19's undo severance — or pick one command and carry the other's tests over. Preserve all safety/lifetime behavior. |
 | Reopen closed tab (parallel #18) | A7 plus [#18](https://github.com/L-K-M/Planchette/pull/18), #51 | #51 is a path-only duplicate opened before #18 was recorded here; prefer #18 and close #51 unless path-only is wanted. |
 | Reopen closed tab (detail) | #18 | #18 restores text/identity/selection from a 10-deep snapshot stack, which supersedes A7's path-only stack and its "do not promise discarded-text recovery" constraint — recovery is real and guarded by the save conflict check. Keep its cancel/conflict coverage and FU5's remaining actions. |
 | Tabs/chrome | #11/#35/#36/#43 | Retain #11’s focus/visibility tests, #35’s tab commands, #36’s row geometry/ThemeData and #43’s fixed dirty slot/directory display. #43 removes the header; geometry improvements still need validation in the chosen layout. |
@@ -1129,6 +1156,24 @@ The source also measured 5,001-line gutter work at 59.0ms layout plus 124.3ms
 for per-line `getOffsetForCaret`, versus 9.1ms for one `computeLineMetrics`.
 Treat these as fixture-specific costs, not an immutable architecture floor.
 
+This pass's own standalone Dart VM measurements (throwaway benchmark,
+ms/op, same machine; reproducible from the quoted call sites) complement
+those harness numbers — they show where the per-keystroke floor sits at
+the highlighting cap and near the 4 MiB ceiling:
+
+| Operation | 200k chars | 4 MiB chars | When it runs |
+|---|---|---|---|
+| `tokenizeSyntax` (dart) | **9.12** | n/a (cap) | every keystroke: the token memo is keyed on the text instance, which every edit replaces (`code_editing_controller.dart:142`) |
+| `lineStartOffsets` | 0.34 | **6.85** | every keystroke through status bar and gutter (`_updateMetrics` memoizes on identical text only) |
+| `utf8EncodedLength` | 0.23 | **5.32** | same as above |
+| `findSearchMatches` | 0.63–0.77 | **~6.3** | every search-field keystroke; dominated by the unconditional full-document `toLowerCase()` (`editor_syntax.dart:1173`) |
+
+So tokenization alone is ~9 ms per keystroke at the 200k cap — before
+span building and the two whole-document `TextPainter` layouts — and a
+16 ms frame budget is blown comfortably while typing near the cap.
+Treat these like the table above: fixture-specific measurements, not
+release-frame predictions.
+
 Candidate steps after profiling, each S–M:
 1. Incremental tokenization. Store the scanner state at each line start
    (inside a block comment or multiline string, or not). On an edit,
@@ -1137,6 +1182,9 @@ Candidate steps after profiling, each S–M:
    as one way to locate the edit rather than assuming it is always cheap.
 2. Cache the lowercased haystack per text instance in `EditorController`;
    evaluate one-frame query debounce while preserving immediate navigation.
+   A query with no cased characters needs no lowered copy at all — `indexOf`
+   over the original text already matches it — so digits/punctuation-only
+   needles can skip lowering even before the cache lands.
 3. Prefer lazy/once-per-frame metrics first. The latest inherited affix-scan
    prototype below regressed mid-buffer edits; do not repeat it without a
    measured improvement. This does not rule out every incremental design.
@@ -1227,6 +1275,13 @@ Treat removing those limits as a measured acceptance target, not an automatic
 consequence. Folding, multicursor, project-wide search and LSP require separate
 design after document/layout foundations are stable; avoid building a plugin
 framework merely to support a small command palette.
+Interim options before any rebuild: document the practical editing size
+honestly, or open above-threshold files read-only with an explicit
+"Edit anyway" escape hatch — `TextField` is not virtualized, so it lays
+out the entire document per keystroke regardless of this repo's code and
+typing near the 4 MiB ceiling is unusable until one of these or the
+virtualized surface lands.
+
 The newer inherited review reports that Flutter 3.47 TextField/EditableText
 have no `softWrap` parameter, and an inert flag in #28's first draft left
 wrapped text paired with incorrect uniform-row gutter geometry. Verify API
@@ -1282,6 +1337,15 @@ new divider Paint. Check the reconciled rendering owner before optimizing.
 Candidates: cache line-number paragraphs or a measured digit atlas, and reuse
 divider paint. Measure scrolling and invalidate for font/scale/style changes;
 do not introduce a second geometry model alongside FU2/FU9.
+Two related build-side costs in `editor_view.dart`, both read this pass:
+`_measureGutter` constructs and lays out a fresh `TextPainter` on every
+layout pass while `_ensureGutterLayout` right below memoizes on four keys —
+its content only changes with the line-count digit count, style and scaler,
+so cache on those instead of re-creating the painter; and
+`_ensureGutterLayout` lays out the *highlighted* text although token styles
+never change glyph advances, so a plain-text layout should produce identical
+line tops. Verify both with measurements and fold them into whichever
+geometry owner FU9 chooses.
 
 ### P7. Reduce line-ending normalization allocations — S (inherited probe)
 The latest report measures 28ms on 3M characters across `_foldToLf`'s two
@@ -1598,8 +1662,9 @@ Do not promise recovery of discarded text merely because its path is in
 history. Tab menus, Copy Path and reveal actions belong to FU5's app service.
 **Save All command** (2026-09-27): a File › Save All that iterates dirty
 tabs through the existing `_save` serialization and aggregates partial
-failures using the B15 aggregation shape is the cheap first piece; the
-quit-prompt Save All/Discard All flow is the bigger half and stays here.
+failures using the B15 aggregation shape was the cheap first piece (now
+in review as #92, below); the quit-prompt Save All/Discard All flow is
+the bigger half and stays here.
 
 Open [#18](https://github.com/L-K-M/Planchette/pull/18)
 (`planchette/reopen-tab`) implements the Reopen half with text snapshots
@@ -1615,10 +1680,18 @@ prompt with partial-success reporting.
 Don't Save / Cancel / Save All question instead of a queue of per-file
 dialogs, handled by an exhaustive switch, and one dirty document keeps its
 file-named prompt. A failing save aborts the quit and the error names the
-document. **Still open here:** a File › Save All command with aggregated
-partial failures (the B15 shape), and reporting which documents a bulk
-"Save All" actually wrote when only some succeeded — #83's behavior is
-all-or-nothing.
+document. **File › Save All in review as #92 (2026-09-28):** Cmd/Ctrl+Alt+S
+iterates the dirty tabs through the existing `_save` serialization and
+aggregates partial failures in the B15 shape — one "Saved X of Y. Could
+not save: …" message, declined destinations excluded, a mid-run modal
+stopping the loop with the never-reached tabs named, a vanished tab
+counted in the failure total, `_savingAll` guarding re-entrancy.
+Round 4's deferred polish: the failure branch should name the documents
+it skipped as well as the stop branch does — accepted in principle,
+recorded here rather than pushed (second consecutive minor-only round).
+**Still open here:** reporting which documents a bulk "Save All"
+actually wrote when only some succeeded in the quit flow — #83's
+behavior is all-or-nothing.
 
 ### A8. Remember window size, position and maximized state — S
 Store them in settings (A1). Restore them before `waitUntilReadyToShow`,
@@ -1670,6 +1743,14 @@ view (same document twice, or two documents side by side) needs the
 editor surface to tolerate two mounted views of one controller (B17/#54
 owns the lock part). Both stay out of scope until session restore (A2)
 and the geometry work (FU9) settle.
+
+### A15. Find in files — L
+Directory search over an Open Folder tree (A13): a results panel reusing
+core `findSearchMatches` per file — whole-word and regex options included —
+with bounded concurrency, a result cap, and each hit opening through the
+guarded load path. Keeps the programmer's-editor promise. Design after the
+shell rewrites and one geometry owner land, so the panel is built once;
+do not grow a second search engine beside E5.
 
 ## 7. Platform integration
 
@@ -1813,7 +1894,10 @@ raw IDs such as `shell`, `c-family` and `dotenv`. After their integration,
 turn the "·"-joined text into distinct, clickable segments
 (see E10), and show "Unsaved" as a dot. A colored dirty dot and
 hover-only close affordances are styling detail inside this item, not a
-second tab-strip design.
+second tab-strip design. An editor error currently hides the entire
+status bar; with V6's scoping in review, keep failures scoped so an
+error never removes unrelated readouts (position, language, encoding)
+(`editor_view.dart:208` at the reviewed baseline).
 
 ### V6. Error banner with actions — S
 #21 reports mapping missing/unresolvable-path errors in core so hosts benefit.
@@ -1824,6 +1908,13 @@ Baseline workspace errors persist after successful retries. Scope errors to
 operation/document and clear only the resolved failure. Test retry success,
 two documents failing independently and multi-open aggregation (B15); announce
 errors accessibly. Never hide an unrelated failure with a generic success.
+**Persistence and announcement halves in review as #93 (2026-09-28):**
+`_clearScope` notifies itself, `closeTab` retires its own tab's failure,
+and the banner carries `liveRegion: true`, with tests for the three
+scoping behaviors above that this row asks for (close retires, unrelated
+failure kept, fail → retry → gone). Still here: mapping the remaining
+errors to friendly actions; multi-open aggregation testing stays with
+B15/#55/#59.
 
 ### V6a. Active-search AA contrast consolidated in V3
 Keep the baseline 4.11:1 finding, extra inherited measurements and proposed
@@ -1865,6 +1956,9 @@ assigned behavior, then add recent files (A3), a drop hint only once A4 works,
 and optional Q2 artwork. New/Open shortcuts must still work with no tab.
 The inherited report caught premature "drop a file here" copy before drop
 support existed. Do not advertise actions the current build cannot perform.
+When the workspace empties while #18's closed-tab stack is non-empty, the
+state may offer its reopen ("Bring it back, Cmd/Ctrl+Shift+T") — only when
+the action can be honored.
 
 ### V12. Verify the new icon at small sizes — S
 Main at `d53f416` integrated the new master/native assets; Linux packaging
@@ -2059,6 +2153,10 @@ feedback must remain quiet and usable without animation or thematic copy.
   long idle period the status bar may show one-line writing aphorisms.
   Never in error contexts, never on by default, silenced while a dialog
   is open.
+- **Q32. Status-bar reading time.** For Markdown and other prose, a quiet
+  "≈ 4 min read" beside the word count — words divided by a fixed reading
+  rate, shown only when the segment fits. Tiny, quirky, useful for notes;
+  coordinate E10/FU13 so units and truncation stay unambiguous.
 
 ## 10. Process and documentation
 
@@ -2489,6 +2587,35 @@ inspected.
   two Devin hardening commits accepted; #66's first review attempt failed
   (reviewer outage) and was rerun. All six left open for owner review per
   instructions.
+- **2026-09-28 pass (#91/#92/#93):** review baseline `e7ec67f`, Flutter
+  3.47.2 / Dart 3.13.2 on Linux, analyze clean, core 84 / editor 19 /
+  app 38 + 2 case-insensitive skips; no GUI session. Each PR verified on
+  its own head with every CI check green (Linux/macOS/Windows): #91
+  `9ffdfb6` core 89 / editor 27 / app 63 + 2, #92 `002f5ec` app 68 + 2,
+  #93 `0c9a9f9` app 62 + 2. Rounds, in order of weight:
+  - **#91** round 1's findings applied at `b80493b`; round 2's major
+    finding on the failure path — a broken read must never destroy the
+    unsaved text it was reloading — applied at `9ffdfb6` (buffer kept,
+    editor error cleared, workspace banner reports); round 3 reported 0
+    actionable suggestions. Its Revert command overlaps the inherited
+    #26/#38 records; left open, coordinate per the §1 overlap row.
+  - **#92** four rounds: round 1 (re-entrancy guard, mid-run modal stop
+    with `interactionLocked`, and declarative macOS `PlatformMenuItem`
+    coverage — key events cannot reach `PlatformMenuBar` in a test) at
+    `009e969`; round 2's lock-break accounting (`attempted`/`skipped`
+    counters so a stopped run reports honestly) at `bf939b8`; round 3's
+    failure/stopped totals naming the documents they cover at `002f5ec`.
+    Round 4 raised two minors only: naming skipped documents in the
+    failure branch (accepted, deferred per stopping rules — recorded in
+    A7) and a `.where(isDirty)` filter (declined: the dirty prefix
+    invariant holds and a disposed editor would be re-serialized).
+    Second consecutive minor-only round, so minor nits stop here.
+  - **#93** round 1 applied at `0c9a9f9`: `_clearScope` must notify
+    itself or a cleared failure never repaints; `closeTab` must retire
+    its own tab's scope; the live-region banner keeps SnackBar parity
+    (dismiss button included in its semantics); three scoping regressions
+    added, one observed failing before the fix. Round 2 reported 0
+    actionable suggestions.
 
 ## 12. 2026-09-27 fresh pass: disposition map
 
