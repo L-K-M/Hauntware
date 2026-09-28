@@ -51,11 +51,6 @@ jobs:
           (cd packages/planchette_core && dart pub get)
           (cd packages/planchette_editor && flutter pub get)
           (cd app/planchette_app && flutter pub get)
-      - name: Format
-        run: >-
-          dart format --set-exit-if-changed
-          packages/planchette_core packages/planchette_editor
-          app/planchette_app
       - name: Shared editor
         working-directory: packages/planchette_editor
         run: |
@@ -68,6 +63,12 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
+      # After the tests, so a formatting slip never hides their results.
+      - name: Format
+        run: >-
+          dart format --set-exit-if-changed --output=none
+          packages/planchette_core packages/planchette_editor
+          app/planchette_app
 
   desktop:
     name: Desktop (${{ matrix.target }})
