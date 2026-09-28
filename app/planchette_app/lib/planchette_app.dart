@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace.dart';
+import 'theme/planchette_theme.dart';
 
 class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
@@ -32,15 +33,7 @@ class PlanchetteApp extends StatelessWidget {
     home: _DocumentShell(workspace: workspace, onQuit: onQuit),
   );
 
-  ThemeData _theme(Brightness brightness) => ThemeData(
-    brightness: brightness,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: const Color(0xff245b5c),
-      brightness: brightness,
-    ),
-    useMaterial3: true,
-    visualDensity: VisualDensity.compact,
-  );
+  ThemeData _theme(Brightness brightness) => planchetteTheme(brightness);
 }
 
 class _DocumentShell extends StatefulWidget {

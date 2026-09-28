@@ -60,6 +60,10 @@ whole level. The unit is learned from the document and exposed as
 `tabKeyBehavior: EditorTabKeyBehavior.moveFocus` where Tab must traverse focus
 instead. Tabs render at the indentation width rather than one space wide.
 
+`EditorSyntaxTheme` is a `ThemeExtension`: add one to a host's
+`ThemeData.extensions` to style every editor, and it animates with theme
+changes. An explicit `syntaxTheme` on a `PlanchetteEditor` still wins.
+
 `EditorStrings` adapts existing host localization resources. Token colors,
 monospace style, an external-change banner, and the status row can be supplied
 without introducing application dependencies into the package. The surface
