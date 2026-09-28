@@ -88,13 +88,15 @@ void main() {
           );
         }
       }
-      // Ordinary matches are translucent, so check them as composited.
+      // Ordinary matches are translucent, so check them as composited, and
+      // the text too in case a palette makes it translucent (from #81).
       for (final background in backgrounds.entries) {
+        final match = Color.alphaBlend(
+          syntax.matchBackground,
+          background.value,
+        );
         expect(
-          contrast(
-            syntax.matchForeground,
-            Color.alphaBlend(syntax.matchBackground, background.value),
-          ),
+          contrast(Color.alphaBlend(syntax.matchForeground, match), match),
           greaterThanOrEqualTo(4.5),
           reason: 'match text over ${background.key}',
         );

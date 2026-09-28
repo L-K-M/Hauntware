@@ -80,4 +80,28 @@ void main() {
       same(EditorSyntaxTheme.light),
     );
   });
+
+  // From #81: hosts on the built-in palettes get readable match highlights
+  // without an app theme of their own. The 4.5:1 floor is WCAG AA for the
+  // 14 px body text the editor draws.
+  for (final brightness in Brightness.values) {
+    test('the built-in ${brightness.name} palette keeps matches readable', () {
+      double contrast(Color a, Color b) {
+        final (x, y) = (a.computeLuminance(), b.computeLuminance());
+        return (x > y ? x + 0.05 : y + 0.05) / (x > y ? y + 0.05 : x + 0.05);
+      }
+
+      final syntax = EditorSyntaxTheme.of(brightness);
+      final surface = ThemeData(brightness: brightness).colorScheme.surface;
+      final match = Color.alphaBlend(syntax.matchBackground, surface);
+      expect(
+        contrast(syntax.activeMatchForeground, syntax.activeMatchBackground),
+        greaterThanOrEqualTo(4.5),
+      );
+      expect(
+        contrast(Color.alphaBlend(syntax.matchForeground, match), match),
+        greaterThanOrEqualTo(4.5),
+      );
+    });
+  }
 }
