@@ -614,7 +614,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                   for (final tab in tabs)
                     (
                       id: tab.id,
-                      name: tab.name,
+                      name: workspace.labelFor(tab),
                       tooltip: tab.path ?? tab.name,
                       dirty: tab.editor.isDirty,
                       closable: !tab.busy,

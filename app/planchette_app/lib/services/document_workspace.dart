@@ -796,6 +796,20 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
   }
 
+  /// The tab's name, with its folder while another open tab has the same
+  /// name, so two index.js tabs can be told apart. Ported from #43.
+  String labelFor(DocumentTab tab) {
+    final path = tab.path;
+    if (path == null ||
+        !_documents.any((other) => other != tab && other.name == tab.name)) {
+      return tab.name;
+    }
+    final folder = _paths.basename(_paths.dirname(path));
+    return folder.isEmpty || folder == '.'
+        ? tab.name
+        : _paths.join(folder, tab.name);
+  }
+
   String _pathKey(String path) => _paths.canonicalize(path);
 
   /// A failed native destruction must not leave the surviving window locked.

@@ -75,6 +75,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Colors.transparent` to turn it off.
 
 ### Changed
+- One tab strip replaces the header and toolbar: tabs, a + button, and
+  Open and Save at its trailing edge, with the menu bar and tabs starting
+  at the window's leading edge. Tabs take keyboard focus and speak to
+  screen readers, `Cmd/Ctrl+1` to `9` select them, a dirty tab shows a dot
+  that turns into its close button under the pointer, a middle click
+  closes a tab, and the active tab stays in view through resizing, text
+  scaling and renames. Two tabs for files with the same name show their
+  folders.
+- Untitled documents are named "Untitled", "Untitled 2" and so on, taking
+  the lowest number no open tab shows, and opening a file from an
+  untouched untitled tab replaces that tab.
 - Loading and saving a large file takes about half the time and a third of
   the peak memory.
 - Typing no longer rebuilds the whole window: the tabs, menus and window

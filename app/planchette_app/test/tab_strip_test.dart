@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -117,6 +119,40 @@ void main() {
     await mouse.moveTo(tester.getCenter(find.text('Untitled')));
     await tester.pumpAndSettle();
     expect(find.byKey(ValueKey('close-${tab.id}')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  // From #43.
+  testWidgets('two files with the same name are told apart', (tester) async {
+    final store = workspace.store as MemoryDocuments;
+    final sep = Platform.pathSeparator;
+    final a = 'a${sep}index.js';
+    final b = 'b${sep}index.js';
+    store.files[testPath(a)] = document(a, 'one');
+    store.files[testPath(b)] = document(b, 'two');
+    await workspace.open(testPath(a));
+    await workspace.open(testPath(b));
+    await mount(tester);
+
+    // Each label carries its folder while the names collide.
+    expect(find.text('a${sep}index.js'), findsOneWidget);
+    expect(find.text('b${sep}index.js'), findsOneWidget);
+
+    await workspace.closeTab(workspace.active!);
+    await tester.pumpAndSettle();
+    expect(find.text('index.js'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a tab keeps its width when it becomes dirty', (tester) async {
+    final tab = workspace.newDocument()!;
+    workspace.newDocument();
+    await mount(tester);
+    Size size() => tester.getSize(find.byKey(ValueKey('tab-${tab.id}')));
+    final before = size();
+    tab.editor.text.text = 'now it has content';
+    await tester.pumpAndSettle();
+    expect(size(), before);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
