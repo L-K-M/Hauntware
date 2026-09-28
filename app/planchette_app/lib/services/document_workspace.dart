@@ -285,10 +285,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   ///
   /// A partial failure is reported once, counting what was written and
   /// naming each document that was not, in the shape multi-open aggregation
-  /// uses. A destination the user declines is a decision, not a failure: it
-  /// is neither written nor named, and the result simply is not a success.
-  /// With a single dirty tab there is nothing to aggregate, so the individual
-  /// save's own message stands.
+  /// uses. Tabs the walk never reached are counted as not saved too, either
+  /// in that summary or on their own when nothing failed. A destination the
+  /// user declines is a decision, not a failure: it is neither written nor
+  /// named, and the result simply is not a success. With a single dirty tab
+  /// there is nothing to aggregate, so the individual save's own message
+  /// stands.
   Future<bool> saveAll() async {
     if (interactionLocked || _savingAll) return false;
     _savingAll = true;
@@ -299,9 +301,11 @@ final class DocumentWorkspace extends ChangeNotifier {
       ];
       var saved = 0;
       var vanished = 0;
+      var attempted = 0;
       final failures = <String>[];
       for (final tab in dirty) {
         if (interactionLocked) break;
+        attempted++;
         if (!_documents.contains(tab)) {
           vanished++;
           continue;
@@ -314,10 +318,18 @@ final class DocumentWorkspace extends ChangeNotifier {
           failures.add(tab.name);
         }
       }
+      // Tabs after a mid-run stop were never touched: count them as not
+      // saved instead of shrinking the totals around them.
+      final skipped = dirty.length - attempted;
       if (failures.isNotEmpty && dirty.length > 1) {
         _error =
-            'Saved $saved of ${saved + failures.length}. '
+            'Saved $saved of ${saved + failures.length + skipped}. '
             'Could not save: ${failures.join(', ')}.';
+        _notify();
+      } else if (skipped > 0 && dirty.length > 1) {
+        _error =
+            'Save All stopped with $skipped document'
+            '${skipped == 1 ? '' : 's'} not saved.';
         _notify();
       }
       return failures.isEmpty && saved + vanished == dirty.length;
