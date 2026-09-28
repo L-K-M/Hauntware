@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:uuid/uuid.dart';
@@ -94,13 +95,16 @@ Future<TextDocument> loadTextDocument(
   }
   final digestOf = sha256Of ?? textDocumentSha256;
   final before = await digestOf(file);
-  final bytes = <int>[];
+  // A growable List<int> stores each byte as a full integer; a byte buffer
+  // is several times faster to fill, hash and decode.
+  final builder = BytesBuilder(copy: false);
   await for (final chunk in file.openRead()) {
-    if (bytes.length + chunk.length > maximumBytes) {
+    if (builder.length + chunk.length > maximumBytes) {
       throw TextDocumentException(_tooLargeMessage(maximumBytes));
     }
-    bytes.addAll(chunk);
+    builder.add(chunk);
   }
+  final bytes = builder.takeBytes();
   final after = await digestOf(file);
   await _requireRegularFile(file);
   if (before != after || crypto.sha256.convert(bytes).toString() != after) {
@@ -129,8 +133,15 @@ Future<TextDocument> loadTextDocument(
       'This file appears to be binary, not editable text.',
     );
   }
-  final crlfCount = RegExp(r'\r\n').allMatches(raw).length;
-  final lfCount = RegExp(r'(?<!\r)\n').allMatches(raw).length;
+  var crlfCount = 0;
+  var lfCount = 0;
+  for (var i = raw.indexOf('\n'); i >= 0; i = raw.indexOf('\n', i + 1)) {
+    if (i > 0 && raw.codeUnitAt(i - 1) == 0x0d) {
+      crlfCount++;
+    } else {
+      lfCount++;
+    }
+  }
   return TextDocument(
     file: file,
     text: normalization == TextNormalization.preserve ? raw : _foldToLf(raw),
@@ -213,7 +224,12 @@ Future<String> _writeTextDocument(
   final normalized = normalization == TextNormalization.preserve
       ? text
       : _normalizeLineEndings(text, lineEnding);
-  final bytes = <int>[if (hasUtf8Bom) ..._utf8Bom, ...utf8.encode(normalized)];
+  final encoded = utf8.encode(normalized);
+  final bytes = hasUtf8Bom
+      ? (Uint8List(_utf8Bom.length + encoded.length)
+          ..setAll(0, _utf8Bom)
+          ..setAll(_utf8Bom.length, encoded))
+      : encoded;
   if (bytes.length > maximumBytes) {
     throw TextDocumentException(
       'The edited file exceeds the '
