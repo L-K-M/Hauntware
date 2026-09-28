@@ -2736,7 +2736,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// One item through the trash layer — the outcome's `resolvedPath` is
   /// the trash path (remote) or the OS-reported trashed location (Put
   /// Back anchor — best-effort, often null); for the permanent path it
-  /// is the source path itself.
+  /// is the source path itself. Null means revalidation settled the item
+  /// without mutation, so the caller must not finish it again.
   Future<({String resolvedPath, ItemDisposition disposition})?> _executeDelete(
     _TaskRuntime runtime,
     RemoteFileSystem fs,

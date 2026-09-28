@@ -15,8 +15,9 @@ trash moves may still resume. Cancellation during revalidation is inert.
 
 The regression first reproduced deletion of changed paths and resumption of an
 incomplete permanent scan. It now covers size, modification-time, type, and
-missing-path changes plus an unchanged control. Core analysis is clean; all
-1,706 core tests pass with 27 environment skips. Import boundaries are clean.
+missing-path changes plus an unchanged control. The journal codec preserves UTC
+microsecond timestamps exactly. Core analysis is clean; all 1,707 core tests
+pass with 27 environment skips. Import boundaries are clean.
 
 ## Destination collision ownership (2026-09-28)
 
