@@ -102,8 +102,10 @@ class FakeDialogs implements DocumentDialogs {
   bool replace = true;
   final choices = <CloseChoice>[];
   final asked = <String>[];
-  final bulkCounts = <int>[];
+  final bulkAsked = <List<String>>[];
   BulkCloseChoice bulkChoice = BulkCloseChoice.saveAll;
+  Completer<BulkCloseChoice>? bulkGate;
+  final savePrompts = <String>[];
   Completer<CloseChoice>? choiceGate;
   Future<void> Function()? beforeReplace;
   final readOnlyChoices = <ReadOnlyChoice>[];
@@ -113,7 +115,11 @@ class FakeDialogs implements DocumentDialogs {
   @override
   Future<List<String>> pickOpenFiles() async => openGate?.future ?? openPaths;
   @override
-  Future<String?> pickSavePath(String suggestedName) async => savePath;
+  Future<String?> pickSavePath(String suggestedName) async {
+    savePrompts.add(suggestedName);
+    return savePath;
+  }
+
   @override
   Future<bool> confirmReplace(String path) async {
     await beforeReplace?.call();
@@ -121,9 +127,9 @@ class FakeDialogs implements DocumentDialogs {
   }
 
   @override
-  Future<BulkCloseChoice> chooseBulkClose(int count) async {
-    bulkCounts.add(count);
-    return bulkChoice;
+  Future<BulkCloseChoice> chooseBulkClose(List<String> names) async {
+    bulkAsked.add(names);
+    return bulkGate?.future ?? bulkChoice;
   }
 
   @override
@@ -717,7 +723,9 @@ void main() {
       expect(identical(one, two), isTrue);
       expect(await one, isFalse);
       expect(await two, isFalse);
-      expect(dialogs.bulkCounts, [2]);
+      expect(dialogs.bulkAsked, [
+        [first.name, second.name],
+      ]);
       expect(workspace.documents, [first, second]);
       expect(workspace.interactionLocked, isFalse);
     },
@@ -780,7 +788,7 @@ void main() {
     final tab = workspace.newDocument()!..editor.text.text = 'only one';
     dialogs.choices.add(CloseChoice.discard);
     expect(await workspace.confirmQuit(), isTrue);
-    expect(dialogs.bulkCounts, isEmpty);
+    expect(dialogs.bulkAsked, isEmpty);
     expect(dialogs.asked, [tab.name]);
   });
 
@@ -789,7 +797,7 @@ void main() {
     final scratch = workspace.newDocument()!..editor.text.text = 'scratch';
     dialogs.choices.add(CloseChoice.discard);
     expect(await workspace.confirmQuit(), isTrue);
-    expect(dialogs.bulkCounts, isEmpty);
+    expect(dialogs.bulkAsked, isEmpty);
     expect(dialogs.asked, [scratch.name]);
   });
 
@@ -1538,5 +1546,76 @@ void main() {
     dialogs.openGate!.complete(const []);
     await opening;
     expect(workspace.error, isNull);
+  });
+
+  test('quit Discard All refuses when a document changed under it', () async {
+    final first = workspace.newDocument()!..editor.text.text = 'first';
+    final second = workspace.newDocument()!..editor.text.text = 'second';
+    final clean = workspace.newDocument()!;
+    dialogs.bulkGate = Completer<BulkCloseChoice>();
+    final quit = workspace.confirmQuit();
+    await pumpEventQueue();
+    // The answer covers the text the question was asked about; a buffer that
+    // moved on meanwhile has edits nobody agreed to drop.
+    clean.editor.text.text = 'typed while asked';
+    dialogs.bulkGate!.complete(BulkCloseChoice.discardAll);
+
+    expect(await quit, isFalse);
+    expect(workspace.documents, [first, second, clean]);
+    expect(workspace.error, contains('changed while'));
+  });
+
+  test('quit Save All also saves edits made while it was asked', () async {
+    for (final name in ['one.txt', 'two.txt', 'three.txt']) {
+      store.files[testPath(name)] = document(name, name);
+      await workspace.open(testPath(name));
+    }
+    final [one, two, three] = workspace.documents;
+    one.editor.text.text = 'edited one';
+    two.editor.text.text = 'edited two';
+    dialogs.bulkGate = Completer<BulkCloseChoice>();
+    final quit = workspace.confirmQuit();
+    await pumpEventQueue();
+    expect(dialogs.bulkAsked, [
+      ['one.txt', 'two.txt'],
+    ]);
+    three.editor.text.text = 'typed while asked';
+    dialogs.bulkGate!.complete(BulkCloseChoice.saveAll);
+
+    expect(await quit, isTrue);
+    expect(store.files[testPath('one.txt')]!.text, 'edited one');
+    expect(store.files[testPath('three.txt')]!.text, 'typed while asked');
+  });
+
+  test('a failed quit Save All says what was saved and stays open', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'one');
+    store.files[testPath('two.txt')] = document('two.txt', 'two');
+    await workspace.open(testPath('one.txt'));
+    final one = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final two = workspace.active!..editor.text.text = 'edited two';
+    store.writeFailures[two.path!] = const FileSystemException('Disk full');
+    dialogs.bulkChoice = BulkCloseChoice.saveAll;
+
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(store.files[testPath('one.txt')]!.text, 'edited one');
+    expect(workspace.error, contains('Saved 1 of 2'));
+    expect(workspace.error, contains('Disk full'));
+    expect(workspace.documents, [one, two]);
+    expect(workspace.interactionLocked, isFalse);
+  });
+
+  test('declining a destination in quit Save All cancels quietly', () async {
+    workspace.newDocument()!.editor.text.text = 'first';
+    workspace.newDocument()!.editor.text.text = 'second';
+    dialogs.bulkChoice = BulkCloseChoice.saveAll;
+    dialogs.savePath = null;
+
+    expect(await workspace.confirmQuit(), isFalse);
+    // Cancelling the first destination cancels the quit; nobody is asked for
+    // the second, and a choice the user made is not an error.
+    expect(dialogs.savePrompts, hasLength(1));
+    expect(workspace.error, isNull);
+    expect(workspace.interactionLocked, isFalse);
   });
 }

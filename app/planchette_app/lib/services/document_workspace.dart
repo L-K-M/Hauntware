@@ -14,6 +14,20 @@ enum ReadOnlyChoice { saveAs, saveAnyway, cancel }
 /// The answer to the one-question close of several dirty documents at once.
 enum BulkCloseChoice { saveAll, discardAll, cancel }
 
+/// Who is walking the dirty tabs, which decides what the walk may assume.
+enum _SaveRun {
+  /// File › Save All: an ordinary save per tab, stopped by any modal.
+  saveAll(EditorSaveAccess.normal),
+
+  /// The quit question's Save All: it holds the interaction lock itself, so
+  /// each save carries the close's consent, and a declined destination
+  /// cancels the quit rather than skipping one document.
+  quit(EditorSaveAccess.confirmedClose);
+
+  const _SaveRun(this.access);
+  final EditorSaveAccess access;
+}
+
 abstract interface class DocumentDialogs {
   Future<List<String>> pickOpenFiles();
   Future<String?> pickSavePath(String suggestedName);
@@ -22,8 +36,9 @@ abstract interface class DocumentDialogs {
   Future<ReadOnlyChoice> chooseReadOnlySave(String name);
 
   /// One question for every unsaved document, offered only when more than one
-  /// is dirty. [count] is how many documents it covers.
-  Future<BulkCloseChoice> chooseBulkClose(int count);
+  /// is dirty. [names] lists them, so the answer is about files the user can
+  /// see rather than a count.
+  Future<BulkCloseChoice> chooseBulkClose(List<String> names);
 }
 
 /// One controller survives tab switches, retaining undo, selection, find and
@@ -456,51 +471,64 @@ final class DocumentWorkspace extends ChangeNotifier {
         for (final tab in _documents)
           if (tab.editor.isDirty) tab,
       ];
-      var saved = 0;
-      var vanished = 0;
-      var attempted = 0;
-      final failures = <String>[];
-      for (final tab in dirty) {
-        if (interactionLocked) break;
-        attempted++;
-        if (!_documents.contains(tab)) {
-          vanished++;
-          continue;
-        }
-        if (await _save(tab)) {
-          saved++;
-        } else if (!_documents.contains(tab)) {
-          // Closed while this request waited behind the tab's own in-flight
-          // save, typically a close that saved it first.
-          vanished++;
-        } else if (_saveFailures[tab] case final detail?) {
-          failures.add('${tab.name} (${_withoutFinalStop(detail)})');
-        } else if (tab.path != null) {
-          failures.add(tab.name);
-        }
-      }
-      // Every dirty tab belongs in the total: saved, failed, vanished or
-      // never reached. A declined destination is attempted, so it stays out
-      // of the parts and only shares the denominator like any not-saved tab.
-      final skipped = dirty.length - attempted;
-      // Unscoped: a summary names several documents, so no single one of
-      // them saving later makes it untrue.
-      if (failures.isNotEmpty && dirty.length > 1) {
-        _reportError(
-          'Saved $saved of ${dirty.length}. '
-          'Could not save: ${failures.join(', ')}.',
-        );
-      } else if (skipped > 0 && dirty.length > 1) {
-        final notSaved = dirty.sublist(attempted).map((tab) => tab.name);
-        _reportError(
-          'Save All stopped with $skipped document'
-          '${skipped == 1 ? '' : 's'} not saved: ${notSaved.join(', ')}.',
-        );
-      }
-      return failures.isEmpty && saved + vanished == dirty.length;
+      return await _saveEach(dirty, _SaveRun.saveAll);
     } finally {
       _savingAll = false;
     }
+  }
+
+  /// The walk behind [saveAll] and the quit question's Save All: one save at a
+  /// time through [_save], and one report for the whole run. [run] decides
+  /// what the walk may assume; see [_SaveRun].
+  Future<bool> _saveEach(List<DocumentTab> dirty, _SaveRun run) async {
+    var saved = 0;
+    var vanished = 0;
+    var attempted = 0;
+    final failures = <String>[];
+    for (final tab in dirty) {
+      // The quit holds the interaction lock for its whole decision; any
+      // other run stops when a modal takes it.
+      if (run == _SaveRun.saveAll && interactionLocked) break;
+      attempted++;
+      if (!_documents.contains(tab)) {
+        vanished++;
+        continue;
+      }
+      if (await _save(tab, access: run.access)) {
+        saved++;
+      } else if (!_documents.contains(tab)) {
+        // Closed while this request waited behind the tab's own in-flight
+        // save, typically a close that saved it first.
+        vanished++;
+      } else if (_saveFailures[tab] case final detail?) {
+        failures.add('${tab.name} (${_withoutFinalStop(detail)})');
+      } else if (tab.path != null) {
+        failures.add(tab.name);
+      } else if (run == _SaveRun.quit) {
+        // A declined destination under the quit question means "not now":
+        // stop asking and keep the window, without calling it a failure.
+        return false;
+      }
+    }
+    // Every dirty tab belongs in the total: saved, failed, vanished or
+    // never reached. A declined destination is attempted, so it stays out
+    // of the parts and only shares the denominator like any not-saved tab.
+    final skipped = dirty.length - attempted;
+    // Unscoped: a summary names several documents, so no single one of
+    // them saving later makes it untrue.
+    if (failures.isNotEmpty && dirty.length > 1) {
+      _reportError(
+        'Saved $saved of ${dirty.length}. '
+        'Could not save: ${failures.join(', ')}.',
+      );
+    } else if (skipped > 0 && dirty.length > 1) {
+      final notSaved = dirty.sublist(attempted).map((tab) => tab.name);
+      _reportError(
+        'Save All stopped with $skipped document'
+        '${skipped == 1 ? '' : 's'} not saved: ${notSaved.join(', ')}.',
+      );
+    }
+    return failures.isEmpty && saved + vanished == dirty.length;
   }
 
   Future<bool> closeTab(DocumentTab tab) async {
@@ -627,22 +655,36 @@ final class DocumentWorkspace extends ChangeNotifier {
       // prompts. A single dirty document keeps its own question, which names
       // the file and can be answered per file.
       if (unsaved.length > 1) {
+        // The answer covers the text the question was asked about, as
+        // _confirmTab's does for one document.
+        final reviewed = {
+          for (final tab in _documents) tab: tab.editor.text.text,
+        };
         final choice = await _dialog(
-          () => dialogs.chooseBulkClose(unsaved.length),
+          () => dialogs.chooseBulkClose([for (final tab in unsaved) tab.name]),
         );
         switch (choice) {
           case BulkCloseChoice.cancel:
             return false;
           case BulkCloseChoice.saveAll:
-            for (final tab in unsaved) {
-              final saved = await _save(
-                tab,
-                access: EditorSaveAccess.confirmedClose,
-              );
-              if (!saved || tab.editor.isDirty) return false;
-            }
+            // Whatever is dirty now, including edits made while the question
+            // was open: saving them is what the answer asked for.
+            final dirty = [
+              for (final tab in _documents)
+                if (tab.editor.isDirty) tab,
+            ];
+            if (!await _saveEach(dirty, _SaveRun.quit)) return false;
           case BulkCloseChoice.discardAll:
-            break;
+            final changed = _documents.where(
+              (tab) => reviewed[tab] != tab.editor.text.text,
+            );
+            if (changed.isNotEmpty) {
+              _reportError(
+                '${changed.first.name} changed while the prompt was open, so '
+                'nothing was discarded. Review it, then quit again.',
+              );
+              return false;
+            }
         }
       } else {
         for (final tab in List.of(_documents)) {

@@ -53,19 +53,19 @@ final class AppDocumentDialogs implements DocumentDialogs {
   }
 
   @override
-  Future<BulkCloseChoice> chooseBulkClose(int count) async {
+  Future<BulkCloseChoice> chooseBulkClose(List<String> names) async {
     // The workspace offers this question only when more than one document is
     // unsaved; a single one gets the prompt that names its file.
-    assert(count > 1, 'the bulk close question covers several documents');
+    assert(names.length > 1, 'the bulk close question covers several files');
     final context = navigatorKey.currentContext;
     if (context == null) return BulkCloseChoice.cancel;
     return await showDialog<BulkCloseChoice>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text('Save changes to $count documents?'),
-            content: const Text(
-              'Your changes will be lost if you close without saving any of '
-              'them.',
+            title: Text('Save changes to ${names.length} documents?'),
+            content: Text(
+              '${_listed(names)}\n\n'
+              'Your changes will be lost if you close without saving them.',
             ),
             actions: [
               TextButton(
@@ -152,4 +152,12 @@ final class AppDocumentDialogs implements DocumentDialogs {
         ) ??
         ReadOnlyChoice.cancel;
   }
+}
+
+/// A short list of file names for a prompt: a long selection still fits.
+String _listed(List<String> names) {
+  const shown = 8;
+  if (names.length <= shown) return names.join('\n');
+  return '${names.take(shown).join('\n')}\n'
+      'and ${names.length - shown} more';
 }
