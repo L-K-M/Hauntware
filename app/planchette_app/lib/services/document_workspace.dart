@@ -163,18 +163,14 @@ final class DocumentWorkspace extends ChangeNotifier {
       initialText: initialText,
       // Read the path at call time: Save As retargets the tab, and a reload
       // must follow the new location rather than the one it was opened with.
-      loadDocument: () async {
-        final target = tab.path;
-        if (target == null) {
-          // Unreachable via DocumentWorkspace.revert (guarded by
-          // tab.path == null); keep the throw as a tripwire for other callers.
-          throw StateError('${tab.name} has no saved location yet.');
-        }
-        final document = await store.load(target);
-        tab.baseline = document;
-        tab.path = document.file.path;
-        return document;
-      },
+      loadDocument: path == null
+          ? null
+          : () async {
+              final document = await store.load(tab.path!);
+              tab.baseline = document;
+              tab.path = document.file.path;
+              return document;
+            },
       saveDocument: (text, _) async {
         final target = _saveTargets[tab];
         if (target == null) {
@@ -743,22 +739,24 @@ final class DocumentWorkspace extends ChangeNotifier {
     tab.busy = true;
     _notify();
     try {
-      // Ignore any error a previous operation left behind so the check
-      // below reflects this revert only.
-      tab.editor.clearError();
-      await tab.editor.reload();
-      final error = tab.editor.error;
-      if (error == null) return true;
-      tab.editor.clearError();
-      _error = 'Could not revert ${tab.name}: $error';
-      return false;
-    } catch (err) {
-      // _revert() runs unawaited; surface unexpected failures through the
-      // workspace banner instead of leaking an unhandled async error.
-      // Also drop any error the failed reload left behind: the view renders
-      // it instead of the document, and this path promises the buffer stays.
-      tab.editor.clearError();
-      _error = 'Could not revert ${tab.name}: $err';
+      // Read here rather than through the editor's loader: the document
+      // stays on screen while the file is read, and a failed read never
+      // reaches the editor, so the buffer survives it untouched. The read
+      // follows the tab's current path, which Save As may have changed.
+      final document = await store.load(tab.path!);
+      if (_disposed || !_documents.contains(tab)) return false;
+      tab.baseline = document;
+      tab.path = document.file.path;
+      // An install: the view starts a fresh undo history, so the reverted
+      // edits cannot be undone back into a buffer whose baseline has moved.
+      tab.editor.adoptDocument(document, replaceText: true);
+      tab.editor.displayPath = document.file.path;
+      _clearScope(tab);
+      return true;
+    } catch (error) {
+      // revert() runs unawaited from the menu; report instead of leaking an
+      // unhandled async error.
+      _reportError('Could not revert ${tab.name}: $error', scope: tab);
       return false;
     } finally {
       tab.busy = false;

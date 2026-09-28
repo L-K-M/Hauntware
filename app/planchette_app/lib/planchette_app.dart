@@ -346,12 +346,11 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled:
               unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
         ),
+        // No shortcut: no platform convention names one, Cmd+R and Ctrl+R
+        // mean other things elsewhere, and a revert cannot be undone.
         _Command(
           'Revert to Saved',
           _revert,
-          // Cmd/Ctrl+R is reserved for Revert to Saved; do not reuse keyR
-          // elsewhere (e.g. a future Replace accelerator).
-          shortcut: _shortcut(LogicalKeyboardKey.keyR),
           enabled: ready && active?.path != null,
         ),
         const _Separator(),

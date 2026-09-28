@@ -7,8 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- Revert to Saved (Cmd/Ctrl+R) with confirmation for dirty buffers; a failed
-  reload keeps the buffer and reports through the workspace error banner.
+- File › Revert to Saved reads the file again, asking first when there
+  are unsaved changes (Cancel is the default). It keeps the document on
+  screen while it reads, keeps the edits if the read fails, and cannot be
+  undone: Undo stops at the reverted text.
 - Standalone desktop editor for macOS, Linux and Windows, with document tabs,
   New/Open/Save/Save As, native menus, file-open events and guarded close/quit.
 - Shared pure-Dart `planchette_core` and Flutter `planchette_editor` packages
