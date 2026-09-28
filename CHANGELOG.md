@@ -42,6 +42,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Line commands in the Edit menu: Duplicate Line (`Cmd/Ctrl+Shift+D`),
   Move Line Up/Down (`Option/Alt+↑/↓`), Delete Line (`Cmd/Ctrl+Shift+K`)
   and Join Lines (`Cmd/Ctrl+J`). They keep a CRLF line's break intact.
+- Edit › Toggle Comment (`Cmd/Ctrl+/`) comments or uncomments the touched
+  lines with the language's line-comment marker, keeping indentation; it is
+  offered only for languages that have one.
+- Find › Go to Matching Bracket (`Cmd/Ctrl+B`, with Shift to select) jumps
+  to the partner of the bracket beside the caret, skipping brackets in
+  strings and comments.
 - A faint band marks the caret's line. It is on by default in the shared
   editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
   `Colors.transparent` to turn it off.

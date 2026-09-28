@@ -217,10 +217,10 @@ void main() {
     );
     addTearDown(editor.dispose);
     editor.text.selection = const TextSelection.collapsed(offset: 2);
-    editor.text.toggleComment();
+    editor.toggleComment();
     expect(editor.text.text, '# a = 1\nb = 2\n');
     expect(editor.text.selection.extentOffset, 4);
-    editor.text.toggleComment();
+    editor.toggleComment();
     expect(editor.text.text, 'a = 1\nb = 2\n');
     expect(editor.text.selection.extentOffset, 2);
   });
@@ -234,7 +234,7 @@ void main() {
       baseOffset: 0,
       extentOffset: 31,
     );
-    editor.text.toggleComment();
+    editor.toggleComment();
     expect(editor.text.text, '// void f() {\n  // int a;\n\n  // int b;\n// }');
   });
   test('toggle comment skips whitespace-only lines like blank ones', () {
@@ -247,7 +247,7 @@ void main() {
       baseOffset: 0,
       extentOffset: 11,
     );
-    editor.text.toggleComment();
+    editor.toggleComment();
     expect(editor.text.text, '# one\n   \n# two');
   });
   test('toggle comment keeps a backward selection pointing at its anchor', () {
@@ -257,7 +257,7 @@ void main() {
     );
     addTearDown(editor.dispose);
     editor.text.selection = const TextSelection(baseOffset: 7, extentOffset: 0);
-    editor.text.toggleComment();
+    editor.toggleComment();
     expect(editor.text.text, '# one\n# two');
     expect(
       editor.text.selection,
@@ -274,7 +274,7 @@ void main() {
       baseOffset: 0,
       extentOffset: 21,
     );
-    editor.text.toggleComment();
+    editor.toggleComment();
     expect(editor.text.text, 'one\n  two\nthree\n');
   });
   test('toggle comment is a no-op without a line comment marker', () {
@@ -284,7 +284,7 @@ void main() {
     );
     addTearDown(editor.dispose);
     editor.text.selection = const TextSelection.collapsed(offset: 1);
-    editor.text.toggleComment();
+    editor.toggleComment();
     expect(editor.text.text, '{"a": 1}');
   });
   test('statistics count UTF-8 and trailing empty lines', () {

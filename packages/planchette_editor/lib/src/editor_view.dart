@@ -164,13 +164,6 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         ?.bringIntoView(selection.extent);
   }
 
-  /// Only the document field comments code; in the find bar the chord must
-  /// not silently edit the buffer behind it.
-  void _toggleComment() {
-    if (_locked || !c.editorFocus.hasFocus) return;
-    c.text.toggleComment();
-  }
-
   void _revealMatch() {
     if (!c.scroll.hasClients) return;
     if (c.activeMatch < 0 || c.activeMatch >= c.matches.length) return;
@@ -234,10 +227,6 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             c.previousMatch,
-        const SingleActivator(LogicalKeyboardKey.slash, meta: true):
-            _toggleComment,
-        const SingleActivator(LogicalKeyboardKey.slash, control: true):
-            _toggleComment,
         if (c.searchOpen)
           const SingleActivator(LogicalKeyboardKey.escape): c.closeSearch,
       },
@@ -639,6 +628,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       primary(LogicalKeyboardKey.keyJ): const _LineCommandIntent(
         _LineCommand.join,
       ),
+      primary(LogicalKeyboardKey.slash): const _LineCommandIntent(
+        _LineCommand.toggleComment,
+      ),
     };
   }
 
@@ -1006,7 +998,7 @@ final class _LineGeometry {
       editable.getLocalRectForCaret(TextPosition(offset: offset)).top - _bias;
 }
 
-enum _LineCommand { duplicate, moveUp, moveDown, delete, join }
+enum _LineCommand { duplicate, moveUp, moveDown, delete, join, toggleComment }
 
 class _LineCommandIntent extends Intent {
   const _LineCommandIntent(this.command);
@@ -1024,7 +1016,10 @@ class _LineCommandAction extends Action<_LineCommandIntent> {
   final EditorController Function() _controller;
 
   @override
-  bool isEnabled(_LineCommandIntent intent) => _controller().canEditText;
+  bool isEnabled(_LineCommandIntent intent) =>
+      intent.command == _LineCommand.toggleComment
+      ? _controller().canToggleComment
+      : _controller().canEditText;
 
   @override
   bool invoke(_LineCommandIntent intent) {
@@ -1035,6 +1030,7 @@ class _LineCommandAction extends Action<_LineCommandIntent> {
       _LineCommand.moveDown => controller.moveLines(LineDirection.down),
       _LineCommand.delete => controller.deleteLines(),
       _LineCommand.join => controller.joinLines(),
+      _LineCommand.toggleComment => controller.toggleComment(),
     };
   }
 }

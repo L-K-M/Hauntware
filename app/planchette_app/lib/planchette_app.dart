@@ -313,9 +313,9 @@ class _DocumentShellState extends State<_DocumentShell> {
         const _Separator(),
         _Command(
           'Toggle Comment',
-          () => active?.editor.text.toggleComment(),
+          () => active?.editor.toggleComment(),
           shortcut: _shortcut(LogicalKeyboardKey.slash),
-          enabled: ready,
+          enabled: ready && (active?.editor.canToggleComment ?? false),
         ),
       ]),
       _ShellMenu('Find', [

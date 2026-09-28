@@ -333,6 +333,22 @@ class EditorController extends ChangeNotifier {
   /// Joins the selected lines, or the caret's line with the next one.
   bool joinLines() => _applyLineEdit(core.joinLines);
 
+  /// Whether [toggleComment] can act: the buffer is editable and its
+  /// language has a line-comment marker. Plain text, Markdown, JSON, XML and
+  /// CSS have none.
+  bool get canToggleComment =>
+      canEditText && (text.language?.lineComments.isNotEmpty ?? false);
+
+  /// Comments the touched lines with the language's line-comment marker, or
+  /// uncomments them when all already carry one. See [toggleLineComments].
+  bool toggleComment() {
+    final markers = text.language?.lineComments;
+    if (markers == null) return false;
+    return _applyLineEdit(
+      (text, base, extent) => toggleLineComments(text, base, extent, markers),
+    );
+  }
+
   bool _applyLineEdit(
     LineEdit? Function(String text, int base, int extent) command,
   ) {
