@@ -237,6 +237,18 @@ void main() {
       );
     });
 
+    test('yaml: meta token offsets skip every dash prefix', () {
+      // Regression: a key inside a nested list must start at the key
+      // itself, not at either of the leading '-' list markers.
+      const text = '- - name: x\n';
+      final tokens = tokenizeSyntax(text, SyntaxLanguages.yaml);
+      final meta = _ofType(tokens, SyntaxTokenType.meta);
+      expect(meta, hasLength(1));
+      expect(meta.single.start, text.indexOf('name'));
+      expect(meta.single.end, text.indexOf('name') + 'name'.length);
+      expect(text.substring(meta.single.start, meta.single.end), 'name');
+    });
+
     test('ini: sections, comments, booleans', () {
       const text = '[core]\n; note\nenabled = TRUE\n';
       final tokens = tokenizeSyntax(text, SyntaxLanguages.ini);
