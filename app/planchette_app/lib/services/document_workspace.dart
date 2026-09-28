@@ -201,16 +201,43 @@ final class DocumentWorkspace extends ChangeNotifier {
     return _save(tab, saveAs: saveAs);
   }
 
+  /// Saves for one tab run in request order. Deduplicating instead would hand
+  /// a Save As issued mid-save the in-flight future: the chosen destination is
+  /// dropped and the old path reports success.
   Future<bool> _save(
     DocumentTab tab, {
     bool saveAs = false,
     EditorSaveAccess access = EditorSaveAccess.normal,
-  }) => _saves.putIfAbsent(
-    tab,
-    () => _saveOnce(tab, saveAs: saveAs, access: access).whenComplete(() {
-      _saves.remove(tab);
-    }),
-  );
+  }) => _saveAfter(tab, _saves[tab], saveAs: saveAs, access: access);
+
+  Future<bool> _saveAfter(
+    DocumentTab tab,
+    Future<bool>? inFlight, {
+    required bool saveAs,
+    required EditorSaveAccess access,
+  }) async {
+    // Several callers can queue behind the same in-flight save, so re-read the
+    // slot after every wait instead of trusting the future captured on entry.
+    // Whoever claims the slot next becomes the new predecessor.
+    while (inFlight != null) {
+      await inFlight;
+
+      // The wait above is an await point, so the tab may be gone by now. The
+      // close and quit decisions call _save directly while they hold the
+      // interaction lock, so only tab membership is re-checked here.
+      if (!_documents.contains(tab)) return false;
+      inFlight = _saves[tab];
+    }
+
+    final save = _saveOnce(tab, saveAs: saveAs, access: access);
+    _saves[tab] = save;
+    try {
+      return await save;
+    } finally {
+      // Only the newest save owns the slot; an older chain must not clear it.
+      if (identical(_saves[tab], save)) _saves.remove(tab);
+    }
+  }
 
   Future<bool> _saveOnce(
     DocumentTab tab, {
