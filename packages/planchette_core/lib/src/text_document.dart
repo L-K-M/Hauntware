@@ -83,9 +83,9 @@ Future<File> resolveTextDocumentTarget(
 /// POSIX, or the read-only attribute on Windows, which Dart reports the same
 /// way. A save replaces the document through a sibling and restores its
 /// mode (on Windows, the attribute), so the file's own permission never
-/// stops a save; hosts ask this to
-/// warn before replacing a file someone deliberately protected. Ownership is
-/// not considered: a file only its owner may write reads as unprotected.
+/// stops a save; hosts ask this to warn before replacing a file someone
+/// deliberately protected. Ownership is not considered: a file only its
+/// owner may write reads as unprotected.
 Future<bool> isTextDocumentWriteProtected(File file) async {
   final stat = await file.stat();
   return stat.type == FileSystemEntityType.file &&

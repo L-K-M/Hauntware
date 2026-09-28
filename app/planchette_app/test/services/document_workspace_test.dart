@@ -231,6 +231,19 @@ void main() {
       expect(store.files[testPath('locked.txt')]!.text, 'edited again');
     });
 
+    test('a Save Anyway whose write fails asks again next time', () async {
+      dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAnyway);
+      store.writeError = const FileSystemException('Disk full');
+      expect(await workspace.save(tab), isFalse);
+
+      // The consent covered one write that never happened; the next save is
+      // a fresh decision about a file that is still protected.
+      store.writeError = null;
+      expect(await workspace.save(tab), isFalse);
+      expect(dialogs.readOnlyAsked, ['locked.txt', 'locked.txt']);
+      expect(store.files[testPath('locked.txt')]!.text, 'disk');
+    });
+
     test('Save As writes a new file and keeps the original', () async {
       dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAs);
       dialogs.savePath = testPath('copy.txt');

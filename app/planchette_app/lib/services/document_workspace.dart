@@ -230,6 +230,9 @@ final class DocumentWorkspace extends ChangeNotifier {
       String target;
       String? digest;
       var chooseTarget = saveAs || tab.path == null;
+      // Consent to replace a protected file covers the write it was given
+      // for, so it is remembered only once that write lands.
+      String? acceptedReadOnly;
       if (!chooseTarget &&
           tab._acceptedReadOnlyPath != tab.path &&
           await store.isWriteProtected(tab.path!)) {
@@ -239,7 +242,7 @@ final class DocumentWorkspace extends ChangeNotifier {
           case ReadOnlyChoice.saveAs:
             chooseTarget = true;
           case ReadOnlyChoice.saveAnyway:
-            tab._acceptedReadOnlyPath = tab.path;
+            acceptedReadOnly = tab.path;
         }
       }
       if (chooseTarget) {
@@ -269,7 +272,11 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
       _saveTargets[tab] = (path: target, digest: digest);
       final result = await tab.editor.save(access: access);
-      return result != null;
+      if (result == null) return false;
+      if (acceptedReadOnly != null) {
+        tab._acceptedReadOnlyPath = acceptedReadOnly;
+      }
+      return true;
     } catch (error) {
       _error = 'Could not save ${tab.name}: $error';
       return false;
