@@ -132,7 +132,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _focusAfterFrame(DocumentTab tab) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && workspace.active == tab && !workspace.interactionLocked) {
-        tab.editor.editorFocus.requestFocus();
+        tab.editor.restoreFocus();
       }
     });
   }
@@ -174,6 +174,8 @@ class _DocumentShellState extends State<_DocumentShell> {
     // workspace isn't interaction-locked — including during load or after
     // a load error — so the menu command follows the same rule.
     final closable = active != null && unlocked && !active.busy;
+    // A composing input method or a host lock refuses line edits too.
+    final lineCommands = ready && (active?.editor.canEditText ?? false);
     return [
       _ShellMenu('File', [
         _Command(
@@ -272,6 +274,43 @@ class _DocumentShellState extends State<_DocumentShell> {
           ),
           shortcut: _shortcut(LogicalKeyboardKey.keyA),
           enabled: ready,
+        ),
+        const _Separator(),
+        _Command(
+          'Duplicate Line',
+          () => active?.editor.duplicateLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyD, shift: true),
+          enabled: lineCommands,
+        ),
+        _Command(
+          'Move Line Up',
+          () => active?.editor.moveLines(LineDirection.up),
+          shortcut: const SingleActivator(
+            LogicalKeyboardKey.arrowUp,
+            alt: true,
+          ),
+          enabled: lineCommands,
+        ),
+        _Command(
+          'Move Line Down',
+          () => active?.editor.moveLines(LineDirection.down),
+          shortcut: const SingleActivator(
+            LogicalKeyboardKey.arrowDown,
+            alt: true,
+          ),
+          enabled: lineCommands,
+        ),
+        _Command(
+          'Delete Line',
+          () => active?.editor.deleteLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyK, shift: true),
+          enabled: lineCommands,
+        ),
+        _Command(
+          'Join Lines',
+          () => active?.editor.joinLines(),
+          shortcut: _shortcut(LogicalKeyboardKey.keyJ),
+          enabled: lineCommands,
         ),
       ]),
       _ShellMenu('Find', [
@@ -627,7 +666,19 @@ class _DocumentShellState extends State<_DocumentShell> {
                               key: ValueKey(tab.id),
                               controller: tab.editor,
                               isActive: tab == active,
-                              editingLocked: workspace.interactionLocked,
+                              // No editingLocked here: the workspace locks
+                              // each controller the moment a dialog opens
+                              // and unlocks it the moment it closes. A view
+                              // lock would clear only on the next rebuild,
+                              // refusing a save made before it.
+                              //
+                              // A locked field cannot take the typing the
+                              // placeholder invites.
+                              placeholder:
+                                  tab.path == null &&
+                                      !workspace.interactionLocked
+                                  ? ghostLineFor(tab.id)
+                                  : null,
                             ),
                         ],
                       ),
@@ -772,6 +823,22 @@ class _TabChipState extends State<_TabChip> {
     );
   }
 }
+
+/// What an untitled document shows while it is empty. Each line leads with
+/// the instruction, which is what a screen reader announces first; the rest
+/// is the board talking.
+const _ghostLines = [
+  'Start typing. The spirits are listening…',
+  'Start typing. The board is waiting…',
+  'Start typing. Something wants to be written…',
+  'Start typing. Rest a finger on the planchette…',
+  'Start typing. Ask, and it will answer…',
+];
+
+/// The ghost line for a tab: fixed for that tab, and different for the tab
+/// created right after it.
+@visibleForTesting
+String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
 
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);

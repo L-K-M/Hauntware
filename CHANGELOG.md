@@ -34,6 +34,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Save All reports a partial failure the way File › Save All does.
 - Diff and patch highlighting, plus Rust attributes and lifetimes, Go raw
   strings, JSON and YAML keys, C preprocessor lines and Python decorators.
+- Tab and Shift+Tab indent and outdent the document instead of moving focus
+  out of it, Enter keeps the line's indentation (one level more after an
+  opening bracket), and Backspace in leading spaces removes a whole level.
+  The level is learned from each file, and Makefiles and Go keep tabs.
+  Hosts choose what Tab does (`PlanchetteEditor.tabKeyBehavior`), a level
+  for one document (`EditorController.indentation`) or a fallback for files
+  that have none yet (`EditorController.indentationPreference`).
+- Line commands in the Edit menu: Duplicate Line (`Cmd/Ctrl+Shift+D`),
+  Move Line Up/Down (`Option/Alt+↑/↓`), Delete Line (`Cmd/Ctrl+Shift+K`)
+  and Join Lines (`Cmd/Ctrl+J`). They keep a CRLF line's break intact.
+- A faint band marks the caret's line. It is on by default in the shared
+  editor too; hosts can set `PlanchetteEditor.currentLineColor`, or pass
+  `Colors.transparent` to turn it off.
 
 ### Changed
 - Loading and saving a large file takes about half the time and a third of
@@ -48,6 +61,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   can close, a saving one cannot.
 - The status bar says "1 line" and "1 byte".
 - On Linux and Windows the window opens at its final size and position.
+- The shared editor keeps a host's lock (`EditorController.setEditingLocked`)
+  apart from a view's `editingLocked` parameter, so rebuilding a view no
+  longer unlocks a document the host locked. A view lock clears only when
+  the view rebuilds, so a host should lock through one of the two: the app
+  now locks through the controller alone, which also fixes saves answered
+  before the next frame after a dialog being refused.
 
 ### Fixed
 - A file whose name nearly fills the 255-byte limit can be saved.
@@ -63,3 +82,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of matching at every position.
 - The Linux package's metadata describes Planchette, and a failed
   `objdump` stops the build instead of passing silently.
+- Line numbers stay on their lines when lines soft-wrap, at any document
+  size, and typing no longer lays the whole document out a second time for
+  the gutter. Find reveals a match on its real row in large wrapped files.

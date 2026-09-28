@@ -1,6 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
+import 'package:planchette_core/planchette_core.dart'
+    as core
+    show
+        deleteIndentBackward,
+        deleteLines,
+        duplicateLines,
+        joinLines,
+        moveLines;
 
 import 'code_editing_controller.dart';
 
@@ -35,6 +45,11 @@ class EditorController extends ChangeNotifier {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
+    for (final node in [editorFocus, searchFocus, replacementFocus]) {
+      node.addListener(() {
+        if (node.hasFocus) _focusMemory = node;
+      });
+    }
     if (initialText != null) {
       _installText(initialText);
     } else {
@@ -71,6 +86,27 @@ class EditorController extends ChangeNotifier {
   final scroll = ScrollController();
   final undoController = UndoHistoryController();
 
+  /// The node to focus when this editor's tab becomes active. Deactivation
+  /// unfocuses all three, so remembering the last-focused node lets a tab
+  /// switch restore a focused find field instead of always the document.
+  /// Falls back to the document when the remembered node is detached —
+  /// the find or replace field it belonged to may have closed.
+  FocusNode get _focusTarget =>
+      _focusMemory?.context != null ? _focusMemory! : editorFocus;
+
+  /// Focuses the field that last had focus in this editor (the document, or
+  /// an open find or replace field), for a host showing this editor again.
+  ///
+  /// The request runs after the current frame's focus bookkeeping: a
+  /// same-frame `unfocus` marks the enclosing scope for focus and would
+  /// overwrite a request issued right now — last mark wins.
+  void restoreFocus() {
+    final target = _focusTarget;
+    scheduleMicrotask(() {
+      if (!_disposed) target.requestFocus();
+    });
+  }
+
   TextDocument? _document;
   String _displayPath;
   String _savedText = '';
@@ -79,6 +115,7 @@ class EditorController extends ChangeNotifier {
   bool _saving = false;
   bool _disposed = false;
   bool _editingLocked = false;
+  final Set<Object> _viewLocks = {};
   bool _searchOpen = false;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
@@ -86,8 +123,10 @@ class EditorController extends ChangeNotifier {
   bool _updatingSearch = false;
   List<TextRange> _matches = const [];
   int _activeMatch = -1;
+  FocusNode? _focusMemory;
   int _revision = 0;
   int _revealRequest = 0;
+  int _caretRevealRequest = 0;
   String _lastText = '';
   String? _lastQuery;
   String _languageProbe = '';
@@ -96,6 +135,9 @@ class EditorController extends ChangeNotifier {
   int _bytes = 0;
   Future<void>? _initialization;
   Future<bool>? _closeDecision;
+  Indentation? _chosenIndentation;
+  Indentation? _detectedIndentation;
+  Indentation? _preferredIndentation;
 
   String get displayPath => _displayPath;
   set displayPath(String value) {
@@ -111,7 +153,7 @@ class EditorController extends ChangeNotifier {
   bool get isSaving => _saving;
   bool get isBusy => _loading || _saving;
   bool get isDirty => !_loading && text.text != _savedText;
-  bool get canSave => !isBusy && !_editingLocked && _error == null;
+  bool get canSave => !isBusy && !editingLocked && _error == null;
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;
   bool get replaceOpen => _replaceOpen;
@@ -125,15 +167,72 @@ class EditorController extends ChangeNotifier {
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
   int get revealRequest => _revealRequest;
-  bool get editingLocked => _editingLocked;
+
+  /// Increments when an edit moved the caret somewhere the view should
+  /// scroll to; typing scrolls by itself, but a programmatic edit does not.
+  int get caretRevealRequest => _caretRevealRequest;
+
+  /// Whether edits, saves and reloads are refused. Two owners can lock: the
+  /// host, through [setEditingLocked], and the mounted [PlanchetteEditor],
+  /// through its `editingLocked` parameter. Either lock holds on its own, and
+  /// each owner clears only its own, so rebuilding the view with its default
+  /// `false` never unlocks a document the host locked.
+  bool get editingLocked => _editingLocked || _viewLocks.isNotEmpty;
+
+  /// Sets the host's lock, like [setEditingLocked]. A mounted view's own lock
+  /// still holds, so the getter can read true after setting false.
   set editingLocked(bool value) => setEditingLocked(value);
 
-  /// The view applies configuration during its build without notifying its
-  /// ancestors; hosts changing the lock directly use the notifying setter.
+  /// The host's lock. [notify] is false only for hosts that update several
+  /// controllers and notify once themselves.
   void setEditingLocked(bool value, {bool notify = true}) {
     if (_editingLocked == value) return;
     _editingLocked = value;
     if (notify) _notify();
+  }
+
+  /// A mounted view's lock, applied during its build, so it does not
+  /// notify. Each view passes itself as [view] and clears only its own
+  /// lock: when a host remounts the editor elsewhere in the same frame, the
+  /// old view is disposed after the new one has locked. Hosts use
+  /// [setEditingLocked] instead.
+  void setViewEditingLocked(Object view, bool value) =>
+      value ? _viewLocks.add(view) : _viewLocks.remove(view);
+
+  /// One level of indentation for Tab, Shift+Tab and Enter, from the most
+  /// specific source that has one: a level chosen for this document, the
+  /// level its own lines use (re-checked after edits until they show one),
+  /// the level its format mandates (tabs for Makefiles and Go), the host's
+  /// [indentationPreference], and finally four spaces.
+  Indentation get indentation =>
+      _chosenIndentation ??
+      _detectedIndentation ??
+      requiredIndentationFor(_displayPath) ??
+      _preferredIndentation ??
+      const Indentation.spaces();
+
+  /// Chooses the level for this document, overriding what its lines use.
+  /// A host applying one setting to every document sets
+  /// [indentationPreference] instead, so each file's convention still wins.
+  set indentation(Indentation value) {
+    if (_chosenIndentation == value) return;
+    _chosenIndentation = value;
+    _notify();
+  }
+
+  /// The host's level for documents that neither use nor mandate one yet,
+  /// such as a new untitled document.
+  Indentation? get indentationPreference => _preferredIndentation;
+  set indentationPreference(Indentation? value) {
+    if (_preferredIndentation == value) return;
+    _preferredIndentation = value;
+    _notify();
+  }
+
+  void _detectIndentation({bool reset = false}) {
+    if (reset) _detectedIndentation = null;
+    if (_chosenIndentation != null || _detectedIndentation != null) return;
+    _detectedIndentation = detectIndentation(text.text);
   }
 
   List<int> get lineStarts {
@@ -169,7 +268,7 @@ class EditorController extends ChangeNotifier {
 
   /// The host confirms any discard and refreshes a remote checkout first.
   Future<void> reload() async {
-    if (isBusy || _editingLocked || loadDocument == null) return;
+    if (isBusy || editingLocked || loadDocument == null) return;
     await _load();
   }
 
@@ -199,6 +298,53 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  /// Whether a command may change the buffer now: not while it loads, is
+  /// locked or failed to load, and not while an input method composes, since
+  /// the composition owns the text until it is committed.
+  bool get canEditText =>
+      !_loading &&
+      !editingLocked &&
+      _error == null &&
+      text.selection.isValid &&
+      !text.value.composing.isValid;
+
+  /// Copies the selected lines, or the caret's line, below themselves.
+  bool duplicateLines() => _applyLineEdit(core.duplicateLines);
+
+  /// Swaps the selected lines, or the caret's line, with the neighbouring
+  /// line. Returns false at the top or bottom of the document.
+  bool moveLines(LineDirection direction) => _applyLineEdit(
+    (text, base, extent) => core.moveLines(text, base, extent, direction),
+  );
+
+  /// Removes the selected lines, or the caret's line.
+  bool deleteLines() => _applyLineEdit(core.deleteLines);
+
+  /// Joins the selected lines, or the caret's line with the next one.
+  bool joinLines() => _applyLineEdit(core.joinLines);
+
+  bool _applyLineEdit(
+    LineEdit? Function(String text, int base, int extent) command,
+  ) {
+    if (!canEditText) return false;
+    final selection = text.selection;
+    final edit = command(
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    if (edit == null) return false;
+    _caretRevealRequest++;
+    text.value = TextEditingValue(
+      text: edit.text,
+      selection: TextSelection(
+        baseOffset: edit.selectionBase,
+        extentOffset: edit.selectionExtent,
+      ),
+    );
+    return true;
+  }
+
   void _installText(String value) {
     _savedText = value;
     _lastText = value;
@@ -207,6 +353,7 @@ class EditorController extends ChangeNotifier {
       selection: const TextSelection.collapsed(offset: 0),
     );
     _detectLanguage();
+    _detectIndentation(reset: true);
     if (_searchOpen) _updateMatches(resetActive: true);
     if (scroll.hasClients) scroll.jumpTo(0);
     _revealRequest++;
@@ -267,9 +414,59 @@ class EditorController extends ChangeNotifier {
       _lastText = text.text;
       _revision++;
       _refreshLanguage();
+      _detectIndentation();
       if (_searchOpen) _updateMatches(resetActive: false);
     }
     _notify();
+  }
+
+  // The indentation keys go through _applyLineEdit like the line commands:
+  // one lock and composition check, and a caret reveal, since a programmatic
+  // edit does not scroll the field the way typing does.
+
+  /// Tab. Indents every selected line, or inserts indentation at the caret.
+  bool indent() => _applyLineEdit(
+    (text, base, extent) => indentLines(text, base, extent, indentation),
+  );
+
+  /// Shift+Tab. Removes one level of indentation from every selected line.
+  bool outdent() => _applyLineEdit(
+    (text, base, extent) => outdentLines(text, base, extent, indentation),
+  );
+
+  /// Enter. Starts the new line at the current indentation, one level deeper
+  /// after an opening bracket, and splits an empty bracket pair. The view
+  /// calls this for hardware Enter; a newline that a software keyboard or
+  /// input method inserts arrives as text and is not indented.
+  bool insertNewline() => _applyLineEdit(
+    (text, base, extent) => insertIndentedNewline(
+      text,
+      base,
+      extent,
+      indentation,
+      indentAfterColon: this.text.language?.indentAfterColon ?? false,
+    ),
+  );
+
+  /// Whether Backspace at the caret removes a whole level of space
+  /// indentation rather than one character.
+  bool get canDeleteIndentBackward => _indentBackward() != null;
+
+  /// Backspace inside space indentation. Returns false when an ordinary
+  /// one-character Backspace applies instead.
+  bool deleteIndentBackward() {
+    final edit = _indentBackward();
+    return edit != null && _applyLineEdit((_, _, _) => edit);
+  }
+
+  LineEdit? _indentBackward() {
+    final selection = text.selection;
+    if (!canEditText || !selection.isCollapsed) return null;
+    return core.deleteIndentBackward(
+      text.text,
+      selection.baseOffset,
+      indentation,
+    );
   }
 
   Future<EditorSaveResult?> save({
@@ -281,7 +478,7 @@ class EditorController extends ChangeNotifier {
         _error != null ||
         saver == null ||
         _disposed ||
-        (_editingLocked && access != EditorSaveAccess.confirmedClose)) {
+        (editingLocked && access != EditorSaveAccess.confirmedClose)) {
       return null;
     }
     _saving = true;
@@ -365,6 +562,7 @@ class EditorController extends ChangeNotifier {
     if (!_searchOpen) return;
     _searchOpen = false;
     _replaceOpen = false;
+    if (_focusMemory != editorFocus) _focusMemory = null;
     _matches = const [];
     _activeMatch = -1;
     _lastQuery = null;
@@ -376,6 +574,13 @@ class EditorController extends ChangeNotifier {
 
   void toggleReplace() {
     _replaceOpen = !_replaceOpen;
+    if (!_replaceOpen && _focusMemory == replacementFocus) {
+      _focusMemory = searchFocus;
+      // The collapsing field may hold focus; hand it to the find field now
+      // rather than leaving primary focus on the enclosing scope. Only
+      // steal when it really did — a host may share our focus scope.
+      if (replacementFocus.hasFocus) restoreFocus();
+    }
     _notify();
   }
 
@@ -440,7 +645,7 @@ class EditorController extends ChangeNotifier {
   }
 
   void replaceCurrent() {
-    if (_editingLocked || isBusy || _activeMatch < 0 || _matches.isEmpty) {
+    if (editingLocked || isBusy || _activeMatch < 0 || _matches.isEmpty) {
       return;
     }
     final match = _matches[_activeMatch];
@@ -463,7 +668,7 @@ class EditorController extends ChangeNotifier {
   /// Replace every literal occurrence, including matches beyond the display cap.
   /// Offsets come from the original text so replacements never match themselves.
   void replaceAll() {
-    if (_editingLocked || isBusy || search.text.isEmpty) return;
+    if (editingLocked || isBusy || search.text.isEmpty) return;
     final source = text.text;
     final matches = findSearchMatches(
       source,

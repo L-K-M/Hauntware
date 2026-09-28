@@ -194,4 +194,44 @@ void main() {
     expect(c.caseFoldingLimited, isFalse);
     expect(find.byIcon(Icons.info_outline), findsNothing);
   });
+
+  testWidgets('restoreFocus returns to the field that last had focus', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.txt', initialText: 'text');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+
+    c.openSearch();
+    await tester.pump();
+    c.searchFocus.unfocus();
+    await tester.pump();
+    c.restoreFocus();
+    await tester.pump();
+    expect(c.searchFocus.hasFocus, isTrue);
+
+    // Closing find forgets it, so the document is the target again.
+    c.closeSearch();
+    await tester.pump();
+    c.editorFocus.unfocus();
+    await tester.pump();
+    c.restoreFocus();
+    await tester.pump();
+    expect(c.editorFocus.hasFocus, isTrue);
+  });
+
+  testWidgets('restoreFocus is harmless once the editor is disposed', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.txt', initialText: 'text');
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    // The request is deferred a microtask, which can outlive the tab.
+    c.restoreFocus();
+    c.dispose();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }

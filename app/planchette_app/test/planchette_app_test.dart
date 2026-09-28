@@ -114,6 +114,34 @@ void main() {
   );
 
   testWidgets(
+    'Tab indents the document while Ctrl+Tab still switches tabs',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      workspace.newDocument();
+      workspace.select(first);
+      await mount(tester);
+      first.editor.editorFocus.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(first.editor.text.text, '    ');
+      expect(first.editor.editorFocus.hasFocus, isTrue);
+
+      await chord(tester, LogicalKeyboardKey.tab);
+      expect(workspace.active, isNot(first));
+      expect(first.editor.text.text, '    ');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    // Next Tab is Control+Tab on every platform, including macOS.
+    variant: const TargetPlatformVariant({
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'New and Open shortcuts remain available after closing the last tab',
     (tester) async {
       workspace.newDocument();
@@ -317,6 +345,62 @@ void main() {
     }),
   );
 
+  testWidgets('untitled documents get a ghost line, opened files do not', (
+    tester,
+  ) async {
+    final first = workspace.newDocument()!;
+    store.files[testPath('empty.txt')] = document('empty.txt', '');
+    await mount(tester);
+    TextField field(DocumentTab tab) =>
+        tester.widget<TextField>(editorField(tab));
+
+    expect(field(first).decoration!.hintText, ghostLineFor(first.id));
+    expect(ghostLineFor(first.id), startsWith('Start typing.'));
+    final second = workspace.newDocument()!;
+    await tester.pumpAndSettle();
+    expect(field(second).decoration!.hintText, ghostLineFor(second.id));
+    expect(ghostLineFor(second.id), isNot(ghostLineFor(first.id)));
+
+    await workspace.open(testPath('empty.txt'));
+    await tester.pumpAndSettle();
+    expect(field(workspace.active!).decoration!.hintText, isNull);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
+  testWidgets('the ghost line hides while the workspace is locked', (
+    tester,
+  ) async {
+    final empty = workspace.newDocument()!;
+    workspace.newDocument()!.editor.text.text = 'unsaved';
+    dialogs.choiceGate = Completer<CloseChoice>();
+    await mount(tester);
+    // The quit prompt activates the dirty tab, so the empty one is offstage.
+    String? hint() => tester
+        .widget<TextField>(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField &&
+                identical(widget.controller, empty.editor.text),
+            skipOffstage: false,
+          ),
+        )
+        .decoration!
+        .hintText;
+    expect(hint(), ghostLineFor(empty.id));
+
+    final quitting = workspace.confirmQuit();
+    await tester.pump();
+    expect(workspace.interactionLocked, isTrue);
+    expect(hint(), isNull);
+
+    dialogs.choiceGate!.complete(CloseChoice.cancel);
+    expect(await quitting, isFalse);
+    await tester.pumpAndSettle();
+    expect(hint(), ghostLineFor(empty.id));
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets(
     'Close Tab stays available while a document is loading',
     (tester) async {
@@ -388,6 +472,33 @@ void main() {
       await tester.tap(find.text('Close Tab'));
       await tester.pump();
       expect(workspace.documents, isEmpty);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'line commands run once from the Edit menu and the keyboard',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'one\ntwo';
+      await mount(tester);
+      tab.editor.text.selection = const TextSelection.collapsed(offset: 1);
+      await tester.pump();
+
+      await tester.tap(find.text('Edit'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move Line Down'));
+      await tester.pumpAndSettle();
+      expect(tab.editor.text.text, 'two\none');
+
+      tab.editor.editorFocus.requestFocus();
+      await tester.pump();
+      await chord(tester, LogicalKeyboardKey.keyD, shift: true);
+      expect(tab.editor.text.text, 'two\none\none');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -628,4 +739,133 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  testWidgets(
+    'switching back to a tab restores find-field focus',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      final second = workspace.newDocument()!;
+      await mount(tester);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      first.editor.openSearch();
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isTrue);
+      workspace.select(second);
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isFalse);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'switching back after the find bar closed restores document focus',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      final second = workspace.newDocument()!;
+      await mount(tester);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      first.editor.openSearch();
+      await tester.pumpAndSettle();
+      expect(first.editor.searchFocus.hasFocus, isTrue);
+      first.editor.closeSearch();
+      await tester.pumpAndSettle();
+      workspace.select(second);
+      await tester.pumpAndSettle();
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      expect(first.editor.editorFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'switching back to a tab restores replacement-field focus',
+    (tester) async {
+      final first = workspace.newDocument()!;
+      final second = workspace.newDocument()!;
+      await mount(tester);
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      first.editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      first.editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(first.editor.replacementFocus.hasFocus, isTrue);
+      workspace.select(second);
+      await tester.pumpAndSettle();
+      workspace.select(first);
+      await tester.pumpAndSettle();
+      expect(first.editor.replacementFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'collapsing replace moves focus back to the find field',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+      final editor = workspace.active!.editor;
+      editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      expect(editor.replacementFocus.hasFocus, isTrue);
+      editor.toggleReplace();
+      await tester.pumpAndSettle();
+      expect(editor.searchFocus.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'collapsing replace does not steal focus it no longer holds',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+      final editor = workspace.active!.editor;
+      editor.openSearch(replace: true);
+      await tester.pumpAndSettle();
+      editor.replacementFocus.requestFocus();
+      await tester.pumpAndSettle();
+      // The field was the last focused node, but focus moved on before the
+      // collapse — a host may share the focus scope, so nothing is stolen.
+      editor.replacementFocus.unfocus();
+      await tester.pumpAndSettle();
+      editor.toggleReplace();
+      await tester.pumpAndSettle();
+      expect(editor.searchFocus.hasFocus, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 }
