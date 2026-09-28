@@ -75,6 +75,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - Loading and saving a large file takes about half the time and a third of
   the peak memory.
+- Typing no longer rebuilds the whole window: the tabs, menus and window
+  title update only when what they show changes.
 - Save errors name their cause: an unwritable or deleted folder, or the
   operating system's error code when the original cannot be moved aside.
 - A refused quit says what it is waiting for (a save, an open, a close or a
