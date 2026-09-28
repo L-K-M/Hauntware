@@ -175,6 +175,24 @@ void main() {
     expect(c.text.text, 'ab');
   });
 
+  testWidgets('review fix: Shift+Tab with nothing to outdent keeps focus', (
+    tester,
+  ) async {
+    // Focus traversal took the declined key; in the app it landed on a
+    // tab's close button, where the next Enter closed that tab.
+    final c = await mount(
+      tester,
+      'alpha',
+      selection: const TextSelection.collapsed(offset: 2),
+    );
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(c.editorFocus.hasFocus, isTrue);
+    expect(c.text.text, 'alpha');
+  }, variant: TargetPlatformVariant.desktop());
+
   testWidgets('locked documents and moveFocus hosts leave Tab alone', (
     tester,
   ) async {
