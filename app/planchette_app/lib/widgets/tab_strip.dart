@@ -75,10 +75,22 @@ class _TabStripState extends State<TabStrip> {
     final ids = {for (final tab in widget.tabs) tab.id};
     _keys.removeWhere((id, _) => !ids.contains(id));
     if (oldWidget.activeId != widget.activeId ||
-        oldWidget.tabs.length != widget.tabs.length) {
+        oldWidget.tabs.length != widget.tabs.length ||
+        _activeName(oldWidget) != _activeName(widget)) {
       _revealActiveAfterFrame();
     }
   }
+
+  /// A renamed tab, after Save As, can grow past the strip's edge.
+  static String? _activeName(TabStrip strip) {
+    for (final tab in strip.tabs) {
+      if (tab.id == strip.activeId) return tab.name;
+    }
+    return null;
+  }
+
+  double? _revealedWidth;
+  TextScaler? _revealedScaler;
 
   /// Scrolls only as far as needed: past the trailing edge, then past the
   /// leading edge. Each call does nothing when the tab is already visible.
@@ -102,7 +114,21 @@ class _TabStripState extends State<TabStrip> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      // A narrower window or larger text can push the active tab out of view
+      // without any change of selection.
+      final scaler = MediaQuery.textScalerOf(context);
+      if (constraints.maxWidth != _revealedWidth || scaler != _revealedScaler) {
+        _revealedWidth = constraints.maxWidth;
+        _revealedScaler = scaler;
+        _revealActiveAfterFrame();
+      }
+      return _strip(context);
+    },
+  );
+
+  Widget _strip(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.surfaceContainerLow,
