@@ -78,6 +78,11 @@ done
 
 command -v readelf >/dev/null 2>&1 \
   || die "readelf not found — install binutils (the .deb dependency list is derived from the ELF headers)"
+# floor_of() below calls objdump -T; a partial binutils install would leave
+# the glibc/libstdc++/libgcc floors silently empty and ship unversioned
+# runtime deps that install on systems too old to run the bundle.
+command -v objdump >/dev/null 2>&1 \
+  || die "objdump not found — install binutils (the .deb version floors are derived from referenced symbol versions)"
 
 # ---------------------------------------------------------------------------
 # Locate the bundle and derive the architecture from it (not from uname: the
@@ -204,23 +209,29 @@ if ((${#UNKNOWN[@]})); then
   die "unmapped soname(s): ${UNKNOWN[*]} — add them to SONAME_TO_DEP in $SELF (check: dpkg -S /usr/lib/*/libX.so.N). Needed by: ${UNKNOWN_DETAIL[*]}"
 fi
 
-# Runtime tools the app spawns — invisible to the ELF scan because nothing
-# links them. gio (the D15 local trash backend, 03 §7.3) lives in
-# libglib2.0-bin; the libglib2.0-0 *library* dependency above does not
-# pull in the binary package, so a desktop-lite install could otherwise
-# ship a .deb whose trash reports "unavailable" where it should work.
-dep_add 'libglib2.0-bin'
+# Runtime-tool dependencies would go here — binaries the app spawns are
+# invisible to the ELF scan because nothing links them. Planchette currently
+# shells out to none (file operations are direct FFI calls); re-add the
+# pattern — e.g. dep_add 'libglib2.0-bin' for `gio` — with the first spawn.
 
 # Version floors from the symbol versions actually referenced — what
 # dh_shlibdeps would compute for us. Only meaningful for the base runtimes.
 floor_of() {  # $1 = objdump tag prefix (e.g. GLIBC_), max across all ELFs
   # sort -Vu is version-aware (2.14 > 2.9); trust it instead of re-comparing.
   # `|| true`: grep exits 1 when a file references none of the tags, and
-  # pipefail would turn that into a failure of the whole function.
-  local tag="$1" f
+  # `set -e` would turn that into an abort mid-loop. A failed
+  # or empty objdump run instead means a bad ELF — die rather than let the
+  # floor silently drop. The loop must accumulate, not pipe: inside a
+  # pipeline it runs in a subshell whose exit cannot abort the script.
+  local tag="$1" f symbols versions=""
   for f in "${ELFS[@]}"; do
-    objdump -T "$f" 2>/dev/null | grep -o "${tag}[0-9.]*" || true
-  done | sed "s/^$tag//" | sort -Vu | tail -1
+    symbols="$(objdump -T "$f")" \
+      || die "objdump failed on $(basename "$f") — cannot compute $tag floor"
+    [[ -n $symbols ]] \
+      || die "no dynamic symbols in $(basename "$f") — cannot compute $tag floor"
+    versions+="$(grep -o "${tag}[0-9.]*" <<<"$symbols" || true)"$'\n'
+  done
+  sed "s/^$tag//" <<<"$versions" | sort -Vu | tail -1
 }
 GLIBC_FLOOR="$(floor_of GLIBC_)"
 GLIBCXX_TAG="$(floor_of GLIBCXX_)"
@@ -335,7 +346,8 @@ Comment=The pointer that spells it out
 Exec=$2 %F
 Icon=planchette
 Terminal=false
-Categories=Utility;TextEditor;
+Categories=Utility;Development;TextEditor;
+Keywords=Text;Editor;Code;Planchette;
 MimeType=text/plain;text/x-source;
 # The packaged build reports this X11 WM_CLASS class (the instance is the
 # lowercase application id); StartupWMClass is case-sensitive.
@@ -397,7 +409,7 @@ LICENSE_FILE="$ROOT/LICENSE"
 write_copyright() {  # $1 = destination; uses $VERSION and $LICENSE_FILE
   {
     cat <<EOF
-Planchette — a cross-platform two-pane file transfer client
+Planchette — a cross-platform text editor
 Source: https://github.com/L-K-M/Planchette
 Upstream-Version: $VERSION
 License: Unlicense — the full text follows.
@@ -430,7 +442,7 @@ sed -e "s/@VERSION@/$DEB_VERSION/" -e "s/@ARCH@/$DEB_ARCH/" \
     > "$DEBROOT/DEBIAN/control" <<'EOF'
 Package: planchette
 Version: @VERSION@
-Section: net
+Section: editors
 Priority: optional
 Architecture: @ARCH@
 Installed-Size: @SIZE@
