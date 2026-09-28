@@ -53,6 +53,43 @@ final class AppDocumentDialogs implements DocumentDialogs {
   }
 
   @override
+  Future<BulkCloseChoice> chooseBulkClose(int count) async {
+    // The workspace offers this question only when more than one document is
+    // unsaved; a single one gets the prompt that names its file.
+    assert(count > 1, 'the bulk close question covers several documents');
+    final context = navigatorKey.currentContext;
+    if (context == null) return BulkCloseChoice.cancel;
+    return await showDialog<BulkCloseChoice>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Save changes to $count documents?'),
+            content: const Text(
+              'Your changes will be lost if you close without saving any of '
+              'them.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () =>
+                    Navigator.pop(context, BulkCloseChoice.discardAll),
+                child: const Text('Don’t Save'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, BulkCloseChoice.cancel),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                autofocus: true,
+                onPressed: () =>
+                    Navigator.pop(context, BulkCloseChoice.saveAll),
+                child: const Text('Save All'),
+              ),
+            ],
+          ),
+        ) ??
+        BulkCloseChoice.cancel;
+  }
+
+  @override
   Future<CloseChoice> chooseClose(String name) async {
     final context = navigatorKey.currentContext;
     if (context == null) return CloseChoice.cancel;

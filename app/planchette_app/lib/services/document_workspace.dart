@@ -11,12 +11,19 @@ enum CloseChoice { save, discard, cancel }
 /// The answer to saving over a read-only file.
 enum ReadOnlyChoice { saveAs, saveAnyway, cancel }
 
+/// The answer to the one-question close of several dirty documents at once.
+enum BulkCloseChoice { saveAll, discardAll, cancel }
+
 abstract interface class DocumentDialogs {
   Future<List<String>> pickOpenFiles();
   Future<String?> pickSavePath(String suggestedName);
   Future<bool> confirmReplace(String path);
   Future<CloseChoice> chooseClose(String name);
   Future<ReadOnlyChoice> chooseReadOnlySave(String name);
+
+  /// One question for every unsaved document, offered only when more than one
+  /// is dirty. [count] is how many documents it covers.
+  Future<BulkCloseChoice> chooseBulkClose(int count);
 }
 
 /// One controller survives tab switches, retaining undo, selection, find and
@@ -611,8 +618,36 @@ final class DocumentWorkspace extends ChangeNotifier {
     _closingAll = true;
     _notify();
     try {
-      for (final tab in List.of(_documents)) {
-        if (!await _confirmTab(tab)) return false;
+      final unsaved = [
+        for (final tab in _documents)
+          if (tab.editor.isDirty) tab,
+      ];
+
+      // One question for a pile of dirty tabs beats a queue of per-document
+      // prompts. A single dirty document keeps its own question, which names
+      // the file and can be answered per file.
+      if (unsaved.length > 1) {
+        final choice = await _dialog(
+          () => dialogs.chooseBulkClose(unsaved.length),
+        );
+        switch (choice) {
+          case BulkCloseChoice.cancel:
+            return false;
+          case BulkCloseChoice.saveAll:
+            for (final tab in unsaved) {
+              final saved = await _save(
+                tab,
+                access: EditorSaveAccess.confirmedClose,
+              );
+              if (!saved || tab.editor.isDirty) return false;
+            }
+          case BulkCloseChoice.discardAll:
+            break;
+        }
+      } else {
+        for (final tab in List.of(_documents)) {
+          if (!await _confirmTab(tab)) return false;
+        }
       }
       _quitAccepted = true;
       return true;
