@@ -162,6 +162,7 @@ class EditorController extends ChangeNotifier {
   FocusNode? _focusMemory;
   int _revision = 0;
   int _revealRequest = 0;
+  int _installGeneration = 0;
   int _caretRevealRequest = 0;
   CaretReveal _caretRevealPlacement = CaretReveal.nearest;
   ({String text, int offset, int bracket})? _lastBracketJump;
@@ -239,6 +240,11 @@ class EditorController extends ChangeNotifier {
   /// the find bar pages there; a counter shows its total as a lower bound.
   bool get matchesMayContinue => _matchesMayContinue;
   int get revealRequest => _revealRequest;
+
+  /// Increments whenever a whole buffer is installed: loaded, reloaded or
+  /// reverted. The view gives each generation its own document field, so
+  /// undo never crosses from the installed text back into the previous one.
+  int get installGeneration => _installGeneration;
 
   /// Increments when a command moved the caret somewhere the view should
   /// scroll to; typing scrolls by itself, but a programmatic change does not.
@@ -543,6 +549,7 @@ class EditorController extends ChangeNotifier {
     if (_searchOpen) _updateMatches(resetActive: true);
     if (scroll.hasClients) scroll.jumpTo(0);
     _revealRequest++;
+    _installGeneration++;
   }
 
   void _detectLanguage() {

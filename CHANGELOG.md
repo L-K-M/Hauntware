@@ -141,6 +141,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Find Next and Find Previous work after the find bar is closed: they
   reopen it on the last query and move from the caret, leaving the cursor
   in the document.
+- Undo stops at a load or reload: it can no longer bring back the text a
+  document had before its file was read again, which then saved over the
+  newer file without a conflict warning. `EditorController` exposes
+  `installGeneration`, and the view gives each installed buffer its own
+  document field.
 - Opening a file that no longer exists says so, instead of showing
   `dart:io`'s `PathNotFoundException` with its errno.
 - The window opens on the app's own background in the current light or
