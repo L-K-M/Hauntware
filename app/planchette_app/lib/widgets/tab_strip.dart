@@ -293,11 +293,13 @@ class _TabState extends State<_Tab> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final canClose = widget.enabled && item.closable;
-    // The active or hovered tab offers its close button; otherwise a dirty
-    // tab shows a dot in the same place, and a clean one shows nothing.
+    // A hovered or focused tab offers its close button, and so does a clean
+    // active tab; otherwise a dirty tab, the active one included, shows a dot
+    // in the same place, and a clean one shows nothing.
+    final offerClose = _hovered || _focused || (widget.active && !item.dirty);
     final trailing = SizedBox.square(
       dimension: 24,
-      child: widget.active || _hovered
+      child: offerClose
           ? IconButton(
               key: ValueKey('close-${item.id}'),
               tooltip: 'Close ${item.name}',
@@ -344,76 +346,68 @@ class _TabState extends State<_Tab> {
           child: MouseRegion(
             onEnter: (_) => setState(() => _hovered = true),
             onExit: (_) => setState(() => _hovered = false),
-            child: Listener(
-              onPointerDown: (event) {
-                if (event.buttons == kMiddleMouseButton && canClose) {
-                  widget.onClose();
-                }
-              },
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: widget.enabled ? widget.onSelect : null,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
-                  constraints: const BoxConstraints(
-                    minWidth: 96,
-                    maxWidth: 220,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.enabled ? widget.onSelect : null,
+              // A middle click closes on release, like any click.
+              onTertiaryTapUp: canClose ? (_) => widget.onClose() : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                constraints: const BoxConstraints(minWidth: 96, maxWidth: 220),
+                padding: const EdgeInsets.only(left: 12, right: 4),
+                decoration: BoxDecoration(
+                  color: _flashing
+                      ? scheme.secondaryContainer
+                      : widget.active
+                      ? scheme.surface
+                      : _hovered
+                      ? scheme.surfaceContainerHighest
+                      : Colors.transparent,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
                   ),
-                  padding: const EdgeInsets.only(left: 12, right: 4),
-                  decoration: BoxDecoration(
-                    color: _flashing
-                        ? scheme.secondaryContainer
-                        : widget.active
-                        ? scheme.surface
-                        : _hovered
-                        ? scheme.surfaceContainerHighest
-                        : Colors.transparent,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(8),
-                    ),
-                    border: Border(
-                      top: BorderSide(
-                        width: 2,
-                        color: widget.active
-                            ? scheme.primary
-                            : Colors.transparent,
-                      ),
+                  border: Border(
+                    top: BorderSide(
+                      width: 2,
+                      color: widget.active
+                          ? scheme.primary
+                          : Colors.transparent,
                     ),
                   ),
-                  foregroundDecoration: _focused
-                      ? BoxDecoration(
-                          border: Border.all(color: scheme.primary, width: 2),
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(8),
-                          ),
-                        )
-                      : null,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        // Announced through the tab's own label above.
-                        child: ExcludeSemantics(
-                          child: Text(
-                            item.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              fontSize: 13,
-                              fontWeight: widget.active
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                              color: widget.active
-                                  ? scheme.onSurface
-                                  : scheme.onSurfaceVariant,
-                            ),
+                ),
+                foregroundDecoration: _focused
+                    ? BoxDecoration(
+                        border: Border.all(color: scheme.primary, width: 2),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(8),
+                        ),
+                      )
+                    : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      // Announced through the tab's own label above.
+                      child: ExcludeSemantics(
+                        child: Text(
+                          item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontSize: 13,
+                            fontWeight: widget.active
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: widget.active
+                                ? scheme.onSurface
+                                : scheme.onSurfaceVariant,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      trailing,
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 4),
+                    trailing,
+                  ],
                 ),
               ),
             ),

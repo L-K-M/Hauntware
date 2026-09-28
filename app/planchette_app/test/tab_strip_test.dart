@@ -100,6 +100,26 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('the active tab shows its dirty dot too', (tester) async {
+    final tab = workspace.newDocument()!;
+    await mount(tester);
+    expect(find.byKey(ValueKey('close-${tab.id}')), findsOneWidget);
+
+    tab.editor.text.text = 'edited';
+    await tester.pumpAndSettle();
+    // The document being edited is the one whose state matters most.
+    expect(find.byKey(ValueKey('dirty-${tab.id}')), findsOneWidget);
+    expect(find.byKey(ValueKey('close-${tab.id}')), findsNothing);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(find.text('Untitled')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(ValueKey('close-${tab.id}')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('chrome rows start at the leading edge', (tester) async {
     workspace.newDocument();
     await mount(tester);
@@ -119,6 +139,10 @@ void main() {
       kind: PointerDeviceKind.mouse,
       buttons: kMiddleMouseButton,
     );
+    await tester.pump();
+    // Like a click, the close happens on release, so a press can be dragged
+    // away and abandoned.
+    expect(workspace.documents.contains(second), isTrue);
     await middle.up();
     await tester.pumpAndSettle();
     expect(workspace.documents.contains(second), isFalse);
