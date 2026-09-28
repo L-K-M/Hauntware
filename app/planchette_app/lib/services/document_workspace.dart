@@ -318,18 +318,20 @@ final class DocumentWorkspace extends ChangeNotifier {
           failures.add(tab.name);
         }
       }
-      // Tabs after a mid-run stop were never touched: count them as not
-      // saved instead of shrinking the totals around them.
+      // Every dirty tab belongs in the total: saved, failed, vanished or
+      // never reached. A declined destination is attempted, so it stays out
+      // of the parts and only shares the denominator like any not-saved tab.
       final skipped = dirty.length - attempted;
       if (failures.isNotEmpty && dirty.length > 1) {
         _error =
-            'Saved $saved of ${saved + failures.length + skipped}. '
+            'Saved $saved of ${dirty.length}. '
             'Could not save: ${failures.join(', ')}.';
         _notify();
       } else if (skipped > 0 && dirty.length > 1) {
+        final notSaved = dirty.sublist(attempted).map((tab) => tab.name);
         _error =
             'Save All stopped with $skipped document'
-            '${skipped == 1 ? '' : 's'} not saved.';
+            '${skipped == 1 ? '' : 's'} not saved: ${notSaved.join(', ')}.';
         _notify();
       }
       return failures.isEmpty && saved + vanished == dirty.length;

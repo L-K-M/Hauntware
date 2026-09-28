@@ -820,4 +820,55 @@ void main() {
     dialogs.choiceGate!.complete(CloseChoice.cancel);
     expect(await closing, isFalse);
   });
+
+  test('Save All counts a vanished tab in the failure total', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final file = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final closing = workspace.active!..editor.text.text = 'edited two';
+    store.writeError = const FileSystemException('Disk full');
+    store.writeGate = Completer<void>();
+
+    final run = workspace.saveAll();
+    await Future<void>.delayed(Duration.zero);
+    dialogs.choices.add(CloseChoice.discard);
+    expect(await workspace.closeTab(closing), isTrue);
+    store.writeGate!.complete();
+
+    expect(await run, isFalse);
+    expect(workspace.error, contains('Saved 0 of 2'));
+    expect(workspace.error, contains('one.txt'));
+    expect(file.editor.isDirty, isTrue);
+  });
+
+  test('Save All names the documents it never reached', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final file = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final other = workspace.active!..editor.text.text = 'edited two';
+    store.writeGate = Completer<void>();
+    dialogs.choiceGate = Completer<CloseChoice>();
+
+    final run = workspace.saveAll();
+    await Future<void>.delayed(Duration.zero);
+    final closing = workspace.closeTab(other);
+    await Future<void>.delayed(Duration.zero);
+    expect(workspace.interactionLocked, isTrue);
+    store.writeGate!.complete();
+
+    expect(await run, isFalse);
+    expect(
+      workspace.error,
+      'Save All stopped with 1 document not saved: two.txt.',
+    );
+    expect(file.editor.isDirty, isFalse);
+    expect(other.editor.isDirty, isTrue);
+
+    dialogs.choiceGate!.complete(CloseChoice.cancel);
+    expect(await closing, isFalse);
+  });
 }
