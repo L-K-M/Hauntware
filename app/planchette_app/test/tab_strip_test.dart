@@ -294,6 +294,37 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('review fix: a middle-click released off its tab closes none', (
+    tester,
+  ) async {
+    // The tap slop let a release on the next tab, or below the strip,
+    // still close the tab the press began on.
+    final first = workspace.newDocument()!;
+    workspace.newDocument();
+    await mount(tester);
+    final tab = tester.getRect(
+      find.ancestor(
+        of: find.text('Untitled'),
+        matching: find.byType(AnimatedContainer),
+      ),
+    );
+    for (final release in [
+      Offset(tab.right + 12, tab.center.dy),
+      Offset(tab.right - 3, tab.bottom + 10),
+    ]) {
+      final middle = await tester.startGesture(
+        Offset(tab.right - 3, tab.center.dy),
+        kind: PointerDeviceKind.mouse,
+        buttons: kMiddleMouseButton,
+      );
+      await middle.moveTo(release);
+      await middle.up();
+      await tester.pumpAndSettle();
+      expect(workspace.documents.contains(first), isTrue, reason: '$release');
+    }
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('the active tab scrolls into view in a crowded strip', (
     tester,
   ) async {
