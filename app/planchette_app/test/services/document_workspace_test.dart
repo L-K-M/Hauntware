@@ -1300,4 +1300,116 @@ void main() {
     expect(workspace.error, contains('(Bad state: Changed externally)'));
     expect(workspace.error, isNot(contains('.)')));
   });
+
+  test('quit during a save says why the window stays open', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'saving';
+    dialogs.savePath = testPath('one.txt');
+    store.writeGate = Completer<void>();
+    final saving = workspace.save(tab);
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('save'));
+    store.writeGate!.complete();
+    expect(await saving, isTrue);
+
+    // The notice described work that has now finished, so it must not linger.
+    expect(workspace.error, isNull);
+    expect(await workspace.confirmQuit(), isTrue);
+  });
+
+  test('quit during an open says why the window stays open', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    store.loadGate = Completer<void>();
+    final opening = workspace.open(testPath('one.txt'));
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('open'));
+    store.loadGate!.complete();
+    await opening;
+    expect(workspace.error, isNull);
+    expect(await workspace.confirmQuit(), isTrue);
+  });
+
+  test('clearing a stale quit refusal reaches the listeners', () async {
+    final tab = workspace.newDocument()!;
+    store.files[testPath('one.txt')] = document('one.txt', 'disk');
+    store.loadGate = Completer<void>();
+    final opening = workspace.open(testPath('one.txt'));
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('open'));
+
+    // The close notifies when it removes the tab, before the notice is
+    // dropped, so the clearing needs its own notification or the banner stays.
+    var afterClearing = 0;
+    workspace.addListener(() {
+      if (workspace.error == null) afterClearing++;
+    });
+    expect(await workspace.closeTab(tab), isTrue);
+    // Asserted while the load is still gated: the open's own completion would
+    // otherwise notify after the notice is gone and mask the close path.
+    expect(workspace.error, isNull);
+    expect(afterClearing, greaterThan(0));
+    store.loadGate!.complete();
+    await opening;
+  });
+
+  test('a quit refusal never buries a failure the user must act on', () async {
+    final failed = workspace.newDocument()!..editor.text.text = 'doomed';
+    dialogs.savePath = testPath('one.txt');
+    store.writeError = const FileSystemException('Disk full');
+    expect(await workspace.save(failed), isFalse);
+    expect(workspace.error, contains('Disk full'));
+
+    store.writeError = null;
+    store.writeGate = Completer<void>();
+    final other = workspace.newDocument()!..editor.text.text = 'saving';
+    dialogs.savePath = testPath('two.txt');
+    final saving = workspace.save(other);
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('Disk full'));
+    store.writeGate!.complete();
+    expect(await saving, isTrue);
+  });
+
+  test(
+    'a save finishing does not retire a notice about a running open',
+    () async {
+      final tab = workspace.newDocument()!..editor.text.text = 'saving';
+      dialogs.savePath = testPath('one.txt');
+      store.writeGate = Completer<void>();
+      final saving = workspace.save(tab);
+      await pumpEventQueue();
+
+      store.files[testPath('two.txt')] = document('two.txt', 'disk');
+      store.loadGate = Completer<void>();
+      final opening = workspace.open(testPath('two.txt'));
+      await pumpEventQueue();
+      expect(await workspace.confirmQuit(), isFalse);
+      expect(workspace.error, contains('open'));
+
+      // The save ends while the open is still running: its notice is still true.
+      store.writeGate!.complete();
+      expect(await saving, isTrue);
+      expect(workspace.error, contains('open'));
+      store.loadGate!.complete();
+      await opening;
+      expect(workspace.error, isNull);
+    },
+  );
+
+  test('a real failure is not cleared when the busy work finishes', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'saving';
+    dialogs.savePath = testPath('one.txt');
+    store.writeGate = Completer<void>();
+    store.writeError = const FileSystemException('Disk full');
+    final saving = workspace.save(tab);
+    await pumpEventQueue();
+    expect(await workspace.confirmQuit(), isFalse);
+    expect(workspace.error, contains('save is still running'));
+    store.writeGate!.complete();
+    expect(await saving, isFalse);
+    expect(workspace.error, contains('Disk full'));
+  });
 }

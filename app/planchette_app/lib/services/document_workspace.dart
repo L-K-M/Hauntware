@@ -53,6 +53,15 @@ final class DocumentWorkspace extends ChangeNotifier {
     paths.Context? pathContext,
   }) : _paths = pathContext ?? paths.context;
 
+  /// Refusals to quit, as opposed to failures. They describe work that is
+  /// about to finish, so the completion of that work clears exactly these and
+  /// leaves a real error for the user to dismiss.
+  static const String _busyWhileOpeningMessage =
+      'A document is still opening or closing, or a dialog is waiting. '
+      'Quit again once it finishes.';
+  static const String _busySavingMessage =
+      'A save is still running. Quit again once it finishes.';
+
   final paths.Context _paths;
   final DocumentStore store;
   final DocumentDialogs dialogs;
@@ -286,6 +295,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       _clearScope(_pathKey(path));
       _clearScope(tab);
     }
+    _clearBusyNotice(_busyWhileOpeningMessage);
     _notify();
     return failure;
   }
@@ -414,6 +424,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     } finally {
       _saveTargets.remove(tab);
       tab.busy = false;
+      _clearBusyNotice(_busySavingMessage);
       _notify();
     }
   }
@@ -516,6 +527,8 @@ final class DocumentWorkspace extends ChangeNotifier {
       return true;
     } finally {
       _closingTabs.remove(tab);
+      // The removal above already notified, so only the clearing needs one.
+      if (_clearBusyNotice(_busyWhileOpeningMessage)) _notify();
     }
   }
 
@@ -587,10 +600,22 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   Future<bool> _confirmQuit() async {
     if (_quitAccepted) return true;
-    if (_dialogCount > 0 ||
-        _closingTabs.isNotEmpty ||
-        _opening.isNotEmpty ||
-        _documents.any((tab) => tab.busy || tab.editor.isSaving)) {
+
+    // A busy window cannot ask about its tabs, and refusing in silence looks
+    // like a broken Quit button. Say what to wait for instead — but a failure
+    // the user has not dealt with yet outranks a retryable notice.
+    if (_dialogCount > 0 || _closingTabs.isNotEmpty || _opening.isNotEmpty) {
+      if (!_showsRealError) {
+        _error = _busyWhileOpeningMessage;
+        _notify();
+      }
+      return false;
+    }
+    if (_documents.any((tab) => tab.busy || tab.editor.isSaving)) {
+      if (!_showsRealError) {
+        _error = _busySavingMessage;
+        _notify();
+      }
       return false;
     }
     _closingAll = true;
@@ -667,6 +692,24 @@ final class DocumentWorkspace extends ChangeNotifier {
     _errorScope = null;
     _notify();
   }
+
+  /// Drops a quit refusal once the work it named has finished. Each completion
+  /// clears only the notice it owns, so a save finishing cannot retire a notice
+  /// about an open that is still running. A real failure is never touched: the
+  /// user has to see it and decide. Returns whether one was dropped, so a
+  /// caller that has not notified yet can do exactly one notification.
+  bool _clearBusyNotice(String message) {
+    if (_error != message) return false;
+    _error = null;
+    return true;
+  }
+
+  /// True when the banner holds a failure the user still has to act on, as
+  /// opposed to one of this class's own retryable notices.
+  bool get _showsRealError =>
+      _error != null &&
+      _error != _busySavingMessage &&
+      _error != _busyWhileOpeningMessage;
 
   void _remove(DocumentTab tab) {
     final index = _documents.indexOf(tab);
