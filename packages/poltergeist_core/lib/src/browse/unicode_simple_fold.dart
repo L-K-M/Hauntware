@@ -17,6 +17,59 @@ String simpleCaseFold(String value) {
   return result.toString();
 }
 
+/// Unicode 17.0.0 full folding without locale-specific tailoring.
+///
+/// Destination identity uses expansions such as ß → ss because Linux
+/// casefold filesystems treat those spellings as the same name.
+String fullCaseFold(String value) {
+  final result = StringBuffer();
+  for (final point in value.runes) {
+    final expansion = _fullFoldExpansions[point];
+    if (expansion == null) {
+      result.writeCharCode(_foldCodePoint(point));
+      continue;
+    }
+
+    for (final target in expansion) {
+      result.writeCharCode(target);
+    }
+  }
+  return result.toString();
+}
+
+/// Removes Unicode 17.0.0 default-ignorable code points.
+///
+/// Linux casefold directories remove these before comparing names.
+String removeDefaultIgnorableCodePoints(String value) {
+  final result = StringBuffer();
+  for (final point in value.runes) {
+    if (_isDefaultIgnorable(point)) continue;
+
+    result.writeCharCode(point);
+  }
+  return result.toString();
+}
+
+bool _isDefaultIgnorable(int point) {
+  var lower = 0;
+  var upper = _defaultIgnorableRanges.length - 1;
+  while (lower <= upper) {
+    final middle = (lower + upper) ~/ 2;
+    final range = _defaultIgnorableRanges[middle];
+    if (point < range.start) {
+      upper = middle - 1;
+      continue;
+    }
+    if (point > range.end) {
+      lower = middle + 1;
+      continue;
+    }
+
+    return true;
+  }
+  return false;
+}
+
 int _foldCodePoint(int point) {
   // Most filenames need only the fixed ASCII mapping.
   if (point <= _asciiMaximum) {

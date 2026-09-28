@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
+const int _posixInvalidArgument = 22;
+
 final class _RecordingIo extends TransferJournalIo {
   final List<String> operations = [];
   String? failingOperation;
@@ -43,12 +45,39 @@ void main() {
   });
 
   test('a reported directory flush failure propagates', () async {
-    // The production directory barrier absorbs FileSystemException.
-    // This fake reports StateError to exercise errors that do escape it.
+    // Non-filesystem failures must escape the production barrier too.
     final io = _RecordingIo()..failingOperation = 'directory';
 
     await expectLater(io.flushLocalFile('copy.txt'), throwsStateError);
 
     expect(io.operations, ['file', 'directory']);
   });
+
+  test('an operational directory flush failure propagates', () async {
+    final root = await Directory.systemTemp.createTemp('pg-durability-');
+    final missing = Directory('${root.path}${Platform.pathSeparator}missing');
+
+    try {
+      await expectLater(
+        const TransferJournalIo().fsyncDirectory(missing),
+        throwsA(isA<FileSystemException>()),
+      );
+    } finally {
+      await root.delete(recursive: true);
+    }
+  });
+
+  test('Linux directory fsync reaches the native barrier', () async {
+    // procfs rejects fsync with EINVAL. EISDIR means native fsync was skipped.
+    await expectLater(
+      const TransferJournalIo().fsyncDirectory(Directory('/proc')),
+      throwsA(
+        isA<FileSystemException>().having(
+          (error) => error.osError?.errorCode,
+          'errno',
+          _posixInvalidArgument,
+        ),
+      ),
+    );
+  }, skip: !Platform.isLinux);
 }

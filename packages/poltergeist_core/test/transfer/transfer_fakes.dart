@@ -6,6 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
+enum FakeNameProbeOperation { upload, stat, delete }
+
 /// Deterministic pump for the real-async transfer tests: every fake
 /// resolves through microtasks and `Duration.zero` boundaries, never real
 /// timers, so pumping the event queue drives the queue engine.
@@ -68,6 +70,15 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   /// Destinations written by `upload(preserveMode:)`.
   final Map<String, int> modes = {};
 
+  /// Probe files stay outside transfer counters and scripted I/O failures.
+  final Map<String, RemoteFileEntry> _nameProbeEntries = {};
+
+  /// Dedicated hooks keep probe faults observable without perturbing the
+  /// transfer-operation counters and gates used by existing tests.
+  final Map<FakeNameProbeOperation, Completer<void>> nameProbeGates = {};
+  final Map<FakeNameProbeOperation, Object> nameProbeFailures = {};
+  final List<String> nameProbeCalls = [];
+
   final List<String> calls = [];
   int statCalls = 0;
   int listCalls = 0;
@@ -120,6 +131,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   /// Gates — return a completer to stall the operation until it completes.
   Completer<void>? Function(String path)? statGate;
   Completer<void>? Function(String path)? listGate;
+  Completer<void>? Function(String path)? createDirectoryGate;
   Completer<void>? Function(String path)? downloadGate;
   Completer<void>? Function(String path)? uploadGate;
 
@@ -135,15 +147,93 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   /// queue's folded-name collision rules are observable.
   bool caseInsensitive = false;
 
-  bool _matches(String a, String b) =>
-      caseInsensitive ? a.toLowerCase() == b.toLowerCase() : a == b;
+  /// When true, canonically equivalent Unicode spellings share one entry.
+  bool normalizationInsensitive = false;
+
+  /// Nested mount/share identity overrides, keyed by their root path.
+  final Map<String, DestinationNameComparison> nameComparisonsByRoot = {};
+
+  /// Optional independent filesystem identity model for collision tests.
+  String Function(String path)? identityKeyOverride;
+
+  DestinationNameComparison get _nameComparison => destinationNameComparisonFor(
+    FileSystemNameTraits(
+      caseSensitivity: caseInsensitive
+          ? FileSystemNameSensitivity.insensitive
+          : FileSystemNameSensitivity.sensitive,
+      normalizationSensitivity: normalizationInsensitive
+          ? FileSystemNameSensitivity.insensitive
+          : FileSystemNameSensitivity.sensitive,
+    ),
+  );
+
+  DestinationNameComparison _comparisonForPath(String path) {
+    var comparison = _nameComparison;
+    var matchedLength = -1;
+    for (final MapEntry(key: root, value: candidate)
+        in nameComparisonsByRoot.entries) {
+      final matches = path == root || path.startsWith('$root/');
+      if (!matches || root.length <= matchedLength) continue;
+      comparison = candidate;
+      matchedLength = root.length;
+    }
+    return comparison;
+  }
+
+  String _identityKey(String path) {
+    final override = identityKeyOverride;
+    if (override != null) return override(path);
+
+    return destinationNameKey(path, _comparisonForPath(path));
+  }
+
+  bool _matches(String a, String b) => _identityKey(a) == _identityKey(b);
+
+  bool _isNameProbePath(String path) =>
+      isFileSystemNameProbeArtifact(remoteBasename(path));
+
+  Future<void> _runNameProbeHook(
+    FakeNameProbeOperation operation,
+    String path, {
+    RemoteTransferCancellation? cancellation,
+  }) async {
+    nameProbeCalls.add('${operation.name}:$path');
+    final gate = nameProbeGates[operation];
+    if (gate != null) {
+      await Future.any<void>([
+        gate.future,
+        if (cancellation != null) cancellation.whenCancelled,
+      ]);
+    }
+    cancellation?.throwIfCancelled();
+    final failure = nameProbeFailures[operation];
+    if (failure != null) throw failure;
+  }
 
   /// The real map key for a directory path — folds when [caseInsensitive]
   /// models a case-insensitive remote (e.g. a Windows server).
   String? _dirKey(String path) {
     if (directories.containsKey(path)) return path;
-    if (!caseInsensitive) return null;
+    if (!caseInsensitive &&
+        !normalizationInsensitive &&
+        nameComparisonsByRoot.isEmpty) {
+      return null;
+    }
     for (final key in directories.keys) {
+      if (_matches(key, path)) return key;
+    }
+    return null;
+  }
+
+  /// The real map key for a file path on a case-insensitive fake volume.
+  String? _fileKey(String path) {
+    if (fileBytes.containsKey(path)) return path;
+    if (!caseInsensitive &&
+        !normalizationInsensitive &&
+        nameComparisonsByRoot.isEmpty) {
+      return null;
+    }
+    for (final key in fileBytes.keys) {
       if (_matches(key, path)) return key;
     }
     return null;
@@ -159,16 +249,17 @@ class FakeTreeFileSystem implements RemoteFileSystem {
 
   void addDirectory(String path, {DateTime? modifiedAt}) {
     final normalized = path == '/' ? path : path.replaceAll(RegExp(r'/+$'), '');
-    directories.putIfAbsent(normalized, () => <RemoteFileEntry>[]);
+    final actualPath = _dirKey(normalized) ?? normalized;
+    directories.putIfAbsent(actualPath, () => <RemoteFileEntry>[]);
     if (normalized == '/') return;
-    final parent = remoteParent(normalized);
+    final parent = remoteParent(actualPath);
     addDirectory(parent);
-    directories[parent]!
-      ..removeWhere((e) => e.path == normalized)
+    directories[_dirKey(parent) ?? parent]!
+      ..removeWhere((e) => _matches(e.path, actualPath))
       ..add(
         RemoteFileEntry(
-          path: normalized,
-          name: remoteBasename(normalized),
+          path: actualPath,
+          name: remoteBasename(actualPath),
           type: RemoteFileType.directory,
           modifiedAt: modifiedAt,
         ),
@@ -181,10 +272,12 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     DateTime? modifiedAt,
     int? mode,
   }) {
-    addDirectory(remoteParent(path));
+    final parent = remoteParent(path);
+    addDirectory(parent);
+    _removeFileAliases(path);
     fileBytes[path] = bytes;
-    directories[remoteParent(path)]!
-      ..removeWhere((e) => e.path == path)
+    directories[_dirKey(parent) ?? parent]!
+      ..removeWhere((e) => _matches(e.path, path))
       ..add(
         RemoteFileEntry(
           path: path,
@@ -198,9 +291,10 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   }
 
   void addSymlink(String path) {
-    addDirectory(remoteParent(path));
-    directories[remoteParent(path)]!
-      ..removeWhere((e) => e.path == path)
+    final parent = remoteParent(path);
+    addDirectory(parent);
+    directories[_dirKey(parent) ?? parent]!
+      ..removeWhere((e) => _matches(e.path, path))
       ..add(
         RemoteFileEntry(
           path: path,
@@ -242,6 +336,17 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     return null;
   }
 
+  void _removeFileAliases(String path) {
+    final aliases = fileBytes.keys
+        .where((candidate) => _matches(candidate, path))
+        .toList();
+    for (final alias in aliases) {
+      fileBytes.remove(alias);
+      mtimes.remove(alias);
+      modes.remove(alias);
+    }
+  }
+
   RemoteFileException _notFound(String operation, String path) =>
       RemoteFileException(
         kind: RemoteFileErrorKind.notFound,
@@ -264,12 +369,18 @@ class FakeTreeFileSystem implements RemoteFileSystem {
 
   @override
   Future<String> canonicalize(String path) async =>
-      // A case-insensitive volume resolves both spellings to one entry —
-      // the fake folds like the queue's `_isSelfTarget` probe expects.
-      caseInsensitive ? path.toLowerCase() : path;
+      // The fake resolves aliases like the destination volume itself.
+      _identityKey(path);
 
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
+    if (_isNameProbePath(path)) {
+      await _runNameProbeHook(FakeNameProbeOperation.stat, path);
+      final probeEntry = entryAt(path);
+      if (probeEntry != null) return probeEntry;
+      throw _notFound('stat', path);
+    }
+
     statCalls++;
     calls.add('stat:$path');
     await statGate?.call(path)?.future;
@@ -309,7 +420,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     try {
       final failure = downloadFailure?.call(path);
       if (failure != null) throw failure;
-      final bytes = fileBytes[path];
+      final bytes = fileBytes[_fileKey(path)];
       if (bytes == null) throw _notFound('download', path);
       var sent = 0;
       Stream<List<int>> chunks() async* {
@@ -394,6 +505,27 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     RemoteTransferCancellation? cancellation,
     bool computeHash = true,
   }) async {
+    if (_isNameProbePath(path)) {
+      if (entryAt(path) != null) throw _conflict('upload', path);
+      await _runNameProbeHook(
+        FakeNameProbeOperation.upload,
+        path,
+        cancellation: cancellation,
+      );
+      await content.drain<void>();
+      final entry = RemoteFileEntry(
+        path: path,
+        name: remoteBasename(path),
+        type: RemoteFileType.file,
+        size: 0,
+      );
+      _nameProbeEntries[_identityKey(path)] = entry;
+      final parent = remoteParent(path);
+      addDirectory(parent);
+      directories[_dirKey(parent) ?? parent]!.add(entry);
+      return entry;
+    }
+
     uploadCalls++;
     calls.add('upload:$path');
     activeUploads++;
@@ -475,7 +607,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     }
     final digest = expected.contentSha256;
     if (digest == null) return true;
-    final bytes = fileBytes[path];
+    final bytes = fileBytes[_fileKey(path)];
     if (bytes == null) return false;
     return sha256.convert(bytes).toString() == digest;
   }
@@ -484,6 +616,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
   Future<void> createDirectory(String path) async {
     mkdirCalls++;
     calls.add('mkdir:$path');
+    await createDirectoryGate?.call(path)?.future;
     if (entryAt(path) != null) throw _conflict('mkdir', path);
     final parent = remoteParent(path);
     final parentKey = _dirKey(parent);
@@ -672,6 +805,18 @@ class FakeTreeFileSystem implements RemoteFileSystem {
 
   @override
   Future<void> delete(RemoteFileEntry entry) async {
+    if (_isNameProbePath(entry.path)) {
+      await _runNameProbeHook(FakeNameProbeOperation.delete, entry.path);
+      if (_nameProbeEntries.remove(_identityKey(entry.path)) != null) {
+        final parent = remoteParent(entry.path);
+        directories[_dirKey(parent) ?? parent]?.removeWhere(
+          (child) => _matches(child.path, entry.path),
+        );
+        return;
+      }
+      throw _notFound('delete', entry.path);
+    }
+
     deleteCalls++;
     calls.add('delete:${entry.path}');
     final failure = deleteFailure?.call(entry);
@@ -690,7 +835,7 @@ class FakeTreeFileSystem implements RemoteFileSystem {
       }
       directories.remove(dirKey ?? entry.path);
     }
-    fileBytes.remove(entry.path);
+    _removeFileAliases(existing.path);
     final parentKey = _dirKey(remoteParent(entry.path));
     if (parentKey != null) {
       directories[parentKey]!.removeWhere((e) => _matches(e.path, entry.path));
@@ -707,13 +852,13 @@ class FakeTreeFileSystem implements RemoteFileSystem {
     final existing = entryAt(path);
     if (existing == null) throw _notFound('setTimes', path);
     if (modifiedAt != null) {
-      mtimes[path] = modifiedAt;
+      mtimes[existing.path] = modifiedAt;
       // Reflect the new mtime in the parent's listing so later
       // replace-if-newer checks observe it.
-      final parent = remoteParent(path);
-      final children = directories[parent];
+      final parent = remoteParent(existing.path);
+      final children = directories[_dirKey(parent) ?? parent];
       if (children != null) {
-        final index = children.indexWhere((e) => e.path == path);
+        final index = children.indexWhere((e) => _matches(e.path, path));
         if (index >= 0) {
           final e = children[index];
           children[index] = RemoteFileEntry(
@@ -807,6 +952,11 @@ class RecordingPersistence implements TransferPersistence {
   void appendJournal(TransferJournalRecord record) {
     onAppend?.call(record);
     journal.add(record);
+  }
+
+  @override
+  Future<void> appendJournalDurably(TransferJournalRecord record) async {
+    appendJournal(record);
   }
 
   @override

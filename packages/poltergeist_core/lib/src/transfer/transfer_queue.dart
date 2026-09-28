@@ -5,11 +5,11 @@ import 'dart:io' show Platform;
 import 'package:path/path.dart' as p;
 import 'package:seance_core/seance_core.dart';
 
-import '../browse/unicode_simple_fold.dart';
 import '../checkout/managed_checkout_spec.dart';
 import '../connection/connection_manager.dart';
 import '../connection/pool_policy.dart';
 import '../editor/built_in_text_document.dart';
+import '../fs/file_system_name_traits.dart';
 import '../fs/local_file_system.dart';
 import '../fs/local_fs_safety.dart';
 import '../preview/preview_kinds.dart';
@@ -17,11 +17,14 @@ import '../preview/preview_produce.dart';
 import 'bandwidth_limiter.dart';
 import 'bounded_transfer_sink.dart';
 import 'conflict_policy.dart';
+import 'destination_name_key.dart';
 import 'recursive_walker.dart';
 import 'server_transfer_limits.dart';
 import 'transfer_journal.dart';
 import 'transfer_task.dart';
 import 'trash_service.dart';
+
+final Map<String, _AsyncGate> _fileSystemNameProbeGates = {};
 
 /// The engine-side transfer queue (03 §4).
 ///
@@ -99,20 +102,23 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     BandwidthLimiter? downloadLimiter,
     BandwidthLimiter? uploadLimiter,
     Future<void> Function(String destinationPath)? flushLocalDestination,
+    Future<void> Function(String destinationPath)? flushLocalDirectory,
     LocalTrashService? localTrash,
     RemoteTrash? remoteTrash,
     bool Function(String serverId)? remoteTrashEnabled,
     this.deleteQuantifyTimeout = const Duration(seconds: 10),
+    this.nameProbeCleanupTimeout = const Duration(seconds: 5),
     this.persistence,
   }) : _localFileSystem = localFileSystem ?? LocalFileSystem(),
-       _isCaseInsensitiveDestination =
-           isCaseInsensitiveDestination ?? _defaultCaseSensitivity,
+       _isCaseInsensitiveDestination = isCaseInsensitiveDestination?.call,
        _isFlaggedEntry = isFlaggedEntry ?? _noFlags,
        localTrash = localTrash ?? LocalTrashService(),
        remoteTrash = remoteTrash ?? RemoteTrash(),
        _remoteTrashEnabled = remoteTrashEnabled ?? _trashOptedOut,
        flushLocalDestination =
            flushLocalDestination ?? const TransferJournalIo().flushLocalFile,
+       flushLocalDirectory =
+           flushLocalDirectory ?? const TransferJournalIo().flushLocalDirectory,
        _maxInFlightFiles = maxInFlightFiles,
        _maxPendingConflicts = maxPendingConflicts,
        downloadLimiter = downloadLimiter ?? BandwidthLimiter(),
@@ -141,7 +147,11 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// The budget constants the queue enforces — today only
   /// `taskRetryLimit` (the §3.3 reconnect-cycle bound per task).
   final PoolPolicy poolPolicy;
-  final bool Function(FsLocation destination) _isCaseInsensitiveDestination;
+
+  /// Compatibility override for callers that already know one endpoint's
+  /// coarse case behavior. Without it, the queue probes each destination
+  /// root for independent case and normalization traits.
+  final bool Function(FsLocation destination)? _isCaseInsensitiveDestination;
 
   /// The §13 flag detector handed to the scan's [RecursiveWalker] —
   /// it defaults to [_noFlags] until the upstream `RemoteFileEntry`
@@ -169,6 +179,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// unquantified copy on timeout/error" — the dialog's count/size
   /// disclosure degrades, never the delete itself).
   final Duration deleteQuantifyTimeout;
+
+  /// Maximum time a directory mutation waits for an external name probe.
+  final Duration nameProbeCleanupTimeout;
 
   /// High-water mark for the in-memory pipe buffer between a source
   /// `download` and a destination `upload` (03 §4.5's small-buffer rule).
@@ -218,6 +231,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// neither where the platform supports the barriers. Injectable for
   /// tests; the production default is [TransferJournalIo.flushLocalFile].
   final Future<void> Function(String destinationPath) flushLocalDestination;
+
+  /// The directory equivalent of [flushLocalDestination].
+  final Future<void> Function(String destinationPath) flushLocalDirectory;
 
   /// The surfaced-conflict bound (the task's "bounded pending-conflict
   /// storage"): at most this many parked items sit in [pendingConflicts]
@@ -367,8 +383,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// observed through [events] and the task's mutable fields.
   ///
   /// Duplicate roots are deduped and roots nested inside another root are
-  /// dropped (the parent already transfers them), keeping a task's planned
-  /// destination paths unique.
+  /// dropped because the parent already transfers them.
   TransferTask enqueue(TransferTaskSpec spec) {
     if (_disposed) {
       throw StateError('the transfer queue is disposed');
@@ -435,7 +450,10 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         disposition: spec.disposition,
       ),
     );
-    final runtime = _TaskRuntime(task);
+    final runtime = _TaskRuntime(
+      task,
+      _initialDestinationNameComparison(task.destination),
+    );
     // Journal the enqueue before the task becomes visible to dispatch —
     // the write-ahead rule that makes a crash between "the user hit
     // transfer" and the first scan recoverable (03 §4.6).
@@ -495,7 +513,10 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         managedCheckout: managed,
       ),
     );
-    final runtime = _TaskRuntime(task);
+    final runtime = _TaskRuntime(
+      task,
+      _initialDestinationNameComparison(task.destination),
+    );
     persistence?.appendJournal(
       TaskEnqueuedRecord(
         taskId: task.id,
@@ -551,7 +572,10 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         produce: produce,
       ),
     );
-    final runtime = _TaskRuntime(task);
+    final runtime = _TaskRuntime(
+      task,
+      _initialDestinationNameComparison(task.destination),
+    );
     // Head insertion: LinkedHashMap iteration order is queue order, so
     // the row renders ahead of every waiting task.
     final existing = Map.of(_tasks);
@@ -1074,6 +1098,11 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     if (_disposed || !_paused) return;
     _paused = false;
     if (!_notPaused.isCompleted) _notPaused.complete();
+    for (final runtime in _tasks.values) {
+      if (runtime.task.state == TransferTaskState.paused) continue;
+
+      _startDestinationComparisonValidation(runtime);
+    }
     _pump();
   }
 
@@ -1114,6 +1143,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     task.state = next;
     _emit(TransferQueueTaskEvent(task.id, task.state));
     if (!runtime.notPaused.isCompleted) runtime.notPaused.complete();
+    if (!_paused) _startDestinationComparisonValidation(runtime);
     _pump();
     // A restored task whose every item already finished (its terminal
     // record was the torn tail) drains to its terminal state here.
@@ -1149,7 +1179,6 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     for (final directory in runtime.directories.values) {
       if (!directory.ready.isCompleted) directory.ready.complete();
     }
-    _releaseRegistryClaims(task.id);
     _maybeFinishTask(runtime);
   }
 
@@ -1391,6 +1420,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         await _walkDeleteRoots(runtime);
       } else {
         await _ensureDestinationRoot(runtime);
+        final comparison = await _resolveDestinationNameComparison(runtime);
+        _setDestinationNameComparison(runtime, comparison);
         await _walkRoots(runtime);
       }
       // Entries the walk never re-discovered — a source deleted between
@@ -1418,6 +1449,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           taskId: task.id,
           totalBytes: task.totalBytes ?? 0,
           skippedSymlinks: task.plan?.skippedSymlinks ?? 0,
+          destinationNameComparison: task.operation == TransferOperation.delete
+              ? null
+              : runtime.destinationNameComparison,
         ),
       );
       task.scanComplete = true;
@@ -1508,6 +1542,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       location: task.source,
       purpose: WalkPurpose.transfer,
       destination: task.destination,
+      destinationNameKey: (name) =>
+          destinationNameKey(name, runtime.destinationNameComparison),
+      // The resolved container may be a nested mount with different name
+      // rules. Execution probes that container before owning an output.
+      destinationCollisionDisposition: (_) =>
+          DestinationCollisionDisposition.admit,
       isFlaggedEntry: _isFlaggedEntry,
       cancellation: task.cancellation,
       // Each VFS op rides the scan leases and the `disconnected`
@@ -1546,8 +1586,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
             final directory = runtime.walkDirectories[event.directory]!;
             // A listing failure is not per-item retryable: the subtree
             // was never discovered, so re-arming the mkdir would claim
-            // success over children that were never planned. The flag
-            // routes the retry through `retryTask`'s re-scan instead.
+            // success over children that were never planned. The terminal
+            // policy survives replay; a fresh enqueue must scan again.
             directory.listingFailed = true;
             _finishDirectory(
               runtime,
@@ -1555,6 +1595,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
               outcome: _DirOutcome.failed,
               error: event.error.message,
               failureKind: event.error.kind,
+              failureRetryPolicy: TransferFailureRetryPolicy.terminal,
             );
           case WalkRootFailedEvent():
             if (_isWalkEndingError(event.error)) {
@@ -1679,6 +1720,17 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     final task = runtime.task;
     final entry = event.entry;
     switch (event.kind) {
+      case WalkItemKind.nameProbeArtifact:
+        _addTerminalItem(
+          runtime,
+          sourcePath: entry.path,
+          destinationPath: entry.path,
+          isDirectory: entry.isDirectory,
+          size: entry.size,
+          state: TransferItemState.skipped,
+          error: event.detail ?? 'reserved filesystem-name probe artifact',
+        );
+        return;
       case WalkItemKind.flagged:
         _addTerminalItem(
           runtime,
@@ -1690,7 +1742,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           error: event.detail ?? 'the entry name is not valid UTF-8',
         );
         return;
-      case WalkItemKind.rejectedName:
+      case WalkItemKind.rejectedName || WalkItemKind.destinationCollision:
         // Unreachable — the walker validates destination names for
         // transfer walks only. A failed row beats a silent skip if that
         // ever changes.
@@ -1805,6 +1857,18 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           error: 'symbolic links are not transferred',
         );
         return;
+      case WalkItemKind.nameProbeArtifact:
+        final artifact = _addTerminalItem(
+          runtime,
+          sourcePath: entry.path,
+          destinationPath: plannedDest,
+          size: entry.size,
+          isDirectory: entry.isDirectory,
+          state: TransferItemState.skipped,
+          error: event.detail ?? 'reserved filesystem-name probe artifact',
+        );
+        runtime.nameProbeArtifactItems.add(artifact.id);
+        return;
       case WalkItemKind.flagged:
         // §13: a flagged name can never round-trip to the wire — the
         // row reports the skip with its reason; nothing dispatches.
@@ -1831,6 +1895,19 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           failureKind: RemoteFileErrorKind.other,
         );
         return;
+      case WalkItemKind.destinationCollision:
+        _addTerminalItem(
+          runtime,
+          sourcePath: entry.path,
+          destinationPath: plannedDest,
+          size: entry.size,
+          isDirectory: entry.isDirectory,
+          state: TransferItemState.failed,
+          error: event.detail ?? withinTaskDestinationCollisionMessage,
+          failureKind: RemoteFileErrorKind.conflict,
+          failureRetryPolicy: TransferFailureRetryPolicy.terminal,
+        );
+        return;
       case WalkItemKind.unsupported:
         _addTerminalItem(
           runtime,
@@ -1849,6 +1926,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     }
     // The walker already applied the destination's name rules.
     final name = entry.name;
+    _rememberPlannedDestination(runtime, plannedDest, entry.path);
     final existing = await _scanStatDestination(runtime, plannedDest);
     switch (event.kind) {
       case WalkItemKind.file:
@@ -1956,8 +2034,10 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       // The report kinds returned above — file/directory are the only
       // kinds that reach the plan.
       case WalkItemKind.symbolicLink ||
+          WalkItemKind.nameProbeArtifact ||
           WalkItemKind.flagged ||
           WalkItemKind.rejectedName ||
+          WalkItemKind.destinationCollision ||
           WalkItemKind.unsupported:
         throw StateError('unreachable: ${event.kind} returned above');
     }
@@ -2033,6 +2113,26 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     // A restored directory whose journaled outcome is already terminal
     // runs no mkdir — the listing above still walked its children.
     if (directory.outcome != _DirOutcome.pending) return;
+    final containerKey = directory.planned.containerKey;
+    final parent = containerKey == null
+        ? null
+        : runtime.directories[containerKey];
+    if (parent != null && !parent.ready.isCompleted) {
+      // A parked parent must resolve before its descendants enter the
+      // serialized chain; otherwise they observe no container and skip.
+      if (directory.waitingForParent) return;
+      directory.waitingForParent = true;
+      unawaited(
+        parent.ready.future.then((_) {
+          directory.waitingForParent = false;
+          if (directory.item.isTerminal || runtime.task.isTerminal) return;
+
+          _scheduleDirectory(runtime, directory);
+        }),
+      );
+      return;
+    }
+
     runtime.directoryOpsPending++;
     runtime.directoryChain = runtime.directoryChain.then(
       (_) => _runDirectory(runtime, directory),
@@ -2042,6 +2142,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
 
   Future<void> _runDirectory(_TaskRuntime runtime, _DirState directory) async {
     final task = runtime.task;
+    (String, String)? registryKey;
+    _RegistryClaim? registryClaim;
     try {
       // A cancel/fail sweep settled the item while its op waited on the
       // chain — the chain drains quickly rather than re-acting on it.
@@ -2060,6 +2162,34 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         _finishDirectory(runtime, directory, outcome: _DirOutcome.skipped);
         return;
       }
+      final destinationPath = _joinDest(
+        task.destination,
+        containerPath,
+        directory.planned.name,
+      );
+      final claimedPath = _durableDestinationClaim(runtime, directory.item.id);
+      final registryPath = claimedPath ?? destinationPath;
+      registryKey = (
+        _endpointKey(task.destination),
+        _fold(registryPath),
+      );
+      while (true) {
+        await _waitForAdmission(runtime);
+        if (directory.item.isTerminal) return;
+        final holder = _registry[registryKey];
+        if (holder == null || holder.committed.isCompleted) {
+          registryClaim = _RegistryClaim(task.id);
+          _registry[registryKey] = registryClaim;
+          break;
+        }
+
+        await Future.any<void>([
+          holder.committed.future,
+          task.cancellation.whenCancelled,
+        ]);
+        _throwIfTaskCancelled(task);
+      }
+
       final leases = await _leaseServerIds(
         _serverIds({task.destination}),
         task.cancellation,
@@ -2116,6 +2246,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         failureKind: RemoteFileErrorKind.other,
       );
     } finally {
+      if (registryKey != null && registryClaim != null) {
+        _releaseClaim(registryKey, registryClaim);
+      }
       runtime.directoryOpsPending--;
       _maybeFinishTask(runtime);
     }
@@ -2128,12 +2261,91 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     String containerPath,
   ) async {
     final task = runtime.task;
+    final durableClaims = runtime.durableDestinationClaims[directory.item.id];
+    if (durableClaims != null && durableClaims.isNotEmpty) {
+      final claimedPath = durableClaims.last;
+      final sourcePath = directory.planned.source.path;
+      final claimedContainer = _parentOf(task.destination, claimedPath);
+      // A durable child claim can sit below a mount whose name rules differ
+      // from the restored root. Rekey ownership before judging aliases.
+      await _refreshDestinationContainerComparison(
+        runtime,
+        dstFs,
+        claimedContainer,
+        claimedPath,
+        sourcePath,
+        cancellation: task.cancellation,
+      );
+      if (!_reserveOutputDestination(runtime, claimedPath, sourcePath)) {
+        _failDirectoryDestinationCollision(runtime, directory);
+        return;
+      }
+
+      final claimed = await _statOrNull(dstFs, claimedPath);
+      if (claimed != null) {
+        // The claim precedes mkdir, so an occupant cannot prove this task
+        // committed. Picking a new name could duplicate a crashed commit.
+        _failDirectoryDestinationCollision(runtime, directory);
+        return;
+      }
+      try {
+        await dstFs.createDirectory(claimedPath);
+      } on RemoteFileException catch (error) {
+        if (error.kind != RemoteFileErrorKind.conflict) rethrow;
+        _failDirectoryDestinationCollision(runtime, directory);
+        return;
+      }
+      _finishDirectory(
+        runtime,
+        directory,
+        outcome: _DirOutcome.ready,
+        resolvedPath: claimedPath,
+      );
+      return;
+    }
+
     final destination = _joinDest(
       task.destination,
       containerPath,
       directory.planned.name,
     );
+    final sourcePath = directory.planned.source.path;
+    final folderVerb = _effectiveFolderVerb(runtime, directory.item.id);
+    await _refreshDestinationContainerComparison(
+      runtime,
+      dstFs,
+      containerPath,
+      destination,
+      sourcePath,
+    );
     final existing = await _statOrNull(dstFs, destination);
+    if (_hasObservedForeignDestinationOwner(
+      runtime,
+      destination,
+      sourcePath,
+      existing,
+    )) {
+      if (folderVerb == ConflictResolution.keepBoth) {
+        await _materializeNumbered(runtime, directory, dstFs, containerPath);
+        return;
+      }
+      if (folderVerb == ConflictResolution.ask && existing != null) {
+        _parkDirectoryConflict(runtime, directory, existing);
+        return;
+      }
+      if (folderVerb == ConflictResolution.skip) {
+        _finishDirectory(
+          runtime,
+          directory,
+          outcome: _DirOutcome.skipped,
+          error: withinTaskDestinationCollisionMessage,
+        );
+        return;
+      }
+
+      _failDirectoryDestinationCollision(runtime, directory);
+      return;
+    }
     // D26's directory self-move, ahead of the conflict verbs: a move
     // within one endpoint (local→local, or one server) whose resolved
     // destination IS the source directory — the same path, or a
@@ -2150,7 +2362,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           directory.planned.source.path,
           destination,
         )) {
+      if (!_reserveOutputDestination(runtime, destination, sourcePath)) {
+        _failDirectoryDestinationCollision(runtime, directory);
+        return;
+      }
       directory.selfTarget = true;
+      await _persistDirectoryDestinationClaim(runtime, directory, destination);
       _finishDirectory(
         runtime,
         directory,
@@ -2166,12 +2383,21 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     // through the same folder verb — `merge` there falls back to `ask`
     // (03 §4.1) rather than pretending recursion is possible.
     switch (resolveTransferConflict(
-      verb: _effectiveFolderVerb(runtime, directory.item.id),
+      verb: folderVerb,
       sourceIsDirectory: true,
       existing: existing == null ? null : DestinationStat.fromEntry(existing),
       sourceModifiedAt: directory.planned.source.modifiedAt,
     )) {
       case ConflictProceed():
+        if (!_reserveOutputDestination(runtime, destination, sourcePath)) {
+          _failDirectoryDestinationCollision(runtime, directory);
+          return;
+        }
+        await _persistDirectoryDestinationClaim(
+          runtime,
+          directory,
+          destination,
+        );
         await _createDirectoryOrClassify(dstFs, destination);
         _finishDirectory(
           runtime,
@@ -2180,6 +2406,15 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           resolvedPath: destination,
         );
       case ConflictMerge():
+        if (!_reserveOutputDestination(runtime, destination, sourcePath)) {
+          _failDirectoryDestinationCollision(runtime, directory);
+          return;
+        }
+        await _persistDirectoryDestinationClaim(
+          runtime,
+          directory,
+          destination,
+        );
         _finishDirectory(
           runtime,
           directory,
@@ -2231,21 +2466,51 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           isDirectory: true,
         ),
       );
-      final existing = await _statOrNull(dstFs, candidate);
-      if (existing != null) continue;
-      try {
-        await dstFs.createDirectory(candidate);
-      } on RemoteFileException catch (error) {
-        if (error.kind == RemoteFileErrorKind.conflict) continue;
-        rethrow;
-      }
-      _finishDirectory(
-        runtime,
-        directory,
-        outcome: _DirOutcome.ready,
-        resolvedPath: candidate,
+      final key = (
+        _endpointKey(runtime.task.destination),
+        _fold(candidate),
       );
-      return;
+      final holder = _registry[key];
+      if (holder != null && !holder.committed.isCompleted) continue;
+
+      final claim = _RegistryClaim(runtime.task.id);
+      _registry[key] = claim;
+      try {
+        final existing = await _statOrNull(dstFs, candidate);
+        if (existing != null ||
+            _hasForeignDestinationOwner(
+              runtime,
+              candidate,
+              directory.planned.source.path,
+            )) {
+          continue;
+        }
+        if (!_reserveOutputDestination(
+          runtime,
+          candidate,
+          directory.planned.source.path,
+        )) {
+          throw StateError('the serialized directory target lost ownership');
+        }
+        await _persistDirectoryDestinationClaim(runtime, directory, candidate);
+        try {
+          await dstFs.createDirectory(candidate);
+        } on RemoteFileException catch (error) {
+          // Another creator won the absent-stat to mkdir race. The
+          // durable intent cannot prove ownership, so try the next name.
+          if (error.kind == RemoteFileErrorKind.conflict) continue;
+          rethrow;
+        }
+        _finishDirectory(
+          runtime,
+          directory,
+          outcome: _DirOutcome.ready,
+          resolvedPath: candidate,
+        );
+        return;
+      } finally {
+        _releaseClaim(key, claim);
+      }
     }
     _finishDirectory(
       runtime,
@@ -2257,6 +2522,18 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       failureKind: RemoteFileErrorKind.conflict,
     );
   }
+
+  void _failDirectoryDestinationCollision(
+    _TaskRuntime runtime,
+    _DirState directory,
+  ) => _finishDirectory(
+    runtime,
+    directory,
+    outcome: _DirOutcome.failed,
+    error: withinTaskDestinationCollisionMessage,
+    failureKind: RemoteFileErrorKind.conflict,
+    failureRetryPolicy: TransferFailureRetryPolicy.terminal,
+  );
 
   /// `createDirectory` plus the exists-race classification: a remote mkdir
   /// can lose to a concurrent creator, which is success when the occupant
@@ -2283,6 +2560,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     String? resolvedPath,
     String? error,
     RemoteFileErrorKind? failureKind,
+    TransferFailureRetryPolicy failureRetryPolicy =
+        TransferFailureRetryPolicy.retryable,
   }) {
     final task = runtime.task;
     final item = directory.item;
@@ -2295,6 +2574,13 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     directory.resolvedPath = resolvedPath;
     directory.outcome = outcome;
     if (resolvedPath != null) item.destinationPath = resolvedPath;
+    if (outcome == _DirOutcome.ready && resolvedPath != null) {
+      _rememberOutputDestination(
+        runtime,
+        resolvedPath,
+        directory.planned.source.path,
+      );
+    }
     // Journal the directory's terminal record before the item state
     // takes effect — a completed mkdir's resolvedPath is what rebases
     // restored children after a crash (03 §4.6).
@@ -2312,6 +2598,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       },
       error: error,
       failureKind: failureKind,
+      failureRetryPolicy: failureRetryPolicy,
       resolvedPath: resolvedPath,
     );
     switch (outcome) {
@@ -2326,6 +2613,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         item.state = TransferItemState.failed;
         item.error = error;
         item.failureKind = failureKind;
+        item.failureRetryPolicy = failureRetryPolicy;
         task.failedItems++;
       case _DirOutcome.cancelled:
         item.state = TransferItemState.cancelled;
@@ -2380,7 +2668,14 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         );
         try {
           final fs = _fsFor(task.source, leases);
-          final outcome = await _executeDelete(runtime, fs, work);
+          final outcome = work.entry.isDirectory
+              ? await _withFileSystemNameProbeIsolation(task.source, () async {
+                  _throwIfTaskCancelled(task);
+                  await _waitForNameProbeArtifacts(task, fs, work.entry.path);
+                  _throwIfTaskCancelled(task);
+                  return _executeDelete(runtime, fs, work);
+                }, cancellation: task.cancellation)
+              : await _executeDelete(runtime, fs, work);
           // A completed op proves connectivity — the retry budget
           // bounds consecutive losses, not lifetime ones (03 §3.3).
           task.retryCount = 0;
@@ -2597,6 +2892,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   ({_TaskRuntime runtime, _FileWork work})? _nextDispatchable() {
     for (final runtime in _tasks.values) {
       if (runtime.eligible.isEmpty) continue;
+      if (!runtime.destinationComparisonReady.isCompleted) continue;
       final task = runtime.task;
       if (task.state == TransferTaskState.paused || task.isTerminal) {
         continue;
@@ -2633,8 +2929,11 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
 
     // Resolve the actual destination through the container key so a
     // keep-both-renamed ancestor rebases this item (03 §4.1).
-    final containerPath = _resolvedContainer(runtime, file.containerKey);
-    if (containerPath == null) {
+    final durableDestination = _durableDestinationClaim(runtime, item.id);
+    final resolvedContainer = durableDestination == null
+        ? _resolvedContainer(runtime, file.containerKey)
+        : _parentOf(task.destination, durableDestination);
+    if (resolvedContainer == null) {
       // Collateral skip: a retried container re-arms this row with it.
       runtime.containerSkips.add(item.id);
       _finishItem(
@@ -2646,17 +2945,19 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       _maybeFinishTask(runtime);
       return;
     }
-    final destinationPath = _joinDest(
-      task.destination,
-      containerPath,
-      file.name,
-    );
+    final containerPath = resolvedContainer;
+    final destinationPath =
+        durableDestination ??
+        _joinDest(task.destination, containerPath, file.name);
     item.destinationPath = destinationPath;
 
     // The shared destination-key registry serializes commits onto one
     // (endpoint, folded path). A waiter holds no slot and no lease: it
     // re-queues behind the holder's commit instead.
-    final key = (_endpointKey(task.destination), _fold(task, destinationPath));
+    final key = (
+      _endpointKey(task.destination),
+      _fold(destinationPath),
+    );
     final holder = _registry[key];
     if (holder != null && !holder.committed.isCompleted) {
       unawaited(
@@ -2699,6 +3000,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
             dstFs,
             work,
             containerPath,
+            cancellation: attempt,
           );
           switch (decision) {
             case _FileAsk(:final existing):
@@ -2715,16 +3017,32 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
                 error: detail,
               );
               return;
-            case _FileError(:final message):
+            case _FileError(:final message, :final retryPolicy):
               _finishItem(
                 runtime,
                 item,
                 TransferItemState.failed,
                 error: message,
                 failureKind: RemoteFileErrorKind.conflict,
+                failureRetryPolicy: retryPolicy,
               );
               return;
             case _FileSelfTarget(:final destinationPath):
+              if (!_reserveOutputDestination(
+                runtime,
+                destinationPath,
+                file.source.path,
+              )) {
+                _finishItem(
+                  runtime,
+                  item,
+                  TransferItemState.failed,
+                  error: withinTaskDestinationCollisionMessage,
+                  failureKind: RemoteFileErrorKind.conflict,
+                  failureRetryPolicy: TransferFailureRetryPolicy.terminal,
+                );
+                return;
+              }
               // The resolved destination IS the source (a move into the
               // file's own directory, or a folded spelling of it on a
               // case-insensitive volume): the move's end state already
@@ -2749,105 +3067,156 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
               overwrite: final overwrite,
               expectedTarget: final expectedTarget,
             ):
-              // Point at the actual commit target before the pipe so a
-              // keep-both item reports its numbered path mid-transfer.
-              item.destinationPath = commitPath;
-              try {
-                if (await _commitLocalMove(
-                  task,
-                  dstFs,
-                  file,
-                  commitPath,
-                  overwrite: overwrite,
-                  expectedTarget: expectedTarget,
-                )) {
-                  // rename(2) moved the entry atomically — mtime and
-                  // mode ride along, nothing was piped, and there is
-                  // no post-copy source unlink. The file counts as
-                  // fully transferred for progress parity with the
-                  // piped path.
-                  _onFileProgress(
-                    runtime,
-                    item,
-                    file.source.size ?? 0,
-                    file.source.size,
-                  );
-                  task.retryCount = 0;
-                  _finishItem(runtime, item, TransferItemState.completed);
+              final commitKey = (
+                _endpointKey(task.destination),
+                _fold(commitPath),
+              );
+              _RegistryClaim? commitClaim;
+              if (commitKey != key) {
+                final commitHolder = _registry[commitKey];
+                if (commitHolder != null &&
+                    !commitHolder.committed.isCompleted) {
+                  _waitForRegistryRelease(runtime, work, commitHolder);
                   return;
                 }
-                if (srcFs is LocalFileSystem && dstFs is LocalFileSystem) {
-                  // D26's local→local fast path (00 D26, 07 §3.10):
-                  // bytes move through the platform copy pump
-                  // (copy_file_range on Linux, streamed fallback
-                  // elsewhere) inside LocalFileSystem's own temp+rename
-                  // commit — the bounded pipe's job is bounding a REMOTE
-                  // leg, and a local hop through it pays a full
-                  // user-space round trip for nothing. Conflict and
-                  // cancellation semantics ride the same exception
-                  // taxonomy, so the retry/requeue logic below applies
-                  // unchanged.
-                  await srcFs.copyLocalFile(
-                    file.source.path,
+                commitClaim = _RegistryClaim(task.id);
+                _registry[commitKey] = commitClaim;
+              }
+              try {
+                if (!_reserveOutputDestination(
+                  runtime,
+                  commitPath,
+                  file.source.path,
+                )) {
+                  if (commitTry < _maxCommitRetries) continue;
+                  _finishItem(
+                    runtime,
+                    item,
+                    TransferItemState.failed,
+                    error: withinTaskDestinationCollisionMessage,
+                    failureKind: RemoteFileErrorKind.conflict,
+                    failureRetryPolicy: TransferFailureRetryPolicy.terminal,
+                  );
+                  return;
+                }
+                await _persistResolvedDestinationClaim(
+                  runtime,
+                  work,
+                  commitPath,
+                );
+                // Point at the actual commit target before the pipe so a
+                // keep-both item reports its numbered path mid-transfer.
+                item.destinationPath = commitPath;
+                try {
+                  if (await _commitLocalMove(
+                    task,
+                    dstFs,
+                    file,
                     commitPath,
                     overwrite: overwrite,
-                    preserveMode: file.source.mode,
                     expectedTarget: expectedTarget,
-                    cancellation: attempt,
-                    onProgress: (transferred, total) =>
-                        _onFileProgress(runtime, item, transferred, total),
-                  );
-                } else {
-                  await _pipe(
-                    source: srcFs,
-                    destination: dstFs,
-                    readLimiter: task.source is ServerFsLocation
-                        ? downloadLimiter
-                        : _localLimiter,
-                    writeLimiter: task.destination is ServerFsLocation
-                        ? uploadLimiter
-                        : _localLimiter,
-                    sourcePath: file.source.path,
-                    destinationPath: commitPath,
-                    length: file.source.size,
-                    overwrite: overwrite,
-                    expectedTarget: expectedTarget,
-                    preserveMode: file.source.mode,
-                    cancellation: attempt,
-                    onProgress: (transferred, total) =>
-                        _onFileProgress(runtime, item, transferred, total),
-                  );
-                }
-              } on RemoteFileException catch (error) {
-                // A stat-checked destination that appeared between decide
-                // and commit re-runs the policy on fresh reality — for
-                // keep-both that is simply the next number (03 §4.2).
-                if (error.kind == RemoteFileErrorKind.conflict &&
-                    commitTry < _maxCommitRetries) {
-                  // A pause that landed while the pipe unwound already
-                  // cancelled the attempt — requeue, don't restart on a
-                  // fresh token the pause could never reach.
-                  if (task.cancellation.isCancelled ||
-                      task.state == TransferTaskState.paused) {
-                    throw _cancelledException();
+                  )) {
+                    // rename(2) moved the entry atomically — mtime and
+                    // mode ride along, nothing was piped, and there is
+                    // no post-copy source unlink. The file counts as
+                    // fully transferred for progress parity with the
+                    // piped path.
+                    _onFileProgress(
+                      runtime,
+                      item,
+                      file.source.size ?? 0,
+                      file.source.size,
+                    );
+                    task.retryCount = 0;
+                    _finishItem(runtime, item, TransferItemState.completed);
+                    return;
                   }
-                  // _pipe cancelled the token when its upload died —
-                  // retry on a fresh one or the next pipe aborts
-                  // instantly. Keep runtime.attempts pointing at the
-                  // live token so pause/cancel still reach it.
-                  attempt = RemoteTransferCancellation();
-                  runtime.attempts[item.id] = attempt;
-                  continue;
+                  if (srcFs is LocalFileSystem && dstFs is LocalFileSystem) {
+                    // D26's local→local fast path (00 D26, 07 §3.10):
+                    // bytes move through the platform copy pump
+                    // (copy_file_range on Linux, streamed fallback
+                    // elsewhere) inside LocalFileSystem's own temp+rename
+                    // commit — the bounded pipe's job is bounding a REMOTE
+                    // leg, and a local hop through it pays a full
+                    // user-space round trip for nothing. Conflict and
+                    // cancellation semantics ride the same exception
+                    // taxonomy, so the retry/requeue logic below applies
+                    // unchanged.
+                    await srcFs.copyLocalFile(
+                      file.source.path,
+                      commitPath,
+                      overwrite: overwrite,
+                      preserveMode: file.source.mode,
+                      expectedTarget: expectedTarget,
+                      cancellation: attempt,
+                      onProgress: (transferred, total) =>
+                          _onFileProgress(runtime, item, transferred, total),
+                    );
+                  } else {
+                    await _pipe(
+                      source: srcFs,
+                      destination: dstFs,
+                      readLimiter: task.source is ServerFsLocation
+                          ? downloadLimiter
+                          : _localLimiter,
+                      writeLimiter: task.destination is ServerFsLocation
+                          ? uploadLimiter
+                          : _localLimiter,
+                      sourcePath: file.source.path,
+                      destinationPath: commitPath,
+                      length: file.source.size,
+                      overwrite: overwrite,
+                      expectedTarget: expectedTarget,
+                      preserveMode: file.source.mode,
+                      cancellation: attempt,
+                      onProgress: (transferred, total) =>
+                          _onFileProgress(runtime, item, transferred, total),
+                    );
+                  }
+                } on RemoteFileException catch (error) {
+                  // A stat-checked destination that appeared between decide
+                  // and commit re-runs the policy on fresh reality — for
+                  // keep-both that is simply the next number (03 §4.2).
+                  if (error.kind == RemoteFileErrorKind.conflict &&
+                      commitTry < _maxCommitRetries) {
+                    // A pause that landed while the pipe unwound already
+                    // cancelled the attempt — requeue, don't restart on a
+                    // fresh token the pause could never reach.
+                    if (task.cancellation.isCancelled ||
+                        task.state == TransferTaskState.paused) {
+                      throw _cancelledException();
+                    }
+                    // This commit reported that it did not land. Let the live
+                    // retry re-run policy instead of treating its old target
+                    // as crash-ambiguous; the journal keeps the stale claim
+                    // so a crash in this gap still fails safe on replay.
+                    final claims = runtime.durableDestinationClaims[item.id];
+                    claims?.remove(commitPath);
+                    if (claims?.isEmpty ?? false) {
+                      runtime.durableDestinationClaims.remove(item.id);
+                    }
+                    // _pipe cancelled the token when its upload died —
+                    // retry on a fresh one or the next pipe aborts
+                    // instantly. Keep runtime.attempts pointing at the
+                    // live token so pause/cancel still reach it.
+                    attempt = RemoteTransferCancellation();
+                    runtime.attempts[item.id] = attempt;
+                    continue;
+                  }
+                  rethrow;
                 }
-                rethrow;
+                item.destinationPath = commitPath;
+                await _postCommit(runtime, srcFs, dstFs, file, commitPath);
+                // A landed file proves connectivity — the retry budget
+                // bounds consecutive losses, not cumulative ones (03 §3.3).
+                task.retryCount = 0;
+                _finishItem(runtime, item, TransferItemState.completed);
+                return;
+              } finally {
+                if (commitClaim != null) {
+                  _releaseClaim(commitKey, commitClaim);
+                }
               }
-              item.destinationPath = commitPath;
-              await _postCommit(runtime, srcFs, dstFs, file, commitPath);
-              // A landed file proves connectivity — the retry budget
-              // bounds consecutive losses, not cumulative ones (03 §3.3).
-              task.retryCount = 0;
-              _finishItem(runtime, item, TransferItemState.completed);
-              return;
           }
         }
       } finally {
@@ -2905,6 +3274,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     if (runtime.task.operation == TransferOperation.move) {
       if (runtime.task.destination is LocalFsLocation) {
         await flushLocalDestination(destinationPath);
+        await _flushLocalDirectoryChain(runtime, p.dirname(destinationPath));
       }
       await srcFs.delete(file.source);
     }
@@ -3077,12 +3447,63 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     _TaskRuntime runtime,
     RemoteFileSystem dstFs,
     _FileWork work,
-    String containerPath,
-  ) async {
+    String containerPath, {
+    required RemoteTransferCancellation cancellation,
+  }) async {
     final task = runtime.task;
     final file = work.file;
-    final candidate = _joinDest(task.destination, containerPath, file.name);
+    final durableDestination = _durableDestinationClaim(runtime, work.item.id);
+    final candidate =
+        durableDestination ??
+        _joinDest(task.destination, containerPath, file.name);
+    final verb = _effectiveFileVerb(runtime, work.item.id);
+    await _refreshDestinationContainerComparison(
+      runtime,
+      dstFs,
+      containerPath,
+      candidate,
+      file.source.path,
+      cancellation: cancellation,
+    );
     final existing = await _statOrNull(dstFs, candidate);
+    if (durableDestination != null) {
+      if (existing != null ||
+          _hasForeignDestinationOwner(runtime, candidate, file.source.path)) {
+        return _FileError(
+          'the durable destination claim is occupied: $durableDestination',
+          retryPolicy: TransferFailureRetryPolicy.terminal,
+        );
+      }
+
+      // Recovery reuses the fsynced target verbatim. Re-running policy could
+      // fall back to the planned base or mint a new keep-both name.
+      return _FileCommit(
+        destinationPath: durableDestination,
+        overwrite: false,
+        expectedTarget: null,
+      );
+    }
+    if (_hasObservedForeignDestinationOwner(
+      runtime,
+      candidate,
+      file.source.path,
+      existing,
+    )) {
+      if (verb == ConflictResolution.keepBoth) {
+        return _decideKeepBothFile(runtime, dstFs, work, containerPath);
+      }
+      if (verb == ConflictResolution.ask && existing != null) {
+        return _FileAsk(existing);
+      }
+      if (verb == ConflictResolution.skip) {
+        return const _FileSkip(withinTaskDestinationCollisionMessage);
+      }
+
+      return const _FileError(
+        withinTaskDestinationCollisionMessage,
+        retryPolicy: TransferFailureRetryPolicy.terminal,
+      );
+    }
     // D26's self-target rule, ahead of the conflict verbs: a move within
     // one endpoint (local→local, or one server — two casings on a
     // case-insensitive server, a symlinked directory) whose resolved
@@ -3099,7 +3520,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       return _FileSelfTarget(candidate);
     }
     switch (resolveTransferConflict(
-      verb: _effectiveFileVerb(runtime, work.item.id),
+      verb: verb,
       sourceIsDirectory: false,
       existing: existing == null ? null : DestinationStat.fromEntry(existing),
       sourceModifiedAt: file.source.modifiedAt,
@@ -3128,37 +3549,53 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           expectedTarget: existing,
         );
       case ConflictKeepBoth():
-        for (var n = 2; n <= _maxKeepBothAttempts; n++) {
-          final numbered = _joinDest(
-            task.destination,
-            containerPath,
-            numberedConflictName(file.name, n, isDirectory: false),
-          );
-          // Another in-flight item may already hold this candidate's key;
-          // rather than wait with a slot held, take the next number.
-          final numberedKey = (
-            _endpointKey(task.destination),
-            _fold(task, numbered),
-          );
-          final claimed = _registry[numberedKey];
-          if (claimed != null && !claimed.committed.isCompleted) continue;
-          if (await _statOrNull(dstFs, numbered) != null) continue;
-          return _FileCommit(
-            destinationPath: numbered,
-            overwrite: false,
-            expectedTarget: null,
-          );
-        }
-        return _FileError(
-          'no free keep-both name after $_maxKeepBothAttempts attempts for '
-          '${file.name}',
-        );
+        return _decideKeepBothFile(runtime, dstFs, work, containerPath);
       case ConflictMerge():
         // Unreachable — a file verb can never be `merge` (the policy
         // normalizes it to ask, and resolveConflict rejects merge
         // answers on file items) — but ask is the honest degradation.
         return _FileAsk(existing!);
     }
+  }
+
+  Future<_FileDecision> _decideKeepBothFile(
+    _TaskRuntime runtime,
+    RemoteFileSystem dstFs,
+    _FileWork work,
+    String containerPath,
+  ) async {
+    final task = runtime.task;
+    final file = work.file;
+    for (var n = 2; n <= _maxKeepBothAttempts; n++) {
+      final numbered = _joinDest(
+        task.destination,
+        containerPath,
+        numberedConflictName(file.name, n, isDirectory: false),
+      );
+      if (_hasForeignDestinationOwner(runtime, numbered, file.source.path)) {
+        continue;
+      }
+
+      // Another task may already hold this candidate. Take the next number
+      // without waiting with a transfer slot and channel lease held.
+      final numberedKey = (
+        _endpointKey(task.destination),
+        _fold(numbered),
+      );
+      final claimed = _registry[numberedKey];
+      if (claimed != null && !claimed.committed.isCompleted) continue;
+      if (await _statOrNull(dstFs, numbered) != null) continue;
+      return _FileCommit(
+        destinationPath: numbered,
+        overwrite: false,
+        expectedTarget: null,
+      );
+    }
+
+    return _FileError(
+      'no free keep-both name after $_maxKeepBothAttempts attempts for '
+      '${file.name}',
+    );
   }
 
   /// The file hop: `download` into a bounded sink feeding `upload`
@@ -3544,7 +3981,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   /// dispose always unblock it (jobs never wedge on pause).
   Future<void> _waitForAdmission(_TaskRuntime runtime) async {
     final task = runtime.task;
-    while ((_paused || task.state == TransferTaskState.paused) &&
+    while ((_paused ||
+            task.state == TransferTaskState.paused ||
+            !runtime.destinationComparisonReady.isCompleted) &&
         !task.cancellation.isCancelled &&
         !_disposed) {
       // Wait only on the gate that is actually pending — a completed
@@ -3554,6 +3993,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       if (_paused) waits.add(_notPaused.future);
       if (task.state == TransferTaskState.paused) {
         waits.add(runtime.notPaused.future);
+      }
+      if (!runtime.destinationComparisonReady.isCompleted) {
+        waits.add(runtime.destinationComparisonReady.future);
       }
       await Future.any(waits);
     }
@@ -3567,7 +4009,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       _completeIfDrained(runtime);
       return;
     }
-    if (!task.scanComplete || runtime.scanning || runtime.finishing) return;
+    if (!task.scanComplete ||
+        runtime.scanning ||
+        runtime.finishing ||
+        runtime.destinationComparisonValidationInFlight) {
+      return;
+    }
     if (runtime.attempts.isNotEmpty ||
         runtime.eligible.isNotEmpty ||
         runtime.directoryOpsPending > 0 ||
@@ -3583,47 +4030,49 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
 
   Future<void> _finishTask(_TaskRuntime runtime) async {
     final task = runtime.task;
-    if (task.isTerminal) {
-      _completeIfDrained(runtime);
-      return;
-    }
-    final failures = task.items
-        .where((item) => item.state == TransferItemState.failed)
-        .toList();
-    if (failures.isEmpty && task.operation == TransferOperation.move) {
-      try {
-        await _removeMovedDirectories(runtime);
-      } on RemoteFileException catch (error) {
-        task.error = "the move's source cleanup failed: ${error.message}";
-        task.failureKind = error.kind;
-      } catch (error) {
-        task.error = "the move's source cleanup failed: $error";
-        task.failureKind = RemoteFileErrorKind.other;
+    try {
+      if (task.isTerminal) return;
+      final failures = task.items
+          .where((item) => item.state == TransferItemState.failed)
+          .toList();
+      if (failures.isEmpty && task.operation == TransferOperation.move) {
+        try {
+          await _removeMovedDirectories(runtime);
+        } on RemoteFileException catch (error) {
+          task.error = "the move's source cleanup failed: ${error.message}";
+          task.failureKind = error.kind;
+        } catch (error) {
+          task.error = "the move's source cleanup failed: $error";
+          task.failureKind = RemoteFileErrorKind.other;
+        }
       }
+      if (failures.isNotEmpty) {
+        final failure = failures.first;
+        task.error = failure.error;
+        task.failureKind = failure.failureKind;
+        _setTaskState(
+          runtime,
+          TransferTaskState.failed,
+          error: failure.error,
+          failureKind: failure.failureKind,
+        );
+      } else if (task.error != null) {
+        _setTaskState(
+          runtime,
+          TransferTaskState.failed,
+          error: task.error,
+          failureKind: task.failureKind,
+        );
+      } else {
+        _setTaskState(runtime, TransferTaskState.completed);
+      }
+    } finally {
+      // Cancellation may terminalize the task while source-directory
+      // cleanup still owns a lease. Completion waits until that unwind ends.
+      runtime.finishing = false;
+      _completeIfDrained(runtime);
+      _pump();
     }
-    if (failures.isNotEmpty) {
-      final failure = failures.first;
-      task.error = failure.error;
-      task.failureKind = failure.failureKind;
-      _setTaskState(
-        runtime,
-        TransferTaskState.failed,
-        error: failure.error,
-        failureKind: failure.failureKind,
-      );
-    } else if (task.error != null) {
-      _setTaskState(
-        runtime,
-        TransferTaskState.failed,
-        error: task.error,
-        failureKind: task.failureKind,
-      );
-    } else {
-      _setTaskState(runtime, TransferTaskState.completed);
-    }
-    _releaseRegistryClaims(task.id);
-    _completeIfDrained(runtime);
-    _pump();
   }
 
   /// The move verb's source-folder disposition (02 §5.2): directories are
@@ -3635,6 +4084,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     final task = runtime.task;
     final directories = task.plan?.directoriesInOrder ?? const [];
     if (directories.isEmpty) return;
+
+    // A fully replayed task can be ready to finish while restore still holds
+    // the queue pause. Source mutation starts only after explicit admission.
+    await _waitForAdmission(runtime);
+    if (task.isTerminal || task.cancellation.isCancelled) return;
+
     final ordered = directories.toList()
       ..sort((a, b) => b.source.path.length.compareTo(a.source.path.length));
     final leases = await _leaseServerIds(
@@ -3656,8 +4111,36 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         if (dirState.selfTarget) continue;
         if (!_subtreeFullyCompleted(runtime, directory)) continue;
         try {
-          await srcFs.delete(directory.source);
+          final resolvedPath = dirState.resolvedPath;
+          if (resolvedPath != null &&
+              _endpointKey(task.source) == _endpointKey(task.destination) &&
+              await _isMoveCleanupSelfTarget(
+                srcFs,
+                directory.source.path,
+                resolvedPath,
+              )) {
+            dirState.selfTarget = true;
+            continue;
+          }
+          if (task.destination is LocalFsLocation && resolvedPath != null) {
+            await _flushLocalDirectoryChain(runtime, resolvedPath);
+          }
+          await _withFileSystemNameProbeIsolation(task.source, () async {
+            if (task.isTerminal || task.cancellation.isCancelled) return;
+            await _waitForNameProbeArtifacts(
+              task,
+              srcFs,
+              directory.source.path,
+            );
+            if (task.isTerminal || task.cancellation.isCancelled) return;
+
+            await srcFs.delete(directory.source);
+          }, cancellation: task.cancellation);
         } on RemoteFileException catch (error) {
+          if (error.kind == RemoteFileErrorKind.cancelled ||
+              task.cancellation.isCancelled) {
+            return;
+          }
           if (error.kind == RemoteFileErrorKind.notFound) continue;
           dirState.item.error =
               'copied, but the source directory could not be removed: '
@@ -3689,14 +4172,44 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     );
     for (final item in runtime.task.items) {
       if (!item.sourcePath.startsWith(prefix)) continue;
+      if (runtime.nameProbeArtifactItems.contains(item.id)) continue;
       if (item.state != TransferItemState.completed) return false;
     }
     return true;
   }
 
+  /// Fsyncs a local destination's directory chain from the task root down.
+  /// This makes every newly-created ancestor durable before source removal.
+  Future<void> _flushLocalDirectoryChain(
+    _TaskRuntime runtime,
+    String deepestPath,
+  ) async {
+    final root = p.normalize(runtime.task.destinationDir);
+    final deepest = p.normalize(deepestPath);
+    if (root != deepest && !p.isWithin(root, deepest)) {
+      throw StateError('$deepest is outside destination root $root');
+    }
+
+    final directories = <String>[root];
+    if (deepest != root) {
+      var current = root;
+      for (final segment in p.split(p.relative(deepest, from: root))) {
+        current = p.join(current, segment);
+        directories.add(current);
+      }
+    }
+    for (final directory in directories) {
+      if (runtime.durableLocalDirectories.contains(directory)) continue;
+      await flushLocalDirectory(directory);
+      runtime.durableLocalDirectories.add(directory);
+    }
+  }
+
   void _completeIfDrained(_TaskRuntime runtime) {
     if (runtime.done.isCompleted) return;
     if (runtime.scanning ||
+        runtime.finishing ||
+        runtime.destinationComparisonValidationInFlight ||
         runtime.attempts.isNotEmpty ||
         runtime.directoryOpsPending > 0 ||
         runtime.deleteOpsPending > 0) {
@@ -3796,7 +4309,6 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     for (final directory in runtime.directories.values) {
       if (!directory.ready.isCompleted) directory.ready.complete();
     }
-    _releaseRegistryClaims(task.id);
     _completeIfDrained(runtime);
   }
 
@@ -3806,18 +4318,30 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     TransferItemState state, {
     String? error,
     RemoteFileErrorKind? failureKind,
+    TransferFailureRetryPolicy failureRetryPolicy =
+        TransferFailureRetryPolicy.retryable,
   }) {
     if (item.isTerminal) return;
+    if (state == TransferItemState.completed &&
+        runtime.task.operation != TransferOperation.delete) {
+      _rememberOutputDestination(
+        runtime,
+        item.destinationPath,
+        item.sourcePath,
+      );
+    }
     _journalItemOutcome(
       runtime.task,
       item,
       state,
       error: error,
       failureKind: failureKind,
+      failureRetryPolicy: failureRetryPolicy,
     );
     item.state = state;
     item.error = error;
     item.failureKind = failureKind;
+    item.failureRetryPolicy = failureRetryPolicy;
     final task = runtime.task;
     if (state == TransferItemState.completed && !item.isDirectory) {
       task.completedFiles++;
@@ -3986,6 +4510,9 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     if (item == null || item.state != TransferItemState.failed) {
       return false;
     }
+    if (item.failureRetryPolicy == TransferFailureRetryPolicy.terminal) {
+      return false;
+    }
     return _retryWork(runtime, item) != null;
   }
 
@@ -4081,6 +4608,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     item.state = TransferItemState.pending;
     item.error = null;
     item.failureKind = null;
+    item.failureRetryPolicy = TransferFailureRetryPolicy.retryable;
     final directory = runtime.directories[item.id];
     if (directory != null) {
       directory.outcome = _DirOutcome.pending;
@@ -4192,6 +4720,10 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       final delete = runtime.deleteWork[item.id];
       final RestoredItemOutcome? outcome = switch (item.state) {
         TransferItemState.completed => RestoredItemOutcome.completed,
+        TransferItemState.failed
+            when item.failureRetryPolicy ==
+                TransferFailureRetryPolicy.terminal =>
+          RestoredItemOutcome.failed,
         // Collateral of a failed container — the retried container's
         // re-scan re-discovers and re-dispatches it.
         _ when runtime.containerSkips.contains(item.id) => null,
@@ -4220,13 +4752,21 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           outcome: outcome,
           error: item.error,
           failureKind: item.failureKind,
+          failureRetryPolicy: item.failureRetryPolicy,
           resolvedPath: outcome == RestoredItemOutcome.completed
               ? item.destinationPath
               : null,
           disposition: item.disposition,
+          destinationClaims: Set.unmodifiable(
+            runtime.durableDestinationClaims[item.id] ?? const {},
+          ),
         ),
       );
     }
+    _rememberRestoredOutputsAndClaims(
+      runtime,
+      index.values.expand((items) => items),
+    );
     task.items.clear();
     task.plan = null;
     task.scanComplete = false;
@@ -4302,7 +4842,14 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     // Work began before the crash — the history record's duration and
     // the user's sense of "when did I start this" both span it.
     task.startedAt = restored.enqueuedAt;
-    final runtime = _TaskRuntime(task);
+    final runtime = _TaskRuntime(
+      task,
+      restored.destinationNameComparison ??
+          _initialDestinationNameComparison(task.destination),
+    );
+    if (restored.scanComplete && task.operation != TransferOperation.delete) {
+      runtime.destinationComparisonReady = Completer<void>();
+    }
     _tasks[task.id] = runtime;
 
     // The state mapping lands BEFORE any dispatch state is built —
@@ -4335,6 +4882,14 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       final index = <String, List<RestoredPlanItem>>{};
       for (final item in restored.items) {
         (index[item.destinationPath] ??= []).add(item);
+      }
+      _rememberRestoredOutputsAndClaims(runtime, restored.items);
+      for (final item in restored.items) {
+        _rememberPlannedDestination(
+          runtime,
+          item.destinationPath,
+          item.sourcePath,
+        );
       }
       runtime.restoredIndex = index;
     }
@@ -4369,7 +4924,15 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     task.plan = TransferPlan();
     final pendingDirs = <_DirState>[];
     final pendingFiles = <_FileWork>[];
+
+    // Resolved claims outrank earlier stale planned rows in journal order.
+    _rememberRestoredOutputsAndClaims(runtime, restored.items);
     for (final entry in restored.items) {
+      _rememberPlannedDestination(
+        runtime,
+        entry.destinationPath,
+        entry.sourcePath,
+      );
       final item = TransferItem(
         id: entry.itemId,
         sourcePath: entry.sourcePath,
@@ -4378,6 +4941,14 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
         size: entry.source?.size,
       );
       task.items.add(item);
+      if (entry.outcome == RestoredItemOutcome.removed &&
+          isFileSystemNameProbeArtifact(
+            _leafName(task.source, entry.sourcePath),
+          )) {
+        // Probe rows are visible skips, but never source payload. Rebuild
+        // the runtime marker so an already-cleaned probe cannot block Move.
+        runtime.nameProbeArtifactItems.add(item.id);
+      }
       if (entry.isDirectory) {
         final planned = PlannedDirectory(
           source:
@@ -4405,6 +4976,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
             item.state = TransferItemState.failed;
             item.error = entry.error;
             item.failureKind = entry.failureKind;
+            item.failureRetryPolicy = entry.failureRetryPolicy;
             task.failedItems++;
           case RestoredItemOutcome.removed:
             dirState.outcome = _DirOutcome.skipped;
@@ -4437,6 +5009,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
             item.state = TransferItemState.failed;
             item.error = entry.error;
             item.failureKind = entry.failureKind;
+            item.failureRetryPolicy = entry.failureRetryPolicy;
             task.failedItems++;
           case RestoredItemOutcome.removed:
             item.state = TransferItemState.skipped;
@@ -4517,6 +5090,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
           item.state = TransferItemState.failed;
           item.error = entry.error;
           item.failureKind = entry.failureKind;
+          item.failureRetryPolicy = entry.failureRetryPolicy;
           task.failedItems++;
         case RestoredItemOutcome.removed:
           item.state = TransferItemState.skipped;
@@ -4673,6 +5247,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     TransferItemState state, {
     String? error,
     RemoteFileErrorKind? failureKind,
+    TransferFailureRetryPolicy failureRetryPolicy =
+        TransferFailureRetryPolicy.retryable,
     String? resolvedPath,
     ItemDisposition? disposition,
   }) {
@@ -4695,6 +5271,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
             itemId: item.id,
             error: error,
             failureKind: failureKind,
+            retryPolicy: failureRetryPolicy,
           ),
         );
       case TransferItemState.skipped || TransferItemState.cancelled:
@@ -4729,11 +5306,17 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     switch (restored.outcome!) {
       case RestoredItemOutcome.completed:
         item.state = TransferItemState.completed;
+        _rememberOutputDestination(
+          runtime,
+          item.destinationPath,
+          item.sourcePath,
+        );
         if (!isDirectory) task.completedFiles++;
       case RestoredItemOutcome.failed:
         item.state = TransferItemState.failed;
         item.error = restored.error;
         item.failureKind = restored.failureKind;
+        item.failureRetryPolicy = restored.failureRetryPolicy;
         task.failedItems++;
       case RestoredItemOutcome.removed:
         item.state = TransferItemState.skipped;
@@ -4765,7 +5348,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     size: item.source?.size,
   );
 
-  void _addTerminalItem(
+  TransferItem _addTerminalItem(
     _TaskRuntime runtime, {
     required String sourcePath,
     required String destinationPath,
@@ -4774,6 +5357,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     int? size,
     String? error,
     RemoteFileErrorKind? failureKind,
+    TransferFailureRetryPolicy failureRetryPolicy =
+        TransferFailureRetryPolicy.retryable,
   }) {
     final task = runtime.task;
     // A re-scanned report-kind row merges onto its journaled record by
@@ -4781,6 +5366,19 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     // of minting a duplicate row (and a duplicate journal prefix) for
     // the same entry.
     final restored = runtime.takeRestored(destinationPath, sourcePath);
+    if (restored?.outcome != null) {
+      final restoredType = restored!.isDirectory
+          ? RemoteFileType.directory
+          : RemoteFileType.file;
+      return _addRestoredTerminalItem(
+        runtime,
+        restored,
+        _placeholderEntry(restored, restoredType),
+        destinationPath,
+        isDirectory: restored.isDirectory,
+      );
+    }
+
     final item = TransferItem(
       id: restored?.itemId ?? uuidV4(),
       sourcePath: sourcePath,
@@ -4810,10 +5408,12 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
       state,
       error: error,
       failureKind: failureKind,
+      failureRetryPolicy: failureRetryPolicy,
     );
     item.state = state;
     item.error = error;
     item.failureKind = failureKind;
+    item.failureRetryPolicy = failureRetryPolicy;
     task.items.add(item);
     if (isDirectory) {
       task.totalDirectories++;
@@ -4825,6 +5425,7 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     _emit(
       TransferQueueItemEvent(runtime.task.id, item.id, state, error: error),
     );
+    return item;
   }
 
   void _emit(TransferQueueEvent event) {
@@ -4908,6 +5509,24 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     if (!claim.committed.isCompleted) claim.committed.complete();
   }
 
+  void _waitForRegistryRelease(
+    _TaskRuntime runtime,
+    _FileWork work,
+    _RegistryClaim holder,
+  ) {
+    final item = work.item;
+    item.state = TransferItemState.pending;
+    _emit(TransferQueueItemEvent(runtime.task.id, item.id, item.state));
+    unawaited(
+      holder.committed.future.then((_) {
+        if (item.isTerminal || runtime.task.isTerminal) return;
+
+        runtime.eligible.addFirst(work);
+        _pump();
+      }),
+    );
+  }
+
   void _releaseRegistryClaims(String taskId) {
     final released = <_RegistryClaim>[];
     _registry.removeWhere((_, claim) {
@@ -4957,17 +5576,645 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   String _endpointKey(FsLocation location) =>
       location is ServerFsLocation ? 'srv:${location.serverId}' : 'local';
 
+  Future<T> _withFileSystemNameProbeIsolation<T>(
+    FsLocation location,
+    Future<T> Function() operation, {
+    required RemoteTransferCancellation cancellation,
+  }) => _fileSystemNameProbeGates
+      .putIfAbsent(_endpointKey(location), _AsyncGate.new)
+      .run(operation, cancellation: cancellation);
+
+  /// Cross-component probes are visible as reserved files. Directory
+  /// mutation waits for their cleanup instead of moving or deleting them.
+  Future<void> _waitForNameProbeArtifacts(
+    TransferTask task,
+    RemoteFileSystem fileSystem,
+    String directoryPath,
+  ) async {
+    final elapsed = Stopwatch()..start();
+    while (true) {
+      _throwIfTaskCancelled(task);
+      final List<RemoteFileEntry> entries;
+      try {
+        entries = await fileSystem.listDirectory(directoryPath);
+      } on RemoteFileException catch (error) {
+        if (error.kind == RemoteFileErrorKind.notFound) return;
+        rethrow;
+      }
+      if (!entries.any((entry) => isFileSystemNameProbeArtifact(entry.name))) {
+        return;
+      }
+
+      if (elapsed.elapsed >= nameProbeCleanupTimeout) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.conflict,
+          operation: 'name-probe-cleanup',
+          path: directoryPath,
+          message:
+              'the directory still contains a filesystem name probe; '
+              'refusing to mutate it',
+        );
+      }
+
+      final remaining = nameProbeCleanupTimeout - elapsed.elapsed;
+      final pollDelay = remaining.compareTo(_nameProbePollInterval) < 0
+          ? remaining
+          : _nameProbePollInterval;
+
+      await Future.any<void>([
+        Future<void>.delayed(pollDelay),
+        task.cancellation.whenCancelled,
+      ]);
+    }
+  }
+
   String _joinDest(FsLocation destination, String directory, String name) =>
       destination is ServerFsLocation
       ? remoteJoin(directory, name)
       : p.join(directory, name);
 
-  /// The registry's case-fold rule (03 §4.2): destinations resolved
-  /// case-insensitive fold with the browse layer's Unicode simple fold.
-  String _fold(TransferTask task, String path) =>
-      _isCaseInsensitiveDestination(task.destination)
-      ? simpleCaseFold(path)
-      : path;
+  DestinationNameComparison _initialDestinationNameComparison(
+    FsLocation destination,
+  ) {
+    final override = _isCaseInsensitiveDestination;
+    if (override == null) {
+      return DestinationNameComparison.normalizedCaseInsensitive;
+    }
+
+    return override(destination)
+        ? DestinationNameComparison.normalizedCaseInsensitive
+        : DestinationNameComparison.exact;
+  }
+
+  Future<DestinationNameComparison> _resolveDestinationNameComparison(
+    _TaskRuntime runtime,
+  ) async {
+    // Probe in this task's lease/cancellation scope. Sharing a future would
+    // let one task's cancellation or reconnect failure settle another task.
+    return _probeDestinationNameComparison(runtime);
+  }
+
+  Future<DestinationNameComparison> _probeDestinationNameComparison(
+    _TaskRuntime runtime,
+  ) => _scanOp(
+    runtime,
+    (fs) => _readDestinationNameComparison(runtime.task, fs),
+    destination: true,
+  );
+
+  Future<DestinationNameComparison> _readDestinationNameComparison(
+    TransferTask task,
+    RemoteFileSystem fileSystem, {
+    String? rootPath,
+    RemoteTransferCancellation? cancellation,
+  }) async {
+    if (_isCaseInsensitiveDestination != null) {
+      return _initialDestinationNameComparison(task.destination);
+    }
+
+    final probeCancellation = cancellation ?? task.cancellation;
+    return _withFileSystemNameProbeIsolation(task.destination, () async {
+      try {
+        final traits = await probeFileSystemNameTraits(
+          fileSystem,
+          rootPath ?? task.destinationDir,
+          cancellation: probeCancellation,
+          joinPath: task.destination is ServerFsLocation
+              ? remoteJoin
+              : (root, name) => p.join(root, name),
+        );
+        return destinationNameComparisonFor(traits);
+      } on FileSystemNameProbeCleanupException {
+        rethrow;
+      } on RemoteFileException catch (error) {
+        if (error.kind == RemoteFileErrorKind.cancelled ||
+            error.kind == RemoteFileErrorKind.disconnected) {
+          rethrow;
+        }
+
+        // Unknown traits refuse extra aliases rather than risking overwrite.
+        return DestinationNameComparison.normalizedCaseInsensitive;
+      } catch (_) {
+        return DestinationNameComparison.normalizedCaseInsensitive;
+      }
+    }, cancellation: probeCancellation);
+  }
+
+  void _startDestinationComparisonValidation(_TaskRuntime runtime) {
+    if (runtime.destinationComparisonReady.isCompleted ||
+        runtime.destinationComparisonValidationStarted ||
+        runtime.task.isTerminal) {
+      return;
+    }
+    runtime.destinationComparisonValidationStarted = true;
+    unawaited(_validateRestoredDestinationNameComparison(runtime));
+  }
+
+  Future<void> _validateRestoredDestinationNameComparison(
+    _TaskRuntime runtime,
+  ) async {
+    final task = runtime.task;
+    Map<String, TransferChannelLease> leases = {};
+    try {
+      leases = await _leaseServerIds(
+        _serverIds({task.destination}),
+        task.cancellation,
+      );
+      final comparison = await _readDestinationNameComparison(
+        task,
+        _fsFor(task.destination, leases),
+      );
+      if (!task.isTerminal) {
+        _setDestinationNameComparison(runtime, comparison);
+      }
+    } on FileSystemNameProbeCleanupException catch (error) {
+      _failTask(runtime, error);
+    } on RemoteFileException catch (_) {
+      if (task.cancellation.isCancelled) {
+        cancelTask(task.id);
+      } else {
+        // An unreachable probe cannot prove aliases distinct.
+        _setDestinationNameComparison(
+          runtime,
+          DestinationNameComparison.normalizedCaseInsensitive,
+        );
+      }
+    } catch (_) {
+      _setDestinationNameComparison(
+        runtime,
+        DestinationNameComparison.normalizedCaseInsensitive,
+      );
+    } finally {
+      try {
+        await _releaseLeases(leases);
+      } finally {
+        if (!runtime.destinationComparisonReady.isCompleted) {
+          runtime.destinationComparisonReady.complete();
+        }
+        _maybeFinishTask(runtime);
+        _pump();
+      }
+    }
+  }
+
+  void _setDestinationNameComparison(
+    _TaskRuntime runtime,
+    DestinationNameComparison comparison,
+  ) {
+    runtime.destinationNameComparison = comparison;
+    runtime.destinationComparisonsByContainer[runtime.task.destinationDir] =
+        comparison;
+    _rebuildDestinationClaims(runtime);
+  }
+
+  void _setDestinationContainerComparison(
+    _TaskRuntime runtime,
+    String containerPath,
+    DestinationNameComparison comparison,
+  ) {
+    final ownershipKey = _destinationContainerOwnershipKey(
+      runtime,
+      containerPath,
+    );
+    var changed = false;
+    for (final knownPath in _knownDestinationContainers(
+      runtime,
+      containerPath,
+    )) {
+      if (_destinationContainerOwnershipKey(runtime, knownPath) !=
+          ownershipKey) {
+        continue;
+      }
+      if (runtime.destinationComparisonsByContainer[knownPath] == comparison) {
+        continue;
+      }
+
+      // Aliased spellings name one physical container, so they must never
+      // retain asymmetric leaf rules after their parent traits change.
+      runtime.destinationComparisonsByContainer[knownPath] = comparison;
+      changed = true;
+    }
+
+    if (containerPath == runtime.task.destinationDir &&
+        runtime.destinationNameComparison != comparison) {
+      runtime.destinationNameComparison = comparison;
+      changed = true;
+    }
+    if (!changed) return;
+
+    _rebuildDestinationClaims(runtime);
+  }
+
+  Set<String> _knownDestinationContainers(
+    _TaskRuntime runtime,
+    String currentPath,
+  ) {
+    final task = runtime.task;
+    final containers = <String>{
+      task.destinationDir,
+      currentPath,
+      ...runtime.destinationComparisonsByContainer.keys,
+    };
+    final claims = <_DestinationClaim>[
+      ...runtime.rawOutputDestinationClaims,
+      ...runtime.rawPlannedDestinationClaims,
+    ];
+    for (final claim in claims) {
+      var path = _parentOf(task.destination, claim.destinationPath);
+      while (true) {
+        containers.add(path);
+        if (path == task.destinationDir) break;
+
+        final parentPath = _parentOf(task.destination, path);
+        if (parentPath == path) break;
+        path = parentPath;
+      }
+    }
+    return containers;
+  }
+
+  void _clearDestinationContainerComparisons(_TaskRuntime runtime) {
+    runtime.destinationNameComparison =
+        DestinationNameComparison.normalizedCaseInsensitive;
+    runtime.destinationComparisonsByContainer.clear();
+    _rebuildDestinationClaims(runtime);
+  }
+
+  void _rebuildDestinationClaims(_TaskRuntime runtime) {
+    runtime.plannedDestinationClaims.clear();
+    runtime.outputDestinationClaims.clear();
+
+    for (final claim in runtime.rawOutputDestinationClaims) {
+      runtime.outputDestinationClaims.putIfAbsent(
+        _destinationOwnershipKey(runtime, claim.destinationPath),
+        () => claim,
+      );
+    }
+    for (final claim in runtime.rawPlannedDestinationClaims) {
+      runtime.plannedDestinationClaims.putIfAbsent(
+        _destinationOwnershipKey(runtime, claim.destinationPath),
+        () => claim,
+      );
+    }
+  }
+
+  /// The commit registry serializes every plausible alias. Filesystems that
+  /// prove the spellings distinct still commit both, one after the other.
+  String _fold(String path) => conservativeDestinationNameKey(path);
+
+  _DestinationOwnershipKey _destinationOwnershipKey(
+    _TaskRuntime runtime,
+    String destinationPath,
+  ) {
+    final task = runtime.task;
+    final containerPath = _parentOf(task.destination, destinationPath);
+    final comparison =
+        runtime.destinationComparisonsByContainer[containerPath] ??
+        DestinationNameComparison.normalizedCaseInsensitive;
+    return (
+      _endpointKey(task.destination),
+      _destinationContainerOwnershipKey(runtime, containerPath),
+      destinationNameKey(
+        _leafName(task.destination, destinationPath),
+        comparison,
+      ),
+    );
+  }
+
+  String _destinationContainerOwnershipKey(
+    _TaskRuntime runtime,
+    String containerPath,
+  ) {
+    final task = runtime.task;
+    if (containerPath == task.destinationDir) {
+      return destinationNameKey(
+        containerPath,
+        DestinationNameComparison.normalizedCaseInsensitive,
+      );
+    }
+
+    final parentPath = _parentOf(task.destination, containerPath);
+    if (parentPath == containerPath) {
+      return destinationNameKey(
+        containerPath,
+        DestinationNameComparison.normalizedCaseInsensitive,
+      );
+    }
+
+    // A container's spelling belongs to its parent filesystem. Use proven
+    // parent traits; without them, collapse aliases conservatively.
+    final parentComparison =
+        runtime.destinationComparisonsByContainer[parentPath] ??
+        DestinationNameComparison.normalizedCaseInsensitive;
+    final nameKey = destinationNameKey(
+      _leafName(task.destination, containerPath),
+      parentComparison,
+    );
+    final parentKey = _destinationContainerOwnershipKey(runtime, parentPath);
+    return '$parentKey$_destinationOwnershipPathSeparator$nameKey';
+  }
+
+  void _rememberPlannedDestination(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+  ) {
+    final rawKey = (destinationPath, sourcePath);
+    if (runtime.rawPlannedDestinationClaimKeys.add(rawKey)) {
+      runtime.rawPlannedDestinationClaims.add(
+        _DestinationClaim(destinationPath, sourcePath),
+      );
+    }
+    runtime.plannedDestinationClaims.putIfAbsent(
+      _destinationOwnershipKey(runtime, destinationPath),
+      () => _DestinationClaim(destinationPath, sourcePath),
+    );
+  }
+
+  void _rememberOutputDestination(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+  ) {
+    final rawKey = (destinationPath, sourcePath);
+    if (runtime.rawOutputDestinationClaimKeys.add(rawKey)) {
+      runtime.rawOutputDestinationClaims.add(
+        _DestinationClaim(destinationPath, sourcePath),
+      );
+    }
+    runtime.outputDestinationClaims.putIfAbsent(
+      _destinationOwnershipKey(runtime, destinationPath),
+      () => _DestinationClaim(destinationPath, sourcePath),
+    );
+  }
+
+  void _rememberRestoredOutputsAndClaims(
+    _TaskRuntime runtime,
+    Iterable<RestoredPlanItem> items,
+  ) {
+    for (final item in items) {
+      final durableClaims = runtime.durableDestinationClaims.putIfAbsent(
+        item.itemId,
+        () => <String>{},
+      );
+      for (final destinationPath in item.destinationClaims) {
+        durableClaims.add(destinationPath);
+        _rememberOutputDestination(runtime, destinationPath, item.sourcePath);
+      }
+      if (item.outcome == RestoredItemOutcome.completed) {
+        _rememberOutputDestination(
+          runtime,
+          item.resolvedPath ?? item.destinationPath,
+          item.sourcePath,
+        );
+      }
+    }
+  }
+
+  _DestinationClaim? _destinationOwner(
+    _TaskRuntime runtime,
+    String destinationPath,
+  ) {
+    final key = _destinationOwnershipKey(runtime, destinationPath);
+    return runtime.outputDestinationClaims[key] ??
+        runtime.plannedDestinationClaims[key];
+  }
+
+  bool _hasPotentialDestinationAlias(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+  ) => _hasPotentialAlias(
+    destinationPath,
+    sourcePath,
+    <_DestinationClaim>[
+      ...runtime.rawOutputDestinationClaims,
+      ...runtime.rawPlannedDestinationClaims,
+    ],
+  );
+
+  bool _hasPotentialOutputAlias(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+  ) => _hasPotentialAlias(
+    destinationPath,
+    sourcePath,
+    runtime.rawOutputDestinationClaims,
+  );
+
+  bool _hasPotentialAlias(
+    String destinationPath,
+    String sourcePath,
+    Iterable<_DestinationClaim> claims,
+  ) {
+    final candidate = conservativeDestinationNameKey(destinationPath);
+    for (final claim in claims) {
+      if (claim.sourcePath == sourcePath) continue;
+
+      final claimed = conservativeDestinationNameKey(claim.destinationPath);
+      if (claimed == candidate) return true;
+    }
+    return false;
+  }
+
+  Future<void> _refreshDestinationContainerComparison(
+    _TaskRuntime runtime,
+    RemoteFileSystem destinationFileSystem,
+    String containerPath,
+    String destinationPath,
+    String sourcePath, {
+    RemoteTransferCancellation? cancellation,
+  }) async {
+    final refreshMode =
+        _hasPotentialDestinationAlias(runtime, destinationPath, sourcePath)
+        ? _DestinationTraitRefreshMode.revalidate
+        : _DestinationTraitRefreshMode.missingOnly;
+    if (refreshMode == _DestinationTraitRefreshMode.revalidate) {
+      // Re-probing a parent can merge prior container spellings. Clear all
+      // descendants first so concurrent decisions see conservative keys.
+      _clearDestinationContainerComparisons(runtime);
+    }
+    await _refreshDestinationAncestorComparisons(
+      runtime,
+      destinationFileSystem,
+      containerPath,
+      mode: refreshMode,
+      cancellation: cancellation,
+    );
+
+    final cached = runtime.destinationComparisonsByContainer.containsKey(
+      containerPath,
+    );
+    if (cached && refreshMode == _DestinationTraitRefreshMode.missingOnly) {
+      return;
+    }
+
+    final comparison = await _readDestinationNameComparison(
+      runtime.task,
+      destinationFileSystem,
+      rootPath: containerPath,
+      cancellation: cancellation,
+    );
+    _setDestinationContainerComparison(runtime, containerPath, comparison);
+  }
+
+  Future<void> _refreshDestinationAncestorComparisons(
+    _TaskRuntime runtime,
+    RemoteFileSystem destinationFileSystem,
+    String containerPath, {
+    required _DestinationTraitRefreshMode mode,
+    RemoteTransferCancellation? cancellation,
+  }) async {
+    final rootPath = runtime.task.destinationDir;
+    if (containerPath == rootPath) return;
+
+    final ancestors = <String>[];
+    var ancestorPath = _parentOf(runtime.task.destination, containerPath);
+    while (true) {
+      ancestors.add(ancestorPath);
+      if (ancestorPath == rootPath) break;
+
+      final parentPath = _parentOf(runtime.task.destination, ancestorPath);
+      if (parentPath == ancestorPath) {
+        throw StateError(
+          '$containerPath is outside destination root $rootPath',
+        );
+      }
+
+      ancestorPath = parentPath;
+    }
+
+    // Container spellings inherit their parent's rules. Probe shallowest
+    // first so every ownership key uses established ancestor identity.
+    for (final path in ancestors.reversed) {
+      if (mode == _DestinationTraitRefreshMode.missingOnly &&
+          runtime.destinationComparisonsByContainer.containsKey(path)) {
+        continue;
+      }
+
+      final comparison = await _readDestinationNameComparison(
+        runtime.task,
+        destinationFileSystem,
+        rootPath: path,
+        cancellation: cancellation,
+      );
+      _setDestinationContainerComparison(runtime, path, comparison);
+    }
+  }
+
+  bool _hasForeignDestinationOwner(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+  ) {
+    final owner = _destinationOwner(runtime, destinationPath);
+    return owner != null && owner.sourcePath != sourcePath;
+  }
+
+  bool _hasObservedForeignDestinationOwner(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+    RemoteFileEntry? existing,
+  ) {
+    if (_hasForeignDestinationOwner(runtime, destinationPath, sourcePath)) {
+      return true;
+    }
+    if (existing == null) return false;
+
+    // A broad alias becomes ownership evidence only after stat sees an
+    // occupant and another item has reserved output there.
+    return _hasPotentialOutputAlias(
+      runtime,
+      destinationPath,
+      sourcePath,
+    );
+  }
+
+  bool _reserveOutputDestination(
+    _TaskRuntime runtime,
+    String destinationPath,
+    String sourcePath,
+  ) {
+    if (_hasForeignDestinationOwner(runtime, destinationPath, sourcePath)) {
+      return false;
+    }
+
+    _rememberOutputDestination(runtime, destinationPath, sourcePath);
+    return true;
+  }
+
+  Future<void> _persistResolvedDestinationClaim(
+    _TaskRuntime runtime,
+    _FileWork work,
+    String destinationPath,
+  ) async {
+    final isDestructiveCommit =
+        runtime.task.operation == TransferOperation.move;
+    if (!isDestructiveCommit && destinationPath == work.file.destinationPath) {
+      return;
+    }
+
+    await _persistDestinationClaim(runtime, work.item.id, destinationPath);
+  }
+
+  String? _durableDestinationClaim(_TaskRuntime runtime, String itemId) {
+    final claims = runtime.durableDestinationClaims[itemId];
+    if (claims == null || claims.isEmpty) return null;
+
+    // Claims are replayed in journal order. The last fsynced target is the
+    // attempt recovery must resume after a conflict-race retry.
+    return claims.last;
+  }
+
+  Future<void> _persistDirectoryDestinationClaim(
+    _TaskRuntime runtime,
+    _DirState directory,
+    String destinationPath,
+  ) async {
+    final isDestructiveCommit =
+        runtime.task.operation == TransferOperation.move;
+    if (!isDestructiveCommit &&
+        destinationPath == directory.planned.destinationPath) {
+      return;
+    }
+
+    await _persistDestinationClaim(runtime, directory.item.id, destinationPath);
+  }
+
+  Future<void> _persistDestinationClaim(
+    _TaskRuntime runtime,
+    String itemId,
+    String destinationPath,
+  ) async {
+    final claims = runtime.durableDestinationClaims.putIfAbsent(
+      itemId,
+      () => <String>{},
+    );
+    if (claims.isNotEmpty && claims.last == destinationPath) return;
+
+    // A live retry can return to an earlier candidate. Its new claim must
+    // become the recovery authority and append a fresh journal record.
+    claims
+      ..remove(destinationPath)
+      ..add(destinationPath);
+
+    final store = persistence;
+    if (store == null) return;
+    try {
+      await store.appendJournalDurably(
+        DestinationClaimedRecord(
+          taskId: runtime.task.id,
+          itemId: itemId,
+          destinationPath: destinationPath,
+        ),
+      );
+    } catch (_) {
+      claims.remove(destinationPath);
+      rethrow;
+    }
+  }
 
   String _leafName(FsLocation location, String path) =>
       location is ServerFsLocation
@@ -5044,6 +6291,20 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     }
   }
 
+  /// Recovery must prove a same-endpoint source is distinct before deleting
+  /// it. Unlike conflict classification, an inconclusive canonicalization is
+  /// an operational failure so the source stays intact.
+  Future<bool> _isMoveCleanupSelfTarget(
+    RemoteFileSystem fs,
+    String sourcePath,
+    String destinationPath,
+  ) async {
+    if (sourcePath == destinationPath) return true;
+
+    return await fs.canonicalize(sourcePath) ==
+        await fs.canonicalize(destinationPath);
+  }
+
   /// Trailing separators are stripped and exact duplicates plus roots
   /// nested inside an already-kept root are dropped. Separator handling is
   /// source-aware: a remote path may legitimately contain a backslash in a
@@ -5087,10 +6348,6 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
     return normalized;
   }
 
-  static bool _defaultCaseSensitivity(FsLocation destination) =>
-      destination is LocalFsLocation &&
-      (Platform.isMacOS || Platform.isWindows);
-
   void _throwIfTaskCancelled(TransferTask task) {
     if (task.cancellation.isCancelled) throw _cancelledException();
   }
@@ -5115,11 +6372,63 @@ const _maxKeepBothAttempts = 99;
 /// reality before the item fails honestly.
 const _maxCommitRetries = 8;
 
+/// Poll interval for probes started outside this queue's in-process gate.
+const _nameProbePollInterval = Duration(milliseconds: 10);
+
+/// NUL cannot occur in a filesystem component, so nested ownership keys
+/// remain unambiguous without leaking platform separators into identity.
+const _destinationOwnershipPathSeparator = '\u0000';
+
+typedef _DestinationOwnershipKey = (String, String, String);
+
 /// Per-task runtime state the public [TransferTask] model doesn't carry.
 class _TaskRuntime {
-  _TaskRuntime(this.task);
+  _TaskRuntime(this.task, this.destinationNameComparison) {
+    destinationComparisonsByContainer[task.destinationDir] =
+        destinationNameComparison;
+  }
 
   final TransferTask task;
+
+  /// Filesystem identity used consistently by scan and execution.
+  DestinationNameComparison destinationNameComparison;
+
+  /// Identity rules are probed at each resolved container. A nested mount
+  /// can differ from the task root.
+  final Map<String, DestinationNameComparison>
+  destinationComparisonsByContainer = {};
+
+  /// Fully-scanned restores re-probe before any pending operation dispatches.
+  Completer<void> destinationComparisonReady = Completer<void>()..complete();
+  bool destinationComparisonValidationStarted = false;
+
+  bool get destinationComparisonValidationInFlight =>
+      destinationComparisonValidationStarted &&
+      !destinationComparisonReady.isCompleted;
+
+  /// Planned and output claims remain separate so a completed output wins
+  /// over stale journal order during recovery.
+  final Map<_DestinationOwnershipKey, _DestinationClaim>
+  plannedDestinationClaims = {};
+  final Map<_DestinationOwnershipKey, _DestinationClaim>
+  outputDestinationClaims = {};
+
+  /// Raw claims are the re-key source after a conservative restore probe.
+  /// The temporary folded index above may collapse paths that the eventual
+  /// exact comparison distinguishes.
+  final List<_DestinationClaim> rawPlannedDestinationClaims = [];
+  final List<_DestinationClaim> rawOutputDestinationClaims = [];
+  final Set<(String, String)> rawPlannedDestinationClaimKeys = {};
+  final Set<(String, String)> rawOutputDestinationClaimKeys = {};
+
+  /// Fsynced resolved claims by item survive re-scan retries and crashes.
+  final Map<String, Set<String>> durableDestinationClaims = {};
+
+  /// Visible probe rows do not block a Move after the probe cleans up.
+  final Set<String> nameProbeArtifactItems = {};
+
+  /// Local directory barriers already completed for this task.
+  final Set<String> durableLocalDirectories = {};
 
   /// Plan-directory state by `PlannedDirectory.itemId`.
   final Map<String, _DirState> directories = {};
@@ -5244,8 +6553,7 @@ class _DirState {
   /// The scan's listing for this directory failed atomically — its
   /// children were never discovered, so re-arming just the mkdir would
   /// "complete" the subtree with nothing in it. Such a row is not
-  /// per-item retryable; only a re-scan (`retryTask` mid-scan path, or
-  /// a fresh enqueue) can rediscover it.
+  /// per-item retryable; only a fresh enqueue can rediscover it.
   bool listingFailed = false;
 
   /// 00 D26's directory self-move: the resolved destination canonicalizes
@@ -5253,9 +6561,56 @@ class _DirState {
   /// file children self-complete, and `_removeMovedDirectories` must
   /// not unlink the source.
   bool selfTarget = false;
+
+  /// True while scheduling waits for the containing directory's result.
+  bool waitingForParent = false;
 }
 
 enum _DirOutcome { pending, ready, skipped, failed, cancelled }
+
+enum _DestinationTraitRefreshMode { missingOnly, revalidate }
+
+/// Serializes name probes with directory mutations on one endpoint.
+final class _AsyncGate {
+  Future<void> _tail = Future<void>.value();
+
+  Future<T> run<T>(
+    Future<T> Function() operation, {
+    required RemoteTransferCancellation cancellation,
+  }) {
+    final previous = _tail;
+    final completed = Completer<void>();
+    _tail = completed.future;
+    return _run(previous, completed, operation, cancellation);
+  }
+
+  Future<T> _run<T>(
+    Future<void> previous,
+    Completer<void> completed,
+    Future<T> Function() operation,
+    RemoteTransferCancellation cancellation,
+  ) async {
+    var ownsCompletion = true;
+    try {
+      final admitted = await Future.any<bool>([
+        previous.then((_) => true),
+        cancellation.whenCancelled.then((_) => false),
+      ]);
+      if (!admitted) {
+        // Keep later operations behind [previous] even though this caller
+        // can release its leases immediately.
+        ownsCompletion = false;
+        unawaited(previous.whenComplete(completed.complete));
+        cancellation.throwIfCancelled();
+      }
+
+      cancellation.throwIfCancelled();
+      return await operation();
+    } finally {
+      if (ownsCompletion && !completed.isCompleted) completed.complete();
+    }
+  }
+}
 
 class _FileWork {
   const _FileWork({required this.item, required this.file});
@@ -5291,6 +6646,14 @@ class _RegistryClaim {
   final Completer<void> committed = Completer();
 }
 
+/// One raw destination path and the source item that owns its folded key.
+final class _DestinationClaim {
+  const _DestinationClaim(this.destinationPath, this.sourcePath);
+
+  final String destinationPath;
+  final String sourcePath;
+}
+
 /// The executor's conflict-decision outcomes.
 sealed class _FileDecision {
   const _FileDecision();
@@ -5312,9 +6675,13 @@ final class _FileAsk extends _FileDecision {
 }
 
 final class _FileError extends _FileDecision {
-  const _FileError(this.message);
+  const _FileError(
+    this.message, {
+    this.retryPolicy = TransferFailureRetryPolicy.retryable,
+  });
 
   final String message;
+  final TransferFailureRetryPolicy retryPolicy;
 }
 
 /// The resolved destination IS the source entry (00 D26): a local→local

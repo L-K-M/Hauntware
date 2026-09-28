@@ -1,5 +1,17 @@
 # Séance ports and pin audits
 
+## Destination collision ownership (2026-09-27)
+
+Original Poltergeist implementation; no Séance source was copied and no pin
+changed. Séance `main` at `2571118` has a one-shot download planner that
+refuses duplicate planned local paths on Windows. It has no persistent
+transfer queue, retry journal, Keep Both policy, or destructive move path, so
+D40's task-lifetime ownership and crash-recovery rules have no direct upstream
+surface. The filesystem-trait probe is part of that ownership contract rather
+than a behavior-preserving port to Séance's downloader.
+
+Port-back candidates: none.
+
 ## M2 probe lifecycle prerequisite (2026-09-08)
 
 The periodic `ProbeService` repair merged in

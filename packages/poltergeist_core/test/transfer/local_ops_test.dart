@@ -44,6 +44,7 @@ void main() {
     int? pipeBufferBytes,
     bool Function(FsLocation)? isCaseInsensitiveDestination,
     Future<void> Function(String destinationPath)? flushLocalDestination,
+    Future<void> Function(String destinationPath)? flushLocalDirectory,
     TransferPersistence? persistence,
     BandwidthLimiter? downloadLimiter,
     BandwidthLimiter? uploadLimiter,
@@ -52,8 +53,11 @@ void main() {
       connections: connections,
       localFileSystem: localFileSystem ?? localFs,
       pipeBufferBytes: pipeBufferBytes ?? 4 * 1024 * 1024,
-      isCaseInsensitiveDestination: isCaseInsensitiveDestination,
+      // These tests measure transfer I/O, not the independent name probe.
+      isCaseInsensitiveDestination:
+          isCaseInsensitiveDestination ?? (_) => false,
       flushLocalDestination: flushLocalDestination,
+      flushLocalDirectory: flushLocalDirectory,
       persistence: persistence,
       downloadLimiter: downloadLimiter,
       uploadLimiter: uploadLimiter,
@@ -480,7 +484,70 @@ void main() {
       },
     );
 
-    test('a move onto itself completes in place — never self-overwrites', () async {
+    test('cancel retains a committed destination claim until drain', () async {
+      final firstSource = FakeTreeFileSystem()
+        ..addFile('/src/shared.txt', 'first'.codeUnits);
+      final secondSource = FakeTreeFileSystem()
+        ..addFile('/src/shared.txt', 'second'.codeUnits);
+      connections.filesystems
+        ..['s1'] = firstSource
+        ..['s2'] = secondSource;
+      final flushStarted = Completer<void>();
+      final flushGate = Completer<void>();
+      queue = newQueue(
+        flushLocalDestination: (_) async {
+          if (!flushStarted.isCompleted) flushStarted.complete();
+          await flushGate.future;
+        },
+        flushLocalDirectory: (_) async {},
+      );
+
+      final first = queue.enqueue(
+        TransferTaskSpec(
+          source: const ServerFsLocation('s1'),
+          destination: const LocalFsLocation(),
+          rootPaths: const ['/src/shared.txt'],
+          destinationDir: localDst.path,
+          policy: ResolvedConflictPolicy(files: ConflictResolution.replace),
+          operation: TransferOperation.move,
+        ),
+      );
+
+      try {
+        await flushStarted.future;
+        expect(dstFile('shared.txt').readAsStringSync(), 'first');
+        expect(localFs.uploadCalls, 1);
+
+        queue.cancelTask(first.id);
+        final second = queue.enqueue(
+          TransferTaskSpec(
+            source: const ServerFsLocation('s2'),
+            destination: const LocalFsLocation(),
+            rootPaths: const ['/src/shared.txt'],
+            destinationDir: localDst.path,
+            policy: ResolvedConflictPolicy(files: ConflictResolution.replace),
+          ),
+        );
+        await pumpUntil(() => second.scanComplete);
+        await pump(20);
+
+        expect(localFs.uploadCalls, 1);
+        expect(dstFile('shared.txt').readAsStringSync(), 'first');
+
+        flushGate.complete();
+        await awaitTaskDone(first);
+        await awaitTaskDone(second);
+
+        expect(first.state, TransferTaskState.cancelled);
+        expect(second.state, TransferTaskState.completed);
+        expect(dstFile('shared.txt').readAsStringSync(), 'second');
+      } finally {
+        if (!flushGate.isCompleted) flushGate.complete();
+      }
+    });
+
+    test(
+      'a move onto itself completes in place — never self-overwrites', () async {
       final file = writeLocal('self.txt', 'self'.codeUnits);
 
       final task = queue.enqueue(
@@ -531,7 +598,7 @@ void main() {
         // The commit-time conflict re-decided on fresh reality: the
         // skip policy wins, the late occupant and the source both
         // survive, and no rename ever ran.
-        expect(task.state, TransferTaskState.completed);
+        expect(task.state, TransferTaskState.completed, reason: task.error);
         expect(task.items.single.state, TransferItemState.skipped);
         expect(File(dstPath).readAsStringSync(), 'late arrival');
         expect(file.readAsStringSync(), 'mine');
@@ -579,7 +646,11 @@ void main() {
           p.join(localSrc.path, 'sub', 'b.txt'),
           'bb'.codeUnits,
         );
-        queue = newQueue(localFileSystem: local);
+        queue = newQueue(
+          localFileSystem: local,
+          // The fake tree has no host directories for the real fsync seam.
+          flushLocalDirectory: (_) async {},
+        );
 
         final task = queue.enqueue(
           localSpec(
@@ -612,6 +683,76 @@ void main() {
       skip: Platform.isWindows
           ? 'FakeTreeFileSystem models posix separators only'
           : null,
+    );
+
+    test('a moved local directory is durable before source removal', () async {
+      final source = Directory(p.join(localSrc.path, 'empty'))..createSync();
+      final destination = p.join(localDst.path, 'empty');
+      final flushed = <String>[];
+      queue = newQueue(
+        flushLocalDirectory: (path) async {
+          expect(source.existsSync(), isTrue);
+          flushed.add(path);
+        },
+      );
+
+      final task = queue.enqueue(
+        localSpec(
+          rootPaths: [source.path],
+          destinationDir: localDst.path,
+          operation: TransferOperation.move,
+        ),
+      );
+      await awaitTaskDone(task);
+
+      expect(task.state, TransferTaskState.completed);
+      expect(flushed, [localDst.path, destination]);
+      expect(source.existsSync(), isFalse);
+      expect(Directory(destination).existsSync(), isTrue);
+    });
+
+    test(
+      'a remote move flushes each new local ancestor before unlinking',
+      () async {
+        final remote = FakeTreeFileSystem()
+          ..addFile('/src/root/sub/file.txt', 'payload'.codeUnits);
+        connections.filesystems['s1'] = remote;
+        final flushedDirectories = <String>[];
+        final expectedDirectories = [
+          localDst.path,
+          p.join(localDst.path, 'root'),
+          p.join(localDst.path, 'root', 'sub'),
+        ];
+        remote.deleteFailure = (entry) {
+          if (entry.path == '/src/root/sub/file.txt') {
+            expect(flushedDirectories, expectedDirectories);
+          }
+          return null;
+        };
+        queue = newQueue(
+          flushLocalDestination: (_) async {},
+          flushLocalDirectory: (path) async {
+            expect(remote.entryAt('/src/root/sub/file.txt'), isNotNull);
+            flushedDirectories.add(path);
+          },
+        );
+
+        final task = queue.enqueue(
+          TransferTaskSpec(
+            source: const ServerFsLocation('s1'),
+            destination: const LocalFsLocation(),
+            rootPaths: const ['/src/root'],
+            destinationDir: localDst.path,
+            policy: ResolvedConflictPolicy(),
+            operation: TransferOperation.move,
+          ),
+        );
+        await awaitTaskDone(task);
+
+        expect(task.state, TransferTaskState.completed);
+        expect(flushedDirectories, containsAllInOrder(expectedDirectories));
+        expect(remote.entryAt('/src/root'), isNull);
+      },
     );
   });
 
@@ -1055,5 +1196,4 @@ class InstrumentedLocalFs extends LocalFileSystem {
     );
   }
 }
-
 
