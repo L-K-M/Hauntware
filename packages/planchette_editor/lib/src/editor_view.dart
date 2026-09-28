@@ -5,6 +5,7 @@ import 'package:planchette_core/planchette_core.dart';
 
 import 'code_editing_controller.dart';
 import 'editor_controller.dart';
+import 'editor_fonts.dart';
 import 'editor_strings.dart';
 
 /// What the Tab key does inside the document.
@@ -25,11 +26,7 @@ class PlanchetteEditor extends StatefulWidget {
     super.key,
     required this.controller,
     this.strings = const EditorStrings(),
-    this.textStyle = const TextStyle(
-      fontFamily: 'monospace',
-      fontSize: 14,
-      height: 1.35,
-    ),
+    this.textStyle = const TextStyle(fontSize: 14, height: 1.35),
     this.syntaxTheme,
     this.isActive = true,
     this.editingLocked = false,
@@ -44,6 +41,11 @@ class PlanchetteEditor extends StatefulWidget {
 
   final EditorController controller;
   final EditorStrings strings;
+
+  /// Merged over the platform's monospace family ([editorMonospaceFor]), a
+  /// 14 px size and 1.35 line height. A `fontFamily` here is tried first;
+  /// the platform stack stays as its fallback unless `fontFamilyFallback`
+  /// is set too, so a missing host font still lands on a monospace face.
   final TextStyle textStyle;
   final EditorSyntaxTheme? syntaxTheme;
   final bool isActive;
@@ -80,8 +82,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
-  TextStyle get _style =>
-      const TextStyle(fontSize: 14, height: 1.35).merge(widget.textStyle);
+  TextStyle get _style => editorMonospaceFor(
+    Theme.of(context).platform,
+  ).merge(const TextStyle(fontSize: 14, height: 1.35)).merge(widget.textStyle);
   bool get _locked => widget.editingLocked || c.editingLocked;
   bool get _apple => switch (Theme.of(context).platform) {
     TargetPlatform.macOS || TargetPlatform.iOS => true,
