@@ -72,7 +72,6 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// matching success clears its own scope and nothing else, so a resolved
   /// failure retires its banner without hiding another document's.
   Object? _errorScope;
-  String? _tabRefusal;
 
   List<DocumentTab> get documents => List.unmodifiable(_documents);
   DocumentTab? get active => _active;
@@ -347,7 +346,6 @@ final class DocumentWorkspace extends ChangeNotifier {
         return false;
       }
       _remove(tab);
-      _clearCloseRefusal();
       // A save or destination failure about this tab cannot be retried
       // anymore, so its banner goes with it. Path-scoped and scope-less
       // errors are untouched.
@@ -411,23 +409,11 @@ final class DocumentWorkspace extends ChangeNotifier {
     tab,
   );
 
-  /// A retryable refusal names the tab it is about, so it stops being true
-  /// the moment that tab closes. Tracking the last one keeps a stale excuse
-  /// from outliving its cause without clearing errors the workspace owns —
-  /// a failed save, a missing file and a declined destination still persist
-  /// until they are replaced or dismissed.
-  void _reportTabRefusal(String message, DocumentTab tab) {
-    _tabRefusal = message;
-    _reportError(message, scope: tab);
-  }
-
-  void _clearCloseRefusal() {
-    if (_error == _tabRefusal) {
-      _error = null;
-      _errorScope = null;
-    }
-    _tabRefusal = null;
-  }
+  /// A retryable refusal is scoped to the tab it is about, like that tab's
+  /// save failures: it retires when that tab saves or closes, and closing
+  /// any other tab leaves it alone while it is still true.
+  void _reportTabRefusal(String message, DocumentTab tab) =>
+      _reportError(message, scope: tab);
 
   /// Both the native close button and the OS Quit route share this decision.
   /// No tab is removed until every document has consented; a later Cancel
@@ -504,7 +490,6 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// caller can clear the state without updating the banner.
   void _clearScope(Object scope) {
     if (_errorScope != scope) return;
-    if (_error == _tabRefusal) _tabRefusal = null;
     _error = null;
     _errorScope = null;
     _notify();
@@ -513,7 +498,6 @@ final class DocumentWorkspace extends ChangeNotifier {
   void clearError() {
     _error = null;
     _errorScope = null;
-    _tabRefusal = null;
     _notify();
   }
 

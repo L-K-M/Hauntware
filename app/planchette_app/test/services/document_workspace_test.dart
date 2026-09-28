@@ -922,4 +922,26 @@ void main() {
     expect(workspace.error, contains('one.txt'));
     expect(workspace.documents, [file]);
   });
+
+  test('closing an unrelated tab keeps a refusal that still holds', () async {
+    store.files[testPath('one.txt')] = document('one.txt', 'original one');
+    store.files[testPath('two.txt')] = document('two.txt', 'original two');
+    await workspace.open(testPath('one.txt'));
+    final saving = workspace.active!..editor.text.text = 'edited one';
+    await workspace.open(testPath('two.txt'));
+    final other = workspace.active!;
+    store.writeGate = Completer<void>();
+    final save = workspace.save(saving);
+    await pumpEventQueue();
+
+    expect(await workspace.closeTab(saving), isFalse);
+    expect(workspace.error, contains('one.txt is still being saved'));
+    // one.txt is still saving, so the refusal is still true after an
+    // unrelated tab goes away.
+    expect(await workspace.closeTab(other), isTrue);
+    expect(workspace.error, contains('one.txt is still being saved'));
+
+    store.writeGate!.complete();
+    expect(await save, isTrue);
+  });
 }
