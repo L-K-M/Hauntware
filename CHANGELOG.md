@@ -49,6 +49,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   can close, a saving one cannot.
 - The status bar says "1 line" and "1 byte".
 - On Linux and Windows the window opens at its final size and position.
+- The shared editor keeps a host's lock (`EditorController.setEditingLocked`)
+  apart from a view's `editingLocked` parameter, so rebuilding a view no
+  longer unlocks a document the host locked. A view lock clears only when
+  the view rebuilds, so a host should lock through one of the two: the app
+  now locks through the controller alone, which also fixes saves answered
+  before the next frame after a dialog being refused.
 
 ### Fixed
 - A file whose name nearly fills the 255-byte limit can be saved.

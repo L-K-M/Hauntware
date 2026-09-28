@@ -133,6 +133,9 @@ class EditorController extends ChangeNotifier {
   /// each owner clears only its own, so rebuilding the view with its default
   /// `false` never unlocks a document the host locked.
   bool get editingLocked => _editingLocked || _viewLocks.isNotEmpty;
+
+  /// Sets the host's lock, like [setEditingLocked]. A mounted view's own lock
+  /// still holds, so the getter can read true after setting false.
   set editingLocked(bool value) => setEditingLocked(value);
 
   /// The host's lock. [notify] is false only for hosts that update several

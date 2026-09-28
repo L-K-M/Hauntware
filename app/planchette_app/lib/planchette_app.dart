@@ -625,7 +625,11 @@ class _DocumentShellState extends State<_DocumentShell> {
                               key: ValueKey(tab.id),
                               controller: tab.editor,
                               isActive: tab == active,
-                              editingLocked: workspace.interactionLocked,
+                              // No editingLocked here: the workspace locks
+                              // each controller the moment a dialog opens
+                              // and unlocks it the moment it closes. A view
+                              // lock would clear only on the next rebuild,
+                              // refusing a save made before it.
                             ),
                         ],
                       ),
