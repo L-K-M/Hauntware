@@ -43,6 +43,9 @@ final class DocumentTab {
   String get name => path == null ? untitledName : paths.basename(path!);
 }
 
+/// One file that failed to open, for callers that aggregate batch results.
+typedef _OpenFailure = ({String path, String name, String message});
+
 final class DocumentWorkspace extends ChangeNotifier {
   DocumentWorkspace({
     required this.store,
@@ -54,7 +57,7 @@ final class DocumentWorkspace extends ChangeNotifier {
   final DocumentStore store;
   final DocumentDialogs dialogs;
   final List<DocumentTab> _documents = [];
-  final Map<String, Future<void>> _opening = {};
+  final Map<String, Future<_OpenFailure?>> _opening = {};
   final Set<DocumentTab> _closingTabs = {};
   final Map<DocumentTab, Future<bool>> _saves = {};
   int _nextId = 1;
@@ -140,18 +143,90 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (interactionLocked) return;
     try {
       final selected = await _dialog(dialogs.pickOpenFiles);
+      final failures = <_OpenFailure>[];
+      final reported = <String>{};
       for (final path in selected) {
-        await open(path);
+        try {
+          final failure = await _openDeduped(path);
+          if (failure != null && reported.add(_pathKey(path))) {
+            failures.add(failure);
+          }
+        } catch (error, stackTrace) {
+          // One exceptional path must not abort the rest of the batch, but a
+          // non-OS throwable is likely a bug — keep it diagnosable. The same
+          // `reported` set dedupes the diagnostic with the visible failure.
+          if (reported.add(_pathKey(path))) {
+            FlutterError.reportError(
+              FlutterErrorDetails(exception: error, stack: stackTrace),
+            );
+            failures.add((
+              path: path,
+              name: _paths.basename(path),
+              message: '$error',
+            ));
+          }
+        }
+      }
+      // A single failure belongs to its path, so opening that file again
+      // successfully retires it; a batch summary belongs to no one document.
+      if (failures.length == 1) {
+        _reportError(
+          _openFailureMessage(failures),
+          scope: _pathKey(failures.single.path),
+        );
+      } else if (failures.isNotEmpty) {
+        _reportError(_openFailureMessage(failures));
       }
     } catch (error) {
       _reportError('Could not open documents: $error');
     }
   }
 
-  Future<void> open(String path) {
+  Future<void> open(String path) async {
+    final failure = await _openDeduped(path);
+    if (failure != null) {
+      _reportError(_openFailureMessage([failure]), scope: _pathKey(path));
+    }
+  }
+
+  /// One line naming every failure — the last error alone would hide the
+  /// rest of the batch. The enumeration is capped so a large multi-select
+  /// stays readable.
+  String _openFailureMessage(List<_OpenFailure> failures) {
+    if (failures.length == 1) {
+      return 'Could not open ${failures.single.name}: '
+          '${failures.single.message}';
+    }
+    const maxListed = 5;
+    // Two files from different folders can share a basename; fall back to
+    // the full path for those so each failure names its file. Compared
+    // case-insensitively — on case-insensitive volumes 'Notes.txt' and
+    // 'notes.txt' are different files that read identically in the list.
+    final ambiguous = <String>{};
+    final seen = <String>{};
+    for (final failure in failures) {
+      final key = failure.name.toLowerCase();
+      if (!seen.add(key)) ambiguous.add(key);
+    }
+    String label(_OpenFailure failure) =>
+        ambiguous.contains(failure.name.toLowerCase())
+        ? failure.path
+        : failure.name;
+    final listed = failures
+        .take(maxListed)
+        .map((failure) => '${label(failure)} (${failure.message})')
+        .join(', ');
+    final extra = failures.length - maxListed;
+    return 'Could not open ${failures.length} files: '
+        '$listed${extra > 0 ? ', and $extra more' : ''}';
+  }
+
+  Future<_OpenFailure?> _openDeduped(String path) {
     if (_quitAccepted || _disposed) return Future.value();
     if (interactionLocked) {
-      return (_unlocked ??= Completer<void>()).future.then((_) => open(path));
+      return (_unlocked ??= Completer<void>()).future.then(
+        (_) => _openDeduped(path),
+      );
     }
     final key = _pathKey(path);
     return _opening.putIfAbsent(
@@ -162,7 +237,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     );
   }
 
-  Future<void> _open(String path) async {
+  Future<_OpenFailure?> _open(String path) async {
     final existing = _findPath(path);
     if (existing != null) {
       // No new tab will appear, so point at the one that already holds the
@@ -170,17 +245,18 @@ final class DocumentWorkspace extends ChangeNotifier {
       _active = existing;
       existing.flashRequest++;
       _notify();
-      return;
+      return null;
     }
     final tab = _makeTab(path: _paths.normalize(_paths.absolute(path)));
     _documents.add(tab);
     _active = tab;
     _notify();
     await tab.editor.initialize();
-    if (_disposed || !_documents.contains(tab)) return;
+    if (_disposed || !_documents.contains(tab)) return null;
     final error = tab.editor.error;
+    _OpenFailure? failure;
     if (error != null) {
-      _reportError('Could not open ${tab.name}: $error', scope: _pathKey(path));
+      failure = (path: tab.path ?? tab.name, name: tab.name, message: error);
       _remove(tab);
     } else {
       // A symlink may resolve onto an already-open document. Keep the existing
@@ -200,6 +276,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       _clearScope(tab);
     }
     _notify();
+    return failure;
   }
 
   Future<bool> save(DocumentTab tab, {bool saveAs = false}) {

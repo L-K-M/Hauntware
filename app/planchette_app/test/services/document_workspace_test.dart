@@ -208,6 +208,88 @@ void main() {
     },
   );
 
+  test('a batch open reports every failure in one message', () async {
+    store.files[testPath('good.txt')] = document('good.txt', 'ok');
+    dialogs.openPaths = [
+      testPath('missing-a.txt'),
+      testPath('good.txt'),
+      testPath('missing-b.txt'),
+      testPath('missing-c.txt'),
+    ];
+    await workspace.openDialog();
+    expect(workspace.documents.map((tab) => tab.name), ['good.txt']);
+    final error = workspace.error!;
+    expect(error, contains('3 files'));
+    expect(error, contains('missing-a.txt'));
+    expect(error, contains('missing-b.txt'));
+    expect(error, contains('missing-c.txt'));
+    expect(error, isNot(contains('good.txt')));
+  });
+
+  test('same-basename failures fall back to full paths', () async {
+    final first = paths.join(Directory.systemTemp.path, 'dir-a', 'same.txt');
+    final second = paths.join(Directory.systemTemp.path, 'dir-b', 'same.txt');
+    // Case variants are distinct files but indistinguishable as basenames.
+    final cased = paths.join(Directory.systemTemp.path, 'dir-c', 'Same.txt');
+    dialogs.openPaths = [first, second, cased];
+    await workspace.openDialog();
+    final error = workspace.error!;
+    expect(error, contains(first));
+    expect(error, contains(second));
+    expect(error, contains(cased));
+  });
+
+  test('a single failed batch open keeps the one-file message', () async {
+    dialogs.openPaths = [testPath('missing.txt')];
+    await workspace.openDialog();
+    expect(workspace.error, startsWith('Could not open missing.txt: '));
+  });
+
+  test('a lone open failure retires once that file opens', () async {
+    dialogs.openPaths = [testPath('late.txt')];
+    await workspace.openDialog();
+    expect(workspace.error, startsWith('Could not open late.txt: '));
+
+    store.files[testPath('late.txt')] = document('late.txt', 'here now');
+    await workspace.open(testPath('late.txt'));
+    expect(workspace.error, isNull);
+  });
+
+  test('a batch summary outlives one of its files opening', () async {
+    dialogs.openPaths = [testPath('late.txt'), testPath('gone.txt')];
+    await workspace.openDialog();
+    expect(workspace.error, contains('2 files'));
+
+    // The summary also names gone.txt, which is still missing.
+    store.files[testPath('late.txt')] = document('late.txt', 'here now');
+    await workspace.open(testPath('late.txt'));
+    expect(workspace.error, contains('gone.txt'));
+  });
+
+  test('a repeated path in one batch reports its failure once', () async {
+    dialogs.openPaths = [testPath('missing.txt'), testPath('missing.txt')];
+    await workspace.openDialog();
+    expect(workspace.error, startsWith('Could not open missing.txt: '));
+  });
+
+  test(
+    'a long batch error lists the first failures and counts the rest',
+    () async {
+      dialogs.openPaths = [
+        for (var i = 0; i < 7; i++) testPath('missing-$i.txt'),
+      ];
+      await workspace.openDialog();
+      final error = workspace.error!;
+      expect(error, contains('7 files'));
+      for (var i = 0; i < 5; i++) {
+        expect(error, contains('missing-$i.txt'));
+      }
+      expect(error, isNot(contains('missing-5.txt')));
+      expect(error, isNot(contains('missing-6.txt')));
+      expect(error, contains('and 2 more'));
+    },
+  );
+
   test(
     'Save As during an in-flight save still writes the chosen path',
     () async {
