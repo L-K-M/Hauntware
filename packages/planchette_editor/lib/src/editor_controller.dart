@@ -190,6 +190,15 @@ class EditorController extends ChangeNotifier {
 
   TextDocument? get document => _document;
   String? get error => _error;
+
+  /// The view renders [error] instead of the document. Hosts surface it in
+  /// their own feedback and then clear it so a surviving buffer stays usable.
+  void clearError() {
+    if (_error == null) return;
+    _error = null;
+    _notify();
+  }
+
   bool get isLoading => _loading;
   bool get isSaving => _saving;
   bool get isBusy => _loading || _saving;

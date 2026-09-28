@@ -196,6 +196,10 @@ class _DocumentShellState extends State<_DocumentShell> {
   }
 
   void _saveAll() => unawaited(workspace.saveAll());
+  void _revert() {
+    final tab = workspace.active;
+    if (tab != null) unawaited(workspace.revert(tab));
+  }
 
   void _close() {
     final tab = workspace.active;
@@ -341,6 +345,14 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyS, alt: true),
           enabled:
               unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
+        ),
+        _Command(
+          'Revert to Saved',
+          _revert,
+          // Cmd/Ctrl+R is reserved for Revert to Saved; do not reuse keyR
+          // elsewhere (e.g. a future Replace accelerator).
+          shortcut: _shortcut(LogicalKeyboardKey.keyR),
+          enabled: ready && active?.path != null,
         ),
         const _Separator(),
         // macOS keeps Settings in the application menu instead.

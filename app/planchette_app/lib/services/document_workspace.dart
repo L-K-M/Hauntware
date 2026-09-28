@@ -39,6 +39,7 @@ abstract interface class DocumentDialogs {
   /// is dirty. [names] lists them, so the answer is about files the user can
   /// see rather than a count.
   Future<BulkCloseChoice> chooseBulkClose(List<String> names);
+  Future<bool> confirmRevert(String name);
 }
 
 /// One controller survives tab switches, retaining undo, selection, find and
@@ -160,14 +161,20 @@ final class DocumentWorkspace extends ChangeNotifier {
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,
-      loadDocument: path == null
-          ? null
-          : () async {
-              final document = await store.load(path);
-              tab.baseline = document;
-              tab.path = document.file.path;
-              return document;
-            },
+      // Read the path at call time: Save As retargets the tab, and a reload
+      // must follow the new location rather than the one it was opened with.
+      loadDocument: () async {
+        final target = tab.path;
+        if (target == null) {
+          // Unreachable via DocumentWorkspace.revert (guarded by
+          // tab.path == null); keep the throw as a tripwire for other callers.
+          throw StateError('${tab.name} has no saved location yet.');
+        }
+        final document = await store.load(target);
+        tab.baseline = document;
+        tab.path = document.file.path;
+        return document;
+      },
       saveDocument: (text, _) async {
         final target = _saveTargets[tab];
         if (target == null) {
@@ -717,6 +724,47 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// any other tab leaves it alone while it is still true.
   void _reportTabRefusal(String message, DocumentTab tab) =>
       _reportError(message, scope: tab);
+
+  /// Reload a tab's file after the host confirmed discarding local edits.
+  /// A failed reload keeps the buffer and reports through [error], so a
+  /// broken read never destroys the user's text.
+  Future<bool> revert(DocumentTab tab) async {
+    if (interactionLocked ||
+        tab.busy ||
+        !_documents.contains(tab) ||
+        tab.path == null ||
+        tab.editor.isBusy) {
+      return false;
+    }
+    if (tab.editor.isDirty) {
+      final confirmed = await _dialog(() => dialogs.confirmRevert(tab.name));
+      if (!confirmed) return false;
+    }
+    tab.busy = true;
+    _notify();
+    try {
+      // Ignore any error a previous operation left behind so the check
+      // below reflects this revert only.
+      tab.editor.clearError();
+      await tab.editor.reload();
+      final error = tab.editor.error;
+      if (error == null) return true;
+      tab.editor.clearError();
+      _error = 'Could not revert ${tab.name}: $error';
+      return false;
+    } catch (err) {
+      // _revert() runs unawaited; surface unexpected failures through the
+      // workspace banner instead of leaking an unhandled async error.
+      // Also drop any error the failed reload left behind: the view renders
+      // it instead of the document, and this path promises the buffer stays.
+      tab.editor.clearError();
+      _error = 'Could not revert ${tab.name}: $err';
+      return false;
+    } finally {
+      tab.busy = false;
+      _notify();
+    }
+  }
 
   /// Both the native close button and the OS Quit route share this decision.
   /// No tab is removed until every document has consented; a later Cancel
