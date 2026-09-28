@@ -121,9 +121,28 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _rememberTextFocus() {
     final focus = FocusManager.instance.primaryFocus;
     final tab = workspace.active;
-    if (tab != null && tab.editor.textFocusNodes.contains(focus)) {
-      _lastTextFocus = focus;
+    if (tab == null ||
+        !tab.editor.textFocusNodes.contains(focus) ||
+        focus == _lastTextFocus) {
+      return;
     }
+    final wasDocument = _documentInUse;
+    _lastTextFocus = focus;
+    // The menus offer document commands only while the document is in use.
+    if (_documentInUse != wasDocument) setState(() {});
+  }
+
+  /// Whether the text field in use is the document rather than a find or
+  /// Go to Line field. Commands that only edit the document, and their
+  /// shortcuts, are offered only then: a key those fields leave unhandled,
+  /// or the native menu's key equivalent, must not edit the hidden text.
+  bool get _documentInUse {
+    final tab = workspace.active;
+    if (tab == null) return false;
+    final remembered = _lastTextFocus;
+    return remembered == null ||
+        remembered == tab.editor.editorFocus ||
+        !tab.editor.textFocusNodes.contains(remembered);
   }
 
   void _textAction(Intent intent) {
@@ -204,7 +223,8 @@ class _DocumentShellState extends State<_DocumentShell> {
     // a load error — so the menu command follows the same rule.
     final closable = active != null && unlocked && !active.busy;
     // A composing input method or a host lock refuses line edits too.
-    final lineCommands = ready && (active?.editor.canEditText ?? false);
+    final inDocument = ready && _documentInUse;
+    final lineCommands = inDocument && (active?.editor.canEditText ?? false);
     return [
       _ShellMenu('File', [
         _Command(
@@ -346,7 +366,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           'Toggle Comment',
           () => active?.editor.toggleComment(),
           shortcut: _shortcut(LogicalKeyboardKey.slash),
-          enabled: ready && (active?.editor.canToggleComment ?? false),
+          enabled: inDocument && (active?.editor.canToggleComment ?? false),
         ),
       ]),
       _ShellMenu('Find', [
@@ -385,13 +405,13 @@ class _DocumentShellState extends State<_DocumentShell> {
           'Go to Matching Bracket',
           () => active?.editor.goToMatchingBracket(),
           shortcut: _shortcut(LogicalKeyboardKey.keyB),
-          enabled: ready,
+          enabled: inDocument,
         ),
         _Command(
           'Select to Matching Bracket',
           () => active?.editor.goToMatchingBracket(extend: true),
           shortcut: _shortcut(LogicalKeyboardKey.keyB, shift: true),
-          enabled: ready,
+          enabled: inDocument,
         ),
         const _Separator(),
         _Command(
