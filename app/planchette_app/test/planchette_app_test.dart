@@ -9,6 +9,7 @@ import 'package:planchette_app/services/document_workspace.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
+import 'services/memory_settings.dart';
 
 void main() {
   late MemoryDocuments store;
@@ -32,7 +33,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1000, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+      PlanchetteApp(workspace: workspace, settings: testSettings()),
     );
     await tester.pumpAndSettle();
   }

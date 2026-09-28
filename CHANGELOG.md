@@ -56,7 +56,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Past 200,000 characters, where syntax colours stop, the status bar says
   "Large file: no highlighting".
 - View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
-  (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
+  (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points, and
+  the size is remembered.
+- Settings (`Cmd/Ctrl+,`; in the application menu on macOS, the File menu
+  elsewhere) choose the theme (system, light or dark), the text size and
+  the indentation for new documents, previewed live and put back by
+  Cancel. They are saved per user and survive a damaged settings file.
 - Find Next and Find Previous reach every match in a large file: past the
   1,000 matches the find bar highlights, they page on, and the counter
   numbers each match within the whole document.

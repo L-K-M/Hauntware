@@ -10,6 +10,7 @@ import 'package:planchette_app/widgets/tab_strip.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
+import 'services/memory_settings.dart';
 
 void main() {
   late DocumentWorkspace workspace;
@@ -25,7 +26,7 @@ void main() {
     await tester.binding.setSurfaceSize(Size(width, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+      PlanchetteApp(workspace: workspace, settings: testSettings()),
     );
     await tester.pumpAndSettle();
   }

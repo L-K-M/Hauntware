@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
+import 'services/app_settings.dart';
 import 'services/document_workspace.dart';
+import 'services/settings_dialog.dart';
 import 'theme/planchette_theme.dart';
 import 'widgets/tab_strip.dart';
 
@@ -20,9 +22,9 @@ Color windowBackdrop(Brightness brightness) =>
 /// brightness through `PlatformDispatcher`, which needs no binding, because the
 /// window is created before `runApp`.
 ///
-/// A future persisted theme (A1) has to be resolved here, before the window
-/// exists: passing one mode to [PlanchetteApp] and another here would bring the
-/// flash straight back.
+/// `main` resolves the stored theme here, before the window exists: passing
+/// one mode to [PlanchetteApp] and another here would bring the flash
+/// straight back.
 Brightness effectiveBrightness(ThemeMode mode) => switch (mode) {
   ThemeMode.light => Brightness.light,
   ThemeMode.dark => Brightness.dark,
@@ -33,31 +35,46 @@ class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
     super.key,
     required this.workspace,
+    required this.settings,
     this.navigatorKey,
     this.onQuit,
-    this.themeMode = ThemeMode.system,
   });
 
   final DocumentWorkspace workspace;
+
+  /// The user's choices, and the only place the theme, the text size and the
+  /// indentation for new documents come from.
+  final SettingsController settings;
   final GlobalKey<NavigatorState>? navigatorKey;
   final Future<void> Function()? onQuit;
-  final ThemeMode themeMode;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Planchette',
-    navigatorKey: navigatorKey,
-    debugShowCheckedModeBanner: false,
-    theme: planchetteTheme(Brightness.light),
-    darkTheme: planchetteTheme(Brightness.dark),
-    themeMode: themeMode,
-    home: _DocumentShell(workspace: workspace, onQuit: onQuit),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: settings,
+    builder: (context, _) => MaterialApp(
+      title: 'Planchette',
+      navigatorKey: navigatorKey,
+      debugShowCheckedModeBanner: false,
+      theme: planchetteTheme(Brightness.light),
+      darkTheme: planchetteTheme(Brightness.dark),
+      themeMode: settings.value.themeMode,
+      home: _DocumentShell(
+        workspace: workspace,
+        settings: settings,
+        onQuit: onQuit,
+      ),
+    ),
   );
 }
 
 class _DocumentShell extends StatefulWidget {
-  const _DocumentShell({required this.workspace, this.onQuit});
+  const _DocumentShell({
+    required this.workspace,
+    required this.settings,
+    this.onQuit,
+  });
   final DocumentWorkspace workspace;
+  final SettingsController settings;
   final Future<void> Function()? onQuit;
 
   @override
@@ -82,37 +99,68 @@ class _DocumentShellState extends State<_DocumentShell> {
         tab.editor.error == null;
   }
 
-  /// Editor font sizes for View › Zoom. The default is the editor's own 14.
-  static const _zoomSizes = [
-    9.0,
-    10.0,
-    11.0,
-    12.0,
-    13.0,
-    14.0,
-    16.0,
-    18.0,
-    20.0,
-    22.0,
-    24.0,
-    28.0,
-    32.0,
-    36.0,
-    48.0,
-  ];
-  static const _defaultZoom = 5;
-  int _zoom = _defaultZoom;
+  SettingsController get settings => widget.settings;
 
-  void _setZoom(int zoom) {
-    final next = zoom.clamp(0, _zoomSizes.length - 1);
-    if (next != _zoom) setState(() => _zoom = next);
-  }
+  /// The text sizes View › Zoom steps through. The stored size need not be one
+  /// of them (the Settings slider reaches every size between), and a step
+  /// goes to the nearest one past it.
+  static const _zoomSizes = [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    16,
+    18,
+    20,
+    22,
+    24,
+    28,
+    32,
+    36,
+    AppSettings.maximumFontSize,
+  ];
+
+  int get _fontSize => settings.value.fontSize;
+
+  void _zoomIn() => _setFontSize(
+    _zoomSizes.firstWhere((size) => size > _fontSize, orElse: () => _fontSize),
+  );
+
+  void _zoomOut() => _setFontSize(
+    _zoomSizes.lastWhere((size) => size < _fontSize, orElse: () => _fontSize),
+  );
+
+  /// Zoom is a setting: it applies to every tab and outlasts the session.
+  void _setFontSize(int size) =>
+      unawaited(settings.update(settings.value.copyWith(fontSize: size)));
+
+  void _showSettings() =>
+      unawaited(SettingsDialog.show(context, settings: settings));
 
   @override
   void initState() {
     super.initState();
     workspace.addListener(_changed);
+    settings.addListener(_settingsChanged);
+    workspace.indentationPreference = settings.value.indentation;
     FocusManager.instance.addListener(_rememberTextFocus);
+  }
+
+  @override
+  void didUpdateWidget(_DocumentShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != settings) {
+      oldWidget.settings.removeListener(_settingsChanged);
+      settings.addListener(_settingsChanged);
+      _settingsChanged();
+    }
+  }
+
+  void _settingsChanged() {
+    workspace.indentationPreference = settings.value.indentation;
+    if (mounted) setState(() {});
   }
 
   void _changed() {
@@ -295,6 +343,14 @@ class _DocumentShellState extends State<_DocumentShell> {
               unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
         ),
         const _Separator(),
+        // macOS keeps Settings in the application menu instead.
+        if (!mac)
+          _Command(
+            'Settings…',
+            _showSettings,
+            shortcut: _shortcut(LogicalKeyboardKey.comma),
+            enabled: !workspace.interactionLocked,
+          ),
         _Command(
           'Close Tab',
           _close,
@@ -459,7 +515,7 @@ class _DocumentShellState extends State<_DocumentShell> {
       _ShellMenu('View', [
         _Command(
           'Zoom In',
-          () => _setZoom(_zoom + 1),
+          _zoomIn,
           shortcut: _shortcut(LogicalKeyboardKey.equal),
           // `+` sits on different keys, shifted or not, across layouts.
           aliases: [
@@ -468,21 +524,21 @@ class _DocumentShellState extends State<_DocumentShell> {
             _shortcut(LogicalKeyboardKey.add, shift: true),
             _shortcut(LogicalKeyboardKey.numpadAdd),
           ],
-          enabled: _zoom < _zoomSizes.length - 1,
+          enabled: _fontSize < _zoomSizes.last,
         ),
         _Command(
           'Zoom Out',
-          () => _setZoom(_zoom - 1),
+          _zoomOut,
           shortcut: _shortcut(LogicalKeyboardKey.minus),
           aliases: [_shortcut(LogicalKeyboardKey.numpadSubtract)],
-          enabled: _zoom > 0,
+          enabled: _fontSize > _zoomSizes.first,
         ),
         _Command(
           'Actual Size',
-          () => _setZoom(_defaultZoom),
+          () => _setFontSize(AppSettings.defaultFontSize),
           shortcut: _shortcut(LogicalKeyboardKey.digit0),
           aliases: [_shortcut(LogicalKeyboardKey.numpad0)],
-          enabled: _zoom != _defaultZoom,
+          enabled: _fontSize != AppSettings.defaultFontSize,
         ),
       ]),
       _ShellMenu('Window', [
@@ -543,6 +599,16 @@ class _DocumentShellState extends State<_DocumentShell> {
         menus: [
           const PlatformProvidedMenuItem(
             type: PlatformProvidedMenuItemType.about,
+          ),
+          // Settings belong in the application menu on macOS.
+          PlatformMenuItemGroup(
+            members: [
+              PlatformMenuItem(
+                label: 'Settings…',
+                shortcut: _shortcut(LogicalKeyboardKey.comma),
+                onSelected: workspace.interactionLocked ? null : _showSettings,
+              ),
+            ],
           ),
           const PlatformMenuItemGroup(
             members: [
@@ -679,30 +745,16 @@ class _DocumentShellState extends State<_DocumentShell> {
                 saveTooltip: 'Save (${_keyLabel('S')})',
               ),
               if (workspace.error case final error?)
-                Semantics(
+                _errorBanner(
                   key: const ValueKey('workspace-error-banner'),
-                  liveRegion: true,
-                  child: Material(
-                    color: scheme.errorContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              error,
-                              style: TextStyle(color: scheme.onErrorContainer),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Dismiss error',
-                            onPressed: workspace.clearError,
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  message: error,
+                  onDismiss: workspace.clearError,
+                ),
+              if (settings.error case final error?)
+                _errorBanner(
+                  key: const ValueKey('settings-error-banner'),
+                  message: error,
+                  onDismiss: settings.clearError,
                 ),
               Expanded(
                 child: tabs.isEmpty
@@ -745,7 +797,13 @@ class _DocumentShellState extends State<_DocumentShell> {
                           for (final tab in tabs)
                             PlanchetteEditor(
                               key: ValueKey(tab.id),
-                              textStyle: TextStyle(fontSize: _zoomSizes[_zoom]),
+                              // Only what the user chose: the editor supplies
+                              // the platform's monospace stack and the line
+                              // height beneath it.
+                              textStyle: TextStyle(
+                                fontFamily: settings.value.fontFamily,
+                                fontSize: _fontSize.toDouble(),
+                              ),
                               controller: tab.editor,
                               isActive: tab == active,
                               // No editingLocked here: the workspace locks
@@ -774,9 +832,43 @@ class _DocumentShellState extends State<_DocumentShell> {
     return body;
   }
 
+  Widget _errorBanner({
+    required Key key,
+    required String message,
+    required VoidCallback onDismiss,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      key: key,
+      liveRegion: true,
+      child: Material(
+        color: scheme.errorContainer,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: scheme.onErrorContainer),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Dismiss error',
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     workspace.removeListener(_changed);
+    settings.removeListener(_settingsChanged);
     FocusManager.instance.removeListener(_rememberTextFocus);
     super.dispose();
   }

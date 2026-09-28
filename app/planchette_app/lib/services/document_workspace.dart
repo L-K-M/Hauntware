@@ -105,6 +105,20 @@ final class DocumentWorkspace extends ChangeNotifier {
   final Map<DocumentTab, Future<bool>> _saves = {};
   int _nextId = 1;
   int _dialogCount = 0;
+  Indentation? _indentationPreference;
+
+  /// The indentation for documents that neither use nor mandate one, from the
+  /// user's settings: every open editor takes it now, and every editor made
+  /// later takes it as it is created.
+  Indentation? get indentationPreference => _indentationPreference;
+  set indentationPreference(Indentation? value) {
+    if (_indentationPreference == value) return;
+    _indentationPreference = value;
+    for (final tab in _documents) {
+      tab.editor.indentationPreference = value;
+    }
+  }
+
   bool _closingAll = false;
   bool _quitAccepted = false;
   bool _disposed = false;
@@ -172,6 +186,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         return document.sha256;
       },
     );
+    tab.editor.indentationPreference = _indentationPreference;
     tab._editorListener = () => _editorChanged(tab);
     tab.editor.addListener(tab._editorListener);
     return tab;
