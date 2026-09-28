@@ -925,6 +925,27 @@ void main() {
       );
     });
 
+    test('plan entries preserve UTC microsecond timestamps', () {
+      final modifiedAt = DateTime.utc(2026, 9, 18, 1, 2, 3, 4, 5);
+      final record = PlanEntryRecord(
+        taskId: 't1',
+        itemId: 'i1',
+        isDirectory: false,
+        sourcePath: '/source/a.txt',
+        destinationPath: '/dest/a.txt',
+        sourceType: RemoteFileType.file,
+        sourceSize: 1,
+        sourceModifiedAt: modifiedAt,
+      );
+
+      final parsed =
+          TransferJournalRecord.parse(jsonEncode(record.toJson()))
+              as PlanEntryRecord;
+
+      expect(parsed.sourceModifiedAt, modifiedAt);
+      expect(parsed.sourceModifiedAt!.isUtc, isTrue);
+    });
+
     test('a non-object managedCheckout field is refused', () {
       final json = managedEnqueuedJson();
       (json['spec'] as Map<String, Object?>)['managedCheckout'] = 'junk';
