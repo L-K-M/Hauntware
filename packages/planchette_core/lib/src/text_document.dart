@@ -128,7 +128,7 @@ Future<TextDocument> loadTextDocument(
   } on FormatException {
     throw const TextDocumentException('This file is not valid UTF-8 text.');
   }
-  if (raw.contains('\u0000')) {
+  if (_firstNulIndex(raw) >= 0) {
     throw const TextDocumentException(
       'This file appears to be binary, not editable text.',
     );
@@ -221,6 +221,19 @@ Future<String> _writeTextDocument(
   if (!RegExp(r'^\.[a-zA-Z0-9_-]+$').hasMatch(temporaryPrefix)) {
     throw ArgumentError.value(temporaryPrefix, 'temporaryPrefix');
   }
+  // Loading rejects NUL as binary; writing it would produce a file this
+  // editor can never reopen. Reject before publication, while the original
+  // destination is still untouched. Scan the input, not the normalized
+  // text: normalization never adds or removes a NUL, and this keeps the
+  // reported offset pointing into the text the caller actually edited.
+  final nulIndex = _firstNulIndex(text);
+  if (nulIndex >= 0) {
+    throw TextDocumentException(
+      'The edited text contains a NUL character at code unit $nulIndex. '
+      'Loading treats that as binary content, so saving it would create a '
+      'file the editor cannot reopen.',
+    );
+  }
   final normalized = normalization == TextNormalization.preserve
       ? text
       : _normalizeLineEndings(text, lineEnding);
@@ -243,7 +256,8 @@ Future<String> _writeTextDocument(
   var retainTemporary = false;
   try {
     await temporary.create(exclusive: true);
-    setFilePermissions(temporary.path, 0x180); // 0600, before any plaintext.
+    // Owner-only before any plaintext reaches the file.
+    setFilePermissions(temporary.path, _ownerReadWriteMode);
     handle = await temporary.open(mode: FileMode.writeOnly);
     await handle.writeFrom(bytes);
     await handle.flush();
@@ -277,7 +291,7 @@ Future<String> _writeTextDocument(
         );
       }
       final stat = await backup.stat();
-      setFilePermissions(temporary.path, stat.mode & 0x1ff);
+      setFilePermissions(temporary.path, stat.mode & _posixPermissionMask);
       renameFileWithoutReplacing(temporary.path, file.path);
     } catch (error) {
       if (error is HardLinkCleanupException) retainTemporary = true;
@@ -357,11 +371,23 @@ String _tooLargeMessage(int maximumBytes) =>
 
 const _utf8Bom = [0xef, 0xbb, 0xbf];
 
+/// chmod 0600: temporary plaintext is owner-only until it inherits the
+/// destination's mode below.
+const int _ownerReadWriteMode = 0x180;
+
+/// chmod 0777 mask: only the portable permission bits survive a save.
+const int _posixPermissionMask = 0x1ff;
+
 bool _utf8BomAt(List<int> bytes, int offset) =>
     bytes.length >= offset + _utf8Bom.length &&
     bytes[offset] == _utf8Bom[0] &&
     bytes[offset + 1] == _utf8Bom[1] &&
     bytes[offset + 2] == _utf8Bom[2];
+
+/// The load- and write-side binary rule, shared so a save can never emit a
+/// file the loader would then reject. Broadening the binary heuristic must
+/// update this one place.
+int _firstNulIndex(String text) => text.indexOf('\u0000');
 
 String _foldToLf(String text) =>
     text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
