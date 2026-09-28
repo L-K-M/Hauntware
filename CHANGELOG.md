@@ -24,9 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Repo scaffolding: Dart pub workspace, `packages/planchette_core` package
   skeleton, CI/release/review workflows, build/release/package scripts, and
   the agent operating manual.
-- Saving over a read-only file asks first: Save As… (the default), Save
-  Anyway or Cancel. Save Anyway covers that file for the tab once the write
-  succeeds, and on Windows the read-only attribute survives the save.
+- Saving over a read-only file asks first, a Save As onto one included: Save
+  As… (the default), Save Anyway or Cancel. Save Anyway covers that file for
+  the tab once the write succeeds, and the file stays read-only. Declining is
+  not reported as a failed save.
 - Quitting with several unsaved documents asks one question that lists them
   (Don't Save, Cancel or Save All) instead of one dialog per document. Its
   Save All reports a partial failure the way File › Save All does.

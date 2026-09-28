@@ -34,7 +34,7 @@ void main() {
   });
 
   test(
-    'the dominant line ending wins; ties and lone CRs count as LF',
+    'the dominant line ending wins, a tie is LF, and lone CRs are not counted',
     () async {
       Future<LineEnding> endingOf(String text) async {
         await file.writeAsString(text);
@@ -47,6 +47,7 @@ void main() {
       expect(await endingOf('\r\n\r\n'), LineEnding.crlf);
       expect(await endingOf('\n\r\n'), LineEnding.lf, reason: 'a tie');
       expect(await endingOf('a\rb\r\n'), LineEnding.crlf);
+      expect(await endingOf('a\rb'), LineEnding.lf, reason: 'nothing counted');
       expect(await endingOf('single line'), LineEnding.lf);
     },
   );

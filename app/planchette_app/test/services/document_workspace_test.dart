@@ -99,7 +99,11 @@ class MemoryDocuments implements DocumentStore {
 class FakeDialogs implements DocumentDialogs {
   List<String> openPaths = [];
   String? savePath;
+
+  /// Answers for successive pickers, taken before [savePath] applies.
+  final savePaths = <String?>[];
   bool replace = true;
+  final replaceAsked = <String>[];
   final choices = <CloseChoice>[];
   final asked = <String>[];
   final bulkAsked = <List<String>>[];
@@ -117,11 +121,12 @@ class FakeDialogs implements DocumentDialogs {
   @override
   Future<String?> pickSavePath(String suggestedName) async {
     savePrompts.add(suggestedName);
-    return savePath;
+    return savePaths.isEmpty ? savePath : savePaths.removeAt(0);
   }
 
   @override
   Future<bool> confirmReplace(String path) async {
+    replaceAsked.add(path);
     await beforeReplace?.call();
     return replace;
   }
@@ -434,11 +439,112 @@ void main() {
       expect(tab.path, testPath('copy.txt'));
     });
 
-    test('an explicit Save As does not ask', () async {
+    test('an explicit Save As to an unprotected file does not ask', () async {
       dialogs.savePath = testPath('copy.txt');
       expect(await workspace.save(tab, saveAs: true), isTrue);
       expect(dialogs.readOnlyAsked, isEmpty);
     });
+
+    test('review fix: an explicit Save As onto the file asks too', () async {
+      dialogs.savePath = testPath('locked.txt');
+      expect(await workspace.save(tab, saveAs: true), isFalse);
+      expect(dialogs.readOnlyAsked, ['locked.txt']);
+      expect(store.writes, isEmpty);
+
+      dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAnyway);
+      expect(await workspace.save(tab, saveAs: true), isTrue);
+      expect(store.files[testPath('locked.txt')]!.text, 'edited');
+    });
+
+    test(
+      'review fix: Save As onto another protected file asks, once',
+      () async {
+        store.files[testPath('other.txt')] = document('other.txt', 'other');
+        store.writeProtected.add(testPath('other.txt'));
+        dialogs.savePath = testPath('other.txt');
+        dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAnyway);
+
+        expect(await workspace.save(tab, saveAs: true), isTrue);
+        // Save Anyway already agreed to replace it, so Replace is not asked.
+        expect(dialogs.readOnlyAsked, ['other.txt']);
+        expect(dialogs.replaceAsked, isEmpty);
+        expect(store.files[testPath('other.txt')]!.text, 'edited');
+        expect(store.files[testPath('locked.txt')]!.text, 'disk');
+      },
+    );
+
+    test('review fix: its Save As goes back to the picker', () async {
+      // Picking the protected file again is asked about again rather than
+      // replacing it in silence; the next pick is written.
+      dialogs.readOnlyChoices.addAll([
+        ReadOnlyChoice.saveAs,
+        ReadOnlyChoice.saveAs,
+      ]);
+      dialogs.savePaths.addAll([testPath('locked.txt'), testPath('copy.txt')]);
+
+      expect(await workspace.save(tab), isTrue);
+      expect(dialogs.readOnlyAsked, ['locked.txt', 'locked.txt']);
+      expect(dialogs.savePrompts, hasLength(2));
+      expect(store.files[testPath('locked.txt')]!.text, 'disk');
+      expect(store.files[testPath('copy.txt')]!.text, 'edited');
+    });
+
+    test('review fix: consent covers the tab\'s own file only', () async {
+      dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAnyway);
+      expect(await workspace.save(tab), isTrue);
+
+      // Another protected file is a new decision.
+      store.files[testPath('other.txt')] = document('other.txt', 'other');
+      store.writeProtected.add(testPath('other.txt'));
+      tab.editor.text.text = 'edited again';
+      dialogs.savePath = testPath('other.txt');
+      expect(await workspace.save(tab, saveAs: true), isFalse);
+      expect(dialogs.readOnlyAsked, ['locked.txt', 'other.txt']);
+      expect(store.files[testPath('other.txt')]!.text, 'other');
+
+      // So is coming back to the first one after saving elsewhere.
+      dialogs.savePath = testPath('copy.txt');
+      expect(await workspace.save(tab, saveAs: true), isTrue);
+      dialogs.savePath = testPath('locked.txt');
+      expect(await workspace.save(tab, saveAs: true), isFalse);
+      expect(dialogs.readOnlyAsked, ['locked.txt', 'other.txt', 'locked.txt']);
+      expect(store.files[testPath('locked.txt')]!.text, 'edited');
+    });
+
+    test(
+      'review fix: Save All does not call a declined save a failure',
+      () async {
+        store.files[testPath('one.txt')] = document('one.txt', 'disk');
+        await workspace.open(testPath('one.txt'));
+        final one = workspace.active!;
+        // Cancel, and Save As with the picker cancelled, are both answers.
+        for (final choice in [ReadOnlyChoice.cancel, ReadOnlyChoice.saveAs]) {
+          one.editor.text.text = 'edited $choice';
+          dialogs.readOnlyChoices.add(choice);
+          expect(await workspace.saveAll(), isFalse);
+          expect(store.files[testPath('one.txt')]!.text, 'edited $choice');
+          expect(workspace.error, isNull, reason: '$choice');
+        }
+        expect(store.files[testPath('locked.txt')]!.text, 'disk');
+      },
+    );
+
+    test(
+      'review fix: declining under the quit keeps the window quietly',
+      () async {
+        store.files[testPath('one.txt')] = document('one.txt', 'disk');
+        await workspace.open(testPath('one.txt'));
+        workspace.active!.editor.text.text = 'edited one';
+        dialogs.bulkChoice = BulkCloseChoice.saveAll;
+
+        expect(await workspace.confirmQuit(), isFalse);
+        // "Not now" stops the walk: nothing after it is saved or asked.
+        expect(dialogs.readOnlyAsked, ['locked.txt']);
+        expect(store.writes, isEmpty);
+        expect(workspace.error, isNull);
+        expect(workspace.interactionLocked, isFalse);
+      },
+    );
 
     test('a close that saves asks too', () async {
       dialogs.choices.add(CloseChoice.save);
@@ -1130,6 +1236,8 @@ void main() {
 
     store.writeGate!.complete();
     expect(await save, isTrue);
+    // Once the save lands the refusal is no longer true, so it retires.
+    expect(workspace.error, isNull);
   });
 
   test('Save All writes every dirty document', () async {

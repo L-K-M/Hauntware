@@ -20,8 +20,8 @@ enum _SaveRun {
   saveAll(EditorSaveAccess.normal),
 
   /// The quit question's Save All: it holds the interaction lock itself, so
-  /// each save carries the close's consent, and a declined destination
-  /// cancels the quit rather than skipping one document.
+  /// each save carries the close's consent, and a declined save cancels the
+  /// quit rather than skipping one document.
   quit(EditorSaveAccess.confirmedClose);
 
   const _SaveRun(this.access);
@@ -67,6 +67,11 @@ final class DocumentTab {
 
 /// One file that failed to open, for callers that aggregate batch results.
 typedef _OpenFailure = ({String path, String name, String message});
+
+/// Where one save writes: the resolved path, the digest the write expects to
+/// replace (null for a new file), and whether the user agreed, for this
+/// write, to replace a protected file.
+typedef _SaveTarget = ({String path, String? digest, bool acceptedReadOnly});
 
 final class DocumentWorkspace extends ChangeNotifier {
   DocumentWorkspace({
@@ -165,6 +170,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// [saveAll] reads it directly after its own await to fold several failures
   /// into one message; a tab's entry is replaced by every attempt it makes.
   final Map<DocumentTab, String> _saveFailures = {};
+
+  /// Tabs whose most recent [_saveOnce] stopped at the user's own answer: a
+  /// cancelled picker, Replace question or read-only question. Kept like
+  /// [_saveFailures], but a declined save is a decision, so a Save All does
+  /// not name it as a failure.
+  final Set<DocumentTab> _declinedSaves = {};
 
   /// Set while [saveAll] walks its snapshot so a second trigger — a repeated
   /// shortcut or another menu activation — cannot start a second pass over
@@ -371,6 +382,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     required EditorSaveAccess access,
   }) async {
     _saveFailures.remove(tab);
+    _declinedSaves.remove(tab);
     if (tab.editor.isLoading || tab.editor.error != null) {
       // Reachable from a close, where a refusal needs an outcome. A document
       // that failed to load has already reported its own error, so only the
@@ -384,57 +396,14 @@ final class DocumentWorkspace extends ChangeNotifier {
     tab.busy = true;
     _notify();
     try {
-      String target;
-      String? digest;
-      var chooseTarget = saveAs || tab.path == null;
-      // Consent to replace a protected file covers the write it was given
-      // for, so it is remembered only once that write lands.
-      String? acceptedReadOnly;
-      if (!chooseTarget &&
-          tab._acceptedReadOnlyPath != tab.path &&
-          await store.isWriteProtected(tab.path!)) {
-        switch (await _dialog(() => dialogs.chooseReadOnlySave(tab.name))) {
-          case ReadOnlyChoice.cancel:
-            return false;
-          case ReadOnlyChoice.saveAs:
-            chooseTarget = true;
-          case ReadOnlyChoice.saveAnyway:
-            acceptedReadOnly = tab.path;
-        }
-      }
-      if (chooseTarget) {
-        final selected = await _dialog(
-          () => dialogs.pickSavePath(tab.path ?? tab.name),
-        );
-        if (selected == null) return false;
-        target = await store.canonicalSavePath(selected);
-        final other = _findPath(target, except: tab);
-        if (other != null) {
-          final message = '${other.name} is already open in another tab.';
-          _reportError(message, scope: tab);
-          _saveFailures[tab] = message;
-          return false;
-        }
-        if (tab.path != null && _pathKey(target) == _pathKey(tab.path!)) {
-          // Choosing the same file must not bypass its external-change guard.
-          digest = tab.baseline!.sha256;
-        } else {
-          digest = await store.existingDigest(target);
-          if (digest != null &&
-              !await _dialog(() => dialogs.confirmReplace(target))) {
-            return false;
-          }
-        }
-      } else {
-        target = tab.path!;
-        digest = tab.baseline!.sha256;
-      }
-      _saveTargets[tab] = (path: target, digest: digest);
+      final target = await _saveTarget(tab, saveAs: saveAs);
+      if (target == null) return false;
+      _saveTargets[tab] = (path: target.path, digest: target.digest);
       final result = await tab.editor.save(access: access);
       if (result == null) return false;
-      if (acceptedReadOnly != null) {
-        tab._acceptedReadOnlyPath = acceptedReadOnly;
-      }
+      // Consent to replace a protected file covers the write it was given
+      // for, so it is remembered only once that write lands.
+      if (target.acceptedReadOnly) tab._acceptedReadOnlyPath = target.path;
       _clearScope(tab);
       return true;
     } catch (error) {
@@ -448,6 +417,77 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
   }
 
+  /// Where [tab] saves, once everything that destination needs has been
+  /// asked: the picker for Save As and new documents, the read-only question
+  /// for a protected file, and Replace for another existing one. Null stops
+  /// the save, recorded in [_declinedSaves] when the user said no and in
+  /// [_saveFailures] when the destination was refused.
+  Future<_SaveTarget?> _saveTarget(
+    DocumentTab tab, {
+    required bool saveAs,
+  }) async {
+    var chooseTarget = saveAs || tab.path == null;
+    while (true) {
+      final String target;
+      if (chooseTarget) {
+        final selected = await _dialog(
+          () => dialogs.pickSavePath(tab.path ?? tab.name),
+        );
+        if (selected == null) {
+          _declinedSaves.add(tab);
+          return null;
+        }
+        target = await store.canonicalSavePath(selected);
+        final other = _findPath(target, except: tab);
+        if (other != null) {
+          final message = '${other.name} is already open in another tab.';
+          _reportError(message, scope: tab);
+          _saveFailures[tab] = message;
+          return null;
+        }
+      } else {
+        target = tab.path!;
+      }
+      final own = tab.path != null && _pathKey(target) == _pathKey(tab.path!);
+      // Choosing the same file must not bypass its external-change guard.
+      final digest = own
+          ? tab.baseline!.sha256
+          : await store.existingDigest(target);
+
+      // Every route onto a protected file asks, Save As included. Consent
+      // given for this tab's own file holds; any other file, including a
+      // return to that one after saving elsewhere, is a new decision.
+      final accepted = tab._acceptedReadOnlyPath;
+      final consented =
+          own && accepted != null && _pathKey(accepted) == _pathKey(target);
+      var acceptedReadOnly = false;
+      if (!consented && await store.isWriteProtected(target)) {
+        final choice = await _dialog(
+          () => dialogs.chooseReadOnlySave(_paths.basename(target)),
+        );
+        switch (choice) {
+          case ReadOnlyChoice.cancel:
+            _declinedSaves.add(tab);
+            return null;
+          case ReadOnlyChoice.saveAs:
+            chooseTarget = true;
+            continue;
+          case ReadOnlyChoice.saveAnyway:
+            acceptedReadOnly = true;
+        }
+      }
+      // Save Anyway has already agreed to replace this file.
+      if (!own &&
+          digest != null &&
+          !acceptedReadOnly &&
+          !await _dialog(() => dialogs.confirmReplace(target))) {
+        _declinedSaves.add(tab);
+        return null;
+      }
+      return (path: target, digest: digest, acceptedReadOnly: acceptedReadOnly);
+    }
+  }
+
   /// Saves every dirty tab, one after another through the same serialization
   /// a single [save] uses, so concurrent writes never race on the digest
   /// guard. The dirty set is taken up front: a tab that closes while the
@@ -458,11 +498,11 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// A partial failure is reported once, counting what was written and
   /// naming each document that was not, in the shape multi-open aggregation
   /// uses. Tabs the walk never reached are counted as not saved too, either
-  /// in that summary or on their own when nothing failed. A destination the
-  /// user declines is a decision, not a failure: it is neither written nor
-  /// named, and the result simply is not a success. With a single dirty tab
-  /// there is nothing to aggregate, so the individual save's own message
-  /// stands.
+  /// in that summary or on their own when nothing failed. A save the user
+  /// declines, at the picker or at the Replace or read-only question, is a
+  /// decision, not a failure: it is neither written nor named, and the
+  /// result simply is not a success. With a single dirty tab there is
+  /// nothing to aggregate, so the individual save's own message stands.
   Future<bool> saveAll() async {
     if (interactionLocked || _savingAll) return false;
     _savingAll = true;
@@ -500,19 +540,19 @@ final class DocumentWorkspace extends ChangeNotifier {
         // Closed while this request waited behind the tab's own in-flight
         // save, typically a close that saved it first.
         vanished++;
+      } else if (_declinedSaves.contains(tab)) {
+        // A declined save under the quit question means "not now": stop
+        // asking and keep the window, without calling it a failure.
+        if (run == _SaveRun.quit) return false;
       } else if (_saveFailures[tab] case final detail?) {
         failures.add('${tab.name} (${_withoutFinalStop(detail)})');
-      } else if (tab.path != null) {
+      } else {
         failures.add(tab.name);
-      } else if (run == _SaveRun.quit) {
-        // A declined destination under the quit question means "not now":
-        // stop asking and keep the window, without calling it a failure.
-        return false;
       }
     }
     // Every dirty tab belongs in the total: saved, failed, vanished or
-    // never reached. A declined destination is attempted, so it stays out
-    // of the parts and only shares the denominator like any not-saved tab.
+    // never reached. A declined save is attempted, so it stays out of the
+    // parts and only shares the denominator like any not-saved tab.
     final skipped = dirty.length - attempted;
     // Unscoped: a summary names several documents, so no single one of
     // them saving later makes it untrue.
@@ -779,6 +819,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     final index = _documents.indexOf(tab);
     _documents.remove(tab);
     _saveFailures.remove(tab);
+    _declinedSaves.remove(tab);
     if (_active == tab) {
       _active = _documents.isEmpty
           ? null
