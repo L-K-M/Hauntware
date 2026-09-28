@@ -49,7 +49,9 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     meta: Color(0xFF2B4FBF),
     matchBackground: Color(0x80F5D89B),
     matchForeground: Color(0xFF233028),
-    activeMatchBackground: Color(0xFF3D8A78),
+    // Darkened from 0xFF3D8A78, which held white text at 4.11:1 — the least
+    // readable pair in either theme. 0xFF377A69 clears AA at 5.06:1.
+    activeMatchBackground: Color(0xFF377A69),
     activeMatchForeground: Color(0xFFFFFFFF),
   );
 

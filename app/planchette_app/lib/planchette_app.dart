@@ -27,13 +27,11 @@ class PlanchetteApp extends StatelessWidget {
     title: 'Planchette',
     navigatorKey: navigatorKey,
     debugShowCheckedModeBanner: false,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
+    theme: planchetteTheme(Brightness.light),
+    darkTheme: planchetteTheme(Brightness.dark),
     themeMode: themeMode,
     home: _DocumentShell(workspace: workspace, onQuit: onQuit),
   );
-
-  ThemeData _theme(Brightness brightness) => planchetteTheme(brightness);
 }
 
 class _DocumentShell extends StatefulWidget {
