@@ -24,7 +24,13 @@ Future<void> main(List<String> arguments) async {
     dialogs: AppDocumentDialogs(navigatorKey),
   );
   final desktop = DesktopWindow(
-    confirmQuit: workspace.confirmQuit,
+    confirmQuit: () async {
+      if (!await workspace.confirmQuit()) return false;
+      // A zoom or setting chosen just before quitting may still be on its
+      // way to disk.
+      await settings.flush();
+      return true;
+    },
     onQuitFailed: workspace.quitFailed,
     windowBackgroundColor: windowBackdrop(
       effectiveBrightness(settings.value.themeMode),

@@ -136,8 +136,20 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _setFontSize(int size) =>
       unawaited(settings.update(settings.value.copyWith(fontSize: size)));
 
-  void _showSettings() =>
-      unawaited(SettingsDialog.show(context, settings: settings));
+  bool _settingsOpen = false;
+
+  /// The native macOS menu stays live under the dialog, so a second request
+  /// is ignored, as the palette does; a second dialog on top would make the
+  /// first one's Cancel restore the previewed values.
+  Future<void> _showSettings() async {
+    if (_settingsOpen || workspace.interactionLocked) return;
+    _settingsOpen = true;
+    try {
+      await SettingsDialog.show(context, settings: settings);
+    } finally {
+      _settingsOpen = false;
+    }
+  }
 
   @override
   void initState() {
