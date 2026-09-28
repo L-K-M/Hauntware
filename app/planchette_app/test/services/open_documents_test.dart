@@ -166,4 +166,21 @@ void main() {
     expect(seen, ['/document.txt']);
     intake.dispose();
   });
+
+  test(
+    'an unexpected callback failure does not poison the next batch',
+    () async {
+      final seen = <String>[];
+      final intake = OpenDocuments(
+        open: (path) async {
+          if (path == 'bad') throw StateError('unexpected failure');
+          seen.add(path);
+        },
+      );
+      await expectLater(intake.accept(['bad']), throwsStateError);
+      await intake.accept(['good']);
+      expect(seen, ['good']);
+      intake.dispose();
+    },
+  );
 }

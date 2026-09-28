@@ -793,9 +793,11 @@ void main() {
     });
 
     test('Go raw strings span lines and take no escapes', () {
-      const text = 'p := `C:\\dir\\`\nq := "a\\"b"';
+      // The backslash before the line break and before the closing backtick
+      // are both plain text.
+      const text = 'p := `C:\\dir\\\nD:\\`\nq := "a\\"b"';
       expect(slices(text, SyntaxLanguages.go, SyntaxTokenType.string), [
-        '`C:\\dir\\`',
+        '`C:\\dir\\\nD:\\`',
         '"a\\"b"',
       ]);
     });

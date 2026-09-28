@@ -30,6 +30,8 @@ final class DesktopWindow with WindowListener {
   /// Public rather than inline in [initialize] so the geometry and the
   /// pre-paint backdrop can be asserted without the platform channel.
   WindowOptions get windowOptions => WindowOptions(
+    // The Linux and Windows runners open the window at this size, centered,
+    // so it has its final geometry before this applies. Change them together.
     size: const Size(1080, 760),
     minimumSize: const Size(640, 400),
     center: true,

@@ -128,10 +128,11 @@ const int _errorNoSuchFile = 2;
 /// POSIX reports the same situation as ENOENT ([_errorNoSuchFile]).
 const int _errorPathNotFound = 3;
 
-/// Whether [error] means a path vanished mid-operation — the destination
-/// file itself ([_errorNoSuchFile]) or, on Windows, a parent directory
-/// ([_errorPathNotFound]). Everything else (permissions, quota) is a real
-/// failure, not a concurrent-modification signal.
+/// Whether [error] means a path vanished mid-operation: the destination or a
+/// parent directory. POSIX reports both as [_errorNoSuchFile]; Windows
+/// reports a missing parent as [_errorPathNotFound]. Everything else
+/// (permissions, quota) is a real failure, not a concurrent-modification
+/// signal.
 ///
 /// Lives in this unexported library so hosts do not see it as package API;
 /// tests import it from `src/` directly.
