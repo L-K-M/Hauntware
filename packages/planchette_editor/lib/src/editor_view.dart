@@ -130,9 +130,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         if (widget.isActive) {
           c.restoreFocus();
         } else {
-          c.editorFocus.unfocus();
-          c.searchFocus.unfocus();
-          c.replacementFocus.unfocus();
+          for (final node in c.textFocusNodes) {
+            node.unfocus();
+          }
         }
       });
     }

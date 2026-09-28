@@ -891,4 +891,38 @@ void main() {
       TargetPlatform.windows,
     }),
   );
+
+  testWidgets('native text menus target the focused Go to Line field', (
+    tester,
+  ) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'document text';
+    await mount(tester);
+    tab.editor.openGoToLine();
+    await tester.pumpAndSettle();
+    tab.editor.goToLineInput.text = '12';
+    tab.editor.goToLineInput.selection = const TextSelection.collapsed(
+      offset: 1,
+    );
+    tab.editor.goToLineFocus.requestFocus();
+    await tester.pump();
+    final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+    final edit = bar.menus.whereType<PlatformMenu>().firstWhere(
+      (menu) => menu.label == 'Edit',
+    );
+    final selectAll = edit.menus
+        .whereType<PlatformMenuItemGroup>()
+        .expand((group) => group.members)
+        .firstWhere((item) => item.label == 'Select All');
+
+    selectAll.onSelected!();
+    await tester.pump();
+    // Select All acts on the field that has focus, not the document.
+    expect(
+      tab.editor.goToLineInput.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 2),
+    );
+    expect(tab.editor.goToLineFocus.hasFocus, isTrue);
+    expect(tab.editor.text.selection.isCollapsed, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 }

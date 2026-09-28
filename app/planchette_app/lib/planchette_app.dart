@@ -84,10 +84,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _rememberTextFocus() {
     final focus = FocusManager.instance.primaryFocus;
     final tab = workspace.active;
-    if (tab != null &&
-        (focus == tab.editor.editorFocus ||
-            focus == tab.editor.searchFocus ||
-            focus == tab.editor.replacementFocus)) {
+    if (tab != null && tab.editor.textFocusNodes.contains(focus)) {
       _lastTextFocus = focus;
     }
   }
@@ -98,12 +95,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (tab == null) return;
     final remembered = _lastTextFocus;
     final target =
-        remembered != null &&
-            [
-              tab.editor.editorFocus,
-              tab.editor.searchFocus,
-              tab.editor.replacementFocus,
-            ].contains(remembered)
+        remembered != null && tab.editor.textFocusNodes.contains(remembered)
         ? remembered
         : tab.editor.editorFocus;
     final context = target.context;

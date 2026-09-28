@@ -56,7 +56,7 @@ class EditorController extends ChangeNotifier {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
-    for (final node in [editorFocus, searchFocus, replacementFocus]) {
+    for (final node in textFocusNodes) {
       node.addListener(() {
         if (node.hasFocus) _focusMemory = node;
       });
@@ -96,6 +96,16 @@ class EditorController extends ChangeNotifier {
   final searchFocus = FocusNode();
   final replacementFocus = FocusNode();
   final goToLineFocus = FocusNode();
+
+  /// Every text field this editor owns: the document, find, replace and Go to
+  /// Line. A host routing Cut, Copy, Paste or Select All from its own menus
+  /// sends them to whichever of these has focus.
+  late final List<FocusNode> textFocusNodes = List.unmodifiable([
+    editorFocus,
+    searchFocus,
+    replacementFocus,
+    goToLineFocus,
+  ]);
   final scroll = ScrollController();
   final undoController = UndoHistoryController();
 
@@ -680,6 +690,7 @@ class EditorController extends ChangeNotifier {
   void closeGoToLine() {
     if (!_goToLineOpen) return;
     _goToLineOpen = false;
+    if (_focusMemory == goToLineFocus) _focusMemory = null;
     editorFocus.requestFocus();
     _notify();
   }
@@ -696,6 +707,7 @@ class EditorController extends ChangeNotifier {
     int number(String? digits) =>
         digits == null ? 1 : int.tryParse(digits) ?? 0x7fffffff;
     _goToLineOpen = false;
+    if (_focusMemory == goToLineFocus) _focusMemory = null;
     goToLine(number(match[1]), column: number(match[2]));
     return true;
   }
