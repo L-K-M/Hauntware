@@ -82,6 +82,8 @@ class FakeDialogs implements DocumentDialogs {
   List<String> openPaths = [];
   String? savePath;
   bool replace = true;
+  bool revert = true;
+  bool revertAsked = false;
   final choices = <CloseChoice>[];
   final asked = <String>[];
   Completer<CloseChoice>? choiceGate;
@@ -102,6 +104,12 @@ class FakeDialogs implements DocumentDialogs {
     asked.add(name);
     return choiceGate?.future ??
         (choices.isEmpty ? CloseChoice.cancel : choices.removeAt(0));
+  }
+
+  @override
+  Future<bool> confirmRevert(String name) async {
+    revertAsked = true;
+    return revert;
   }
 }
 
@@ -450,6 +458,92 @@ void main() {
     dialogs.choiceGate!.complete(CloseChoice.discard);
     expect(await closing, isFalse);
     expect(workspace.documents, [tab]);
+  });
+
+  test('revert reloads the saved file after confirmation', () async {
+    store.files[testPath('note.txt')] = document('note.txt', 'saved text');
+    await workspace.open(testPath('note.txt'));
+    final tab = workspace.active!..editor.text.text = 'local edits';
+    store.files[testPath('note.txt')] = document(
+      'note.txt',
+      'changed elsewhere',
+      digest: 'external',
+    );
+    expect(await workspace.revert(tab), isTrue);
+    expect(tab.editor.text.text, 'changed elsewhere');
+    expect(tab.editor.isDirty, isFalse);
+    expect(dialogs.revertAsked, isTrue);
+  });
+
+  test('declined revert keeps the unsaved buffer', () async {
+    store.files[testPath('note.txt')] = document('note.txt', 'saved text');
+    await workspace.open(testPath('note.txt'));
+    final tab = workspace.active!..editor.text.text = 'local edits';
+    dialogs.revert = false;
+    expect(await workspace.revert(tab), isFalse);
+    expect(tab.editor.text.text, 'local edits');
+    expect(tab.editor.isDirty, isTrue);
+  });
+
+  test('revert of a clean document skips confirmation', () async {
+    store.files[testPath('note.txt')] = document('note.txt', 'saved text');
+    await workspace.open(testPath('note.txt'));
+    final tab = workspace.active!;
+    dialogs.revert = false;
+    expect(await workspace.revert(tab), isTrue);
+    expect(dialogs.revertAsked, isFalse);
+    expect(tab.editor.text.text, 'saved text');
+  });
+
+  test('a failed reload keeps the buffer and reports an error', () async {
+    store.files[testPath('note.txt')] = document('note.txt', 'saved text');
+    await workspace.open(testPath('note.txt'));
+    final tab = workspace.active!..editor.text.text = 'precious edits';
+    store.files.remove(testPath('note.txt'));
+    expect(await workspace.revert(tab), isFalse);
+    expect(tab.editor.text.text, 'precious edits');
+    expect(tab.editor.isDirty, isTrue);
+    expect(tab.editor.error, isNull);
+    expect(tab.editor.canSave, isTrue);
+    expect(workspace.error, contains('Could not revert'));
+  });
+
+  test('untitled tabs cannot revert', () async {
+    final tab = workspace.newDocument()!;
+    expect(await workspace.revert(tab), isFalse);
+    expect(dialogs.revertAsked, isFalse);
+  });
+
+  test('revert works after Save As gives an untitled tab a file', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'first draft';
+    dialogs.savePath = testPath('draft.txt');
+    expect(await workspace.save(tab), isTrue);
+    tab.editor.text.text = 'revised';
+    store.files[testPath('draft.txt')] = document(
+      'draft.txt',
+      'newer on disk',
+      digest: 'external',
+    );
+    expect(await workspace.revert(tab), isTrue);
+    expect(tab.editor.text.text, 'newer on disk');
+    expect(tab.editor.isDirty, isFalse);
+  });
+
+  test('revert follows a Save As retarget', () async {
+    store.files[testPath('a.txt')] = document('a.txt', 'content a');
+    await workspace.open(testPath('a.txt'));
+    final tab = workspace.active!;
+    dialogs.savePath = testPath('b.txt');
+    expect(await workspace.save(tab, saveAs: true), isTrue);
+    tab.editor.text.text = 'edited at b';
+    store.files[testPath('b.txt')] = document(
+      'b.txt',
+      'newer b',
+      digest: 'b-external',
+    );
+    expect(await workspace.revert(tab), isTrue);
+    expect(tab.editor.text.text, 'newer b');
+    expect(tab.path, testPath('b.txt'));
   });
 
   test(

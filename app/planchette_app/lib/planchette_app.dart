@@ -117,6 +117,11 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (tab != null) unawaited(workspace.save(tab, saveAs: saveAs));
   }
 
+  void _revert() {
+    final tab = workspace.active;
+    if (tab != null) unawaited(workspace.revert(tab));
+  }
+
   void _close() {
     final tab = workspace.active;
     if (tab != null) unawaited(workspace.closeTab(tab));
@@ -189,6 +194,12 @@ class _DocumentShellState extends State<_DocumentShell> {
           () => _save(saveAs: true),
           shortcut: _shortcut(LogicalKeyboardKey.keyS, shift: true),
           enabled: ready,
+        ),
+        _Command(
+          'Revert to Saved',
+          _revert,
+          shortcut: _shortcut(LogicalKeyboardKey.keyR),
+          enabled: ready && active.path != null,
         ),
         const _Separator(),
         _Command(

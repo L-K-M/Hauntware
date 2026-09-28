@@ -314,6 +314,59 @@ void main() {
   );
 
   testWidgets(
+    'menu Revert to Saved restores the active document',
+    (tester) async {
+      store.files[testPath('revert.txt')] = document('revert.txt', 'saved');
+      await workspace.open(testPath('revert.txt'));
+      final tab = workspace.active!..editor.text.text = 'local edits';
+      await mount(tester);
+      store.files[testPath('revert.txt')] = document(
+        'revert.txt',
+        'changed elsewhere',
+        digest: 'external',
+      );
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Revert to Saved'));
+      await tester.pumpAndSettle();
+      expect(tab.editor.text.text, 'changed elsewhere');
+      expect(tab.editor.isDirty, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'Revert to Saved stays disabled for untitled documents',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'scratch';
+      await mount(tester);
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      final item = tester.widget<MenuItemButton>(
+        find.ancestor(
+          of: find.text('Revert to Saved'),
+          matching: find.byType(MenuItemButton),
+        ),
+      );
+      expect(item.onPressed, isNull);
+      await tester.tap(find.text('Revert to Saved'));
+      await tester.pumpAndSettle();
+      expect(tab.editor.text.text, 'scratch');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
     'quit Save succeeds with the mounted editor locked',
     (tester) async {
       final tab = workspace.newDocument()!
