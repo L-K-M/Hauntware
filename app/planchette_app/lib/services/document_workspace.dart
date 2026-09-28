@@ -388,6 +388,9 @@ final class DocumentWorkspace extends ChangeNotifier {
     } catch (err) {
       // _revert() runs unawaited; surface unexpected failures through the
       // workspace banner instead of leaking an unhandled async error.
+      // Also drop any error the failed reload left behind: the view renders
+      // it instead of the document, and this path promises the buffer stays.
+      tab.editor.clearError();
       _error = 'Could not revert ${tab.name}: $err';
       return false;
     } finally {
