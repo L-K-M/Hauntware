@@ -62,10 +62,10 @@ void main() {
         planchetteTheme(brightness).scaffoldBackgroundColor,
       );
     }
-    expect(
-      windowBackdrop(Brightness.dark),
-      isNot(windowBackdrop(Brightness.light)),
-    );
+    // The app's own pages: a second theme builder shadowing the imported one
+    // would still pass the check above.
+    expect(windowBackdrop(Brightness.light), PlanchettePalette.parchment.page);
+    expect(windowBackdrop(Brightness.dark), PlanchettePalette.seance.page);
   });
 
   test(

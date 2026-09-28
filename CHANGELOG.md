@@ -108,3 +108,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fell back to the proportional system font. `PlanchetteEditor.textStyle`
   now merges over the platform's family (`editorMonospaceFor`), and a host
   passing the generic name gets that family too.
+- The window opens on the app's own background in the current light or
+  dark mode, instead of the platform's default colour before the first
+  frame and while resizing.
