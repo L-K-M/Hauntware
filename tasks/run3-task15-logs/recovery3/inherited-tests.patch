@@ -1,0 +1,86 @@
+diff --git a/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart b/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+index a530bd2..2692cf0 100644
+--- a/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
++++ b/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+@@ -89,15 +89,15 @@ RemoteFileEntry _entry(String name) => RemoteFileEntry(
+   type: RemoteFileType.file,
+ );
+ 
+-Bookmark _remoteBookmark() {
++Bookmark _remoteBookmark({String id = 'srv-1', String host = 'web.example.com'}) {
+   final now = DateTime.utc(2026, 9, 12);
+   return Bookmark(
+-    id: 'srv-1',
++    id: id,
+     kind: BookmarkKind.remotePath,
+-    label: 'web.example.com',
++    label: host,
+     server: BookmarkServerRef(
+       identity: EmbeddedHostIdentity(
+-        host: 'web.example.com',
++        host: host,
+         port: 22,
+         username: 'tester',
+         authMethod: AuthMethod.password,
+@@ -305,6 +305,61 @@ void registerRound15Tests() {
+       controller.location,
+       const RemotePaneLocation('srv-1', '/srv/www'),
+     );
++    // A successful retry fully clears the failed attempt's error: the
++    // pane must not browse with a stale error surface underneath.
++    expect(controller.error, isNull);
++    controller.dispose();
++  });
++
++  // ── round-17 regressions ──────────────────────────────────────────────
++
++  test('a stale pending path never leaks into another bookmark', () async {
++    final lanes = FakePaneLanes();
++    final channel = FakePaneChannel('/srv/home');
++    channel.listings['/srv/home'] = [_entry('root.txt')];
++    lanes.nextRemoteChannel = channel;
++    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
++    await controller.connectRemote(_remoteBookmark());
++    await _settle();
++
++    // Transport severs mid-navigation; retry captures /srv/www as the
++    // pending path, but the reconnect bind itself fails.
++    channel.failure = const RemoteFileException(
++      kind: RemoteFileErrorKind.disconnected,
++      operation: 'list',
++      message: 'Connection closed.',
++    );
++    controller.navigate('/srv/www');
++    await _settle();
++    expect(controller.error?.kind, RemoteFileErrorKind.disconnected);
++
++    lanes.remoteOpenFailure = const RemoteFileException(
++      kind: RemoteFileErrorKind.disconnected,
++      operation: 'connect',
++      message: 'unreachable',
++    );
++    await controller.retry(); // the reconnect bind fails; /srv/www stays pending
++    await _settle();
++    expect(controller.phase, PanePhase.connectingRemote);
++    expect(controller.error, isNotNull);
++
++    // The user gives up on srv-1 and opens a DIFFERENT server: its bind
++    // must land on its own home, not on srv-1's pending directory.
++    lanes.remoteOpenFailure = null;
++    final other = FakePaneChannel('/srv/other/home');
++    other.listings['/srv/other/home'] = [_entry('readme.txt')];
++    lanes.nextRemoteChannel = other;
++    await controller.connectRemote(
++      _remoteBookmark(id: 'srv-2', host: 'other.example.com'),
++    );
++    await _settle();
++
++    expect(other.listCalls, ['/srv/other/home'],
++        reason: 'a pending path from srv-1 must not leak into srv-2');
++    expect(
++      controller.location,
++      const RemotePaneLocation('srv-2', '/srv/other/home'),
++    );
+     controller.dispose();
+   });
+ 

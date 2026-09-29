@@ -1,0 +1,105 @@
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  archive 4.2.0 (4.3.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+18 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart
+00:00 +0: toolbar refresh becomes available after initial binding
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: not null
+  Actual: <null>
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart:114:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart line 114
+The test description was:
+  toolbar refresh becomes available after initial binding
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +0 -1: toolbar refresh becomes available after initial binding [E]
+  Test failed. See exception logs above.
+  The test description was: toolbar refresh becomes available after initial binding
+  
+00:01 +0 -1: toolbar open follows cursor and active pane changes
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: not null
+  Actual: <null>
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart:134:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart line 134
+The test description was:
+  toolbar open follows cursor and active pane changes
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +0 -2: toolbar open follows cursor and active pane changes [E]
+  Test failed. See exception logs above.
+  The test description was: toolbar open follows cursor and active pane changes
+  
+00:02 +0 -2: toolbar parent tracks pending and completed listings
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: not null
+  Actual: <null>
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart:155:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart line 155
+The test description was:
+  toolbar parent tracks pending and completed listings
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:02 +0 -3: toolbar parent tracks pending and completed listings [E]
+  Test failed. See exception logs above.
+  The test description was: toolbar parent tracks pending and completed listings
+  
+00:02 +0 -3: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar parent tracks pending and completed listings
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar refresh becomes available after initial binding

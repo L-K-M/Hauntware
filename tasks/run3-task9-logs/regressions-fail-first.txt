@@ -1,0 +1,40 @@
+          ^^^^^^^^^^^^^^
+  test/ui/production_engine_wiring_test.dart:217:27: Error: Method not found: 'startEngineSession'.
+      final session = await startEngineSession(
+                            ^^^^^^^^^^^^^^^^^^
+  test/ui/production_engine_wiring_test.dart:230:9: Error: No named parameter with the name 'engineSession'.
+          engineSession: session,
+          ^^^^^^^^^^^^^
+  lib/app.dart:18:9: Context: Found this candidate, but the arguments don't match.
+    const PoltergeistApp({
+          ^^^^^^^^^^^^^^
+  test/ui/production_engine_wiring_test.dart:283:27: Error: Method not found: 'startEngineSession'.
+      final session = await startEngineSession(
+                            ^^^^^^^^^^^^^^^^^^
+  test/ui/production_engine_wiring_test.dart:294:9: Error: No named parameter with the name 'engineSession'.
+          engineSession: session,
+          ^^^^^^^^^^^^^
+  lib/app.dart:18:9: Context: Found this candidate, but the arguments don't match.
+    const PoltergeistApp({
+          ^^^^^^^^^^^^^^
+  test/services/engine_session_test.dart:228:11: Error: 'EngineSession' isn't a type.
+    Future<(EngineSession?, FakeAppEngine?)> startSession({
+            ^^^^^^^^^^^^^
+  test/services/engine_session_test.dart:234:27: Error: Method not found: 'startEngineSession'.
+      final session = await startEngineSession(
+                            ^^^^^^^^^^^^^^^^^^
+  test/services/engine_session_test.dart:251:13: Error: Method not found: 'FileHostKeyStore'.
+        await FileHostKeyStore(
+              ^^^^^^^^^^^^^^^^
+  test/services/engine_session_test.dart:297:26: Error: Method not found: 'FileHostKeyStore'.
+        final pins = await FileHostKeyStore(
+                           ^^^^^^^^^^^^^^^^
+  test/services/engine_session_test.dart:423:29: Error: Method not found: 'startEngineSession'.
+        final session = await startEngineSession(
+                              ^^^^^^^^^^^^^^^^^^
+  .
+00:00 +0 -2: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart

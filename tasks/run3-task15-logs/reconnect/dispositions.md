@@ -1,0 +1,19 @@
+
+
+## Final review disposition at 994a2c0
+
+Read the full edited summary, all actual comments/reviews and fully paginated threads/nested comments. Seven findings, three posted threads; the summary's “3 actionable” count is not the review scope. No confirmed production blocker. Stabilization continues from #84; no optional source push.
+
+1. **Connected from failed: decline blanket relaxation.** The synthetic surviving-error premise is reproducible with a still-usable channel: connected updates status, but Retry remains required. It is not a production status path. `engine_host.dart:531-550` forwards manager values and explicitly absorbs status errors; manager streams do not error today. `engine_client.dart:173-188,318-321` only publishes status data. Request errors complete futures (`:357-367`); isolate errors terminate/close watches (`:348-354,418-426`), not error then resume them. For real failed bindings, `reconnect.dart:340-399` rebinds healthy views but removes a permanently failed view from the rebind set; `_PaneChannelView.fs` retains that failure. Pool blocked/disconnected also clear bindings (`connection_manager.dart:1251,1686`). Thus “healthy channels rebind” does not prove a failed channel is reusable. Explicit Retry intentionally reopens, then requires a fresh listing. The synthetic case is not stranded: an independently successful retained-channel read and delayed explicit replacement both pass in `surviving-status.log`. Automatic recovery after errors from a future status adapter is deferred, not silently claimed implemented.
+2. **Missing-channel else: decline speculative hardening.** A null channel during connected is legitimate while its open awaits; the completion handles the listing. The stale-attempt return and channel assignment have no intervening await. No present path was established with waiting plus no binding/open; a future-refactor premise does not justify a stabilization push.
+3. **Scrim key: defer maintenance.** Current rendering already uses `withValues(alpha: 0.6)` and the controlled widget regression was observed red with stacked overlays, then green. A new key is optional test maintenance, not a demonstrated float failure.
+4. **200ms constant: defer maintenance.** It steps beyond the current150ms grace. Held listings are completer-controlled; advancing the clock cannot resolve them as claimed. Sharing a delay may help a future timing change, but no present failure exists.
+5. **STATUS blank line: defer prose nit.**
+6. **STATUS attribution wording: defer prose nit.** Runtime reds exposed the assumption; the implementation repaired it. No audit claim that tests edited production code is intended.
+7. **Fake map helper: defer; reject teardown rationale.** Repeated controller close is idempotent. Removal obtains a new open status controller on Retry rather than reusing EOF; it is not needed to avoid teardown closing twice. Both facts pass in `surviving-status.log`. The first probe incorrectly compared stream-wrapper identity; that harness failure is retained separately, not product red evidence.
+
+Post-restart source proof: unchanged supervisor2, focused90, app566, analysis clean, retained lifecycle5, production-core lifetime59, supplemental status/fake probes2. All full bounded logs have explicit exit0. Seven freshly regenerated PNGs are byte-identical to the inspected pre-restart captures. Native/install/real-SFTP QA remains unverified.
+
+Exact-head CI34776539036, review34776537541, secret34776538992 passed. CI includes five client builds and three native-host Dart suites. SSH integration/M0 jobs were scope-skipped, not run. The earlier bounded review watcher lost its process at the proven daemon/container restart; its missing exit is not a provider failure. Completed GitHub run metadata and full published feedback supply the final evidence.
+
+This companion repairs task15 only. Supervisor acceptance/counting remains separate; no M3/release closure or successor launch.

@@ -1,0 +1,95 @@
+{
+  "head": "f38c97f6f9287d41f2b4fa0b5256ecbc85d0e28c",
+  "logs": [
+    {
+      "path": "tasks/run3-task15-logs/recovery3/app-analyze.log",
+      "exit": "0",
+      "sha256": "4095dc7bf709ba52d142a6f42925b3842eb1e697ecce60678f36cbcab6d484ad"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/app-tests.log",
+      "exit": "0",
+      "sha256": "2be4f3818af99e87fa20db28d96696349db8a6f1ce37eb2905f622584373272b"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/cancel-replacement-green.log",
+      "exit": "0",
+      "sha256": "38e5f40f65dd9d33d976ba5e2ff4dda181fe415cebfb2eb98f129aaa6db73c50"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/cancel-replacement-red.log",
+      "exit": "1",
+      "sha256": "42ef902bf713331990f5bc066dd130d6d59324ab11e6ab642194bc554c67bed6"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/controller-green.log",
+      "exit": "0",
+      "sha256": "51b53ad2803aa0b8f03c9d6ca9b2f37f29667de54631ba03d54a794cc9fe605c"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/controller-red.log",
+      "exit": "1",
+      "sha256": "53401c72b3e9df1f444e5be7b239af2b6cb5ad5b662725607f2cdc67a8968efb"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/core-analyze.log",
+      "exit": "0",
+      "sha256": "599bdf0f34cb5d0153fde8f7205a3e4e9f89ba9f7a462184a0da7242ad182abf"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/core-tests.log",
+      "exit": "0",
+      "sha256": "5d7145b4bd5438fb077cf261e72e19bf9e30f4b77219bcae9c3fad1229edaea3"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/imports.log",
+      "exit": "0",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/protocol-tests.log",
+      "exit": "0",
+      "sha256": "f76f557fb00b42f8b308a702faba02f51630a3d2c4f66b1f8b324cbf631a15b9"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/protocol.log",
+      "exit": "0",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/route-final.log",
+      "exit": "0",
+      "sha256": "687c99876eb5175f4b71641c81beba199e66a1487c68624a3428a37b28ca5308"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/route-green.log",
+      "exit": "1",
+      "sha256": "1bdaa6f53e1abafbb1304eb42a70190271b894e6ec9011da76db6d425b088c85"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/route-red.log",
+      "exit": "1",
+      "sha256": "1503137d38fd6960fe3e29bd1f50a1aa1c8c64a3a48bb4f4fee8b627677eb558"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/shared-session-diagnostic.log",
+      "exit": "124",
+      "sha256": "517d4e0201538fe885650a3a22a35195562f1a78bb99c2c6af9851068ab809ed"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/shared-session-green.log",
+      "exit": "0",
+      "sha256": "26295de479f9ac4e0b19ca9e6c24781f48826d02ca417133333b0f10e35346a7"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/shared-session-teardown.log",
+      "exit": "124",
+      "sha256": "181851f71f9bf1368453c8a384e1278ae7497b64999150a0bc85fb236f034738"
+    },
+    {
+      "path": "tasks/run3-task15-logs/recovery3/shared-session.log",
+      "exit": "124",
+      "sha256": "2fc33dc844e13ca34177c5f9e1ee7502e75a315ad7e0cca2ba8cffac8b422dac"
+    }
+  ]
+}

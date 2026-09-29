@@ -403,7 +403,7 @@ jobs:
               scripts/package-linux.sh --bundle "poltergeist-linux-${{ matrix.flavor }}" --output-dir .
               # The .flatpak is the same .deb's payload staged under /app —
               # one packaging path, four assets.
-              sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+              sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
               # Ubuntu 24.04 denies the unprivileged user namespaces
               # bubblewrap (flatpak's sandbox helper) builds in.
               sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob

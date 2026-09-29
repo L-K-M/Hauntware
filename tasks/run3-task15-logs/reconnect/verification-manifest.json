@@ -1,0 +1,47 @@
+{
+  "head": "994a2c05bce9ea2ea2af6c37434fa5fdfb55040c",
+  "merge": "57cabf7bc9e4d9c7906084d5a4cdc16954ae1eb4",
+  "checks": {
+    "supervisor-after": {
+      "exit": 0,
+      "sha256": "7bb7002935c519bcdfb4a08d3c93fe1d4bdc97c0d02e054d28c0316e023a6cf4"
+    },
+    "focused-final": {
+      "exit": 0,
+      "sha256": "34111959575d1f3462044620563fdbcd214ed0d736be7ce4119f0fe221c4c367"
+    },
+    "app-final": {
+      "exit": 0,
+      "sha256": "3a3cbf0eebe852d89be938f5fa577dd3a6ef4deb723ad04f82d6cadf9a12b0ea"
+    },
+    "analyze-final": {
+      "exit": 0,
+      "sha256": "0d74333733d5f882e65d32a233606de8f6ec09a39f82e78c891cb3dc94b1e933"
+    },
+    "retained-lifecycle": {
+      "exit": 0,
+      "sha256": "6ba007cb604e8e7907e105c7e585d8a297c8fa6127e88504693cd063d71b48d3"
+    },
+    "lifetime-production": {
+      "exit": 0,
+      "sha256": "10730afcbd027a05900958d7646d7fd51c7e4e2816b0541bfca4ea996dfceb89"
+    },
+    "surviving-status": {
+      "exit": 0,
+      "sha256": "b5179d5e84e4db20a0efa72a681692729b990d4574893e819fb887da2a875166"
+    },
+    "capture-final": {
+      "exit": 0,
+      "sha256": "ccb25ddb5dbcf783edea93e6c093e2cd2c29c34e650683d7fb80164372877f46"
+    }
+  },
+  "captures": {
+    "remote-connected.png": "bd50708587dc992b8b730c92517030593a92b4c8e586c75517cfcb5112e9a98f",
+    "remote-connection-lost.png": "75711a226598b2391d427785e562fc1157ab1576678abae070f7b6b685b1e859",
+    "healing-complete.png": "18526e4beb15dbf802fe72439800ec4c76a2d96138aa297a0cac3cf3e1bb928b",
+    "healing-failed.png": "ffdccbd81332e4c3a0d32ddd491d990599222a0062cc0f1c2d39229c3469effe",
+    "healing-listing-pending.png": "75711a226598b2391d427785e562fc1157ab1576678abae070f7b6b685b1e859",
+    "remote-connecting.png": "c8b951bcefa502475dbdc205ac72dc2e35c69219e1cd8078dc85c5561f955fc9",
+    "local-both-panes.png": "3e7c4dba2d515b6a62e95ffb3400f6ecbbbddac78bbf6718e54c3f44ac962726"
+  }
+}
