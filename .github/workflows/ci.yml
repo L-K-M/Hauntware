@@ -20,7 +20,7 @@ jobs:
       - name: Resolve dependencies
         working-directory: app/poltergeist_app
         run: flutter pub get
-      - name: Compare sequential and batched metadata reads
+      - name: Compare per-file messages and a listing worker
         shell: bash
         env:
           LIBGL_ALWAYS_SOFTWARE: 1
@@ -33,17 +33,17 @@ jobs:
           cpu_model=$(lscpu | sed -n 's/^Model name: *//p' | head -1)
           cd app/poltergeist_app
           repetition=0
-          for batch_size in 1 32 32 1; do
+          for worker in false true true false; do
             repetition=$((repetition + 1))
             xvfb-run -a flutter drive --driver=test_driver/integration_test.dart --target=integration_test/perf/temporary_p4_list_test.dart --device-id linux --profile \
               "--dart-define=POLTERGEIST_BENCH_FIXTURE_ROOT=$fixture_root" \
-              "--dart-define=POLTERGEIST_BENCH_OUTPUT=$GITHUB_WORKSPACE/p4-diagnostic/$repetition-batch-$batch_size.json" \
+              "--dart-define=POLTERGEIST_BENCH_OUTPUT=$GITHUB_WORKSPACE/p4-diagnostic/$repetition-worker-$worker.json" \
               "--dart-define=POLTERGEIST_BENCH_RUNNER_IMAGE=$ImageOS@$ImageVersion" \
               "--dart-define=POLTERGEIST_BENCH_CPU_MODEL=$cpu_model" \
               --dart-define=POLTERGEIST_BENCH_FLUTTER_VERSION=3.47.2 \
               --dart-define=P4_LIST_DIAGNOSTIC_MODE=normal \
-              "--dart-define=P4_LIST_BATCH_SIZE=$batch_size" \
-              2>&1 | tee "$GITHUB_WORKSPACE/p4-diagnostic/$repetition-batch-$batch_size.log"
+              "--dart-define=P4_LIST_WORKER=$worker" \
+              2>&1 | tee "$GITHUB_WORKSPACE/p4-diagnostic/$repetition-worker-$worker.log"
           done
       - uses: actions/upload-artifact@v7
         if: always()

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
@@ -133,7 +134,9 @@ class LocalFileSystem implements RemoteFileSystem {
     'list',
     path,
     () async {
-      // Diagnostic-only switch: the default preserves the sequential path.
+      // Diagnostic-only switches: the default preserves the sequential path.
+      const useWorker = bool.fromEnvironment('P4_LIST_WORKER');
+      if (useWorker) return _listDirectoryInWorker(path);
       const batchSize = int.fromEnvironment('P4_LIST_BATCH_SIZE', defaultValue: 1);
       if (batchSize > 1) return _listDirectoryInBatches(path, batchSize);
 
@@ -162,6 +165,33 @@ class LocalFileSystem implements RemoteFileSystem {
       return entries;
     },
   );
+
+  // Static dispatch ensures the worker captures only the path, never this
+  // filesystem's other state. Blocking directory reads stay in that worker.
+  static Future<List<RemoteFileEntry>> _listDirectoryInWorker(String path) =>
+      Isolate.run(() => _listDirectorySync(path), debugName: 'local-listing');
+
+  static List<RemoteFileEntry> _listDirectorySync(String path) {
+    final entries = <RemoteFileEntry>[];
+    for (final entity in Directory(path).listSync(followLinks: false)) {
+      final name = p.basename(entity.path);
+      if (name == '.' || name == '..') continue;
+      if (entity is Link) {
+        entries.add(
+          RemoteFileEntry(
+            path: entity.path,
+            name: name,
+            type: RemoteFileType.symbolicLink,
+          ),
+        );
+        continue;
+      }
+      final stat = FileStat.statSync(entity.path);
+      if (stat.type == FileSystemEntityType.notFound) continue;
+      entries.add(_entryFromStat(entity.path, name, stat));
+    }
+    return entries;
+  }
 
   Future<List<RemoteFileEntry>> _listDirectoryInBatches(
     String path,
@@ -1164,7 +1194,7 @@ class LocalFileSystem implements RemoteFileSystem {
     return digest.toString();
   }
 
-  RemoteFileEntry _entryFromStat(String path, String name, FileStat stat) =>
+  static RemoteFileEntry _entryFromStat(String path, String name, FileStat stat) =>
       RemoteFileEntry(
         path: path,
         name: name,
