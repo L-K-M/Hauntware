@@ -58,7 +58,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Past 200,000 characters, where syntax colours stop, the status bar says
   "Large file: no highlighting".
 - View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
-  (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
+  (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points, and
+  the size is remembered.
+- Settings (`Cmd/Ctrl+,`; in the application menu on macOS, the File menu
+  elsewhere) choose the theme (system, light or dark), the text size and
+  the indentation for new documents, previewed live and put back by
+  Cancel. They are saved per user and survive a damaged settings file.
 - Find Next and Find Previous reach every match in a large file: past the
   1,000 matches the find bar highlights, they page on, and the counter
   numbers each match within the whole document.
@@ -77,6 +82,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Colors.transparent` to turn it off.
 
 ### Changed
+- One tab strip replaces the header and toolbar: tabs, a + button, and
+  Open and Save at its trailing edge, with the menu bar and tabs starting
+  at the window's leading edge. Tabs take keyboard focus and speak to
+  screen readers, `Cmd/Ctrl+1` to `9` select them, a dirty tab shows a dot
+  that turns into its close button under the pointer, a middle click
+  closes a tab, and the active tab stays in view through resizing, text
+  scaling and renames. Two tabs for files with the same name show their
+  folders. A right click on a tab offers Close, Close Others, Close All
+  Tabs and Copy Full Path.
+- Untitled documents are named "Untitled", "Untitled 2" and so on, taking
+  the lowest number no open tab shows, and opening a file from an
+  untouched untitled tab replaces that tab.
 - Loading and saving a large file takes about half the time and a third of
   the peak memory.
 - Typing no longer rebuilds the whole window: the tabs, menus and window
