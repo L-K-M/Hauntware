@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
@@ -136,7 +137,13 @@ class LocalFileSystem implements RemoteFileSystem {
     () async {
       // Diagnostic-only switches: the default preserves the sequential path.
       const useWorker = bool.fromEnvironment('P4_LIST_WORKER');
-      if (useWorker) return _listDirectoryInWorker(path);
+      const workerLimit = int.fromEnvironment(
+        'P4_LIST_WORKER_LIMIT',
+        defaultValue: 2,
+      );
+      if (useWorker && workerLimit > 0) {
+        return _listDirectoryInWorker(path, workerLimit);
+      }
       const batchSize = int.fromEnvironment('P4_LIST_BATCH_SIZE', defaultValue: 1);
       if (batchSize > 1) return _listDirectoryInBatches(path, batchSize);
 
@@ -166,10 +173,46 @@ class LocalFileSystem implements RemoteFileSystem {
     },
   );
 
+  // Shared across filesystem instances: every local browse channel owns one.
+  // This diagnostic permit bounds workers but does not cancel obsolete jobs.
+  static int _listingWorkersActive = 0;
+  static final _listingWorkerWaiters = ListQueue<Completer<void>>();
+
+  static Future<void> _acquireListingWorker(int limit) async {
+    if (_listingWorkersActive < limit) {
+      _listingWorkersActive++;
+      return;
+    }
+    final ready = Completer<void>();
+    _listingWorkerWaiters.addLast(ready);
+    await ready.future;
+  }
+
+  static void _releaseListingWorker() {
+    if (_listingWorkerWaiters.isNotEmpty) {
+      // Transfer the occupied permit directly to the oldest queued request.
+      _listingWorkerWaiters.removeFirst().complete();
+      return;
+    }
+    _listingWorkersActive--;
+  }
+
   // Static dispatch ensures the worker captures only the path, never this
   // filesystem's other state. Blocking directory reads stay in that worker.
-  static Future<List<RemoteFileEntry>> _listDirectoryInWorker(String path) =>
-      Isolate.run(() => _listDirectorySync(path), debugName: 'local-listing');
+  static Future<List<RemoteFileEntry>> _listDirectoryInWorker(
+    String path,
+    int limit,
+  ) async {
+    await _acquireListingWorker(limit);
+    try {
+      return await Isolate.run(
+        () => _listDirectorySync(path),
+        debugName: 'local-listing',
+      );
+    } finally {
+      _releaseListingWorker();
+    }
+  }
 
   static List<RemoteFileEntry> _listDirectorySync(String path) {
     final entries = <RemoteFileEntry>[];

@@ -484,6 +484,7 @@ class PaneController extends ChangeNotifier {
   // by channel identity and [_watchEpoch], never by path: the engine
   // names the canonical path, the pane keeps the requested spelling.
   bool _tabActive = true;
+  Timer? _activationRefreshTimer;
   AppBrowseChannel? _watchChannel;
   StreamSubscription<DirectoryWatchEvent>? _watchSubscription;
   String? _watchedPath;
@@ -1272,6 +1273,17 @@ class PaneController extends ChangeNotifier {
     _watchLosses = 0;
     if (_channel == null || _location is! LocalPaneLocation) return;
     _watchDirty = true;
+    const activationDelayMs = int.fromEnvironment('P4_ACTIVATION_DELAY_MS');
+    if (activationDelayMs > 0) {
+      _activationRefreshTimer = Timer(
+        const Duration(milliseconds: activationDelayMs),
+        () {
+          _activationRefreshTimer = null;
+          _flushWatchRefresh();
+        },
+      );
+      return;
+    }
     _flushWatchRefresh();
   }
 
@@ -3558,6 +3570,8 @@ class PaneController extends ChangeNotifier {
   /// Invalidates every in-flight listing answer without touching the
   /// visible state (the rebind resets it separately).
   void _cancelListing() {
+    _activationRefreshTimer?.cancel();
+    _activationRefreshTimer = null;
     _issuedGeneration++;
     _answeredGeneration = _issuedGeneration;
     // A cancelled listing can never consume a pending rename re-select.
@@ -3632,6 +3646,8 @@ class PaneController extends ChangeNotifier {
     AppBrowseChannel channel, {
     bool historyTraversal = false,
   }) {
+    _activationRefreshTimer?.cancel();
+    _activationRefreshTimer = null;
     // Quick Select ends BEFORE the navigation snapshot and the selection
     // reset: the restored baseline is what a later Esc-cancel restores,
     // and the new listing prunes it (02 §2.5).
@@ -4139,6 +4155,7 @@ class PaneController extends ChangeNotifier {
   /// would clear before the user read it.
   void _flushWatchRefresh() {
     if (!_watchDirty ||
+        _activationRefreshTimer != null ||
         _disposed ||
         !_tabActive ||
         _error != null ||
@@ -4197,6 +4214,8 @@ class PaneController extends ChangeNotifier {
   /// and every later signal at once; the engine side is released too
   /// unless [unwatch] is false because the channel is closing anyway.
   void _dropWatch({bool unwatch = true}) {
+    _activationRefreshTimer?.cancel();
+    _activationRefreshTimer = null;
     final channel = _watchChannel;
     final armed = _watchedPath != null;
     _watchEpoch++;
