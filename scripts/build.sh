@@ -12,6 +12,8 @@
 #            On Linux, release builds are also packaged into installable
 #            artifacts (.deb + AppImage) via scripts/package-linux.sh → dist/
 #   apk    — Android APK (needs flutter + an Android SDK)
+#   flatpak — repack the app's .deb as a Flatpak bundle (Linux; runs the
+#            app target first when no dist/ .deb exists yet)
 #
 # Usage:
 #   scripts/build.sh                 # every target this host can build
@@ -55,8 +57,8 @@ while [[ $# -gt 0 ]]; do
     -h|--help) usage 0 ;;
     --debug) PROFILE="debug"; shift ;;
     --install) INSTALL=true; shift ;;
-    server|docker|app|apk) REQUESTED+=("$1"); EXPLICIT=1; shift ;;
-    all) REQUESTED=(server docker app apk); EXPLICIT=1; shift ;;
+    server|docker|app|apk|flatpak) REQUESTED+=("$1"); EXPLICIT=1; shift ;;
+    all) REQUESTED=(server docker app apk flatpak); EXPLICIT=1; shift ;;
     *) echo "unknown argument: $1" >&2; usage 1 ;;
   esac
 done
@@ -76,7 +78,7 @@ fi
 
 # Default to all targets; feasibility is decided per-target below.
 if [[ ${#REQUESTED[@]} -eq 0 ]]; then
-  REQUESTED=(server docker app apk)
+  REQUESTED=(server docker app apk flatpak)
 fi
 
 case "$(uname -s)" in
@@ -217,6 +219,30 @@ package_linux() {
   else
     echo "!! packages: package-linux.sh failed" >&2
     record "packages: FAILED"
+    return 1
+  fi
+}
+
+build_flatpak() {
+  if [[ "$HOST" != "linux" ]]; then
+    record "flatpak: skipped (Linux only)"
+    return 0
+  fi
+  if ! have flatpak-builder; then
+    skip_or_fail flatpak "flatpak-builder not found"; return
+  fi
+  # Reuse the .deb the app target just packaged; build one when absent.
+  local deb
+  deb="$(ls -t dist/seance_*.deb 2>/dev/null | head -1 || true)"
+  if [[ -z "$deb" ]]; then
+    build_app || { record "flatpak: FAILED (app build)"; return 1; }
+    deb="$(ls -t dist/seance_*.deb 2>/dev/null | head -1 || true)"
+  fi
+  [[ -n "$deb" ]] || { record "flatpak: FAILED (no .deb produced)"; return 1; }
+  if scripts/build-flatpak.sh "$deb"; then
+    record "flatpak: built -> dist/"
+  else
+    record "flatpak: FAILED (repack)"
     return 1
   fi
 }
@@ -371,6 +397,7 @@ for target in "${REQUESTED[@]}"; do
     docker) build_docker || FAILED=1 ;;
     app)    build_app    || FAILED=1 ;;
     apk)    build_apk    || FAILED=1 ;;
+    flatpak) build_flatpak || FAILED=1 ;;
   esac
   echo
 done

@@ -57,7 +57,8 @@ release (proposal §2, M10).
 Requires the Dart SDK (3.12+) for the pure-Dart packages and the Flutter SDK
 for the app. `scripts/build.sh` builds every target this host can build (the
 native sync-server binary, the Docker image, the Flutter desktop app, and the
-Android APK; on Linux it also packages the app into a `.deb` and an AppImage)
+Android APK; on Linux it also packages the app into a `.deb`, a Flatpak
+bundle, and an AppImage)
 and prints one summary; the individual commands:
 
 ```bash
@@ -90,7 +91,7 @@ docker compose -f packages/seance_sync_server/docker-compose.yml up -d --build
 version line at the top of this README in step, commits, and tags `v<version>`
 — pushing that tag triggers `.github/workflows/release.yml`, which tests, then
 publishes the sync-server binaries, the `ghcr.io/l-k-m/seance` Docker image,
-and the app for every client platform — Android APK, Linux `.deb` + AppImage
+and the app for every client platform — Android APK, Linux `.deb` + Flatpak + AppImage
 packages for x64 plus plain desktop bundles (via
 `scripts/package-linux.sh`), macOS/Windows desktop bundles, and an unsigned
 iOS IPA (re-sign to sideload) — as the
@@ -286,10 +287,12 @@ compiles the app for android/linux/macos/ios/windows on their native runners
 **Helper scripts** (family conventions shared with the sibling repos):
 
 - `scripts/build.sh` — builds every target this host can build (`server`,
-  `docker`, `app`, `apk`); skips targets whose toolchain is missing, fails only
+  `docker`, `app`, `apk`, `flatpak`); skips targets whose toolchain is missing,
+  fails only
   on targets you name explicitly. Artifacts are staged into `dist/`; on Linux
   the `app` target additionally runs `scripts/package-linux.sh` to produce a
-  `.deb` and an AppImage there. `--install` builds the host's app and installs
+  `.deb` and an AppImage there, and `flatpak` repacks the `.deb` via
+  `scripts/build-flatpak.sh`. `--install` builds the host's app and installs
   it (macOS: `/Applications/Séance.app`; Linux: `~/.local/opt/seance`), then
   reveals the installed copy. `--help` prints the contract.
 - `scripts/package-linux.sh` — turns a built Flutter Linux bundle into
@@ -298,7 +301,9 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   soname→package table with t64 alternatives, glibc/libstdc++ symbol-version
   floors — so the metadata can't go stale as plugins change) and
   `seance-linux-<arch>.AppImage` (appimagetool, fetched once and cached).
-  Deliberately no .rpm/Flatpak: non-Debian users get the AppImage. Runs from
+  Flatpak joins the matrix as the sandboxed install path
+  (`scripts/build-flatpak.sh` repacks the .deb under /app); still no .rpm —
+  AppImage remains the bare-metal non-Debian option. Runs from
   `scripts/build.sh` (best-effort AppImage) and both CI workflows (required).
 - `scripts/release.sh X.Y.Z [--push]` — stub over the shared
   [release-tool](https://github.com/L-K-M/release-tool) engine (`lkm-release`):
@@ -306,7 +311,7 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   commits, tags `v<version>`; the pushed tag triggers
   `.github/workflows/release.yml` (tests gate; publishes sync-server binaries,
   the GHCR Docker image, and all app clients, now including the Linux
-  .deb + AppImage packages). Runs on macOS (BSD sed),
+  .deb + Flatpak + AppImage packages). Runs on macOS (BSD sed),
   like the engine. (The post-bump hook is sed-portable since 0.7.0, so Linux
   hosts can cut releases too.)
 - `./update.sh` — on a deployment host: pull the latest code, then

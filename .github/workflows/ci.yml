@@ -156,6 +156,17 @@ jobs:
       - name: Package Linux artifacts (.deb + AppImage)
         if: startsWith(matrix.target, 'linux')
         run: scripts/package-linux.sh --output-dir dist-packages
+      # Repack the same .deb as a Flatpak bundle; rides the same upload.
+      - name: Flatpak bundle
+        if: startsWith(matrix.target, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder
+          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+          # (flatpak's sandbox helper) builds in.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          scripts/build-flatpak.sh "$(ls -t dist-packages/seance_*.deb | head -1)"
+          mv dist/seance-linux-x64.flatpak dist-packages/
       - name: Upload Linux packages
         if: startsWith(matrix.target, 'linux')
         uses: actions/upload-artifact@v7
