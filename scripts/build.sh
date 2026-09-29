@@ -55,9 +55,11 @@ case "$target" in
     cp "$root/media-sources/icon.png" "$destination/planchette.png"
     if [[ "$mode" == release ]]; then
       "$root/scripts/package-linux.sh" --bundle "$source" --appimage=best-effort
-      if $flatpak; then
-        "$root/scripts/build-flatpak.sh" "$(ls -t "$root"/dist/planchette_*.deb | head -1)"
-      fi
+    elif $flatpak; then
+      "$root/scripts/package-linux.sh" --bundle "$source" --skip-appimage
+    fi
+    if $flatpak; then
+      "$root/scripts/build-flatpak.sh" "$(ls -t "$root"/dist/planchette_*.deb | head -1)"
     fi
     if $install; then
       installed="$HOME/.local/opt/planchette"
