@@ -91,6 +91,7 @@ change, and how to know it is done. Read [AGENTS.md](AGENTS.md) first.
 10. [Process and documentation](#10-process-and-documentation)
 11. [Review and verification ledger](#11-review-and-verification-ledger)
 12. [2026-09-27 fresh pass: disposition map](#12-2026-09-27-fresh-pass-disposition-map)
+13. [2026-09-28 integration: disposition of every open PR](#13-2026-09-28-integration-disposition-of-every-open-pr)
 
 ---
 
@@ -129,6 +130,12 @@ publication, rollback, race and dirty-close regressions before write-path work.
 ---
 
 ## 1. In review
+
+> **Resolved on 2026-09-28.** Every PR recorded below was merged, ported or
+> closed with its reasons in the integration pass; see
+> [section 13](#13-2026-09-28-integration-disposition-of-every-open-pr). Of
+> those, only #44 and #26 remain open; #95 (Dependabot) opened during the pass
+> and is open too. The records below are kept as history.
 
 These findings have open PR records against `main`, left for the owner's
 review. Do not duplicate their implementation. If a PR closes unmerged,
@@ -2749,3 +2756,153 @@ measured on this baseline.
   reviewed revisions are recorded per PR above; the rebased revisions of #77,
   #79, #81, #83, #85 and #87 have **no review of record**. Re-run those jobs when
   the reviewer recovers rather than reading the failures as approval.
+
+## 13. 2026-09-28 integration: disposition of every open PR
+
+All 83 PRs open on 2026-09-28 were reviewed against `main` at `dcb3c55` and
+resolved in one integration pass. Duplicates were compared side by side, each
+candidate was merged onto `main` and tested, and the chosen PRs landed in three
+batches with their own history (`Merge #N: …`), so GitHub records them as merged:
+batch A (core file safety, syntax, save and quit) in #94, batch B (editor
+surface) in #97, #98 and #99, and batch C (app shell) in #100 and #101.
+Integration fixes sit on top of each batch as separate commits, each pinned by
+a test that failed first. Batch B first went up whole as #96, but its GLM review
+ran out of the 170-minute budget after 11 of 18 chunks, so it was split into
+three stacked parts that each fit; together #97 to #99 are the tree #96
+carried. Batch C was split into two parts before it went up, for the same
+budget.
+
+Before each batch went up, review agents re-read its integration commits; their
+confirmed findings were fixed in the same batch. Each batch PR then went through
+GLM review rounds under AGENTS.md's stopping rules; declined and refuted
+findings, with their evidence, are recorded as replies and comments on those
+PRs. Ported pieces name their
+source PR in the commit that carries them. Section 12's rebased revisions
+without a review of record are covered by these rounds: #77 and #83 landed
+through #94, #81 and #87 through #98, and #85 through #99, each reviewed to
+completion; #79 was closed.
+
+Deferred from the pass, each with its reason:
+- #44 (regex search) stays open: pattern matching runs on the UI isolate with no
+  time budget, and `(a+)+$` takes 3.56 s at 25 characters. It needs a worker
+  isolate and a budget, escaping of the prefill, compile-once, `unicode: true`,
+  `$n` in replacements and localized pattern errors.
+- #26 (disk-change notices) stays open: its own Revert duplicates #91, and a
+  silent reload must be non-undoable yet keep caret and scroll; it needs a
+  rework on the install-generation boundary.
+- Search: edits past page one run two full searches (38–44 ms per keystroke at
+  4 MB with 1M hits, against 7–15 ms on page one).
+- Gutter: the line-top cache is cleared on every edit, so each keystroke
+  re-measures the visible lines (about 55 ms at 100,000 lines in
+  `flutter_tester`); a theme-only typography change can leave cached tops stale
+  in hosts whose text themes differ.
+- Line commands: moving a block that ends in a blank line to the bottom drops
+  that line from the selection (no text is lost).
+- Undo pressed in the same frame as an install can still reach the old text.
+- Export as HTML highlights the whole document on the UI isolate with no cap.
+- #48's display-width status column stays with B8: the editor renders a tab as
+  one cell, so a width-aware column would disagree with Go to Line.
+- From the review rounds, each confirmed but not worth another round:
+  - The editor's three shortcut maps (find, line commands, bracket jumps) pick
+    Cmd or Ctrl from the theme's platform. A host that pins a foreign theme
+    platform would get the other family; keying all three on the OS is
+    consistent with how fonts are already chosen.
+  - `Makefile.am` and `Makefile.in` are not treated as Makefiles, so only
+    detection, not the format, keeps their tabs.
+  - A scratch tab and a saved file of the same name show the same tab label.
+  - Command palette rows take Tab focus, where arrows no longer move the
+    highlight.
+  - Exported pages set no print colour adjustment or viewport.
+  - The editor package has no test for a failed reload's aftermath.
+- #95 (Dependabot, file_picker 11 to 13) opened during the pass and is left to
+  the owner.
+
+Host follow-up: Poltergeist and Séance should move to the same shared-editor
+revision. Their batch notes (#97 to #101) list the API additions, the removed
+`clearError()`, and the behaviour changes hosts will notice.
+
+| PR | Title | Outcome |
+|---|---|---|
+| [#5](https://github.com/L-K-M/Planchette/pull/5) | Bound CSS highlighting scans | Merged (#94) |
+| [#6](https://github.com/L-K-M/Planchette/pull/6) | Save documents with long filenames | Merged (#94) |
+| [#7](https://github.com/L-K-M/Planchette/pull/7) | Fix Linux packaging metadata and prereq gaps | Merged (#94) |
+| [#8](https://github.com/L-K-M/Planchette/pull/8) | Add Go to Line navigation | Closed. Superseded by #33 (#98). |
+| [#9](https://github.com/L-K-M/Planchette/pull/9) | Add editor zoom controls | Closed. Tests ported into #30 (#98). |
+| [#10](https://github.com/L-K-M/Planchette/pull/10) | Make find and replace keyboard accessible | Merged (#99); #86's case-fold notice folded in |
+| [#11](https://github.com/L-K-M/Planchette/pull/11) | Keep active document tabs visible | Closed. Reveal trigger and tests ported into #35 (#100). |
+| [#12](https://github.com/L-K-M/Planchette/pull/12) | Add whole-word search toggle | Closed. Whole word ported onto #85 (#99). |
+| [#13](https://github.com/L-K-M/Planchette/pull/13) | Make Tab indent and Shift+Tab outdent in the document | Closed. Superseded by #14 (#97). |
+| [#14](https://github.com/L-K-M/Planchette/pull/14) | Indent with Tab and keep indentation on Enter | Merged (#97); tab rendering removed (quadratic); IME, reveal, host preference |
+| [#15](https://github.com/L-K-M/Planchette/pull/15) | Default the editor to a resolvable monospace font | Closed. Ported into #30 (#98). |
+| [#16](https://github.com/L-K-M/Planchette/pull/16) | Add Go to Line for the document | Closed. Superseded by #33 (#98); validation message ported. |
+| [#17](https://github.com/L-K-M/Planchette/pull/17) | Stop rebuilding the shell on every keystroke | Merged (#99); title guard pinned |
+| [#18](https://github.com/L-K-M/Planchette/pull/18) | Add Reopen Closed Tab | Closed. Caret restore and tests ported into #51 (#101). |
+| [#19](https://github.com/L-K-M/Planchette/pull/19) | Sever undo history at the document boundary | Closed. Fixed differently (#101): field re-keyed per install. |
+| [#20](https://github.com/L-K-M/Planchette/pull/20) | Cover the Flutter pubspecs in dependabot | Merged (#94) |
+| [#21](https://github.com/L-K-M/Planchette/pull/21) | Make Tab indent and Find Next reach the buffer | Closed. Missing-file message and Find Next ported (#99). |
+| [#22](https://github.com/L-K-M/Planchette/pull/22) | Paint line numbers from the editor's own layout | Merged (#97); line-top cache; reveal tests from #28 |
+| [#23](https://github.com/L-K-M/Planchette/pull/23) | Add Toggle Comment for the document | Merged (#98); rebuilt on the line-edit path |
+| [#24](https://github.com/L-K-M/Planchette/pull/24) | Add indentation and line-editing key commands | Closed. CRLF separator and tests ported (#97). |
+| [#25](https://github.com/L-K-M/Planchette/pull/25) | Add document font zoom and a View menu | Closed. Superseded by #30 (#98). |
+| [#26](https://github.com/L-K-M/Planchette/pull/26) | Notice outside file changes and allow reverting | Open: rework on #91 and the undo boundary. |
+| [#27](https://github.com/L-K-M/Planchette/pull/27) | Measure line numbers from a viewport-sized prefix | Closed. Superseded by #22 (#97). |
+| [#28](https://github.com/L-K-M/Planchette/pull/28) | Stop re-laying out the document per keystroke | Closed. Large-file note and reveal tests ported (#97, #99). |
+| [#29](https://github.com/L-K-M/Planchette/pull/29) | Add Go to Line with caret reveal | Closed. Superseded by #33 (#98); dialog crashed on Go. |
+| [#30](https://github.com/L-K-M/Planchette/pull/30) | Use real monospace fonts and add zoom | Merged (#98); font by OS; #15/#9 ported |
+| [#31](https://github.com/L-K-M/Planchette/pull/31) | Fix Rust and Go highlighting, add diff and keys | Merged (#94); Rust attribute pattern made linear |
+| [#32](https://github.com/L-K-M/Planchette/pull/32) | Fix gutter line-number drift under soft wrap | Closed. Superseded by #22 (#97). |
+| [#33](https://github.com/L-K-M/Planchette/pull/33) | Add Go to Line and a clearer status bar | Merged (#98); #16/#67 ported; focus routing |
+| [#34](https://github.com/L-K-M/Planchette/pull/34) | Indent, auto-indent and pair brackets while typing | Closed. Tests ported into #14 (#97). |
+| [#35](https://github.com/L-K-M/Planchette/pull/35) | Merge the toolbar into a single tab strip | Merged (#100); dirty dot, release close, reveal on resize |
+| [#36](https://github.com/L-K-M/Planchette/pull/36) | Put the window chrome back where it belongs | Closed. Empty-state lock gating ported (#101). |
+| [#37](https://github.com/L-K-M/Planchette/pull/37) | Let the user choose the theme, text size and indentation | Closed. Settings rebuilt from its design (#100). |
+| [#38](https://github.com/L-K-M/Planchette/pull/38) | Add Revert File for file-backed tabs | Closed. Superseded by #91 (#101). |
+| [#39](https://github.com/L-K-M/Planchette/pull/39) | Open and save large files about twice as fast | Merged (#94) |
+| [#40](https://github.com/L-K-M/Planchette/pull/40) | Sweep stale .edit/.backup leftovers on document open | Closed. Rejected: sweep deletes other documents' only backups. |
+| [#41](https://github.com/L-K-M/Planchette/pull/41) | Give Planchette its own Parchment and Séance themes | Merged (#98); selection colours distinct from matches |
+| [#42](https://github.com/L-K-M/Planchette/pull/42) | Middle-click, Close Others, and Close All on document tabs | Merged (#100); Close Others keeps selection on Cancel |
+| [#43](https://github.com/L-K-M/Planchette/pull/43) | One chrome strip, a stable dirty dot, and file drops | Closed. Same-name labels ported into #35 (#100). |
+| [#44](https://github.com/L-K-M/Planchette/pull/44) | Search with regular expressions, and say when a pattern will not compile | Open: regex search needs a worker isolate and time budget. |
+| [#45](https://github.com/L-K-M/Planchette/pull/45) | Gate dart format in CI | Merged (#101); runs after the tests |
+| [#46](https://github.com/L-K-M/Planchette/pull/46) | Line operations: duplicate, move, delete, join | Closed. Superseded by #47 (#97). |
+| [#47](https://github.com/L-K-M/Planchette/pull/47) | Add line commands: duplicate, move, delete, join | Merged (#97); CRLF as one break |
+| [#48](https://github.com/L-K-M/Planchette/pull/48) | Status column counts display width, not UTF-16 units | Closed. Deferred to backlog (tab display width). |
+| [#49](https://github.com/L-K-M/Planchette/pull/49) | Ask before saving over a read-only file | Merged (#94); consent recorded after the write; asked on every route incl. Save As; declines are not failures |
+| [#50](https://github.com/L-K-M/Planchette/pull/50) | Add a command palette | Merged (#101); menu-name matches rank last |
+| [#51](https://github.com/L-K-M/Planchette/pull/51) | Add Reopen Closed Tab | Merged (#101); caret restored (from #18) |
+| [#52](https://github.com/L-K-M/Planchette/pull/52) | Let an empty untitled document speak | Merged (#97) |
+| [#53](https://github.com/L-K-M/Planchette/pull/53) | Say "1 line" and "1 byte" in the status bar | Merged (#94) |
+| [#54](https://github.com/L-K-M/Planchette/pull/54) | Keep a host's editing lock through view rebuilds | Merged (#97); one lock owner in the app |
+| [#55](https://github.com/L-K-M/Planchette/pull/55) | Aggregate multi-file open errors | Closed. Superseded by #59 and #93 (#94). |
+| [#56](https://github.com/L-K-M/Planchette/pull/56) | Reuse a pristine untitled tab when opening a file | Merged (#100) |
+| [#57](https://github.com/L-K-M/Planchette/pull/57) | Refuse to save text containing NUL | Merged (#94) |
+| [#58](https://github.com/L-K-M/Planchette/pull/58) | Turn raw save-path failures into save errors | Merged (#94); OS codes kept; `isVanishedPathError` made internal |
+| [#59](https://github.com/L-K-M/Planchette/pull/59) | Report every failed file in a batch open | Merged (#94) |
+| [#60](https://github.com/L-K-M/Planchette/pull/60) | Give Close Tab one rule in menu and tab strip | Merged (#94) |
+| [#61](https://github.com/L-K-M/Planchette/pull/61) | Stop dropping dash-named files from startup argv | Merged (#94); dash-led argument is a file only if it exists; `--` honoured |
+| [#62](https://github.com/L-K-M/Planchette/pull/62) | Match native startup geometry to the Dart window options | Merged (#94) |
+| [#63](https://github.com/L-K-M/Planchette/pull/63) | Follow window title changes in the Linux header bar | Closed. Rejected: GTK already syncs; binding hangs startup. |
+| [#64](https://github.com/L-K-M/Planchette/pull/64) | Export a document as highlighted HTML | Merged (#101); colour-only background |
+| [#65](https://github.com/L-K-M/Planchette/pull/65) | Scan once when search opens with a prefilled query | Merged (#99) |
+| [#66](https://github.com/L-K-M/Planchette/pull/66) | Add middle-click close and a tab context menu | Closed. Copy Full Path ported into #42 (#100). |
+| [#67](https://github.com/L-K-M/Planchette/pull/67) | Show the selection extent in the status bar | Closed. `selectionStats` ported into #33 (#98). |
+| [#68](https://github.com/L-K-M/Planchette/pull/68) | Highlight the caret line behind the text | Closed. Duplicate of #22's band (#97); wrapped-line test kept. |
+| [#69](https://github.com/L-K-M/Planchette/pull/69) | Restore last-focused node when a tab reactivates | Merged (#97); focus memory private |
+| [#70](https://github.com/L-K-M/Planchette/pull/70) | Assert that initialText and loadDocument are exclusive | Closed. Rejected: premise false; breaks reload and #91. |
+| [#71](https://github.com/L-K-M/Planchette/pull/71) | Pin the meta-token group-offset boundary with a test | Merged (#94) |
+| [#72](https://github.com/L-K-M/Planchette/pull/72) | Look keywords up without a per-identifier lowercase allocation | Closed. Rejected: no measurable gain; removed a public const constructor. |
+| [#73](https://github.com/L-K-M/Planchette/pull/73) | Add Go to Matching Bracket | Merged (#98); bounded by the highlight cap |
+| [#74](https://github.com/L-K-M/Planchette/pull/74) | Keep the last caret position for an invalid selection | Closed. Rejected: no effect on desktop. |
+| [#76](https://github.com/L-K-M/Planchette/pull/76) | Run saves for one tab in request order | Merged (#94) |
+| [#77](https://github.com/L-K-M/Planchette/pull/77) | Say why a quit during a save or open is refused | Merged (#94); re-expressed as a retiring scope |
+| [#79](https://github.com/L-K-M/Planchette/pull/79) | Refuse a NUL byte on save as on load | Closed. Duplicate of #57 (#94); its reload assertion ported. |
+| [#81](https://github.com/L-K-M/Planchette/pull/81) | Gate the editor palette on measured contrast | Merged (#98); one contrast gate |
+| [#83](https://github.com/L-K-M/Planchette/pull/83) | Ask once when quitting with several unsaved documents | Merged (#94); revision check on Discard All restored; shares #92's loop |
+| [#85](https://github.com/L-K-M/Planchette/pull/85) | Page the find bar past its highlight cap | Merged (#99); fold, page and counter fixes; ring buffer |
+| [#87](https://github.com/L-K-M/Planchette/pull/87) | Open the native window on the app's own surface | Merged (#98); backdrop test pinned |
+| [#88](https://github.com/L-K-M/Planchette/pull/88) | Fold the search query even when its fold is longer | Merged (#94); an erased query no longer matches everywhere |
+| [#89](https://github.com/L-K-M/Planchette/pull/89) | Give the header a tooltip only when it has a path | Closed. Obsolete after #35 (#100). |
+| [#90](https://github.com/L-K-M/Planchette/pull/90) | Pin the canonical language instances the guard compares | Merged (#94); list extended with #31's languages |
+| [#91](https://github.com/L-K-M/Planchette/pull/91) | Add Revert to Saved with confirmation | Merged (#101); read in the workspace; no shortcut; undo stops at install |
+| [#92](https://github.com/L-K-M/Planchette/pull/92) | Add File Save All command | Merged (#94); tabs closed while waiting are not failures |
+| [#93](https://github.com/L-K-M/Planchette/pull/93) | Scope workspace errors to their failing document | Merged (#94); main's `_tabRefusal` removed |
