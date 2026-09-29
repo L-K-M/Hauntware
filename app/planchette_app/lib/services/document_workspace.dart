@@ -711,7 +711,21 @@ final class DocumentWorkspace extends ChangeNotifier {
       return false;
     }
     final scope = _exportScope(tab);
+    // A confirmed revert has discarded the buffer's edits, which stay on
+    // screen until the file is read: exporting them would publish the text
+    // the user just chose to throw away. Checked again before the buffer is
+    // read, since a revert can start while the export settles its target.
+    bool reverting() {
+      if (!tab._reverting) return false;
+      _reportError(
+        '${tab.name} is being reverted. Export it once the file is read.',
+        scope: scope,
+      );
+      return true;
+    }
+
     try {
+      if (reverting()) return false;
       String target;
       String? digest;
       while (true) {
@@ -743,6 +757,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         }
         break;
       }
+      if (reverting()) return false;
       final text = tab.editor.text.text;
       final language = tab.editor.text.language;
       await store.write(

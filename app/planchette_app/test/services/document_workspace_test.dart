@@ -681,6 +681,36 @@ void main() {
       expect(workspace.error, isNull);
     });
 
+    test(
+      'review fix: an export never writes edits a revert discards',
+      () async {
+        // Export read the buffer, which still held the edits the user had
+        // just chosen to discard while a confirmed revert read the file.
+        store.loadGate = Completer<void>();
+        final reverting = workspace.revert(tab);
+        await pumpEventQueue();
+        dialogs.savePath = testPath('out.html');
+        expect(await workspace.exportHtml(tab, palette), isFalse);
+        expect(workspace.error, contains('being reverted'));
+        store.loadGate!.complete();
+        expect(await reverting, isTrue);
+
+        // Nor when the revert starts while the export settles its target.
+        tab.editor.text.text += '// discard me too\n';
+        store.savePathGate = Completer<void>();
+        final exporting = workspace.exportHtml(tab, palette);
+        await pumpEventQueue();
+        store.loadGate = Completer<void>();
+        final again = workspace.revert(tab);
+        await pumpEventQueue();
+        store.savePathGate!.complete();
+        expect(await exporting, isFalse);
+        store.loadGate!.complete();
+        expect(await again, isTrue);
+        expect(store.writes, isEmpty);
+      },
+    );
+
     test('review fix: an export failure outlives an unrelated save', () async {
       store.files[testPath('one.txt')] = document('one.txt', 'disk');
       await workspace.open(testPath('one.txt'));
