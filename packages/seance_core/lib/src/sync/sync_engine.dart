@@ -44,6 +44,8 @@ class RefusedRecord {
       RecordKind.snippet => 'snippet',
       RecordKind.bookmark => 'bookmark',
       RecordKind.assistantSettings => 'assistant settings',
+      RecordKind.inboxApp => 'inbox app',
+      RecordKind.inboxStatus => 'inbox status',
       RecordKind.unknown => 'record',
     };
     final named = name?.trim() ?? '';

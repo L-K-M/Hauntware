@@ -1,9 +1,12 @@
 import 'dart:developer' as developer;
+import 'dart:math' show max;
 
 import 'package:meta/meta.dart';
 import 'package:seance_protocol/seance_protocol.dart';
 
 import '../hostkey/tofu.dart';
+import '../inbox/inbox_service.dart';
+import '../inbox/inbox_stores.dart';
 import '../store/stores.dart';
 import 'local_record_store.dart';
 import 'sync_engine.dart';
@@ -74,6 +77,21 @@ class SyncCoordinator {
   /// pre-existing behaviour, which the app no longer relies on.
   final TombstoneStore? tombstoneStore;
 
+  /// The command inbox's connected apps and handled statuses. Optional like
+  /// the snippet store; null means neither kind is published or applied.
+  ///
+  /// An app record carries the app's key inside the seal whatever
+  /// [syncSecrets] says: without the key a device cannot open the proposals
+  /// the server keeps for it. Neither kind is ever deleted by a tombstone.
+  /// Tombstones are unsealed, so a sync server could forge one; an app is
+  /// removed by a sealed record marking it removed instead, and a status is
+  /// only ever added.
+  final InboxAppStore? inboxAppStore;
+  final InboxStatusStore? inboxStatusStore;
+
+  /// Clock for the status retention cutoff; injectable for tests.
+  final DateTime Function() now;
+
   SyncCoordinator({
     required this.configStore,
     required this.hostKeyStore,
@@ -85,7 +103,10 @@ class SyncCoordinator {
     this.syncSecrets = false,
     this.secretVault,
     this.tombstoneStore,
-  });
+    this.inboxAppStore,
+    this.inboxStatusStore,
+    DateTime Function()? now,
+  }) : now = now ?? DateTime.now;
 
   /// The credentials [servers] opt into publishing to the account.
   ///
@@ -277,7 +298,34 @@ class SyncCoordinator {
         data: s.toJson(),
       )));
     }
+    for (final app
+        in await inboxAppStore?.listApps() ?? const <InboxApp>[]) {
+      await local.putLocal(await codec.encrypt(DecryptedRecord(
+        id: app.recordId,
+        kind: RecordKind.inboxApp,
+        updatedAt: app.updatedAt,
+        deviceId: deviceId,
+        data: app.toJson(),
+      )));
+    }
+    final statusCutoff = _statusCutoff();
+    for (final status
+        in await inboxStatusStore?.listStatuses() ?? const <InboxStatus>[]) {
+      // Past retention a status names nothing any server still holds, and
+      // publishing it every round would only grow every device's mirror.
+      if (status.updatedAt < statusCutoff) continue;
+      await local.putLocal(await codec.encrypt(DecryptedRecord(
+        id: status.recordId,
+        kind: RecordKind.inboxStatus,
+        updatedAt: status.updatedAt,
+        deviceId: deviceId,
+        data: status.toJson(),
+      )));
+    }
   }
+
+  int _statusCutoff() =>
+      now().millisecondsSinceEpoch - kInboxStatusRetention.inMilliseconds;
 
   /// Retract a server the user has excluded from sync: tombstone its record,
   /// and its credential's, so a copy pushed before the exclusion comes off the
@@ -504,6 +552,9 @@ class SyncCoordinator {
     // so unlike a config it cannot outrank its retraction on its own.
     final revivedSecrets = <(String, int)>[];
     final skippedIds = <String>[];
+    // Inbox app removals re-dated past a live copy that beat them; see the
+    // inboxApp case. Counted with the other re-datings so [run] pushes them.
+    var redatedRemovals = 0;
     Object? firstError;
     StackTrace? firstStackTrace;
     void skip(String id, Object error, StackTrace stackTrace) {
@@ -715,6 +766,74 @@ class SyncCoordinator {
             }
 
             await store.putAssistantSettings(assistant);
+          case RecordKind.inboxApp:
+            final store = inboxAppStore;
+            if (store == null) continue;
+
+            final app = InboxApp.fromJson(dec.data);
+            if (dec.id != app.recordId) {
+              skip(
+                dec.id,
+                StateError('inbox app ${app.id} does not match record id '
+                    '${dec.id}'),
+                StackTrace.current,
+              );
+              continue;
+            }
+            final existing = await store.getApp(app.id);
+            // Removal is final: an app id is never reused, so a live copy
+            // arriving after this device saw the removal is a stale one, and
+            // adopting it would bring back a revoked key.
+            //
+            // It can only arrive by beating the removal at last-write-wins,
+            // though: another device edited the app later, or under a clock
+            // ahead of this one. Skipping it alone would leave that copy on
+            // the account for good, and every other device keeping the key.
+            // So the removal is re-dated past it and pushed again, the same
+            // escalation [rescheduleOutranked] makes for a retraction.
+            if (existing != null && existing.removed) {
+              // Past the later of the copy's stamps and the removal's own, so
+              // the removal never moves backwards.
+              if (!app.removed) {
+                final redated = existing.asRemoved(
+                  updatedAt: [dec.updatedAt, app.updatedAt, existing.updatedAt]
+                          .reduce(max) +
+                      1,
+                );
+                await local.putLocal(await codec.encrypt(DecryptedRecord(
+                  id: redated.recordId,
+                  kind: RecordKind.inboxApp,
+                  updatedAt: redated.updatedAt,
+                  deviceId: deviceId,
+                  data: redated.toJson(),
+                )));
+                await store.putApp(redated);
+                redatedRemovals++;
+              }
+              continue;
+            }
+            // Strictly older, for the reason the assistant path gives: an
+            // edit made between rounds is newer than the mirror knows.
+            if (existing != null && app.updatedAt < existing.updatedAt) {
+              continue;
+            }
+            await store.putApp(app);
+          case RecordKind.inboxStatus:
+            final store = inboxStatusStore;
+            if (store == null) continue;
+
+            final status = InboxStatus.fromJson(dec.data);
+            if (dec.id != status.recordId) {
+              skip(
+                dec.id,
+                StateError('inbox status ${status.recordId} does not match '
+                    'record id ${dec.id}'),
+                StackTrace.current,
+              );
+              continue;
+            }
+            if (status.updatedAt < _statusCutoff()) continue;
+            await store.putStatus(status);
           case RecordKind.bookmark:
           case RecordKind.unknown:
             continue;
@@ -730,7 +849,8 @@ class SyncCoordinator {
     // the log line, not after it: a tombstone that could not be minted or a
     // revival that could not be staged was landing in `skippedIds` a moment
     // after the only reader of `skippedIds` had already spoken.
-    final redated = await rescheduleOutranked(outranked, skip) +
+    final redated = redatedRemovals +
+        await rescheduleOutranked(outranked, skip) +
         await _revive(revived, skip) +
         await _reviveSecrets(revivedSecrets, servers, skip);
     if (skippedIds.isNotEmpty) {

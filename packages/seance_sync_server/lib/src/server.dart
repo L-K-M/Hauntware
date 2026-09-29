@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show HttpStatus;
 import 'dart:math' show min;
-import 'dart:typed_data' show BytesBuilder;
+import 'dart:typed_data' show BytesBuilder, Uint8List;
 
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:shelf/shelf.dart';
@@ -11,8 +11,11 @@ import 'package:shelf_router/shelf_router.dart';
 
 import 'config.dart';
 import 'favicon.dart';
+import 'inbox_docs.dart';
 import 'rate_limiter.dart';
 import 'storage.dart';
+
+part 'inbox_handlers.dart';
 
 /// The Séance sync server. A dumb, breach-tolerant blob store: it authenticates
 /// devices, stores end-to-end encrypted records, and resolves conflicts with
@@ -51,15 +54,31 @@ class SyncServer {
   final ServerSettings settings;
   final RateLimiter loginLimiter;
 
+  /// Deposits per inbox app, keyed by app id (docs/INBOX.md: 30 a minute).
+  final RateLimiter inboxLimiter;
+
+  /// The clock inbox retention is measured with; injectable for tests.
+  final DateTime Function() _now;
+
   SyncServer({
     required this.storage,
     required this.settings,
     RateLimiter? loginLimiter,
-  }) : loginLimiter =
+    RateLimiter? inboxLimiter,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       loginLimiter =
            loginLimiter ??
            RateLimiter(
              maxAttempts: settings.loginMaxAttempts,
              window: settings.loginWindow,
+           ),
+       inboxLimiter =
+           inboxLimiter ??
+           RateLimiter(
+             maxAttempts: _inboxDepositsPerWindow,
+             window: _inboxDepositWindow,
+             now: now,
            );
 
   Handler get handler {
@@ -84,7 +103,28 @@ class SyncServer {
       ..post('/v1/login', _login)
       ..get('/v1/sync', _sync)
       ..put('/v1/records', _push)
-      ..delete('/v1/account', _deleteAccount);
+      ..delete('/v1/account', _deleteAccount)
+      // The command inbox (docs/INBOX.md). The producer's only route is the
+      // POST; every other inbox route needs a session, so a deposit token
+      // can add items and do nothing else.
+      ..post('/v1/apps', _createInboxApp)
+      ..get('/v1/apps', _listInboxApps)
+      ..delete('/v1/apps/<appId>', _deleteInboxApp)
+      ..get('/v1/inbox', _listInbox)
+      ..post('/v1/inbox/<appId>', _deposit)
+      ..delete('/v1/inbox/<appId>/<itemId>', _deleteInboxItem)
+      // Static documentation for producers, which have only a pairing
+      // string. App ids are base64url and so never contain a dot: these
+      // paths cannot shadow an app.
+      ..get('/llms.txt', (Request r) => _static(inboxLlmsTxt, 'text/plain'))
+      ..get(
+        '/v1/inbox/openapi.json',
+        (Request r) => _static(inboxOpenApiJson, 'application/json'),
+      )
+      ..get(
+        '/v1/inbox/seance-propose.py',
+        (Request r) => _static(inboxProposePy, 'text/x-python'),
+      );
 
     return const Pipeline()
         .addMiddleware(_errorToJson())
@@ -332,7 +372,10 @@ class SyncServer {
     }
   }
 
-  Future<String> _readBounded(Request req, int maxBytes) async {
+  Future<String> _readBounded(Request req, int maxBytes) async =>
+      utf8.decode(await _readBoundedBytes(req, maxBytes));
+
+  Future<Uint8List> _readBoundedBytes(Request req, int maxBytes) async {
     // Keeps the received chunks as they are. A growable List<int> spends a
     // word per byte plus growth slack, which made one body just under the
     // 8 MiB push cap cost over 100 MiB of heap.
@@ -341,7 +384,7 @@ class SyncServer {
       bytes.add(chunk);
       if (bytes.length > maxBytes) throw const _PayloadTooLarge();
     }
-    return utf8.decode(bytes.takeBytes());
+    return bytes.takeBytes();
   }
 
   List<int>? _tryBase64Decode(String value) {
@@ -396,6 +439,9 @@ class SyncServer {
 <p>A breach-tolerant blob store for the <strong>Séance</strong> SSH client:
 it holds only end-to-end encrypted records and can decrypt nothing.
 Configure this server's URL in the app's sync settings.</p>
+<p>Handed an inbox pairing string to propose commands? Read
+<a href="/llms.txt">/llms.txt</a> or use the reference client,
+<a href="/v1/inbox/seance-propose.py">seance-propose.py</a>.</p>
 </body>
 </html>
 ''';

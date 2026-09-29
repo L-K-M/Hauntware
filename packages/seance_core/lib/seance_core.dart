@@ -39,6 +39,11 @@ export 'src/probe/probe_service.dart';
 
 export 'src/store/stores.dart';
 
+export 'src/inbox/inbox_api.dart';
+export 'src/inbox/inbox_service.dart';
+export 'src/inbox/inbox_staging.dart';
+export 'src/inbox/inbox_stores.dart';
+
 export 'src/sync/local_record_store.dart';
 export 'src/sync/sync_engine.dart';
 export 'src/sync/sync_coordinator.dart';

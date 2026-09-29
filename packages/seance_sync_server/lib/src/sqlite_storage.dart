@@ -67,6 +67,53 @@ class SqliteStorage implements Storage {
     ''');
     _db.execute(
         'CREATE INDEX IF NOT EXISTS records_seq ON records(username, seq);');
+    _migrateInbox();
+  }
+
+  /// The command inbox tables (docs/INBOX.md). Created if missing, so a
+  /// database from before the inbox gains them on its next open and keeps
+  /// everything else untouched. `app_id` alone is the key because the
+  /// producer endpoint names only the app. The cascade is the schema's
+  /// guarantee that no item outlives its app; foreign keys are off by
+  /// default in SQLite and per connection, hence the pragma.
+  void _migrateInbox() {
+    _db.execute('PRAGMA foreign_keys=ON;');
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS inbox_apps (
+        app_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        name TEXT NOT NULL,
+        token_salt TEXT NOT NULL,
+        token_hash TEXT NOT NULL,
+        created INTEGER NOT NULL
+      );
+    ''');
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS inbox_items (
+        app_id TEXT NOT NULL
+          REFERENCES inbox_apps(app_id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        received INTEGER NOT NULL,
+        blob BLOB NOT NULL,
+        stored_at INTEGER NOT NULL,
+        PRIMARY KEY (app_id, item_id)
+      );
+    ''');
+    // Kept apart from `seqs`: record sequence numbers are the sync cursor,
+    // and an inbox item must not move it.
+    _db.execute('''
+      CREATE TABLE IF NOT EXISTS inbox_seqs (
+        username TEXT PRIMARY KEY,
+        value INTEGER NOT NULL
+      );
+    ''');
+    _db.execute('CREATE INDEX IF NOT EXISTS inbox_apps_user '
+        'ON inbox_apps(username);');
+    _db.execute('CREATE INDEX IF NOT EXISTS inbox_items_received '
+        'ON inbox_items(username, received);');
+    _db.execute('CREATE INDEX IF NOT EXISTS inbox_items_stored '
+        'ON inbox_items(stored_at);');
   }
 
   @override
@@ -111,6 +158,9 @@ class SqliteStorage implements Storage {
       _db.execute('DELETE FROM tokens WHERE username = ?', [username]);
       _db.execute('DELETE FROM records WHERE username = ?', [username]);
       _db.execute('DELETE FROM seqs WHERE username = ?', [username]);
+      _db.execute('DELETE FROM inbox_items WHERE username = ?', [username]);
+      _db.execute('DELETE FROM inbox_apps WHERE username = ?', [username]);
+      _db.execute('DELETE FROM inbox_seqs WHERE username = ?', [username]);
     });
   }
 
@@ -305,10 +355,157 @@ class SqliteStorage implements Storage {
         deviceId: r['device_id'] as String,
         deleted: (r['deleted'] as int) != 0,
         seq: r['seq'] as int,
-        blob: r['blob'] is Uint8List
-            ? r['blob'] as Uint8List
-            : Uint8List.fromList((r['blob'] as List).cast<int>()),
+        blob: _blobOf(r),
       );
+
+  static Uint8List _blobOf(Row r) => r['blob'] is Uint8List
+      ? r['blob'] as Uint8List
+      : Uint8List.fromList((r['blob'] as List).cast<int>());
+
+  @override
+  Future<bool> createInboxApp(StoredInboxApp app) async =>
+      _transaction(_TransactionMode.write, () {
+        _db.execute(
+          'INSERT OR IGNORE INTO inbox_apps (app_id, username, name, '
+          'token_salt, token_hash, created) VALUES (?, ?, ?, ?, ?, ?)',
+          [
+            app.appId,
+            app.username,
+            app.name,
+            app.tokenSalt,
+            app.tokenHash,
+            app.created,
+          ],
+        );
+        return _db.updatedRows == 1;
+      });
+
+  @override
+  Future<StoredInboxApp?> getInboxApp(String appId) async {
+    final rows =
+        _db.select('SELECT * FROM inbox_apps WHERE app_id = ?', [appId]);
+    if (rows.isEmpty) return null;
+    final r = rows.first;
+    return StoredInboxApp(
+      username: r['username'] as String,
+      appId: r['app_id'] as String,
+      name: r['name'] as String,
+      tokenHash: r['token_hash'] as String,
+      tokenSalt: r['token_salt'] as String,
+      created: r['created'] as int,
+    );
+  }
+
+  @override
+  Future<List<InboxAppInfo>> listInboxApps(String username) async {
+    final rows = _db.select(
+      'SELECT a.app_id, a.name, a.created, '
+      '(SELECT COUNT(*) FROM inbox_items i WHERE i.app_id = a.app_id) '
+      'AS pending FROM inbox_apps a WHERE a.username = ? '
+      'ORDER BY a.created ASC, a.app_id ASC',
+      [username],
+    );
+    return [
+      for (final r in rows)
+        InboxAppInfo(
+          appId: r['app_id'] as String,
+          name: r['name'] as String,
+          created: r['created'] as int,
+          pending: r['pending'] as int,
+        ),
+    ];
+  }
+
+  @override
+  Future<bool> deleteInboxApp(String username, String appId) async =>
+      _transaction(_TransactionMode.write, () {
+        // Explicit as well as cascaded, so the items go even on a
+        // connection that was opened without the foreign-key pragma.
+        _db.execute(
+          'DELETE FROM inbox_items WHERE app_id = ? AND username = ?',
+          [appId, username],
+        );
+        _db.execute(
+          'DELETE FROM inbox_apps WHERE app_id = ? AND username = ?',
+          [appId, username],
+        );
+        return _db.updatedRows == 1;
+      });
+
+  @override
+  Future<InboxAddResult> addInboxItem(
+    String appId,
+    String itemId,
+    Uint8List blob, {
+    required int storedAt,
+    required int maxPending,
+  }) async =>
+      // One write transaction, so two concurrent deposits cannot both pass
+      // the pending cap or draw the same `received` number.
+      _transaction(_TransactionMode.write, () {
+        final apps = _db.select(
+            'SELECT username FROM inbox_apps WHERE app_id = ?', [appId]);
+        if (apps.isEmpty) {
+          return const InboxAddResult(InboxAddStatus.unknownApp);
+        }
+        final username = apps.first['username'] as String;
+        final pending = _db.select(
+            'SELECT COUNT(*) AS n FROM inbox_items WHERE app_id = ?',
+            [appId]).first['n'] as int;
+        if (pending >= maxPending) {
+          return const InboxAddResult(InboxAddStatus.full);
+        }
+        _db.execute(
+          'INSERT INTO inbox_seqs (username, value) VALUES (?, 1) '
+          'ON CONFLICT(username) DO UPDATE SET value = value + 1',
+          [username],
+        );
+        final received = _db.select(
+            'SELECT value FROM inbox_seqs WHERE username = ?',
+            [username]).first['value'] as int;
+        _db.execute(
+          'INSERT INTO inbox_items (app_id, item_id, username, received, '
+          'blob, stored_at) VALUES (?, ?, ?, ?, ?, ?)',
+          [appId, itemId, username, received, blob, storedAt],
+        );
+        return InboxAddResult(InboxAddStatus.added, received);
+      });
+
+  @override
+  Future<List<InboxItem>> inboxItemsSince(String username, int since) async {
+    final rows = _db.select(
+      'SELECT app_id, item_id, received, blob FROM inbox_items '
+      'WHERE username = ? AND received > ? ORDER BY received ASC',
+      [username, since],
+    );
+    return [
+      for (final r in rows)
+        InboxItem(
+          appId: r['app_id'] as String,
+          itemId: r['item_id'] as String,
+          received: r['received'] as int,
+          blob: _blobOf(r),
+        ),
+    ];
+  }
+
+  @override
+  Future<bool> deleteInboxItem(
+      String username, String appId, String itemId) async {
+    _db.execute(
+      'DELETE FROM inbox_items WHERE username = ? AND app_id = ? '
+      'AND item_id = ?',
+      [username, appId, itemId],
+    );
+    return _db.updatedRows == 1;
+  }
+
+  @override
+  Future<int> purgeInboxItems({required int storedBefore}) async {
+    _db.execute(
+        'DELETE FROM inbox_items WHERE stored_at < ?', [storedBefore]);
+    return _db.updatedRows;
+  }
 
   void close() => _connection.dispose();
 }

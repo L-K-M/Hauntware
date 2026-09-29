@@ -19,6 +19,8 @@ dependencies:
   args: ^2.5.0
 
 dev_dependencies:
+  # Pins the reference client's hash (kInboxReferenceClientSha256).
+  crypto: ^3.0.0
   lints: ^5.0.0
   test: ^1.25.0
   http: ^1.2.0
