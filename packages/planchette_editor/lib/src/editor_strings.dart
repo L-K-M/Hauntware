@@ -1,3 +1,5 @@
+import 'package:planchette_core/planchette_core.dart';
+
 /// User-facing editor copy. Hosts can adapt their existing localization system
 /// without taking a dependency on another application's generated resources.
 class EditorStrings {
@@ -19,6 +21,9 @@ class EditorStrings {
   String get saving => 'Saving…';
   String matchCount(int current, int total, {bool capped = false}) =>
       '$current/$total${capped ? '+' : ''}';
+  String indentation(Indentation value) => value.style == IndentStyle.tabs
+      ? 'Tab Size: ${value.width}'
+      : 'Spaces: ${value.width}';
   String documentPosition(int line, int column, int lines, int bytes) =>
       'Ln $line, Col $column · $lines ${lines == 1 ? 'line' : 'lines'} · '
       '$bytes ${bytes == 1 ? 'byte' : 'bytes'}';
