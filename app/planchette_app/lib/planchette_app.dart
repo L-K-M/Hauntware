@@ -9,6 +9,7 @@ import 'services/app_settings.dart';
 import 'services/document_workspace.dart';
 import 'services/settings_dialog.dart';
 import 'theme/planchette_theme.dart';
+import 'widgets/command_palette.dart';
 import 'widgets/tab_strip.dart';
 
 /// The color the native window shows before the first Flutter frame. Must be
@@ -227,6 +228,34 @@ class _DocumentShellState extends State<_DocumentShell> {
   }
 
   void _saveAll() => unawaited(workspace.saveAll());
+  void _revert() {
+    final tab = workspace.active;
+    if (tab != null) unawaited(workspace.revert(tab));
+  }
+
+  /// Exports in the colors the editor is showing: its syntax theme and the
+  /// page behind it.
+  void _exportHtml() {
+    final tab = workspace.active;
+    if (tab == null) return;
+    String css(Color color) =>
+        '#${(color.toARGB32() & 0xffffff).toRadixString(16).padLeft(6, '0')}';
+    final scheme = Theme.of(context).colorScheme;
+    final syntax = tab.editor.text.theme;
+    unawaited(
+      workspace.exportHtml(
+        tab,
+        HtmlPalette(
+          background: css(scheme.surface),
+          foreground: css(scheme.onSurface),
+          tokens: {
+            for (final type in SyntaxTokenType.values)
+              type: css(syntax.colorFor(type)),
+          },
+        ),
+      ),
+    );
+  }
 
   void _close() {
     final tab = workspace.active;
@@ -240,7 +269,12 @@ class _DocumentShellState extends State<_DocumentShell> {
 
   void _focusAfterFrame(DocumentTab tab) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && workspace.active == tab && !workspace.interactionLocked) {
+      // Under a dialog such as the command palette, the editor focuses
+      // itself once the dialog is gone rather than taking the dialog's.
+      if (mounted &&
+          workspace.active == tab &&
+          !workspace.interactionLocked &&
+          (ModalRoute.isCurrentOf(context) ?? true)) {
         tab.editor.restoreFocus();
       }
     });
@@ -317,6 +351,47 @@ class _DocumentShellState extends State<_DocumentShell> {
     _select(tabs[(index + (previous ? -1 : 1)) % tabs.length]);
   }
 
+  bool _paletteOpen = false;
+
+  /// Lists every command the menus enable right now. The native macOS menu
+  /// stays live under the palette, so a second request is ignored.
+  Future<void> _openPalette() async {
+    if (_paletteOpen || workspace.interactionLocked) return;
+    final commands = [
+      for (final menu in _menus())
+        for (final entry in menu.items)
+          if (entry is _Command && entry.enabled && entry.run != _openPalette)
+            PaletteCommand(
+              group: menu.label,
+              label: entry.label,
+              run: () => _runCurrent(menu.label, entry.label),
+              shortcut: entry.shortcut,
+            ),
+    ];
+    _paletteOpen = true;
+    try {
+      await showCommandPalette(context, commands);
+    } finally {
+      _paletteOpen = false;
+    }
+  }
+
+  /// Runs a command the palette offered as the menus define it now: the
+  /// native menu stays live under the palette, so the active tab, or whether
+  /// the command still applies, may have changed since it opened.
+  void _runCurrent(String menuLabel, String label) {
+    if (!mounted) return;
+    for (final menu in _menus()) {
+      if (menu.label != menuLabel) continue;
+      for (final entry in menu.items) {
+        if (entry is _Command && entry.label == label) {
+          if (entry.enabled) entry.run();
+          return;
+        }
+      }
+    }
+  }
+
   void _find({bool replace = false}) {
     if (!workspace.interactionLocked) {
       workspace.active?.editor.openSearch(replace: replace);
@@ -376,6 +451,14 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled:
               unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
         ),
+        // No shortcut: no platform convention names one, Cmd+R and Ctrl+R
+        // mean other things elsewhere, and a revert cannot be undone.
+        _Command(
+          'Revert to Saved',
+          _revert,
+          enabled: ready && active?.path != null,
+        ),
+        _Command('Export as HTML…', _exportHtml, enabled: ready),
         const _Separator(),
         // macOS keeps Settings in the application menu instead.
         if (!mac)
@@ -390,6 +473,12 @@ class _DocumentShellState extends State<_DocumentShell> {
           _close,
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
           enabled: closable,
+        ),
+        _Command(
+          'Reopen Closed Tab',
+          () => unawaited(workspace.reopenClosed()),
+          shortcut: _shortcut(LogicalKeyboardKey.keyT, shift: true),
+          enabled: workspace.canReopenClosed,
         ),
         if (!mac && widget.onQuit != null) ...[
           const _Separator(),
@@ -576,6 +665,13 @@ class _DocumentShellState extends State<_DocumentShell> {
         ),
       ]),
       _ShellMenu('Window', [
+        _Command(
+          'Command Palette…',
+          _openPalette,
+          shortcut: _shortcut(LogicalKeyboardKey.keyP, shift: true),
+          enabled: unlocked,
+        ),
+        const _Separator(),
         _Command(
           'Next Tab',
           _nextTab,
@@ -810,14 +906,19 @@ class _DocumentShellState extends State<_DocumentShell> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // Offered only when they would act, like the
+                                // strip's buttons (from #36).
                                 FilledButton(
-                                  onPressed: _new,
+                                  onPressed: workspace.interactionLocked
+                                      ? null
+                                      : _new,
                                   child: const Text('New document'),
                                 ),
                                 const SizedBox(width: 12),
                                 OutlinedButton(
-                                  onPressed: () =>
-                                      unawaited(workspace.openDialog()),
+                                  onPressed: workspace.interactionLocked
+                                      ? null
+                                      : () => unawaited(workspace.openDialog()),
                                   child: const Text('Open…'),
                                 ),
                               ],

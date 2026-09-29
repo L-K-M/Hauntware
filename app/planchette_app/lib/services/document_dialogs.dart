@@ -152,6 +152,31 @@ final class AppDocumentDialogs implements DocumentDialogs {
         ) ??
         ReadOnlyChoice.cancel;
   }
+
+  @override
+  Future<bool> confirmRevert(String name) async {
+    final context = navigatorKey.currentContext;
+    if (context == null) return false;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Revert “$name” to its saved version?'),
+            content: const Text('Your unsaved changes will be lost.'),
+            actions: [
+              TextButton(
+                autofocus: true,
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Revert'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
 }
 
 /// A short list of file names for a prompt: a long selection still fits.

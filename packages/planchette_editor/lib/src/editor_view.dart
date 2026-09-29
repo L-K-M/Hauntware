@@ -95,6 +95,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// dialog is gone instead of taking the keyboard from it.
   bool _routeIsCurrent = true;
   bool _restoreWhenCurrent = false;
+  bool _routeSeen = false;
+
+  /// The controller's install count this view has handed focus over for.
+  /// Read when the view attaches, not lazily on the first change: an install
+  /// that changes neither text nor caret can be that first change.
+  late int _installSeen;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
@@ -130,6 +136,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void initState() {
     super.initState();
     c.addListener(_changed);
+    _installSeen = c.installGeneration;
     _lastCaretReveal = c.caretRevealRequest;
     c.setViewEditingLocked(this, widget.editingLocked);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -142,6 +149,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     super.didChangeDependencies();
     c.text.theme = _syntaxTheme;
     final current = ModalRoute.isCurrentOf(context) ?? true;
+    if (!_routeSeen) {
+      _routeSeen = true;
+      _routeIsCurrent = current;
+      // An editor that appears active under a dialog, such as a tab the
+      // native menu opened under the command palette, does not autofocus
+      // over it: Flutter would let it take the dialog's focus. It focuses
+      // once its route is on top.
+      _restoreWhenCurrent = !current && widget.isActive;
+      return;
+    }
     if (current == _routeIsCurrent) return;
     _routeIsCurrent = current;
     if (!current || !_restoreWhenCurrent) return;
@@ -160,6 +177,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       c.addListener(_changed);
       _lastReveal = -1;
       _lastCaretReveal = c.caretRevealRequest;
+      _installSeen = c.installGeneration;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) c.initialize();
       });
@@ -186,6 +204,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
 
   void _changed() {
     if (!mounted) return;
+    if (_installSeen != c.installGeneration) {
+      _installSeen = c.installGeneration;
+      _carryOverInstall();
+    }
     setState(() {});
     if (_lastCaretReveal != c.caretRevealRequest) {
       _lastCaretReveal = c.caretRevealRequest;
@@ -202,6 +224,34 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         _revealMatch();
       });
     }
+  }
+
+  /// Each install gets a new document field (see the [KeyedSubtree] in the
+  /// build), which starts unscrolled and, since its focus node already has
+  /// focus, never sees the focus change that opens an input connection:
+  /// typing would go nowhere. Hand focus off now and back to the new field
+  /// once it is built, and restore the scroll offset.
+  void _carryOverInstall() {
+    final offset = c.scroll.hasClients ? c.scroll.offset : null;
+    final focused = c.editorFocus.hasFocus;
+    if (focused) c.editorFocus.unfocus(disposition: UnfocusDisposition.scope);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (offset != null && c.scroll.hasClients) {
+        final position = c.scroll.position;
+        c.scroll.jumpTo(
+          offset.clamp(position.minScrollExtent, position.maxScrollExtent),
+        );
+      }
+      if (!focused) return;
+      // A dialog that opened meanwhile keeps the keyboard; the document takes
+      // it back when the dialog closes.
+      if (_routeIsCurrent) {
+        c.editorFocus.requestFocus();
+      } else {
+        _restoreWhenCurrent = true;
+      }
+    });
   }
 
   /// Scrolls to a caret that a command moved, since only typing scrolls by
@@ -708,80 +758,87 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   width: gutterWidth,
                 ),
               Expanded(
-                child: Actions(
-                  actions: {
-                    if (_locked) ...{
-                      UndoTextIntent: CallbackAction<UndoTextIntent>(
-                        onInvoke: (_) => null,
-                      ),
-                      RedoTextIntent: CallbackAction<RedoTextIntent>(
-                        onInvoke: (_) => null,
-                      ),
-                    },
-                    _IndentIntent: _EditAction<_IndentIntent>(
-                      enabled: () => !_locked,
-                      run: c.indent,
-                      heldWhileComposing: _composing,
-                      keepsKey: true,
-                    ),
-                    _OutdentIntent: _EditAction<_OutdentIntent>(
-                      enabled: () => !_locked,
-                      run: c.outdent,
-                      heldWhileComposing: _composing,
-                      keepsKey: true,
-                    ),
-                    _NewlineIntent: _EditAction<_NewlineIntent>(
-                      enabled: () => !_locked,
-                      run: c.insertNewline,
-                    ),
-                    _DeleteIndentIntent: _EditAction<_DeleteIndentIntent>(
-                      enabled: () => !_locked && c.canDeleteIndentBackward,
-                      run: c.deleteIndentBackward,
-                    ),
-                  },
-                  child: Shortcuts(
-                    shortcuts: {
-                      if (widget.tabKeyBehavior ==
-                          EditorTabKeyBehavior.indent) ...const {
-                        SingleActivator(LogicalKeyboardKey.tab):
-                            _IndentIntent(),
-                        SingleActivator(LogicalKeyboardKey.tab, shift: true):
-                            _OutdentIntent(),
+                child: KeyedSubtree(
+                  // A new document field per installed buffer: the field's
+                  // undo history cannot be cleared, and must not reach back
+                  // past a load, reload or revert into the previous text.
+                  key: ValueKey(c.installGeneration),
+                  child: Actions(
+                    actions: {
+                      if (_locked) ...{
+                        UndoTextIntent: CallbackAction<UndoTextIntent>(
+                          onInvoke: (_) => null,
+                        ),
+                        RedoTextIntent: CallbackAction<RedoTextIntent>(
+                          onInvoke: (_) => null,
+                        ),
                       },
-                      const SingleActivator(LogicalKeyboardKey.enter):
-                          const _NewlineIntent(),
-                      const SingleActivator(LogicalKeyboardKey.numpadEnter):
-                          const _NewlineIntent(),
-                      const SingleActivator(LogicalKeyboardKey.backspace):
-                          const _DeleteIndentIntent(),
+                      _IndentIntent: _EditAction<_IndentIntent>(
+                        enabled: () => !_locked,
+                        run: c.indent,
+                        heldWhileComposing: _composing,
+                        keepsKey: true,
+                      ),
+                      _OutdentIntent: _EditAction<_OutdentIntent>(
+                        enabled: () => !_locked,
+                        run: c.outdent,
+                        heldWhileComposing: _composing,
+                        keepsKey: true,
+                      ),
+                      _NewlineIntent: _EditAction<_NewlineIntent>(
+                        enabled: () => !_locked,
+                        run: c.insertNewline,
+                      ),
+                      _DeleteIndentIntent: _EditAction<_DeleteIndentIntent>(
+                        enabled: () => !_locked && c.canDeleteIndentBackward,
+                        run: c.deleteIndentBackward,
+                      ),
                     },
-                    child: TextField(
-                      key: const ValueKey('planchette.document'),
-                      controller: c.text,
-                      undoController: c.undoController,
-                      readOnly: _locked,
-                      focusNode: c.editorFocus,
-                      scrollController: c.scroll,
-                      autofocus: widget.isActive,
-                      expands: true,
-                      maxLines: null,
-                      minLines: null,
-                      keyboardType: TextInputType.multiline,
-                      textAlignVertical: TextAlignVertical.top,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                      style: _style,
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.all(_padding),
-                        hintText: widget.placeholder,
-                        hintStyle: _style.copyWith(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                          fontStyle: FontStyle.italic,
+                    child: Shortcuts(
+                      shortcuts: {
+                        if (widget.tabKeyBehavior ==
+                            EditorTabKeyBehavior.indent) ...const {
+                          SingleActivator(LogicalKeyboardKey.tab):
+                              _IndentIntent(),
+                          SingleActivator(LogicalKeyboardKey.tab, shift: true):
+                              _OutdentIntent(),
+                        },
+                        const SingleActivator(LogicalKeyboardKey.enter):
+                            const _NewlineIntent(),
+                        const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                            const _NewlineIntent(),
+                        const SingleActivator(LogicalKeyboardKey.backspace):
+                            const _DeleteIndentIntent(),
+                      },
+                      child: TextField(
+                        key: const ValueKey('planchette.document'),
+                        controller: c.text,
+                        undoController: c.undoController,
+                        readOnly: _locked,
+                        focusNode: c.editorFocus,
+                        scrollController: c.scroll,
+                        autofocus: widget.isActive && _routeIsCurrent,
+                        expands: true,
+                        maxLines: null,
+                        minLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textAlignVertical: TextAlignVertical.top,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        style: _style,
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.all(_padding),
+                          hintText: widget.placeholder,
+                          hintStyle: _style.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                                .withValues(alpha: 0.6),
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ),
                     ),

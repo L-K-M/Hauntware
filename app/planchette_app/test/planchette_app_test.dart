@@ -160,6 +160,11 @@ void main() {
       await chord(tester, LogicalKeyboardKey.keyO);
       expect(workspace.documents, hasLength(1));
       expect(workspace.active!.editor.text.text, 'on disk');
+
+      await chord(tester, LogicalKeyboardKey.keyW);
+      expect(workspace.documents, isEmpty);
+      await chord(tester, LogicalKeyboardKey.keyT, shift: true);
+      expect(workspace.active!.path, testPath('reopen.txt'));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -450,6 +455,135 @@ void main() {
       await tester.pump();
       await chord(tester, LogicalKeyboardKey.keyD, shift: true);
       expect(tab.editor.text.text, 'two\none\none');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'menu Revert to Saved restores the active document',
+    (tester) async {
+      store.files[testPath('revert.txt')] = document('revert.txt', 'saved');
+      await workspace.open(testPath('revert.txt'));
+      final tab = workspace.active!..editor.text.text = 'local edits';
+      await mount(tester);
+      store.files[testPath('revert.txt')] = document(
+        'revert.txt',
+        'changed elsewhere',
+        digest: 'external',
+      );
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Revert to Saved'));
+      await tester.pumpAndSettle();
+      expect(tab.editor.text.text, 'changed elsewhere');
+      expect(tab.editor.isDirty, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'Revert to Saved stays disabled for untitled documents',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'scratch';
+      await mount(tester);
+      await tester.tap(find.text('File'));
+      await tester.pumpAndSettle();
+      final item = tester.widget<MenuItemButton>(
+        find.ancestor(
+          of: find.text('Revert to Saved'),
+          matching: find.byType(MenuItemButton),
+        ),
+      );
+      expect(item.onPressed, isNull);
+      await tester.tap(find.text('Revert to Saved'));
+      await tester.pumpAndSettle();
+      expect(tab.editor.text.text, 'scratch');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets(
+    'review fix: the palette acts on the window as it is when chosen',
+    (tester) async {
+      // The native menu stays live under the palette. Its commands closed
+      // over the tab active when it opened, so a New from the menu left
+      // Duplicate Line editing the hidden tab, and the new tab's editor
+      // took the palette's focus.
+      final first = workspace.newDocument()!..editor.text.text = 'one';
+      await mount(tester);
+      PlatformMenuItem item(String menuLabel, String label) {
+        final bar = tester.widget<PlatformMenuBar>(
+          find.byType(PlatformMenuBar),
+        );
+        final menu = bar.menus.whereType<PlatformMenu>().firstWhere(
+          (menu) => menu.label == menuLabel,
+        );
+        return menu.menus
+            .whereType<PlatformMenuItemGroup>()
+            .expand((group) => group.members)
+            .whereType<PlatformMenuItem>()
+            .firstWhere((item) => item.label == label);
+      }
+
+      first.editor.editorFocus.requestFocus();
+      await tester.pumpAndSettle();
+      item('Window', 'Command Palette…').onSelected!();
+      await tester.pumpAndSettle();
+      item('File', 'New').onSelected!();
+      await tester.pumpAndSettle();
+      final second = workspace.active!;
+      expect(second, isNot(first));
+      expect(second.editor.editorFocus.hasFocus, isFalse);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        'duplicate line',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(first.editor.text.text, 'one');
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({TargetPlatform.macOS}),
+  );
+
+  testWidgets(
+    'the command palette runs a menu command by name',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'palette text';
+      dialogs.savePath = testPath('palette.txt');
+      await mount(tester);
+
+      await chord(tester, LogicalKeyboardKey.keyP, shift: true);
+      expect(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        findsOneWidget,
+      );
+      expect(find.text('Command Palette…'), findsNothing);
+      await tester.enterText(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        'save as',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(tab.path, testPath('palette.txt'));
+      expect(store.files[testPath('palette.txt')]!.text, 'palette text');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },
@@ -886,6 +1020,29 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 
+  // Ported from #18, reopening from disk as #51 does.
+  testWidgets(
+    'Reopen Closed Tab brings a closed file back from the keyboard',
+    (tester) async {
+      store.files[testPath('back.txt')] = document('back.txt', 'on disk');
+      await workspace.open(testPath('back.txt'));
+      await mount(tester);
+
+      await chord(tester, LogicalKeyboardKey.keyW);
+      expect(workspace.documents, isEmpty);
+      await chord(tester, LogicalKeyboardKey.keyT, shift: true);
+      expect(workspace.active?.path, testPath('back.txt'));
+      expect(workspace.active!.editor.text.text, 'on disk');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    // macOS drives the same command through native menus and Command.
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
   testWidgets(
     'review fix: a bracket jump typed in the find field leaves the text',
     (tester) async {
@@ -911,6 +1068,32 @@ void main() {
       TargetPlatform.windows,
     }),
   );
+
+  // Ported from #36.
+  testWidgets('the empty window offers New and Open only while unlocked', (
+    tester,
+  ) async {
+    await mount(tester);
+    ButtonStyleButton button(String label) => tester.widget<ButtonStyleButton>(
+      find.ancestor(
+        of: find.text(label),
+        matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+      ),
+    );
+    expect(button('New document').onPressed, isNotNull);
+    expect(button('Open…').onPressed, isNotNull);
+
+    // An open dialog holds the lock.
+    dialogs.openGate = Completer<List<String>>();
+    final opening = workspace.openDialog();
+    await tester.pump();
+    expect(workspace.interactionLocked, isTrue);
+    expect(button('New document').onPressed, isNull);
+    expect(button('Open…').onPressed, isNull);
+    dialogs.openGate!.complete(const []);
+    await opening;
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('review fix: document commands wait for the document on macOS', (
     tester,

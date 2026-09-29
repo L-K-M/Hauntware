@@ -162,6 +162,7 @@ class EditorController extends ChangeNotifier {
   FocusNode? _focusMemory;
   int _revision = 0;
   int _revealRequest = 0;
+  int _installGeneration = 0;
   int _caretRevealRequest = 0;
   CaretReveal _caretRevealPlacement = CaretReveal.nearest;
   ({String text, int offset, int bracket})? _lastBracketJump;
@@ -189,6 +190,7 @@ class EditorController extends ChangeNotifier {
 
   TextDocument? get document => _document;
   String? get error => _error;
+
   bool get isLoading => _loading;
   bool get isSaving => _saving;
   bool get isBusy => _loading || _saving;
@@ -239,6 +241,11 @@ class EditorController extends ChangeNotifier {
   /// the find bar pages there; a counter shows its total as a lower bound.
   bool get matchesMayContinue => _matchesMayContinue;
   int get revealRequest => _revealRequest;
+
+  /// Increments whenever a whole buffer is installed: loaded, reloaded or
+  /// reverted. The view gives each generation its own document field, so
+  /// undo never crosses from the installed text back into the previous one.
+  int get installGeneration => _installGeneration;
 
   /// Increments when a command moved the caret somewhere the view should
   /// scroll to; typing scrolls by itself, but a programmatic change does not.
@@ -535,15 +542,28 @@ class EditorController extends ChangeNotifier {
   void _installText(String value) {
     _savedText = value;
     _lastText = value;
+    // A reload or revert keeps the reader's place as far as the new text
+    // reaches, never between the halves of a surrogate pair; the view
+    // carries the scroll offset over to the new document field.
+    final previous = text.selection;
+    var caret = previous.isValid
+        ? previous.extentOffset.clamp(0, value.length)
+        : 0;
+    if (caret > 0 &&
+        caret < value.length &&
+        _isLowSurrogate(value.codeUnitAt(caret)) &&
+        _isHighSurrogate(value.codeUnitAt(caret - 1))) {
+      caret--;
+    }
     text.value = TextEditingValue(
       text: value,
-      selection: const TextSelection.collapsed(offset: 0),
+      selection: TextSelection.collapsed(offset: caret),
     );
     _detectLanguage();
     _detectIndentation(reset: true);
     if (_searchOpen) _updateMatches(resetActive: true);
-    if (scroll.hasClients) scroll.jumpTo(0);
     _revealRequest++;
+    _installGeneration++;
   }
 
   void _detectLanguage() {

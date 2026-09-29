@@ -103,6 +103,8 @@ class FakeDialogs implements DocumentDialogs {
   /// Answers for successive pickers, taken before [savePath] applies.
   final savePaths = <String?>[];
   bool replace = true;
+  bool revert = true;
+  bool revertAsked = false;
   final replaceAsked = <String>[];
   final choices = <CloseChoice>[];
   final asked = <String>[];
@@ -150,6 +152,12 @@ class FakeDialogs implements DocumentDialogs {
     return readOnlyChoices.isEmpty
         ? ReadOnlyChoice.cancel
         : readOnlyChoices.removeAt(0);
+  }
+
+  @override
+  Future<bool> confirmRevert(String name) async {
+    revertAsked = true;
+    return revert;
   }
 }
 
@@ -607,6 +615,230 @@ void main() {
     });
   });
 
+  group('export as HTML', () {
+    const palette = HtmlPalette(
+      background: '#ffffff',
+      foreground: '#000000',
+      tokens: {SyntaxTokenType.comment: '#777777'},
+    );
+    late DocumentTab tab;
+    setUp(() async {
+      store.files[testPath('main.dart')] = document(
+        'main.dart',
+        '// hi <there>\nvoid main() {}\n',
+      );
+      await workspace.open(testPath('main.dart'));
+      tab = workspace.active!..editor.text.text += '// unsaved\n';
+    });
+
+    test('writes the buffer, unsaved edits included, as a page', () async {
+      dialogs.savePath = testPath('main.dart.html');
+      expect(await workspace.exportHtml(tab, palette), isTrue);
+
+      final page = store.files[testPath('main.dart.html')]!.text;
+      expect(page, contains('<title>main.dart</title>'));
+      expect(page, contains('<span class="c">// hi &lt;there&gt;</span>'));
+      expect(page, contains('<span class="c">// unsaved</span>'));
+      expect(tab.path, testPath('main.dart'));
+      expect(tab.editor.isDirty, isTrue);
+    });
+
+    test(
+      'writes nothing when cancelled or when replacing is declined',
+      () async {
+        dialogs.savePath = null;
+        expect(await workspace.exportHtml(tab, palette), isFalse);
+
+        store.files[testPath('old.html')] = document('old.html', 'keep');
+        dialogs
+          ..savePath = testPath('old.html')
+          ..replace = false;
+        expect(await workspace.exportHtml(tab, palette), isFalse);
+        expect(store.files[testPath('old.html')]!.text, 'keep');
+        expect(store.writes, isEmpty);
+      },
+    );
+
+    test('never writes over a document open in a tab', () async {
+      dialogs.savePath = testPath('main.dart');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(workspace.error, contains('open in a tab'));
+      expect(store.writes, isEmpty);
+    });
+
+    test('review fix: a failed export retires when the export works', () async {
+      // Export failures set the banner outside the error scopes, so a later
+      // export that worked left the old failure up.
+      store.writeFailures[testPath('out.html')] = const FileSystemException(
+        'Disk full',
+      );
+      dialogs.savePath = testPath('out.html');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(workspace.error, contains('Could not export main.dart'));
+
+      store.writeFailures.clear();
+      expect(await workspace.exportHtml(tab, palette), isTrue);
+      expect(workspace.error, isNull);
+    });
+
+    test(
+      'review fix: an export never writes edits a revert discards',
+      () async {
+        // Export read the buffer, which still held the edits the user had
+        // just chosen to discard while a confirmed revert read the file.
+        store.loadGate = Completer<void>();
+        final reverting = workspace.revert(tab);
+        await pumpEventQueue();
+        dialogs.savePath = testPath('out.html');
+        expect(await workspace.exportHtml(tab, palette), isFalse);
+        expect(workspace.error, contains('being reverted'));
+        store.loadGate!.complete();
+        expect(await reverting, isTrue);
+
+        // Nor when the revert starts while the export settles its target.
+        tab.editor.text.text += '// discard me too\n';
+        store.savePathGate = Completer<void>();
+        final exporting = workspace.exportHtml(tab, palette);
+        await pumpEventQueue();
+        store.loadGate = Completer<void>();
+        final again = workspace.revert(tab);
+        await pumpEventQueue();
+        store.savePathGate!.complete();
+        expect(await exporting, isFalse);
+        store.loadGate!.complete();
+        expect(await again, isTrue);
+        expect(store.writes, isEmpty);
+      },
+    );
+
+    test('review fix: an export failure outlives an unrelated save', () async {
+      store.files[testPath('one.txt')] = document('one.txt', 'disk');
+      await workspace.open(testPath('one.txt'));
+      final other = workspace.active!..editor.text.text = 'edited';
+      store.writeFailures[testPath('one.txt')] = const FileSystemException(
+        'Disk full',
+      );
+      expect(await workspace.save(other), isFalse);
+
+      dialogs.savePath = testPath('main.dart');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(workspace.error, contains('open in a tab'));
+      store.writeFailures.clear();
+      expect(await workspace.save(other), isTrue);
+      expect(workspace.error, contains('open in a tab'));
+    });
+
+    test('review fix: exporting over a read-only file asks first', () async {
+      store.files[testPath('locked.html')] = document('locked.html', 'keep');
+      store.writeProtected.add(testPath('locked.html'));
+      dialogs.savePath = testPath('locked.html');
+      expect(await workspace.exportHtml(tab, palette), isFalse);
+      expect(dialogs.readOnlyAsked, ['locked.html']);
+      expect(store.files[testPath('locked.html')]!.text, 'keep');
+
+      // Save Anyway has agreed to replace it; Replace is not asked again.
+      dialogs.readOnlyChoices.add(ReadOnlyChoice.saveAnyway);
+      expect(await workspace.exportHtml(tab, palette), isTrue);
+      expect(dialogs.replaceAsked, isEmpty);
+      expect(store.files[testPath('locked.html')]!.text, contains('<html'));
+    });
+  });
+
+  group('reopen closed tab', () {
+    setUp(() {
+      for (final name in ['one.txt', 'two.txt']) {
+        store.files[testPath(name)] = document(name, name);
+      }
+    });
+
+    Future<DocumentTab> openFile(String name) async {
+      await workspace.open(testPath(name));
+      return workspace.active!;
+    }
+
+    test('brings back the most recently closed file, newest first', () async {
+      expect(workspace.canReopenClosed, isFalse);
+      await workspace.closeTab(await openFile('one.txt'));
+      await workspace.closeTab(await openFile('two.txt'));
+      expect(workspace.documents, isEmpty);
+      expect(workspace.canReopenClosed, isTrue);
+
+      await workspace.reopenClosed();
+      expect(workspace.active!.path, testPath('two.txt'));
+      await workspace.reopenClosed();
+      expect(workspace.active!.path, testPath('one.txt'));
+      expect(workspace.documents, hasLength(2));
+      expect(workspace.canReopenClosed, isFalse);
+    });
+
+    test('skips a file that was opened again some other way', () async {
+      await workspace.closeTab(await openFile('one.txt'));
+      await workspace.closeTab(await openFile('two.txt'));
+      await openFile('two.txt');
+
+      await workspace.reopenClosed();
+      expect(workspace.documents.map((tab) => tab.path), [
+        testPath('two.txt'),
+        testPath('one.txt'),
+      ]);
+      expect(workspace.canReopenClosed, isFalse);
+    });
+
+    test('ignores untitled tabs and closes the user cancelled', () async {
+      final untitled = workspace.newDocument()!;
+      await workspace.closeTab(untitled);
+      final kept = await openFile('one.txt');
+      kept.editor.text.text = 'unsaved';
+      dialogs.choices.add(CloseChoice.cancel);
+      expect(await workspace.closeTab(kept), isFalse);
+
+      expect(workspace.canReopenClosed, isFalse);
+    });
+
+    // Ported from #18.
+    test('puts the caret back, within the file as it is now', () async {
+      store.files[testPath('lines.txt')] = document(
+        'lines.txt',
+        'one\ntwo two\nthree',
+      );
+      final tab = await openFile('lines.txt');
+      tab.editor.goToLine(2, column: 5);
+      await workspace.closeTab(tab);
+      await workspace.reopenClosed();
+      expect(workspace.active!.editor.caretLineColumn, (2, 5));
+
+      // The file lost lines while closed: the caret goes as far as it can.
+      final again = workspace.active!;
+      await workspace.closeTab(again);
+      store.files[testPath('lines.txt')] = document('lines.txt', 'one');
+      await workspace.reopenClosed();
+      expect(workspace.active!.editor.caretLineColumn, (1, 4));
+    });
+
+    test('remembers the last twenty closed files', () async {
+      for (var i = 0; i < 25; i++) {
+        store.files[testPath('f$i.txt')] = document('f$i.txt', '$i');
+        await workspace.closeTab(await openFile('f$i.txt'));
+      }
+      for (var i = 0; i < 20; i++) {
+        await workspace.reopenClosed();
+      }
+      expect(workspace.documents, hasLength(20));
+      expect(workspace.canReopenClosed, isFalse);
+      expect(workspace.documents.last.path, testPath('f5.txt'));
+    });
+
+    test('reports a closed file that has since disappeared', () async {
+      await workspace.closeTab(await openFile('one.txt'));
+      store.files.remove(testPath('one.txt'));
+
+      await workspace.reopenClosed();
+      expect(workspace.documents, isEmpty);
+      expect(workspace.error, contains('one.txt'));
+      expect(workspace.canReopenClosed, isFalse);
+    });
+  });
+
   test('canceling Save As keeps a new document dirty and unnamed', () async {
     final tab = workspace.newDocument()!;
     tab.editor.text.text = 'keep me';
@@ -868,6 +1100,126 @@ void main() {
     dialogs.choiceGate!.complete(CloseChoice.discard);
     expect(await closing, isFalse);
     expect(workspace.documents, [tab]);
+  });
+
+  test('revert reloads the saved file after confirmation', () async {
+    store.files[testPath('note.txt')] = document('note.txt', 'saved text');
+    await workspace.open(testPath('note.txt'));
+    final tab = workspace.active!..editor.text.text = 'local edits';
+    store.files[testPath('note.txt')] = document(
+      'note.txt',
+      'changed elsewhere',
+      digest: 'external',
+    );
+    expect(await workspace.revert(tab), isTrue);
+    expect(tab.editor.text.text, 'changed elsewhere');
+    expect(tab.editor.isDirty, isFalse);
+    expect(dialogs.revertAsked, isTrue);
+  });
+
+  test('declined revert keeps the unsaved buffer', () async {
+    store.files[testPath('note.txt')] = document('note.txt', 'saved text');
+    await workspace.open(testPath('note.txt'));
+    final tab = workspace.active!..editor.text.text = 'local edits';
+    dialogs.revert = false;
+    expect(await workspace.revert(tab), isFalse);
+    expect(tab.editor.text.text, 'local edits');
+    expect(tab.editor.isDirty, isTrue);
+  });
+
+  test('revert of a clean document skips confirmation', () async {
+    store.files[testPath('note.txt')] = document('note.txt', 'saved text');
+    await workspace.open(testPath('note.txt'));
+    final tab = workspace.active!;
+    dialogs.revert = false;
+    expect(await workspace.revert(tab), isTrue);
+    expect(dialogs.revertAsked, isFalse);
+    expect(tab.editor.text.text, 'saved text');
+  });
+
+  test('a failed reload keeps the buffer and reports an error', () async {
+    store.files[testPath('note.txt')] = document('note.txt', 'saved text');
+    await workspace.open(testPath('note.txt'));
+    final tab = workspace.active!..editor.text.text = 'precious edits';
+    store.files.remove(testPath('note.txt'));
+    expect(await workspace.revert(tab), isFalse);
+    expect(tab.editor.text.text, 'precious edits');
+    expect(tab.editor.isDirty, isTrue);
+    expect(tab.editor.error, isNull);
+    expect(tab.editor.canSave, isTrue);
+    expect(workspace.error, contains('Could not revert'));
+  });
+
+  test('untitled tabs cannot revert', () async {
+    final tab = workspace.newDocument()!;
+    expect(await workspace.revert(tab), isFalse);
+    expect(dialogs.revertAsked, isFalse);
+  });
+
+  test('revert works after Save As gives an untitled tab a file', () async {
+    final tab = workspace.newDocument()!..editor.text.text = 'first draft';
+    dialogs.savePath = testPath('draft.txt');
+    expect(await workspace.save(tab), isTrue);
+    tab.editor.text.text = 'revised';
+    store.files[testPath('draft.txt')] = document(
+      'draft.txt',
+      'newer on disk',
+      digest: 'external',
+    );
+    expect(await workspace.revert(tab), isTrue);
+    expect(tab.editor.text.text, 'newer on disk');
+    expect(tab.editor.isDirty, isFalse);
+  });
+
+  test('review fix: a save cannot write edits a revert discards', () async {
+    // The buffer stayed dirty while the file was read, so Save All wrote
+    // the edits the user had just chosen to discard over the file.
+    final tab = await openOne();
+    tab.editor.text.text = 'discard me';
+    store.loadGate = Completer<void>();
+    final reverting = workspace.revert(tab);
+    await pumpEventQueue();
+    final savingAll = workspace.saveAll();
+    final saving = workspace.save(tab);
+    await pumpEventQueue();
+    store.loadGate!.complete();
+    expect(await reverting, isTrue);
+    await savingAll;
+    expect(await saving, isFalse);
+    expect(store.writes, isEmpty);
+    expect(store.files[testPath('one.txt')]!.text, 'disk');
+    expect(tab.editor.text.text, 'disk');
+    expect(tab.editor.isDirty, isFalse);
+  });
+
+  test('review fix: a tab being reverted takes no edits', () async {
+    // Typing during the read was replaced by the file without a word.
+    final tab = await openOne();
+    store.loadGate = Completer<void>();
+    final reverting = workspace.revert(tab);
+    await pumpEventQueue();
+    expect(tab.editor.editingLocked, isTrue);
+    expect(tab.editor.canEditText, isFalse);
+    store.loadGate!.complete();
+    expect(await reverting, isTrue);
+    expect(tab.editor.editingLocked, isFalse);
+  });
+
+  test('revert follows a Save As retarget', () async {
+    store.files[testPath('a.txt')] = document('a.txt', 'content a');
+    await workspace.open(testPath('a.txt'));
+    final tab = workspace.active!;
+    dialogs.savePath = testPath('b.txt');
+    expect(await workspace.save(tab, saveAs: true), isTrue);
+    tab.editor.text.text = 'edited at b';
+    store.files[testPath('b.txt')] = document(
+      'b.txt',
+      'newer b',
+      digest: 'b-external',
+    );
+    expect(await workspace.revert(tab), isTrue);
+    expect(tab.editor.text.text, 'newer b');
+    expect(tab.path, testPath('b.txt'));
   });
 
   test(
