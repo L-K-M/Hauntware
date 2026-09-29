@@ -58,11 +58,11 @@ while IFS= read -r f; do
 done < <(grep -rl '/usr/' "$WORK/stage/bin/" 2>/dev/null || true)
 while IFS= read -r f; do
   sed -i 's|Exec=/usr/bin/|Exec=|; s|Exec=/opt/[^/]*/bin/|Exec=|' "$f"
-done < <(find "$WORK/stage/share/applications" -name '*.desktop' 2>/dev/null)
+done < <(find "$WORK/stage/share/applications" -type f -name '*.desktop' 2>/dev/null)
 
 # flatpak exports the desktop file and icons only when they are named after
 # the app id; the bundler names them after the binary instead.
-DESKTOP="$(find "$WORK/stage/share/applications" -name '*.desktop' -print -quit 2>/dev/null || true)"
+DESKTOP="$(find "$WORK/stage/share/applications" -type f -name '*.desktop' -print -quit 2>/dev/null || true)"
 [ -n "$DESKTOP" ] || die "no .desktop file inside $DEB"
 [ "$(basename "$DESKTOP")" = "$APP_ID.desktop" ] ||
   mv "$DESKTOP" "$WORK/stage/share/applications/$APP_ID.desktop"
