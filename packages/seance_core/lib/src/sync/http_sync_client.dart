@@ -214,7 +214,9 @@ class HttpSyncClient implements SyncApi, InboxApi {
     for (final item in json['items'] as List) {
       try {
         items.add(InboxItem.fromJson((item as Map).cast()));
-      } on Object {
+      } on FormatException {
+        continue;
+      } on TypeError {
         continue;
       }
     }

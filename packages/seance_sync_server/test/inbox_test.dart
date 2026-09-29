@@ -267,12 +267,21 @@ void _inboxTests(Storage Function() newStorage) {
     });
 
     test('an account holds at most 50 apps', () async {
-      for (var i = 0; i < 50; i++) {
+      final first = newInboxAppId();
+      expect((await h.createApp(alice, appId: first)).status, 201);
+      for (var i = 1; i < 50; i++) {
         expect((await h.createApp(alice)).status, 201);
       }
       final over = await h.createApp(alice);
       expect(over.status, 429);
       expect(over.code, 'too_many_apps');
+
+      // Removing one frees its slot, as the refusal tells the user.
+      expect(
+        (await h.send('DELETE', '/v1/apps/$first', bearer: alice)).status,
+        204,
+      );
+      expect((await h.createApp(alice)).status, 201);
     });
 
     test('the Bearer scheme is case-insensitive', () async {
