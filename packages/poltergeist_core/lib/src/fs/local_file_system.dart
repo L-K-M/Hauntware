@@ -133,6 +133,10 @@ class LocalFileSystem implements RemoteFileSystem {
     'list',
     path,
     () async {
+      // Diagnostic-only switch: the default preserves the sequential path.
+      const batchSize = int.fromEnvironment('P4_LIST_BATCH_SIZE', defaultValue: 1);
+      if (batchSize > 1) return _listDirectoryInBatches(path, batchSize);
+
       final entries = <RemoteFileEntry>[];
       await for (final entity in Directory(path).list(followLinks: false)) {
         final name = p.basename(entity.path);
@@ -158,6 +162,45 @@ class LocalFileSystem implements RemoteFileSystem {
       return entries;
     },
   );
+
+  Future<List<RemoteFileEntry>> _listDirectoryInBatches(
+    String path,
+    int batchSize,
+  ) async {
+    final entries = <RemoteFileEntry>[];
+    final batch = <FileSystemEntity>[];
+
+    Future<void> flush() async {
+      // Future.wait preserves enumeration order and observes every read's
+      // failure before this batch can leave the listing's error funnel.
+      final listed = await Future.wait(batch.map(_listDirectoryEntry));
+      entries.addAll(listed.nonNulls);
+      batch.clear();
+    }
+
+    await for (final entity in Directory(path).list(followLinks: false)) {
+      batch.add(entity);
+      if (batch.length == batchSize) await flush();
+    }
+    if (batch.isNotEmpty) await flush();
+    return entries;
+  }
+
+  Future<RemoteFileEntry?> _listDirectoryEntry(FileSystemEntity entity) async {
+    final name = p.basename(entity.path);
+    if (name == '.' || name == '..') return null;
+    // Links keep their own identity and null metadata, including broken links.
+    if (entity is Link) {
+      return RemoteFileEntry(
+        path: entity.path,
+        name: name,
+        type: RemoteFileType.symbolicLink,
+      );
+    }
+    final stat = await FileStat.stat(entity.path);
+    if (stat.type == FileSystemEntityType.notFound) return null;
+    return _entryFromStat(entity.path, name, stat);
+  }
 
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) =>
