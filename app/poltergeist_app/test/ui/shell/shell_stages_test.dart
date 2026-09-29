@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
+import 'package:poltergeist_app/ui/adaptive_shell.dart';
 import 'package:poltergeist_app/ui/panes/pane_commands.dart';
 import 'package:poltergeist_app/ui/panes/pane_tabs_view.dart';
 
@@ -41,6 +42,32 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
   }
+
+  testWidgets('switching tabs does not rebuild the workspace layout', (
+    tester,
+  ) async {
+    final harness = CompactHarness();
+    await harness.pump(tester, size: const Size(1400, 900));
+    final workspace = workspaceOf(tester);
+    final first = workspace.left.activeTab!;
+    workspace.left.newTab();
+    await tester.pumpAndSettle();
+
+    var layoutBuilds = 0;
+    final previous = debugOnRebuildDirtyWidget;
+    addTearDown(() => debugOnRebuildDirtyWidget = previous);
+    debugOnRebuildDirtyWidget = (element, builtOnce) {
+      previous?.call(element, builtOnce);
+      if (element.widget is AdaptiveShell) layoutBuilds++;
+    };
+
+    workspace.left.activateTab(first);
+    await tester.pumpAndSettle();
+
+    expect(layoutBuilds, 0);
+    expect(workspace.left.activeTab, same(first));
+    expect(panes, findsNWidgets(2));
+  });
 
   testWidgets('the inspector folds first, then the sidebar; both panes '
       'stay on screen', (tester) async {

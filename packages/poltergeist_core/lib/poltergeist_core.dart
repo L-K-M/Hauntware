@@ -286,6 +286,15 @@ export 'src/editor/built_in_text_document.dart'
         loadBuiltInTextDocumentDetails,
         resolveBuiltInEditorTarget,
         saveBuiltInTextDocument;
+export 'src/fs/file_system_name_traits.dart'
+    show
+        FileSystemNameJoin,
+        FileSystemNameProbeCleanupException,
+        FileSystemNameSensitivity,
+        FileSystemNameTraits,
+        fileSystemNameProbePrefix,
+        isFileSystemNameProbeArtifact,
+        probeFileSystemNameTraits;
 export 'src/transfer/bandwidth_limiter.dart'
     show BandwidthLimiter, maxTransferChunkBytes;
 export 'src/transfer/conflict_policy.dart'
@@ -304,8 +313,15 @@ export 'src/transfer/conflict_policy.dart'
         numberedConflictName,
         resolveTransferConflict,
         taskScopePolicy;
+export 'src/transfer/destination_name_key.dart'
+    show
+        DestinationNameComparison,
+        destinationNameComparisonFor,
+        destinationNameKey,
+        withinTaskDestinationCollisionMessage;
 export 'src/transfer/recursive_walker.dart'
     show
+        DestinationCollisionDisposition,
         RecursiveWalker,
         WalkEntryEvent,
         WalkEvent,
@@ -342,6 +358,7 @@ export 'src/transfer/transfer_task.dart'
         ServerFsLocation,
         TransferItem,
         TransferItemState,
+        TransferFailureRetryPolicy,
         TransferOperation,
         TransferPlan,
         TransferTask,
@@ -369,6 +386,7 @@ export 'src/transfer/trash_service.dart'
         trashInvokeTimeout;
 export 'src/transfer/transfer_journal.dart'
     show
+        DestinationClaimedRecord,
         FileCompletedRecord,
         FileFailedRecord,
         ItemRemovedRecord,

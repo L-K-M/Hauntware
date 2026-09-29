@@ -10,7 +10,7 @@
 /// ```
 ///
 /// Every record is a **versioned document**: a top-level `v` (schema
-/// version, currently `1`) and a `type`. Decode is strict on both — a
+/// version, currently `2`) and a `type`. Decode is strict on both — a
 /// record with an unknown type or a `v` this build does not understand
 /// fails to parse, which routes the file through the quarantine path in
 /// [FileTransferPersistence] rather than being silently misread. That is
@@ -22,8 +22,8 @@
 /// preserved", never to silent corruption.
 ///
 /// Record `type`s are the 03 §4.6 vocabulary: `taskEnqueued`,
-/// `planEntry`, `scanComplete`, `taskState`, `fileCompleted`,
-/// `fileFailed`, `itemRemoved`, `taskRemoved`.
+/// `planEntry`, `destinationClaimed`, `scanComplete`, `taskState`,
+/// `fileCompleted`, `fileFailed`, `itemRemoved`, `taskRemoved`.
 library;
 
 import 'dart:convert';
@@ -35,7 +35,9 @@ import 'package:seance_core/seance_core.dart';
 
 import '../checkout/managed_checkout_spec.dart';
 import '../checkout/managed_remote_file.dart';
+import '../fs/local_directory_sync.dart';
 import '../fs/local_fs_safety.dart';
+import 'destination_name_key.dart';
 import 'transfer_task.dart';
 
 /// The journal file's basename inside the support directory (03 §4.6).
@@ -44,10 +46,11 @@ const String transferJournalFileName = 'transfer_queue.jsonl';
 /// The history file's basename inside the support directory (03 §4.6).
 const String transferHistoryFileName = 'transfer_history.jsonl';
 
-/// The schema version every journal/history record carries in `v`. Bump
-/// on any semantic change to a record shape; additive field additions do
-/// not require a bump (decode ignores unknown fields).
-const int transferJournalSchemaVersion = 1;
+/// The schema version every journal/history record carries in `v`.
+/// Version 2 adds durable resolved-destination claims. Readers retain v1
+/// support so existing logs expand in place; v1 readers reject v2 fail closed.
+const int transferJournalSchemaVersion = 2;
+const int _minimumTransferJournalSchemaVersion = 1;
 
 /// Default history retention (03 §4.6): the store rewrites the file once
 /// it exceeds the limit by a 10 % slack margin, keeping the newest
@@ -85,7 +88,7 @@ sealed class TransferJournalRecord {
   };
 
   /// Strict decode of one journal line. Throws [FormatException] on
-  /// anything that is not a well-formed v1 record of a known type — the
+  /// anything that is not a well-formed supported record of a known type — the
   /// caller routes that to quarantine, never to a partial read.
   static TransferJournalRecord parse(String line) {
     final Object? decoded;
@@ -99,7 +102,9 @@ sealed class TransferJournalRecord {
     }
     final json = decoded.cast<String, Object?>();
     final v = json['v'];
-    if (v != transferJournalSchemaVersion) {
+    if (v is! int ||
+        v < _minimumTransferJournalSchemaVersion ||
+        v > transferJournalSchemaVersion) {
       throw FormatException('unsupported journal schema version: $v');
     }
     final taskId = json['taskId'];
@@ -118,6 +123,13 @@ sealed class TransferJournalRecord {
         return PlanEntryRecord._fromJson(json, taskId, at);
       case ScanCompleteRecord.wireType:
         return ScanCompleteRecord._fromJson(json, taskId, at);
+      case DestinationClaimedRecord.wireType:
+        if (v < 2) {
+          throw const FormatException(
+            'destinationClaimed requires journal schema version 2',
+          );
+        }
+        return DestinationClaimedRecord._fromJson(json, taskId, at);
       case TaskStateRecord.wireType:
         return TaskStateRecord._fromJson(json, taskId, at);
       case FileCompletedRecord.wireType:
@@ -288,6 +300,55 @@ final class PlanEntryRecord extends TransferJournalRecord {
   }
 }
 
+/// `destinationClaimed` — a move or renamed output reserved its exact target.
+/// The queue fsyncs this record before committing so recovery can protect the
+/// output even when completion never journaled.
+final class DestinationClaimedRecord extends TransferJournalRecord {
+  DestinationClaimedRecord({
+    required super.taskId,
+    required this.itemId,
+    required this.destinationPath,
+    super.at,
+  });
+
+  static const wireType = 'destinationClaimed';
+
+  final String itemId;
+  final String destinationPath;
+
+  @override
+  String get type => wireType;
+
+  @override
+  Map<String, Object?> toJson() => {
+    ..._baseJson(),
+    'itemId': itemId,
+    'destinationPath': destinationPath,
+  };
+
+  static DestinationClaimedRecord _fromJson(
+    Map<String, Object?> json,
+    String taskId,
+    DateTime at,
+  ) {
+    final itemId = json['itemId'];
+    final destinationPath = json['destinationPath'];
+    if (itemId is! String ||
+        itemId.isEmpty ||
+        destinationPath is! String ||
+        destinationPath.isEmpty) {
+      throw const FormatException('malformed destinationClaimed record');
+    }
+
+    return DestinationClaimedRecord(
+      taskId: taskId,
+      itemId: itemId,
+      destinationPath: destinationPath,
+      at: at,
+    );
+  }
+}
+
 /// `scanComplete` — the source walk finished; [totalBytes] is final.
 /// Without this record a restored task re-scans on resume (03 §4.6's
 /// mid-scan crash rule).
@@ -296,6 +357,7 @@ final class ScanCompleteRecord extends TransferJournalRecord {
     required super.taskId,
     required this.totalBytes,
     required this.skippedSymlinks,
+    this.destinationNameComparison,
     super.at,
   });
 
@@ -303,6 +365,7 @@ final class ScanCompleteRecord extends TransferJournalRecord {
 
   final int totalBytes;
   final int skippedSymlinks;
+  final DestinationNameComparison? destinationNameComparison;
 
   @override
   String get type => wireType;
@@ -312,6 +375,8 @@ final class ScanCompleteRecord extends TransferJournalRecord {
     ..._baseJson(),
     'totalBytes': totalBytes,
     'skippedSymlinks': skippedSymlinks,
+    if (destinationNameComparison != null)
+      'destinationNameComparison': destinationNameComparison!.name,
   };
 
   static ScanCompleteRecord _fromJson(
@@ -328,6 +393,9 @@ final class ScanCompleteRecord extends TransferJournalRecord {
       taskId: taskId,
       totalBytes: totalBytes,
       skippedSymlinks: skippedSymlinks,
+      destinationNameComparison: _parseDestinationNameComparison(
+        json['destinationNameComparison'],
+      ),
       at: at,
     );
   }
@@ -442,6 +510,7 @@ final class FileFailedRecord extends TransferJournalRecord {
     required this.itemId,
     this.error,
     this.failureKind,
+    this.retryPolicy = TransferFailureRetryPolicy.terminal,
     super.at,
   });
 
@@ -450,6 +519,7 @@ final class FileFailedRecord extends TransferJournalRecord {
   final String itemId;
   final String? error;
   final RemoteFileErrorKind? failureKind;
+  final TransferFailureRetryPolicy retryPolicy;
 
   @override
   String get type => wireType;
@@ -460,6 +530,7 @@ final class FileFailedRecord extends TransferJournalRecord {
     'itemId': itemId,
     if (error != null) 'error': error,
     if (failureKind != null) 'failureKind': failureKind!.name,
+    'retryPolicy': retryPolicy.name,
   };
 
   static FileFailedRecord _fromJson(
@@ -476,6 +547,7 @@ final class FileFailedRecord extends TransferJournalRecord {
       itemId: _itemId(json),
       error: error as String?,
       failureKind: _parseErrorKind(json['failureKind']),
+      retryPolicy: _parseFailureRetryPolicy(json['retryPolicy']),
       at: at,
     );
   }
@@ -663,10 +735,13 @@ final class TransferHistoryEntry {
       throw const FormatException('history record is not an object');
     }
     final json = decoded.cast<String, Object?>();
-    if (json['v'] != transferJournalSchemaVersion) {
+    final version = json['v'];
+    if (version is! int ||
+        version < _minimumTransferJournalSchemaVersion ||
+        version > transferJournalSchemaVersion) {
       throw FormatException(
         'unsupported history schema version: '
-        '${json['v']}',
+        '$version',
       );
     }
     if (json['type'] != wireType) {
@@ -746,7 +821,9 @@ final class RestoredPlanItem {
     required this.error,
     required this.failureKind,
     required this.resolvedPath,
+    this.failureRetryPolicy = TransferFailureRetryPolicy.retryable,
     this.disposition,
+    this.destinationClaims = const {},
   });
 
   final String itemId;
@@ -767,10 +844,14 @@ final class RestoredPlanItem {
   final RestoredItemOutcome? outcome;
   final String? error;
   final RemoteFileErrorKind? failureKind;
+  final TransferFailureRetryPolicy failureRetryPolicy;
 
   /// The committed path when keep-both relocated the item — or the
   /// trash path a completed delete item moved to (D15).
   final String? resolvedPath;
+
+  /// Fsynced resolved targets reserved before their commit began.
+  final Set<String> destinationClaims;
 
   /// D15: the completed delete item's outcome — os-trash delivery, a
   /// `.poltergeist-trash/` rename, or a permanent unlink. Null on
@@ -790,6 +871,7 @@ final class RestoredTransferTask {
     required this.skippedSymlinks,
     required this.items,
     required this.sweepDirectories,
+    this.destinationNameComparison,
   });
 
   final String taskId;
@@ -805,6 +887,10 @@ final class RestoredTransferTask {
   final bool scanComplete;
   final int? totalBytes;
   final int skippedSymlinks;
+
+  /// The probed destination identity used to build the completed plan.
+  /// Legacy journals omit it and restore conservatively.
+  final DestinationNameComparison? destinationNameComparison;
 
   /// Journaled plan items in append order (terminal and pending alike).
   final List<RestoredPlanItem> items;
@@ -851,14 +937,11 @@ final class TransferJournalReplay {
 /// [TransferQueue] persistence keeps the #147 in-memory behavior exactly;
 /// [FileTransferPersistence] is the production store.
 ///
-/// The `append*` calls are synchronous enqueues onto the store's single
-/// writer — the queue invokes them *before* the in-memory transition they
-/// describe takes effect (write-before-effect ordering) and never awaits
-/// them: the hot path is buffered, fsync rides a bounded interval
-/// (~64 records / ~250 ms, always fsynced before a history record lands).
-/// Ordering, durability, and failure reporting are the implementation's
-/// problem; a persistence failure degrades to the disabled mode with a
-/// notice, never to a queue crash.
+/// Ordinary `append*` calls enqueue onto the store's single writer before
+/// their in-memory transitions; the hot path fsyncs on a bounded interval.
+/// [appendJournalDurably] is the narrow exception: a move or renamed output
+/// awaits its resolved-target claim so a crash cannot erase ownership
+/// evidence.
 abstract interface class TransferPersistence {
   /// What recovery found at open — the task set [TransferQueue.restore]
   /// adopts plus the corruption accounting the UI surfaces.
@@ -866,6 +949,9 @@ abstract interface class TransferPersistence {
 
   /// Append one journal record. Ordered before the effect it describes.
   void appendJournal(TransferJournalRecord record);
+
+  /// Append and fsync one safety-critical record before its effect.
+  Future<void> appendJournalDurably(TransferJournalRecord record);
 
   /// Append one finished-task history record. The implementation fsyncs
   /// the journal first so a crash never shows a completed task whose
@@ -1167,6 +1253,27 @@ RemoteFileErrorKind? _parseErrorKind(Object? value) {
   throw FormatException('unknown failure kind: $value');
 }
 
+DestinationNameComparison? _parseDestinationNameComparison(Object? value) {
+  if (value == null) return null;
+  if (value is String) {
+    for (final comparison in DestinationNameComparison.values) {
+      if (comparison.name == value) return comparison;
+    }
+  }
+  throw FormatException('unknown destination name comparison: $value');
+}
+
+TransferFailureRetryPolicy _parseFailureRetryPolicy(Object? value) {
+  // Legacy failures lack enough context to prove that replay is safe.
+  if (value == null) return TransferFailureRetryPolicy.terminal;
+  if (value is String) {
+    for (final policy in TransferFailureRetryPolicy.values) {
+      if (policy.name == value) return policy;
+    }
+  }
+  throw FormatException('unknown failure retry policy: $value');
+}
+
 // ── File primitives (the fault-injection seam) ──────────────────────────
 
 /// The store's file primitives, isolated so tests can count fsyncs,
@@ -1177,12 +1284,20 @@ class TransferJournalIo {
 
   /// Flushes a committed local copy before its original can be removed.
   /// File contents precede the parent directory's rename metadata. The
-  /// [fsyncDirectory] barrier absorbs [FileSystemException]. If that
-  /// barrier fails or is unsupported, only file data is guaranteed flushed.
+  /// [fsyncDirectory] barrier absorbs only unsupported directory-handle
+  /// opens. Operational flush failures still block source removal.
   Future<void> flushLocalFile(String path) async {
     final file = File(path);
     await fsyncFile(file);
     await fsyncDirectory(file.parent);
+  }
+
+  /// Flushes a created directory and its parent's directory entry before a
+  /// move removes the source tree.
+  Future<void> flushLocalDirectory(String path) async {
+    final directory = Directory(path);
+    await fsyncDirectory(directory);
+    await fsyncDirectory(directory.parent);
   }
 
   /// Append one complete line. A fresh open per append is deliberate:
@@ -1210,22 +1325,11 @@ class TransferJournalIo {
 
   /// Directory fsync after a mutate-the-directory operation (truncate,
   /// rename) — the rename/truncate itself is only power-loss-durable once
-  /// the directory entry is flushed (03 §4.6). POSIX-only in practice:
-  /// dart:io cannot open a directory handle on Windows, so a failure here
-  /// is absorbed — the platform simply lacks the primitive through this
-  /// API, not the discipline.
-  Future<void> fsyncDirectory(Directory directory) async {
-    try {
-      final raf = await File(directory.path).open();
-      try {
-        await raf.flush();
-      } finally {
-        await raf.close();
-      }
-    } on FileSystemException {
-      // No directory handle on this platform — nothing to fsync.
-    }
-  }
+  /// the directory entry is flushed (03 §4.6). Linux uses the native
+  /// directory-handle primitive; unsupported platforms retain PGE-03a's
+  /// explicit no-op while operational open/flush/close failures propagate.
+  Future<void> fsyncDirectory(Directory directory) =>
+      syncLocalDirectory(directory);
 
   /// Truncate [file] to [length] bytes (the torn-tail repair).
   Future<void> truncateTo(File file, int length) async {

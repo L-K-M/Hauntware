@@ -484,6 +484,8 @@ class PaneController extends ChangeNotifier {
   // by channel identity and [_watchEpoch], never by path: the engine
   // names the canonical path, the pane keeps the requested spelling.
   bool _tabActive = true;
+  Timer? _activationRefreshTimer;
+  static const _activationRefreshDelay = Duration(milliseconds: 300);
   AppBrowseChannel? _watchChannel;
   StreamSubscription<DirectoryWatchEvent>? _watchSubscription;
   String? _watchedPath;
@@ -930,11 +932,16 @@ class PaneController extends ChangeNotifier {
   /// The selected entries in listing order (02 §2.5) — the payload a
   /// row drag carries when the grabbed row belongs to a multi-selection.
   /// Empty while nothing is selected.
-  List<RemoteFileEntry> get selectedEntries => [
-    for (var i = 0; i < _entries.length; i++)
-      if (i < _rowKeys.length && _selection.selectedKeys.contains(_rowKeys[i]))
-        _entries[i],
-  ];
+  List<RemoteFileEntry> get selectedEntries {
+    // Menu enablement and preview listeners request this on tab changes.
+    // An empty selection must not scan a large cached listing each time.
+    if (_selection.selectedKeys.isEmpty) return [];
+    return [
+      for (var i = 0; i < _entries.length; i++)
+        if (i < _rowKeys.length && _selection.selectedKeys.contains(_rowKeys[i]))
+          _entries[i],
+    ];
+  }
 
   /// Whether the rendered rows are a disowned cached listing — inert
   /// from the moment a location-changing navigation issues, not from
@@ -1244,19 +1251,36 @@ class PaneController extends ChangeNotifier {
   bool get tabActive => _tabActive;
 
   /// The strip's activation edge (03 §7.5): a background tab releases
-  /// its watch, and a tab coming back re-lists (nothing watched it
-  /// meanwhile), which re-arms the watch.
+  /// its watch. A returning tab shows its cache while activation settles,
+  /// then re-arms and re-lists because nothing watched it meanwhile.
   void setTabActive(bool active) {
     if (_disposed || active == _tabActive) return;
     _tabActive = active;
     if (!active) {
       _dropWatch();
+      if (_loadingActive() && _issuedGeneration == _watchRefreshGeneration) {
+        // An automatic refresh is useful only while this tab is visible.
+        // Keep its existing cache and selection without rebuilding them;
+        // late replies must not sort thousands of inactive rows on the UI
+        // isolate. Activation always starts a fresh watched listing. User
+        // navigation and explicit refreshes still finish in the background.
+        _issuedGeneration++;
+        _answeredGeneration = _issuedGeneration;
+        _snapshot = null;
+        notifyListeners();
+      }
       return;
     }
     _watchLosses = 0;
     if (_channel == null || _location is! LocalPaneLocation) return;
     _watchDirty = true;
-    _flushWatchRefresh();
+    // Match ordinary watch coalescing: rapid tab visits should not start
+    // scans that will finish after the user has already left. The listing
+    // still arms its watch first, covering changes throughout this delay.
+    _activationRefreshTimer = Timer(_activationRefreshDelay, () {
+      _activationRefreshTimer = null;
+      _flushWatchRefresh();
+    });
   }
 
   /// The Esc tier that cancels navigation (02 §2.8): drops every in-flight
@@ -3542,6 +3566,7 @@ class PaneController extends ChangeNotifier {
   /// Invalidates every in-flight listing answer without touching the
   /// visible state (the rebind resets it separately).
   void _cancelListing() {
+    _cancelActivationRefresh();
     _issuedGeneration++;
     _answeredGeneration = _issuedGeneration;
     // A cancelled listing can never consume a pending rename re-select.
@@ -3616,6 +3641,7 @@ class PaneController extends ChangeNotifier {
     AppBrowseChannel channel, {
     bool historyTraversal = false,
   }) {
+    _cancelActivationRefresh();
     // Quick Select ends BEFORE the navigation snapshot and the selection
     // reset: the restored baseline is what a later Esc-cancel restores,
     // and the new listing prunes it (02 §2.5).
@@ -4123,6 +4149,7 @@ class PaneController extends ChangeNotifier {
   /// would clear before the user read it.
   void _flushWatchRefresh() {
     if (!_watchDirty ||
+        _activationRefreshTimer != null ||
         _disposed ||
         !_tabActive ||
         _error != null ||
@@ -4181,6 +4208,7 @@ class PaneController extends ChangeNotifier {
   /// and every later signal at once; the engine side is released too
   /// unless [unwatch] is false because the channel is closing anyway.
   void _dropWatch({bool unwatch = true}) {
+    _cancelActivationRefresh();
     final channel = _watchChannel;
     final armed = _watchedPath != null;
     _watchEpoch++;
@@ -4191,6 +4219,11 @@ class PaneController extends ChangeNotifier {
     unawaited(_watchSubscription?.cancel());
     _watchSubscription = null;
     if (unwatch && armed && channel != null) unawaited(_unwatch(channel));
+  }
+
+  void _cancelActivationRefresh() {
+    _activationRefreshTimer?.cancel();
+    _activationRefreshTimer = null;
   }
 
   Future<void> _unwatch(AppBrowseChannel channel) async {

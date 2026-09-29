@@ -19,6 +19,148 @@ tests pass. Light/dark before-and-after captures use real fonts and record
 their provenance in `tasks/planchette-editor/screenshots/README.md`.
 Cross-platform CI and final review results are recorded on the adoption PR.
 
+## D12 drift scope and tab-switch work (2026-09-28)
+
+Tier-A-only benchmark runs now report persisted tier-B drift as a notice,
+so pull requests are graded on the scenarios they actually run. Tier-B
+enforcement, historical drift counts, thresholds, and baselines are unchanged.
+Only a clean main-branch tier-B observation may clear stale history.
+
+The tier-A benchmark job pins Dart to its calibrated `3.13.4` runtime,
+preventing stable SDK updates from silently disabling its comparisons.
+A workflow regression requires the exact SDK pin to match the committed
+calibration; runtime changes require a deliberate calibration update.
+Ordinary Dart CI stays on latest stable, and the budgets are unchanged.
+
+Automatic local watch refreshes are retired when their tab leaves the
+foreground. Their cached rows and selection remain intact, late responses
+skip sorting and rebuilding inactive listings, and activation still re-arms
+the watch before re-listing. Explicit navigation and refresh continue in
+background tabs. Cached local tab activation now coalesces for 300 ms,
+matching the ordinary watch debounce, so rapidly skipped tabs do not start
+obsolete scans. The accepted rows remain usable while the tab settles;
+navigation and explicit Refresh start immediately. Deactivation, disposal,
+and binding changes cancel delayed work, while watch-before-list preserves
+freshness. Nine fake-clock regressions cover that policy; seven failed
+before the change, and all nine pass afterward.
+
+The P4 collector logs scheduling, build, and raster phases
+to distinguish regressions. Manual CI dispatch accepts `skip_m0=true` to
+collect all D12 scenarios without the historical M0 SSH measurement shards.
+
+Workspace layout updates now follow visibility changes, and pane workspace
+updates follow active-pane treatment and paired sync-chip visibility. A tab
+switch no longer rebuilds the surrounding layout or the unchanged opposite
+listing; tab content, focus, sync state, and inspector updates keep their own
+listeners.
+
+Each pane also isolates its painting, so switching one tab retains the
+opposite pane's display list. Empty selection payloads no longer scan every
+cached row when menu enablement or preview listeners request them. The
+activation-watch regression covers switching away before arming completes,
+as well as dropping a listing response that arrives after deactivation.
+
+Desktop listings prebuild one row beyond the viewport, reducing work when
+mounting a tab while retaining the next row for accessibility scrolling.
+Mobile keeps Flutter's default cache. Modified-time formatting reuses parsed
+patterns for the current explicit locale, without caching dates or relative
+labels. Regression coverage checks scrolling and selection at two text
+scales, successive accessibility reveals, mobile cache behavior, and locale
+switches. All 161 affected pane tests pass and Flutter analysis is clean.
+On the calibrated Linux CPU, the combined change measured
+48.694 ms against unchanged controls of 53.156 and 52.841 ms; full production
+verification is recorded with the PR.
+
+Regressions reproduced the stale-history scope failure and unnecessary
+background refresh before the fixes. The paint regression reproduced an
+opposite-pane repaint before isolation and none afterward. All 133 affected
+watch, selection, preview, and command tests, 97 pane/shell tests, and 139
+benchmark tests pass locally, with one existing host-dependent benchmark
+skip. Flutter and benchmark analysis are clean. The first Linux profile
+iteration still exceeded P4's unchanged budget; subsequent profile evidence
+and CI results are recorded with the PR.
+
+The existing queue-restart widget fixture now boots each replay from a disk
+snapshot, preventing abandoned simulated-crash sessions from writing to the
+new session's journal. No extra flush is added at the tested durability
+boundary. The original fixture lost a persisted pause during stress; the
+isolated version passes ten repeats and all three composition tests.
+
+## Upload permissions on ACL-managed servers (2026-09-28)
+
+Ordinary local-to-server uploads now follow Séance's permission policy: new
+files use the server's defaults and inherited ACL, while replacements keep
+the existing destination mode. The queue no longer requests a chmod to the
+local source mode, which could abort an otherwise writable new upload after
+all bytes were sent. Local executable bits are therefore not automatically
+copied. Downloads, remote copies, local copies, managed edits, and sync keep
+their existing permission behavior. Required destination-mode preservation
+and real write failures still fail without deleting a move's source.
+
+Bridged regressions reproduced the upload failure and replacement-mode
+change before the fix. All seven now pass, including executable downloads
+and safe move failure. Shared-adapter contract tests exercise SFTP mode
+denial, temporary-file cleanup, and destination preservation. Core and sync
+analysis are clean; 1,702 core tests and 249 sync tests pass, with 24 and 3
+environment skips respectively. Flutter analysis and 33 affected app tests
+pass on Flutter 3.47.3; the dependency-boundary guard passes. Borg's transfer
+history confirms that all bytes were sent before the reported failure, but
+the exact rejected server operation and a live retry remain unverified.
+This aligns an existing Séance behavior, so no upstream port is needed.
+
+## Restored delete identity safety (2026-09-28)
+
+Restored delete tasks now stat each pending path without following links and
+require its type, size, and modification time to match the journaled entry.
+Changed or missing paths are skipped instead of deleting replacement data.
+An interrupted permanent delete whose scan was incomplete now fails and must
+be confirmed again while retaining its journaled Activity rows; interrupted
+trash moves may still resume. Cancellation during revalidation is inert.
+
+The regression first reproduced deletion of changed paths and resumption of an
+incomplete permanent scan. It now covers size, modification-time, type, and
+missing-path changes plus an unchanged control. The journal codec preserves UTC
+microsecond timestamps exactly. Core analysis is clean; all 1,707 core tests
+pass with 27 environment skips. Import boundaries are clean.
+
+## Destination collision ownership (2026-09-28)
+
+Transfer tasks now probe each resolved destination container for independent
+case and Unicode-normalization identity. A source owns the resulting key for
+the task's lifetime. A later task item cannot replace that output:
+`replace` and `replaceIfNewer` fail, `skip` skips, and `ask` may keep both or
+skip. Keep Both reserves the first free numbered key. A queue-wide
+conservative registry serializes possible aliases across tasks, then each
+waiter re-stats under the container's actual rules. The registry models Linux
+NFDICF, including full folds and default-ignorable code points; exact trait
+keys still preserve distinct HFS+/NTFS names. P2-06a tracks an exact
+fold-profile probe to reduce one safe-refusal edge.
+
+Moves and renamed outputs journal and fsync their selected destination before
+the filesystem effect. Recovery reuses an empty claimed path and fails an
+occupied, ambiguous claim without touching either copy. Journal schema v2
+atomically upgrades the complete v1 prefix before migration or compaction;
+raw unknown fields survive upgrades, compaction, and history trimming. A
+legacy failure without retry evidence remains terminal.
+On Linux, native directory open, fsync, and close failures block source
+removal, and run off the app isolate. Other platforms retain PGE-03a's
+explicit unsupported behavior.
+
+Name probes are isolated from directory mutation. Exact generated artifacts
+remain visible as skipped rows, while prefix-like user files transfer
+normally; a stranded artifact causes a bounded failure. Cancellation can
+leave a queued probe without retaining channel leases or admitting a later
+probe past the active holder. Regressions cover case and NFC/NFD twins,
+same-basename roots, nested mounts, cross-task races, retry and crash replay,
+Linux full-fold/default-ignorable aliases, normalized-simple HFS+ twins,
+probe cleanup, cancellation, restored cleanup admission, and local-move
+durability.
+
+Validation: core analysis is clean; 1,703 core tests pass with 27 environment
+skips. Sync analysis is clean and all 249 tests pass with 3 SSH fixture skips.
+All 138 benchmark tests and 2,882 Flutter tests pass; Flutter analysis and the
+import-boundary check are clean on the pinned 3.47.2 SDK.
+
 ## Dotenv syntax highlighting (2026-09-27)
 
 The editor recognizes `.env`, `.env.*` and `*.env`, including local Windows

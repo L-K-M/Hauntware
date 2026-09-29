@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show debugOnProfilePaint;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
@@ -17,8 +18,9 @@ Future<void> _pumpPane(
   WidgetTester tester,
   PaneTabsController strip,
   WorkspaceController workspace,
-  FocusNode focusNode,
-) {
+  FocusNode focusNode, {
+  DateTime Function()? clock,
+}) {
   return tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -29,6 +31,7 @@ Future<void> _pumpPane(
           focusNode: focusNode,
           onSwapFocus: () {},
           onCancelRecovery: () {},
+          clock: clock,
         ),
       ),
     ),
@@ -36,6 +39,134 @@ Future<void> _pumpPane(
 }
 
 void main() {
+  testWidgets('switching a tab does not repaint the unchanged opposite pane', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final lanes = FakePaneLanes();
+    Future<PaneController> open(String id, String path) async {
+      lanes.nextLocalChannel = FakePaneChannel(path)
+        ..listings[path] = [
+          RemoteFileEntry(
+            path: '$path/report.txt',
+            name: 'report.txt',
+            type: RemoteFileType.file,
+            size: 8,
+          ),
+        ];
+      final controller = PaneController(paneTabId: id, lanes: lanes);
+      await controller.openLocalHome();
+      return controller;
+    }
+
+    final left = testPaneStrip(await open('pane.left.tab1', '/home/first'));
+    final next = left.addTab(await open('pane.left.tab2', '/home/second'));
+    final right = testPaneStrip(await open('pane.right.tab1', '/home/right'));
+    final workspace = WorkspaceController(left: left, right: right);
+    addTearDown(workspace.dispose);
+    final leftFocus = FocusNode();
+    final rightFocus = FocusNode();
+    addTearDown(leftFocus.dispose);
+    addTearDown(rightFocus.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Scaffold(
+          body: Row(
+            children: [
+              for (final (tabs, focus) in [(left, leftFocus), (right, rightFocus)])
+                Expanded(
+                  child: PaneTabsView(
+                    tabs: tabs,
+                    workspace: workspace,
+                    focusNode: focus,
+                    onSwapFocus: () {},
+                    onCancelRecovery: () {},
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The path summary sits outside the listing's existing row boundaries.
+    final rightSummary = tester.renderObject(
+      find.byKey(const ValueKey('pane.right.tab1.path.summary')),
+    );
+    var paints = 0;
+    var oppositePaints = 0;
+    final previous = debugOnProfilePaint;
+    debugOnProfilePaint = (object) {
+      previous?.call(object);
+      paints++;
+      if (identical(object, rightSummary)) oppositePaints++;
+    };
+
+    try {
+      left.activateTab(next);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(paints, greaterThan(0));
+      expect(oppositePaints, 0);
+      expect(find.byKey(const ValueKey('pane.left.tab2.path.summary')),
+          findsOneWidget);
+    } finally {
+      debugOnProfilePaint = previous;
+    }
+  });
+
+  testWidgets('switching the other pane tab does not rebuild listing rows', (
+    tester,
+  ) async {
+    final lanes = FakePaneLanes();
+    final leftStrip = testPaneStrip(
+      PaneController(paneTabId: 'pane.left', lanes: lanes),
+    );
+    final first = leftStrip.activeTab!;
+    leftStrip.newTab(target: NewTabTarget.launcher);
+    lanes.nextLocalChannel = FakePaneChannel('/home/tester')
+      ..listings['/home/tester'] = [
+        RemoteFileEntry(
+          path: '/home/tester/report.txt',
+          name: 'report.txt',
+          type: RemoteFileType.file,
+          size: 8,
+        ),
+      ];
+    final right = PaneController(paneTabId: 'pane.right', lanes: lanes);
+    await right.openLocalHome();
+    final rightStrip = testPaneStrip(right);
+    final workspace = WorkspaceController(left: leftStrip, right: rightStrip);
+    addTearDown(workspace.dispose);
+    final focusNode = FocusNode(debugLabel: 'pane.right.listing');
+    addTearDown(focusNode.dispose);
+    var rowBuilds = 0;
+    await _pumpPane(
+      tester,
+      rightStrip,
+      workspace,
+      focusNode,
+      clock: () {
+        rowBuilds++;
+        return DateTime(2026, 9, 28);
+      },
+    );
+    await tester.pumpAndSettle();
+    expect(rowBuilds, greaterThan(0));
+    rowBuilds = 0;
+
+    leftStrip.activateTab(first);
+    await tester.pumpAndSettle();
+
+    expect(rowBuilds, 0);
+    expect(find.text('report.txt'), findsOneWidget);
+  });
+
   testWidgets('closing the last tab returns focus to the launcher', (
     tester,
   ) async {
@@ -213,7 +344,8 @@ void main() {
     await tester.pump();
     expect(selected('report.txt'), isFalse);
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
     expect(field, findsNothing);
     expect(controllerA.quickSelectActive, isFalse);
     expect(selected('report.txt'), isFalse);

@@ -807,7 +807,12 @@ Mechanics:
   documented as the single state store, with retention), updates it each
   **main-branch run only** — the artifact fetch is filtered to
   `branch=main` (the state rides inside `bench-results.json` or its own
-  always-uploaded artifact), PR tier-A runs never write drift state, and a
+  always-uploaded artifact), PR tier-A runs never write drift state or
+  fail on persisted tier-B staleness: they report it as a notice because
+  tier B is outside their declared scope. Tier-B invocations retain the
+  stale-history gate, including read-only evaluations. This keeps the
+  corrective baseline or performance PR mergeable without clearing
+  history or weakening tier-B enforcement. A
   missing/unfetchable state file (cache eviction, artifact expiry) means
   "count unknown — continue counting conservatively," never a reset — and
   once the same drift notice has fired on ≥ 7 consecutive

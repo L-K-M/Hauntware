@@ -213,6 +213,10 @@ void main() {
     final workflow =
         loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
             as YamlMap;
+    final events = workflow['on'] as YamlMap;
+    final dispatch = events['workflow_dispatch'] as YamlMap;
+    final inputs = dispatch['inputs'] as YamlMap;
+    final skipM0 = inputs['skip_m0'] as YamlMap;
     final jobs = workflow['jobs'] as YamlMap;
     final benchmark = jobs[_m0BenchmarkJobName] as YamlMap;
     final strategy = benchmark['strategy'] as YamlMap;
@@ -227,9 +231,12 @@ void main() {
     expect((matrix['shard'] as YamlList).toList(), _m0ShardNames);
     expect(_m0ShardNames.toSet(), hasLength(_m0ShardNames.length));
     expect(benchmark['timeout-minutes'], _m0TimeoutMinutes);
+    expect(skipM0['type'], 'boolean');
+    expect(skipM0['required'], isFalse);
+    expect(skipM0['default'], isFalse);
     expect(
       '${benchmark['if']}'.trim(),
-      "github.event_name == 'workflow_dispatch'",
+      "github.event_name == 'workflow_dispatch' && !inputs.skip_m0",
     );
 
     final steps = (benchmark['steps'] as YamlList).cast<YamlMap>();

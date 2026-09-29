@@ -97,6 +97,28 @@ void main() {
       expect(walker.discoveredSymlinks, 1); // the symlink
     });
 
+    test('asks for a collision disposition only on a duplicate', () async {
+      remote
+        ..addFile('/src/A.txt', 'upper'.codeUnits)
+        ..addFile('/src/a.txt', 'lower'.codeUnits);
+      final dispositionNames = <String>[];
+      final walker = RecursiveWalker(
+        source: remote,
+        location: const ServerFsLocation('src'),
+        purpose: WalkPurpose.transfer,
+        destination: const ServerFsLocation('dst'),
+        destinationNameKey: (name) => name.toLowerCase(),
+        destinationCollisionDisposition: (entry) {
+          dispositionNames.add(entry.name);
+          return DestinationCollisionDisposition.admit;
+        },
+      );
+
+      await collect(walker, ['/src']);
+
+      expect(dispositionNames, ['a.txt']);
+    });
+
     test('file and symlink roots enumerate like listed children',
         () async {
       remote.addFile('/solo.txt', 'x'.codeUnits);
@@ -106,6 +128,27 @@ void main() {
       final entries = entriesOf(events);
       expect(entries[0].kind, WalkItemKind.file);
       expect(entries[1].kind, WalkItemKind.symbolicLink);
+    });
+
+    test('probe-like user names remain transferable content', () async {
+      const path = '/src/.poltergeist-nameprobe-notes';
+      remote.addFile(path, 'notes'.codeUnits);
+
+      final entries = entriesOf(await collect(remoteWalker(), ['/src']));
+
+      expect(entries.map((entry) => entry.entry.path), contains(path));
+    });
+
+    test('reserved probe artifacts remain visible as skipped rows', () async {
+      const path = '/src/.poltergeist-nameprobe-0123456789abcdef-e\u0301';
+      remote.addFile(path, const []);
+
+      final entry = entriesOf(
+        await collect(remoteWalker(), ['/src']),
+      ).singleWhere((entry) => entry.entry.path == path);
+
+      expect(entry.entry.path, path);
+      expect(entry.kind, WalkItemKind.nameProbeArtifact);
     });
 
     test('a root stat failure reports and the walk continues', () async {
@@ -579,6 +622,30 @@ void main() {
       // The boundary: enumeration never deletes — no VFS delete ran.
       expect(remote.deleteCalls, 0);
     });
+
+    test('probe-like user names remain delete targets', () async {
+      const path = '/tree/.poltergeist-nameprobe-notes';
+      remote.addFile(path, 'notes'.codeUnits);
+
+      final entries = entriesOf(await collect(deleteWalker(), ['/tree']));
+
+      expect(entries.map((entry) => entry.entry.path), contains(path));
+    });
+
+    test(
+      'delete reports reserved probe artifacts instead of hiding them',
+      () async {
+        const path = '/tree/.poltergeist-nameprobe-0123456789abcdef-e\u0301';
+        remote.addFile(path, const []);
+
+        final entries = entriesOf(await collect(deleteWalker(), ['/tree']));
+
+        expect(
+          entries.singleWhere((entry) => entry.entry.path == path).kind,
+          WalkItemKind.nameProbeArtifact,
+        );
+      },
+    );
 
     test('delete walks run over the local filesystem too', () async {
       // p.join throughout: local paths carry the platform separator.

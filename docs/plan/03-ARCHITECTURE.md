@@ -991,48 +991,56 @@ non-negotiable:
 - **Scan** walks the source (`followLinks: false`; symlinks skipped and
   counted), validates every name crossing a trust boundary
   (`validatePathComponent` for remote targets, `validateLocalName` for local
-  targets, and case-insensitive collision detection within the plan
-  whenever the **destination filesystem** is case-insensitive — Windows
-  volumes, macOS default APFS/HFS+, and remotes that report or are marked
-  case-insensitive — resolved per endpoint at scan time, never keyed to
-  the client OS), emitting directories parents-first and files with sizes
-  as it goes. There is **no full eager walk**: the first file starts as
-  soon as its parent directory chain exists **and the scan has closed
-  that directory** — a directory's entries (its own mkdir AND its file
-  dispatches) become usable only once its own listing is complete, so its
-  case-collision set — files and subdirectories alike — is final and a
-  late-scanned case-variant sibling can never race an already-dispatched
-  file (the execution-time re-stat is case-folding-aware on
-  case-insensitive destinations as the second net — which only helps once
-  the first variant has landed; two case-variant files in flight
-  simultaneously from *different* tasks could still both pass an absent
-  re-stat under §4.3's global cap, so the executor also consults a shared
-  registry keyed on **(destination endpoint id, case-folded absolute
-  path)** — never the bare folded path alone, per §4.1's own
-  no-bare-path-keys rule (identical paths on two different servers, or a
-  local destination sharing a path string with a remote one, must never
-  alias in this registry) — of in-flight and committed targets
-  (committed entries are evicted once their task reaches a terminal
-  state — the case-folding-aware execution-time re-stat already covers
-  anything already committed, so the registry only ever needs to hold
-  the in-flight window it exists for, and never grows unbounded across a
-  long session)
-  and treats the hit as a conflict resolved through the task's policy,
-  exactly like a fresh-stat conflict — `ask` prompts via
-  `EnginePromptEvent.conflict`, and `skip`/`replace`/`replaceIfNewer`/
-  `keepBoth` apply their verb once the registry entry commits (an item
-  waiting on another entry's commit holds no §4.3 global slot and no
-  leased channel while it waits, exactly like §4.1's ask-park below,
-  since it cannot deadlock — a waiter only ever waits on an actively
-  transferring item, never on another waiter) — every verb
-  in the v1 `ConflictResolution` enum is evaluable this way, so the
-  terminal-fail-with-`conflict` escape hatch is **empty in v1**; it exists
-  only so a future non-evaluable policy has a defined, non-silent outcome,
-  and any implementer reaching it must first name the verb it covers); the
-  scan continues
-  concurrently growing `plan`, `totalBytes` is a running total rendered
-  as the growing `N+` form (02 §5.3), and both finalize when
-  `scanComplete` flips.
+  targets), emitting directories parents-first and files with sizes as it
+  goes. There is **no full eager walk**: the first file starts as soon as
+  its parent directory chain exists **and the scan has closed that
+  directory**. The planner records every sibling even when conservative
+  root traits make two names look equal; execution is authoritative because
+  the resolved container may cross into a nested mount with different name
+  rules.
+
+  Before any entry owns an output, execution write-probes that resolved
+  destination container for independent case and canonical-normalization
+  sensitivity. Results are cached per container and a potential alias
+  re-probes before use. Trait keys use canonical normalization and simple
+  one-code-point folding, preserving distinct names on normalized HFS+ and
+  upcase-table NTFS/exFAT. The separate conservative registry uses Linux
+  NFDICF: canonical decomposition, default-ignorable removal, then full
+  Unicode folding. Exact generated probe artifacts are reported as skipped
+  rows, never mistaken for user files sharing only the prefix; destructive
+  directory mutation waits a bounded period for active probe cleanup and
+  otherwise fails without acting.
+
+  The task then claims **(destination endpoint id, resolved container,
+  trait-keyed leaf)** for the source. Container identity is segment-wise:
+  each component uses its parent's probed traits, including across nested
+  mounts. Output ownership outranks planned intent and lasts for the task
+  runtime, including terminal items, until that task is removed. A later
+  task item that aliases an output is not an ordinary external conflict:
+  `replace` and `replaceIfNewer` fail terminally rather than erase it. This is
+  v1's first
+  terminal-fail-with-`conflict` escape hatch: the item emits a failed
+  `TransferQueueItemEvent` and a `fileFailed` journal record with
+  `withinTaskDestinationCollisionMessage`, `conflict` kind, and a
+  `terminal` retry policy, never a conflict prompt. `skip` skips, and
+  `ask` may choose `keepBoth` or `skip`; `keepBoth` selects the first
+  stat-free, unowned numbered key. Retry reuses a safe selected key.
+  Recovery refuses an occupied durable key when ownership cannot be
+  proved (D40).
+
+  A separate queue-wide registry conservatively folds both case and
+  normalization and serializes plausible aliases across tasks. Its key is
+  **(destination endpoint id, folded absolute path)**, never a bare path.
+  A waiter holds no §4.3 slot or channel lease. Once the holder releases,
+  the waiter re-stats and applies its ordinary conflict policy under the
+  actual container traits, so exact-sensitive filesystems may still commit
+  both spellings. If stat observes an occupant and another item in that task
+  already reserved output at the conservative alias, output ownership wins
+  even when the narrower trait key differs. This catches Linux fold-table
+  aliases without refusing two absent HFS+/NTFS names. The registry holds
+  only active claims and cannot grow across a long session. The scan
+  concurrently grows `plan`; `totalBytes` is a running total rendered as
+  `N+`, and both finalize when `scanComplete` flips.
 - **Execute** creates directories in order (**mkdir-then-classify**:
   "already exists as a directory" — including one a concurrent task
   created between check and call — is success, so two of the app's own
@@ -1108,6 +1116,15 @@ non-negotiable:
   entry; `.part` temps orphaned by a crash are cleaned at journal
   recovery (§4.6). Completed
   files stay in place on failure (documented Séance behavior, kept).
+
+Ordinary queued local→remote uploads use the server's default permissions
+and inherited ACL for new files, matching Séance's upload behavior. They do
+not request the local source mode, including executable bits: a server may
+allow file creation and writes while denying chmod. Replacements retain the
+existing remote file's mode through the shared adapter; a denied required
+mode change still fails rather than silently relaxing those permissions.
+Downloads, remote→remote copies, local copies, managed edits, and sync keep
+their existing source-mode or explicit preservation contracts.
 
 Local→local tasks run the same two phases over two `LocalFileSystem`
 endpoints — D26's streamed copy with progress, cancellation, and mtime
@@ -1339,9 +1356,12 @@ app-provided support directory (`EngineConfig`, §5):
   secondary lookup index for UI display, never the record's identity, so a post-crash
   re-scan's re-appended entries collapse onto the journaled ones instead of
   duplicating plan items or inflating totalBytes),
+  `destinationClaimed` (the exact selected path for a move or renamed-output
+  commit), `scanComplete` (including the probed root comparison),
   `taskState`, `fileCompleted`, `fileFailed` (terminal per-item outcome,
-  with error text), `itemRemoved` (per-item cancel or skip, §4.4),
-  `taskRemoved`. Appends are flushed
+  with error text and retry policy), `itemRemoved` (per-item cancel or skip,
+  §4.4), `taskRemoved`. A `destinationClaimed` record is fsynced before the
+  corresponding filesystem effect. Other appends are flushed
   per line and fsynced on a bounded interval (every ~64 records or
   ~250 ms, always before that task's history record is appended) — a
   flush alone survives process death, not power loss, and the compaction
@@ -1397,6 +1417,19 @@ app-provided support directory (`EngineConfig`, §5):
   resuming a task whose policy is `ask` re-runs its remaining items'
   execution-time policy check, which re-emits the `conflict`
   `EnginePromptEvent` (§5) — never a remembered answer, never a default.
+  A pending item with a durable destination claim resumes that exact empty
+  path. An occupant there is ambiguous and therefore a terminal conflict;
+  replay never guesses that the path belongs to the interrupted attempt.
+  Journal schema v2 adds these claims. Opening a v1 store atomically rewrites
+  the **entire** recovered journal prefix to v2 before migrating finished
+  tasks, rewriting history, or compacting. The atomic rewrite leaves the
+  journal wholly v1 or wholly v2, so a partially upgraded queue cannot be
+  replayed: after a crash, an older build either replays the intact v1 journal
+  or sees the leading v2 record and fails closed. Unknown fields remain
+  attached to their raw journal/history lines through upgrade, compaction,
+  and history trimming. A legacy `fileFailed` row without a retry policy
+  restores terminally because recovery cannot prove that repeating its write
+  is safe.
 - **Compaction**: on clean shutdown, after startup replay, and whenever the
   live journal crosses a finished-task/size threshold within a long session
   (the same crash-safe ordering below — history append first, atomic rewrite
@@ -1410,7 +1443,8 @@ app-provided support directory (`EngineConfig`, §5):
   replay skips ids already present in history), then rewrite the
   journal to just the pending tasks **with their full record set**
   (`taskEnqueued`/`taskState` plus every already-journaled `planEntry`,
-  `fileCompleted`, `fileFailed`, and `itemRemoved` belonging to them —
+  `destinationClaimed`, `scanComplete`, `fileCompleted`, `fileFailed`, and
+  `itemRemoved` belonging to them —
   "just the pending tasks" narrows *which tasks* survive the rewrite,
   never *which of their records*: dropping a still-pending task's own
   item-level terminal records here would let the next replay resurrect
@@ -2056,8 +2090,14 @@ dependency (3 years stale).
 Policy, fixed: watch **only the directory shown by each pane's active
 tab**, non-recursively — one watcher per pane, retargeted on tab switch
 and navigation, dropped when the pane shows a launcher or remote location;
-background tabs are not watched (their listing refreshes on activation).
-Debounced 300 ms into a refresh. Watcher failure is never silent: inotify
+background tabs are not watched. Activating a cached local tab shows its
+accepted rows immediately and coalesces its refresh for 300 ms, so rapidly
+passing through tabs does not start scans that will be discarded. Remaining
+on the tab arms its watch before re-listing; this covers changes made while
+it was inactive or awaiting refresh. Deactivation cancels the pending
+refresh. Explicit navigation and Refresh bypass this delay.
+Directory changes are debounced 300 ms into a refresh. Watcher failure is
+never silent: inotify
 `IN_Q_OVERFLOW`, `IN_DELETE_SELF`/`IN_UNMOUNT`, or a backend
 invalidated-watch error triggers an immediate rescan, and a watched path
 that vanishes out from under its watcher retargets or drops the watcher
