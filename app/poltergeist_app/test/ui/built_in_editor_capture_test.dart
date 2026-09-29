@@ -14,10 +14,9 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'workspace/built_in_editor_checkout_test.dart';
 
-/// Real-font captures of the built-in editor's two reviewable states
-/// (06): the find bar mid-search, and the §3.4 conflict-blocked save —
-/// the escalation dialog the editor surfaces when the remote moved
-/// under an open checkout. Follows the workspace capture's convention —
+/// Real-font captures of the built-in editor (06): syntax highlighting,
+/// the document window, the find bar, and the §3.4 conflict-blocked save.
+/// Follows the workspace capture's convention —
 /// a real face when the host provides one
 /// (POLTERGEIST_CAPTURE_FONT_DIR or the DejaVu fallback), PNGs under
 /// tasks/run3-task84/ (or POLTERGEIST_CAPTURE_DIR),
@@ -59,8 +58,8 @@ Future<void> _loadRealFonts() async {
   }
 }
 
-ThemeData _captureTheme() {
-  final base = buildPoltergeistTheme(Brightness.dark);
+ThemeData _captureTheme({Brightness brightness = Brightness.dark}) {
+  final base = buildPoltergeistTheme(brightness);
   return base.copyWith(
     textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
     primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
@@ -93,6 +92,103 @@ Future<void> Function(String name) _capture(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('captures dotenv highlighting in light and dark themes', (
+    tester,
+  ) async {
+    await tester.runAsync(_loadRealFonts);
+    tester.view.physicalSize = const Size(1100, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    const sample =
+        '# Example development settings; all values are placeholders.\n'
+        'APP_NAME=Planchette\n'
+        'export APP_ENV=development\n'
+        'PORT=3000 # Local preview port\n'
+        'DEBUG=true\n'
+        'API_ORIGIN=https://api.example.invalid\n'
+        'EMPTY_VALUE=\n'
+        '\n'
+        '# Quoted hashes remain part of the value.\n'
+        'PAGE_TITLE="Planchette # Preview"\n'
+        "GREETING='Hello from the example app'\n"
+        '\n'
+        '# Quoted values can span several lines.\n'
+        'WELCOME_MESSAGE="Welcome to the preview.\n'
+        '# This line is still part of the message.\n'
+        'Enjoy your stay."\n'
+        'LOG_LEVEL=info # Back to an ordinary assignment\n';
+
+    for (final brightness in [Brightness.light, Brightness.dark]) {
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: const ValueKey('capture.editor'),
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: _captureTheme(brightness: brightness),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: BuiltInTextEditorScreen(
+              file: File('/Users/example/Projects/preview/.env.local'),
+              initialText: sample,
+              onCloseRequested: () async {},
+              onQuitRequested: () async {},
+              onNewWindowRequested: () async {},
+              showToast: (context, message) =>
+                  showTopToastIn(context, message: message),
+              monoFontFallback: const ['DejaVu Sans Mono'],
+              basenameOf: remoteBasename,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('.env.local'), findsOneWidget);
+      expect(find.widgetWithText(TextField, sample), findsOneWidget);
+      await _capture(tester)('editor-dotenv-${brightness.name}');
+    }
+  });
+
+  testWidgets('captures the standalone editor window in the light theme', (
+    tester,
+  ) async {
+    await tester.runAsync(_loadRealFonts);
+    tester.view.physicalSize = const Size(1100, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    for (final separateWindow in [false, true]) {
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: const ValueKey('capture.editor'),
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: _captureTheme(brightness: Brightness.light),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: BuiltInTextEditorScreen(
+              file: File('/Users/lmathis/Projects/poltergeist/config.yaml'),
+              initialText:
+                  '# Poltergeist development settings\n'
+                  'server:\n  host: staging.example.com\n  port: 22\n\n'
+                  'transfers:\n  concurrent: 3\n  verify_checksums: true\n',
+              onCloseRequested: separateWindow ? () async {} : null,
+              onQuitRequested: separateWindow ? () async {} : null,
+              onNewWindowRequested: separateWindow ? () async {} : null,
+              showToast: (context, message) =>
+                  showTopToastIn(context, message: message),
+              monoFontFallback: const ['DejaVu Sans Mono'],
+              basenameOf: remoteBasename,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _capture(tester)(
+        separateWindow ? 'editor-window-light' : 'editor-route-light',
+      );
+    }
+  });
+
   testWidgets('captures the find bar mid-search', (tester) async {
     await tester.runAsync(_loadRealFonts);
 

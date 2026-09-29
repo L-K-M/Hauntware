@@ -1,5 +1,17 @@
 # Séance ports and pin audits
 
+## Destination collision ownership (2026-09-27)
+
+Original Poltergeist implementation; no Séance source was copied and no pin
+changed. Séance `main` at `2571118` has a one-shot download planner that
+refuses duplicate planned local paths on Windows. It has no persistent
+transfer queue, retry journal, Keep Both policy, or destructive move path, so
+D40's task-lifetime ownership and crash-recovery rules have no direct upstream
+surface. The filesystem-trait probe is part of that ownership contract rather
+than a behavior-preserving port to Séance's downloader.
+
+Port-back candidates: none.
+
 ## M2 probe lifecycle prerequisite (2026-09-08)
 
 The periodic `ProbeService` repair merged in
@@ -957,13 +969,22 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
 - Source: app/seance_app/lib/ui/editor_syntax.dart
 - Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
 - Ported: 2026-09-20
-- Divergences: tokenizer, controller, and engine semantics are
-  verbatim; the `EditorSyntaxTheme` values are Poltergeist's teal-seed
+- Divergences: the generic tokenizer and controller retain their source
+  semantics; the `EditorSyntaxTheme` values are Poltergeist's teal-seed
   palette (06 §2.2), and §7's data-only additions extend the language
   table (css, ruby, perl, lua, the Apache dot-config mappings,
-  env-aware shebangs) without touching the engine.
-- Port-back candidates: none — palette and table entries are
-  Poltergeist data.
+  env-aware shebangs). The owner's 2026-09-27 dotenv request adds a private
+  assignment-aware scanner in `dotenv_syntax.dart` and `.env`/`.env.*`/`*.env`
+  detection. This is first proven in Poltergeist with dedicated regression
+  fixtures; the token API, controller and size cap are unchanged. Windows
+  basename separation follows Séance's current implementation at
+  `6a1a3301512a6593208062be389e7414929a0649`.
+  Dark-theme comments are brighter to meet the editor's 4.5:1 text contrast
+  threshold; the palette remains app-specific.
+- Port-back candidates: dotenv detection, scanner and regression fixtures
+  apply to Séance. Palette differences remain app-specific. Shared editor
+  package extraction and a possible Planchette app are under discussion;
+  no shared dependency or standalone app is introduced by this change.
 
 ## app/poltergeist_app/lib/ui/built_in_text_editor.dart
 
@@ -980,8 +1001,16 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   and upload verbs — save-and-upload on a managed checkout rides the
   composed queue and surfaces the typed `conflict` as 06 §3.4's
   overwrite dialog; cancel keeps the local save and uploads nothing.
-- Port-back candidates: none — the seams exist so Poltergeist's
-  checkout pipeline owns the conflict authority.
+  Since 2026-09-26, optional close/quit callbacks host the same editor in a
+  D39 native window. The editor registers its dirty-buffer guard with the
+  window manager and owns its document menus; mobile retains the route.
+  Native close refuses an in-flight save/upload and concurrent close
+  attempts share the discard question. Quit freezes the open buffers until
+  exit or cancellation so earlier confirmations remain valid.
+- Port-back candidates: separate editor windows and native close guards
+  apply to Séance too, but require its own window ownership and checkout
+  integration. This task changes Poltergeist; the shared document I/O,
+  syntax, and conflict rules remain unchanged.
 
 ## Editor tests and captures (M7)
 
@@ -1363,6 +1392,13 @@ and Séance's root Unlicense.
   active a text-input callback can read the freed tree (Séance's
   docs/macos-accessibility-crash.md). Remove when the engine fixes the
   destruction order.
+- Keyboard compatibility (2026-09-26): key-down/up ingress supplies a
+  left Command bit only when an injected event carries aggregate Command
+  without either side. Existing physical events retain identity, and cloned
+  events retain Flutter's key-equivalent marker. The native keyboard fixture
+  exercises this boundary against the real bundled responders. The same
+  correction is proposed in [Séance #144](https://github.com/L-K-M/Seance/pull/144);
+  its accessibility lifecycle remains unchanged.
 
 ## Settings window runners (D36)
 

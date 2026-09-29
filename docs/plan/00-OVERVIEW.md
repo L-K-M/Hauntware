@@ -67,7 +67,8 @@ D24 name · D25 parking lot · D26 local↔local · D27 archives · D28
 permissions · D29 mobile hooks · D30 Séance license · D31 no mounting ·
 D32 inspector workspace · D33 sidebar density · D34 colour vocabulary ·
 D35 Android supported · D36 settings window · D37 transfer limits ·
-D38 device themes · D39 workspace windows
+D38 device themes · D39 workspace windows · D40 task-local destination
+ownership
 
 ### Stack and shape
 
@@ -593,6 +594,24 @@ D38 device themes · D39 workspace windows
   surface on Windows/Linux, supplementary to the macOS Quick Look channel.
   Checkout ownership is per **server**, never per pane/tab
   (`CheckoutManager`, specified in 06 and ported per D2).
+  - **Desktop editor windows (2026-09-26, owner-directed).** Edit in
+    Poltergeist opens one native document window per local file or remote
+    checkout, using D39's shared engine. Reopening the same document raises
+    its existing window, including from another workspace. Closing its
+    original workspace leaves the editor and its save/upload callbacks
+    alive. Native close and app Quit consult the editor's unsaved-buffer
+    guard; a pending save/upload prevents a native close. Phones, tablets,
+    and runners without the window host retain the full-window route.
+    Quit freezes document edits and window creation until the decision
+    completes; a veto restores editing, so later dialogs cannot invalidate
+    an earlier document's discard consent.
+  - **Dotenv highlighting (2026-09-27, owner-directed).** `.env`, `.env.*`,
+    and `*.env` use assignment-aware highlighting for keys, `export`,
+    comments and quoted values. A small dedicated scanner handles multiline
+    values without treating quotes inside bare values as string openers;
+    the other language families retain their scanner. This uses Node's
+    documented dotenv convention, described in 06 §7.1, and is recorded as
+    a Séance port-back candidate.
 - **D28 — Permissions UI.** chmod via octal + checkboxes with recursive
   apply (app-level walker with progress/cancel); chown UI lands once the D3
   `setOwner` addition ships; uid→username shown when the server's `longname`
@@ -667,7 +686,9 @@ D38 device themes · D39 workspace windows
     touch row shows its "⋮". The choice is device-local
     (`sidebar.density`) and set from the bottom bar's switch, a phone
     Home's app bar, or View ▸ Use Compact/Comfortable Sidebar Rows (one
-    item naming the other density: the macOS menu cannot show a check).
+    item naming the other density). Native checked commands, including
+    Show Hidden Files, receive AppKit checkmarks through the menu-state
+    bridge added on 2026-09-26; Flutter's menu API omits that state.
     A phone Home is the Material list when comfortable and the rail's
     touch rows when compact.
   - **The second line** says what each row's tooltip says first: free
@@ -922,6 +943,26 @@ D38 device themes · D39 workspace windows
     first open window, so an older build still restores it; the others go
     in `session.windows`, versioned and fail-closed like it, in the same
     write.
+- **D40 — One source owns each task-local destination key (2026-09-27;
+  amends 03 §4.2).** A destination key, after applying that filesystem's
+  independently probed case and canonical-normalization rules, belongs to
+  one source for the task's lifetime. Traits are resolved at each actual
+  destination container because a nested mount can differ from the task root.
+  Trait keys use canonical normalization and simple upcase-table folding, so
+  absent HFS+/NTFS names remain distinct. Because the exact fold table is not
+  probed, the queue serializes a broader Linux NFDICF identity (canonical
+  decomposition, default-ignorable removal, then full Unicode folding). If a
+  later stat observes that alias at a key already reserved as output by this
+  task, ownership wins. `replace` and `replaceIfNewer` resolve external or
+  cross-task occupants, never output owned by another item in the same task.
+  `skip`
+  skips that item; `ask` may choose `keepBoth` or `skip`; `keepBoth` claims
+  the first stat-free, unowned numbered key. Cross-task aliases serialize,
+  then re-stat under the ordinary conflict policy. A move or renamed-output
+  commit fsyncs its selected key to the versioned queue journal before
+  acting. If recovery or retry cannot prove that an occupant at that key is
+  this item's output, the item fails terminally: repeating an ambiguous
+  write cannot make it safe.
 
 ### Security, trust, distribution
 

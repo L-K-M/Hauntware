@@ -73,6 +73,13 @@ enum TransferItemState {
   cancelled,
 }
 
+/// Whether a failed row can be safely dispatched again.
+///
+/// Most failures are [retryable]. [terminal] is reserved for failures where
+/// repeating the write cannot change the safety decision, such as a second
+/// source claiming another item's task-local destination key (00 D40).
+enum TransferFailureRetryPolicy { retryable, terminal }
+
 /// 02 §5.2's conflict verbs, used verbatim by the resolved per-task policy.
 /// `merge` is meaningful for folders only (stat-else-mkdir and recurse);
 /// [ResolvedConflictPolicy] normalizes a `merge` file field to `ask`,
@@ -191,8 +198,8 @@ class PlannedDirectory {
 }
 
 /// One scanned file (03 §4.1). [itemId], not [destinationPath], is the
-/// record's identity — overlapping roots can plan two different source
-/// files onto one destination, so a bare-path key would collapse them.
+/// record's identity — keep-both items can initially share a destination
+/// before the executor numbers them, so a bare-path key would collapse them.
 class PlannedFile {
   PlannedFile({
     required this.source,
@@ -435,6 +442,10 @@ class TransferItem {
   /// worth showing (e.g. why a move's source directory stayed behind).
   String? error;
   RemoteFileErrorKind? failureKind;
+
+  /// Retry is withheld when repeating this write cannot make it safe.
+  TransferFailureRetryPolicy failureRetryPolicy =
+      TransferFailureRetryPolicy.retryable;
 
   /// The remote-side entry a managed-checkout task captured at commit
   /// (06 §3.4): the post-download stat + digest for a checkout, the

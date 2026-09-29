@@ -72,6 +72,7 @@ class _QuiescentSnapshot {
     this.listing,
     this.error,
     this.selection,
+    this.selectionHistory,
     this.committedLocation,
   );
 
@@ -79,6 +80,7 @@ class _QuiescentSnapshot {
   final List<RemoteFileEntry> listing;
   final RemoteFileException? error;
   final SelectionState<_RowKey> selection;
+  final SelectionHistory<_RowKey> selectionHistory;
 
   /// The committed-location marker at snapshot time: an Esc-cancelled
   /// navigation (or an abandoned server change) restores it, so Sync
@@ -111,6 +113,7 @@ class _BindingRollback {
     required this.sortedListing,
     required this.error,
     required this.selection,
+    required this.selectionHistory,
     required this.history,
     required this.historyIndex,
     required this.filterQuery,
@@ -132,6 +135,7 @@ class _BindingRollback {
   final List<RemoteFileEntry> sortedListing;
   final RemoteFileException? error;
   final SelectionState<_RowKey> selection;
+  final SelectionHistory<_RowKey> selectionHistory;
   final List<PaneLocation> history;
   final int historyIndex;
   final String filterQuery;
@@ -516,6 +520,8 @@ class PaneController extends ChangeNotifier {
     rows: const [],
   );
 
+  SelectionHistory<_RowKey> _selectionHistory = const SelectionHistory.empty();
+
   /// Whether the rendered rows are presentation cache for a location
   /// the pane has already left (02 §2.8's grace is presentation-only):
   /// set the moment a location-changing navigation resets the selection
@@ -534,6 +540,7 @@ class PaneController extends ChangeNotifier {
   /// rows prune the restored baseline — a stale session never restores
   /// into a listing it did not open on.
   QuickSelectState<_RowKey>? _quickSelect;
+  SelectionState<_RowKey>? _quickSelectBaseline;
 
   /// 02 §2.5's type-ahead buffer: printable keys accumulate over the
   /// focused pane and 1 s of inactivity resets it. The pane view's key
@@ -1284,6 +1291,8 @@ class PaneController extends ChangeNotifier {
     _error = snapshot?.error;
     _selection =
         snapshot?.selection ?? SelectionState<_RowKey>.begin(rows: const []);
+    _selectionHistory =
+        snapshot?.selectionHistory ?? const SelectionHistory.empty();
     _sortedListing = snapshot?.listing ?? const [];
     _setListing(_hiddenFiltered(_sortedListing));
     // The restored snapshot owns its rows again — clear before
@@ -1647,6 +1656,9 @@ class PaneController extends ChangeNotifier {
     final before = _selection;
     _selection = _selection.activate(_rowKeys[clamped], update);
     if (identical(before, _selection)) return;
+    if (!quickSelectActive) {
+      _selectionHistory = _selectionHistory.record(before, _selection);
+    }
     // Moving on from the file that failed to open retires its error.
     if (_error is OpenEntryError) _error = null;
     notifyListeners();
@@ -1659,6 +1671,9 @@ class PaneController extends ChangeNotifier {
     final before = _selection;
     _selection = _selection.selectAll();
     if (identical(before, _selection)) return;
+    if (!quickSelectActive) {
+      _selectionHistory = _selectionHistory.record(before, _selection);
+    }
     notifyListeners();
   }
 
@@ -1673,7 +1688,11 @@ class PaneController extends ChangeNotifier {
     if (_selection.selectedKeys.isEmpty && _selection.cursorKey == null) {
       return;
     }
+    final before = _selection;
     _selection = SelectionState<_RowKey>.begin(rows: _rowKeys);
+    if (!quickSelectActive) {
+      _selectionHistory = _selectionHistory.record(before, _selection);
+    }
     notifyListeners();
   }
 
@@ -1685,6 +1704,43 @@ class PaneController extends ChangeNotifier {
     final before = _selection;
     _selection = _selection.invert();
     if (identical(before, _selection)) return;
+    if (!quickSelectActive) {
+      _selectionHistory = _selectionHistory.record(before, _selection);
+    }
+    notifyListeners();
+  }
+
+  /// Selection history is separate from file-operation and text undo. A
+  /// Quick Select preview must be confirmed or cancelled before it can run.
+  bool get canUndoSelection =>
+      !_disposed &&
+      verbsEnabled &&
+      !_staleRows &&
+      !quickSelectActive &&
+      _selectionHistory.canUndo(_selection);
+
+  bool get canRedoSelection =>
+      !_disposed &&
+      verbsEnabled &&
+      !_staleRows &&
+      !quickSelectActive &&
+      _selectionHistory.canRedo(_selection);
+
+  void undoSelection() {
+    if (!canUndoSelection) return;
+    final restored = _selectionHistory.undo(_selection)!;
+    _selectionHistory = restored.history;
+    _selection = restored.selection;
+    if (_error is OpenEntryError) _error = null;
+    notifyListeners();
+  }
+
+  void redoSelection() {
+    if (!canRedoSelection) return;
+    final restored = _selectionHistory.redo(_selection)!;
+    _selectionHistory = restored.history;
+    _selection = restored.selection;
+    if (_error is OpenEntryError) _error = null;
     notifyListeners();
   }
 
@@ -3018,6 +3074,7 @@ class PaneController extends ChangeNotifier {
       if (entry.name.contains('\uFFFD')) continue;
       names[_rowKeys[i]] = entry.name;
     }
+    _quickSelectBaseline = _selection;
     _quickSelect = QuickSelectState<_RowKey>.begin(
       namesByKey: names,
       selectedKeys: _selection.selectedKeys,
@@ -3042,7 +3099,10 @@ class PaneController extends ChangeNotifier {
     final session = _quickSelect;
     if (_disposed || session == null) return;
     _quickSelect = null;
+    final baseline = _quickSelectBaseline!;
+    _quickSelectBaseline = null;
     _selection = _selection.withSelectedKeys(session.confirm().selectedKeys);
+    _selectionHistory = _selectionHistory.record(baseline, _selection);
     notifyListeners();
     _flushWatchRefresh();
   }
@@ -3075,7 +3135,8 @@ class PaneController extends ChangeNotifier {
     final session = _quickSelect;
     if (session == null) return;
     _quickSelect = null;
-    _selection = _selection.withSelectedKeys(session.cancel().selectedKeys);
+    _selection = _quickSelectBaseline!;
+    _quickSelectBaseline = null;
   }
 
   /// Detaches the pane and drops its server reference (02 §2.7's Cancel).
@@ -3150,6 +3211,7 @@ class PaneController extends ChangeNotifier {
     _endFolderSize();
     _endEnclosedApply();
     _phase = PanePhase.unbound;
+    _selectionHistory = const SelectionHistory.empty();
     _location = null;
     _committedLocation = null;
     _history.clear();
@@ -3188,6 +3250,7 @@ class PaneController extends ChangeNotifier {
     _disposed = true;
     _bindAttempt++;
     _quickSelect = null;
+    _quickSelectBaseline = null;
     _renameSession = null;
     _pendingRenameSelectPath = null;
     _renameAfterSelect = false;
@@ -3381,6 +3444,7 @@ class PaneController extends ChangeNotifier {
     String? priorRemotePath,
     bool keepLenses = false,
   }) {
+    _endQuickSelectSession();
     _cancelListing();
     // A binding transition ends the session every in-flight mirror
     // probe was scoped to (02 §7's stale-probe rule).
@@ -3421,6 +3485,7 @@ class PaneController extends ChangeNotifier {
           sortedListing: _sortedListing,
           error: _error,
           selection: _selection,
+          selectionHistory: _selectionHistory,
           history: List.of(_history),
           historyIndex: _historyIndex,
           filterQuery: _filterQuery,
@@ -3440,6 +3505,7 @@ class PaneController extends ChangeNotifier {
         _channel = null;
         _parkedWatchSignalled = false;
       }
+      _selectionHistory = const SelectionHistory.empty();
       _location = null;
       // A rebind stands nowhere until its first listing commits — the
       // sync link's server-change drop keys on THAT commit, so an
@@ -3617,6 +3683,7 @@ class PaneController extends ChangeNotifier {
         _sortedListing,
         _error,
         _selection,
+        _selectionHistory,
         _committedLocation,
       );
     }
@@ -3627,6 +3694,7 @@ class PaneController extends ChangeNotifier {
       // governs presentation only, never interaction eligibility.
       _staleRows = true;
       _selection = SelectionState<_RowKey>.begin(rows: const []);
+      _selectionHistory = const SelectionHistory.empty();
     }
     _location = target;
     _issuedGeneration++;
@@ -3777,6 +3845,7 @@ class PaneController extends ChangeNotifier {
     _rowKeys = List.unmodifiable(_keysFor(entries));
     _rowKeyIndex = {for (var i = 0; i < _rowKeys.length; i++) _rowKeys[i]: i};
     _selection = _selection.withRows(_rowKeys);
+    _selectionHistory = _selectionHistory.withRows(_rowKeys);
     if (rename != null &&
         _location != null &&
         !_rowKeyIndex.containsKey(rename.rowKey)) {
@@ -3888,6 +3957,7 @@ class PaneController extends ChangeNotifier {
     _sortedListing = rollback.sortedListing;
     _setListing(_hiddenFiltered(_sortedListing));
     _selection = rollback.selection;
+    _selectionHistory = rollback.selectionHistory;
     // The restored binding owns its rows again — clear before
     // publishing so listeners never see owned rows flagged stale.
     _staleRows = false;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/editor_syntax.dart';
 
 // Ported from Séance
@@ -14,6 +15,24 @@ String _slice(String text, SyntaxToken token) =>
     text.substring(token.start, token.end);
 
 void main() {
+  test('syntax comments remain readable on both editor backgrounds', () {
+    for (final brightness in Brightness.values) {
+      final foreground = EditorSyntaxTheme.of(
+        brightness,
+      ).comment.computeLuminance();
+      final background = buildPoltergeistTheme(
+        brightness,
+      ).scaffoldBackgroundColor.computeLuminance();
+      final light = foreground > background ? foreground : background;
+      final dark = foreground < background ? foreground : background;
+      expect(
+        (light + 0.05) / (dark + 0.05),
+        greaterThanOrEqualTo(4.5),
+        reason: '${brightness.name} comment contrast',
+      );
+    }
+  });
+
   group('language detection', () {
     test('resolves well-known extensions', () {
       expect(syntaxLanguageFor('/srv/deploy.py')?.id, 'python');

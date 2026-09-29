@@ -15,6 +15,18 @@ const _generatedDartSuffixes = {'.freezed.dart', '.g.dart', '.mocks.dart'};
 
 // Technical literals are reviewed per file so an allowlist cannot hide UI copy.
 const _allowedTechnicalLiterals = <String, Set<String>>{
+  // Flutter menu serialization and the AppKit checkmark channel protocol.
+  'lib/services/checked_platform_menu.dart': {
+    "'checked'",
+    "'flutter/menu'",
+    "'poltergeist/menu_checks'",
+    "'Menu.setMenus'",
+    "'id'",
+    "'children'",
+    "'0'",
+    "'setChecked'",
+    r"'${item['id']}'",
+  },
   // View schema keys and validation diagnostics, never rendered UI copy.
   'lib/services/view_preferences_store.dart': {
     "'view.preferences'",
@@ -639,6 +651,15 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'ratio'",
     "'must be finite'",
   },
+  // Dotenv assignment grammar, BOM handling, and value delimiters.
+  'lib/ui/dotenv_syntax.dart': {
+    r"r'[ \t]*(?:(export)[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*'",
+    r"'\ufeff'",
+    "'='",
+    "'export'",
+    '\'"\'',
+    '"\'"',
+  },
   // The ported syntax engine's grammar literals (06 §2.2, ported from
   // Séance's editor_syntax.dart @ 2e6d1f1): language ids, keyword sets,
   // comment/string delimiters, regex patterns, and the extension/basename
@@ -664,6 +685,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'.dockerfile\'',
     '\'.dockerignore\'',
     '\'.editorconfig\'',
+    '\'.env\'',
+    '\'.env.\'',
     '\'.gitconfig\'',
     '\'.gitignore\'',
     '\'.gitmodules\'',
@@ -674,7 +697,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'.zprofile\'',
     '\'.zshenv\'',
     '\'.zshrc\'',
-    '\'/\'',
     '\'/*\'',
     '\'//\'',
     '\'0X\'',
@@ -768,6 +790,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'dockerfile\'',
     '\'dockerfile.\'',
     '\'done\'',
+    '\'dotenv\'',
     '\'double\'',
     '\'drop\'',
     '\'dynamic\'',
@@ -1062,6 +1085,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     '\'yield\'',
     '\'yml\'',
     '\'zsh\'',
+    r"r'[/\\]'",
     'r\'([-a-zA-Z]+)[ \\t]*:\'',
     'r\'</?[A-Za-z][A-Za-z0-9:._-]*\'',
     'r\'\\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?\'',
@@ -1145,7 +1169,20 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // carries the same literal); its accessible name is the ARB tooltip
   // editorMatchCaseTooltip, so translating the glyph itself would be
   // wrong.
+  'lib/ui/editor_checkout_upload.dart': {
+    r"'${copy.serverId}|${copy.remotePath}'",
+  },
   'lib/ui/built_in_text_editor.dart': {
+    "'window.new'",
+    "'editor.save'",
+    "'editor.close'",
+    "'editor.find'",
+    "'editor.undo'",
+    "'editor.redo'",
+    "'editor.cut'",
+    "'editor.copy'",
+    "'editor.paste'",
+    "'editor.selectAll'",
     "''",
     "'\\n'",
     "'Aa'",
@@ -1335,6 +1372,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'pane.focusLeft'",
     "'pane.focusRight'",
     "'pane.swapFocus'",
+    "'edit.undoSelection'",
+    "'edit.redoSelection'",
     "'edit.selectAll'",
     "'edit.invertSelection'",
     "'selection.quickSelect'",

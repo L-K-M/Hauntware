@@ -4,6 +4,134 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Upload permissions on ACL-managed servers (2026-09-28)
+
+Ordinary local-to-server uploads now follow Séance's permission policy: new
+files use the server's defaults and inherited ACL, while replacements keep
+the existing destination mode. The queue no longer requests a chmod to the
+local source mode, which could abort an otherwise writable new upload after
+all bytes were sent. Local executable bits are therefore not automatically
+copied. Downloads, remote copies, local copies, managed edits, and sync keep
+their existing permission behavior. Required destination-mode preservation
+and real write failures still fail without deleting a move's source.
+
+Bridged regressions reproduced the upload failure and replacement-mode
+change before the fix. All seven now pass, including executable downloads
+and safe move failure. Shared-adapter contract tests exercise SFTP mode
+denial, temporary-file cleanup, and destination preservation. Core and sync
+analysis are clean; 1,702 core tests and 249 sync tests pass, with 24 and 3
+environment skips respectively. Flutter analysis and 33 affected app tests
+pass on Flutter 3.47.3; the dependency-boundary guard passes. Borg's transfer
+history confirms that all bytes were sent before the reported failure, but
+the exact rejected server operation and a live retry remain unverified.
+This aligns an existing Séance behavior, so no upstream port is needed.
+
+## Restored delete identity safety (2026-09-28)
+
+Restored delete tasks now stat each pending path without following links and
+require its type, size, and modification time to match the journaled entry.
+Changed or missing paths are skipped instead of deleting replacement data.
+An interrupted permanent delete whose scan was incomplete now fails and must
+be confirmed again while retaining its journaled Activity rows; interrupted
+trash moves may still resume. Cancellation during revalidation is inert.
+
+The regression first reproduced deletion of changed paths and resumption of an
+incomplete permanent scan. It now covers size, modification-time, type, and
+missing-path changes plus an unchanged control. The journal codec preserves UTC
+microsecond timestamps exactly. Core analysis is clean; all 1,707 core tests
+pass with 27 environment skips. Import boundaries are clean.
+
+## Destination collision ownership (2026-09-28)
+
+Transfer tasks now probe each resolved destination container for independent
+case and Unicode-normalization identity. A source owns the resulting key for
+the task's lifetime. A later task item cannot replace that output:
+`replace` and `replaceIfNewer` fail, `skip` skips, and `ask` may keep both or
+skip. Keep Both reserves the first free numbered key. A queue-wide
+conservative registry serializes possible aliases across tasks, then each
+waiter re-stats under the container's actual rules. The registry models Linux
+NFDICF, including full folds and default-ignorable code points; exact trait
+keys still preserve distinct HFS+/NTFS names. P2-06a tracks an exact
+fold-profile probe to reduce one safe-refusal edge.
+
+Moves and renamed outputs journal and fsync their selected destination before
+the filesystem effect. Recovery reuses an empty claimed path and fails an
+occupied, ambiguous claim without touching either copy. Journal schema v2
+atomically upgrades the complete v1 prefix before migration or compaction;
+raw unknown fields survive upgrades, compaction, and history trimming. A
+legacy failure without retry evidence remains terminal.
+On Linux, native directory open, fsync, and close failures block source
+removal, and run off the app isolate. Other platforms retain PGE-03a's
+explicit unsupported behavior.
+
+Name probes are isolated from directory mutation. Exact generated artifacts
+remain visible as skipped rows, while prefix-like user files transfer
+normally; a stranded artifact causes a bounded failure. Cancellation can
+leave a queued probe without retaining channel leases or admitting a later
+probe past the active holder. Regressions cover case and NFC/NFD twins,
+same-basename roots, nested mounts, cross-task races, retry and crash replay,
+Linux full-fold/default-ignorable aliases, normalized-simple HFS+ twins,
+probe cleanup, cancellation, restored cleanup admission, and local-move
+durability.
+
+Validation: core analysis is clean; 1,703 core tests pass with 27 environment
+skips. Sync analysis is clean and all 249 tests pass with 3 SSH fixture skips.
+All 138 benchmark tests and 2,882 Flutter tests pass; Flutter analysis and the
+import-boundary check are clean on the pinned 3.47.2 SDK.
+
+## Dotenv syntax highlighting (2026-09-27)
+
+The editor recognizes `.env`, `.env.*` and `*.env`, including local Windows
+paths. It highlights assignment keys, an optional `export` prefix, comments
+and single/double-quoted values across lines. Bare values remain text, so
+booleans, numbers, semicolons and quotes within an unquoted value cannot
+acquire misleading INI or shell syntax. The highlighter follows the Node
+dotenv convention; dialect limits are recorded in 06 §7.1. Dark-theme
+comments also have stronger contrast, checked against both editor backgrounds.
+
+Detection and token-range regressions reproduced the missing/incorrect
+highlighting before the fix. All 69 syntax, editor and capture tests pass,
+as do the 10 localization checks after updating their technical-literal
+inventory. Flutter analysis is clean on 3.47.3. Independent review checked
+malformed input, Unicode offsets and linear scaling. The scanner is recorded
+in PORTS.md as a Séance port-back candidate. Before/after light and dark captures are in
+[the task evidence](../tasks/dotenv-highlighting/README.md); sharing editor
+packages with a possible Planchette app remains a proposal.
+
+## Desktop file interactions (2026-09-26)
+
+Show Hidden Files now carries its checked state into the macOS menu. The
+same bridge handles the other registry-backed checkable commands and
+updates when the active pane or window changes. Windows/Linux retain their
+existing checkbox rendering.
+
+Each pane tab keeps a bounded selection undo/redo history. Undo Selection
+and Redo Selection appear in Edit, the palette, and file-list context menus;
+their shortcuts are Cmd/Ctrl+Alt+Z and Cmd/Ctrl+Alt+Shift+Z. History includes
+the cursor and range anchor, survives refresh and sorting by row identity,
+prunes unavailable rows, and resets on navigation. Cancelled navigation
+restores history with the original listing. Quick Select contributes one
+confirmed change, with previews and cancellation kept out of history.
+
+On desktop, Edit in Poltergeist opens a separate document window on the
+existing shared engine. Opening the same document raises its window, even
+from another workspace. The editor retains its own save, upload, conflict,
+and close handling after the source workspace closes. Native close and Quit
+protect unsaved buffers, including a save started from the native menu while
+the discard dialog is open; mobile retains its editor route.
+
+These changes follow the owner's request and amend D17 and the selection
+specification. The menu bridge and selection model are Poltergeist-specific;
+the editor-window seams are recorded in PORTS.md as a Séance port-back
+candidate. Validation details are recorded with the PR.
+
+Validation: 273 affected Flutter tests pass, including remote editing,
+external-editor checkouts, menus, selection, and window lifecycle. The
+macOS debug build and native menu-state XCTest pass. Light-theme widget
+captures cover the selection menu and the route/window editor forms;
+native screenshot capture was unavailable. Local checks use Flutter 3.47.3;
+CI uses the repository's 3.47.2 pin and builds the other platforms.
+
 ## Mouse drag activation (2026-09-26)
 
 Clicking or holding a folder or file now selects it without showing a drag
@@ -23,6 +151,27 @@ macOS. Flutter analysis is clean. The broader pane run reached 341 passing
 tests but stalled in the session-lifetime suite. Before/after light-theme
 widget captures show the held-click state; native held-pointer capture was
 not exercised. CI uses the repository's Flutter 3.47.2 pin.
+
+## Injected Command shortcuts on macOS (2026-09-26)
+
+The native view controller preserves Command on synthetic key events that
+omit left/right Command bits. This prevents Easydict's simulated Copy after
+Shift-click from entering file-pane type-ahead as a plain c. Physical
+left/right Command events retain identity, and normalized events preserve
+Flutter's key-equivalent marker for native shortcut routing. The same
+correction is proposed in [Séance #144](https://github.com/L-K-M/Seance/pull/144).
+
+The native regression fails with stock Flutter at the missing-Command
+assertion and passes with the app controller. Seven groups cover the real
+keyboard manager/responders, physical modifier sides, repeats, metadata,
+marker preservation, the observed Shift/Copy/release sequence, and controller
+replacement on one engine, and unhandled-event redispatch identity. The 29
+pane-selection/type-ahead widget tests
+pass, analysis is clean, and the macOS release build succeeds with Flutter
+3.47.3; CI exercises its 3.47.2 pin. The fixture starts no Dart application
+and posts no system input. Live Easydict, text-field/menu, and extra-window
+smoke checks remain described in
+[macOS keyboard compatibility](macos-keyboard-compatibility.md).
 
 ## Delete-confirmation route lifetime (2026-09-26)
 
@@ -8974,6 +9123,27 @@ root (including the macOS menu bar), the window commands, the runner
 source contract, the multi-window session document, the lifecycle's
 close hook, and OS drops refused in an extra window.
 
+## Journal compaction pays for itself (2026-09-26)
+
+Mid-session compaction measured the whole transfer journal against its
+4 MiB threshold, but a rewrite keeps every pending task's records and
+drops only the finished tasks'. Once one pending task passed 4 MiB on
+its own (about 5 000 files), every further record rebuilt, rewrote and
+fsynced the whole journal on the UI isolate: 2 000 records at a 64 KiB
+threshold cost 1 691 rewrites. Compaction now waits until the finished
+tasks' records reach the threshold (or 32 tasks finish) and dropping
+them frees at least as many bytes as the rewrite writes. A pending set
+alone never triggers a rewrite, and the journal stays under the larger
+of twice the pending set and the pending set plus 4 MiB. The crash-safe
+ordering, startup and shutdown compaction, and restore are unchanged.
+
+Verification: four new cases in `transfer_persistence_test.dart`'s
+compaction group. A 2 000-record pending task causes no mid-session
+rewrite (1 691 before) and still restores every item; 200 tasks
+finishing beside a pending one never rewrite more bytes than they
+append (8.5 MB for 80 KB before); a large finished task still compacts
+mid-session; and a retried task counts as pending again.
+
 ## Backup acknowledgement safety (2026-09-26)
 
 Backup replies now settle the exact record sent, inside the persistent store's
@@ -8989,6 +9159,47 @@ Séance wire format are unchanged; equal-version LWW conflicts remain a separate
 revision-policy concern. Séance's core by-ID acknowledgement API needs its own
 compatible upstream extension; this change uses Poltergeist's existing store
 extension without copying shared transport code.
+
+## Edited servers reach the next connection (2026-09-26)
+
+The pool kept the config a serverId's reference resolved first for the
+whole session, so after an edit to a server or bookmark (local or
+synced) new tabs, transfer leases and sync runs kept dialing the old
+host, port and user with the old credential reference until an explicit
+Disconnect or a restart. The invalidation the manager's comment
+promised was never built.
+
+Every browse open and lease already carries the app's current config, so
+the engine host now hands it to the new
+`PooledConnectionManager.updateServerConfig` before acquiring; no
+protocol change. The same endpoint (`PoolKey`) takes the config in
+place: the next first connect uses it, and live transports keep their
+resolved credentials, as for any sibling bookmark (03 §3.5). A new
+endpoint retires the reference: the next acquisition resolves the new
+config, the id's status reads `disconnected` until then, and the old
+pool drains instead of being cut. Panes and leases there keep working
+until they close, queued acquisitions fail `disconnected` so they retry
+on the new endpoint, the pool never reconnects for the edited id (nor
+does a recovery already pending when the edit lands), its keepalive runs
+until the last draining channel closes (a sibling's disconnect does not
+cut it either), and an explicit disconnect or bookmark removal still
+closes what is left.
+
+Regression tests: `test/connection/pool_config_refresh_test.dart` (open,
+close, edit, open dials the new host, port or user; drain; no reconnect
+to the old endpoint; same-endpoint swap; disconnect after an edit; a
+sibling keeping the shared pool; an edit during a first connect, alone
+or joined by a sibling; an edit after a transport death; the draining
+keepalive; a sibling's disconnect; queued acquisitions) and two
+`engine_host_test.dart` cases for the browse and lease requests.
+Follow-up: the pane controller's Retry and restored-tab resume still
+rebuild the config from the tab's own copy of the bookmark (ignoring the
+pulled catalog), so they can dial a stale endpoint after an edit, and
+since the engine host adopts every request's config, such a request also
+moves the id's reference back to the stale endpoint until the next
+current one. `ServerConfig.updatedAt` cannot order them in the engine: a
+catalog config and a bookmark's embedded identity carry different
+records' clocks.
 
 ## Extra windows' integrations (2026-09-26)
 

@@ -15,8 +15,15 @@ same deliberate scope cut Séance made and tested. It edits the class of file
 an SFTP user actually round-trips: nginx configs, dotfiles, crontabs, YAML,
 small scripts. Concretely:
 
-- One document per editor screen, pushed as a full-window route (Séance's
-  model). No editor tabs, no split editing, no line numbers, no soft-wrap
+- One document per native editor window on desktop (D17's 2026-09-26
+  amendment), leaving the workspace available beside it. Reopening the same
+  local file or remote checkout raises its existing editor across all
+  workspaces. The editor owns its navigator, close guard, and upload/conflict
+  surface, so closing its source workspace does not interrupt editing.
+  Native close and Quit protect unsaved buffers; native close waits for
+  an in-flight save/upload to finish. Phones, tablets, and runners without
+  the window host use the full-window route (Séance's model).
+  No editor tabs, no split editing, no line numbers, no soft-wrap
   toggle, no multiple cursors. The rendering body is a single Flutter
   `TextField` (`expands: true, maxLines: null`) with a custom controller —
   the I/O layer, find logic, and syntax engine are all independent of it, so
@@ -1398,7 +1405,7 @@ independent in v1; no change detection is claimed.
 ## 7. Syntax additions for the file-manager audience
 
 Séance's 12 declarative families target what an SSH terminal user edits.
-Poltergeist's audience adds web-hosting file types. All additions are
+Poltergeist's audience adds web-hosting file types. The original additions are
 **data-only** — new `SyntaxLanguage` declarations and detection-map
 entries; the tokenizer and controller are untouched (that declarative shape
 is the point of the engine). Each addition ships with a tokenizer smoke
@@ -1418,6 +1425,27 @@ soup; nginx-style configs are covered by ini; `sql`, `xml/html`,
 `markdown`, `json`, `yaml`, `dockerfile` all exist. The screen keeps
 Séance's re-detection after load using the first line, so extensionless
 scripts pick up their shebang.
+
+### 7.1 Dotenv files
+
+The owner's 2026-09-27 request adds `.env`, `.env.*` (including environment
+and example suffixes), and `*.env`. Detection uses the basename on POSIX and
+Windows paths. Dotenv needs assignment context, so this addition uses a
+small dedicated scanner while keeping the other language families unchanged.
+The token/controller API and highlighting size limit stay the same.
+
+Keys use the meta color; a declaration's optional `export` uses the keyword
+color. Single/double quotes open a string only at the beginning of its value,
+and the value may span lines. Quoted hashes remain content; unquoted hashes
+start comments. Bare values remain text, including numbers, booleans,
+semicolons, JSON and shell words. No environment expansion or execution occurs.
+
+These conventions follow [Node's dotenv description](https://nodejs.org/api/environment_variables.html#dotenv).
+Dotenv has no universal grammar: python-dotenv's whitespace-sensitive inline
+comments and extensions such as backtick values, quoted keys and colon
+assignments are not claimed. This is highlighting rather than validation;
+unsupported forms remain editable as ordinary text. Regression tests pin
+token ranges, multiline boundaries, escaping, CRLF and Unicode offsets.
 
 ## 8. Editor settings (Settings > Editing)
 
