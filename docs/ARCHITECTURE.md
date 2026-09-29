@@ -46,6 +46,14 @@ Temporary plaintext is owner-only before writing on POSIX. Each host retains
 its temporary-file prefix so its recovery and cleanup rules still recognize
 editor leftovers.
 
+The desktop app checks open files when its window regains focus. A file's
+size and modification time decide whether it is worth hashing; the digest
+decides whether it changed. A document without edits takes the new version
+through the same install as Revert to Saved, a document with edits keeps
+its text until the user reloads or keeps it, and keeping it adopts the
+digest found on disk as the next save's guard. A missing file is recreated
+with exclusive creation, so a file that reappeared is never overwritten.
+
 These filesystem checks are best-effort conflict guards, not a cross-process
 lock. The current two-rename replacement has a brief missing-path interval.
 The migration must not describe it as a transaction with other applications.
