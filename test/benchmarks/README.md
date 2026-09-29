@@ -213,10 +213,11 @@ because every run so far produced insufficient-frame error rows.
 
 To collect tier-B profile evidence on a branch while running all regular
 CI checks, dispatch with `skip_m0=true`. This skips only the historical
-M0 SSH measurement shards; dispatch without the input still runs them:
+M0 SSH measurement shards; dispatch without the input still runs them.
+Replace `YOUR_BRANCH` with the branch to measure:
 
 ```bash
-gh workflow run CI --ref codex/fix-d12-benchmark -f skip_m0=true
+gh workflow run CI --ref YOUR_BRANCH -f skip_m0=true
 ```
 
 Local iteration needs a display plus the Linux toolchain; the same

@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show debugOnProfilePaint;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
@@ -38,6 +39,85 @@ Future<void> _pumpPane(
 }
 
 void main() {
+  testWidgets('switching a tab does not repaint the unchanged opposite pane', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final lanes = FakePaneLanes();
+    Future<PaneController> open(String id, String path) async {
+      lanes.nextLocalChannel = FakePaneChannel(path)
+        ..listings[path] = [
+          RemoteFileEntry(
+            path: '$path/report.txt',
+            name: 'report.txt',
+            type: RemoteFileType.file,
+            size: 8,
+          ),
+        ];
+      final controller = PaneController(paneTabId: id, lanes: lanes);
+      await controller.openLocalHome();
+      return controller;
+    }
+
+    final left = testPaneStrip(await open('pane.left.tab1', '/home/first'));
+    final next = left.addTab(await open('pane.left.tab2', '/home/second'));
+    final right = testPaneStrip(await open('pane.right.tab1', '/home/right'));
+    final workspace = WorkspaceController(left: left, right: right);
+    addTearDown(workspace.dispose);
+    final leftFocus = FocusNode();
+    final rightFocus = FocusNode();
+    addTearDown(leftFocus.dispose);
+    addTearDown(rightFocus.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Scaffold(
+          body: Row(
+            children: [
+              for (final (tabs, focus) in [(left, leftFocus), (right, rightFocus)])
+                Expanded(
+                  child: PaneTabsView(
+                    tabs: tabs,
+                    workspace: workspace,
+                    focusNode: focus,
+                    onSwapFocus: () {},
+                    onCancelRecovery: () {},
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // The path summary sits outside the listing's existing row boundaries.
+    final rightSummary = tester.renderObject(
+      find.byKey(const ValueKey('pane.right.tab1.path.summary')),
+    );
+    var paints = 0;
+    var oppositePaints = 0;
+    final previous = debugOnProfilePaint;
+    debugOnProfilePaint = (object) {
+      previous?.call(object);
+      paints++;
+      if (identical(object, rightSummary)) oppositePaints++;
+    };
+
+    try {
+      left.activateTab(next);
+      await tester.pumpAndSettle();
+
+      expect(paints, greaterThan(0));
+      expect(oppositePaints, 0);
+      expect(find.byKey(const ValueKey('pane.left.tab2.path.summary')),
+          findsOneWidget);
+    } finally {
+      debugOnProfilePaint = previous;
+    }
+  });
+
   testWidgets('switching the other pane tab does not rebuild listing rows', (
     tester,
   ) async {

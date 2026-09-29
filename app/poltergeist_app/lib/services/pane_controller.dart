@@ -930,11 +930,16 @@ class PaneController extends ChangeNotifier {
   /// The selected entries in listing order (02 §2.5) — the payload a
   /// row drag carries when the grabbed row belongs to a multi-selection.
   /// Empty while nothing is selected.
-  List<RemoteFileEntry> get selectedEntries => [
-    for (var i = 0; i < _entries.length; i++)
-      if (i < _rowKeys.length && _selection.selectedKeys.contains(_rowKeys[i]))
-        _entries[i],
-  ];
+  List<RemoteFileEntry> get selectedEntries {
+    // Menu enablement and preview listeners request this on tab changes.
+    // An empty selection must not scan a large cached listing each time.
+    if (_selection.selectedKeys.isEmpty) return [];
+    return [
+      for (var i = 0; i < _entries.length; i++)
+        if (i < _rowKeys.length && _selection.selectedKeys.contains(_rowKeys[i]))
+          _entries[i],
+    ];
+  }
 
   /// Whether the rendered rows are a disowned cached listing — inert
   /// from the moment a location-changing navigation issues, not from

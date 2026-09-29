@@ -25,11 +25,20 @@ switch no longer rebuilds the surrounding layout or the unchanged opposite
 listing; tab content, focus, sync state, and inspector updates keep their own
 listeners.
 
+Each pane also isolates its painting, so switching one tab retains the
+opposite pane's display list. Empty selection payloads no longer scan every
+cached row when menu enablement or preview listeners request them. The
+activation-watch regression covers switching away before arming completes,
+as well as dropping a listing response that arrives after deactivation.
+
 Regressions reproduced the stale-history scope failure and unnecessary
-background refresh before the fixes. All 154 watch, tab-controller, and pane
-controller tests and 139 benchmark tests pass locally, with one existing
-host-dependent benchmark skip. Benchmark checker analysis is clean. Further
-UI validation and Linux profile evidence are recorded with the PR.
+background refresh before the fixes. The paint regression reproduced an
+opposite-pane repaint before isolation and none afterward. All 133 affected
+watch, selection, preview, and command tests, 97 pane/shell tests, and 139
+benchmark tests pass locally, with one existing host-dependent benchmark
+skip. Flutter and benchmark analysis are clean. The first Linux profile
+iteration still exceeded P4's unchanged budget; subsequent profile evidence
+and CI results are recorded with the PR.
 
 ## Upload permissions on ACL-managed servers (2026-09-28)
 

@@ -1469,6 +1469,8 @@ CheckReport evaluate({
         )
         .toList();
     for (final entry in stale) {
+      // Persisted drift streaks are a tier-B policy. Tier-A hardware
+      // drift deliberately never fails a run or creates a streak.
       if (!tiers.contains(BenchTier.b)) {
         // PRs deliberately observe only tier A. Failing them on saved
         // tier-B history would also block the PR needed to fix that

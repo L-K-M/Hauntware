@@ -431,6 +431,36 @@ void main() {
     expect(channel.watchCalls, hasLength(2));
   });
 
+  test('a backgrounded activation arm never starts an obsolete listing',
+      () async {
+    final (controller, channel, _) = await _watchedPane();
+    final cached = controller.entries;
+    controller.setTabActive(false);
+    final arm = Completer<void>();
+    channel.heldWatch = arm;
+    controller.setTabActive(true);
+    await _settle();
+    expect(channel.watchCalls, hasLength(2));
+    expect(channel.listCalls, hasLength(1));
+
+    controller.setTabActive(false);
+    expect(controller.loading, isFalse);
+    var notifications = 0;
+    controller.addListener(() => notifications++);
+    channel.listings['/home/tester'] = [_entry('b.txt')];
+    arm.complete();
+    await _settle();
+    expect(channel.listCalls, hasLength(1));
+    expect(controller.entries, same(cached));
+    expect(notifications, 0);
+
+    controller.setTabActive(true);
+    await _settle();
+    expect(channel.watchCalls, hasLength(3));
+    expect(channel.listCalls, hasLength(2));
+    expect(controller.entries.single.name, 'b.txt');
+  });
+
   test('backgrounding preserves an explicit navigation in flight',
       () async {
     final (controller, channel, _) =
