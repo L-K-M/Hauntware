@@ -119,6 +119,7 @@ void main() {
           await listDiagnostic.waitIdle();
           listDiagnostic.dump();
         }
+        await measureSelectionFrames(rig);
       },
     );
   }, timeout: const Timeout(Duration(minutes: 8)));

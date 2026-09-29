@@ -12,6 +12,7 @@ import 'package:flutter/gestures.dart'
         kSecondaryMouseButton,
         kTouchSlop;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -1876,6 +1877,15 @@ class _PaneSurface extends StatelessWidget {
           key: listAreaKey,
           controller: scrollController,
           itemExtent: extent,
+          scrollCacheExtent: const bool.fromEnvironment('P4_THREE_ROW_CACHE')
+              ? ScrollCacheExtent.pixels(extent * 3)
+              : null,
+          addAutomaticKeepAlives: !const bool.fromEnvironment(
+            'P4_NO_KEEP_ALIVES',
+          ),
+          addRepaintBoundaries: !const bool.fromEnvironment(
+            'P4_NO_ROW_REPAINT_BOUNDARIES',
+          ),
           itemCount: controller.entries.length,
           itemBuilder: (context, index) => _buildRow(context, index),
         ),

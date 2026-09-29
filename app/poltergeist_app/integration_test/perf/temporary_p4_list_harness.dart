@@ -406,6 +406,56 @@ Future<int> measureTabSwitchMicros(
   }
 }
 
+/// Supplemental diagnostic only: selection updates after P4 and its delayed
+/// refresh have settled. These samples never enter the benchmark result rows.
+Future<void> measureSelectionFrames(BenchmarkRig rig) async {
+  await Future<void>.delayed(const Duration(milliseconds: 350));
+  await listDiagnostic.waitIdle();
+  final pane = rig.tabs.activeTab!.controller;
+  await waitFor(
+    rig.tester,
+    () => !pane.loading,
+    'selection diagnostic listing settled',
+  );
+  final waits = <int>[];
+  final builds = <int>[];
+  final rasters = <int>[];
+  final latencies = <int>[];
+  for (var index = 0; index < 5; index++) {
+    final capture = FrameCapture();
+    try {
+      final triggerUs = Timeline.now;
+      pane.setCursorIndex(index);
+      FrameSlice? painted;
+      await waitFor(
+        rig.tester,
+        () => (painted = firstPaintedFrame(capture.slices, triggerUs)) != null,
+        'selection frame for row $index',
+        timeout: const Duration(seconds: 30),
+      );
+      waits.add(painted!.buildStartUs - triggerUs);
+      builds.add(painted!.buildFinishUs - painted!.buildStartUs);
+      rasters.add(painted!.rasterFinishUs - painted!.rasterStartUs);
+      latencies.add(painted!.rasterFinishUs - triggerUs);
+      // ignore: avoid_print
+      print(
+        'SELECTION rep$index (us): wait=${waits.last} '
+        'build=${builds.last} raster=${rasters.last} '
+        'latency=${latencies.last}',
+      );
+    } finally {
+      capture.detach();
+    }
+  }
+  int median(List<int> values) => (values..sort())[values.length ~/ 2];
+  // ignore: avoid_print
+  print(
+    'SELECTION medians (us): wait=${median(waits)} '
+    'build=${median(builds)} raster=${median(rasters)} '
+    'latency=${median(latencies)}',
+  );
+}
+
 /// Navigates the measured pane to [path] and waits for the listing to
 /// settle — the inter-repetition reset that keeps each measured leg
 /// independent of the previous listing's rows.
