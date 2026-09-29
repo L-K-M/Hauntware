@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Command inbox: a bot or script can propose commands for your servers,
+  and you decide whether to run them. Connect it under Settings > Inbox;
+  it gets a pairing string to use with your sync server, which lets it
+  add proposals and nothing else. A banner above the server list says
+  when proposals are waiting. Each one shows the server it is for, why,
+  the whole script (invisible and control characters shown as
+  `<U+…>`) and the danger checker's warnings per line. Stage uploads the
+  script to `~/.seance/inbox/` on that server and puts the one line that
+  runs it in the prompt; nothing runs until you press Enter. Proposals
+  are encrypted with a key only the app and your vault hold, so the sync
+  server can neither read nor forge them. Handled proposals stop showing
+  on your other devices, and two devices cannot both stage one. The
+  sync server documents the format at `/llms.txt` and serves a reference
+  client, `/v1/inbox/seance-propose.py`. The sync server needs updating
+  for this.
 - On macOS the window no longer has a separate title bar. The traffic
   lights sit over the server list, and a header across the terminal and
   side panel shows the server you are on (name and `user@host`) with

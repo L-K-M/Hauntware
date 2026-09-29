@@ -1,8 +1,11 @@
 # Command inbox (design)
 
-Status: proposed, not implemented. This document is for review before any
-code lands, because it adds a server API, a wire format and a client
-surface that are hard to change once bots depend on them.
+Status: implemented. The wire format is `seance_protocol`'s
+`src/inbox/inbox.dart`, the client is `seance_core`'s `src/inbox/`, the
+server is `seance_sync_server`'s `inbox_handlers.dart`, and the app's
+parts are Settings > Inbox (`ui/inbox_settings.dart`) and the review
+(`ui/inbox_view.dart`). Where the code differs from the first draft of this
+document, this document was updated to match.
 
 ## Problem
 
@@ -76,7 +79,7 @@ its own earlier proposals, protects nothing: it wrote them.
 
 ## Setup
 
-Settings > Apps > Add app:
+Settings > Inbox > Connect an app:
 
 1. The user names the app and may restrict it to a set of servers (by
    Séance server id; the default is any server).
@@ -99,8 +102,15 @@ It is a credential. Séance shows it once. Losing it means removing the app
 and adding it again, which is also how a leak is handled.
 
 Removing an app: `DELETE /v1/apps/{appId}` (drops the token hash and all
-pending items) and a tombstone for the `inboxApp` record, so every device
-forgets the key.
+pending items) first, then a sealed `inboxApp` record marked removed and
+carrying no key, so every device forgets the key. Not a tombstone:
+tombstones are unsealed, so a sync server could forge one and drop an app
+on every device. A removal is final; a live copy of a removed app is never
+adopted again.
+
+On a device, the app's name and server list are in `inbox_apps.json` and
+its key is a vault entry, `inbox-key:<appId>`, so it is sealed like every
+other credential and survives a vault re-key.
 
 ## Proposal format (version 1)
 
@@ -170,17 +180,26 @@ delete anything. Rate limit per app: 30 per minute, reusing
 User side (existing session auth, `_withAuth`):
 
 ```
-POST   /v1/apps                    {"app", "name", "token"}  -> 201
-GET    /v1/apps                    -> [{"app", "name", "created", "pending"}]
-DELETE /v1/apps/{appId}            -> 204
-GET    /v1/inbox?since=<received>  -> [{"app", "item", "received", "blob"}]
-DELETE /v1/inbox/{appId}/{itemId}  -> 204
+POST   /v1/apps                    {"app", "name", "token"}  -> 201 {}
+GET    /v1/apps                    -> {"apps": [{"app", "name", "created", "pending"}]}
+DELETE /v1/apps/{appId}            -> 204, 404 not_found
+GET    /v1/inbox?since=<received>  -> {"items": [{"app", "item", "received", "blob"}]}
+DELETE /v1/inbox/{appId}/{itemId}  -> 204, 404 not_found
 ```
 
-Storage: two SQLite tables, `inbox_apps(username, app_id, name,
-token_salt, token_hash, created)` and `inbox_items(username, app_id,
-item_id, received, blob)`, with `ON DELETE CASCADE` from apps. The
-in-memory storage gets the same. Deleting the account deletes both.
+The 404 on an item carries the error code `not_found`. The client reads
+only that as "another device claimed it": a plain 404 is a server too old
+to have the route, or a proxy, and must not quietly drop a proposal.
+
+Storage: SQLite tables `inbox_apps(app_id primary key, username, name,
+token_salt, token_hash, created)`, `inbox_items(app_id, item_id, username,
+received, stored_at, blob)` with `ON DELETE CASCADE` from apps, and
+`inbox_seqs` for the per-account `received` counter, kept apart from the
+record sequence so a deposit never moves the sync cursor. App ids are
+global, since the producer endpoint names only the app. Retention is by
+`stored_at`; expired items are purged when apps or items are listed and on
+each deposit. The in-memory storage does the same. Deleting the account
+deletes all of it.
 
 Items stay on the server until a device deletes one after the user has
 run or dismissed it, or until 7 days after `received`, when the server
@@ -216,9 +235,10 @@ app records the failures, so a misconfigured producer is visible). An
 item for an unknown app is left alone: this device may not have synced
 the app record yet.
 
-UI: a badge with the count of new proposals, and an Inbox pane listing
-them newest first with the app name, target and title. Opening one
-shows:
+UI: a banner above the server list with the count of waiting proposals
+opens the inbox, a list newest first with the app name, target and title.
+The queue is fetched after every sync round and every minute while an app
+is connected. Opening a proposal shows:
 
 - the target server, or *unassigned*;
 - the reason, as plain text;
@@ -229,18 +249,24 @@ shows:
 
 Actions:
 
-- **Run on {server}**: first claims the proposal. It pulls records and
-  refuses if an `inboxStatus` already marks the proposal done, then sends
-  `DELETE /v1/inbox/{appId}/{itemId}`. A 404 means another device claimed
-  it first, and Séance says so instead of running it. Then it writes the
-  `ran` status, opens or reuses a session to the target server, uploads
-  the script over SFTP (`RemoteFileSystem.upload`) to
-  `~/.seance/inbox/<sha256>.sh` with mode 0700, and places the single line
-  `sh ~/.seance/inbox/<sha256>.sh` in the prompt through `PasteSanitizer`.
-  The user presses Enter. The name is the hash of the bytes shown, so the
-  file cannot be swapped between review and run without the line changing.
-  An interpreter line (`#!`) in the script is honoured by running the
-  file directly instead of through `sh`.
+- **Stage on {server}**, in this order:
+  1. A sync round, so a status another device wrote is seen first (best
+     effort: the claim below decides).
+  2. Open or reuse a session to the target server and upload the script
+     over SFTP (`stageProposalScript`) to `~/.seance/inbox/<sha256>.sh`,
+     mode 0700, checking the upload's digest against the reviewed bytes.
+     Uploading before the claim means a failed upload leaves the proposal
+     pending rather than marked as run.
+  3. Claim it: refuse if an `inboxStatus` already marks it done, then
+     `DELETE /v1/inbox/{appId}/{itemId}`. A `not_found` means another
+     device claimed it first, and Séance says so instead of staging it.
+     Otherwise it writes the `ran` status.
+  4. Place `sh '<home>/.seance/inbox/<sha256>.sh'` in the prompt through
+     `PasteSanitizer`. The user presses Enter.
+
+  The name is the hash of the bytes shown, so the file cannot be swapped
+  between review and run without the line changing. An interpreter line
+  (`#!`) is honoured by running the file by path instead of through `sh`.
 - **Copy**, **Dismiss** (Dismiss writes the `dismissed` status and
   deletes the item the same way, without the claim check).
 
@@ -265,7 +291,8 @@ assistant's staged commands.
 - `inboxStatus` is a new `RecordKind` keyed by `appId` and proposal `id`:
   `ran` or `dismissed`, with a timestamp. It lets every device agree what
   is done, and also serves as the replay filter. It holds no script and no
-  output.
+  output. A status older than 30 days is neither published nor
+  applied, and is pruned locally: no server still holds its proposal.
 - The proposals themselves are not synced records. Each device fetches
   them from the server queue, where they stay until handled or expired.
   A device that fetched a proposal before another device handled it

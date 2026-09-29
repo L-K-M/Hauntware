@@ -490,6 +490,11 @@ Do not "simplify" these away — they are load-bearing:
 - `ConfigStore` / `VaultStore` / `HostKeyStore` — in-memory (tests) and JSON-file
   (app) impls; SQLite/drift is the documented future swap.
 - `SyncApi` (pull/push) — `HttpSyncClient` in prod, `FakeServer` in tests.
+- `InboxApi` (the command inbox's account side) — `HttpSyncClient` in
+  prod, `_FakeInbox` in `seance_core/test/inbox_test.dart`. Apps and
+  handled statuses sync as sealed records and are never deleted by a
+  tombstone; an app's key lives in the vault as `inbox-key:<appId>`. See
+  [docs/INBOX.md](docs/INBOX.md).
 - `VaultRekeyJournal` (`file_stores.dart`) — crash recovery for a vault re-key,
   which changes the vault file and the OS keystore with no operation spanning
   both. `FileVaultStore` stages both generations to a `vault.json.rekey`

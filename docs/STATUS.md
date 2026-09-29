@@ -115,6 +115,51 @@ be excluded from sync and kept on
 one device, on top of the additive SSH keepalive controls and SFTP activity
 tracking that support Poltergeist's pooled transport policy._
 
+## Command inbox (2026-09-29)
+
+A connected app (a bot or script that must not touch production) can
+propose commands; the user reviews each one in Séance and stages it, or
+dismisses it. Design and wire format: [INBOX.md](INBOX.md). It replaces
+the snippet-sources approach of PR #151 for this workflow.
+
+- **Protocol** (`seance_protocol/src/inbox/`): the pairing string, the
+  version-1 proposal and its validation, the sealed blob (XChaCha20-
+  Poly1305 with the app id as associated data), the `inboxApp` and
+  `inboxStatus` record kinds and the server DTOs. The blob format is
+  checked against a vector sealed with libsodium.
+- **Server**: apps registered over the session with a salted-hash
+  deposit token; the token only deposits. Items listed and deleted over
+  the session, a `not_found` 404 as the claim signal, 100 pending per
+  app, 30 deposits a minute, 7-day retention. `/llms.txt`, an OpenAPI
+  description and the reference client `seance-propose.py` are served
+  unauthenticated. An interop test runs that client against a live
+  server when python3 and PyNaCl are available (skipped otherwise).
+- **Core**: `InboxService` (connect, remove, fetch, claim, dismiss),
+  `resolveInboxTarget` (label, then host name, unique match, allowed
+  set), `stageProposalScript` (upload under the script's hash, digest
+  checked), `revealInvisibles`. `SyncCoordinator` syncs apps and statuses
+  as sealed records and never deletes either on an unsealed tombstone.
+- **App**: Settings > Inbox (connect with a one-time pairing string and
+  instructions for the agent, edit, remove), a banner above the server
+  list, and the review with target, reason, revealed script, per-line
+  danger findings, Copy, Dismiss and Stage. The queue is fetched after
+  each sync round and every minute while an app is connected.
+
+Local results: `dart analyze` and `flutter analyze` clean; the three
+Dart packages pass 911 tests (6 skipped, unrelated), the app 1,150,
+including the inbox tests in `seance_protocol/test/inbox_test.dart`,
+`seance_core/test/inbox_test.dart` and `inbox_staging_test.dart`,
+`seance_sync_server/test/inbox_*_test.dart` and the app's
+`inbox_app_test.dart`, `settings_screen_test.dart` and
+`settings_window_test.dart`.
+
+**Not verified here:** the app was not driven in a running build (no
+display in this container), so staging on a real server over SFTP is
+covered only by `inbox_staging_test.dart`'s fake file system and the
+widget tests. The Settings window path (the second engine) is covered by
+the `_Link` plumbing compiling and the route's widget tests, not by
+running the window.
+
 ## The macOS titlebar is part of the window (2026-09-26)
 
 The main window on macOS now looks like Poltergeist's: no separate title
