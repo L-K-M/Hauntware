@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as paths;
 import 'package:planchette_app/services/app_settings.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -436,6 +437,8 @@ void main() {
     await store.save(const AppSettings(fontSize: 16));
     await store.save(const AppSettings(fontSize: 18));
     expect((await store.load())?.fontSize, 18);
-    expect(directory.listSync().map((entry) => entry.path), [file.path]);
+    expect(directory.listSync().map((entry) => paths.basename(entry.path)), [
+      'settings.json',
+    ]);
   });
 }
