@@ -1233,6 +1233,15 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   ) async {
     try {
       await action();
+    } on ExecutableLaunchRefused catch (refusal) {
+      // 06 §5.3's open boundary: an expected refusal, not a fault.
+      if (!mounted) return;
+      showTopToastIn(
+        context,
+        message: AppLocalizations.of(
+          context,
+        ).fileOpenProgramRefused(p.basename(refusal.path)),
+      );
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);
       if (mounted) showTopToastIn(context, message: error.toString());
@@ -2039,12 +2048,59 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         filterField: _HeaderFilterField(
           workspace: workspace,
           focusNode: _headerFilterFocus,
+          onReturnToListing: () => _focusPane(workspace.activePane),
         ),
         menuButton: mac
             ? null
             : AppMainMenuButton(commands: commands, onRun: _runCommand),
       ),
     );
+
+    // The panes | inspector boundary is a 1 px seam in the row; the
+    // splitter's grab area floats over it (see [ShellSeam]).
+    final paneRow = !inspectorInline
+        ? panes
+        : ShellSeam.straddle(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: panes),
+                const ShellSeam(),
+                SizedBox(
+                  key: const ValueKey('inspector.region'),
+                  width: inspectorWidth,
+                  child: inspector,
+                ),
+              ],
+            ),
+            end: inspectorWidth,
+            handle: ShellSplitter(
+              key: const ValueKey('inspector.splitter'),
+              focusNode: _inspectorSplitterFocus,
+              label: strings.resizeInspector,
+              value: strings.splitterWidthPx(inspectorWidth.round()),
+              increasedValue: strings.splitterWidthPx(
+                _clampInspector(
+                  inspectorWidth + shellSplitterKeyStep,
+                  width,
+                ).round(),
+              ),
+              decreasedValue: strings.splitterWidthPx(
+                _clampInspector(
+                  inspectorWidth - shellSplitterKeyStep,
+                  width,
+                ).round(),
+              ),
+              grow: -1,
+              onResizeStart: () => _inspectorDragWidth = null,
+              onResize: (delta) => _resizeInspector(delta, width),
+              onResizeEnd: _commitInspectorWidth,
+              onReset: () {
+                setState(() => _inspectorWidth = inspectorDefaultWidth);
+                _commitInspectorWidth();
+              },
+            ),
+          );
 
     final main = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2056,54 +2112,18 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         Divider(height: 1, color: chrome.separator),
         // D19's update banner lives in Alerts now (D32 §3); the pane
         // row owns the rest of the column.
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: panes),
-              if (inspectorInline) ...[
-                ShellSplitter(
-                  key: const ValueKey('inspector.splitter'),
-                  focusNode: _inspectorSplitterFocus,
-                  label: strings.resizeInspector,
-                  value: strings.splitterWidthPx(inspectorWidth.round()),
-                  increasedValue: strings.splitterWidthPx(
-                    _clampInspector(
-                      inspectorWidth + shellSplitterKeyStep,
-                      width,
-                    ).round(),
-                  ),
-                  decreasedValue: strings.splitterWidthPx(
-                    _clampInspector(
-                      inspectorWidth - shellSplitterKeyStep,
-                      width,
-                    ).round(),
-                  ),
-                  grow: -1,
-                  onResizeStart: () => _inspectorDragWidth = null,
-                  onResize: (delta) => _resizeInspector(delta, width),
-                  onResizeEnd: _commitInspectorWidth,
-                  onReset: () {
-                    setState(() => _inspectorWidth = inspectorDefaultWidth);
-                    _commitInspectorWidth();
-                  },
-                ),
-                SizedBox(
-                  key: const ValueKey('inspector.region'),
-                  width: inspectorWidth,
-                  child: inspector,
-                ),
-              ],
-            ],
-          ),
-        ),
+        Expanded(child: paneRow),
       ],
     );
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (sidebarInline) ...[
+    if (!sidebarInline) return main;
+
+    // The sidebar | main boundary is a 1 px seam, so the header divider
+    // and the sidebar's edge meet; the splitter floats over it.
+    return ShellSeam.straddle(
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           SizedBox(
             key: const ValueKey('sidebar.region'),
             width: sidebarWidth,
@@ -2121,29 +2141,31 @@ class _WorkspaceShellState extends State<WorkspaceShell>
               ),
             ),
           ),
-          ShellSplitter(
-            key: const ValueKey('sidebar.splitter'),
-            focusNode: _sidebarSplitterFocus,
-            nativeTitlebar: unifiedToolbar,
-            label: strings.resizeSidebar,
-            value: strings.splitterWidthPx(sidebarWidth.round()),
-            increasedValue: strings.splitterWidthPx(
-              _clampSidebar(sidebarWidth + shellSplitterKeyStep, width).round(),
-            ),
-            decreasedValue: strings.splitterWidthPx(
-              _clampSidebar(sidebarWidth - shellSplitterKeyStep, width).round(),
-            ),
-            onResizeStart: () => _sidebarDragWidth = null,
-            onResize: (delta) => _resizeSidebar(delta, width),
-            onResizeEnd: _commitSidebarWidth,
-            onReset: () {
-              setState(() => _sidebarWidth = sidebarDefaultWidth);
-              _commitSidebarWidth();
-            },
-          ),
+          const ShellSeam(),
+          Expanded(child: main),
         ],
-        Expanded(child: main),
-      ],
+      ),
+      start: sidebarWidth,
+      handle: ShellSplitter(
+        key: const ValueKey('sidebar.splitter'),
+        focusNode: _sidebarSplitterFocus,
+        nativeTitlebar: unifiedToolbar,
+        label: strings.resizeSidebar,
+        value: strings.splitterWidthPx(sidebarWidth.round()),
+        increasedValue: strings.splitterWidthPx(
+          _clampSidebar(sidebarWidth + shellSplitterKeyStep, width).round(),
+        ),
+        decreasedValue: strings.splitterWidthPx(
+          _clampSidebar(sidebarWidth - shellSplitterKeyStep, width).round(),
+        ),
+        onResizeStart: () => _sidebarDragWidth = null,
+        onResize: (delta) => _resizeSidebar(delta, width),
+        onResizeEnd: _commitSidebarWidth,
+        onReset: () {
+          setState(() => _sidebarWidth = sidebarDefaultWidth);
+          _commitSidebarWidth();
+        },
+      ),
     );
   }
 
@@ -2812,10 +2834,26 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         return;
       }
       await _openRemoteEntryWith(pane, entry, editorId);
+    } on ExecutableLaunchRefused {
+      if (mounted) _toastLaunchRefusal(pane, entry);
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);
       if (mounted) showTopToastIn(context, message: error.toString());
     }
+  }
+
+  /// 06 §5.3's open-boundary refusal: the file stays unlaunched and, per
+  /// §1's refusal-is-a-router rule, the toast's Open With action offers
+  /// the explicit editor choice that opens it as a document.
+  void _toastLaunchRefusal(PaneController pane, RemoteFileEntry entry) {
+    final l10n = AppLocalizations.of(context);
+    showTopToastIn(
+      context,
+      message: l10n.fileOpenProgramRefused(entry.name),
+      duration: const Duration(seconds: 12),
+      actionLabel: l10n.fileOpenWithLabel,
+      onAction: () => unawaited(_chooseEditorFor(pane, entry)),
+    );
   }
 
   /// The local rows of §4.2's table: the built-in selector rides the
@@ -2862,6 +2900,13 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       await _openBuiltInEditor(pane, entry);
       return;
     }
+    if (editorId == EditorRegistry.systemDefaultId &&
+        widget.externalOpener.launchWouldExecute(entry.name)) {
+      // Refused from the listing name before anything downloads; the
+      // opener checks the checkout's own name again at launch.
+      if (mounted) _toastLaunchRefusal(pane, entry);
+      return;
+    }
     final session = widget.checkoutSession;
     final bookmark = pane.remoteBookmark;
     if (session == null || bookmark == null) {
@@ -2902,6 +2947,10 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     if (editorId == EditorRegistry.systemDefaultId) {
       try {
         await widget.externalOpener.openSystemDefault(file.path);
+      } on ExecutableLaunchRefused {
+        // Not a failed launch: the record may be a reused copy holding
+        // local edits, so it stays (a clean one is inert until reused).
+        rethrow;
       } catch (_) {
         unawaited(session.discard(record));
         rethrow;
@@ -4333,11 +4382,20 @@ class _HeaderTitle extends StatelessWidget {
 /// D32 §4's filter field: filters the active pane's listing as the user
 /// types (the pane's own strip no longer opens for ⌘F), shows `12 of
 /// 348` while a query is active, and Esc clears it back to the listing.
+/// Esc, Enter, and ↓ all hand keyboard focus back to that listing
+/// (P4-01), so the arrows, Space, and Enter act on the results at once.
 class _HeaderFilterField extends StatefulWidget {
-  const _HeaderFilterField({required this.workspace, required this.focusNode});
+  const _HeaderFilterField({
+    required this.workspace,
+    required this.focusNode,
+    required this.onReturnToListing,
+  });
 
   final WorkspaceController workspace;
   final FocusNode focusNode;
+
+  /// Moves focus to the active pane's listing.
+  final VoidCallback onReturnToListing;
 
   @override
   State<_HeaderFilterField> createState() => _HeaderFilterFieldState();
@@ -4397,6 +4455,51 @@ class _HeaderFilterFieldState extends State<_HeaderFilterField> {
     super.dispose();
   }
 
+  /// Ends the edit on the listing instead of stranding focus on the
+  /// route scope, placing the cursor per [landing] and scrolling it
+  /// into view.
+  void _returnToListing(_FilterExitCursor landing) {
+    final pane = _bound;
+    if (pane != null && pane.entries.isNotEmpty) {
+      switch (landing) {
+        case _FilterExitCursor.keep:
+          break;
+        case _FilterExitCursor.firstIfUnset:
+          if (pane.cursorIndex == null) pane.setCursorIndex(0);
+        case _FilterExitCursor.first:
+          pane.setCursorIndex(0);
+      }
+    }
+    widget.onReturnToListing();
+    pane?.requestCursorReveal();
+  }
+
+  static const _escape = SingleActivator(LogicalKeyboardKey.escape);
+  static const _down = SingleActivator(LogicalKeyboardKey.arrowDown);
+
+  /// Esc clears the query; ↓ steps into the results' first row. An open
+  /// input-method composition owns both keys: the desktop engines offer
+  /// a key to the framework first, so declining here is what lets ↓
+  /// walk the candidates and Esc cancel the composition.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    final composing = _text.value.composing;
+    if (composing.isValid && !composing.isCollapsed) {
+      return KeyEventResult.ignored;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (_escape.accepts(event, keyboard)) {
+      _bound?.clearFilter();
+      _text.clear();
+      _returnToListing(_FilterExitCursor.keep);
+      return KeyEventResult.handled;
+    }
+    if (_down.accepts(event, keyboard)) {
+      _returnToListing(_FilterExitCursor.first);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -4406,14 +4509,10 @@ class _HeaderFilterFieldState extends State<_HeaderFilterField> {
     final active = pane != null && pane.filterActive;
     return SizedBox(
       height: 28,
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.escape): () {
-            pane?.clearFilter();
-            _text.clear();
-            widget.focusNode.unfocus();
-          },
-        },
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: _onKey,
         child: TextField(
           key: const ValueKey('header.filter'),
           controller: _text,
@@ -4422,6 +4521,12 @@ class _HeaderFilterFieldState extends State<_HeaderFilterField> {
           style: theme.textTheme.bodyMedium,
           textAlignVertical: TextAlignVertical.center,
           onChanged: (value) => pane?.setFilterQuery(value),
+          // Enter keeps the query and hands the results over; with no
+          // cursor yet the first match takes it, so Enter-then-Space
+          // previews it. Supplying this also replaces the default
+          // unfocus, which parks focus on the route scope.
+          onEditingComplete: () =>
+              _returnToListing(_FilterExitCursor.firstIfUnset),
           decoration: InputDecoration(
             isDense: true,
             filled: true,
@@ -4456,4 +4561,16 @@ class _HeaderFilterFieldState extends State<_HeaderFilterField> {
       ),
     );
   }
+}
+
+/// Where the cursor lands when the header filter hands focus back.
+enum _FilterExitCursor {
+  /// Esc: wherever it stood.
+  keep,
+
+  /// Enter: on the first match when no row holds it.
+  firstIfUnset,
+
+  /// ↓: on the first row of the results.
+  first,
 }

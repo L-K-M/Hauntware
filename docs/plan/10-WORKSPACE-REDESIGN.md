@@ -121,6 +121,11 @@ changes how it is presented.
   - panes | inspector
 - **Splitter behavior** (one reusable `ShellSplitter`):
   - 1 px line with an 8 px hit area and a resize cursor.
+  - Only the 1 px line takes part in layout (a *seam*). The hit area floats
+    over it and overlaps the regions either side, so each region's own
+    horizontal lines (the header divider, the active pane's accent line)
+    run into the vertical line instead of stopping a few pixels short.
+    Stage thresholds still budget the full hit area.
   - Focusable, resizable with the arrow keys in 16 px steps, and announced
     ("Resize sidebar, 232 pixels").
   - Double-click resets to the default.
@@ -489,8 +494,9 @@ Poltergeist and Séance are one product family. The contract:
 
 - Icon, column, and cover-flow view modes: 02 §2.2 stands.
 - Multi-window: D39 (it was D13 / D25).
-- Tree disclosure in lists: ForkLift's inline expansion needs a flattened
-  tree model in the controller, so it is its own slice.
+- Tree disclosure in lists: shipped as its own slice
+  (2026-09-26, owner-directed), specified in 02 §2.5 under
+  "Folders expand in place".
 - Remote free space: this needs `statvfs@openssh.com` exposed through the
   VFS (an upstream Séance PR). Until then remote headers show the item count
   only.

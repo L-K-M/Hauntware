@@ -1604,6 +1604,24 @@ abstract class AppLocalizations {
   /// **'This folder stopped updating automatically. Refresh to see new changes.'**
   String get paneNoticeWatchStopped;
 
+  /// Transient notice strip (02 §2.5): a folder the user opened in place with its disclosure triangle could not be listed, so it closed again. {name} is the folder's name, {reason} the listing error's sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t show what\'s in “{name}”: {reason}'**
+  String paneNoticeExpandFailed(String name, String reason);
+
+  /// Tooltip and screen-reader action on a folder row's disclosure triangle (02 §2.5): shows the folder's contents in place, indented below it, without opening the folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand'**
+  String get paneRowExpand;
+
+  /// Tooltip and screen-reader action on an expanded folder row's disclosure triangle (02 §2.5): hides the contents shown below it.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse'**
+  String get paneRowCollapse;
+
   /// Accessible name of the Get Info inspector panel (02 §2.6).
   ///
   /// In en, this message translates to:
@@ -3768,6 +3786,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open'**
   String get openWithConfirmOpen;
+
+  /// 06 §5.3's open-boundary refusal: a remote file whose type this OS runs rather than opens (.exe, .js on Windows, .command on macOS, .desktop on Linux) is never handed to the system default app. Shown with an Open With action where a remote row is the source, so an explicit editor can still open it as a document.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” could run as a program on this computer, so it wasn\'t opened with the system default app.'**
+  String fileOpenProgramRefused(String name);
 
   /// 06 §3.3's 12-second action toast when an external editor's save marks a managed checkout dirty (watch → debounce → SHA-256 reconcile).
   ///

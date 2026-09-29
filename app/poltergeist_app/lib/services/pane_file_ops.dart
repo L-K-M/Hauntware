@@ -88,29 +88,39 @@ final class PaneFileOps {
     return task;
   }
 
-  /// `file.duplicate` (⌘D / Ctrl+D): one copy task that duplicates
-  /// [pane]'s selection beside itself — keep-both on both kinds, so each
-  /// copy lands as `name (2).ext` (folders `name (2)`), the same
-  /// numbering the conflict verbs use, never an overwrite. Null when there
-  /// is nothing to duplicate. The pane refreshes when the task settles.
-  TransferTask? duplicateSelection(PaneController pane) {
+  /// `file.duplicate` (⌘D / Ctrl+D): copy tasks that duplicate [pane]'s
+  /// selection beside itself — keep-both on both kinds, so each copy
+  /// lands as `name (2).ext` (folders `name (2)`), the same numbering the
+  /// conflict verbs use, never an overwrite. One task per folder the
+  /// roots sit in: with folders open in place (02 §2.5) a selection can
+  /// span several, and each copy belongs next to its original. Empty
+  /// when there is nothing to duplicate. The pane refreshes as each task
+  /// settles.
+  List<TransferTask> duplicateSelection(PaneController pane) {
     final target = _selectionOf(pane);
-    final location = pane.location;
-    if (target == null || location == null) return null;
-    final task = _queue.enqueue(
-      TransferTaskSpec(
-        source: target.source,
-        destination: target.source,
-        rootPaths: target.paths,
-        destinationDir: location.path,
-        policy: ResolvedConflictPolicy(
-          files: ConflictResolution.keepBoth,
-          folders: ConflictResolution.keepBoth,
+    if (target == null) return const [];
+    final byFolder = <String, List<String>>{};
+    for (final path in target.paths) {
+      byFolder.putIfAbsent(paneParentPath(path), () => []).add(path);
+    }
+    final tasks = <TransferTask>[];
+    for (final MapEntry(key: folder, value: paths) in byFolder.entries) {
+      final task = _queue.enqueue(
+        TransferTaskSpec(
+          source: target.source,
+          destination: target.source,
+          rootPaths: paths,
+          destinationDir: folder,
+          policy: ResolvedConflictPolicy(
+            files: ConflictResolution.keepBoth,
+            folders: ConflictResolution.keepBoth,
+          ),
         ),
-      ),
-    );
-    refreshWhenSettled(pane, task);
-    return task;
+      );
+      refreshWhenSettled(pane, task);
+      tasks.add(task);
+    }
+    return tasks;
   }
 
   /// Refreshes [pane] once [task] reaches a terminal state, if the pane
@@ -148,7 +158,9 @@ final class PaneFileOps {
   ) {
     final location = pane.location;
     if (location == null || !pane.verbsEnabled) return null;
-    final paths = [for (final entry in pane.selectedEntries) entry.path];
+    // Roots only: a row inside a selected folder travels with the
+    // folder (02 §2.5), never a second time on its own.
+    final paths = [for (final entry in pane.selectedRoots) entry.path];
     if (paths.isEmpty) return null;
     return (source: fsLocationForLocation(location), paths: paths);
   }

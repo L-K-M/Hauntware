@@ -7,6 +7,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/pane_file_ops.dart';
+import 'package:poltergeist_app/services/selection_state.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../support/fake_app_transfer_queue.dart';
@@ -168,7 +169,7 @@ void main() {
       final queue = FakeAppTransferQueue();
       final ops = PaneFileOps(queue);
       expect(await ops.prepareDeleteSelection(pane), isNull);
-      expect(ops.duplicateSelection(pane), isNull);
+      expect(ops.duplicateSelection(pane), isEmpty);
       expect(queue.prepareDeleteCalls, isEmpty);
       expect(queue.enqueuedSpecs, isEmpty);
     });
@@ -180,8 +181,8 @@ void main() {
       ]);
       pane.selectAll();
       final queue = FakeAppTransferQueue();
-      final task = PaneFileOps(queue).duplicateSelection(pane);
-      expect(task, isNotNull);
+      final tasks = PaneFileOps(queue).duplicateSelection(pane);
+      expect(tasks, hasLength(1));
       final spec = queue.enqueuedSpecs.single;
       expect(spec.destinationDir, '/home/tester');
       expect(spec.operation, TransferOperation.copy);
@@ -195,7 +196,7 @@ void main() {
       final (pane, channel) = await browsing([_entry('a.txt')]);
       pane.selectAll();
       final queue = FakeAppTransferQueue();
-      final task = PaneFileOps(queue).duplicateSelection(pane)!;
+      final task = PaneFileOps(queue).duplicateSelection(pane).single;
       await _settle();
       final before = channel.listCalls.length;
       queue.emit(TransferQueueTaskEvent(task.id, TransferTaskState.running));
@@ -204,6 +205,82 @@ void main() {
       queue.emit(TransferQueueTaskEvent(task.id, TransferTaskState.completed));
       await _settle();
       expect(channel.listCalls.length, before + 1);
+    });
+  });
+
+  // 02 §2.5: with folders open in place, a selection can hold a folder
+  // and rows inside it, and rows in several folders.
+  group('folders opened in place', () {
+    Future<PaneController> openTree() async {
+      final (pane, channel) = await browsing([
+        _entry('cache', type: RemoteFileType.directory),
+        _entry('docker', type: RemoteFileType.directory),
+      ]);
+      channel.listings['/home/tester/cache'] = [
+        RemoteFileEntry(
+          path: '/home/tester/cache/runtimes',
+          name: 'runtimes',
+          type: RemoteFileType.directory,
+        ),
+      ];
+      pane.expandAt(0);
+      await _settle();
+      return pane;
+    }
+
+    int rowOf(PaneController pane, String name) =>
+        pane.entries.indexWhere((entry) => entry.name == name);
+
+    test('delete leaves out a row its selected folder carries', () async {
+      final pane = await openTree();
+      pane.setCursorIndex(rowOf(pane, 'cache'));
+      pane.setCursorIndex(
+        rowOf(pane, 'runtimes'),
+        update: SelectionUpdate.toggle,
+      );
+      pane.setCursorIndex(
+        rowOf(pane, 'docker'),
+        update: SelectionUpdate.toggle,
+      );
+      final queue = FakeAppTransferQueue();
+      await PaneFileOps(queue).prepareDeleteSelection(pane);
+      expect(queue.prepareDeleteCalls.single.rootPaths, [
+        '/home/tester/cache',
+        '/home/tester/docker',
+      ]);
+    });
+
+    test('delete keeps a row whose folder is not selected', () async {
+      final pane = await openTree();
+      pane.setCursorIndex(rowOf(pane, 'runtimes'));
+      pane.setCursorIndex(
+        rowOf(pane, 'docker'),
+        update: SelectionUpdate.toggle,
+      );
+      final queue = FakeAppTransferQueue();
+      await PaneFileOps(queue).prepareDeleteSelection(pane);
+      expect(queue.prepareDeleteCalls.single.rootPaths, [
+        '/home/tester/cache/runtimes',
+        '/home/tester/docker',
+      ]);
+    });
+
+    test('duplicate copies each root beside itself', () async {
+      final pane = await openTree();
+      pane.setCursorIndex(rowOf(pane, 'runtimes'));
+      pane.setCursorIndex(
+        rowOf(pane, 'docker'),
+        update: SelectionUpdate.toggle,
+      );
+      final queue = FakeAppTransferQueue();
+      expect(PaneFileOps(queue).duplicateSelection(pane), hasLength(2));
+      final specs = queue.enqueuedSpecs;
+      expect(
+        [for (final spec in specs) spec.destinationDir],
+        ['/home/tester/cache', '/home/tester'],
+      );
+      expect(specs[0].rootPaths, ['/home/tester/cache/runtimes']);
+      expect(specs[1].rootPaths, ['/home/tester/docker']);
     });
   });
 }

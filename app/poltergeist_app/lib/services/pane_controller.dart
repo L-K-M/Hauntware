@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart' show basicLocaleListResolution;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
+import '../theme/app_theme.dart' show isDesktopPlatform;
 import 'double_click_action.dart';
 import 'drag_out_controller.dart' show DragOutLeftOut;
 import 'engine_session.dart';
@@ -57,6 +58,10 @@ const _connectionLostError = RemoteFileException(
   operation: 'reconnect',
   message: '',
 );
+
+/// One stop on a tab's navigation trail (02 §2.1) with the row the user
+/// left the cursor on there, which Back and Forward re-select (P4-02).
+typedef _TrailStop = ({PaneLocation location, String? cursorPath});
 
 /// The last quiescent state, captured on every not-loading → loading
 /// transition (02 §2.8): Esc-cancel restores exactly this, never a
@@ -135,7 +140,7 @@ class _BindingRollback {
   final RemoteFileException? error;
   final SelectionState<_RowKey> selection;
   final SelectionHistory<_RowKey> selectionHistory;
-  final List<PaneLocation> history;
+  final List<_TrailStop> history;
   final int historyIndex;
   final String filterQuery;
   final bool filterFieldOpen;
@@ -143,6 +148,34 @@ class _BindingRollback {
   final PaneViewMode viewMode;
   final ServerStatus? connectionStatus;
   final _RecoveryPhase recovery;
+}
+
+/// A folder row's disclosure state (02 §2.5, folders expand in place).
+enum PaneDisclosure {
+  /// Not expandable: a file, a symbolic link, or anything else the
+  /// listing does not type as a directory (02 §2.3 never stats a link).
+  none,
+
+  /// A folder shown closed.
+  collapsed,
+
+  /// Opened, its own listing still in flight.
+  loading,
+
+  /// Opened, its children shown below it.
+  expanded,
+}
+
+/// One inline-expanded folder: its own listing once that answers, in
+/// §2.3's default order before the hidden policy — the same shape as
+/// the pane's [PaneController._sortedListing], so every lens (hidden,
+/// sort, filter) applies to children exactly as it does to the top.
+class _Expansion {
+  List<RemoteFileEntry>? children;
+
+  /// Bumped per listing issued, so a slower earlier re-list never
+  /// overwrites a newer answer.
+  int loads = 0;
 }
 
 /// Stable identity of one visible row within a listing: the entry's
@@ -360,6 +393,11 @@ enum PaneNotice {
   /// silent). A navigation to another directory, a refresh, or
   /// re-activating the tab arms it again.
   watchStopped,
+
+  /// A folder opened in place could not be listed; it closed again. The
+  /// strip names the folder and why, from
+  /// [PaneController.expansionFailure].
+  expandFailed,
 }
 
 /// A Sync Browsing mirror probe's verdict bound to the pane operation
@@ -523,6 +561,25 @@ class PaneController extends ChangeNotifier {
 
   SelectionHistory<_RowKey> _selectionHistory = const SelectionHistory.empty();
 
+  /// The folders expanded in place (02 §2.5), keyed by path, and the
+  /// location they belong to. They outlive a navigation that is still
+  /// in flight, so an Esc-cancel restores the tree as it was; the first
+  /// listing accepted for another location drops them. Keyed by path, so
+  /// two rows whose names decode to the same path ([_RowKey]'s one
+  /// collision case) open and close together — an accepted limitation
+  /// until raw-byte names land (STATUS item 13).
+  final Map<String, _Expansion> _expansions = {};
+  PaneLocation? _expansionOwner;
+
+  /// Each visible row's nesting depth, parallel to [_entries]: 0 for the
+  /// location's own entries, one more per expanded folder above.
+  List<int> _rowDepths = const [];
+
+  /// A rename's re-select that the accepted top-level listing could not
+  /// place because the renamed row sits inside an expanded folder: the
+  /// folder's re-list places it instead.
+  ({String path, bool rename})? _expansionRenameSelect;
+
   /// Whether the rendered rows are presentation cache for a location
   /// the pane has already left (02 §2.8's grace is presentation-only):
   /// set the moment a location-changing navigation resets the selection
@@ -621,6 +678,14 @@ class PaneController extends ChangeNotifier {
   /// select path by every invalidation.
   bool _renameAfterSelect = false;
 
+  /// The row the next accepted listing re-selects (P4-02): the folder
+  /// `go.enclosing` climbed out of, or the row a Back/Forward stop
+  /// remembers. Set by the location change that wants it and kept by
+  /// same-location re-lists issued before anything was accepted, so a
+  /// refresh or watch re-list mid-load still lands on it; spent by the
+  /// first accept and dropped with every cancelled listing.
+  String? _revealOnAccept;
+
   /// The Get Info inspector's on-demand folder-size session (02 §2.6):
   /// the walk's live or terminal snapshot, keyed by target path so the
   /// panel only ever shows a measure started for ITS target. One
@@ -684,7 +749,7 @@ class PaneController extends ChangeNotifier {
   /// by construction — the trail lives on the per-tab controller and
   /// never reaches a persistence surface (ghost-tab reopen deliberately
   /// starts an empty trail, the same data-loss rule as the filter).
-  final List<PaneLocation> _history = <PaneLocation>[];
+  final List<_TrailStop> _history = <_TrailStop>[];
   int _historyIndex = -1;
 
   /// 02 §2.1's path-field session (`go.editPath`/`go.toFolder`): the
@@ -943,6 +1008,288 @@ class PaneController extends ChangeNotifier {
     ];
   }
 
+  /// The selected entries an action takes as its roots: [selectedEntries]
+  /// without any row inside a selected folder (02 §2.5). With folders
+  /// expanded in place, a folder and rows inside it can both be selected;
+  /// the folder already carries those rows, so acting on them again would
+  /// copy, move, or delete them twice. A selected row under an
+  /// unselected folder stays a root of its own.
+  List<RemoteFileEntry> get selectedRoots {
+    final selected = selectedEntries;
+    if (_expansions.isEmpty || selected.length < 2) return selected;
+    final folders = {
+      for (final entry in selected)
+        if (entry.type == RemoteFileType.directory) entry.path,
+    };
+    return [
+      for (final entry in selected)
+        if (!folders.any((folder) => panePathIsUnder(entry.path, folder)))
+          entry,
+    ];
+  }
+
+  /// How deeply the visible row at [index] is nested below the location
+  /// (0 for the location's own entries).
+  int rowDepth(int index) =>
+      index >= 0 && index < _rowDepths.length ? _rowDepths[index] : 0;
+
+  /// The disclosure state of the visible row at [index].
+  PaneDisclosure disclosureAt(int index) {
+    if (index < 0 || index >= _entries.length) return PaneDisclosure.none;
+    final entry = _entries[index];
+    if (!_expandable(entry)) return PaneDisclosure.none;
+    final expansion = _ownedExpansions ? _expansions[entry.path] : null;
+    if (expansion == null) return PaneDisclosure.collapsed;
+    return expansion.children == null
+        ? PaneDisclosure.loading
+        : PaneDisclosure.expanded;
+  }
+
+  /// Only entries the listing itself types as directories expand — the
+  /// same rule [openEntry] navigates by (a symlink is not a directory
+  /// from listing metadata alone, 02 §2.3).
+  static bool _expandable(RemoteFileEntry entry) =>
+      entry.type == RemoteFileType.directory;
+
+  /// Whether [_expansions] belong to the location the rows show.
+  bool get _ownedExpansions =>
+      _expansions.isNotEmpty && _expansionOwner == _location;
+
+  /// Opens the folder row at [index] in place, listing it through the
+  /// pane's channel. Returns false when the row is not a closed folder.
+  bool expandAt(int index) {
+    if (!_rowsInteractive || disclosureAt(index) != PaneDisclosure.collapsed) {
+      return false;
+    }
+    final channel = _channel;
+    if (channel == null || connectionLost) return false;
+    if (_expansionOwner != _location) _dropExpansions();
+    _expansionOwner = _location;
+    final entry = _entries[index];
+    final expansion = _Expansion();
+    _expansions[entry.path] = expansion;
+    notifyListeners();
+    unawaited(_loadExpansion(entry, expansion, channel, reportFailure: true));
+    return true;
+  }
+
+  /// Closes the folder row at [index] and every folder opened inside it.
+  /// Selected rows inside it fold into the folder: the folder becomes
+  /// selected, and a cursor inside moves to the folder (Finder's rule),
+  /// so the selection never silently loses what the user picked. Returns
+  /// false when the row is not an open folder.
+  bool collapseAt(int index) {
+    final state = disclosureAt(index);
+    if (!_rowsInteractive ||
+        (state != PaneDisclosure.expanded && state != PaneDisclosure.loading)) {
+      return false;
+    }
+    final folder = _entries[index];
+    final fold = _foldPlan(folder.path);
+    _expansions.removeWhere(
+      (path, _) => path == folder.path || panePathIsUnder(path, folder.path),
+    );
+    _applyEntries(_filteredListing());
+    _applyFold(folder.path, fold);
+    notifyListeners();
+    return true;
+  }
+
+  /// Whether a closing [folder]'s selected rows and cursor must fold
+  /// into it — read while its rows still show, applied by [_applyFold]
+  /// once they are gone. Every path that closes a folder (a collapse, a
+  /// re-list that failed) goes through the pair, so none of them drops
+  /// what the user picked.
+  ({bool selection, bool cursor}) _foldPlan(String folder) {
+    bool inside(_RowKey key) => panePathIsUnder(key.path, folder);
+    final cursorKey = _selection.cursorKey;
+    return (
+      selection: _selection.selectedKeys.any(inside),
+      cursor: cursorKey != null && inside(cursorKey),
+    );
+  }
+
+  void _applyFold(String folder, ({bool selection, bool cursor}) plan) {
+    if (!plan.selection && !plan.cursor) return;
+    final index = _entries.indexWhere((entry) => entry.path == folder);
+    if (index < 0) return;
+    final key = _rowKeys[index];
+    final before = _selection;
+    if (plan.selection) {
+      _selection = _selection.withSelectedKeys({
+        ..._selection.selectedKeys,
+        key,
+      });
+    }
+    if (plan.cursor) _selection = _selection.withCursor(key);
+    if (!identical(before, _selection) && !quickSelectActive) {
+      _selectionHistory = _selectionHistory.record(before, _selection);
+    }
+  }
+
+  /// The disclosure triangle: opens a closed folder, closes an open one.
+  void toggleExpansionAt(int index) {
+    if (!collapseAt(index)) expandAt(index);
+  }
+
+  /// → on the cursor row (02 §2.5): opens a closed folder, or steps into
+  /// an open one's first child. Returns false when neither applies, so
+  /// the key keeps whatever meaning it had before.
+  bool expandCursor() {
+    final cursor = cursorIndex;
+    if (cursor == null || !_rowsInteractive) return false;
+    switch (disclosureAt(cursor)) {
+      case PaneDisclosure.collapsed:
+        return expandAt(cursor);
+      case PaneDisclosure.expanded:
+        final child = cursor + 1;
+        if (child < _entries.length && _rowDepths[child] > _rowDepths[cursor]) {
+          setCursorIndex(child);
+        }
+        return true;
+      case PaneDisclosure.loading:
+        return true;
+      case PaneDisclosure.none:
+        return false;
+    }
+  }
+
+  /// ← on the cursor row: closes an open folder, or steps out to the
+  /// folder a nested row sits in. Returns false at the top level with
+  /// nothing open.
+  bool collapseCursor() {
+    final cursor = cursorIndex;
+    if (cursor == null || !_rowsInteractive) return false;
+    if (collapseAt(cursor)) return true;
+    final depth = rowDepth(cursor);
+    if (depth == 0) return false;
+    for (var i = cursor - 1; i >= 0; i--) {
+      if (_rowDepths[i] < depth) {
+        setCursorIndex(i);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _dropExpansions() {
+    _expansions.clear();
+    _expansionOwner = null;
+    _expansionRenameSelect = null;
+  }
+
+  /// Lists one expanded folder on [channel]. A user's expand reports a
+  /// failure as a notice and closes the folder again; a refresh's
+  /// re-list closes it quietly (the folder is usually gone). Every
+  /// await rechecks that the expansion is still the one it loads for
+  /// (09 §3.1): a collapse, a rebind, or another location's listing
+  /// drops the answer.
+  Future<void> _loadExpansion(
+    RemoteFileEntry folder,
+    _Expansion expansion,
+    AppBrowseChannel channel, {
+    required bool reportFailure,
+  }) async {
+    final load = ++expansion.loads;
+    bool current() =>
+        !_disposed &&
+        identical(channel, _channel) &&
+        identical(_expansions[folder.path], expansion) &&
+        load == expansion.loads;
+    var fold = (selection: false, cursor: false);
+    try {
+      final listed = await channel.listDirectory(folder.path);
+      if (!current()) return;
+      expansion.children = sortFileEntries(listed);
+    } on RemoteFileException catch (error) {
+      if (!current()) return;
+      fold = _foldPlan(folder.path);
+      _expansions.remove(folder.path);
+      if (reportFailure) {
+        _expansionFailure = (name: folder.name, error: error);
+        _postNotice(PaneNotice.expandFailed);
+      }
+    } on Object catch (error, stackTrace) {
+      if (!current()) return;
+      _report(error, stackTrace);
+      fold = _foldPlan(folder.path);
+      _expansions.remove(folder.path);
+      if (reportFailure) {
+        _expansionFailure = (
+          name: folder.name,
+          error: PaneFaultException(PaneFault.listFolder, operation: 'list'),
+        );
+        _postNotice(PaneNotice.expandFailed);
+      }
+    }
+    // Rows re-derive only while they are this location's own: an answer
+    // landing during another navigation is kept for an Esc-cancel.
+    if (_staleRows || _expansionOwner != _location) return;
+    // Nothing awaits this load: a fault re-deriving the rows is reported
+    // here, not left as an unhandled async error.
+    try {
+      _applyEntries(_filteredListing());
+      _applyFold(folder.path, fold);
+      _placeExpansionRenameSelect();
+    } on Object catch (error, stackTrace) {
+      _report(error, stackTrace);
+    }
+    notifyListeners();
+  }
+
+  /// Re-lists every open folder after the location's own listing was
+  /// accepted, keeping its old children on screen until the answer.
+  void _relistExpansions(AppBrowseChannel channel) {
+    for (final entry in _expansions.entries.toList()) {
+      final folder = _sortedListingEntryOrRow(entry.key);
+      if (folder == null) {
+        _expansions.remove(entry.key);
+        continue;
+      }
+      unawaited(
+        _loadExpansion(folder, entry.value, channel, reportFailure: false),
+      );
+    }
+  }
+
+  /// The listed entry for an expanded folder's [path]: from the top-level
+  /// listing or an open folder's children, null when it is gone.
+  RemoteFileEntry? _sortedListingEntryOrRow(String path) {
+    for (final entry in _sortedListing) {
+      if (entry.path == path) return entry;
+    }
+    for (final expansion in _expansions.values) {
+      for (final entry in expansion.children ?? const <RemoteFileEntry>[]) {
+        if (entry.path == path) return entry;
+      }
+    }
+    return null;
+  }
+
+  void _placeExpansionRenameSelect() {
+    final pending = _expansionRenameSelect;
+    if (pending == null) return;
+    final index = _entries.indexWhere((entry) => entry.path == pending.path);
+    if (index < 0) return;
+    _expansionRenameSelect = null;
+    setCursorIndex(index);
+    if (pending.rename &&
+        _renameSession == null &&
+        !_renameInFlight &&
+        !nameIsFlagged(_entries[index].name)) {
+      _renameSession = _RenameSession(
+        entry: _entries[index],
+        rowKey: _rowKeys[index],
+      );
+    }
+  }
+
+  /// The folder whose expand failed and why, for
+  /// [PaneNotice.expandFailed]'s sentence.
+  ({String name, RemoteFileException error})? get expansionFailure =>
+      _expansionFailure;
+  ({String name, RemoteFileException error})? _expansionFailure;
+
   /// Whether the rendered rows are a disowned cached listing — inert
   /// from the moment a location-changing navigation issues, not from
   /// the dim's appearance (02 §2.8). The view reads this to block
@@ -1055,7 +1402,7 @@ class PaneController extends ChangeNotifier {
   /// location: a cancelled first listing leaves the location null while
   /// the channel stays live, and a null location on a remote pane must
   /// never mint a local one.
-  void navigate(String path) {
+  void navigate(String path, {String? reveal}) {
     if (_disposed || _channel == null || connectionLost) return;
     final serverId = _pendingRemote?.id;
     _issueNavigation(
@@ -1064,6 +1411,7 @@ class PaneController extends ChangeNotifier {
           : LocalPaneLocation(path),
       path,
       _channel!,
+      reveal: reveal,
     );
   }
 
@@ -1218,12 +1566,14 @@ class PaneController extends ChangeNotifier {
   }
 
   /// Navigates to the parent folder; the root is its own parent (no-op).
+  /// The folder it climbs out of is re-selected once the parent lists
+  /// (P4-02), so ⌘↓ goes straight back in and ↓ to the next sibling.
   void goUp() {
     final current = _location;
     if (current == null) return;
     final parent = paneParentPath(current.path);
     if (parent == current.path) return;
-    navigate(parent);
+    navigate(parent, reveal: current.path);
   }
 
   /// Browses the binding's home (02 §8.3's `go.home`): the user's home
@@ -1330,6 +1680,7 @@ class PaneController extends ChangeNotifier {
     final answered = _answeredGeneration;
     _issuedGeneration++;
     _answeredGeneration = _issuedGeneration;
+    _revealOnAccept = null;
     _snapshot = null;
     notifyListeners();
     // No re-list here: that would re-enter the loading state the user
@@ -1370,25 +1721,59 @@ class PaneController extends ChangeNotifier {
   /// index so a later Forward still names where the user was heading.
   void goBack() {
     if (_disposed || !canGoBack) return;
-    _historyIndex--;
-    _issueNavigation(
-      _history[_historyIndex],
-      _history[_historyIndex].path,
-      _channel!,
-      historyTraversal: true,
-    );
+    _traverseHistory(-1);
   }
 
   /// Forward (Alt+Right / ⌘]): [goBack]'s mirror.
   void goForward() {
     if (_disposed || !canGoForward) return;
-    _historyIndex++;
+    _traverseHistory(1);
+  }
+
+  /// Walks the trail by [step] and reissues the stop it lands on. The
+  /// stop re-selects the row the user left there — or, walking back to
+  /// an ancestor with nothing remembered, the folder on the way down to
+  /// where the user stood (P4-02).
+  void _traverseHistory(int step) {
+    _rememberCursor();
+    final from = _location?.path;
+    _historyIndex += step;
+    final stop = _history[_historyIndex];
+    final path = stop.location.path;
     _issueNavigation(
-      _history[_historyIndex],
-      _history[_historyIndex].path,
+      stop.location,
+      path,
       _channel!,
       historyTraversal: true,
+      reveal: stop.cursorPath ?? (from == null ? null : _childToward(path, from)),
     );
+  }
+
+  /// Records the cursor row on the trail stop the pane stands on. Rows
+  /// an in-flight navigation already disowned keep what the stop held.
+  void _rememberCursor() {
+    if (_staleRows || _historyIndex < 0 || _historyIndex >= _history.length) {
+      return;
+    }
+    final stop = _history[_historyIndex];
+    if (stop.location != _location) return;
+    final cursor = cursorIndex;
+    _history[_historyIndex] = (
+      location: stop.location,
+      cursorPath: cursor == null ? null : _entries[cursor].path,
+    );
+  }
+
+  /// The child of [ancestor] that [path] is, or lies under; null when
+  /// [path] is not below [ancestor].
+  static String? _childToward(String ancestor, String path) {
+    var node = path;
+    while (true) {
+      final parent = paneParentPath(node);
+      if (parent == node) return null;
+      if (parent == ancestor) return node;
+      node = parent;
+    }
   }
 
   /// Whether the path field can open: a bound pane with a live channel.
@@ -1628,14 +2013,14 @@ class PaneController extends ChangeNotifier {
     final origin = _historyIndex.clamp(0, _history.length - 1);
     for (var delta = 0; delta < _history.length; delta++) {
       final below = origin - delta;
-      if (below >= 0 && _history[below] == location) {
+      if (below >= 0 && _history[below].location == location) {
         _historyIndex = below;
         return;
       }
       final above = origin + delta;
       if (above != below &&
           above < _history.length &&
-          _history[above] == location) {
+          _history[above].location == location) {
         _historyIndex = above;
         return;
       }
@@ -1680,6 +2065,21 @@ class PaneController extends ChangeNotifier {
     }
     // Moving on from the file that failed to open retires its error.
     if (_error is OpenEntryError) _error = null;
+    notifyListeners();
+  }
+
+  /// Bumped by [requestCursorReveal]; the view scrolls the cursor row
+  /// into view on each change.
+  int get cursorRevealGeneration => _cursorRevealGeneration;
+  int _cursorRevealGeneration = 0;
+
+  /// Asks the view to scroll the cursor row into view — for cursor
+  /// moves made outside the listing, such as the header filter handing
+  /// focus back (P4-01), where the view sees no key event to react to.
+  /// The scroll position stays the view's; this only counts requests.
+  void requestCursorReveal() {
+    if (_disposed || cursorIndex == null) return;
+    _cursorRevealGeneration++;
     notifyListeners();
   }
 
@@ -3246,6 +3646,7 @@ class PaneController extends ChangeNotifier {
     _filterQuery = '';
     _filterFieldOpen = false;
     _staleRows = false;
+    _dropExpansions();
     _applyEntries(const []);
     _error = null;
     _snapshot = null;
@@ -3273,6 +3674,7 @@ class PaneController extends ChangeNotifier {
     _renameSession = null;
     _pendingRenameSelectPath = null;
     _renameAfterSelect = false;
+    _revealOnAccept = null;
     _endFolderSize();
     _endEnclosedApply();
     _noticeTimer?.cancel();
@@ -3550,6 +3952,7 @@ class PaneController extends ChangeNotifier {
       _setListing(const []);
       // No rows at all now — nothing stale is left to guard.
       _staleRows = false;
+      _dropExpansions();
       _applyEntries(const []);
       _error = null;
       _recovery = _RecoveryPhase.none;
@@ -3569,9 +3972,11 @@ class PaneController extends ChangeNotifier {
     _cancelActivationRefresh();
     _issuedGeneration++;
     _answeredGeneration = _issuedGeneration;
-    // A cancelled listing can never consume a pending rename re-select.
+    // A cancelled listing can never consume a pending rename re-select
+    // or return re-select.
     _pendingRenameSelectPath = null;
     _renameAfterSelect = false;
+    _revealOnAccept = null;
   }
 
   /// The browse target of the in-flight or last-failed local open —
@@ -3640,6 +4045,7 @@ class PaneController extends ChangeNotifier {
     String path,
     AppBrowseChannel channel, {
     bool historyTraversal = false,
+    String? reveal,
   }) {
     _cancelActivationRefresh();
     // Quick Select ends BEFORE the navigation snapshot and the selection
@@ -3678,6 +4084,7 @@ class PaneController extends ChangeNotifier {
       _renameInFlight = false;
     }
     if (!historyTraversal && target != _location) {
+      _rememberCursor();
       // 02 §2.1's branch semantics: a user-driven navigation to a new
       // location truncates the forward entries and records the target
       // at issue time — an interrupted or failed navigation stays in
@@ -3689,8 +4096,8 @@ class PaneController extends ChangeNotifier {
       if (_historyIndex < _history.length - 1) {
         _history.removeRange(_historyIndex + 1, _history.length);
       }
-      if (_history.isEmpty || _history.last != target) {
-        _history.add(target);
+      if (_history.isEmpty || _history.last.location != target) {
+        _history.add((location: target, cursorPath: null));
       }
       _historyIndex = _history.length - 1;
     }
@@ -3715,6 +4122,7 @@ class PaneController extends ChangeNotifier {
       // governs presentation only, never interaction eligibility.
       _staleRows = true;
       _selection = SelectionState<_RowKey>.begin(rows: const []);
+      _revealOnAccept = reveal;
       _selectionHistory = const SelectionHistory.empty();
     }
     _location = target;
@@ -3750,12 +4158,15 @@ class PaneController extends ChangeNotifier {
       // The candidate answered — its binding is now the pane's, so the
       // prior binding's channel finally retires.
       _retireRollback();
+      // Open folders belong to the location they were opened in.
+      if (_expansionOwner != _location) _dropExpansions();
       _sortedListing = sortFileEntries(listed);
       _setListing(_hiddenFiltered(_sortedListing));
       // The accepted listing owns its rows again — clear before
       // publishing so listeners never see owned rows flagged stale.
       _staleRows = false;
       _applyEntries(_filteredListing());
+      _applyReveal();
       final renameSelect = _pendingRenameSelectPath;
       final renameAfterSelect = _renameAfterSelect;
       _pendingRenameSelectPath = null;
@@ -3770,8 +4181,17 @@ class PaneController extends ChangeNotifier {
         if (index >= 0) {
           setCursorIndex(index);
           if (renameAfterSelect) openRenameAt = index;
+        } else if (_expansions.keys.any(
+          (folder) => panePathIsUnder(renameSelect, folder),
+        )) {
+          // Inside an open folder: its re-list below places the row.
+          _expansionRenameSelect = (
+            path: renameSelect,
+            rename: renameAfterSelect,
+          );
         }
       }
+      if (_expansions.isNotEmpty) _relistExpansions(channel);
       _recovery = _RecoveryPhase.none;
       _answeredGeneration = generation;
       // The commit marker moves only here — an accepted answer. The
@@ -3835,6 +4255,24 @@ class PaneController extends ChangeNotifier {
     }
   }
 
+  /// Spends [_revealOnAccept] on the listing just accepted: its row
+  /// takes the cursor unless something already holds it. Desktop only —
+  /// D32 §9's touch rows never gain a verb subject the user did not
+  /// pick, and the compact listing draws a selected row as a checked
+  /// selection.
+  void _applyReveal() {
+    final reveal = _revealOnAccept;
+    _revealOnAccept = null;
+    if (reveal == null ||
+        _selection.cursorKey != null ||
+        !isDesktopPlatform(defaultTargetPlatform)) {
+      return;
+    }
+    final index = _entries.indexWhere((entry) => entry.path == reveal);
+    if (index < 0) return;
+    _selection = _selection.activate(_rowKeys[index], SelectionUpdate.single);
+  }
+
   /// Adopts [entries] as the pane's VISIBLE rows (already through the
   /// §2.5 filter where one is active) and prunes the selection against
   /// the new row identities: surviving keys keep their selection,
@@ -3858,6 +4296,7 @@ class PaneController extends ChangeNotifier {
     // silently.
     final rename = _renameSession;
     _renameSession = null;
+    entries = _withExpandedChildren(entries);
     _entries = entries;
     _foldedNames = List.generate(entries.length, (i) {
       final name = entries[i].name;
@@ -3876,6 +4315,45 @@ class PaneController extends ChangeNotifier {
       );
       _renameSession = rename;
     }
+  }
+
+  /// [top] with each open folder's children below it, through the same
+  /// hidden, sort and filter lenses as the top level, and [_rowDepths]
+  /// to match. A folder the filter hides takes its children with it.
+  List<RemoteFileEntry> _withExpandedChildren(List<RemoteFileEntry> top) {
+    if (!_ownedExpansions) {
+      _rowDepths = List.filled(top.length, 0);
+      return top;
+    }
+    final folded = _filterQuery.isEmpty
+        ? null
+        : ListingFilter(_filterQuery).foldedQuery;
+    final rows = <RemoteFileEntry>[];
+    final depths = <int>[];
+    void add(List<RemoteFileEntry> level, int depth) {
+      for (final entry in level) {
+        rows.add(entry);
+        depths.add(depth);
+        final children = _expandable(entry)
+            ? _expansions[entry.path]?.children
+            : null;
+        if (children == null) continue;
+        final visible = _hiddenFiltered(children);
+        add(
+          folded == null
+              ? visible
+              : [
+                  for (final child in visible)
+                    if (child.name.toLowerCase().contains(folded)) child,
+                ],
+          depth + 1,
+        );
+      }
+    }
+
+    add(top, 0);
+    _rowDepths = List.unmodifiable(depths);
+    return List.unmodifiable(rows);
   }
 
   static Iterable<_RowKey> _keysFor(List<RemoteFileEntry> entries) sync* {
