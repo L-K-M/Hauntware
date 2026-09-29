@@ -177,9 +177,12 @@ package_linux() {
 }
 
 build_flatpak() {
-  if [[ "$(uname -s)" != "Linux" ]]; then
+  if [[ "$HOST" != "linux" ]]; then
     record "flatpak: skipped (Linux only)"
     return 0
+  fi
+  if ! have flatpak-builder; then
+    skip_or_fail flatpak "flatpak-builder not found"; return
   fi
   # Reuse the .deb the app target just packaged; build one when absent.
   local deb
