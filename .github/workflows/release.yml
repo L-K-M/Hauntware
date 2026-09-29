@@ -418,11 +418,11 @@ jobs:
           scripts/package-linux.sh \
             --bundle "$(ls -d app/planchette_app/build/linux/*/release/bundle)" \
             --output-dir . --skip-appimage
-          scripts/build-flatpak.sh "$(ls -t planchette_*.deb | head -1)"
+          scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'planchette_*.deb' -print -quit)"
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
-          files: planchette-linux-x64.flatpak
+          files: dist/planchette-linux-x64.flatpak
           fail_on_unmatched_files: true
 
   # Every release carries SHA-256 checksums for all assets — SHA256SUMS

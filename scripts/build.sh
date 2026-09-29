@@ -59,7 +59,7 @@ case "$target" in
       "$root/scripts/package-linux.sh" --bundle "$source" --skip-appimage
     fi
     if $flatpak; then
-      "$root/scripts/build-flatpak.sh" "$(ls -t "$root"/dist/planchette_*.deb | head -1)"
+      "$root/scripts/build-flatpak.sh" "$(find "$root/dist" -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
     fi
     if $install; then
       installed="$HOME/.local/opt/planchette"

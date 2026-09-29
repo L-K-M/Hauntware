@@ -118,7 +118,7 @@ jobs:
           # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
           # (flatpak's sandbox helper) builds in.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-          scripts/build-flatpak.sh "$(ls -t dist/planchette_*.deb | head -1)"
+          scripts/build-flatpak.sh "$(find dist -maxdepth 1 -type f -name 'planchette_*.deb' -print -quit)"
       - name: Native keyboard modifiers
         if: matrix.target == 'macos'
         run: scripts/test-macos-keyboard.sh
