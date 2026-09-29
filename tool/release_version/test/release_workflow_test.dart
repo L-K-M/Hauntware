@@ -601,6 +601,7 @@ void main() {
     expect(run, contains('poltergeist_*.deb'));
     expect(run, contains('poltergeist-linux-x64.AppImage'));
     expect(run, contains('poltergeist-linux-x64.tar.gz'));
+    expect(run, contains('poltergeist-linux-x64.flatpak'));
     expect(run, contains('sha256sum'));
     expect(run, contains('gh release upload'));
     expect(run, contains('--notes-file'));
@@ -1040,6 +1041,7 @@ enum _DraftAssets {
     'poltergeist_0.1.0-1_amd64.deb',
     'poltergeist-linux-x64.AppImage',
     'poltergeist-linux-x64.tar.gz',
+    'poltergeist-linux-x64.flatpak',
     'poltergeist-macos-universal.zip',
     'poltergeist-ios-unsigned.ipa',
     'poltergeist-windows-x64.zip',
@@ -1048,6 +1050,7 @@ enum _DraftAssets {
     'poltergeist_0.1.0-1_amd64.deb',
     'poltergeist-linux-x64.AppImage',
     'poltergeist-linux-x64.tar.gz',
+    'poltergeist-linux-x64.flatpak',
     'poltergeist-macos-universal.zip',
     'poltergeist-ios-unsigned.ipa',
     'poltergeist-windows-x64.zip',
