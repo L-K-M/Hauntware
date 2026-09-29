@@ -78,7 +78,7 @@ Plaintext is UTF-8 JSON:
 - `id`: you choose it; 1 to 64 characters of `A-Z a-z 0-9 . _ -`. Unique per
   app: a repeated id is dropped as a replay.
 - `host`: the target, matched case-insensitively against the server's name
-  in Séance, then its host name. One non-empty line. No match means the
+  in Séance, then its host name. One line, 1 to 200 characters. No match means the
   user can read the proposal but not run it.
 - `title`: one line, 1 to 200 characters.
 - `reason`: optional, up to 4000 characters, shown as plain text. Say why.
@@ -276,12 +276,13 @@ PAIRING_PREFIX = "seance-inbox:"
 AAD_PREFIX = "seance/v1/inbox/"
 NONCE_BYTES = 24
 MAX_TITLE_CHARS = 200
+MAX_HOST_CHARS = 200
 MAX_REASON_CHARS = 4000
 MAX_SCRIPT_BYTES = 64 * 1024
 MAX_BLOB_BYTES = 96 * 1024
 RETENTION_SECONDS = 7 * 24 * 3600
 ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
-LINE_BREAKS = ("\n", "\r", " ")
+LINE_BREAKS = ("\n", "\r", "\u2028", "\u2029")
 
 
 class UsageError(Exception):
@@ -320,7 +321,8 @@ def decode_pairing(text):
 def one_line(name, value, limit=None):
     if not value.strip() or any(c in value for c in LINE_BREAKS):
         raise UsageError("%s must be a non-empty single line" % name)
-    if limit is not None and utf16_length(value) > limit:
+    # Measured as sent: build_proposal strips the value.
+    if limit is not None and utf16_length(value.strip()) > limit:
         raise UsageError("%s is longer than %d characters" % (name, limit))
 
 
@@ -328,12 +330,15 @@ def build_proposal(args, script):
     proposal_id = args.id or uuid.uuid4().hex
     if not ID_PATTERN.match(proposal_id):
         raise UsageError('--id must be 1 to 64 characters of A-Z, a-z, 0-9, ".", "_" or "-"')
-    one_line("--host", args.host)
+    one_line("--host", args.host, MAX_HOST_CHARS)
     one_line("--title", args.title, MAX_TITLE_CHARS)
     reason = args.reason or ""
     if args.reason_file:
         with open(args.reason_file, "rb") as f:
-            reason = f.read().decode("utf-8")
+            try:
+                reason = f.read().decode("utf-8")
+            except UnicodeDecodeError:
+                raise UsageError("--reason-file is not UTF-8 text")
     if utf16_length(reason) > MAX_REASON_CHARS:
         raise UsageError("reason is longer than %d characters" % MAX_REASON_CHARS)
     if not script.strip():
@@ -380,8 +385,9 @@ def post(url, app, token, blob):
     except urllib.error.HTTPError as e:
         try:
             body = json.loads(e.read().decode("utf-8"))
-            detail = "%s: %s" % (body.get("error"), body.get("message"))
-        except ValueError:
+            detail = "%s: %s" % (body["error"], body["message"])
+        except (ValueError, KeyError, TypeError):
+            # Not the server's own error shape: whatever sits in front of it.
             detail = e.reason
         raise RuntimeError("server answered %d (%s)" % (e.code, detail))
     except urllib.error.URLError as e:

@@ -208,10 +208,17 @@ class HttpSyncClient implements SyncApi, InboxApi {
         .timeout(timeout);
     if (res.statusCode >= 400) _fail(res);
     final json = jsonDecode(res.body) as Map<String, dynamic>;
-    return [
-      for (final item in json['items'] as List)
-        InboxItem.fromJson((item as Map).cast()),
-    ];
+    final items = <InboxItem>[];
+    // One malformed entry must not hide every other proposal, so it is
+    // skipped rather than failing the whole list.
+    for (final item in json['items'] as List) {
+      try {
+        items.add(InboxItem.fromJson((item as Map).cast()));
+      } on Object {
+        continue;
+      }
+    }
+    return items;
   }
 
   @override

@@ -44,7 +44,26 @@ RevealedScript revealInvisibles(String script) {
   return RevealedScript(out.toString(), hidden);
 }
 
+/// Spaces other than U+0020, and code points Unicode itself says to render
+/// as nothing. The first look like a space but are not one to a shell:
+/// `true<U+00A0>|| rm x` reads as a no-op, while bash takes `true<U+00A0>`
+/// as one word, fails to find it and runs `rm x`.
+final RegExp _deceptiveBlank = RegExp(
+  r'[\p{Zs}\p{Default_Ignorable_Code_Point}]',
+  unicode: true,
+);
+
+/// Braille blank: in neither class, and drawn as nothing.
+const int _kBrailleBlank = 0x2800;
+
 bool _isInvisible(int rune) =>
+    // Printable ASCII, which is nearly every script, skips the regex.
+    (rune >= 0x20 && rune < 0x7f) ? false : _isInvisibleSlow(rune);
+
+bool _isInvisibleSlow(int rune) =>
+    (rune != 0x20 &&
+        (rune == _kBrailleBlank ||
+            _deceptiveBlank.hasMatch(String.fromCharCode(rune)))) ||
     rune < 0x20 ||
     (rune >= 0x7f && rune <= 0x9f) ||
     rune == 0x00ad ||
@@ -54,6 +73,9 @@ bool _isInvisible(int rune) =>
     (rune >= 0x2028 && rune <= 0x202e) ||
     (rune >= 0x2060 && rune <= 0x206f) ||
     rune == 0xfeff ||
+    // Variation selectors: zero-width, and able to carry hidden data.
+    (rune >= 0xfe00 && rune <= 0xfe0f) ||
+    (rune >= 0xe0100 && rune <= 0xe01ef) ||
     (rune >= 0xfff9 && rune <= 0xfffb) ||
     (rune >= 0xe0000 && rune <= 0xe007f);
 
@@ -117,7 +139,15 @@ Future<StagedScript> stageProposalScript(
     preserveMode: _kScriptMode,
   );
   final uploaded = entry.contentSha256;
-  if (uploaded != null && uploaded.toLowerCase() != digest) {
+  if (uploaded == null) {
+    // Every implementation in this repo hashes by default; one that cannot
+    // leaves the uploaded bytes unverified, so nothing is run.
+    throw const InboxStagingException(
+      'The server did not report a checksum for the uploaded script, so it '
+      'could not be checked against the one you reviewed.',
+    );
+  }
+  if (uploaded.toLowerCase() != digest) {
     throw const InboxStagingException(
       'The uploaded script does not match the one you reviewed.',
     );

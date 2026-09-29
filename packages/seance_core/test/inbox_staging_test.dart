@@ -14,6 +14,9 @@ class _FakeFs implements RemoteFileSystem {
   /// Replaces what an upload stores, as a server tampering with it would.
   List<int> Function(List<int>)? tamper;
 
+  /// Reports no digest for an upload, as a backend that cannot hash would.
+  bool withholdDigest = false;
+
   RemoteFileEntry _entry(String path, RemoteFileType type, [List<int>? data]) =>
       RemoteFileEntry(
         path: path,
@@ -66,7 +69,14 @@ class _FakeFs implements RemoteFileSystem {
     var data = [for (final chunk in await content.toList()) ...chunk];
     data = tamper?.call(data) ?? data;
     files[path] = data;
-    return _entry(path, RemoteFileType.file, data);
+    final entry = _entry(path, RemoteFileType.file, data);
+    if (!withholdDigest) return entry;
+    return RemoteFileEntry(
+      path: entry.path,
+      name: entry.name,
+      type: entry.type,
+      size: entry.size,
+    );
   }
 
   @override
@@ -116,6 +126,14 @@ void main() {
     );
   });
 
+  test('refuses when the upload reports no digest', () async {
+    final fs = _FakeFs()..withholdDigest = true;
+    await expectLater(
+      stageProposalScript(fs, _proposal('echo safe')),
+      throwsA(isA<InboxStagingException>()),
+    );
+  });
+
   test('refuses a staging path that is not a directory', () async {
     final fs = _FakeFs()..files['/home/u/.seance'] = [1];
     await expectLater(
@@ -140,6 +158,29 @@ void main() {
         'rm -rf /tmp/x<U+202E>#<U+200B><U+000D><U+001B>[2J<U+2066>',
       );
       expect(r.hiddenCount, 5);
+    });
+
+    test('escapes blanks the shell does not treat as spaces', () {
+      // Reads as `true || rm x`; bash runs `rm x`.
+      final r = revealInvisibles('true\u00A0|| rm x');
+      expect(r.text, 'true<U+00A0>|| rm x');
+      for (final blank in [
+        0x2000, 0x202f, 0x3000, 0x115f, 0x3164, 0xffa0, //
+        0x034f, 0x180b, 0x17b4, 0x1d173, 0x2800,
+      ]) {
+        expect(
+          revealInvisibles('a${String.fromCharCode(blank)}b').hasHidden,
+          isTrue,
+          reason: blank.toRadixString(16),
+        );
+      }
+      expect(revealInvisibles('a b\tc').hasHidden, isFalse);
+    });
+
+    test('escapes variation selectors', () {
+      final r = revealInvisibles('echo a\uFE0Fb\u{E0100}');
+      expect(r.text, 'echo a<U+FE0F>b<U+E0100>');
+      expect(r.hiddenCount, 2);
     });
   });
 }

@@ -131,4 +131,28 @@ void main() {
       );
     });
   });
+
+  test('listItems skips a malformed item instead of failing the list', () async {
+    final good = {
+      'app': 'AAAAAAAAAAAAAAAAAAAAAA',
+      'item': 'i1',
+      'received': 1,
+      'blob': base64.encode(List<int>.filled(48, 0)),
+    };
+    final sync = HttpSyncClient(
+      baseUrl: 'https://host',
+      client: MockClient((req) async => http.Response(
+            jsonEncode({
+              'items': [
+                {'app': 'x'},
+                'not an object',
+                good,
+              ],
+            }),
+            200,
+          )),
+    );
+    final items = await sync.listItems(since: 0);
+    expect(items.map((i) => i.itemId), ['i1']);
+  });
 }

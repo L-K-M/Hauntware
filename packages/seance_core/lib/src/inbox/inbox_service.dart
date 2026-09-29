@@ -204,7 +204,10 @@ class InboxService {
   /// the app record may simply not have synced here yet.
   Future<List<PendingProposal>> refresh() async {
     final current = await cache.load();
-    final items = await api.listItems(since: current.cursor);
+    // Sorted here rather than trusted: the cursor logic below is only sound
+    // in `received` order, and an item skipped past is never fetched again.
+    final items = [...await api.listItems(since: current.cursor)]
+      ..sort((a, b) => a.received.compareTo(b.received));
     final proposals = [...current.proposals];
     final failures = {...current.failures};
     var cursor = current.cursor;
