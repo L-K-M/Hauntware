@@ -44,6 +44,13 @@ jobs:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
+      # Formatting needs each package's language version resolved first —
+      # unresolved, the formatter guesses and reports phantom diffs.
+      - name: Resolve packages
+        run: |
+          (cd packages/planchette_core && dart pub get)
+          (cd packages/planchette_editor && flutter pub get)
+          (cd app/planchette_app && flutter pub get)
       - name: Shared editor
         working-directory: packages/planchette_editor
         run: |
@@ -56,6 +63,12 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test
+      # After the tests, so a formatting slip never hides their results.
+      - name: Format
+        run: >-
+          dart format --set-exit-if-changed --output=none
+          packages/planchette_core packages/planchette_editor
+          app/planchette_app
 
   desktop:
     name: Desktop (${{ matrix.target }})

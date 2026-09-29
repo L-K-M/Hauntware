@@ -39,6 +39,7 @@ abstract interface class DocumentDialogs {
   /// is dirty. [names] lists them, so the answer is about files the user can
   /// see rather than a count.
   Future<BulkCloseChoice> chooseBulkClose(List<String> names);
+  Future<bool> confirmRevert(String name);
 }
 
 /// One controller survives tab switches, retaining undo, selection, find and
@@ -54,6 +55,10 @@ final class DocumentTab {
   TextDocument? baseline;
   String? path;
   bool busy = false;
+
+  /// Set while a confirmed revert reads the file. The buffer is about to be
+  /// replaced, so it takes no edits and no save may write it.
+  bool _reverting = false;
 
   /// Bumped when the tab is chosen by opening a document it already holds, so
   /// the shell can point at it. Monotonic, never reset: a view compares it to
@@ -108,6 +113,13 @@ final class DocumentWorkspace extends ChangeNotifier {
   final Map<String, Future<_OpenFailure?>> _opening = {};
   final Set<DocumentTab> _closingTabs = {};
   final Map<DocumentTab, Future<bool>> _saves = {};
+
+  /// Files whose tabs the user closed, most recent last, for Reopen Closed
+  /// Tab. Bounded so a long session does not keep every path it touched.
+  /// Closed files, oldest first, with where the caret was: a line and
+  /// column survive the file changing on disk better than an offset would.
+  final List<({String path, int line, int column})> _closedPaths = [];
+  static const _closedPathLimit = 20;
   int _nextId = 1;
   int _dialogCount = 0;
   Indentation? _indentationPreference;
@@ -165,10 +177,12 @@ final class DocumentWorkspace extends ChangeNotifier {
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,
+      // Read the path at call time: Save As retargets the tab, and a reload
+      // must follow the new location rather than the one it was opened with.
       loadDocument: path == null
           ? null
           : () async {
-              final document = await store.load(path);
+              final document = await store.load(tab.path!);
               tab.baseline = document;
               tab.path = document.file.path;
               return document;
@@ -353,6 +367,41 @@ final class DocumentWorkspace extends ChangeNotifier {
     );
   }
 
+  /// Whether Reopen Closed Tab has a closed file that is not open again.
+  bool get canReopenClosed =>
+      !interactionLocked &&
+      _closedPaths.any((closed) => _findPath(closed.path) == null);
+
+  /// Reopens the most recently closed file. Entries opened again some other
+  /// way are skipped, so the command always brings back a closed tab.
+  Future<void> reopenClosed() async {
+    if (interactionLocked) return;
+    while (_closedPaths.isNotEmpty) {
+      final closed = _closedPaths.removeLast();
+      if (_findPath(closed.path) != null) continue;
+      _notify();
+      await open(closed.path);
+      // Back where the caret was, clamped to the file as it is now. Only a
+      // tab this open created: a failed open shows nothing to move.
+      final reopened = _findPath(closed.path);
+      if (reopened != null && reopened == _active) {
+        reopened.editor.goToLine(closed.line, column: closed.column);
+      }
+      return;
+    }
+  }
+
+  void _rememberClosed(DocumentTab tab) {
+    final path = tab.path;
+    if (path == null) return;
+    final key = _pathKey(path);
+    final (line, column) = tab.editor.caretLineColumn;
+    _closedPaths
+      ..removeWhere((closed) => _pathKey(closed.path) == key)
+      ..add((path: path, line: line, column: column));
+    if (_closedPaths.length > _closedPathLimit) _closedPaths.removeAt(0);
+  }
+
   Future<_OpenFailure?> _open(String path) async {
     final existing = _findPath(path);
     if (existing != null) {
@@ -455,6 +504,12 @@ final class DocumentWorkspace extends ChangeNotifier {
   }) async {
     _saveFailures.remove(tab);
     _declinedSaves.remove(tab);
+    if (tab._reverting) {
+      // Reachable only through a shortcut pressed before the menus caught up;
+      // writing now would put the discarded edits back on disk.
+      _saveFailures[tab] = 'it is being reverted';
+      return false;
+    }
     if (tab.editor.isLoading || tab.editor.error != null) {
       // Reachable from a close, where a refusal needs an outcome. A document
       // that failed to load has already reported its own error, so only the
@@ -579,9 +634,10 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (interactionLocked || _savingAll) return false;
     _savingAll = true;
     try {
+      // A tab being reverted is dirty only with edits the user discarded.
       final dirty = [
         for (final tab in _documents)
-          if (tab.editor.isDirty) tab,
+          if (tab.editor.isDirty && !tab._reverting) tab,
       ];
       return await _saveEach(dirty, _SaveRun.saveAll);
     } finally {
@@ -643,6 +699,77 @@ final class DocumentWorkspace extends ChangeNotifier {
     return failures.isEmpty && saved + vanished == dirty.length;
   }
 
+  /// Writes [tab] as a highlighted HTML page, by default beside the file.
+  /// A page is never written over a document open in a tab, and replacing
+  /// an existing file asks first, as Save As does. Returns whether a page
+  /// was written.
+  Future<bool> exportHtml(DocumentTab tab, HtmlPalette palette) async {
+    if (interactionLocked ||
+        !_documents.contains(tab) ||
+        tab.editor.isLoading ||
+        tab.editor.error != null) {
+      return false;
+    }
+    final scope = _exportScope(tab);
+    try {
+      String target;
+      String? digest;
+      while (true) {
+        final selected = await _dialog(
+          () => dialogs.pickSavePath('${tab.path ?? tab.name}.html'),
+        );
+        if (selected == null) return false;
+        target = await store.canonicalSavePath(selected);
+        final open = _findPath(target);
+        if (open != null) {
+          _reportError(
+            '${open.name} is open in a tab. Export to another file.',
+            scope: scope,
+          );
+          return false;
+        }
+        digest = await store.existingDigest(target);
+        // A protected page is asked about as a save would be; Save Anyway
+        // already agrees to replace it.
+        if (await store.isWriteProtected(target)) {
+          final choice = await _dialog(
+            () => dialogs.chooseReadOnlySave(_paths.basename(target)),
+          );
+          if (choice == ReadOnlyChoice.cancel) return false;
+          if (choice == ReadOnlyChoice.saveAs) continue;
+        } else if (digest != null &&
+            !await _dialog(() => dialogs.confirmReplace(target))) {
+          return false;
+        }
+        break;
+      }
+      final text = tab.editor.text.text;
+      final language = tab.editor.text.language;
+      await store.write(
+        path: target,
+        text: highlightedHtml(
+          text: text,
+          tokens: language == null ? const [] : tokenizeSyntax(text, language),
+          palette: palette,
+          title: tab.name,
+        ),
+        source: null,
+        expectedSha256: digest,
+      );
+      _clearScope(scope);
+      return true;
+    } catch (error) {
+      _reportError('Could not export ${tab.name}: $error', scope: scope);
+      return false;
+    } finally {
+      _notify();
+    }
+  }
+
+  /// A tab's export failures, apart from its save failures: saving the
+  /// document says nothing about an export that did not work.
+  static Object _exportScope(DocumentTab tab) => (exportOf: tab);
+
   Future<bool> closeTab(DocumentTab tab) async {
     if (interactionLocked ||
         !_documents.contains(tab) ||
@@ -667,6 +794,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       // anymore, so its banner goes with it. Path-scoped and scope-less
       // errors are untouched.
       _clearScope(tab);
+      _rememberClosed(tab);
       _notify();
       return true;
     } finally {
@@ -757,6 +885,51 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// any other tab leaves it alone while it is still true.
   void _reportTabRefusal(String message, DocumentTab tab) =>
       _reportError(message, scope: tab);
+
+  /// Reload a tab's file after the host confirmed discarding local edits.
+  /// A failed reload keeps the buffer and reports through [error], so a
+  /// broken read never destroys the user's text.
+  Future<bool> revert(DocumentTab tab) async {
+    if (interactionLocked ||
+        tab.busy ||
+        !_documents.contains(tab) ||
+        tab.path == null ||
+        tab.editor.isBusy) {
+      return false;
+    }
+    if (tab.editor.isDirty) {
+      final confirmed = await _dialog(() => dialogs.confirmRevert(tab.name));
+      if (!confirmed) return false;
+    }
+    tab.busy = true;
+    tab._reverting = true;
+    _notify();
+    try {
+      // Read here rather than through the editor's loader: the document
+      // stays on screen while the file is read, and a failed read never
+      // reaches the editor, so the buffer survives it untouched. The read
+      // follows the tab's current path, which Save As may have changed.
+      final document = await store.load(tab.path!);
+      if (_disposed || !_documents.contains(tab)) return false;
+      tab.baseline = document;
+      tab.path = document.file.path;
+      // An install: the view starts a fresh undo history, so the reverted
+      // edits cannot be undone back into a buffer whose baseline has moved.
+      tab.editor.adoptDocument(document, replaceText: true);
+      tab.editor.displayPath = document.file.path;
+      _clearScope(tab);
+      return true;
+    } catch (error) {
+      // revert() runs unawaited from the menu; report instead of leaking an
+      // unhandled async error.
+      _reportError('Could not revert ${tab.name}: $error', scope: tab);
+      return false;
+    } finally {
+      tab.busy = false;
+      tab._reverting = false;
+      _notify();
+    }
+  }
 
   /// Both the native close button and the OS Quit route share this decision.
   /// No tab is removed until every document has consented; a later Cancel
@@ -974,6 +1147,11 @@ final class DocumentWorkspace extends ChangeNotifier {
     _documents.remove(tab);
     _saveFailures.remove(tab);
     _declinedSaves.remove(tab);
+    // An export of a closed tab cannot be retried from it.
+    if (_errorScope == _exportScope(tab)) {
+      _error = null;
+      _errorScope = null;
+    }
     if (_active == tab) {
       _active = _documents.isEmpty
           ? null
@@ -990,7 +1168,10 @@ final class DocumentWorkspace extends ChangeNotifier {
       _errorScope = null;
     }
     for (final tab in _documents) {
-      tab.editor.setEditingLocked(interactionLocked, notify: false);
+      tab.editor.setEditingLocked(
+        interactionLocked || tab._reverting,
+        notify: false,
+      );
     }
     if (interactionLocked) {
       _unlocked ??= Completer<void>();

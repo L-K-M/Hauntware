@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- A command palette (`Cmd/Ctrl+Shift+P`) finds any available menu command
+  by a few letters of its name or its menu's.
+- File › Export as HTML… writes the document, unsaved edits included, as a
+  page in the colours the editor shows, and never over an open document.
+- File › Reopen Closed Tab (`Cmd/Ctrl+Shift+T`) opens the last closed file
+  again from disk, up to twenty back, with the caret where it was.
+- File › Revert to Saved reads the file again, asking first when there
+  are unsaved changes (Cancel is the default). It keeps the document on
+  screen, locked, while it reads, keeps the edits if the read fails, keeps
+  the caret and scroll position, and cannot be undone: Undo stops at the
+  reverted text.
 - Standalone desktop editor for macOS, Linux and Windows, with document tabs,
   New/Open/Save/Save As, native menus, file-open events and guarded close/quit.
 - Shared pure-Dart `planchette_core` and Flutter `planchette_editor` packages
@@ -143,6 +154,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Find Next and Find Previous work after the find bar is closed: they
   reopen it on the last query and move from the caret, leaving the cursor
   in the document.
+- Undo stops at a load or reload: it can no longer bring back the text a
+  document had before its file was read again, which then saved over the
+  newer file without a conflict warning. `EditorController` exposes
+  `installGeneration`, and the view gives each installed buffer its own
+  document field, carrying focus, the caret and the scroll position over.
 - Opening a file that no longer exists says so, instead of showing
   `dart:io`'s `PathNotFoundException` with its errno.
 - The window opens on the app's own background in the current light or
