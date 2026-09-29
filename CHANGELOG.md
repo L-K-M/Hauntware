@@ -81,6 +81,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The find bar's Whole words toggle (`ab`) skips hits that run on into a
   word, in find, paging and Replace All. Letters of any script are part of
   a word; curly quotes, dashes, no-break spaces and emoji end one.
+- The find bar's Regular expression toggle (`.*`) searches with a
+  pattern. It matches in the background and gives up after a second, so
+  a runaway pattern says "Pattern took too long to search" instead of
+  freezing the editor; one that does not compile says why. Replace and
+  Replace All expand `$1`, `${1}`, `${name}` and `$$`, and a selection
+  opens the bar escaped so it finds the text as written.
 - Every find and replace control can be reached with Tab and tells screen
   readers whether it is on, and on a narrow window the bar puts its
   controls under the field.
