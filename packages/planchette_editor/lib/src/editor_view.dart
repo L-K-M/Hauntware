@@ -243,7 +243,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           offset.clamp(position.minScrollExtent, position.maxScrollExtent),
         );
       }
-      if (focused) c.editorFocus.requestFocus();
+      if (!focused) return;
+      // A dialog that opened meanwhile keeps the keyboard; the document takes
+      // it back when the dialog closes.
+      if (_routeIsCurrent) {
+        c.editorFocus.requestFocus();
+      } else {
+        _restoreWhenCurrent = true;
+      }
     });
   }
 

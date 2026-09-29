@@ -163,6 +163,40 @@ void main() {
     expect(tester.testTextInput.hasAnyClients, isTrue);
   });
 
+  testWidgets('review fix: an install leaves a dialog its focus', (
+    tester,
+  ) async {
+    // The hand-over after an install requested focus unconditionally, so a
+    // dialog opened in the same frame lost the keyboard to the document.
+    final c = EditorController(displayPath: 'a.txt', initialText: 'v1');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.showKeyboard(
+      find.byKey(const ValueKey('planchette.document')),
+    );
+
+    c.adoptDocument(disk('v2'), replaceText: true);
+    final closed = showDialog<void>(
+      context: tester.element(find.byType(PlanchetteEditor)),
+      builder: (context) => AlertDialog(
+        content: const Text('Discard?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(c.editorFocus.hasFocus, isFalse);
+
+    await tester.tap(find.text('OK'));
+    await closed;
+    await tester.pumpAndSettle();
+    expect(c.editorFocus.hasFocus, isTrue);
+  });
+
   testWidgets('review fix: an install keeps the caret and the scroll', (
     tester,
   ) async {
