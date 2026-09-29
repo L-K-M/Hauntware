@@ -61,6 +61,39 @@ void main() {
     expect(dialogs.revertAsked, isFalse);
   });
 
+  test('a shorter new version keeps the selection inside the text', () async {
+    final tab = await open('one\ntwo\nthree\n');
+    tab.editor.text.selection = const TextSelection(
+      baseOffset: 4,
+      extentOffset: 13,
+    );
+    changeOnDisk('one\n');
+    await workspace.checkDisk();
+    expect(tab.editor.text.text, 'one\n');
+    final selection = tab.editor.text.selection;
+    expect(selection.isValid, isTrue);
+    expect(selection.start, inInclusiveRange(0, 4));
+    expect(selection.end, inInclusiveRange(0, 4));
+  });
+
+  test('Keep Mine waits while the editor is busy', () async {
+    final tab = await open('original');
+    tab.editor.text.text = 'mine';
+    changeOnDisk('theirs');
+    await workspace.checkDisk();
+    store.loadGate = Completer<void>();
+    final reloading = tab.editor.reload();
+    await pumpEventQueue();
+    expect(tab.editor.isBusy, isTrue);
+    // A loading editor reads as clean, which is what refuses it here; saves
+    // hold the workspace's own busy flag.
+    workspace.keepMine(tab);
+    expect(tab.disk, DiskState.changed);
+    expect(tab.baseline!.sha256, 'v1');
+    store.loadGate!.complete();
+    await reloading;
+  });
+
   test('a tab with edits shows a notice and keeps the edits', () async {
     final tab = await open('original');
     tab.editor.text.text = 'mine';
@@ -294,6 +327,8 @@ void main() {
     store.digestGate = Completer<void>();
     final checking = workspace.checkDisk();
     await pumpEventQueue();
+    // Parked inside the file read, so the save below races it.
+    expect(store.digests, 1);
 
     // The save changes both the file and the baseline under the check, and
     // new edits follow, so a stale comparison would flag the tab's own save
