@@ -261,7 +261,7 @@ void main() {
     });
 
     test('a newer request cancels the one still running', () async {
-      final worker = PatternWorker(budget: const Duration(seconds: 30));
+      final worker = PatternWorker(budget: const Duration(seconds: 2));
       addTearDown(worker.dispose);
       final stale = worker.findAll(_catastrophicText, _catastrophic);
       // Let the first request reach the worker before superseding it.
@@ -282,7 +282,7 @@ void main() {
     });
 
     test('dispose cancels a running request', () async {
-      final worker = PatternWorker(budget: const Duration(seconds: 30));
+      final worker = PatternWorker(budget: const Duration(seconds: 2));
       final running = worker.findAll(_catastrophicText, _catastrophic);
       await Future<void>.delayed(const Duration(milliseconds: 100));
       worker.dispose();

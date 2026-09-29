@@ -1417,6 +1417,10 @@ class EditorController extends ChangeNotifier {
 
   Future<bool> _replaceAllMatches() async {
     final source = text.text;
+    // Replace All covers the matches that find commands queued on the
+    // search were waiting for; run later, they would edit its result.
+    _revealPatternResults = false;
+    _afterPatternSearch.clear();
     final find = _patternFind ??= PatternFind(
       budget: _patternSearchBudget,
       onSettled: _patternSearchSettled,
@@ -1429,7 +1433,9 @@ class EditorController extends ChangeNotifier {
       wholeWord: _wholeWord,
     );
     if (_disposed) return false;
-    if (editingLocked || isBusy || !identical(text.text, source)) {
+    // By content: an input method may send the same text back as a new
+    // string, and one comparison per Replace All is cheap.
+    if (editingLocked || isBusy || text.text != source) {
       _notify();
       return false;
     }

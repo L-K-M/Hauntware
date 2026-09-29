@@ -494,7 +494,11 @@ void main() {
         ..toggleRegularExpression()
         ..search.text = '(unclosed';
       await tester.pump();
-      final message = find.text('Invalid pattern: Unterminated group');
+      // The detail is the platform's own RegExp message, not the editor's.
+      final detail = switch (_compileError('(unclosed')) {
+        FormatException(:final message) => message,
+      };
+      final message = find.text('Invalid pattern: $detail');
       expect(message, findsOneWidget);
       final context = tester.element(message);
       expect(
@@ -540,4 +544,13 @@ void main() {
       expect(find.text('Find by regular expression'), findsOneWidget);
     });
   });
+}
+
+FormatException _compileError(String pattern) {
+  try {
+    RegExp(pattern);
+  } on FormatException catch (error) {
+    return error;
+  }
+  throw StateError('$pattern compiles');
 }

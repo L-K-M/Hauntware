@@ -78,6 +78,7 @@ class PatternFind {
     if (_pattern == null) {
       _stopSearching();
       _results = null;
+      _replaceFailure = null;
       return;
     }
     final key = _Key(text, query, caseSensitive, wholeWord);

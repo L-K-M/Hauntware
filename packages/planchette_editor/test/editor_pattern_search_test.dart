@@ -190,11 +190,11 @@ void main() {
       },
     );
 
-    test('an answer for text that has since changed is not applied', () async {
+    test('an edit while a search waits searches the new text', () async {
       final editor = _searching('aaa', 'a+');
       await _settled(editor);
       editor.search.text = 'b+';
-      // Edited before the new search has answered.
+      // Edited before the new search has started, which restarts its wait.
       editor.text.value = const TextEditingValue(
         text: 'b bb',
         selection: TextSelection.collapsed(offset: 0),
@@ -322,6 +322,36 @@ void main() {
       expect(editor.text.text, 'a1 a2 a3');
     });
 
+    test('Replace All drops a Replace still waiting for the search', () async {
+      final editor = _searching('a a', 'a');
+      await _settled(editor);
+      editor.text.value = const TextEditingValue(
+        text: 'a a ',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      editor.replacement.text = 'aa';
+      // Waits for the search of the edited text, which Replace All
+      // overtakes: replacing everything includes the match it waited on.
+      editor.replaceCurrent();
+      expect(await editor.replaceAll(), isTrue);
+      await _settled(editor);
+      expect(editor.text.text, 'aa aa ');
+    });
+
+    test('Replace All applies to an equal copy of its text', () async {
+      final editor = _searching('a1 a2', r'a(\d)');
+      editor.replacement.text = r'b$1';
+      await _settled(editor);
+      final replacing = editor.replaceAll();
+      // An input method may send the same text back as a new string.
+      editor.text.value = TextEditingValue(
+        text: String.fromCharCodes('a1 a2'.codeUnits),
+        selection: const TextSelection.collapsed(offset: 2),
+      );
+      expect(await replacing, isTrue);
+      expect(editor.text.text, 'b1 b2');
+    });
+
     test('a search past its budget reports it instead of hanging', () async {
       final editor = _searching(
         _catastrophicText,
@@ -339,6 +369,10 @@ void main() {
       expect(await editor.replaceAll(), isFalse);
       expect(editor.text.text, _catastrophicText);
       expect(editor.patternFailure, isA<PatternTimedOut>());
+
+      // An empty query has nothing to report.
+      editor.search.text = '';
+      expect(editor.patternFailure, isNull);
 
       // A usable pattern searches normally again.
       editor.search.text = 'a+';
