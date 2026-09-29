@@ -9,6 +9,7 @@ import 'package:planchette_app/services/document_workspace.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
+import 'services/memory_settings.dart';
 
 void main() {
   late MemoryDocuments store;
@@ -32,7 +33,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1000, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+      PlanchetteApp(workspace: workspace, settings: testSettings()),
     );
     await tester.pumpAndSettle();
   }
@@ -159,56 +160,6 @@ void main() {
       await chord(tester, LogicalKeyboardKey.keyO);
       expect(workspace.documents, hasLength(1));
       expect(workspace.active!.editor.text.text, 'on disk');
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    },
-    variant: const TargetPlatformVariant({
-      TargetPlatform.linux,
-      TargetPlatform.windows,
-    }),
-  );
-
-  testWidgets(
-    'the header names the document, launch copy only when empty',
-    (tester) async {
-      Finder header() => find.byKey(const ValueKey('active-document-label'));
-      String headerText() => tester.widget<Text>(header()).data!;
-
-      await mount(tester);
-      expect(headerText(), 'A place for your words.');
-
-      final untitled = workspace.newDocument()!;
-      await tester.pumpAndSettle();
-      expect(headerText(), untitled.name);
-
-      // Each untitled tab names itself, not the first one.
-      final second = workspace.newDocument()!;
-      await tester.pumpAndSettle();
-      expect(headerText(), second.name);
-
-      store.files[testPath('named.txt')] = document('named.txt', 'on disk');
-      await workspace.open(testPath('named.txt'));
-      await tester.pumpAndSettle();
-      expect(headerText(), testPath('named.txt'));
-      // A truncated path is still recoverable: the header's own tooltip
-      // carries it, whether or not the tab strip shows the same one.
-      expect(
-        find
-            .ancestor(
-              of: header(),
-              matching: find.byTooltip(testPath('named.txt')),
-            )
-            .evaluate()
-            .isNotEmpty,
-        isTrue,
-      );
-
-      // Closing every tab brings the launch copy back.
-      for (final tab in workspace.documents) {
-        expect(await workspace.closeTab(tab), isTrue);
-      }
-      await tester.pumpAndSettle();
-      expect(headerText(), 'A place for your words.');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

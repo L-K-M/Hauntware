@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'planchette_app.dart';
+import 'services/app_settings.dart';
 import 'services/desktop_window.dart';
 import 'services/document_dialogs.dart';
 import 'services/document_store.dart';
@@ -11,25 +12,36 @@ import 'services/open_documents.dart';
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
-  // One source for both the theme and the window's pre-paint color. A
-  // persisted preference (A1) replaces this line and nothing else.
-  const themeMode = ThemeMode.system;
+  // Loaded before the window exists: the stored theme is the one source for
+  // both the app and the window's pre-paint color.
+  final settings = SettingsController(
+    store: LocalSettingsStore.defaultLocation(),
+  );
+  await settings.load();
   final navigatorKey = GlobalKey<NavigatorState>();
   final workspace = DocumentWorkspace(
     store: LocalDocumentStore(),
     dialogs: AppDocumentDialogs(navigatorKey),
   );
   final desktop = DesktopWindow(
-    confirmQuit: workspace.confirmQuit,
+    confirmQuit: () async {
+      if (!await workspace.confirmQuit()) return false;
+      // A zoom or setting chosen just before quitting may still be on its
+      // way to disk.
+      await settings.flush();
+      return true;
+    },
     onQuitFailed: workspace.quitFailed,
-    windowBackgroundColor: windowBackdrop(effectiveBrightness(themeMode)),
+    windowBackgroundColor: windowBackdrop(
+      effectiveBrightness(settings.value.themeMode),
+    ),
   );
   runApp(
     PlanchetteApp(
       workspace: workspace,
+      settings: settings,
       navigatorKey: navigatorKey,
       onQuit: desktop.requestQuit,
-      themeMode: themeMode,
     ),
   );
   await desktop.initialize();

@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
+import 'services/app_settings.dart';
 import 'services/document_workspace.dart';
+import 'services/settings_dialog.dart';
 import 'theme/planchette_theme.dart';
+import 'widgets/tab_strip.dart';
 
 /// The color the native window shows before the first Flutter frame. Must be
 /// the same surface the app paints, or the window flashes a different color on
@@ -19,9 +22,9 @@ Color windowBackdrop(Brightness brightness) =>
 /// brightness through `PlatformDispatcher`, which needs no binding, because the
 /// window is created before `runApp`.
 ///
-/// A future persisted theme (A1) has to be resolved here, before the window
-/// exists: passing one mode to [PlanchetteApp] and another here would bring the
-/// flash straight back.
+/// `main` resolves the stored theme here, before the window exists: passing
+/// one mode to [PlanchetteApp] and another here would bring the flash
+/// straight back.
 Brightness effectiveBrightness(ThemeMode mode) => switch (mode) {
   ThemeMode.light => Brightness.light,
   ThemeMode.dark => Brightness.dark,
@@ -32,31 +35,46 @@ class PlanchetteApp extends StatelessWidget {
   const PlanchetteApp({
     super.key,
     required this.workspace,
+    required this.settings,
     this.navigatorKey,
     this.onQuit,
-    this.themeMode = ThemeMode.system,
   });
 
   final DocumentWorkspace workspace;
+
+  /// The user's choices, and the only place the theme, the text size and the
+  /// indentation for new documents come from.
+  final SettingsController settings;
   final GlobalKey<NavigatorState>? navigatorKey;
   final Future<void> Function()? onQuit;
-  final ThemeMode themeMode;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'Planchette',
-    navigatorKey: navigatorKey,
-    debugShowCheckedModeBanner: false,
-    theme: planchetteTheme(Brightness.light),
-    darkTheme: planchetteTheme(Brightness.dark),
-    themeMode: themeMode,
-    home: _DocumentShell(workspace: workspace, onQuit: onQuit),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: settings,
+    builder: (context, _) => MaterialApp(
+      title: 'Planchette',
+      navigatorKey: navigatorKey,
+      debugShowCheckedModeBanner: false,
+      theme: planchetteTheme(Brightness.light),
+      darkTheme: planchetteTheme(Brightness.dark),
+      themeMode: settings.value.themeMode,
+      home: _DocumentShell(
+        workspace: workspace,
+        settings: settings,
+        onQuit: onQuit,
+      ),
+    ),
   );
 }
 
 class _DocumentShell extends StatefulWidget {
-  const _DocumentShell({required this.workspace, this.onQuit});
+  const _DocumentShell({
+    required this.workspace,
+    required this.settings,
+    this.onQuit,
+  });
   final DocumentWorkspace workspace;
+  final SettingsController settings;
   final Future<void> Function()? onQuit;
 
   @override
@@ -81,37 +99,80 @@ class _DocumentShellState extends State<_DocumentShell> {
         tab.editor.error == null;
   }
 
-  /// Editor font sizes for View › Zoom. The default is the editor's own 14.
-  static const _zoomSizes = [
-    9.0,
-    10.0,
-    11.0,
-    12.0,
-    13.0,
-    14.0,
-    16.0,
-    18.0,
-    20.0,
-    22.0,
-    24.0,
-    28.0,
-    32.0,
-    36.0,
-    48.0,
-  ];
-  static const _defaultZoom = 5;
-  int _zoom = _defaultZoom;
+  SettingsController get settings => widget.settings;
 
-  void _setZoom(int zoom) {
-    final next = zoom.clamp(0, _zoomSizes.length - 1);
-    if (next != _zoom) setState(() => _zoom = next);
+  /// The text sizes View › Zoom steps through. The stored size need not be one
+  /// of them (the Settings slider reaches every size between), and a step
+  /// goes to the nearest one past it.
+  static const _zoomSizes = [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    16,
+    18,
+    20,
+    22,
+    24,
+    28,
+    32,
+    36,
+    AppSettings.maximumFontSize,
+  ];
+
+  int get _fontSize => settings.value.fontSize;
+
+  void _zoomIn() => _setFontSize(
+    _zoomSizes.firstWhere((size) => size > _fontSize, orElse: () => _fontSize),
+  );
+
+  void _zoomOut() => _setFontSize(
+    _zoomSizes.lastWhere((size) => size < _fontSize, orElse: () => _fontSize),
+  );
+
+  /// Zoom is a setting: it applies to every tab and outlasts the session.
+  void _setFontSize(int size) =>
+      unawaited(settings.update(settings.value.copyWith(fontSize: size)));
+
+  bool _settingsOpen = false;
+
+  /// The native macOS menu stays live under the dialog, so a second request
+  /// is ignored, as the palette does; a second dialog on top would make the
+  /// first one's Cancel restore the previewed values.
+  Future<void> _showSettings() async {
+    if (_settingsOpen || workspace.interactionLocked) return;
+    _settingsOpen = true;
+    try {
+      await SettingsDialog.show(context, settings: settings);
+    } finally {
+      _settingsOpen = false;
+    }
   }
 
   @override
   void initState() {
     super.initState();
     workspace.addListener(_changed);
+    settings.addListener(_settingsChanged);
+    workspace.indentationPreference = settings.value.indentation;
     FocusManager.instance.addListener(_rememberTextFocus);
+  }
+
+  @override
+  void didUpdateWidget(_DocumentShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings != settings) {
+      oldWidget.settings.removeListener(_settingsChanged);
+      settings.addListener(_settingsChanged);
+      _settingsChanged();
+    }
+  }
+
+  void _settingsChanged() {
+    workspace.indentationPreference = settings.value.indentation;
+    if (mounted) setState(() {});
   }
 
   void _changed() {
@@ -190,6 +251,60 @@ class _DocumentShellState extends State<_DocumentShell> {
     _focusAfterFrame(tab);
   }
 
+  /// Cmd/Ctrl+1…8 select that tab and 9 the last one, as in browsers.
+  void _selectNumbered(int number) {
+    final tabs = workspace.documents;
+    if (tabs.isEmpty || workspace.interactionLocked) return;
+    if (number == 9) {
+      _select(tabs.last);
+    } else if (number <= tabs.length) {
+      _select(tabs[number - 1]);
+    }
+  }
+
+  String _keyLabel(String key) => mac ? '⌘$key' : 'Ctrl+$key';
+
+  void _showTabMenu(Offset position, DocumentTab tab) {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final hasOthers = workspace.documents.length > 1;
+    showMenu<void>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(position, position),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          enabled: !workspace.interactionLocked && !tab.busy,
+          onTap: () => unawaited(workspace.closeTab(tab)),
+          child: const Text('Close'),
+        ),
+        PopupMenuItem(
+          enabled: hasOthers && !workspace.interactionLocked,
+          onTap: () => unawaited(workspace.closeOthers(tab)),
+          child: const Text('Close Others'),
+        ),
+        PopupMenuItem(
+          enabled: !workspace.interactionLocked,
+          onTap: () => unawaited(workspace.closeAllTabs()),
+          child: const Text('Close All Tabs'),
+        ),
+        const PopupMenuDivider(),
+        // From #66.
+        PopupMenuItem(
+          enabled: tab.path != null,
+          onTap: () {
+            if (tab.path case final path?) {
+              unawaited(Clipboard.setData(ClipboardData(text: path)));
+            }
+          },
+          child: const Text('Copy Full Path'),
+        ),
+      ],
+    );
+  }
+
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
     if (tabs.isEmpty || workspace.interactionLocked) return;
@@ -262,6 +377,14 @@ class _DocumentShellState extends State<_DocumentShell> {
               unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
         ),
         const _Separator(),
+        // macOS keeps Settings in the application menu instead.
+        if (!mac)
+          _Command(
+            'Settings…',
+            _showSettings,
+            shortcut: _shortcut(LogicalKeyboardKey.comma),
+            enabled: !workspace.interactionLocked,
+          ),
         _Command(
           'Close Tab',
           _close,
@@ -426,7 +549,7 @@ class _DocumentShellState extends State<_DocumentShell> {
       _ShellMenu('View', [
         _Command(
           'Zoom In',
-          () => _setZoom(_zoom + 1),
+          _zoomIn,
           shortcut: _shortcut(LogicalKeyboardKey.equal),
           // `+` sits on different keys, shifted or not, across layouts.
           aliases: [
@@ -435,21 +558,21 @@ class _DocumentShellState extends State<_DocumentShell> {
             _shortcut(LogicalKeyboardKey.add, shift: true),
             _shortcut(LogicalKeyboardKey.numpadAdd),
           ],
-          enabled: _zoom < _zoomSizes.length - 1,
+          enabled: _fontSize < _zoomSizes.last,
         ),
         _Command(
           'Zoom Out',
-          () => _setZoom(_zoom - 1),
+          _zoomOut,
           shortcut: _shortcut(LogicalKeyboardKey.minus),
           aliases: [_shortcut(LogicalKeyboardKey.numpadSubtract)],
-          enabled: _zoom > 0,
+          enabled: _fontSize > _zoomSizes.first,
         ),
         _Command(
           'Actual Size',
-          () => _setZoom(_defaultZoom),
+          () => _setFontSize(AppSettings.defaultFontSize),
           shortcut: _shortcut(LogicalKeyboardKey.digit0),
           aliases: [_shortcut(LogicalKeyboardKey.numpad0)],
-          enabled: _zoom != _defaultZoom,
+          enabled: _fontSize != AppSettings.defaultFontSize,
         ),
       ]),
       _ShellMenu('Window', [
@@ -510,6 +633,16 @@ class _DocumentShellState extends State<_DocumentShell> {
         menus: [
           const PlatformProvidedMenuItem(
             type: PlatformProvidedMenuItemType.about,
+          ),
+          // Settings belong in the application menu on macOS.
+          PlatformMenuItemGroup(
+            members: [
+              PlatformMenuItem(
+                label: 'Settings…',
+                shortcut: _shortcut(LogicalKeyboardKey.comma),
+                onSelected: workspace.interactionLocked ? null : _showSettings,
+              ),
+            ],
           ),
           const PlatformMenuItemGroup(
             members: [
@@ -602,6 +735,8 @@ class _DocumentShellState extends State<_DocumentShell> {
               shortcut: () {
                 if (entry.enabled) entry.run();
               },
+      for (var number = 1; number <= 9; number++)
+        _shortcut(_digits[number]): () => _selectNumbered(number),
     };
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
@@ -610,126 +745,50 @@ class _DocumentShellState extends State<_DocumentShell> {
         autofocus: true,
         child: Scaffold(
           body: Column(
+            // Chrome rows span the window and start at the leading edge;
+            // a centered column floated the menu bar mid-window.
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (!mac) _menuBar(menus),
-              Material(
-                color: scheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_note_rounded, color: scheme.primary),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Planchette',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(width: 20),
-                      IconButton(
-                        tooltip: 'New',
-                        onPressed: workspace.interactionLocked ? null : _new,
-                        icon: const Icon(Icons.add),
-                      ),
-                      IconButton(
-                        tooltip: 'Open…',
-                        onPressed: workspace.interactionLocked
-                            ? null
-                            : () => unawaited(workspace.openDialog()),
-                        icon: const Icon(Icons.folder_open_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Save',
-                        onPressed: _documentReady ? _save : null,
-                        icon: const Icon(Icons.save_outlined),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        // A full path is more useful than a bare name here —
-                        // which directory is open is worth knowing — but it
-                        // truncates on narrow windows, so the tooltip carries
-                        // the whole thing.
-                        child: Tooltip(
-                          message: active?.path ?? '',
-                          child: Text(
-                            // `path` and `name` are null or non-empty by
-                            // construction: `name` is 'Untitled <id>' or
-                            // basename of a normalised path, and a directory
-                            // can never become a document path.
-                            active?.path ??
-                                active?.name ??
-                                'A place for your words.',
-                            key: const ValueKey('active-document-label'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: scheme.onSurfaceVariant,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                      if (active?.busy == true)
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                    ],
-                  ),
+              TabStrip(
+                tabs: [
+                  for (final tab in tabs)
+                    (
+                      id: tab.id,
+                      name: workspace.labelFor(tab),
+                      tooltip: tab.path ?? tab.name,
+                      dirty: tab.editor.isDirty,
+                      closable: !tab.busy,
+                      flashRequest: tab.flashRequest,
+                    ),
+                ],
+                activeId: active?.id,
+                enabled: !workspace.interactionLocked,
+                busy: active?.busy == true,
+                onSelect: (id) => _select(tabs.firstWhere((t) => t.id == id)),
+                onClose: (id) => unawaited(
+                  workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
                 ),
+                onContextMenu: (id, position) =>
+                    _showTabMenu(position, tabs.firstWhere((t) => t.id == id)),
+                onNew: _new,
+                onOpen: () => unawaited(workspace.openDialog()),
+                onSave: _documentReady ? _save : null,
+                newTooltip: 'New (${_keyLabel('N')})',
+                openTooltip: 'Open… (${_keyLabel('O')})',
+                saveTooltip: 'Save (${_keyLabel('S')})',
               ),
-              if (tabs.isNotEmpty)
-                Material(
-                  color: scheme.surfaceContainerLow,
-                  child: SizedBox(
-                    height: 40,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 8),
-                          for (final tab in tabs)
-                            _TabChip(
-                              key: ValueKey('tab-${tab.id}'),
-                              tab: tab,
-                              isActive: tab == active,
-                              enabled: !workspace.interactionLocked,
-                              onSelect: () => _select(tab),
-                              onClose: () => unawaited(workspace.closeTab(tab)),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
               if (workspace.error case final error?)
-                Semantics(
+                _errorBanner(
                   key: const ValueKey('workspace-error-banner'),
-                  liveRegion: true,
-                  child: Material(
-                    color: scheme.errorContainer,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              error,
-                              style: TextStyle(color: scheme.onErrorContainer),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: 'Dismiss error',
-                            onPressed: workspace.clearError,
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  message: error,
+                  onDismiss: workspace.clearError,
+                ),
+              if (settings.error case final error?)
+                _errorBanner(
+                  key: const ValueKey('settings-error-banner'),
+                  message: error,
+                  onDismiss: settings.clearError,
                 ),
               Expanded(
                 child: tabs.isEmpty
@@ -772,7 +831,13 @@ class _DocumentShellState extends State<_DocumentShell> {
                           for (final tab in tabs)
                             PlanchetteEditor(
                               key: ValueKey(tab.id),
-                              textStyle: TextStyle(fontSize: _zoomSizes[_zoom]),
+                              // Only what the user chose: the editor supplies
+                              // the platform's monospace stack and the line
+                              // height beneath it.
+                              textStyle: TextStyle(
+                                fontFamily: settings.value.fontFamily,
+                                fontSize: _fontSize.toDouble(),
+                              ),
                               controller: tab.editor,
                               isActive: tab == active,
                               // No editingLocked here: the workspace locks
@@ -801,135 +866,45 @@ class _DocumentShellState extends State<_DocumentShell> {
     return body;
   }
 
-  @override
-  void dispose() {
-    workspace.removeListener(_changed);
-    FocusManager.instance.removeListener(_rememberTextFocus);
-    super.dispose();
-  }
-}
-
-/// One document tab.
-///
-/// Opening a document the workspace already holds activates its tab instead
-/// of adding one, which looks like nothing happening. [DocumentTab.flashRequest]
-/// marks that case, and the chip answers with a short pulse so the user can
-/// see where the open landed. The pulse is decoration: activation happens
-/// either way, and it is skipped entirely when the platform reports that
-/// animation is disabled.
-class _TabChip extends StatefulWidget {
-  const _TabChip({
-    super.key,
-    required this.tab,
-    required this.isActive,
-    required this.enabled,
-    required this.onSelect,
-    required this.onClose,
-  });
-
-  final DocumentTab tab;
-  final bool isActive;
-  final bool enabled;
-  final VoidCallback onSelect;
-  final VoidCallback onClose;
-
-  @override
-  State<_TabChip> createState() => _TabChipState();
-}
-
-class _TabChipState extends State<_TabChip> {
-  /// Long enough to notice between two glances, short enough not to linger.
-  static const _flashDuration = Duration(milliseconds: 700);
-
-  bool _flashing = false;
-
-  /// The last flash request this chip reacted to. Zero is also the value a
-  /// freshly mounted tab has, and a new tab has nothing to point at.
-  int _seenFlash = 0;
-  Timer? _flashTimer;
-
-  @override
-  void didUpdateWidget(_TabChip oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Compare against the value this state last saw, not against
-    // oldWidget.tab: the tab is a mutable object, so the old widget reads the
-    // new value too and the request would look unchanged.
-    if (widget.tab.flashRequest == _seenFlash) return;
-    _seenFlash = widget.tab.flashRequest;
-    if (MediaQuery.disableAnimationsOf(context)) return;
-    _flashTimer?.cancel();
-    // No setState: didUpdateWidget is followed immediately by this element's
-    // own build, which is the frame the flash should first appear in. Only the
-    // timer needs a new frame, to take it away again.
-    _flashing = true;
-    _flashTimer = Timer(_flashDuration, () {
-      if (mounted) setState(() => _flashing = false);
-    });
-  }
-
-  @override
-  void dispose() {
-    _flashTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tab = widget.tab;
+  Widget _errorBanner({
+    required Key key,
+    required String message,
+    required VoidCallback onDismiss,
+  }) {
     final scheme = Theme.of(context).colorScheme;
-    final base = widget.isActive ? scheme.surface : Colors.transparent;
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: Tooltip(
-        message: tab.path ?? tab.name,
-        child: Semantics(
-          selected: widget.isActive,
-          child: AnimatedContainer(
-            duration: _flashDuration,
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              color: _flashing ? scheme.secondaryContainer : base,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(8),
-              ),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: widget.enabled ? widget.onSelect : null,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 14),
-                  child: Row(
-                    children: [
-                      Text(
-                        '${tab.editor.isDirty ? '● ' : ''}${tab.name}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: widget.isActive
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton(
-                        key: ValueKey('close-${tab.id}'),
-                        tooltip: 'Close ${tab.name}',
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 16,
-                        onPressed: widget.enabled && !tab.busy
-                            ? widget.onClose
-                            : null,
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
+    return Semantics(
+      key: key,
+      liveRegion: true,
+      child: Material(
+        color: scheme.errorContainer,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(color: scheme.onErrorContainer),
                 ),
               ),
-            ),
+              IconButton(
+                tooltip: 'Dismiss error',
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close),
+              ),
+            ],
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    workspace.removeListener(_changed);
+    settings.removeListener(_settingsChanged);
+    FocusManager.instance.removeListener(_rememberTextFocus);
+    super.dispose();
   }
 }
 
@@ -948,6 +923,19 @@ const _ghostLines = [
 /// created right after it.
 @visibleForTesting
 String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
+
+const _digits = [
+  LogicalKeyboardKey.digit0,
+  LogicalKeyboardKey.digit1,
+  LogicalKeyboardKey.digit2,
+  LogicalKeyboardKey.digit3,
+  LogicalKeyboardKey.digit4,
+  LogicalKeyboardKey.digit5,
+  LogicalKeyboardKey.digit6,
+  LogicalKeyboardKey.digit7,
+  LogicalKeyboardKey.digit8,
+  LogicalKeyboardKey.digit9,
+];
 
 class _ShellMenu {
   const _ShellMenu(this.label, this.items);

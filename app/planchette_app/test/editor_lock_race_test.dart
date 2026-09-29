@@ -11,6 +11,7 @@ import 'package:planchette_app/services/document_workspace.dart';
 // next frame. Nothing may hold the lock until the view rebuilds.
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs, document, testPath;
+import 'services/memory_settings.dart';
 
 /// A save dialog that stays open until the test answers it, the way the
 /// native picker stays open while frames keep rendering behind it.
@@ -32,7 +33,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1000, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+      PlanchetteApp(workspace: workspace, settings: testSettings()),
     );
     await tester.pumpAndSettle();
     tab.editor.text.text = 'race text';
@@ -76,7 +77,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(1000, 720));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
-        PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+        PlanchetteApp(workspace: workspace, settings: testSettings()),
       );
       await tester.pumpAndSettle();
       tab.editor.text.text = 'new text';

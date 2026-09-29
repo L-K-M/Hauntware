@@ -110,6 +110,20 @@ final class DocumentWorkspace extends ChangeNotifier {
   final Map<DocumentTab, Future<bool>> _saves = {};
   int _nextId = 1;
   int _dialogCount = 0;
+  Indentation? _indentationPreference;
+
+  /// The indentation for documents that neither use nor mandate one, from the
+  /// user's settings: every open editor takes it now, and every editor made
+  /// later takes it as it is created.
+  Indentation? get indentationPreference => _indentationPreference;
+  set indentationPreference(Indentation? value) {
+    if (_indentationPreference == value) return;
+    _indentationPreference = value;
+    for (final tab in _documents) {
+      tab.editor.indentationPreference = value;
+    }
+  }
+
   bool _closingAll = false;
   bool _quitAccepted = false;
   bool _disposed = false;
@@ -146,7 +160,8 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   DocumentTab _makeTab({String? path, String? initialText}) {
     final id = _nextId++;
-    final tab = DocumentTab._(id, 'Untitled $id')..path = path;
+    final tab = DocumentTab._(id, path == null ? _freeUntitledName() : '')
+      ..path = path;
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,
@@ -176,6 +191,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         return document.sha256;
       },
     );
+    tab.editor.indentationPreference = _indentationPreference;
     tab._editorListener = () => _editorChanged(tab);
     tab.editor.addListener(tab._editorListener);
     return tab;
@@ -219,6 +235,16 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// shortcut or another menu activation — cannot start a second pass over
   /// the same tabs and interleave its result.
   bool _savingAll = false;
+
+  /// "Untitled", then "Untitled 2" and so on, reusing the lowest number no
+  /// open tab currently shows, a saved file called "Untitled 2" included.
+  String _freeUntitledName() {
+    final used = {for (final tab in _documents) tab.name};
+    for (var number = 1; ; number++) {
+      final name = number == 1 ? 'Untitled' : 'Untitled $number';
+      if (!used.contains(name)) return name;
+    }
+  }
 
   void select(DocumentTab tab) {
     if (interactionLocked || !_documents.contains(tab)) return;
@@ -332,11 +358,16 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (existing != null) {
       // No new tab will appear, so point at the one that already holds the
       // document. Activation is the whole behaviour; the flash is decoration.
+      // Activating a tab the window already shows still drops the empty
+      // scratch tab it replaces, so the outcome matches a fresh open.
+      final previous = _active;
       _active = existing;
       existing.flashRequest++;
+      _dropPristine(previous);
       _notify();
       return null;
     }
+    final previous = _active;
     final tab = _makeTab(path: _paths.normalize(_paths.absolute(path)));
     _documents.add(tab);
     _active = tab;
@@ -364,6 +395,9 @@ final class DocumentWorkspace extends ChangeNotifier {
       // still-opening refusal raised against this tab) has been resolved.
       _clearScope(_pathKey(path));
       _clearScope(tab);
+      // Opening into a fresh empty window replaces the empty tab instead
+      // of stranding it. A failed open above keeps it untouched.
+      _dropPristine(previous);
     }
     _notify();
     return failure;
@@ -642,6 +676,30 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
   }
 
+  /// Batch closes still run each tab through the same consent decision as
+  /// a lone close; a Cancel stops the sweep — tabs closed so far stay
+  /// closed, the rest stay open. Each returns whether the sweep completed.
+  Future<bool> closeAllTabs() => _closeAllExcept(null);
+
+  /// Closes every tab but [keep], which becomes active once the sweep
+  /// completes. After a Cancel the refused tab stays active: its prompt
+  /// showed it, and it is what the user is looking at.
+  Future<bool> closeOthers(DocumentTab keep) async {
+    if (!_documents.contains(keep)) return false;
+    final completed = await _closeAllExcept(keep);
+    if (completed && _documents.contains(keep)) select(keep);
+    return completed;
+  }
+
+  Future<bool> _closeAllExcept(DocumentTab? keep) async {
+    for (final tab in List.of(_documents)) {
+      // A tab closed some other way while a save ran is already done.
+      if (tab == keep || !_documents.contains(tab)) continue;
+      if (!await closeTab(tab)) return false;
+    }
+    return true;
+  }
+
   Future<bool> _confirmTab(DocumentTab tab) async {
     if (tab.busy || tab.editor.isSaving) {
       _reportBusy(tab);
@@ -797,6 +855,64 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  /// A New tab still in its initial state: never saved, nothing typed,
+  /// nothing to lose. Type-then-erase-all also reads pristine (the buffer is
+  /// empty and clean); its dropped undo tail is accepted and documented.
+  bool _isPristineTab(DocumentTab tab) =>
+      tab.path == null &&
+      !tab.busy &&
+      !tab.editor.isDirty &&
+      tab.editor.text.text.isEmpty;
+
+  /// Closes the scratch tab an open just replaced. Only the previously active
+  /// tab qualifies, and only while it is still open, unnamed, empty and
+  /// unedited: background scratch tabs belong to the user.
+  void _dropPristine(DocumentTab? tab) {
+    if (tab != null && _documents.contains(tab) && _isPristineTab(tab)) {
+      _remove(tab);
+    }
+  }
+
+  /// The tab's name, with its folder while another open tab has the same
+  /// name, so two index.js tabs can be told apart. Ported from #43.
+  String labelFor(DocumentTab tab) {
+    final path = tab.path;
+    if (path == null) return tab.name;
+    final others = [
+      for (final other in _documents)
+        if (other != tab && other.name == tab.name && other.path != null)
+          _folders(other.path!),
+    ];
+    if (others.isEmpty) return tab.name;
+    // As few folders as tell this tab from every other of the same name:
+    // x/src/index.js and y/src/index.js need two, a/b.txt and c/b.txt one.
+    final mine = _folders(path);
+    for (var count = 1; count <= mine.length; count++) {
+      final suffix = mine.sublist(mine.length - count).join('/');
+      final unique = others.every(
+        (theirs) =>
+            theirs.length < count ||
+            theirs.sublist(theirs.length - count).join('/') != suffix,
+      );
+      if (unique) {
+        return _paths.joinAll([...mine.sublist(mine.length - count), tab.name]);
+      }
+    }
+    // Every folder is shared, as with /a/index.js beside /x/a/index.js:
+    // show them all, which the longer path's label then extends.
+    return _paths.joinAll([...mine, tab.name]);
+  }
+
+  /// The folders above [path]'s file, outermost first, without the root.
+  List<String> _folders(String path) {
+    final parts = _paths.split(_paths.dirname(path));
+    final root = _paths.rootPrefix(path);
+    return [
+      for (final part in parts)
+        if (part.isNotEmpty && part != root && part != '.') part,
+    ];
   }
 
   String _pathKey(String path) => _paths.canonicalize(path);

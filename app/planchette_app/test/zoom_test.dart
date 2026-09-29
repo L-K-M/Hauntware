@@ -8,6 +8,7 @@ import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs;
+import 'services/memory_settings.dart';
 
 void main() {
   late DocumentWorkspace workspace;
@@ -44,7 +45,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(1000, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
-      PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+      PlanchetteApp(workspace: workspace, settings: testSettings()),
     );
     await tester.pumpAndSettle();
   }
@@ -56,7 +57,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(1000, 720));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
-        PlanchetteApp(workspace: workspace, themeMode: ThemeMode.light),
+        PlanchetteApp(workspace: workspace, settings: testSettings()),
       );
       await tester.pumpAndSettle();
       expect(fontSize(tester), 14);

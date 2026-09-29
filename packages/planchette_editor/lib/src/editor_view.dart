@@ -89,6 +89,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     skipTraversal: true,
   );
   int _lastReveal = -1;
+
+  /// Whether this view's route is on top. A tab activated while a dialog is
+  /// up, such as the one a close prompt shows, restores focus once the
+  /// dialog is gone instead of taking the keyboard from it.
+  bool _routeIsCurrent = true;
+  bool _restoreWhenCurrent = false;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
@@ -135,6 +141,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     c.text.theme = _syntaxTheme;
+    final current = ModalRoute.isCurrentOf(context) ?? true;
+    if (current == _routeIsCurrent) return;
+    _routeIsCurrent = current;
+    if (!current || !_restoreWhenCurrent) return;
+    _restoreWhenCurrent = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isActive) c.restoreFocus();
+    });
   }
 
   @override
@@ -156,7 +170,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (widget.isActive) {
-          c.restoreFocus();
+          if (_routeIsCurrent) {
+            c.restoreFocus();
+          } else {
+            _restoreWhenCurrent = true;
+          }
         } else {
           for (final node in c.textFocusNodes) {
             node.unfocus();
