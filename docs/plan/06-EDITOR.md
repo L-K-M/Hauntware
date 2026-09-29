@@ -8,6 +8,17 @@ requirements R8 (built-in editor) and R9 (external editors). Architecture
 placement (notifiers, channels, isolates) is 03's; UX chrome, shortcuts, and
 dialogs are 02's; this chapter owns the behavior.
 
+## Shared implementation (2026-09-27)
+
+The owner approved extracting the reusable editor into Planchette. D2 now
+assigns syntax, search, guarded document I/O, and the Flutter editing surface
+and controller to `planchette_core` and `planchette_editor`. Both hosts retain
+thin adapters for their own chrome, strings, menus, remote files, and windows.
+The common surface adds line numbers and find/replace; the per-document
+window policy and managed-checkout/upload semantics below still belong to
+Poltergeist. The original port descriptions remain provenance, with current
+ownership recorded in PORTS.md and the package architecture document.
+
 ## 1. Scope: what "editor" means here
 
 Poltergeist's built-in editor is a **config-file editor, not an IDE** — the
@@ -23,8 +34,8 @@ small scripts. Concretely:
   Native close and Quit protect unsaved buffers; native close waits for
   an in-flight save/upload to finish. Phones, tablets, and runners without
   the window host use the full-window route (Séance's model).
-  No editor tabs, no split editing, no line numbers, no soft-wrap
-  toggle, no multiple cursors. The rendering body is a single Flutter
+  No editor tabs, split editing, soft-wrap toggle, or multiple cursors.
+  Line numbers come from the shared Planchette surface. The rendering body is a single Flutter
   `TextField` (`expands: true, maxLines: null`) with a custom controller —
   the I/O layer, find logic, and syntax engine are all independent of it, so
   a richer body can be swapped in later without touching them.
@@ -1258,12 +1269,24 @@ they clicked another row.
   an explicit confirmation, and never re-attaches a Windows-executable
   extension (`.bat`, `.cmd`, `.com`, `.scr`, `.ps1`, `.js`, `.jse`,
   `.vbs`, `.vbe`, `.wsf`, `.wsh`, `.hta`, `.exe`, `.pif`, `.scf`,
-  `.cpl`, `.msp`, `.mst` — the encoded/Script-Host and control-panel
+  `.cpl`, `.msp`, `.mst`, plus the types whose default verb runs code
+  anyway: `.msi`, `.lnk`, `.url`, `.reg`, `.chm`, `.msc`, `.jar`,
+  `.vb`, `.ws`, `.wsc`, `.sct`, `.application`, `.diagcab`, and the
+  Python launcher's `.py`, `.pyw`, `.pyz`, `.pyzw` — the
+  encoded/Script-Host and control-panel
   twins double-click-execute and pass the `^[A-Za-z0-9_-]{1,16}$`
   sanitizer just like the rest, so the list lives as **one named
   constant with a membership-pinning test** that also asserts every
   entry matches that charset, keeping sanitizer and blocklist from
-  drifting apart) to an OS launch); Quick Look and
+  drifting apart) to an OS launch. The rule holds on every desktop
+  host: `isExecutableLaunchName` classifies the last extension
+  (case-insensitive, trailing dots and spaces stripped as Win32 does)
+  against this list on Windows and small macOS (`.app`, `.command`,
+  `.tool`, `.terminal`, `.term`, `.workflow`, `.fileloc`, `.inetloc`,
+  `.webloc`, `.jar`, `.pkg`, `.mpkg`) and Linux (`.desktop`, `.jar`,
+  `.appimage`) lists; the system-default launch of a checkout refuses
+  such a name with a toast carrying §1's `Open With ▸` router, never
+  a "run anyway"); Quick Look and
   image decoding key type off the extension, so the sanitized form is
   kept whenever safe and an extensionless hash name falls back to
   content sniffing or the metadata card. JSON-encoding the fields

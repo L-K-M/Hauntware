@@ -61,4 +61,18 @@ void main() {
     expect(paneLastSegment(r'\\server\share\'), r'\\server\share\');
     expect(paneLastSegment(r'C:\foo\'), 'foo');
   });
+
+  test('panePathIsUnder walks parents in either separator style', () {
+    expect(panePathIsUnder('/home/tester/.cache/gh', '/home/tester'), isTrue);
+    expect(
+      panePathIsUnder('/home/tester/.cache', '/home/tester/.cache'),
+      isFalse,
+    );
+    // A shared name prefix is not containment.
+    expect(panePathIsUnder('/home/tester2/x', '/home/tester'), isFalse);
+    expect(panePathIsUnder('/etc', '/'), isTrue);
+    expect(panePathIsUnder('/', '/'), isFalse);
+    expect(panePathIsUnder(r'C:\Users\a\b', r'C:\Users'), isTrue);
+    expect(panePathIsUnder(r'C:\Users2\b', r'C:\Users'), isFalse);
+  });
 }

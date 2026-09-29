@@ -36,6 +36,14 @@ dependencies:
   path_provider: 2.1.6
   # Applies owner-only mode bits to path-bearing local audit files.
   posix: 6.5.2
+  # Shared editor surface: git-pinned to Planchette, never forked or copied,
+  # at the same reviewed revision as planchette_core in poltergeist_core and
+  # as Séance's pin. Bump both pins together and re-run the editor tests.
+  planchette_editor:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: ff4873947c93ac4e259338b7f80dac93947259e6
+      path: packages/planchette_editor
   poltergeist_core:
     path: ../../packages/poltergeist_core
   poltergeist_sync:

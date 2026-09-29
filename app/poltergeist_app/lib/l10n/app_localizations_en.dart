@@ -941,6 +941,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'This folder stopped updating automatically. Refresh to see new changes.';
 
   @override
+  String paneNoticeExpandFailed(String name, String reason) {
+    return 'Couldn\'t show what\'s in “$name”: $reason';
+  }
+
+  @override
+  String get paneRowExpand => 'Expand';
+
+  @override
+  String get paneRowCollapse => 'Collapse';
+
+  @override
   String get infoPanelLabel => 'Info';
 
   @override
@@ -2225,6 +2236,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editorSaveAndUploadTooltip => 'Save and upload';
 
   @override
+  String get editorShowReplaceTooltip => 'Find and replace';
+
+  @override
+  String get editorReplaceHint => 'Replace with';
+
+  @override
+  String get editorReplaceLabel => 'Replace';
+
+  @override
+  String get editorReplaceAllLabel => 'Replace all';
+
+  @override
   String get editorFindHint => 'Find in file';
 
   @override
@@ -2250,6 +2273,43 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String editorMatchCountCapped(int current, int total) {
     return '$current/$total+';
+  }
+
+  @override
+  String get editorWholeWordsTooltip => 'Whole words';
+
+  @override
+  String get editorRegularExpressionTooltip => 'Regular expression';
+
+  @override
+  String get editorFindPatternHint => 'Find by regular expression';
+
+  @override
+  String editorPatternInvalid(String detail) {
+    return 'Invalid pattern: $detail';
+  }
+
+  @override
+  String get editorPatternTooSlow => 'Pattern took too long to search';
+
+  @override
+  String get editorCaseFoldLimited =>
+      'This text cannot be compared without case, so matching was exact.';
+
+  @override
+  String get editorGoToLineTooltip => 'Go to line';
+
+  @override
+  String get editorCloseGoToLineTooltip => 'Close go to line';
+
+  @override
+  String editorGoToLineHint(int lines) {
+    return 'Line or line:column, 1 to $lines';
+  }
+
+  @override
+  String editorGoToLineInvalid(int lines) {
+    return 'Enter a line from 1 to $lines, or line:column.';
   }
 
   @override
@@ -2326,6 +2386,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get openWithConfirmOpen => 'Open';
+
+  @override
+  String fileOpenProgramRefused(String name) {
+    return '“$name” could run as a program on this computer, so it wasn\'t opened with the system default app.';
+  }
 
   @override
   String checkoutDirtyUploadPrompt(String name) {

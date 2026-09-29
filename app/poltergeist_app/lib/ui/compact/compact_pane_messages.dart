@@ -50,6 +50,21 @@ String compactFaultText(AppLocalizations l10n, PaneFault fault) =>
       PaneFault.openFile => l10n.paneFaultOpenFile,
     };
 
+/// The notice strip's sentence for a folder that could not be opened in
+/// place (02 §2.5): which folder, and why. Shared by the desktop pane and
+/// the compact listing.
+String expandFailedText(
+  AppLocalizations l10n,
+  ({String name, RemoteFileException error})? failure,
+) {
+  if (failure == null) return '';
+  final reason = switch (failure.error) {
+    PaneFaultException(:final fault) => compactFaultText(l10n, fault),
+    final error => error.message,
+  };
+  return l10n.paneNoticeExpandFailed(failure.name, reason);
+}
+
 /// A rename session's refusal, as the rename dialog shows it.
 String compactRenameErrorText(
   AppLocalizations l10n,
@@ -65,6 +80,7 @@ String compactNoticeText(
   AppLocalizations l10n,
   PaneNotice notice, {
   required DragOutLeftOut dragOutLeftOut,
+  ({String name, RemoteFileException error})? expansionFailure,
 }) => switch (notice) {
   PaneNotice.openRemoteUnavailable => l10n.paneNoticeOpenRemoteUnavailable,
   PaneNotice.editLater => l10n.paneNoticeEditLater,
@@ -74,4 +90,5 @@ String compactNoticeText(
   PaneNotice.dragOutRemote => l10n.paneNoticeDragOutRemote,
   PaneNotice.dragOutLeftOut => dragOutLeftOutText(l10n, dragOutLeftOut),
   PaneNotice.watchStopped => l10n.paneNoticeWatchStopped,
+  PaneNotice.expandFailed => expandFailedText(l10n, expansionFailure),
 };

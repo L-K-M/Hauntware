@@ -280,4 +280,17 @@ void main() {
     expect(cancelled.withRows(const [1, 2]).selectedKeys, isEmpty);
     expect(confirmed.withRows(const [3]).selectedKeys, {3});
   });
+
+  test('withCursor moves cursor and anchor, keeping the selection', () {
+    final state = _begin(
+      selected: const [2, 4],
+    ).activate(3, SelectionUpdate.toggle);
+    expect(state.selectedKeys, {2, 3, 4});
+    final moved = state.withCursor(1);
+    expect(moved.cursorKey, 1);
+    expect(moved.anchorKey, 1);
+    expect(moved.selectedKeys, {2, 3, 4});
+    expect(identical(moved.withCursor(1), moved), isTrue);
+    expect(() => state.withCursor(9), throwsArgumentError);
+  });
 }

@@ -92,6 +92,86 @@ Future<void> Function(String name) _capture(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('captures shared editor search and replace in both themes', (
+    tester,
+  ) async {
+    await tester.runAsync(_loadRealFonts);
+    tester.view.physicalSize = const Size(1100, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const sample =
+        '# Example preview settings; these are dummy values.\n'
+        'APP_NAME=Planchette\n'
+        'export APP_ENV=preview\n'
+        'PORT=3000 # Local preview port\n'
+        'API_ORIGIN=https://preview.example.invalid\n'
+        '\n'
+        '# A quoted hash is part of the value.\n'
+        'PAGE_TITLE="Planchette # Preview"\n'
+        'WELCOME_MESSAGE="Welcome to the preview.\n'
+        '# This line remains part of the message.\n'
+        'Enjoy your stay."\n'
+        'LOG_LEVEL=info\n';
+    final baseline =
+        Platform.environment['POLTERGEIST_CAPTURE_BASELINE'] == '1';
+    for (final brightness in [Brightness.light, Brightness.dark]) {
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: const ValueKey('capture.editor'),
+          child: MaterialApp(
+            key: ValueKey(brightness),
+            debugShowCheckedModeBanner: false,
+            theme: _captureTheme(brightness: brightness),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: BuiltInTextEditorScreen(
+              file: File('/Users/example/Projects/preview/.env.local'),
+              initialText: sample,
+              onCloseRequested: () async {},
+              onQuitRequested: () async {},
+              onNewWindowRequested: () async {},
+              showToast: (context, message) =>
+                  showTopToastIn(context, message: message),
+              monoFontFallback: const ['DejaVu Sans Mono'],
+              basenameOf: remoteBasename,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Find'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is TextField &&
+              widget.decoration?.hintText == 'Find in file',
+        ),
+        'preview',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('1/6'), findsOneWidget);
+      if (!baseline) {
+        await tester.tap(find.byTooltip('Find and replace'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is TextField &&
+                widget.decoration?.hintText == 'Replace with',
+          ),
+          'production',
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(const ValueKey('editor-line-gutter')),
+          findsOneWidget,
+        );
+      }
+      await _capture(tester)('editor-search-replace-${brightness.name}');
+    }
+  });
+
   testWidgets('captures dotenv highlighting in light and dark themes', (
     tester,
   ) async {

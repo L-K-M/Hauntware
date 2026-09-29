@@ -4,6 +4,35 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Shared Planchette editor (2026-09-27)
+
+The owner approved shared editor packages and a standalone Planchette app.
+Poltergeist's migration retains native editor windows, localized chrome,
+menus, and managed-checkout/upload behavior while using the shared syntax,
+document I/O, editing controller, and surface. The common editor adds a
+line-number gutter and find/replace. Both packages are pinned to the same
+immutable Planchette revision in the pubspecs and lockfiles.
+
+Local validation: core analysis and 58 document/checkout tests pass; Flutter
+analysis and 90 editor, window, localization, syntax, checkout and activity
+tests pass. Light/dark before-and-after captures use real fonts and record
+their provenance in `tasks/planchette-editor/screenshots/README.md`.
+Cross-platform CI and final review results are recorded on the adoption PR.
+
+Update (2026-09-29): the pin moved from `5b75f9dc` to `ff487394`,
+Planchette main, the revision Séance adopts too. The surface now brings
+indentation, line commands, Go to Line, bracket matching, whole-word and
+regular-expression search, and new highlighting. The find and Go to Line
+bars' new strings come from the ARB file like the rest of the find bar;
+the status-row strings stay unused because this editor draws its own. Go
+files now detect as Go, not C-family. No shortcut the surface installs is
+bound by the editor window's menu. Local validation after merging main:
+core analysis is clean; 1,701 core tests pass and 3 fail, all unrelated:
+the two root-only cleanup-failure checkout tests fail here on main too,
+and the Linux watch test failed once under load and passes alone. Flutter
+analysis is clean and all 2,907 other app tests pass; the Go expectation
+was the one failure and is updated.
+
 ## D12 drift scope and tab-switch work (2026-09-28)
 
 Tier-A-only benchmark runs now report persisted tier-B drift as a notice,
@@ -164,6 +193,43 @@ malformed input, Unicode offsets and linear scaling. The scanner is recorded
 in PORTS.md as a Séance port-back candidate. Before/after light and dark captures are in
 [the task evidence](../tasks/dotenv-highlighting/README.md); sharing editor
 packages with a possible Planchette app remains a proposal.
+
+## Region seams (2026-09-27)
+
+The three region boundaries (sidebar | panes, A | B, panes | inspector)
+now take 1 px in layout instead of their 7 px splitter slot. The grab
+area floats over the seam (`ShellSeam.straddle`), so the header divider
+and the active pane's accent line reach the vertical lines; before, each
+stopped 3 px short. Stage thresholds and clamps still budget the full
+splitter extent, so the stages switch at the same widths; the secondary
+pane and the main column take the 6 px each seam frees. Covered by
+`test/ui/shell/shell_seams_test.dart`. Owner-reported; 10 §3.1 amended.
+
+## Folders expand in place (2026-09-26)
+
+Desktop listings show a disclosure triangle on folder rows (02 §2.5,
+owner-directed; 10 §12 had deferred it as its own slice). A click on
+the triangle, or → / ← on the cursor row, opens and closes a folder in
+place, its rows indented below it and listed on demand through the
+pane's channel. Hidden files, sort and the filter apply inside open
+folders. Every accepted listing of the location re-lists them;
+navigating elsewhere closes them, and Esc-cancel keeps them.
+
+The selection spans nested rows. Closing a folder with selected rows
+inside selects the folder. Delete, duplicate, copy/move to the other
+pane, download and drags act on the selection's roots
+(`PaneController.selectedRoots`): a row inside a selected folder is not
+acted on a second time. Duplicate now copies each root into its own
+folder (previously always the pane's location). Drops onto a row
+inside an open folder land in that folder.
+
+Not done: open folders are not watched on their own (the local watch
+still covers the location), their state is not persisted, and touch
+rows do not expand. Recursive expand (⌥-click / ⌥→) is not offered.
+
+Validation: new controller (`pane_expansion_test.dart`, 21 tests),
+view (`pane_outline_test.dart`, 6) and file-verb/drop tests; the
+affected pane suites pass.
 
 ## Desktop file interactions (2026-09-26)
 
@@ -9370,6 +9436,80 @@ subsumption shapes, plus a source-side directory that keeps its copy
 rows) and a `scanned plans` group in `executor_test.dart` that scans
 real trees, diffs and runs them. All but the source-side guard failed
 before the fix. `dart test packages/poltergeist_sync` passes.
+## rsync export: server pairs (2026-09-26)
+
+P2-07. For a pair with a remote side, `buildRsyncCommand` escaped every
+flag value for the remote shell, filter patterns included. rsync sends
+filter rules over its protocol, so the backslashes reached wildmatch:
+the default `.poltergeist*` exclude matched nothing, a pasted Mirror
+could delete the destination's `.poltergeist-trash`, and patterns with
+spaces never matched. On rsync 3.2.4+, which escapes remote args
+itself, the pre-escaped remote path also named a wrong directory (and
+on 3.2.4–3.2.7 a backtick in it reached the remote shell).
+
+- Filter values are only single-quoted now.
+- Commands with a remote side start with
+  `RSYNC_OLD_ARGS=2 RSYNC_PROTECT_ARGS=0`, so every rsync version passes
+  the exporter's own escaping through unchanged (05 §2.1 records why).
+- `--backup-dir` rides the remote command line in both directions: it
+  is remote-escaped for a remote destination, and a pull whose local
+  trash path is not shell-safe falls back to the in-root
+  `.poltergeist-trash/rsync-<ts>` with a note. Verbatim, a split value
+  made the remote sender pull another directory's files, exit 0.
+
+Tests: contract tests in `rsync_export_test.dart` (default and user
+excludes survive for remote pairs, the backup-dir cases, a remote path
+with space, quote, `$` and backtick, no prefix on local pairs), a
+`trash_unsafe_pull` golden, and `rsync_export_exec_test.dart`, which
+runs the generated preview and live lines through real rsync with a
+stand-in `ssh` that keeps OpenSSH's remote-command contract (skipped
+without rsync 3.x). Remote goldens changed; local ones are identical.
+Checked by hand against rsync 3.2.7 and a real sshd on loopback.
+
+## Remote Open never executes (2026-09-26)
+
+P1-03: Open, Open With > System default, the preview card's Open and
+the local-edits review's Open handed managed checkouts to the OS
+default handler under their remote extension, so a remote `.js`,
+`.hta` or `.exe` ran on Windows; `previewWindowsExecutableExtensions`
+had no production caller. `isExecutableLaunchName` (core) now
+classifies a name per host (last extension, case-insensitive, Win32
+trailing dot/space strip), `ExternalFileOpener.openSystemDefault`
+throws `ExecutableLaunchRefused` for it, and the shell refuses from
+the listing name before any download, with a localized toast and the
+Open With router (06 §1). A refusal never discards a checkout. The
+Windows list grew by the shortcut, installer and script-host types
+(06 §5.3 updated). Checkouts stay 0600 (pinned by a new core test), so
+extensionless scripts cannot run either.
+
+Verification: classifier tables in `preview_kinds_test.dart`, opener
+cases in `external_editor_test.dart`, and shell cases in
+`external_editor_checkout_test.dart` and `local_edits_review_test.dart`
+(Windows `.js`/`.exe`, macOS `.command`, the built-in fallback, the
+review Open; `.pdf` still launches). The shell cases failed before the
+fix. Follow-ups: Mark-of-the-Web / quarantine on checkouts and
+downloads; `_launchCheckout` still discards a reused (possibly dirty)
+record when a real launch fails.
+
+## Keyboard focus and place after filtering and going up (2026-09-26)
+
+Review findings P4-01 and P4-02. Esc or Enter in the header filter
+field left focus on the route's scope, so the arrow keys did nothing
+until a click; the field now hands focus to the active pane's listing
+on Esc, Enter (selecting the first match when no row holds the cursor)
+and ↓ (selecting the first row), and scrolls the cursor into view. An
+open input-method composition keeps ↓ and Esc. Going up (⌘↑, Backspace)
+and Back scrolled the parent to its top with nothing selected; the
+accepted parent listing now re-selects the folder the pane came from,
+and each trail stop remembers its cursor row for Back/Forward (falling
+back to the child on the way to an ancestor). The row is centred when
+the listing lands. The re-select is spent by the first accepted
+listing, survives a same-folder re-list issued mid-load, and drops with
+Esc-cancel. Desktop only: touch never gains an unpicked selection (D32
+§9). Exact scroll offsets are not restored. Tests: the leaving-the-field
+group in `header_filter_test.dart`, the re-select group in
+`pane_history_test.dart`, and `pane_view_test.dart`'s "going up reveals
+the folder the user came from".
 
 ## SSH-agent authentication and ProxyJump (D10, 2026-09-29)
 

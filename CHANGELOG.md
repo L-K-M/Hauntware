@@ -4,6 +4,25 @@
 
 - **SSH-agent authentication.** New servers default to the system SSH agent,
   with no private key stored by Poltergeist.
+- **The built-in editor is the one Planchette and Séance use.** It gains
+  line numbers, find and replace with whole-word and regular-expression
+  search, Go to Line (⌘L on a Mac, Ctrl+G elsewhere), Tab and Shift+Tab
+  to indent and outdent (Enter keeps the indentation, learned from each
+  file), line commands (duplicate, move, delete and join lines), Toggle
+  Comment, Go to Matching Bracket, and highlighting for Go, diffs and
+  more. Saving, uploads and conflict checks work as before.
+- **Lines meet at the region edges.** The line under the header and the
+  active pane's accent line stopped a few pixels short of the sidebar's
+  edge, the divider between the two panes and the inspector's edge. They
+  now run all the way to those lines.
+- **Folders open in place.** Folder rows have a small triangle on the
+  left, as in Finder and Transmit: click it, or press → and ←, to show a
+  folder's contents indented below it without leaving the folder you
+  are in. You can select rows at any level. When a folder and something
+  inside it are both selected, delete, duplicate, copy, move and drag
+  act on the folder once instead of on its contents twice, and a row
+  inside an unselected folder is handled on its own. Duplicate now puts
+  each copy next to its original.
 - **The active pane's accent line is above its tabs.** The coloured line
   that shows which pane is active now runs along the top of that pane's
   tab bar instead of under the tabs, so it no longer sits between a tab
@@ -212,6 +231,28 @@
   connection exercises it, and the raw sidebar probe never bypasses it.
   If sync changes a hop or removes a connected server, existing work may
   finish, but the old route cannot reconnect.
+- **Copy as rsync Command is right for server pairs.** For a pair with a
+  server side, the copied command backslash-escaped its exclude
+  patterns, so rsync ignored them: a pasted Mirror could delete the
+  server's `.poltergeist-trash` folder, and an exclude with a space
+  uploaded what it should skip. Patterns are now passed as written. The
+  command also starts with `RSYNC_OLD_ARGS=2 RSYNC_PROTECT_ARGS=0`, so
+  rsync 3.2.4 and later no longer escape the server path a second time
+  and sync into a wrongly named folder. When a pull's trash folder has
+  a name the server's shell would misread, backups go to
+  `.poltergeist-trash` instead, and a note in the command says so.
+- **Remote program files are never run by opening them.** Opening a
+  remote file whose type your computer runs rather than opens (such as
+  `.exe`, `.js`, `.hta` or `.lnk` on Windows, `.command` or `.terminal`
+  on macOS, `.desktop` on Linux) no longer hands it to the system
+  default app. You see why, with an Open With button to pick an editor
+  instead.
+- **Keyboard browsing keeps your place.** Esc, Enter or ↓ in the
+  header filter now return you to the listing, so the arrow keys, Space
+  and Enter work on the results straight away (Enter selects the first
+  match, ↓ the first row). Going up a folder selects the folder you came
+  from and scrolls it into view, and Back and Forward select the item
+  you last had selected there, as Finder and ForkLift do.
 - Pre-1.0 history lives in the commit log and the GitHub pre-releases
   (v0.1.0, v0.2.0).
 

@@ -10,6 +10,15 @@ environment:
   sdk: ^3.12.0
 
 dependencies:
+  # Shared editor document layer (bounded load, BOM and line endings,
+  # guarded saves): git-pinned to Planchette, never forked or copied, at the
+  # same reviewed revision as planchette_editor in the app and as Séance's
+  # pin. Bump both pins together (docs/PORTS.md records each audit).
+  planchette_core:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: ff4873947c93ac4e259338b7f80dac93947259e6
+      path: packages/planchette_core
   # D2: git-pinned to Séance, never forked or copied. Temporary revision
   # bridge to PR-S4 (Séance #131: agent auth + ProxyJump); return to a tag
   # when the next Séance release contains merge 4c0a960.

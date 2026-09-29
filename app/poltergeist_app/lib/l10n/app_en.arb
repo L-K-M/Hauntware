@@ -1262,6 +1262,22 @@
   "@paneNoticeWatchStopped": {
     "description": "Transient notice strip (02 §10): the shown local folder's change watch failed repeatedly, so the listing no longer refreshes on its own until the next navigation, refresh, or tab switch (03 §7.5: watcher failure is never silent)."
   },
+  "paneNoticeExpandFailed": "Couldn't show what's in “{name}”: {reason}",
+  "@paneNoticeExpandFailed": {
+    "description": "Transient notice strip (02 §2.5): a folder the user opened in place with its disclosure triangle could not be listed, so it closed again. {name} is the folder's name, {reason} the listing error's sentence.",
+    "placeholders": {
+      "name": {"type": "String"},
+      "reason": {"type": "String"}
+    }
+  },
+  "paneRowExpand": "Expand",
+  "@paneRowExpand": {
+    "description": "Tooltip and screen-reader action on a folder row's disclosure triangle (02 §2.5): shows the folder's contents in place, indented below it, without opening the folder."
+  },
+  "paneRowCollapse": "Collapse",
+  "@paneRowCollapse": {
+    "description": "Tooltip and screen-reader action on an expanded folder row's disclosure triangle (02 §2.5): hides the contents shown below it."
+  },
   "infoPanelLabel": "Info",
   "@infoPanelLabel": {
     "description": "Accessible name of the Get Info inspector panel (02 §2.6)."
@@ -2931,6 +2947,22 @@
   "@editorSaveAndUploadTooltip": {
     "description": "Tooltip of the editor's save-and-upload action on a managed checkout (06 §2.4)."
   },
+  "editorShowReplaceTooltip": "Find and replace",
+  "@editorShowReplaceTooltip": {
+    "description": "Tooltip of the shared editor's replace controls toggle."
+  },
+  "editorReplaceHint": "Replace with",
+  "@editorReplaceHint": {
+    "description": "Hint of the shared editor's replacement text field."
+  },
+  "editorReplaceLabel": "Replace",
+  "@editorReplaceLabel": {
+    "description": "Replace the active literal search match."
+  },
+  "editorReplaceAllLabel": "Replace all",
+  "@editorReplaceAllLabel": {
+    "description": "Replace all literal search matches in the document."
+  },
   "editorFindHint": "Find in file",
   "@editorFindHint": {
     "description": "Hint text of the editor's find query field (06 §2.3)."
@@ -2975,6 +3007,61 @@
         "type": "int"
       },
       "total": {
+        "type": "int"
+      }
+    }
+  },
+  "editorWholeWordsTooltip": "Whole words",
+  "@editorWholeWordsTooltip": {
+    "description": "Tooltip of the find bar's whole-word toggle."
+  },
+  "editorRegularExpressionTooltip": "Regular expression",
+  "@editorRegularExpressionTooltip": {
+    "description": "Tooltip of the find bar's regular-expression toggle."
+  },
+  "editorFindPatternHint": "Find by regular expression",
+  "@editorFindPatternHint": {
+    "description": "Hint text of the find query field while regular-expression mode is on."
+  },
+  "editorPatternInvalid": "Invalid pattern: {detail}",
+  "@editorPatternInvalid": {
+    "description": "Find bar notice for a regular expression that does not compile; detail is the engine's own explanation, such as 'Unterminated group'.",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "editorPatternTooSlow": "Pattern took too long to search",
+  "@editorPatternTooSlow": {
+    "description": "Find bar notice for a regular expression stopped at the search time budget."
+  },
+  "editorCaseFoldLimited": "This text cannot be compared without case, so matching was exact.",
+  "@editorCaseFoldLimited": {
+    "description": "Find bar notice when a case-insensitive search had to fall back to exact matching."
+  },
+  "editorGoToLineTooltip": "Go to line",
+  "@editorGoToLineTooltip": {
+    "description": "Label of the editor's Go to Line bar (Cmd+L on Apple platforms, Ctrl+G elsewhere)."
+  },
+  "editorCloseGoToLineTooltip": "Close go to line",
+  "@editorCloseGoToLineTooltip": {
+    "description": "Tooltip of the Go to Line bar's close button."
+  },
+  "editorGoToLineHint": "Line or line:column, 1 to {lines}",
+  "@editorGoToLineHint": {
+    "description": "Hint text of the Go to Line field; lines is the document's line count.",
+    "placeholders": {
+      "lines": {
+        "type": "int"
+      }
+    }
+  },
+  "editorGoToLineInvalid": "Enter a line from 1 to {lines}, or line:column.",
+  "@editorGoToLineInvalid": {
+    "description": "Go to Line error for input that is not a line or line:column in range.",
+    "placeholders": {
+      "lines": {
         "type": "int"
       }
     }
@@ -3102,6 +3189,15 @@
   "openWithConfirmOpen": "Open",
   "@openWithConfirmOpen": {
     "description": "Confirms the remember-choice prompt: opens the file with the picked application."
+  },
+  "fileOpenProgramRefused": "“{name}” could run as a program on this computer, so it wasn't opened with the system default app.",
+  "@fileOpenProgramRefused": {
+    "description": "06 §5.3's open-boundary refusal: a remote file whose type this OS runs rather than opens (.exe, .js on Windows, .command on macOS, .desktop on Linux) is never handed to the system default app. Shown with an Open With action where a remote row is the source, so an explicit editor can still open it as a document.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "checkoutDirtyUploadPrompt": "“{name}” changed locally. Upload it?",
   "@checkoutDirtyUploadPrompt": {

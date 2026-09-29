@@ -1616,6 +1616,24 @@ abstract class AppLocalizations {
   /// **'This folder stopped updating automatically. Refresh to see new changes.'**
   String get paneNoticeWatchStopped;
 
+  /// Transient notice strip (02 §2.5): a folder the user opened in place with its disclosure triangle could not be listed, so it closed again. {name} is the folder's name, {reason} the listing error's sentence.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t show what\'s in “{name}”: {reason}'**
+  String paneNoticeExpandFailed(String name, String reason);
+
+  /// Tooltip and screen-reader action on a folder row's disclosure triangle (02 §2.5): shows the folder's contents in place, indented below it, without opening the folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand'**
+  String get paneRowExpand;
+
+  /// Tooltip and screen-reader action on an expanded folder row's disclosure triangle (02 §2.5): hides the contents shown below it.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse'**
+  String get paneRowCollapse;
+
   /// Accessible name of the Get Info inspector panel (02 §2.6).
   ///
   /// In en, this message translates to:
@@ -3523,6 +3541,30 @@ abstract class AppLocalizations {
   /// **'Save and upload'**
   String get editorSaveAndUploadTooltip;
 
+  /// Tooltip of the shared editor's replace controls toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Find and replace'**
+  String get editorShowReplaceTooltip;
+
+  /// Hint of the shared editor's replacement text field.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace with'**
+  String get editorReplaceHint;
+
+  /// Replace the active literal search match.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get editorReplaceLabel;
+
+  /// Replace all literal search matches in the document.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace all'**
+  String get editorReplaceAllLabel;
+
   /// Hint text of the editor's find query field (06 §2.3).
   ///
   /// In en, this message translates to:
@@ -3570,6 +3612,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{current}/{total}+'**
   String editorMatchCountCapped(int current, int total);
+
+  /// Tooltip of the find bar's whole-word toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Whole words'**
+  String get editorWholeWordsTooltip;
+
+  /// Tooltip of the find bar's regular-expression toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Regular expression'**
+  String get editorRegularExpressionTooltip;
+
+  /// Hint text of the find query field while regular-expression mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Find by regular expression'**
+  String get editorFindPatternHint;
+
+  /// Find bar notice for a regular expression that does not compile; detail is the engine's own explanation, such as 'Unterminated group'.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid pattern: {detail}'**
+  String editorPatternInvalid(String detail);
+
+  /// Find bar notice for a regular expression stopped at the search time budget.
+  ///
+  /// In en, this message translates to:
+  /// **'Pattern took too long to search'**
+  String get editorPatternTooSlow;
+
+  /// Find bar notice when a case-insensitive search had to fall back to exact matching.
+  ///
+  /// In en, this message translates to:
+  /// **'This text cannot be compared without case, so matching was exact.'**
+  String get editorCaseFoldLimited;
+
+  /// Label of the editor's Go to Line bar (Cmd+L on Apple platforms, Ctrl+G elsewhere).
+  ///
+  /// In en, this message translates to:
+  /// **'Go to line'**
+  String get editorGoToLineTooltip;
+
+  /// Tooltip of the Go to Line bar's close button.
+  ///
+  /// In en, this message translates to:
+  /// **'Close go to line'**
+  String get editorCloseGoToLineTooltip;
+
+  /// Hint text of the Go to Line field; lines is the document's line count.
+  ///
+  /// In en, this message translates to:
+  /// **'Line or line:column, 1 to {lines}'**
+  String editorGoToLineHint(int lines);
+
+  /// Go to Line error for input that is not a line or line:column in range.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a line from 1 to {lines}, or line:column.'**
+  String editorGoToLineInvalid(int lines);
 
   /// Editor status bar for a saved document (06 §2.3).
   ///
@@ -3696,6 +3798,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open'**
   String get openWithConfirmOpen;
+
+  /// 06 §5.3's open-boundary refusal: a remote file whose type this OS runs rather than opens (.exe, .js on Windows, .command on macOS, .desktop on Linux) is never handed to the system default app. Shown with an Open With action where a remote row is the source, so an explicit editor can still open it as a document.
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” could run as a program on this computer, so it wasn\'t opened with the system default app.'**
+  String fileOpenProgramRefused(String name);
 
   /// 06 §3.3's 12-second action toast when an external editor's save marks a managed checkout dirty (watch → debounce → SHA-256 reconcile).
   ///

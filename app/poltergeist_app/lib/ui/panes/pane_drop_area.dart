@@ -171,6 +171,15 @@ class _PaneDropAreaState extends State<PaneDropArea> {
         entries[index].type == RemoteFileType.directory) {
       return (dir: entries[index].path, folderRow: index);
     }
+    // A row inside a folder opened in place (02 §2.5) drops into that
+    // folder, the one it is listed in — not the pane's location. No row
+    // highlights: the folder may be scrolled away, and hovering a file
+    // must never spring-load its folder.
+    if (index >= 0 &&
+        index < entries.length &&
+        controller.rowDepth(index) > 0) {
+      return (dir: paneParentPath(entries[index].path), folderRow: null);
+    }
     return (dir: location.path, folderRow: null);
   }
 

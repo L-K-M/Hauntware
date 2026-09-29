@@ -628,6 +628,24 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.6.0"
+  planchette_core:
+    dependency: transitive
+    description:
+      path: "packages/planchette_core"
+      ref: ff4873947c93ac4e259338b7f80dac93947259e6
+      resolved-ref: ff4873947c93ac4e259338b7f80dac93947259e6
+      url: "https://github.com/L-K-M/Planchette.git"
+    source: git
+    version: "0.1.0"
+  planchette_editor:
+    dependency: "direct main"
+    description:
+      path: "packages/planchette_editor"
+      ref: ff4873947c93ac4e259338b7f80dac93947259e6
+      resolved-ref: ff4873947c93ac4e259338b7f80dac93947259e6
+      url: "https://github.com/L-K-M/Planchette.git"
+    source: git
+    version: "0.1.0"
   platform:
     dependency: transitive
     description:
