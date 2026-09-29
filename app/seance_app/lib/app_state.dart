@@ -2525,12 +2525,18 @@ class AppState extends ChangeNotifier {
     try {
       fs = await ssh.openRemoteFileSystem();
       staged = await stageProposalScript(fs, proposal.proposal);
-      // Built from a quoted path, so it never holds a line break; it goes
-      // through the same gate as every paste regardless, and before the
-      // claim, so a refusal leaves the proposal pending.
-      line = PasteSanitizer.sanitize(staged.commandLine);
     } catch (error) {
       return ProposalRunResult.failed('Could not upload the script: $error');
+    }
+    try {
+      // Built from a quoted path, so it never holds a line break; it goes
+      // through the same gate as every paste regardless, and before the
+      // claim, so a refusal leaves the proposal pending. The script is on
+      // the server by now, so a refusal removes it again.
+      line = PasteSanitizer.sanitize(staged.commandLine);
+    } on UnsafePasteException catch (error) {
+      await _unstage(fs, staged);
+      return ProposalRunResult.failed(error.reason);
     }
     final InboxClaim claim;
     try {
