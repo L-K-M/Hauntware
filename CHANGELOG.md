@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- The lines between the server list, the terminal and the side panel
+  now meet the lines across them. The header's bottom edge, the tab
+  bar and the panes' bottom borders used to stop a few pixels short of
+  the vertical dividers. The dividers are still as easy to grab, and
+  the terminal is 18 pixels wider.
+- On macOS the window no longer has a separate title bar. The traffic
+  lights sit over the server list, and a header across the terminal and
+  side panel shows the server you are on (name and `user@host`) with
+  Generate command beside it, the way Poltergeist's window looks. Drag
+  the header's empty space to move the window; double-click it to zoom.
+  In full screen the header stays and the title bar slides in with the
+  menu bar. Linux and Windows keep their title bars.
 - Themes: Settings has an Appearance tab. Pick one of ten themes
   (Séance, Graphite, Paper, Newsprint, Solarized, Midnight, Terminal,
   Vapor, Bubblegum, High contrast) as a starting point, then change any
@@ -14,6 +26,10 @@
 - On phones and tablets, the server filter field is full height again
   instead of a thin strip above an empty gap, and compact server rows
   are 40 dp instead of 48.
+- Sync: a snippet or server too large for the sync server no longer cuts
+  this device off from your other devices. Their edits and deletions
+  still arrive, and the sync status names the record that stays behind,
+  so you know what to make smaller.
 - Tabs switch in place. Settings, the side panel and the server mark
   picker showed the new tab by scrolling the content sideways to it, and
   a sideways swipe or trackpad scroll flipped between tabs. The new tab
@@ -130,5 +146,15 @@
   local copies just as the close button does. Plain Ctrl+W, Ctrl+C and
   Ctrl+A still go to the shell; Alt+digit now switches tabs instead of
   reaching readline. The terminal's right-click menu lists every shortcut.
+- Terminal: find in the scrollback with ⌘F on a Mac or iPad and
+  Ctrl+Shift+F elsewhere, or Find… in the terminal's right-click menu;
+  plain Ctrl+F still goes to the shell. A small bar at the top right
+  searches the whole scrollback, matching text that wraps across rows,
+  highlights every hit and marks the current one, and counts them ("3 of
+  17"). Enter and Shift+Enter, ⌘G and ⇧⌘G, or F3 and Shift+F3 move between
+  hits, the terminal scrolls to the current one, Aa makes the search match
+  case, and Escape closes the bar and returns you to the shell. New output
+  updates the hits while the bar is open, and the terminal does not resize
+  when it opens.
 
 Earlier history lives in the commit log and any GitHub releases.

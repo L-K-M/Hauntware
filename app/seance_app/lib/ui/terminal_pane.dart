@@ -9,6 +9,7 @@ import 'package:xterm/xterm.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
+import '../services/terminal_search.dart';
 import '../services/web_links.dart';
 import '../services/xterm_engine.dart';
 import '../theme.dart';
@@ -24,6 +25,7 @@ import 'session_label.dart';
 import 'sidebar_panel.dart';
 import 'tab_close.dart';
 import 'terminal_appearance.dart';
+import 'terminal_find_bar.dart';
 import 'terminal_keyboard_bar.dart';
 import 'top_toast.dart';
 
@@ -51,11 +53,16 @@ class TerminalPane extends StatelessWidget {
   final bool showAssistantAffordance;
   final bool showAppBar;
 
+  /// Whether the tab strip carries Generate command; false under the macOS
+  /// header ([HeaderToolbar]), which carries it instead.
+  final bool showGenerateCommandInStrip;
+
   const TerminalPane({
     super.key,
     this.onBack,
     this.showAssistantAffordance = false,
     this.showAppBar = true,
+    this.showGenerateCommandInStrip = true,
   });
 
   @override
@@ -91,7 +98,9 @@ class TerminalPane extends StatelessWidget {
                   onFocus: state.focusTab,
                   onClose: (id) => confirmAndCloseTab(context, state, id),
                   onNewTab: () => state.newTab(active.config),
-                  onGenerateCommand: () => openCommandGenerator(state),
+                  onGenerateCommand: showGenerateCommandInStrip
+                      ? () => openCommandGenerator(state)
+                      : null,
                   onRename: state.renameSession,
                   // In the wide layout the strip is the only chrome the
                   // terminal has, so it carries the server's colour: the
@@ -244,7 +253,10 @@ class TerminalTabStrip extends StatelessWidget {
   final ValueChanged<String> onFocus;
   final ValueChanged<String> onClose;
   final VoidCallback onNewTab;
-  final VoidCallback onGenerateCommand;
+
+  /// Null leaves Generate command out of the strip, for a window whose
+  /// header carries it.
+  final VoidCallback? onGenerateCommand;
 
   /// Called with a tab's id and its new name, or null to clear it back to
   /// automatic naming. Optional so the strip can be built without one.
@@ -261,7 +273,7 @@ class TerminalTabStrip extends StatelessWidget {
     required this.onFocus,
     required this.onClose,
     required this.onNewTab,
-    required this.onGenerateCommand,
+    this.onGenerateCommand,
     this.onRename,
     this.accent,
   });
@@ -366,25 +378,27 @@ class TerminalTabStrip extends StatelessWidget {
             icon: const Icon(Icons.add),
             onPressed: onNewTab,
           ),
-          VerticalDivider(
-            width: 1,
-            indent: 7,
-            endIndent: 7,
-            color: scheme.outlineVariant,
-          ),
-          IconButton(
-            tooltip: 'Generate command',
-            iconSize: 18,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
-            // The assistant's purple (Poltergeist's D34).
-            icon: Icon(
-              Icons.auto_fix_high,
-              color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+          if (onGenerateCommand case final generate?) ...[
+            VerticalDivider(
+              width: 1,
+              indent: 7,
+              endIndent: 7,
+              color: scheme.outlineVariant,
             ),
-            onPressed: onGenerateCommand,
-          ),
+            IconButton(
+              tooltip: 'Generate command',
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
+              // The assistant's purple (Poltergeist's D34).
+              icon: Icon(
+                Icons.auto_fix_high,
+                color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+              ),
+              onPressed: generate,
+            ),
+          ],
         ],
       ),
     );
@@ -937,8 +951,18 @@ class _SessionViewState extends State<_SessionView> {
   };
 
   final FocusNode _focus = FocusNode();
+  late bool _wasConnected;
   // Our own controller so the copy/paste menu can read (and set) the selection.
   final TerminalController _terminalController = TerminalController();
+
+  // Find in scrollback: the view's key and scroll position let a search
+  // reveal a hit; the session exists only while the find bar is open.
+  final GlobalKey<TerminalViewState> _viewKey = GlobalKey();
+  final ScrollController _scroll = ScrollController();
+  final GlobalKey<TerminalFindBarState> _findBarKey = GlobalKey();
+  TerminalSearchSession? _search;
+  String _lastFindQuery = '';
+  bool _lastFindCaseSensitive = false;
   @override
   void initState() {
     super.initState();
@@ -947,6 +971,8 @@ class _SessionViewState extends State<_SessionView> {
     // to the terminal when a terminal (not a text field) is focused.
     widget.tab.controller = _terminalController;
     _focus.addListener(_reportTerminalFocus);
+    _wasConnected = widget.tab.status == TerminalStatus.connected;
+    if (_wasConnected && widget.isActive) _requestTerminalFocus();
   }
 
   @override
@@ -957,12 +983,28 @@ class _SessionViewState extends State<_SessionView> {
     // new id instead of swapping the tab under this one, so no controller
     // rebind is needed (the old server-id keying required one).
     //
-    // Focus the terminal when this session becomes the active one.
-    if (widget.isActive && !oldWidget.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _focus.requestFocus();
-      });
+    // The session mutates in place, so oldWidget.tab cannot tell us whether
+    // the terminal just replaced its connecting placeholder. Autofocus alone
+    // leaves focus on the sidebar row that opened the connection.
+    final connected = widget.tab.status == TerminalStatus.connected;
+    if (widget.isActive &&
+        connected &&
+        (!oldWidget.isActive || !_wasConnected)) {
+      _requestTerminalFocus();
     }
+    _wasConnected = connected;
+  }
+
+  void _requestTerminalFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !widget.isActive ||
+          widget.tab.status != TerminalStatus.connected ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      _focus.requestFocus();
+    });
   }
 
   @override
@@ -971,8 +1013,10 @@ class _SessionViewState extends State<_SessionView> {
     if (identical(widget.tab.controller, _terminalController)) {
       widget.tab.controller = null;
     }
+    _search?.dispose();
     _focus.dispose();
     _terminalController.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -1006,13 +1050,35 @@ class _SessionViewState extends State<_SessionView> {
     // anchoring, edge autoscroll) live in the vendored xterm fork — one owner
     // in the gesture arena. The old app-side Listener machine raced xterm's
     // recognizers: its selections were force-cleared ~100ms later.
+    _search?.theme = appearance.theme;
+    final search = _search;
     return ColoredBox(
       // The padding around the grid is outside xterm's own painted area, so
       // without this the app surface would frame the terminal in a mismatched
       // color at every edge.
       color: appearance.theme.background,
-      child: TerminalView(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _terminalView(tab, appearance),
+          if (search != null)
+            TerminalFindBarOverlay(
+              child: TerminalFindBar(
+                key: _findBarKey,
+                session: search,
+                onClose: _closeFind,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _terminalView(TerminalSession tab, TerminalAppearance appearance) =>
+      TerminalView(
         tab.engine.terminal,
+        key: _viewKey,
+        scrollController: _scroll,
         controller: _terminalController,
         focusNode: _focus,
         autofocus: widget.isActive,
@@ -1029,8 +1095,52 @@ class _SessionViewState extends State<_SessionView> {
         onSecondaryTapDown: (details, _) =>
             _showContextMenu(context, details.globalPosition),
         padding: const EdgeInsets.all(6),
-      ),
-    );
+      );
+
+  /// Opens the find bar, or focuses it when it is already open. A one-line
+  /// selection becomes the query; otherwise the last query comes back.
+  void _openFind() {
+    if (_search != null) {
+      _findBarKey.currentState?.focusQuery();
+      return;
+    }
+    final terminal = widget.tab.engine.terminal;
+    final selection = _terminalController.selection;
+    final selected = selection == null
+        ? ''
+        : terminal.buffer.getText(selection).trim();
+    final query =
+        selected.isNotEmpty &&
+            !selected.contains('\n') &&
+            selected.length <= 200
+        ? selected
+        : _lastFindQuery;
+    setState(() {
+      _search =
+          TerminalSearchSession(
+              terminal: terminal,
+              controller: _terminalController,
+              viewport: TerminalViewSearchViewport(_viewKey, _scroll),
+              theme: TerminalAppearance.resolve(
+                widget.state.services.settings,
+                Theme.of(context).brightness,
+              ).theme,
+            )
+            ..caseSensitive = _lastFindCaseSensitive
+            ..search(query);
+    });
+  }
+
+  /// Closes the find bar, clearing its highlights, and hands the keyboard
+  /// back to the shell.
+  void _closeFind() {
+    final search = _search;
+    if (search == null) return;
+    _lastFindQuery = search.query;
+    _lastFindCaseSensitive = search.caseSensitive;
+    setState(() => _search = null);
+    search.dispose();
+    _focus.requestFocus();
   }
 
   Future<void> _openLink(Uri uri) async {
@@ -1094,6 +1204,15 @@ class _SessionViewState extends State<_SessionView> {
         ServerListPane.revealFilter()) {
       return KeyEventResult.handled;
     }
+    // Find in scrollback: ⌘F / Ctrl+Shift+F. Plain Ctrl+F stays readline's
+    // forward-char, and a held Alt is the filter chord above or, on
+    // Windows, AltGr typing a character.
+    if (clip &&
+        !keys.isAltPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyF) {
+      _openFind();
+      return KeyEventResult.handled;
+    }
     // Open another tab for this server: ⌘T / Ctrl+Shift+T.
     if (clip && event.logicalKey == LogicalKeyboardKey.keyT) {
       widget.state.newTab(widget.tab.config);
@@ -1131,7 +1250,7 @@ class _SessionViewState extends State<_SessionView> {
   }
 
   /// Right-click menu: Copy (when there's a selection), Paste, Select all,
-  /// and the keyboard shortcut list.
+  /// Find, and the keyboard shortcut list.
   Future<void> _showContextMenu(
     BuildContext context,
     Offset globalPosition,
@@ -1155,6 +1274,7 @@ class _SessionViewState extends State<_SessionView> {
         const PopupMenuItem(value: 'paste', child: Text('Paste')),
         const PopupMenuDivider(),
         const PopupMenuItem(value: 'selectAll', child: Text('Select all')),
+        const PopupMenuItem(value: 'find', child: Text('Find…')),
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'shortcuts',
@@ -1169,6 +1289,9 @@ class _SessionViewState extends State<_SessionView> {
         await terminalPaste(widget.tab);
       case 'selectAll':
         terminalSelectAll(widget.tab);
+      case 'find':
+        // The tab may have closed while the menu was open.
+        if (mounted) _openFind();
       case 'shortcuts':
         if (context.mounted) await showKeyboardShortcuts(context);
     }

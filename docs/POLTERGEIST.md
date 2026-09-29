@@ -14,6 +14,16 @@ same change.
 
 ## How Poltergeist consumes Séance
 
+The owner approved [Planchette](https://github.com/L-K-M/Planchette) as the
+shared editor repository on 2026-09-27. Syntax, search, document I/O, editing
+state, and the Flutter surface now belong to `planchette_core` and
+`planchette_editor`, consumed by both apps through pinned Git dependencies.
+This replaces editor copy-with-attribution below; the other porting rules
+are unchanged. Séance retains its session-owned tabs, remote-change banner,
+managed copies, upload/conflict routing, and application theme. Future
+shared editor fixes belong in Planchette and reach both consumers through
+reviewed dependency updates.
+
 - **Git-pinned dependencies, never forks**: `seance_protocol` and
   `seance_core` (records/crypto/DTOs, `SyncEngine`/`HttpSyncClient`/
   `LocalRecordStore`, `RemoteFileSystem` + adapter, `TofuVerifier`, stores,
@@ -309,6 +319,32 @@ copy takes the same change with its own device themes
 where `PoltergeistChrome` gains `cornerScale` and `corner()`; with it,
 the two kit files again differ only in the header, the chrome import and
 `_chrome()`.
+
+## The integrated titlebar (macOS)
+
+Séance's main window now has Poltergeist's titlebar: content under a
+transparent titlebar with an empty unified toolbar, the traffic lights
+over the rail, and a header across the terminal and the side panel
+(its D32 §3, [10 §3](https://github.com/L-K-M/Poltergeist/blob/main/docs/plan/10-WORKSPACE-REDESIGN.md)).
+
+- **Source:** Poltergeist `app/poltergeist_app/lib/ui/shell/macos_toolbar_band.dart`
+  and `lib/services/macos_toolbar_band_channel.dart` @ `dc478e6`, the
+  runner's full-screen handling in `macos/Runner/MainFlutterWindow.swift`,
+  and `_MacTitlebarAdapter` in `lib/services/desktop_window_lifecycle.dart`.
+- **Copy:** `app/seance_app/lib/ui/macos_toolbar_band.dart` and
+  `lib/services/macos_titlebar.dart` (the channel plus the installer).
+  Divergences: the channel is `seance/window`; without a
+  `MacosToolbarBandScope` there is no band (Poltergeist counts it as
+  shown), because the Settings window and the tests have no scope; a
+  failed install puts the standard titlebar back rather than leaving it
+  half applied.
+- **Séance's header** (`lib/ui/header_toolbar.dart`) is its own: the
+  active server's badge, label and `user@host`, and Generate command as
+  the one labelled primary button. It exists only under the band; Linux,
+  Windows and tablets keep the native titlebar and the tab strip's
+  buttons. Its header and capsule are `Material`s, so the buttons' hover
+  ink paints above the fill; Poltergeist's header paints its fills in
+  boxes above the ink, which may be worth porting back.
 
 ## The colour vocabulary
 

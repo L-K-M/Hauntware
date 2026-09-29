@@ -2,10 +2,14 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
 import '../main.dart';
+import '../theme.dart';
+import 'header_toolbar.dart';
+import 'macos_toolbar_band.dart';
 import 'server_list_pane.dart';
 import 'sidebar_panel.dart';
 import 'terminal_pane.dart';
@@ -24,6 +28,12 @@ class AdaptiveShell extends StatefulWidget {
   static const double minimumUtilityWidth = 260;
   static const double defaultUtilityWidth = 340;
   static const double maximumUtilityWidth = 680;
+
+  /// The visible line between two panes: all the width the layout gives
+  /// it, so the panes' own borders run into it.
+  static const double seamWidth = 1;
+
+  /// The drag target centred on a seam, floating over the panes' edges.
   static const double resizeHandleWidth = 10;
   static const double breakpoint =
       minimumListWidth +
@@ -43,6 +53,10 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final settings = state.services.settings;
+    // macOS with the integrated titlebar: the wide layout gets the header
+    // that draws under the toolbar band, and Generate command moves up
+    // into it. Elsewhere the native titlebar stays and so does the strip.
+    final unifiedToolbar = MacosToolbarBandScope.unifiedToolbarOf(context);
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) {
@@ -61,7 +75,11 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
             posture: ServerListPosture.rail,
             onOpen: (s) => _open(state, s),
           ),
-          terminalPane: const TerminalPane(showAppBar: false),
+          header: unifiedToolbar ? const HeaderToolbar() : null,
+          terminalPane: TerminalPane(
+            showAppBar: false,
+            showGenerateCommandInStrip: !unifiedToolbar,
+          ),
           // The utility panel (Assistant + Snippets) is always available;
           // Snippets works without an LLM configured.
           utilityPane: const SidebarPanel(),
@@ -185,10 +203,14 @@ AdaptivePaneWidths? allocateAdaptivePaneWidths({
       )
       .toDouble();
 
+  // The side panes are sized as if each handle took its full width, which
+  // keeps the breakpoint and every pane width where they were. The seams
+  // take one pixel each, and the terminal gets the rest: the handles'
+  // overhang, [AdaptiveShell.resizeHandleWidth] less a seam per edge, lies
+  // over its edges.
   return AdaptivePaneWidths(
     list: list,
-    terminal:
-        availableWidth - list - utility - AdaptiveShell.resizeHandleWidth * 2,
+    terminal: availableWidth - list - utility - AdaptiveShell.seamWidth * 2,
     utility: utility,
   );
 }
@@ -202,6 +224,7 @@ class AdaptivePaneLayout extends StatefulWidget {
     required this.terminalPane,
     required this.utilityPane,
     required this.narrowPane,
+    this.header,
     this.initialListWidth = AdaptiveShell.defaultListWidth,
     this.initialUtilityWidth = AdaptiveShell.defaultUtilityWidth,
     this.onPaneWidthsChanged,
@@ -211,6 +234,14 @@ class AdaptivePaneLayout extends StatefulWidget {
   final Widget terminalPane;
   final Widget utilityPane;
   final Widget narrowPane;
+
+  /// The header drawn under the macOS unified toolbar band ([HeaderToolbar]),
+  /// or null for no header. When set, it spans the terminal and utility
+  /// panes the way Poltergeist's spans its panes and inspector; the list
+  /// pane stays full height and starts below a spacer of the header's
+  /// height, where the traffic lights sit, and the layout takes the band
+  /// back from the app's reservation ([ClaimMacosToolbarBand]).
+  final Widget? header;
 
   /// Requested pane widths to start from (the persisted values, on real
   /// launches). The widget owns them once mounted; later changes to these
@@ -261,58 +292,38 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
           );
         }
 
-        return Scaffold(
-          body: Row(
+        final header = widget.header;
+        final utilityHandle = _ResizeHandle(
+          key: AdaptivePaneLayout.utilityResizeHandleKey,
+          label: 'Resize utility panel',
+          width: widths.utility,
+          minimumWidth: AdaptiveShell.minimumUtilityWidth,
+          maximumWidth: _maximumUtilityWidth(widths),
+          edge: _PaneEdge.trailing,
+          widthAfterStep: (delta) => _widthAfterStep(
+            _PaneEdge.trailing,
+            currentWidths()!,
+            constraints.maxWidth,
+            delta,
+          ),
+          onStep: (delta) =>
+              _stepPane(_PaneEdge.trailing, currentWidths()!, delta),
+          onStart: () => _startUtilityResize(currentWidths()!),
+          onDelta: _resizeUtility,
+          onEnd: _endUtilityResize,
+        );
+        // The terminal, its seam and the utility pane, with the utility
+        // handle floated over that seam.
+        final panes = _straddle(
+          Row(
             children: [
-              SizedBox(
-                key: AdaptivePaneLayout.listPaneKey,
-                width: widths.list,
-                child: widget.listPane,
-              ),
-              _ResizeHandle(
-                key: AdaptivePaneLayout.listResizeHandleKey,
-                label: 'Resize server list',
-                width: widths.list,
-                minimumWidth: AdaptiveShell.minimumListWidth,
-                maximumWidth: _maximumListWidth(widths),
-                edge: _PaneEdge.leading,
-                widthAfterStep: (delta) => _widthAfterStep(
-                  _PaneEdge.leading,
-                  currentWidths()!,
-                  constraints.maxWidth,
-                  delta,
-                ),
-                onStep: (delta) =>
-                    _stepPane(_PaneEdge.leading, currentWidths()!, delta),
-                onStart: () => _startListResize(currentWidths()!),
-                onDelta: _resizeList,
-                onEnd: _endListResize,
-              ),
               Expanded(
                 child: SizedBox(
                   key: AdaptivePaneLayout.terminalPaneKey,
                   child: widget.terminalPane,
                 ),
               ),
-              _ResizeHandle(
-                key: AdaptivePaneLayout.utilityResizeHandleKey,
-                label: 'Resize utility panel',
-                width: widths.utility,
-                minimumWidth: AdaptiveShell.minimumUtilityWidth,
-                maximumWidth: _maximumUtilityWidth(widths),
-                edge: _PaneEdge.trailing,
-                widthAfterStep: (delta) => _widthAfterStep(
-                  _PaneEdge.trailing,
-                  currentWidths()!,
-                  constraints.maxWidth,
-                  delta,
-                ),
-                onStep: (delta) =>
-                    _stepPane(_PaneEdge.trailing, currentWidths()!, delta),
-                onStart: () => _startUtilityResize(currentWidths()!),
-                onDelta: _resizeUtility,
-                onEnd: _endUtilityResize,
-              ),
+              const _Seam(),
               SizedBox(
                 key: AdaptivePaneLayout.utilityPaneKey,
                 width: widths.utility,
@@ -320,8 +331,124 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
               ),
             ],
           ),
+          handle: utilityHandle,
+          end: widths.utility,
+        );
+        Widget listHandle = _ResizeHandle(
+          key: AdaptivePaneLayout.listResizeHandleKey,
+          label: 'Resize server list',
+          width: widths.list,
+          minimumWidth: AdaptiveShell.minimumListWidth,
+          maximumWidth: _maximumListWidth(widths),
+          edge: _PaneEdge.leading,
+          widthAfterStep: (delta) => _widthAfterStep(
+            _PaneEdge.leading,
+            currentWidths()!,
+            constraints.maxWidth,
+            delta,
+          ),
+          onStep: (delta) =>
+              _stepPane(_PaneEdge.leading, currentWidths()!, delta),
+          onStart: () => _startListResize(currentWidths()!),
+          onDelta: _resizeList,
+          onEnd: _endListResize,
+        );
+        if (header == null) {
+          return Scaffold(
+            body: _straddle(
+              Row(
+                children: [
+                  SizedBox(
+                    key: AdaptivePaneLayout.listPaneKey,
+                    width: widths.list,
+                    child: widget.listPane,
+                  ),
+                  const _Seam(),
+                  Expanded(child: panes),
+                ],
+              ),
+              handle: listHandle,
+              start: widths.list,
+            ),
+          );
+        }
+
+        final chrome = SeanceChrome.of(context);
+        // The list handle runs the full height, so its top lies inside the
+        // band, where AppKit would take a drag on it for the window's.
+        if (MacosToolbarBandScope.unifiedToolbarOf(context)) {
+          listHandle = MacosToolbarPassthrough(child: listHandle);
+        }
+        return ClaimMacosToolbarBand(
+          child: Scaffold(
+            body: _straddle(
+              Row(
+                children: [
+                  SizedBox(
+                    key: AdaptivePaneLayout.listPaneKey,
+                    width: widths.list,
+                    // The traffic lights sit over the list's top, which
+                    // drags the window natively: Finder's layout, and
+                    // Poltergeist's.
+                    child: ColoredBox(
+                      color: chrome.sidebarBackground,
+                      child: Column(
+                        children: [
+                          SizedBox(height: chrome.headerHeight),
+                          Expanded(child: widget.listPane),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const _Seam(),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        header,
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: chrome.separator,
+                        ),
+                        Expanded(child: panes),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              handle: listHandle,
+              start: widths.list,
+            ),
+          ),
         );
       },
+    );
+  }
+
+  /// [row] with [handle] floated over the seam that follows [start] logical
+  /// pixels of it, or precedes the last [end]. Only the one-pixel seam takes
+  /// layout width, so the panes' borders meet it; the drag target overhangs
+  /// both panes by the same amount instead of pushing them apart.
+  Widget _straddle(
+    Widget row, {
+    required Widget handle,
+    double? start,
+    double? end,
+  }) {
+    const overhang =
+        (AdaptiveShell.resizeHandleWidth - AdaptiveShell.seamWidth) / 2;
+    return Stack(
+      children: [
+        Positioned.fill(child: row),
+        PositionedDirectional(
+          top: 0,
+          bottom: 0,
+          start: start == null ? null : start - overhang,
+          end: end == null ? null : end - overhang,
+          width: AdaptiveShell.resizeHandleWidth,
+          child: handle,
+        ),
+      ],
     );
   }
 
@@ -473,6 +600,20 @@ enum _PaneEdge { leading, trailing }
 
 const double _resizeKeyStep = 16;
 
+/// The one-pixel line between two panes (see [AdaptiveShell.seamWidth]).
+class _Seam extends StatelessWidget {
+  const _Seam();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: AdaptiveShell.seamWidth,
+    // A childless ColoredBox takes the smallest size it may, and a Row
+    // leaves the height loose: ask for all of it.
+    height: double.infinity,
+    child: ColoredBox(color: Theme.of(context).dividerColor),
+  );
+}
+
 /// A labelled, keyboard-adjustable divider with the same clamping and
 /// persistence boundary as a pointer drag. Physical arrow direction follows
 /// the divider; assistive increase/decrease follows the owned pane's width.
@@ -563,16 +704,18 @@ class _ResizeHandleState extends State<_ResizeHandle> {
                 widget.onDelta(d.delta.dx * _direction),
             onHorizontalDragEnd: (_) => widget.onEnd(),
             onHorizontalDragCancel: widget.onEnd,
+            // The line itself is the layout's [_Seam] underneath; the
+            // handle draws only its focus ring over it.
             child: SizedBox(
               width: AdaptiveShell.resizeHandleWidth,
-              child: Center(
-                child: Container(
-                  width: _focused ? 3 : 1,
-                  color: _focused
-                      ? theme.colorScheme.primary
-                      : theme.dividerColor,
-                ),
-              ),
+              child: _focused
+                  ? Center(
+                      child: Container(
+                        width: 3,
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  : null,
             ),
           ),
         ),

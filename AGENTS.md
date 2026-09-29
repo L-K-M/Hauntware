@@ -230,6 +230,12 @@ does not launch the Dart app or use saved user data. See
 [the crash investigation](docs/macos-accessibility-crash.md) for the native
 compatibility boundary and the limits of the reproduction.
 
+`scripts/test-macos-keyboard.sh` also gates macOS CI and release builds. It
+checks injected Command shortcuts against the real native keyboard pipeline
+without launching the app or posting system input. See
+[the keyboard compatibility note](docs/macos-keyboard-compatibility.md) for
+the fixture, stock-engine reproduction, and limits.
+
 The platform folders (android/ios/linux/macos/windows) ARE committed — they
 carry real configuration: the display name (`Séance` — AndroidManifest label;
 macOS `CFBundleName`/`CFBundleDisplayName`, while `PRODUCT_NAME` stays ASCII
@@ -304,7 +310,9 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   like the engine. (The post-bump hook is sed-portable since 0.7.0, so Linux
   hosts can cut releases too.)
 - `./update.sh` — on a deployment host: pull the latest code, then
-  `docker compose up -d --build` the sync server. Honors per-deployment
+  `docker compose build --pull` (refreshes the FROM base image — `up
+  --build` alone never refetches it) and `up -d` the sync server. Honors
+  per-deployment
   overrides in `packages/seance_sync_server/.env` (e.g. `SEANCE_PUBLISH_ADDR`
   when a containerized reverse proxy can't reach the default loopback publish)
   and fails with container logs when the recreated server doesn't answer
@@ -435,6 +443,25 @@ Do not "simplify" these away — they are load-bearing:
   ratio while screen_retriever scales each display by its own, so on mixed-DPI
   setups their "logical" spaces disagree — physical is the one space both map
   into exactly (`WindowStateSnapshot` doc has the details).
+
+- **The macOS integrated titlebar is macos_window_utils', not
+  window_manager's.** The main window draws its header under an empty
+  unified NSToolbar (a 52 pt band) over full-size content, as Poltergeist
+  does. Three things hold it together. The runner hosts the Flutter view in
+  `MacOSWindowUtilsViewController` (the package's passthrough code
+  force-casts to it), with `SeanceFlutterViewController` inside so the
+  accessibility guard stays. `MainFlutterWindowManipulator.start` resets the
+  window to a standard titlebar, so `MacosTitlebar.install()` re-applies it
+  from `main()` *before* `restoreAndTrack()` shows the hidden window. Never
+  also pass `titleBarStyle` to window_manager: its `setTitleBarStyle`
+  rewrites the same window properties. In full screen the runner hides the
+  toolbar (AppKit would keep it in an opaque strip over the header) and
+  reports it on `seance/window` from will-enter/will-exit *notifications*,
+  because window_manager owns the window delegate. Controls inside the band
+  take clicks only through `MacosToolbarPassthrough`; every other surface
+  keeps below it (`ReserveMacosToolbarBand` above the navigator,
+  `ClaimMacosToolbarBand` for the wide layout). The Settings window keeps a
+  standard titlebar: the passthrough serves one window.
 
 - **A second window is a second engine.** Flutter stable has no
   multi-window API (the framework's is `@internal`, master-channel only in
