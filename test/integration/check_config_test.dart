@@ -314,7 +314,7 @@ void main() {
     final steps = (aggregate['steps'] as YamlList).cast<YamlMap>();
     final download = _stepNamed(steps, 'Download M0 source evidence');
     final downloadOptions = download['with'] as YamlMap;
-    expect(download['uses'], 'actions/download-artifact@v4');
+    expect(download['uses'], 'actions/download-artifact@v8');
     expect(downloadOptions['pattern'], '$_m0SourceArtifactPrefix-*');
     expect(downloadOptions['path'], 'packages/poltergeist_bench/shards');
     expect(downloadOptions['merge-multiple'], isFalse);
