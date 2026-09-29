@@ -229,15 +229,27 @@ shows:
 
 Actions:
 
-- **Run on {server}**: opens or reuses a session to the target server,
-  uploads the script over SFTP (`RemoteFileSystem.upload`) to
+- **Run on {server}**: first claims the proposal. It pulls records and
+  refuses if an `inboxStatus` already marks the proposal done, then sends
+  `DELETE /v1/inbox/{appId}/{itemId}`. A 404 means another device claimed
+  it first, and Séance says so instead of running it. Then it writes the
+  `ran` status, opens or reuses a session to the target server, uploads
+  the script over SFTP (`RemoteFileSystem.upload`) to
   `~/.seance/inbox/<sha256>.sh` with mode 0700, and places the single line
   `sh ~/.seance/inbox/<sha256>.sh` in the prompt through `PasteSanitizer`.
   The user presses Enter. The name is the hash of the bytes shown, so the
   file cannot be swapped between review and run without the line changing.
   An interpreter line (`#!`) in the script is honoured by running the
   file directly instead of through `sh`.
-- **Copy**, **Dismiss**.
+- **Copy**, **Dismiss** (Dismiss writes the `dismissed` status and
+  deletes the item the same way, without the claim check).
+
+When two devices hold the same proposal and one runs it, the other learns
+on its next sync, from the `inboxStatus` record, and shows the proposal as
+handled on another device instead of announcing it. The claim closes the
+remaining window, where the user presses Run on both before they sync. A
+breached server could answer 404 to stop a proposal from running, but
+that only denies it; it cannot make one run.
 
 Nothing runs without the user pressing Enter at a prompt, as with the
 assistant's staged commands.
