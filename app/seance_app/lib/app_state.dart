@@ -463,6 +463,33 @@ class AppState extends ChangeNotifier {
   static const Duration _autoSyncInterval = Duration(minutes: 5);
   static const Duration _syncDebounceDelay = Duration(seconds: 2);
 
+  // --- Command inbox (docs/INBOX.md) ---
+
+  /// Connected producers, live ones only. Refreshed at load, after each sync
+  /// round and after every inbox edit.
+  List<InboxApp> inboxApps = [];
+
+  /// Proposals waiting for the user, newest first.
+  List<PendingProposal> inboxPending = [];
+
+  /// Items refused per app (could not be opened or validated).
+  Map<String, int> inboxFailures = {};
+
+  /// Why the last fetch failed, if it did.
+  String? inboxError;
+
+  Timer? _inboxTimer;
+  bool _inboxFetching = false;
+
+  /// Set by [dispose]. A fetch runs in the background after every sync
+  /// round, so it can finish after the state is gone, and must then neither
+  /// notify nor re-arm its timer.
+  bool _inboxDisposed = false;
+
+  /// Much shorter than the record sync's interval: fetching the queue is one
+  /// small request, and a proposal is usually waited for.
+  static const Duration _inboxPollInterval = Duration(minutes: 1);
+
   // --- Command suggestions (opt-in) ---
 
   /// Frequently-run commands worth saving as snippets, most-used first. Empty
@@ -678,8 +705,11 @@ class AppState extends ChangeNotifier {
     });
     services.probe.start(servers);
     notifyListeners();
+    await _loadInbox();
     // Sync at startup (pull others' changes) and keep a periodic timer going.
     ensureAutoSyncTimer();
+    _ensureInboxTimer();
+    if (inboxApps.isNotEmpty) unawaited(refreshInbox());
     if (services.settings.autoSync && services.isSyncConfigured) {
       unawaited(_autoSync());
     }
@@ -1607,6 +1637,9 @@ class AppState extends ChangeNotifier {
       });
       services.probe.updateServers(servers);
       _recomputeSuggestions();
+      // Apps and statuses may have arrived: a new app's items can be opened
+      // now, and a proposal handled elsewhere should stop being announced.
+      unawaited(refreshInbox());
       return outcome;
     } finally {
       // A pulled assistant configuration changes the provider, the model or
@@ -2271,6 +2304,8 @@ class AppState extends ChangeNotifier {
     _probeSub?.cancel();
     _autoSyncTimer?.cancel();
     _syncDebounce?.cancel();
+    _inboxDisposed = true;
+    _inboxTimer?.cancel();
     _statsSaveDebounce?.cancel();
     // Nothing anchors a dying app: drop the OS keep-alive before the sessions
     // it was holding open go.
@@ -2301,4 +2336,244 @@ class AppState extends ChangeNotifier {
     _appearance.dispose();
     super.dispose();
   }
+
+  // --- Command inbox ---
+
+  /// Local state only: which apps exist and what is already fetched. Never
+  /// throws; a locked vault reads as no apps until it unlocks.
+  Future<void> _loadInbox() async {
+    try {
+      inboxApps = [
+        for (final app in await services.inboxApps.listApps())
+          if (!app.removed) app,
+      ];
+      final inbox = InboxService(
+        api: const _OfflineInboxApi(),
+        apps: services.inboxApps,
+        statuses: services.inboxStatuses,
+        cache: services.inboxCache,
+      );
+      inboxPending = await inbox.pending();
+      inboxFailures = await inbox.failures();
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not load the command inbox',
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  void _ensureInboxTimer() {
+    _inboxTimer?.cancel();
+    _inboxTimer = null;
+    if (inboxApps.isEmpty || !services.isSyncConfigured) return;
+    _inboxTimer = Timer.periodic(
+      _inboxPollInterval,
+      (_) => unawaited(refreshInbox()),
+    );
+  }
+
+  /// Fetch new proposals. Errors land in [inboxError] rather than being
+  /// thrown: this runs from timers and after sync rounds.
+  Future<void> refreshInbox() async {
+    if (_inboxFetching || _inboxDisposed) return;
+    if (!services.isSyncConfigured) return;
+    _inboxFetching = true;
+    try {
+      await _mutate(() async {
+        await _loadInbox();
+        if (inboxApps.isEmpty) return;
+        inboxPending = await services.withInbox((inbox) async {
+          final pending = await inbox.refresh();
+          await inbox.pruneStatuses();
+          return pending;
+        });
+        inboxFailures = await services.inboxCache
+            .load()
+            .then((cache) => cache.failures);
+      });
+      inboxError = null;
+    } catch (error) {
+      inboxError = _shortError(error);
+    } finally {
+      _inboxFetching = false;
+      if (!_inboxDisposed) {
+        _ensureInboxTimer();
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Connect a producer. Returns the pairing string, which is shown once.
+  Future<String> addInboxApp({
+    required String name,
+    List<String> allowedServerIds = const [],
+  }) async {
+    final baseUrl = services.settings.syncBaseUrl;
+    if (baseUrl == null || baseUrl.isEmpty) {
+      throw StateError('Set up sync first: the inbox uses the sync server.');
+    }
+    final pairing = await _mutate(() async {
+      final pairing = await services.withInbox(
+        (inbox) => inbox.addApp(
+          name: name,
+          serverUrl: baseUrl,
+          allowedServerIds: allowedServerIds,
+        ),
+      );
+      await _loadInbox();
+      return pairing;
+    });
+    _ensureInboxTimer();
+    notifyListeners();
+    // The app record carries the key, and the user's other devices need it
+    // to open anything this producer sends.
+    _scheduleAutoSync();
+    return pairing.encode();
+  }
+
+  Future<void> updateInboxApp(
+    String appId, {
+    required String name,
+    required List<String> allowedServerIds,
+  }) async {
+    await _mutate(() async {
+      await services.withInbox(
+        (inbox) => inbox.updateApp(
+          appId,
+          name: name,
+          allowedServerIds: allowedServerIds,
+        ),
+      );
+      await _loadInbox();
+    });
+    notifyListeners();
+    _scheduleAutoSync();
+  }
+
+  Future<void> removeInboxApp(String appId) async {
+    await _mutate(() async {
+      await services.withInbox((inbox) => inbox.removeApp(appId));
+      await _loadInbox();
+    });
+    _ensureInboxTimer();
+    notifyListeners();
+    _scheduleAutoSync();
+  }
+
+  Future<void> dismissProposal(PendingProposal proposal) async {
+    await _mutate(() async {
+      await services.withInbox((inbox) => inbox.dismiss(proposal));
+      await _loadInbox();
+    });
+    notifyListeners();
+    _scheduleAutoSync();
+  }
+
+  /// Stage [proposal] on [server] and place the line that runs it in the
+  /// prompt. Nothing runs until the user presses Enter.
+  ///
+  /// In this order, each step for a reason: a sync round first, so a status
+  /// another device wrote is seen before anything happens (best effort, since
+  /// the claim below is what decides); the upload before the claim, so a
+  /// failed upload leaves the proposal pending instead of marked as run; the
+  /// claim before the paste, so two devices cannot both stage it.
+  Future<ProposalRunResult> runProposal(
+    PendingProposal proposal,
+    ServerConfig server,
+  ) async {
+    if (services.isSyncConfigured) {
+      try {
+        await _runSyncAndRefresh();
+      } catch (_) {
+        // The claim is authoritative; a round that failed only makes a
+        // "handled elsewhere" answer come from the server instead.
+      }
+    }
+    final session = await _connectedSessionFor(server);
+    final ssh = session?.session;
+    if (session == null || ssh == null) {
+      return const ProposalRunResult.failed(
+        'Could not connect to the server.',
+      );
+    }
+    final String line;
+    try {
+      final staged = await stageProposalScript(
+        await ssh.openRemoteFileSystem(),
+        proposal.proposal,
+      );
+      // Built from a quoted path, so it never holds a line break; it goes
+      // through the same gate as every paste regardless, and before the
+      // claim, so a refusal leaves the proposal pending.
+      line = PasteSanitizer.sanitize(staged.commandLine);
+    } catch (error) {
+      return ProposalRunResult.failed('Could not upload the script: $error');
+    }
+    final claim = await _mutate(() async {
+      final claim = await services.withInbox((inbox) => inbox.claim(proposal));
+      await _loadInbox();
+      return claim;
+    });
+    notifyListeners();
+    _scheduleAutoSync();
+    switch (claim) {
+      case InboxClaim.handledElsewhere:
+        return const ProposalRunResult.failed(
+          'Another device already ran or dismissed this proposal.',
+        );
+      case InboxClaim.unavailable:
+        return const ProposalRunResult.failed(
+          'This proposal expired or its app was removed.',
+        );
+      case InboxClaim.claimed:
+        break;
+    }
+    session.engine.injectInput(line);
+    focusTab(session.id);
+    return ProposalRunResult.staged(line);
+  }
+
+  /// A connected terminal on [server]: the last one used there if it is up,
+  /// otherwise a new tab.
+  Future<TerminalSession?> _connectedSessionFor(ServerConfig server) async {
+    final existing = [
+      for (final tab in tabsForServer(server.id))
+        if (tab is TerminalSession && tab.isConnected) tab,
+    ];
+    final last = tabById(_lastTabForServer[server.id]);
+    if (last is TerminalSession && last.isConnected) return last;
+    if (existing.isNotEmpty) return existing.last;
+    await newTab(server);
+    final opened = activeSession;
+    if (opened == null || opened.serverId != server.id || !opened.isConnected) {
+      return null;
+    }
+    return opened;
+  }
+}
+
+/// What [AppState.runProposal] did.
+class ProposalRunResult {
+  /// The line placed in the prompt, when [ok].
+  final String? commandLine;
+  final String? error;
+
+  const ProposalRunResult.staged(String this.commandLine) : error = null;
+  const ProposalRunResult.failed(String this.error) : commandLine = null;
+
+  bool get ok => error == null;
+}
+
+/// The inbox read from local state only, for [AppState._loadInbox]: pending
+/// and failures never reach the network, and anything that would is a bug.
+class _OfflineInboxApi implements InboxApi {
+  const _OfflineInboxApi();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('The offline inbox view reached the network');
 }

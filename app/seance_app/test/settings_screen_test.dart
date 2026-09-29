@@ -108,6 +108,63 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
 
   @override
   Future<SyncCounts> syncNow() async => const SyncCounts(pulled: 0, pushed: 0);
+
+  InboxAppsView inbox = const InboxAppsView(
+    syncConfigured: true,
+    apps: [],
+    servers: [InboxServerChoice(id: 's1', label: 'prod-db-1')],
+  );
+  final List<InboxAppDraft> addedApps = [];
+  final List<String> removedApps = [];
+
+  /// A real pairing string, so the dialog can derive the docs URL from it.
+  final String pairing = InboxPairing(
+    url: 'https://sync.example.com',
+    appId: newInboxAppId(),
+    token: newInboxToken(),
+    key: newInboxKey(),
+  ).encode();
+
+  @override
+  Future<InboxAppsView> inboxApps() async => inbox;
+
+  @override
+  Future<String> addInboxApp(InboxAppDraft draft) async {
+    await _write('addInboxApp');
+    addedApps.add(draft);
+    inbox = InboxAppsView(
+      syncConfigured: true,
+      apps: [
+        ...inbox.apps,
+        InboxAppSummary(
+          id: 'a${addedApps.length}',
+          name: draft.name,
+          allowedServerIds: draft.allowedServerIds,
+          refused: 0,
+        ),
+      ],
+      servers: inbox.servers,
+    );
+    return pairing;
+  }
+
+  @override
+  Future<void> updateInboxApp(String appId, InboxAppDraft draft) =>
+      _write('updateInboxApp');
+
+  @override
+  Future<void> removeInboxApp(String appId) async {
+    await _write('removeInboxApp');
+    removedApps.add(appId);
+    inbox = InboxAppsView(
+      syncConfigured: true,
+      apps: [
+        for (final a in inbox.apps)
+          if (a.id != appId) a,
+      ],
+      servers: inbox.servers,
+    );
+  }
 }
 
 AssistantFields _fields(String model) => AssistantFields(
@@ -409,6 +466,7 @@ void main() {
         'Assistant',
         'Files',
         'Sync',
+        'Inbox',
       ]);
       expect(SettingsTab.values.map((tab) => tab.name), [
         'general',
@@ -416,6 +474,7 @@ void main() {
         'assistant',
         'files',
         'sync',
+        'inbox',
       ]);
     });
 
@@ -710,6 +769,92 @@ void main() {
       expect(backend.appearances, hasLength(2));
       expect(find.text('Appearance not saved: disk full'), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
+    });
+  });
+
+  group('Inbox tab', () {
+    testWidgets('connecting an app shows its pairing string once', (
+      tester,
+    ) async {
+      await pumpScreen(tester, tab: SettingsTab.inbox);
+      expect(find.text('No apps connected.'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('inbox.add')));
+      await tester.pumpAndSettle();
+      final save = find.byKey(const ValueKey('inbox.app.save'));
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('inbox.app.name')),
+        '  bots  ',
+      );
+      // Limiting the app to picked servers needs at least one pick.
+      await tester.tap(find.byKey(const ValueKey('inbox.app.any')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+      await tester.tap(find.text('prod-db-1'));
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+
+      expect(backend.addedApps.single.name, 'bots');
+      expect(backend.addedApps.single.allowedServerIds, ['s1']);
+      final shown = tester.widget<SelectableText>(
+        find.byKey(const ValueKey('inbox.pairing')),
+      );
+      expect(shown.data, backend.pairing);
+      expect(
+        find.textContaining('https://sync.example.com/llms.txt'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('inbox.pairing.done')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('inbox.pairing')), findsNothing);
+      expect(find.text('bots'), findsOneWidget);
+      expect(find.text('prod-db-1'), findsOneWidget);
+    });
+
+    testWidgets('removing an app asks first', (tester) async {
+      backend.inbox = const InboxAppsView(
+        syncConfigured: true,
+        apps: [
+          InboxAppSummary(
+            id: 'a1',
+            name: 'bots',
+            allowedServerIds: [],
+            refused: 2,
+          ),
+        ],
+        servers: [],
+      );
+      await pumpScreen(tester, tab: SettingsTab.inbox);
+      expect(find.textContaining('2 proposals could not be opened'),
+          findsOneWidget);
+
+      await tester.tap(find.byTooltip('Remove'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(backend.removedApps, isEmpty);
+
+      await tester.tap(find.byTooltip('Remove'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(backend.removedApps, ['a1']);
+      expect(find.text('No apps connected.'), findsOneWidget);
+    });
+
+    testWidgets('without sync there is nothing to connect', (tester) async {
+      backend.inbox = const InboxAppsView(
+        syncConfigured: false,
+        apps: [],
+        servers: [],
+      );
+      await pumpScreen(tester, tab: SettingsTab.inbox);
+      expect(find.textContaining('Set up sync first'), findsOneWidget);
+      expect(find.byKey(const ValueKey('inbox.add')), findsNothing);
     });
   });
 }

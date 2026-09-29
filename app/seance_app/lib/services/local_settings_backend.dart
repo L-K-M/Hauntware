@@ -432,4 +432,39 @@ class LocalSettingsBackend implements SettingsBackend {
     final outcome = await _state.syncNow();
     return SyncCounts(pulled: outcome.pulled, pushed: outcome.pushed);
   }
+
+  @override
+  Future<InboxAppsView> inboxApps() async => InboxAppsView(
+    syncConfigured: _state.services.isSyncConfigured,
+    apps: [
+      for (final app in _state.inboxApps)
+        InboxAppSummary(
+          id: app.id,
+          name: app.name,
+          allowedServerIds: app.allowedServerIds,
+          refused: _state.inboxFailures[app.id] ?? 0,
+        ),
+    ],
+    servers: [
+      for (final server in _state.servers)
+        InboxServerChoice(id: server.id, label: server.label),
+    ],
+  );
+
+  @override
+  Future<String> addInboxApp(InboxAppDraft draft) => _state.addInboxApp(
+    name: draft.name,
+    allowedServerIds: draft.allowedServerIds,
+  );
+
+  @override
+  Future<void> updateInboxApp(String appId, InboxAppDraft draft) =>
+      _state.updateInboxApp(
+        appId,
+        name: draft.name,
+        allowedServerIds: draft.allowedServerIds,
+      );
+
+  @override
+  Future<void> removeInboxApp(String appId) => _state.removeInboxApp(appId);
 }

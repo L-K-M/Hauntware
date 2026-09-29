@@ -10,6 +10,7 @@ import '../services/settings_backend.dart';
 import '../services/system_fonts.dart';
 import 'appearance_settings.dart';
 import 'font_picker.dart';
+import 'inbox_settings.dart';
 import 'selected_tab_view.dart';
 import 'settings_layout.dart';
 import 'sync_enrollment_validation.dart';
@@ -211,8 +212,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   Widget build(BuildContext context) {
     final palette = FamilyPalette.of(context);
     // Each section in its family hue (Poltergeist's D34): the assistant
-    // purple, files blue, sync indigo; General and Appearance stay in the
-    // tab bar's ink.
+    // purple, files blue, sync indigo, the inbox attention yellow; General and
+    // Appearance stay in the tab bar's ink.
     final tabBar = TabBar(
       controller: _tabs,
       isScrollable: true,
@@ -231,6 +232,10 @@ class _SettingsScreenState extends State<SettingsScreen>
         Tab(
           icon: Icon(Icons.cloud_sync, color: palette.glyph(FamilyHue.indigo)),
           text: 'Sync',
+        ),
+        Tab(
+          icon: Icon(Icons.move_to_inbox, color: palette.glyph(FamilyHue.yellow)),
+          text: 'Inbox',
         ),
       ],
     );
@@ -254,6 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           _assistantTab(),
           _filesTab(),
           _syncTab(),
+          InboxSettings(backend: _backend),
         ],
       ),
     );

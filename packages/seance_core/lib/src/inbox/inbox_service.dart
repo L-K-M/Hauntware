@@ -151,10 +151,19 @@ class InboxService {
     String? name,
     List<String>? allowedServerIds,
   }) async {
+    final trimmed = name?.trim();
+    if (trimmed != null &&
+        (trimmed.isEmpty || trimmed.length > kInboxMaxNameChars)) {
+      throw ArgumentError.value(
+        name,
+        'name',
+        'must be 1 to $kInboxMaxNameChars characters',
+      );
+    }
     final app = await apps.getApp(appId);
     if (app == null || app.removed) return;
     await apps.putApp(app.copyWith(
-      name: name?.trim(),
+      name: trimmed,
       allowedServerIds: allowedServerIds,
       updatedAt: _nowMs > app.updatedAt ? _nowMs : app.updatedAt + 1,
     ));
