@@ -15,7 +15,7 @@ for argument in "$@"; do
     --flatpak) flatpak=true ;;
     app) ;;
     --help|-h)
-      echo 'Usage: scripts/build.sh [--debug] [--install] [app]'
+      echo 'Usage: scripts/build.sh [--debug] [--install] [--flatpak] [app]'
       exit 0 ;;
     *) echo "Unknown argument: $argument" >&2; exit 1 ;;
   esac
