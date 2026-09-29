@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The lines between the server list, the terminal and the side panel
+  now meet the lines across them. The header's bottom edge, the tab
+  bar and the panes' bottom borders used to stop a few pixels short of
+  the vertical dividers. The dividers are still as easy to grab, and
+  the terminal is 18 pixels wider.
 - On macOS the window no longer has a separate title bar. The traffic
   lights sit over the server list, and a header across the terminal and
   side panel shows the server you are on (name and `user@host`) with

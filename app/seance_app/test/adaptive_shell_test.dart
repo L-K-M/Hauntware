@@ -297,6 +297,57 @@ void main() {
     expect(paneWidth(tester, AdaptivePaneLayout.utilityPaneKey), 400);
   });
 
+  // The panes and the header's divider meet the one-pixel seams; the wider
+  // drag target floats over its seam instead of pushing the panes apart,
+  // which left every horizontal border short of the vertical lines.
+  testWidgets('panes meet their seams; handles straddle them', (tester) async {
+    await pumpResizable(tester);
+    Rect rect(Key key) => tester.getRect(find.byKey(key));
+    final list = rect(AdaptivePaneLayout.listPaneKey);
+    final terminal = rect(AdaptivePaneLayout.terminalPaneKey);
+    final utility = rect(AdaptivePaneLayout.utilityPaneKey);
+
+    expect(terminal.left - list.right, AdaptiveShell.seamWidth);
+    expect(utility.left - terminal.right, AdaptiveShell.seamWidth);
+
+    // Both seams are drawn, the full height of the panes they divide.
+    final divider = Theme.of(
+      tester.element(find.byKey(AdaptivePaneLayout.listPaneKey)),
+    ).dividerColor;
+    final seams = find.byWidgetPredicate(
+      (widget) => widget is ColoredBox && widget.color == divider,
+    );
+    expect(
+      [
+        for (final seam in seams.evaluate())
+          tester.getRect(find.byWidget(seam.widget)),
+      ],
+      [
+        Rect.fromLTWH(list.right, 0, AdaptiveShell.seamWidth, list.height),
+        Rect.fromLTWH(
+          terminal.right,
+          terminal.top,
+          AdaptiveShell.seamWidth,
+          terminal.height,
+        ),
+      ],
+    );
+
+    for (final (key, seamLeft) in [
+      (AdaptivePaneLayout.listResizeHandleKey, list.right),
+      (AdaptivePaneLayout.utilityResizeHandleKey, terminal.right),
+    ]) {
+      final handle = rect(key);
+      expect(handle.width, AdaptiveShell.resizeHandleWidth);
+      expect(handle.center.dx, seamLeft + AdaptiveShell.seamWidth / 2);
+    }
+  });
+
+  // What the handles used to reserve beside each seam: the terminal gets
+  // it now, and the handles overhang its edges instead.
+  const reclaimed =
+      (AdaptiveShell.resizeHandleWidth - AdaptiveShell.seamWidth) * 2;
+
   test('breakpoint and allocation minimums stay aligned', () {
     expect(
       AdaptiveShell.breakpoint,
@@ -312,7 +363,7 @@ void main() {
       requestedUtilityWidth: 0,
     )!;
     expect(widths.list, AdaptiveShell.minimumListWidth);
-    expect(widths.terminal, AdaptiveShell.minimumTerminalWidth);
+    expect(widths.terminal, AdaptiveShell.minimumTerminalWidth + reclaimed);
     expect(widths.utility, AdaptiveShell.minimumUtilityWidth);
   });
 
@@ -324,13 +375,13 @@ void main() {
     )!;
 
     expect(widths.list, AdaptiveShell.minimumListWidth);
-    expect(widths.terminal, AdaptiveShell.minimumTerminalWidth);
+    expect(widths.terminal, AdaptiveShell.minimumTerminalWidth + reclaimed);
     expect(widths.utility, AdaptiveShell.minimumUtilityWidth);
     expect(
       widths.list +
           widths.terminal +
           widths.utility +
-          AdaptiveShell.resizeHandleWidth * 2,
+          AdaptiveShell.seamWidth * 2,
       closeTo(960, 0.01),
     );
   });
@@ -344,7 +395,7 @@ void main() {
 
     expect(widths.list, closeTo(256, 0.01));
     expect(widths.utility, closeTo(344, 0.01));
-    expect(widths.terminal, AdaptiveShell.minimumTerminalWidth);
+    expect(widths.terminal, AdaptiveShell.minimumTerminalWidth + reclaimed);
     expect(
       (widths.list - AdaptiveShell.minimumListWidth) /
           (widths.utility - AdaptiveShell.minimumUtilityWidth),
@@ -411,7 +462,7 @@ void main() {
         list.width +
             terminal.width +
             utility.width +
-            AdaptiveShell.resizeHandleWidth * 2,
+            AdaptiveShell.seamWidth * 2,
         closeTo(width, 0.01),
       );
       expect(tester.takeException(), isNull);
@@ -463,10 +514,7 @@ void main() {
       greaterThanOrEqualTo(AdaptiveShell.minimumUtilityWidth),
     );
     expect(
-      list.width +
-          terminal.width +
-          utility.width +
-          AdaptiveShell.resizeHandleWidth * 2,
+      list.width + terminal.width + utility.width + AdaptiveShell.seamWidth * 2,
       closeTo(960, 0.01),
     );
     expect(tester.takeException(), isNull);
