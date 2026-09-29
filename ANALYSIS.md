@@ -133,8 +133,9 @@ publication, rollback, race and dirty-close regressions before write-path work.
 
 > **Resolved on 2026-09-28.** Every PR recorded below was merged, ported or
 > closed with its reasons in the integration pass; see
-> [section 13](#13-2026-09-28-integration-disposition-of-every-open-pr). Only
-> #44 and #26 remain open. The records below are kept as history.
+> [section 13](#13-2026-09-28-integration-disposition-of-every-open-pr). Of
+> those, only #44 and #26 remain open; #95 (Dependabot) opened during the pass
+> and is open too. The records below are kept as history.
 
 These findings have open PR records against `main`, left for the owner's
 review. Do not duplicate their implementation. If a PR closes unmerged,
@@ -2766,16 +2767,20 @@ batch A (core file safety, syntax, save and quit) in #94, batch B (editor
 surface) in #97, #98 and #99, and batch C (app shell) in #100 and #101.
 Integration fixes sit on top of each batch as separate commits, each pinned by
 a test that failed first. Batch B first went up whole as #96, but its GLM review
-ran out of the 170-minute budget after 11 of 18 chunks, so batches B and C
-were split into stacked parts that each fit; together the parts are the tree
-#96 carried.
+ran out of the 170-minute budget after 11 of 18 chunks, so it was split into
+three stacked parts that each fit; together #97 to #99 are the tree #96
+carried. Batch C was split into two parts before it went up, for the same
+budget.
 
 Before each batch went up, review agents re-read its integration commits; their
 confirmed findings were fixed in the same batch. Each batch PR then went through
 GLM review rounds under AGENTS.md's stopping rules; declined and refuted
 findings, with their evidence, are recorded as replies and comments on those
 PRs. Ported pieces name their
-source PR in the commit that carries them.
+source PR in the commit that carries them. Section 12's rebased revisions
+without a review of record are covered by these rounds: #77 and #83 landed
+through #94, #81 and #87 through #98, and #85 through #99, each reviewed to
+completion; #79 was closed.
 
 Deferred from the pass, each with its reason:
 - #44 (regex search) stays open: pattern matching runs on the UI isolate with no

@@ -20,7 +20,8 @@ ownership boundaries and compatibility policies are documented in
   cap, Go to Line, Go to Matching Bracket, line commands, Toggle Comment, Tab
   indent and auto-indent, line numbers from the editor's own layout, real
   monospace fonts with zoom, undo/redo that stops at a reload, and document
-  status.
+  status. Known gaps from the integration, such as undo pressed in the same
+  frame as a reload, are listed in ANALYSIS.md section 13.
 - Bounded UTF-8 loading, BOM/EOL metadata, digest conflict checks, protected
   replacement/rollback and exclusive new-file publication.
 - macOS Finder file-open events and Linux/Windows command-line file intake.
