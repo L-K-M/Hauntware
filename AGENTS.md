@@ -310,7 +310,9 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   like the engine. (The post-bump hook is sed-portable since 0.7.0, so Linux
   hosts can cut releases too.)
 - `./update.sh` — on a deployment host: pull the latest code, then
-  `docker compose up -d --build` the sync server. Honors per-deployment
+  `docker compose build --pull` (refreshes the FROM base image — `up
+  --build` alone never refetches it) and `up -d` the sync server. Honors
+  per-deployment
   overrides in `packages/seance_sync_server/.env` (e.g. `SEANCE_PUBLISH_ADDR`
   when a containerized reverse proxy can't reach the default loopback publish)
   and fails with container logs when the recreated server doesn't answer
