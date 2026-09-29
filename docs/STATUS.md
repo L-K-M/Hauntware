@@ -18,6 +18,14 @@ including reconnect/disconnect regressions. Without real fonts,
 two desktop sidebar capture tests fail on both unchanged main and this branch.
 Cross-platform CI and final review results are recorded on the adoption PR.
 
+The Planchette pin moved from `5b75f9dc` to `ff487394` (Planchette main on
+2026-09-29), the same revision Poltergeist adopts. The status bar now uses
+the shared strings and shows the selection, indentation, language name and
+large-file notice, and its caret position opens Go to Line. The editor view
+is no longer locked while a reload runs: Planchette now keeps the view's
+lock apart from the host's, and a view lock would refuse the reload itself.
+The two server-drift reload tests caught that before the fix.
+
 macOS now preserves Command shortcuts injected with only the aggregate
 Command flag, such as Easydict's synthetic Command+C. The native controller
 supplies a missing device-side bit before Flutter processes key-down and
