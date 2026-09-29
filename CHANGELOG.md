@@ -214,6 +214,12 @@
   and sync into a wrongly named folder. When a pull's trash folder has
   a name the server's shell would misread, backups go to
   `.poltergeist-trash` instead, and a note in the command says so.
+- **Remote program files are never run by opening them.** Opening a
+  remote file whose type your computer runs rather than opens (such as
+  `.exe`, `.js`, `.hta` or `.lnk` on Windows, `.command` or `.terminal`
+  on macOS, `.desktop` on Linux) no longer hands it to the system
+  default app. You see why, with an Open With button to pick an editor
+  instead.
 - Pre-1.0 history lives in the commit log and the GitHub pre-releases
   (v0.1.0, v0.2.0).
 

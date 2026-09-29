@@ -9394,6 +9394,31 @@ stand-in `ssh` that keeps OpenSSH's remote-command contract (skipped
 without rsync 3.x). Remote goldens changed; local ones are identical.
 Checked by hand against rsync 3.2.7 and a real sshd on loopback.
 
+## Remote Open never executes (2026-09-26)
+
+P1-03: Open, Open With > System default, the preview card's Open and
+the local-edits review's Open handed managed checkouts to the OS
+default handler under their remote extension, so a remote `.js`,
+`.hta` or `.exe` ran on Windows; `previewWindowsExecutableExtensions`
+had no production caller. `isExecutableLaunchName` (core) now
+classifies a name per host (last extension, case-insensitive, Win32
+trailing dot/space strip), `ExternalFileOpener.openSystemDefault`
+throws `ExecutableLaunchRefused` for it, and the shell refuses from
+the listing name before any download, with a localized toast and the
+Open With router (06 §1). A refusal never discards a checkout. The
+Windows list grew by the shortcut, installer and script-host types
+(06 §5.3 updated). Checkouts stay 0600 (pinned by a new core test), so
+extensionless scripts cannot run either.
+
+Verification: classifier tables in `preview_kinds_test.dart`, opener
+cases in `external_editor_test.dart`, and shell cases in
+`external_editor_checkout_test.dart` and `local_edits_review_test.dart`
+(Windows `.js`/`.exe`, macOS `.command`, the built-in fallback, the
+review Open; `.pdf` still launches). The shell cases failed before the
+fix. Follow-ups: Mark-of-the-Web / quarantine on checkouts and
+downloads; `_launchCheckout` still discards a reused (possibly dirty)
+record when a real launch fails.
+
 ## Open items
 
 1. **M3 — OS Dart client matrix: validated 2026-09-12.**
