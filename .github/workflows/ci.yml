@@ -471,7 +471,7 @@ jobs:
       # checker counts conservatively at the escalation threshold.
       - name: Restore drift state
         if: always()
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: bench-drift-state.json
           key: d12-drift-state-${{ github.run_id }}
@@ -554,7 +554,7 @@ jobs:
         if: >-
           always() && github.ref == 'refs/heads/main' &&
           hashFiles('bench-drift-state.json') != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: bench-drift-state.json
           key: d12-drift-state-${{ github.run_id }}
