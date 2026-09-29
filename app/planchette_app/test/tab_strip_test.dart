@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as paths;
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 import 'package:planchette_app/widgets/tab_strip.dart';
@@ -165,13 +166,32 @@ void main() {
     expect(find.text(y), findsOneWidget);
     expect(find.text(['lib', 'index.js'].join(sep)), findsOneWidget);
 
-    // A path whose folders all end another one's shows every folder.
+    // One folder up from x and y, src/index.js needs its parent folder too.
     final short = ['src', 'index.js'].join(sep);
     store.files[testPath(short)] = document(short, short);
     await workspace.open(testPath(short));
     await tester.pumpAndSettle();
-    final root = testPath('').split(sep).where((part) => part.isNotEmpty);
-    expect(find.text([...root, short].join(sep)), findsOneWidget);
+    final parent = testPath('').split(sep).lastWhere((part) => part.isNotEmpty);
+    expect(find.text([parent, short].join(sep)), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a path whose folders all end another one shows every folder', (
+    tester,
+  ) async {
+    final store = workspace.store as MemoryDocuments;
+    final sep = Platform.pathSeparator;
+    final root = paths.rootPrefix(testPath(''));
+    final inner = paths.join(root, 'a', 'index.js');
+    final outer = paths.join(root, 'x', 'a', 'index.js');
+    for (final path in [inner, outer]) {
+      store.files[path] = document(path, path);
+      await workspace.open(path);
+    }
+    await mount(tester);
+
+    expect(find.text(['a', 'index.js'].join(sep)), findsOneWidget);
+    expect(find.text(['x', 'a', 'index.js'].join(sep)), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
