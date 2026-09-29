@@ -375,20 +375,6 @@ Future<void> main(List<String> args) async {
       ? null
       : QueueDragOutProducer(previewProducer);
 
-  // The managed-checkout pipeline (06 §3, M7): one CheckoutManager over
-  // the app-support store, driving every byte through the queue session
-  // above so checkout downloads and upload-on-save rows surface in the
-  // activity panel. It leases through the same engine bridge the queue
-  // does, so both answer remote access identically.
-  final checkoutSession = transferQueueSession == null
-      ? null
-      : await startCheckoutSession(
-          supportDirectoryPath: supportDirectory.path,
-          queue: transferQueueSession.concreteQueue,
-          connections: transferQueueSession.connections,
-          onError: errorReporter.report,
-        );
-
   // Settings → Backup (04 §3.3, M6): the bookmark-backup service over
   // the same seams the enrolled state renders — the OS keystore for the
   // token and vault key (never settings.json), the shared bookmark and
@@ -461,6 +447,20 @@ Future<void> main(List<String> args) async {
     changes: bookmarkBackup,
     read: () => bookmarkBackup.catalog?.servers ?? const [],
   );
+
+  // The managed-checkout pipeline (06 §3, M7): one CheckoutManager over
+  // the app-support store, driving every byte through the queue session
+  // above so checkout downloads and upload-on-save rows surface in the
+  // activity panel. It starts after catalog binding because restored
+  // records may lease immediately while repairing degraded snapshots.
+  final checkoutSession = transferQueueSession == null
+      ? null
+      : await startCheckoutSession(
+          supportDirectoryPath: supportDirectory.path,
+          queue: transferQueueSession.concreteQueue,
+          connections: transferQueueSession.connections,
+          onError: errorReporter.report,
+        );
 
   // The server editor's application layer (04 §4.2's management verbs):
   // catalog truth and sync writes through the backup service, credential

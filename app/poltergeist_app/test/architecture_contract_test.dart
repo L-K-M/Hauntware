@@ -7,6 +7,9 @@ final _fileSystemDeclaration = RegExp(
   r'\b(?:class|mixin|typedef)\s+\w*FileSystem\w*\b',
 );
 const _packageDeclaration = 'name: poltergeist_app';
+const _bookmarkBackupLoad = 'await errorReporter.guard(bookmarkBackup.load);';
+const _catalogLookupBinding = 'serverConfigs.catalogLookup =';
+const _checkoutSessionStart = 'final checkoutSession =';
 
 void main() {
   test('recognizes reserved filesystem declaration variants', () {
@@ -43,5 +46,21 @@ void main() {
 
     // D3 reserves the filesystem interface for seance_core.
     expect(offenders, isEmpty);
+  });
+
+  test('loads the server catalog before restoring checkouts', () {
+    final source = File('lib/main.dart').readAsStringSync();
+    final checkoutStart = source.indexOf(_checkoutSessionStart);
+    final backupLoad = source.indexOf(_bookmarkBackupLoad);
+    final lookupBinding = source.indexOf(_catalogLookupBinding);
+
+    expect(checkoutStart, greaterThanOrEqualTo(0));
+    expect(backupLoad, greaterThanOrEqualTo(0));
+    expect(lookupBinding, greaterThanOrEqualTo(0));
+
+    // Startup repair may lease immediately, so every route must already
+    // resolve through the materialized catalog.
+    expect(backupLoad, lessThan(checkoutStart));
+    expect(lookupBinding, lessThan(checkoutStart));
   });
 }

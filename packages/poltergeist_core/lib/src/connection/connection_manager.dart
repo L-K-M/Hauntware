@@ -205,6 +205,7 @@ class ResolvedCredentials {
 ///    exhaustion queues or shares instead of failing.
 class PooledConnectionManager implements ConnectionManager {
   final Future<ServerConfig> Function(String serverId) _resolveServer;
+  final Future<ServerConfig> Function(String serverId) _resolveJumpHost;
   final Future<ResolvedCredentials> Function(
     ServerConfig config,
     CredentialResolutionScope scope,
@@ -246,8 +247,10 @@ class PooledConnectionManager implements ConnectionManager {
   final StreamController<ConnectLogLine> _connectLog =
       StreamController<ConnectLogLine>.broadcast();
 
-  /// [resolveServer] loads config only; [resolveCredentials] may access the
-  /// vault or prompt and runs once inside each pool's first connect. It
+  /// [resolveServer] loads a connection alias; [resolveJumpHost] loads route
+  /// members and defaults to the same resolver when both share a namespace.
+  /// [resolveCredentials] may access the vault or prompt and runs once inside
+  /// each pool's first connect. It
   /// receives the resolution's dismissal scope: the manager trips it when
   /// the pool's lifetime ends mid-resolution, so a resolver-owned prompt
   /// closes instead of parking on an answer the pool rejects as stale.
@@ -272,7 +275,8 @@ class PooledConnectionManager implements ConnectionManager {
   /// before any password prompt (02 §10). Null skips it — the host key is
   /// then verified inside the authenticated connect, after resolution.
   PooledConnectionManager({
-    required this._resolveServer,
+    required Future<ServerConfig> Function(String serverId) resolveServer,
+    Future<ServerConfig> Function(String serverId)? resolveJumpHost,
     required this._resolveCredentials,
     required this._tofu,
     required this._onHostKey,
@@ -285,7 +289,9 @@ class PooledConnectionManager implements ConnectionManager {
     this._incidentStore,
     this._onIncidentStoreError,
     this._onRecoveryFailure,
-  }) : _reconnectRandom = reconnectRandom ?? Random() {
+  }) : _resolveServer = resolveServer,
+       _resolveJumpHost = resolveJumpHost ?? resolveServer,
+       _reconnectRandom = reconnectRandom ?? Random() {
     // A nonpositive cap turns an outage into a zero-delay retry loop.
     if (_policy.reconnectBackoffCap <= Duration.zero) {
       throw ArgumentError.value(
@@ -1301,7 +1307,7 @@ class PooledConnectionManager implements ConnectionManager {
 
       final ServerConfig config;
       try {
-        config = await _resolveServer(jumpHostId);
+        config = await _resolveJumpHost(jumpHostId);
       } on Object catch (error) {
         throw SshConnectException(
           'Could not resolve jump host "$jumpHostId": $error',
@@ -1510,9 +1516,15 @@ class PooledConnectionManager implements ConnectionManager {
 
         case HostKeyVerdict.firstUse:
           if (prompting == ConnectPrompting.disabled) return false;
-          // Removing a pin does not authorize first-use approval of a hard block.
-          if (pool.blocked) return false;
           final incident = pool._incident;
+          // A missing pin cannot downgrade the incident endpoint to first use.
+          // Other route hops still need review before the opener can reach it.
+          if (incident != null &&
+              decision.presented.host.trim().toLowerCase() ==
+                  incident.host.trim().toLowerCase() &&
+              decision.presented.port == incident.port) {
+            return false;
+          }
           final accepted = await _onHostKey(decision);
           return accepted &&
               _isCurrentTrustEpoch(pool, trustEpoch) &&

@@ -511,6 +511,68 @@ void main() {
     );
   });
 
+  test('a catalog hop ignores an engine alias with the same id', () async {
+    final alias = _config(
+      id: 'embedded-server',
+    ).copyWith(host: 'alias.example.com');
+    final target = _config(
+      id: 'catalog-target',
+    ).copyWith(host: 'target.example.com', jumpHostId: 'bastion');
+    final bastion = _config(
+      id: 'bastion',
+    ).copyWith(host: 'bastion.example.com');
+    final pins = [
+      for (final config in [alias, target, bastion])
+        HostKey(
+          host: config.host,
+          port: config.port,
+          type: 'ssh-ed25519',
+          fingerprintSha256: 'SHA256:presented',
+          pinnedAt: 0,
+        ),
+    ];
+    final h = HostHarness(config: EngineConfig(hostKeyPins: pins));
+    addTearDown(h.dispose);
+
+    final aliasOpen = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: bastion.id,
+        paneTabId: 'alias-tab',
+        config: alias,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    expect(await aliasOpen, isA<BrowseChannelOpened>());
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [target, bastion],
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+
+    final targetOpen = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-target',
+        paneTabId: 'target-tab',
+        config: target,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+
+    expect(await targetOpen, isA<BrowseChannelOpened>());
+    expect(h.opener.calls.last.jumpHosts.single.config.host, bastion.host);
+  });
+
   test('a changed outer hop retires a pending catalog route', () async {
     final h = HostHarness();
     addTearDown(h.dispose);

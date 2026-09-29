@@ -58,6 +58,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
   final Set<(String, String, int)> _seenMarked = {};
   final Set<String> _connectedMarked = {};
   Future<void> _tail = Future.value();
+  int _configurationRevision = 0;
   bool _disposed = false;
 
   /// Live probe truth per favorite id; unknown for ineligible rows. Live
@@ -85,6 +86,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
     _configs
       ..clear()
       ..addAll(configs);
+    _configurationRevision++;
     _markVisibleConfigs();
     _enqueue(_reconfigure);
   }
@@ -104,6 +106,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
         for (final server in servers)
           if (server.jumpHostId == null) server.id: server,
       });
+    _configurationRevision++;
     _markVisibleConfigs();
     _enqueue(_reconfigure);
   }
@@ -195,6 +198,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
     _catalogConfigs.remove(serverId);
     _visible.remove(serverId);
     _seenMarked.removeWhere((key) => key.$1 == serverId);
+    _configurationRevision++;
     // The dedupe keys too: a re-added favorite with the same id/endpoint
     // must re-persist markConnected — the record was just deleted.
     _connectedMarked.removeWhere((key) => key.startsWith('$serverId@'));
@@ -217,6 +221,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
   void forwardLifecycle(AppLifecycleState? state) {
     if (_disposed || _lifecycle == state) return;
     _lifecycle = state;
+    _configurationRevision++;
     _enqueue(_reconfigure);
   }
 
@@ -225,6 +230,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
   /// must never enable probing; an unwritable one may still read.
   Future<void> _reconfigure() async {
     if (_disposed) return;
+    final revision = _configurationRevision;
     try {
       _preference = await _settings.loadGlobalPreference();
     } on Object catch (error, stackTrace) {
@@ -268,9 +274,9 @@ final class SidebarProbeOwner extends ChangeNotifier {
         ),
       );
     }
-    // A dispose landing during the awaited reads must not touch the
-    // torn-down controller.
-    if (_disposed) return;
+    // State changes enqueue their own pass; never let this older snapshot
+    // briefly restore a removed endpoint or a newly jump-routed target.
+    if (_disposed || revision != _configurationRevision) return;
     await _controller.update(
       favorites: favorites,
       preference: _preference,

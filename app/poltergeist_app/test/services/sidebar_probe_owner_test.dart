@@ -69,6 +69,8 @@ final class _Settings implements ProbeSettings {
   ProbePreference global = ProbePreference.enabled;
   bool failReads = false;
   bool failWrites = false;
+  Completer<void>? serverFactsStarted;
+  Completer<void>? serverFactsRelease;
   final calls = <String>[];
   final servers = <String, ({String host, int port, bool connected})>{};
 
@@ -85,6 +87,11 @@ final class _Settings implements ProbeSettings {
     required int port,
   }) async {
     if (failReads) throw StateError('settings unreadable');
+    final started = serverFactsStarted;
+    if (started != null && !started.isCompleted) started.complete();
+    final release = serverFactsRelease;
+    if (release != null) await release.future;
+
     final facts = servers[serverId];
     // Mirrors the real store: case-insensitive host, exact port.
     if (facts == null ||
@@ -271,6 +278,35 @@ void main() {
     // The probe would dial db directly, around its bastion (X-05).
     expect(settings.calls, ['write:web']);
     expect(bridge.targets.map((target) => target.id), ['web']);
+  });
+
+  test('a route change invalidates a pending direct probe snapshot', () async {
+    ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.internal', port: 22, connected: false);
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    await pump();
+    bridge.calls.clear();
+
+    settings.serverFactsStarted = Completer<void>();
+    settings.serverFactsRelease = Completer<void>();
+    owner.syncCatalog([pulled()]);
+    await settings.serverFactsStarted!.future;
+
+    // The route changes while the direct snapshot waits on durable facts.
+    owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+    settings.serverFactsRelease!.complete();
+    await pump();
+
+    expect(bridge.calls, isNot(contains('targets:db')));
+    expect(bridge.targets, isEmpty);
   });
 
   test('a visible catalog server starts probing when its jump route clears',

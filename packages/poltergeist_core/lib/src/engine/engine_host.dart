@@ -162,6 +162,7 @@ class EngineHost {
     host._logCoalescer = ConnectLogCoalescer(events.send);
     host._manager = PooledConnectionManager(
       resolveServer: host._resolveKnownServer,
+      resolveJumpHost: host._resolveCatalogServer,
       resolveCredentials: host._prompts.resolveCredentials,
       onHostKey: host._prompts.hostKey,
       onKeyboardInteractive: host._prompts.keyboard,
@@ -642,6 +643,18 @@ class EngineHost {
       );
     }
     return config;
+  }
+
+  /// Jump ids belong only to the shared catalog, never the engine-alias map.
+  Future<ServerConfig> _resolveCatalogServer(String serverId) async {
+    final config = _catalogServers[serverId];
+    if (config != null) return config;
+
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.other,
+      operation: 'resolve jump host',
+      message: 'No catalog entry exists for jump host "$serverId".',
+    );
   }
 
   /// Closes the channel (03 §3.2): routing retires synchronously, the

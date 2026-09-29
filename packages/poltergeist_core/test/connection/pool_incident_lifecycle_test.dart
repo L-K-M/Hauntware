@@ -360,6 +360,59 @@ void main() {
     },
   );
 
+  test('a restored target block allows first use on an outer hop', () async {
+    final routeContext = jsonEncode([
+      ['bastion', 'bastion.example.com', 22, 'test', null],
+    ]);
+    final store = InMemoryIncidentStore.seeded([
+      IncidentRecord(
+        serverId: 's1',
+        host: 'example.com',
+        port: 22,
+        username: 'test',
+        jumpHostId: 'bastion',
+        routeContext: routeContext,
+        presentedFingerprintSha256: _changedKey,
+        pinnedFingerprintSha256: _originalKey,
+      ),
+    ]);
+    final harness =
+        PoolHarness(
+            opener: FakeTransportOpener(
+              presentedFingerprints: const [_originalKey],
+            ),
+            incidentStore: store,
+          )
+          ..addServer('s1', jumpHostId: 'bastion')
+          ..addServer('bastion', host: 'bastion.example.com');
+    addTearDown(() => harness.manager.disconnectServer('s1'));
+    await harness.store.put(
+      const HostKey(
+        host: 'example.com',
+        port: 22,
+        type: _hostKeyType,
+        fingerprintSha256: _originalKey,
+        pinnedAt: 0,
+      ),
+    );
+    final decisions = <HostKeyDecision>[];
+    harness.onHostKey = (decision) async {
+      decisions.add(decision);
+      return true;
+    };
+
+    final pane = await harness.manager.openBrowseChannel(
+      's1',
+      paneTabId: 'review',
+    );
+
+    expect(decisions, hasLength(1));
+    expect(decisions.single.verdict, HostKeyVerdict.firstUse);
+    expect(decisions.single.presented.host, 'bastion.example.com');
+    await _eventually(() => store.load(), (records) => records.isEmpty);
+    await pane.close();
+  });
+
   test(
     'trust at another route endpoint cannot lift a restored block',
     () async {
