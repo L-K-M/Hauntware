@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
@@ -135,18 +133,6 @@ class LocalFileSystem implements RemoteFileSystem {
     'list',
     path,
     () async {
-      // Diagnostic-only switches: the default preserves the sequential path.
-      const useWorker = bool.fromEnvironment('P4_LIST_WORKER');
-      const workerLimit = int.fromEnvironment(
-        'P4_LIST_WORKER_LIMIT',
-        defaultValue: 2,
-      );
-      if (useWorker && workerLimit > 0) {
-        return _listDirectoryInWorker(path, workerLimit);
-      }
-      const batchSize = int.fromEnvironment('P4_LIST_BATCH_SIZE', defaultValue: 1);
-      if (batchSize > 1) return _listDirectoryInBatches(path, batchSize);
-
       final entries = <RemoteFileEntry>[];
       await for (final entity in Directory(path).list(followLinks: false)) {
         final name = p.basename(entity.path);
@@ -172,108 +158,6 @@ class LocalFileSystem implements RemoteFileSystem {
       return entries;
     },
   );
-
-  // Shared across filesystem instances: every local browse channel owns one.
-  // This diagnostic permit bounds workers but does not cancel obsolete jobs.
-  static int _listingWorkersActive = 0;
-  static final _listingWorkerWaiters = ListQueue<Completer<void>>();
-
-  static Future<void> _acquireListingWorker(int limit) async {
-    if (_listingWorkersActive < limit) {
-      _listingWorkersActive++;
-      return;
-    }
-    final ready = Completer<void>();
-    _listingWorkerWaiters.addLast(ready);
-    await ready.future;
-  }
-
-  static void _releaseListingWorker() {
-    if (_listingWorkerWaiters.isNotEmpty) {
-      // Transfer the occupied permit directly to the oldest queued request.
-      _listingWorkerWaiters.removeFirst().complete();
-      return;
-    }
-    _listingWorkersActive--;
-  }
-
-  // Static dispatch ensures the worker captures only the path, never this
-  // filesystem's other state. Blocking directory reads stay in that worker.
-  static Future<List<RemoteFileEntry>> _listDirectoryInWorker(
-    String path,
-    int limit,
-  ) async {
-    await _acquireListingWorker(limit);
-    try {
-      return await Isolate.run(
-        () => _listDirectorySync(path),
-        debugName: 'local-listing',
-      );
-    } finally {
-      _releaseListingWorker();
-    }
-  }
-
-  static List<RemoteFileEntry> _listDirectorySync(String path) {
-    final entries = <RemoteFileEntry>[];
-    for (final entity in Directory(path).listSync(followLinks: false)) {
-      final name = p.basename(entity.path);
-      if (name == '.' || name == '..') continue;
-      if (entity is Link) {
-        entries.add(
-          RemoteFileEntry(
-            path: entity.path,
-            name: name,
-            type: RemoteFileType.symbolicLink,
-          ),
-        );
-        continue;
-      }
-      final stat = FileStat.statSync(entity.path);
-      if (stat.type == FileSystemEntityType.notFound) continue;
-      entries.add(_entryFromStat(entity.path, name, stat));
-    }
-    return entries;
-  }
-
-  Future<List<RemoteFileEntry>> _listDirectoryInBatches(
-    String path,
-    int batchSize,
-  ) async {
-    final entries = <RemoteFileEntry>[];
-    final batch = <FileSystemEntity>[];
-
-    Future<void> flush() async {
-      // Future.wait preserves enumeration order and observes every read's
-      // failure before this batch can leave the listing's error funnel.
-      final listed = await Future.wait(batch.map(_listDirectoryEntry));
-      entries.addAll(listed.nonNulls);
-      batch.clear();
-    }
-
-    await for (final entity in Directory(path).list(followLinks: false)) {
-      batch.add(entity);
-      if (batch.length == batchSize) await flush();
-    }
-    if (batch.isNotEmpty) await flush();
-    return entries;
-  }
-
-  Future<RemoteFileEntry?> _listDirectoryEntry(FileSystemEntity entity) async {
-    final name = p.basename(entity.path);
-    if (name == '.' || name == '..') return null;
-    // Links keep their own identity and null metadata, including broken links.
-    if (entity is Link) {
-      return RemoteFileEntry(
-        path: entity.path,
-        name: name,
-        type: RemoteFileType.symbolicLink,
-      );
-    }
-    final stat = await FileStat.stat(entity.path);
-    if (stat.type == FileSystemEntityType.notFound) return null;
-    return _entryFromStat(entity.path, name, stat);
-  }
 
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) =>
@@ -1237,7 +1121,7 @@ class LocalFileSystem implements RemoteFileSystem {
     return digest.toString();
   }
 
-  static RemoteFileEntry _entryFromStat(String path, String name, FileStat stat) =>
+  RemoteFileEntry _entryFromStat(String path, String name, FileStat stat) =>
       RemoteFileEntry(
         path: path,
         name: name,

@@ -46,6 +46,24 @@ String formatPaneSize(int? bytes, {required TargetPlatform platform}) {
   return '$text ${_byteUnits[unit]}';
 }
 
+// Diagnostic only: retain formatters for one explicit locale so tab mounts can
+// reuse parsed patterns without accumulating locales or relying on Intl's default.
+_PaneDateFormats? _cachedDateFormats;
+
+_PaneDateFormats _dateFormatsFor(String localeName) {
+  final cached = _cachedDateFormats;
+  if (cached != null && cached.localeName == localeName) return cached;
+  return _cachedDateFormats = _PaneDateFormats(localeName);
+}
+
+class _PaneDateFormats {
+  _PaneDateFormats(this.localeName);
+
+  final String localeName;
+  late final time = DateFormat.jm(localeName);
+  late final dateTime = DateFormat.yMd(localeName).add_jm();
+}
+
 /// Modified-time text: relative for today/yesterday, absolute otherwise
 /// (02 §2.3). Links and unevaluated sizes carry null metadata — the dash.
 String formatPaneModified(
@@ -59,7 +77,12 @@ String formatPaneModified(
   final localModified = modified.toLocal();
   final localNow = now.toLocal();
   final dayStart = DateTime(localNow.year, localNow.month, localNow.day);
-  final time = DateFormat.jm(localeName).format(localModified);
+  final formats = const bool.fromEnvironment('P4_CACHE_DATE_FORMATS')
+      ? _dateFormatsFor(localeName)
+      : null;
+  final time = (formats?.time ?? DateFormat.jm(localeName)).format(
+    localModified,
+  );
   if (!localModified.isBefore(dayStart)) {
     // Same calendar day → "today"; genuinely future mtimes (clock skew,
     // migrated archives) fall through to the absolute format rather
@@ -71,7 +94,9 @@ String formatPaneModified(
     );
     return localModified.isBefore(nextDayStart)
         ? today(time)
-        : DateFormat.yMd(localeName).add_jm().format(localModified);
+        : (formats?.dateTime ?? DateFormat.yMd(localeName).add_jm()).format(
+            localModified,
+          );
   }
   // Calendar-day arithmetic, not 24-hour subtraction: across a DST
   // transition, midnight minus 24h lands at 23:00 or 01:00 of the
@@ -80,9 +105,9 @@ String formatPaneModified(
       .isBefore(DateTime(localNow.year, localNow.month, localNow.day - 1))) {
     return yesterday(time);
   }
-  return DateFormat.yMd(localeName)
-      .add_jm()
-      .format(localModified);
+  return (formats?.dateTime ?? DateFormat.yMd(localeName).add_jm()).format(
+    localModified,
+  );
 }
 
 /// The `ls -l` symbolic rendering of a POSIX mode's permission bits

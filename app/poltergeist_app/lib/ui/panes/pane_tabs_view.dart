@@ -220,9 +220,7 @@ class PaneTabsView extends StatelessWidget {
                 // Keyed per tab so a switch mounts a clean view state —
                 // per-tab state lives on the controller, so nothing the
                 // view owns (scroll offset, field focus) may leak across.
-                key: const bool.fromEnvironment('P4_REUSE_PANE_VIEW')
-                    ? null
-                    : ValueKey(activeTab.id),
+                key: ValueKey(activeTab.id),
                 controller: activeTab.controller,
                 pane: tabs,
                 workspace: workspace,

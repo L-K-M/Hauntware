@@ -1877,15 +1877,11 @@ class _PaneSurface extends StatelessWidget {
           key: listAreaKey,
           controller: scrollController,
           itemExtent: extent,
-          scrollCacheExtent: const bool.fromEnvironment('P4_THREE_ROW_CACHE')
-              ? ScrollCacheExtent.pixels(extent * 3)
+          scrollCacheExtent: const bool.fromEnvironment('P4_VIEWPORT_ONLY_CACHE')
+              ? const ScrollCacheExtent.pixels(0)
+              : const bool.fromEnvironment('P4_ONE_ROW_CACHE')
+              ? ScrollCacheExtent.pixels(extent)
               : null,
-          addAutomaticKeepAlives: !const bool.fromEnvironment(
-            'P4_NO_KEEP_ALIVES',
-          ),
-          addRepaintBoundaries: !const bool.fromEnvironment(
-            'P4_NO_ROW_REPAINT_BOUNDARIES',
-          ),
           itemCount: controller.entries.length,
           itemBuilder: (context, index) => _buildRow(context, index),
         ),

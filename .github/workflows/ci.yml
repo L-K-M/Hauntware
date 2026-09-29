@@ -5,11 +5,16 @@ permissions:
   contents: read
 jobs:
   p4_diagnostic:
-    name: P4 pane cold-build diagnostic
+    name: P4 production-path diagnostic
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: '3.13.4'
+      - name: Resolve workspace
+        run: dart pub get
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
@@ -20,54 +25,57 @@ jobs:
       - name: Resolve dependencies
         working-directory: app/poltergeist_app
         run: flutter pub get
-      - name: Compare pane cold-build variants
+      - name: Compare production-path pane variants
         shell: bash
         env:
           LIBGL_ALWAYS_SOFTWARE: 1
         run: |
           set -euo pipefail
-          fixture_root=$(mktemp -d /tmp/poltergeist-p4-diagnostic.XXXXXX)
+          fixture_root=$(mktemp -d /tmp/poltergeist-bench-b.XXXXXX)
           trap 'rm -rf -- "$fixture_root"' EXIT
-          mkdir -p "$fixture_root/entries-10000" "$GITHUB_WORKSPACE/p4-diagnostic"
+          mkdir -p "$fixture_root/entries-10000" "$fixture_root/entries-100000" "$GITHUB_WORKSPACE/p4-diagnostic"
           seq -f "$fixture_root/entries-10000/entry-%06g" 10000 | xargs -n 5000 touch
+          seq -f "$fixture_root/entries-100000/entry-%06g" 100000 | xargs -n 5000 touch
           cpu_model=$(lscpu | sed -n 's/^Model name: *//p' | head -1)
+          lscpu
+          cat /proc/loadavg
           cd app/poltergeist_app
-          repetition=0
-          for variant in baseline three-row-cache no-keep-alives reuse-pane-view no-row-repaint-boundaries combined-list-options baseline; do
-            repetition=$((repetition + 1))
-            three_row_cache=false
-            no_keep_alives=false
-            reuse_pane_view=false
-            no_row_repaint_boundaries=false
-            case "$variant" in
-              three-row-cache) three_row_cache=true ;;
-              no-keep-alives) no_keep_alives=true ;;
-              reuse-pane-view) reuse_pane_view=true ;;
-              no-row-repaint-boundaries) no_row_repaint_boundaries=true ;;
-              combined-list-options)
-                three_row_cache=true
-                no_keep_alives=true
-                no_row_repaint_boundaries=true
-                ;;
-            esac
-            label="$repetition-$variant"
-            xvfb-run -a flutter drive --driver=test_driver/integration_test.dart --target=integration_test/perf/temporary_p4_list_test.dart --device-id linux --profile \
+          run_scenario() {
+            local label="$1" target="$2" viewport_only="$3" one_row="$4" cache_date_formats="$5"
+            xvfb-run -a flutter drive --driver=test_driver/integration_test.dart --target="integration_test/perf/$target" --device-id linux --profile \
               "--dart-define=POLTERGEIST_BENCH_FIXTURE_ROOT=$fixture_root" \
               "--dart-define=POLTERGEIST_BENCH_OUTPUT=$GITHUB_WORKSPACE/p4-diagnostic/$label.json" \
-              "--dart-define=POLTERGEIST_BENCH_RUNNER_IMAGE=$ImageOS@$ImageVersion" \
+              "--dart-define=POLTERGEIST_BENCH_RUNNER_IMAGE=ubuntu-latest@$ImageVersion" \
               "--dart-define=POLTERGEIST_BENCH_CPU_MODEL=$cpu_model" \
               --dart-define=POLTERGEIST_BENCH_FLUTTER_VERSION=3.47.2 \
-              --dart-define=P4_LIST_DIAGNOSTIC_MODE=normal \
-              --dart-define=P4_LIST_WORKER=false \
-              --dart-define=P4_ACTIVATION_DELAY_MS=300 \
-              "--dart-define=P4_THREE_ROW_CACHE=$three_row_cache" \
-              "--dart-define=P4_NO_KEEP_ALIVES=$no_keep_alives" \
-              "--dart-define=P4_REUSE_PANE_VIEW=$reuse_pane_view" \
-              "--dart-define=P4_NO_ROW_REPAINT_BOUNDARIES=$no_row_repaint_boundaries" \
+              "--dart-define=P4_VIEWPORT_ONLY_CACHE=$viewport_only" \
+              "--dart-define=P4_ONE_ROW_CACHE=$one_row" \
+              "--dart-define=P4_CACHE_DATE_FORMATS=$cache_date_formats" \
               2>&1 | tee "$GITHUB_WORKSPACE/p4-diagnostic/$label.log"
+          }
+          run_scenario prelude-p1 p1_first_paint_test.dart false false false
+          run_scenario prelude-p2 p2_first_paint_test.dart false false false
+          repetition=0
+          for variant in baseline viewport-only viewport-and-date-cache one-row-and-date-cache baseline; do
+            repetition=$((repetition + 1))
+            viewport_only=false
+            one_row=false
+            cache_date_formats=false
+            case "$variant" in
+              viewport-only) viewport_only=true ;;
+              viewport-and-date-cache)
+                viewport_only=true
+                cache_date_formats=true
+                ;;
+              one-row-and-date-cache)
+                one_row=true
+                cache_date_formats=true
+                ;;
+            esac
+            run_scenario "$repetition-$variant" p4_tab_switch_test.dart "$viewport_only" "$one_row" "$cache_date_formats"
           done
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: p4-list-diagnostic
+          name: p4-production-path-diagnostic
           path: p4-diagnostic

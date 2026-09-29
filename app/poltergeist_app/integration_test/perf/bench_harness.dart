@@ -386,6 +386,24 @@ Future<int> measureTabSwitchMicros(
         '${painted!.rasterFinishUs} precedes trigger $triggerUs',
       );
     }
+    final paneDetails = <String>[];
+    for (final element in find.byType(PaneView).evaluate()) {
+      final view = element.widget as PaneView;
+      final box = element.findRenderObject() as RenderBox;
+      final side = view.pane.isLeftPane ? 'left' : 'right';
+      final controller = view.controller;
+      paneDetails.add(
+        '$side:path=${controller.location?.path},'
+        'entries=${controller.entries.length},size=${box.size},'
+        'names=${controller.entries.take(20).map((entry) => entry.name).toList()}',
+      );
+    }
+    // Diagnostic context is reported after the measured raster completion.
+    // ignore: avoid_print
+    print(
+      'P4 environment: viewport=${rig.tester.view.physicalSize} '
+      'dpr=${rig.tester.view.devicePixelRatio} ${paneDetails.join(' | ')}',
+    );
     // Keep scheduling, build, and raster costs visible in regression logs.
     // ignore: avoid_print
     print(
