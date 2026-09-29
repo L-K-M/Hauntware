@@ -96,7 +96,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   bool _routeIsCurrent = true;
   bool _restoreWhenCurrent = false;
   bool _routeSeen = false;
-  late int _installSeen = c.installGeneration;
+
+  /// The controller's install count this view has handed focus over for.
+  /// Read when the view attaches, not lazily on the first change: an install
+  /// that changes neither text nor caret can be that first change.
+  late int _installSeen;
   int _lastCaretReveal = 0;
   bool _revealQueued = false;
   EditorController get c => widget.controller;
@@ -132,6 +136,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void initState() {
     super.initState();
     c.addListener(_changed);
+    _installSeen = c.installGeneration;
     _lastCaretReveal = c.caretRevealRequest;
     c.setViewEditingLocked(this, widget.editingLocked);
     WidgetsBinding.instance.addPostFrameCallback((_) {

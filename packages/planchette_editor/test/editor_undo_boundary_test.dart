@@ -142,6 +142,27 @@ void main() {
     expect(c.text.text, 'v2!');
   });
 
+  testWidgets('review fix: an unchanged install still carries focus over', (
+    tester,
+  ) async {
+    // The view read the install count lazily, on its first change. A clean
+    // tab reverted to the same text changes neither text nor caret, so the
+    // install was that first change: the view saw nothing new, skipped the
+    // hand-over, and the new field held focus without an input connection.
+    final c = EditorController(displayPath: 'a.txt', initialText: 'v1')
+      ..text.selection = const TextSelection.collapsed(offset: 0);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    c.editorFocus.requestFocus();
+    await tester.pump();
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+
+    c.adoptDocument(disk('v1'), replaceText: true);
+    await tester.pumpAndSettle();
+    expect(c.editorFocus.hasFocus, isTrue);
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+  });
+
   testWidgets('review fix: an install keeps the caret and the scroll', (
     tester,
   ) async {
