@@ -46,6 +46,7 @@ class MemoryDocuments implements DocumentStore {
   @override
   Future<TextDocument> load(String path) async {
     await loadGate?.future;
+    if (loadFailures[path] case final error?) throw error;
     final value = files[aliases[path] ?? path];
     if (value == null) throw const FileSystemException('Missing file');
     return value;
@@ -58,7 +59,40 @@ class MemoryDocuments implements DocumentStore {
   }
 
   @override
-  Future<String?> existingDigest(String path) async => files[path]?.sha256;
+  Future<FileStamp?> stamp(String path) async {
+    stamps++;
+    final value = files[aliases[path] ?? path];
+    if (value == null) return null;
+    // The digest stands in for a modification time: the same content keeps
+    // its stamp, as a file moved away and back keeps its own.
+    return (
+      modified: DateTime.utc(
+        2026,
+      ).add(Duration(seconds: value.sha256.hashCode)),
+      size: value.text.length,
+    );
+  }
+
+  int stamps = 0;
+
+  /// Paths whose text cannot be loaded, as with a file grown past the limit.
+  final Map<String, Object> loadFailures = {};
+
+  /// Holds digest reads, and so disk checks, open until completed.
+  Completer<void>? digestGate;
+
+  /// Paths whose digest cannot be read, as with a permission error.
+  final Map<String, Object> digestFailures = {};
+
+  @override
+  Future<String?> existingDigest(String path) async {
+    digests++;
+    await digestGate?.future;
+    if (digestFailures[path] case final error?) throw error;
+    return files[aliases[path] ?? path]?.sha256;
+  }
+
+  int digests = 0;
 
   @override
   Future<bool> isWriteProtected(String path) async =>

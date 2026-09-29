@@ -9,6 +9,7 @@ final class DesktopWindow with WindowListener {
   DesktopWindow({
     required this.confirmQuit,
     required this.onQuitFailed,
+    this.onFocus,
     this.windowBackgroundColor,
     Future<void> Function()? destroyWindow,
     Future<void> Function(String title)? setWindowTitle,
@@ -16,6 +17,10 @@ final class DesktopWindow with WindowListener {
        _setWindowTitle = setWindowTitle ?? windowManager.setTitle;
   final Future<bool> Function() confirmQuit;
   final void Function(Object error) onQuitFailed;
+
+  /// Called when the window becomes active again, so files that other
+  /// programs changed in the meantime are noticed.
+  final VoidCallback? onFocus;
 
   /// The color the native window paints before the first Flutter frame. Left
   /// unset the platform shows its own default, which reads as a white flash on
@@ -71,6 +76,9 @@ final class DesktopWindow with WindowListener {
 
   @override
   void onWindowClose() => unawaited(requestQuit());
+
+  @override
+  void onWindowFocus() => onFocus?.call();
 
   /// Each call is a platform channel message; skip the ones that would not
   /// change what the window shows.
