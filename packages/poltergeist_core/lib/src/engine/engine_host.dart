@@ -491,7 +491,9 @@ class EngineHost {
   }
 
   /// Presentation and sync-policy edits do not disturb a matching open that
-  /// is already resolving. Route or credential changes must retire it.
+  /// is already resolving. Route or credential changes must retire it. Keep
+  /// this list exhaustive for every [ServerConfig] field connection setup
+  /// consumes.
   bool _sameConnectionConfig(ServerConfig first, ServerConfig second) =>
       first.id == second.id &&
       first.host == second.host &&
@@ -504,10 +506,25 @@ class EngineHost {
 
   /// Resolves a request's catalog record against the latest full snapshot.
   /// Deleted ids remain tombstoned so a request captured before deletion
-  /// cannot recreate its old route.
+  /// cannot recreate its old route. Payload timestamps are not the catalog's
+  /// LWW tuple, so a route mismatch refuses until the ordered snapshot lands
+  /// instead of guessing which side is newer.
   ServerConfig _authoritativeServerConfig(ServerConfig supplied) {
     final current = _catalogServers[supplied.id];
-    if (current != null) return current;
+    if (current != null) {
+      if (_sameConnectionConfig(current, supplied)) return current;
+      // Preserve the authoritative typed refusal instead of reducing a
+      // known jump route to a transient catalog-mismatch failure.
+      if (current.jumpHostId != null) return current;
+
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'resolve server',
+        message:
+            'The server connection changed in the current catalog. Retry '
+            'the connection.',
+      );
+    }
     if (!_knownCatalogIds.contains(supplied.id)) return supplied;
 
     throw RemoteFileException(

@@ -444,6 +444,7 @@ Future<void> main(List<String> args) async {
     vaultKey: masterKeys.probeKeystore,
     servers: servers,
     vaultStore: vaultStore,
+    serverCatalogPublisher: engineSession?.publishServerCatalog,
     settings: settingsStore,
     recordQuarantinePath: () => syncRecords.quarantinedPath,
   );

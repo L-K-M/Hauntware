@@ -98,6 +98,7 @@ class FakeAppEngine implements AppEngine {
   FakeAppBrowseChannel? channel;
   final disconnectIds = <String>[];
   final removedBookmarkIds = <String>[];
+  Completer<void>? catalogReplacementGate;
   int shutdownCalls = 0;
 
   @override
@@ -145,6 +146,7 @@ class FakeAppEngine implements AppEngine {
   @override
   Future<void> replaceServerCatalog(List<ServerConfig> configs) async {
     catalogSnapshots.add(List.unmodifiable(configs));
+    await catalogReplacementGate?.future;
   }
 
   @override
@@ -762,6 +764,29 @@ void main() {
   });
 
   group('catalog config refresh', () {
+    test('publishes a snapshot before its acknowledgement', () async {
+      const direct = ServerConfig(
+        id: 'catalog-1',
+        label: 'Database',
+        host: 'db.internal',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+      final gate = Completer<void>();
+      engine!.catalogReplacementGate = gate;
+
+      session.publishServerCatalog([direct]);
+
+      expect(engine.catalogSnapshots, [
+        [direct],
+      ]);
+      gate.complete();
+      await pumpEventQueue();
+    });
+
     test('sends an empty snapshot when sync removes the catalog', () async {
       const direct = ServerConfig(
         id: 'catalog-1',

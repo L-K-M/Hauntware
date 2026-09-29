@@ -9319,9 +9319,14 @@ already carries `jumpHostId`.
   sync runs). The editor's Test connection reports the same sentence as
   a failed trial without calling the delegate, and the sidebar no longer
   probes such a server. Protocol v14 also pushes complete catalog snapshots
-  into the engine without acquiring a channel. They are authoritative even
-  before an alias opens: adding a jump route or removing a record retires
-  every old alias, and a request captured before sync cannot restore it.
+  into the engine without acquiring a channel. The app publishes each
+  materialized snapshot synchronously before its mutation returns, clears it
+  on sign-out or account replacement, and ignores callbacks from superseded
+  catalogs. Overlapping coordinator rebuilds commit only their newest
+  account/key generation. Snapshots are authoritative by arrival order, not
+  by `ServerConfig.updatedAt` (payload metadata): adding a jump route or
+  removing a record retires every old alias, while a captured request whose
+  connection no longer matches refuses instead of restoring the old route.
   Work already authenticated may drain, but it cannot recover or issue
   another lease there. This matches 01 §4 differentiator 8 (not connectable
   until D10), so no plan edit.
@@ -9331,12 +9336,13 @@ and `saveServer` seals it into the pushed record. The pane, the config
 source and the editor's test refuse a jump-routed server without
 dialing, and the probe owner skips it (all four failed before the fix).
 Review added regressions for live and pending route retirement, stale opens
-and leases, catalog tombstones, matching concurrent opens, and mounted versus
-hidden probe rows; each failed before its fix. Local catalog changes notify
-the snapshot listener, and the v14 snapshot crosses the isolate contract test.
-Validation: Dart and Flutter analysis are clean; the full core suite passes
-1720 tests with 27 environment skips, and the full app suite passes 2894 tests
-(12 app tests new).
+and leases, skewed payload timestamps, catalog tombstones, matching concurrent
+opens, mounted versus hidden probe rows, synchronous publication, sign-out,
+and overlapping account rebuilds. The routing and lifecycle regressions failed
+before their fixes; the skew cases pin snapshot arrival order. The v14 snapshot
+also crosses the isolate contract test. Validation: Dart and Flutter analysis
+are clean; the full core suite passes 1724 tests with 27 environment skips,
+and the full app suite passes 2899 tests (17 app tests new).
 
 ## Open items
 

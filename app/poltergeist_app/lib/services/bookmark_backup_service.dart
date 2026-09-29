@@ -72,6 +72,7 @@ final class BookmarkBackupService extends ChangeNotifier
     required Future<List<int>?> Function() vaultKey,
     required SyncTrackingServerStore servers,
     required VaultStore vaultStore,
+    void Function(List<ServerConfig> snapshot)? serverCatalogPublisher,
     SettingsStore? settings,
     String? Function()? recordQuarantinePath,
     DateTime Function()? now,
@@ -103,6 +104,8 @@ final class BookmarkBackupService extends ChangeNotifier
         // ignore: prefer_initializing_formals
         _vaultStore = vaultStore,
         // ignore: prefer_initializing_formals
+        _serverCatalogPublisher = serverCatalogPublisher,
+        // ignore: prefer_initializing_formals
         _settings = settings,
         // ignore: prefer_initializing_formals
         _recordQuarantinePath = recordQuarantinePath,
@@ -129,6 +132,11 @@ final class BookmarkBackupService extends ChangeNotifier
   /// [_rebuildCoordinator] to make the [SecretVault] the coordinator and
   /// the editor write through.
   final VaultStore _vaultStore;
+
+  /// Pushes a materialized route snapshot before [SeanceServerCatalog.replace]
+  /// returns, closing the window where a connect could observe the new row
+  /// before the engine did.
+  final void Function(List<ServerConfig> snapshot)? _serverCatalogPublisher;
   final SettingsStore? _settings;
   final String? Function()? _recordQuarantinePath;
   final DateTime Function() _now;
@@ -155,6 +163,7 @@ final class BookmarkBackupService extends ChangeNotifier
 
   BookmarkCoordinator? _coordinator;
   RecordCrypto? _crypto;
+  int _coordinatorRebuildGeneration = 0;
 
   /// The shared-mode credential vault the coordinator and the server
   /// editor write through — rebuilt on every coordinator rebind so it
@@ -228,9 +237,29 @@ final class BookmarkBackupService extends ChangeNotifier
 
   /// The Séance server catalog materialized in shared mode (read-only).
   SeanceServerCatalog? _catalog;
+  ({String baseUrl, String username, List<int> vaultKey})? _catalogBinding;
 
   /// Shared mode's catalog, for the surfaces §4.2 unlocks.
   SeanceServerCatalog? get catalog => _catalog;
+
+  void _clearServerCatalog() {
+    _catalog = null;
+    _catalogBinding = null;
+    _serverCatalogPublisher?.call(const []);
+  }
+
+  SeanceServerCatalog _newServerCatalog() {
+    late final SeanceServerCatalog catalog;
+    catalog = SeanceServerCatalog(
+      onReplaced: (snapshot) {
+        // A superseded coordinator may finish after sign-out or a rebind.
+        // Its snapshot must never restore routes owned by the old account.
+        if (!identical(_catalog, catalog)) return;
+        _serverCatalogPublisher?.call(snapshot);
+      },
+    );
+    return catalog;
+  }
 
   /// Load all durable state and build the coordinator when the vault key
   /// is readable. Called once at composition and again on refresh needs.
@@ -401,35 +430,69 @@ final class BookmarkBackupService extends ChangeNotifier
   /// state still renders and rounds fail honestly rather than sealing
   /// under a fabricated key.
   Future<void> _rebuildCoordinator() async {
+    final generation = ++_coordinatorRebuildGeneration;
     final account = await _enrollmentState.account();
     final key = account == null ? null : await _vaultKey();
+    final deviceId = account == null || key == null
+        ? null
+        : await _enrollmentState.deviceId();
+    if (generation != _coordinatorRebuildGeneration) return;
+
     if (account == null || key == null) {
       _coordinator = null;
       _crypto = null;
-      _catalog = null;
       _secretVault = null;
+      _clearServerCatalog();
       return;
     }
+
     final crypto = RecordCrypto(RecordCodec(key));
-    _crypto = crypto;
     final shared = account.mode == SyncAccountMode.shared;
-    _catalog = shared ? SeanceServerCatalog() : null;
-    _secretVault = shared ? SecretVault(_vaultStore, key) : null;
-    _coordinator = BookmarkCoordinator(
+    final binding = _catalogBinding;
+    final canReuseCatalog = shared &&
+        _catalog != null &&
+        binding?.baseUrl == account.baseUrl &&
+        binding?.username == account.username &&
+        listEquals(binding?.vaultKey, key);
+    final catalog = !shared
+        ? null
+        : canReuseCatalog
+            ? _catalog
+            : _newServerCatalog();
+    final nextBinding = !shared
+        ? null
+        : (
+            baseUrl: account.baseUrl,
+            username: account.username,
+            vaultKey: List<int>.unmodifiable(key),
+          );
+    final secretVault = shared ? SecretVault(_vaultStore, key) : null;
+    final coordinator = BookmarkCoordinator(
       records: _records,
       bookmarks: _bookmarks,
       hostKeys: _hostKeys,
       crypto: crypto,
-      deviceId: await _enrollmentState.deviceId(),
+      deviceId: deviceId!,
       pinVerdicts: _pinVerdicts,
       tripwires: _tripwires,
-      catalog: _catalog,
+      catalog: catalog,
       servers: shared ? _servers : null,
-      secrets: _secretVault,
+      secrets: secretVault,
       syncSecrets: _syncSecrets,
       enrollment: _enrollmentState,
       now: _now,
     );
+
+    // Commit one generation together so callbacks cannot observe mixed keys.
+    final replacedCatalog = !identical(_catalog, catalog);
+    _crypto = crypto;
+    _catalog = catalog;
+    _catalogBinding = nextBinding;
+    _secretVault = secretVault;
+    _coordinator = coordinator;
+    if (replacedCatalog) {
+      _serverCatalogPublisher?.call(catalog?.servers ?? const []);
+    }
   }
 
   SyncEnrollment _enrollment() => SyncEnrollment(
@@ -570,12 +633,14 @@ final class BookmarkBackupService extends ChangeNotifier
   @override
   Future<void> signOut() async {
     _requireNotSyncing();
+    _coordinatorRebuildGeneration += 1;
     await _credentials.deleteToken();
     await _enrollmentState.setAccount(null);
+    _coordinatorRebuildGeneration += 1;
     _coordinator = null;
     _crypto = null;
-    _catalog = null;
     _secretVault = null;
+    _clearServerCatalog();
     _lastSyncAt = null;
     _lastSyncError = null;
     await _persistStatus();

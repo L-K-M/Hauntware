@@ -425,13 +425,14 @@ void main() {
     addTearDown(h.dispose);
     h.watch('favorite-1');
     await h.pumping();
+    final direct = _config(id: 'catalog-1').copyWith(updatedAt: 999);
 
     final opened = h.call(
       (id) => OpenBrowseChannelRequest(
         requestId: id,
         serverId: 'favorite-1',
         paneTabId: 'tab-1',
-        config: _config(id: 'catalog-1'),
+        config: direct,
       ),
     );
     await h.pumping();
@@ -444,7 +445,7 @@ void main() {
       (id) => ReplaceServerCatalogRequest(
         requestId: id,
         configs: [
-          _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion'),
+          direct.copyWith(jumpHostId: 'bastion', updatedAt: 1),
         ],
       ),
     );
@@ -462,6 +463,55 @@ void main() {
       isA<DirectoryListed>(),
     );
   });
+
+  for (final lease in [false, true]) {
+    test('a changed catalog request refuses a stale snapshot '
+        'for ${lease ? 'a lease' : 'an open'}', () async {
+      final h = HostHarness();
+      addTearDown(h.dispose);
+      final current = _config(id: 'catalog-1');
+      expect(
+        await h.call(
+          (id) => ReplaceServerCatalogRequest(
+            requestId: id,
+            configs: [current],
+          ),
+        ),
+        isA<EngineAck>(),
+      );
+      final changed = current.copyWith(
+        host: 'new.example.com',
+        updatedAt: current.updatedAt + 1000,
+      );
+
+      final attempt = lease
+          ? h.call(
+              (id) => LeaseTransferChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                config: changed,
+              ),
+            )
+          : h.call(
+              (id) => OpenBrowseChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                paneTabId: 'tab-1',
+                config: changed,
+              ),
+            );
+      await h.pumping();
+
+      expect(
+        h.events.whereType<EnginePromptEvent>(),
+        isEmpty,
+        reason: 'neither side of an unordered route change is safe to dial',
+      );
+      final failure = await expectError(attempt);
+      expect(failure.kind, RemoteFileErrorKind.disconnected);
+      expect(h.opener.calls, isEmpty);
+    });
+  }
 
   test('a removed catalog route drains work and refuses stale requests',
       () async {
@@ -503,20 +553,24 @@ void main() {
       isA<DirectoryListed>(),
     );
 
+    final staleAfterRemoval = direct.copyWith(
+      updatedAt: direct.updatedAt + 1000,
+    );
+
     for (final attempt in [
       h.call(
         (id) => OpenBrowseChannelRequest(
           requestId: id,
           serverId: 'favorite-1',
           paneTabId: 'stale-tab',
-          config: direct,
+          config: staleAfterRemoval,
         ),
       ),
       h.call(
         (id) => LeaseTransferChannelRequest(
           requestId: id,
           serverId: 'favorite-1',
-          config: direct,
+          config: staleAfterRemoval,
         ),
       ),
     ]) {
@@ -527,20 +581,28 @@ void main() {
     expect(h.opener.calls, hasLength(1));
   });
 
-  test(
-    'a catalog refresh cancels a pending direct open before dialing',
-    () async {
+  for (final lease in [false, true]) {
+    test('a catalog refresh cancels a pending direct '
+        '${lease ? 'lease' : 'open'} before dialing', () async {
       final h = HostHarness();
       addTearDown(h.dispose);
 
-      final opened = h.call(
-        (id) => OpenBrowseChannelRequest(
-          requestId: id,
-          serverId: 'favorite-1',
-          paneTabId: 'tab-1',
-          config: _config(id: 'catalog-1'),
-        ),
-      );
+      final attempt = lease
+          ? h.call(
+              (id) => LeaseTransferChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                config: _config(id: 'catalog-1'),
+              ),
+            )
+          : h.call(
+              (id) => OpenBrowseChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                paneTabId: 'tab-1',
+                config: _config(id: 'catalog-1'),
+              ),
+            );
       final refreshed = h.call(
         (id) => ReplaceServerCatalogRequest(
           requestId: id,
@@ -557,25 +619,30 @@ void main() {
         isEmpty,
         reason: 'the retired direct route must not request credentials',
       );
-      final failure = await expectError(opened);
+      final failure = await expectError(attempt);
       expect(failure.kind, RemoteFileErrorKind.unsupported);
       expect(h.opener.calls, isEmpty);
-    },
-  );
+    });
+  }
 
   for (final lease in [false, true]) {
     test('an authoritative jump route refuses a stale '
         '${lease ? 'lease' : 'open'} before dialing', () async {
       final h = HostHarness();
       addTearDown(h.dispose);
+      final staleDirect = _config(
+        id: 'catalog-1',
+      ).copyWith(updatedAt: 999);
+      final jumpRoute = staleDirect.copyWith(
+        jumpHostId: 'bastion',
+        updatedAt: 1,
+      );
 
       expect(
         await h.call(
           (id) => ReplaceServerCatalogRequest(
             requestId: id,
-            configs: [
-              _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion'),
-            ],
+            configs: [jumpRoute],
           ),
         ),
         isA<EngineAck>(),
@@ -585,7 +652,7 @@ void main() {
               (id) => LeaseTransferChannelRequest(
                 requestId: id,
                 serverId: 'favorite-1',
-                config: _config(id: 'catalog-1'),
+                config: staleDirect,
               ),
             )
           : h.call(
@@ -593,7 +660,7 @@ void main() {
                 requestId: id,
                 serverId: 'favorite-1',
                 paneTabId: 'tab-1',
-                config: _config(id: 'catalog-1'),
+                config: staleDirect,
               ),
             );
       await h.pumping();

@@ -66,6 +66,8 @@ abstract interface class AppEngine implements PromptBridge, ProbeBridge, PaneEng
   Future<void> disconnectServer(String serverId);
 
   /// Replaces the engine's authoritative catalog without acquiring a channel.
+  /// Implementations enqueue the snapshot before returning the [Future]; later
+  /// connection calls rely on that FIFO ordering, not acknowledgement order.
   Future<void> replaceServerCatalog(List<ServerConfig> configs);
 
   /// The bookmark-removal cascade (03 §6's delete path): drops the pool
@@ -443,6 +445,17 @@ final class EngineSession {
   /// Updates retire stale pool references without opening the replacement
   /// route. This matters while jump hosts are refused: a live direct route
   /// must not recover after sync adds a bastion.
+  void publishServerCatalog(List<ServerConfig> configs) {
+    if (_shutdownFuture != null) return;
+
+    // EngineClient sends before returning its Future. Catalog publication
+    // therefore precedes later connection requests on the same FIFO port,
+    // even while this acknowledgement is pending.
+    _errors.observe(
+      _engine.replaceServerCatalog(List.unmodifiable(configs)),
+    );
+  }
+
   void bindServerCatalog({
     required Listenable changes,
     required Iterable<ServerConfig> Function() read,
@@ -462,7 +475,7 @@ final class EngineSession {
         _errors.report(error, stackTrace);
         return;
       }
-      _errors.observe(_engine.replaceServerCatalog(configs));
+      publishServerCatalog(configs);
     }
 
     _serverCatalogChanges = changes;

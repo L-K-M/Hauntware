@@ -12,6 +12,13 @@ import 'package:seance_core/seance_core.dart';
 /// `servers` is replaced wholesale by the coordinator's rebuild; consumers
 /// hold no reference into it.
 final class SeanceServerCatalog {
+  SeanceServerCatalog({
+    void Function(List<ServerConfig> snapshot)? onReplaced,
+  }) : // The public collaborator name stays readable; its field is private.
+       // ignore: prefer_initializing_formals
+       _onReplaced = onReplaced;
+
+  final void Function(List<ServerConfig> snapshot)? _onReplaced;
   List<ServerConfig> _servers = const [];
 
   /// The pulled Séance server configs, sorted by label for display. The
@@ -29,13 +36,17 @@ final class SeanceServerCatalog {
   }
 
   /// Swap in a fresh materialization — the coordinator calls this after
-  /// diffing the store's prefixless records on each apply pass.
+  /// diffing the store's prefixless records on each apply pass. The optional
+  /// publisher runs synchronously after assignment, so a consumer can order
+  /// the new routing snapshot before any connection reads it.
   void replace(Iterable<ServerConfig> servers) {
-    _servers = List.unmodifiable(servers.toList()
+    final snapshot = List<ServerConfig>.unmodifiable(servers.toList()
       ..sort((a, b) {
         final byLabel =
             a.label.toLowerCase().compareTo(b.label.toLowerCase());
         return byLabel != 0 ? byLabel : a.id.compareTo(b.id);
       }));
+    _servers = snapshot;
+    _onReplaced?.call(snapshot);
   }
 }
