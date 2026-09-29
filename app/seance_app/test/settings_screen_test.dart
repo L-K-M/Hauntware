@@ -953,6 +953,7 @@ void main() {
 
     testWidgets('a failed first load offers a retry', (tester) async {
       backend.failInboxLoadOnce = StateError('offline');
+      addTearDown(() => backend.failInboxLoadOnce = null);
       await pumpScreen(tester, tab: SettingsTab.inbox);
       expect(find.textContaining('offline'), findsOneWidget);
       expect(find.byType(CircularProgressIndicator), findsNothing);

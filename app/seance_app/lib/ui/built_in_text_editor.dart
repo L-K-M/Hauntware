@@ -243,8 +243,11 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
         maximumBytes: builtInEditorMaximumBytes,
       );
       if (!mounted || !identical(files, widget.remoteFiles)) return;
-      // Reload replaces the confirmed snapshot. Keep the surface locked until
-      // the new load finishes, even though the controller permits loading.
+      // Reload replaces the confirmed snapshot, and the controller refuses a
+      // reload while any lock holds. Release the host lock only; the load
+      // itself keeps the surface read-only until the new text is installed.
+      // The view is never locked for this, since its lock would refuse the
+      // reload too and the host cannot release it.
       _editor.editingLocked = false;
       await _editor.reload();
     } catch (error) {
@@ -314,7 +317,6 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
               controller: _editor,
               strings: const EditorStrings(),
               isActive: widget.isActive,
-              editingLocked: _reloading,
               syntaxTheme: seanceEditorSyntaxTheme(
                 Theme.of(context).brightness,
               ),
@@ -404,36 +406,60 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
     );
   }
 
+  /// The shared status row plus the managed copy's remote state. The byte
+  /// count is [EditorController.byteCount], not `fileByteCount`: Séance
+  /// saves LF documents with their line breaks as they are.
   Widget _statusBar(BuildContext context) {
+    const strings = EditorStrings();
     final theme = Theme.of(context);
     final (line, col) = _editor.caretLineColumn;
+    final selected = _editor.selectionStats;
     final copy = widget.remoteFiles?.localCopies[widget.remotePath];
     final status = [
-      if (_editor.isSaving) 'Saving…',
+      if (selected.characters > 0)
+        strings.selectionSummary(selected.characters, selected.lines),
+      if (_editor.isSaving) strings.saving,
       if (_remoteMissing)
         'Deleted on server'
       else if (_remoteChanged == true)
         'Changed on server',
       if (_editor.isDirty)
-        'Unsaved edits'
+        strings.unsaved
       else if (copy?.dirty ?? false)
         'Local changes'
       else if (copy != null)
         'In sync',
       _editor.document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
       (_editor.document?.hasUtf8Bom ?? false) ? 'UTF-8 BOM' : 'UTF-8',
-      if (_editor.text.language case final language?) language.id,
+      strings.indentation(_editor.indentation),
+      strings.languageName(_editor.text.language),
+      if (!_editor.highlightingEnabled) strings.largeFile,
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              'Ln $line, Col $col · ${_editor.lineStarts.length} lines · ${_editor.byteCount} bytes',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall,
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Tooltip(
+                message: strings.goToLine,
+                child: InkWell(
+                  onTap: _editor.openGoToLine,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Text(
+                    strings.documentPosition(
+                      line,
+                      col,
+                      _editor.lineStarts.length,
+                      _editor.byteCount,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall,
+                  ),
+                ),
+              ),
             ),
           ),
           Flexible(

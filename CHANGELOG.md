@@ -17,6 +17,19 @@
   sync server documents the format at `/llms.txt` and serves a reference
   client, `/v1/inbox/seance-propose.py`. The sync server needs updating
   for this.
+- Built-in editor: the shared Planchette editor brings Tab and Shift+Tab
+  to indent and outdent (Enter keeps the indentation, learned from each
+  file), line commands (duplicate, move, delete and join lines), Toggle
+  Comment, Go to Matching Bracket, Go to Line (click the caret position
+  in the status bar, or Cmd+L on macOS and Ctrl+G elsewhere), whole-word
+  and regular-expression search, and highlighting for Go, diffs and
+  more. The status bar also shows the selection's size, the indentation
+  and the language, and says when a file is too large to highlight.
+- The lines between the server list, the terminal and the side panel
+  now meet the lines across them. The header's bottom edge, the tab
+  bar and the panes' bottom borders used to stop a few pixels short of
+  the vertical dividers. The dividers are still as easy to grab, and
+  the terminal is 18 pixels wider.
 - On macOS the window no longer has a separate title bar. The traffic
   lights sit over the server list, and a header across the terminal and
   side panel shows the server you are on (name and `user@host`) with
@@ -147,5 +160,24 @@
   keeps others from reading or writing it, such as a 0600 key or an
   ordinary 0644 file, is staged owner-only while it uploads, so other users
   on the server can neither read the new bytes nor write into them.
+- Keyboard shortcuts for tabs: close the current tab with ⌘W (Ctrl+Shift+W
+  on Linux and Windows), step through a server's tabs with Ctrl+Tab and
+  Ctrl+Shift+Tab (also ⇧⌘] and ⇧⌘[ on a Mac, Ctrl+Page Down and Ctrl+Page
+  Up elsewhere), and jump to a tab with ⌘1 to ⌘9 (Alt+1 to Alt+9 on Linux
+  and Windows; 9 is always the last tab). They work in the terminal and
+  anywhere else in the window, and closing asks about unsaved edits and
+  local copies just as the close button does. Plain Ctrl+W, Ctrl+C and
+  Ctrl+A still go to the shell; Alt+digit now switches tabs instead of
+  reaching readline. The terminal's right-click menu lists every shortcut.
+- Terminal: find in the scrollback with ⌘F on a Mac or iPad and
+  Ctrl+Shift+F elsewhere, or Find… in the terminal's right-click menu;
+  plain Ctrl+F still goes to the shell. A small bar at the top right
+  searches the whole scrollback, matching text that wraps across rows,
+  highlights every hit and marks the current one, and counts them ("3 of
+  17"). Enter and Shift+Enter, ⌘G and ⇧⌘G, or F3 and Shift+F3 move between
+  hits, the terminal scrolls to the current one, Aa makes the search match
+  case, and Escape closes the bar and returns you to the shell. New output
+  updates the hits while the bar is open, and the terminal does not resize
+  when it opens.
 
 Earlier history lives in the commit log and any GitHub releases.

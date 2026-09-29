@@ -9,6 +9,7 @@ import 'package:xterm/xterm.dart';
 import '../app_state.dart';
 import '../family_hues.dart';
 import '../main.dart';
+import '../services/terminal_search.dart';
 import '../services/web_links.dart';
 import '../services/xterm_engine.dart';
 import '../theme.dart';
@@ -16,12 +17,15 @@ import 'app_menus.dart';
 import 'command_generator.dart';
 import 'connection_log_view.dart';
 import 'files_pane.dart';
+import 'keyboard_shortcuts_dialog.dart';
 import 'middle_ellipsis_text.dart';
 import 'server_appearance.dart';
 import 'server_list_pane.dart';
 import 'session_label.dart';
 import 'sidebar_panel.dart';
+import 'tab_close.dart';
 import 'terminal_appearance.dart';
+import 'terminal_find_bar.dart';
 import 'terminal_keyboard_bar.dart';
 import 'top_toast.dart';
 
@@ -92,7 +96,7 @@ class TerminalPane extends StatelessWidget {
                   tabs: state.tabsForServer(active.serverId),
                   activeTabId: state.activeTabId,
                   onFocus: state.focusTab,
-                  onClose: (id) => _closeTab(context, state, id),
+                  onClose: (id) => confirmAndCloseTab(context, state, id),
                   onNewTab: () => state.newTab(active.config),
                   onGenerateCommand: showGenerateCommandInStrip
                       ? () => openCommandGenerator(state)
@@ -117,90 +121,6 @@ class TerminalPane extends StatelessWidget {
         );
       },
     );
-  }
-
-  Future<void> _closeTab(
-    BuildContext context,
-    AppState state,
-    String tabId,
-  ) async {
-    final tab = state.tabById(tabId);
-    if (tab == null) return;
-    if (tab is EditorTab) {
-      if (await _editorMayClose(context, tab)) await state.closeTab(tabId);
-      return;
-    }
-    if (tab is! TerminalSession) return;
-    // Its editor tabs die with the session (the checkouts they write to are
-    // deleted): a declined unsaved-buffer confirm aborts the whole close.
-    final session = tab;
-    for (final editor in state.editorTabsOwnedBy(session)) {
-      if (!await _editorMayClose(context, editor)) return;
-    }
-    final localCopyCount =
-        (session.files?.localCopies.length ?? 0) +
-        session.retainedLocalCopies.length;
-    if (localCopyCount > 0) {
-      // The guard lives here rather than above: a session with no local
-      // copies needs no dialog and no context, so it still closes.
-      if (!context.mounted) return;
-      final close = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Close session and local edits?'),
-          content: Text(
-            '$localCopyCount downloaded ${localCopyCount == 1 ? 'file has' : 'files have'} '
-            'a managed local copy. Closing this tab deletes '
-            '${localCopyCount == 1 ? 'it' : 'them'}, including changes that '
-            'have not been uploaded.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Close and Delete'),
-            ),
-          ],
-        ),
-      );
-      if (close != true) return;
-    }
-    await state.closeTab(tabId);
-  }
-
-  /// Whether an editor tab's buffer may be dropped. A clean buffer needs no
-  /// ask; a dirty one is asked through the editor's own confirm dialog when
-  /// its state is mounted, or — when the widget is somehow unreachable —
-  /// through a plain dialog on the pane's context, so the close click never
-  /// silently does nothing while unsaved text is at stake.
-  Future<bool> _editorMayClose(BuildContext context, EditorTab tab) async {
-    if (!tab.dirty.value) return true;
-    final confirmed = await tab.editorKey.currentState?.confirmDiscard();
-    if (confirmed != null) return confirmed;
-    if (!context.mounted) return false;
-    final discard = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Discard unsaved changes?'),
-        content: Text(
-          '${sanitizeRemoteLabel(tab.remotePath)} has unsaved changes.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep editing'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard'),
-          ),
-        ],
-      ),
-    );
-    return discard ?? false;
   }
 
   PreferredSizeWidget _appBar(
@@ -304,8 +224,8 @@ class TerminalPane extends StatelessWidget {
   /// One entry's content in the stack. Keyed by tab id (not server id): a
   /// reconnect swaps in a new session with a new id, so a fresh _SessionView
   /// mounts and binds its controller in initState — no didUpdateWidget
-  /// rebind needed. The editor equivalent holds its key on [EditorTab] so the
-  /// strip's close button can ask about unsaved changes.
+  /// rebind needed. The editor equivalent holds its key on [EditorTab] so
+  /// closing the tab can ask about unsaved changes.
   Widget _tabChild(PaneTab tab, AppState state, {required bool isActive}) =>
       switch (tab) {
         TerminalSession() => _SessionView(
@@ -1034,6 +954,15 @@ class _SessionViewState extends State<_SessionView> {
   late bool _wasConnected;
   // Our own controller so the copy/paste menu can read (and set) the selection.
   final TerminalController _terminalController = TerminalController();
+
+  // Find in scrollback: the view's key and scroll position let a search
+  // reveal a hit; the session exists only while the find bar is open.
+  final GlobalKey<TerminalViewState> _viewKey = GlobalKey();
+  final ScrollController _scroll = ScrollController();
+  final GlobalKey<TerminalFindBarState> _findBarKey = GlobalKey();
+  TerminalSearchSession? _search;
+  String _lastFindQuery = '';
+  bool _lastFindCaseSensitive = false;
   @override
   void initState() {
     super.initState();
@@ -1084,8 +1013,10 @@ class _SessionViewState extends State<_SessionView> {
     if (identical(widget.tab.controller, _terminalController)) {
       widget.tab.controller = null;
     }
+    _search?.dispose();
     _focus.dispose();
     _terminalController.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -1119,13 +1050,35 @@ class _SessionViewState extends State<_SessionView> {
     // anchoring, edge autoscroll) live in the vendored xterm fork — one owner
     // in the gesture arena. The old app-side Listener machine raced xterm's
     // recognizers: its selections were force-cleared ~100ms later.
+    _search?.theme = appearance.theme;
+    final search = _search;
     return ColoredBox(
       // The padding around the grid is outside xterm's own painted area, so
       // without this the app surface would frame the terminal in a mismatched
       // color at every edge.
       color: appearance.theme.background,
-      child: TerminalView(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _terminalView(tab, appearance),
+          if (search != null)
+            TerminalFindBarOverlay(
+              child: TerminalFindBar(
+                key: _findBarKey,
+                session: search,
+                onClose: _closeFind,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _terminalView(TerminalSession tab, TerminalAppearance appearance) =>
+      TerminalView(
         tab.engine.terminal,
+        key: _viewKey,
+        scrollController: _scroll,
         controller: _terminalController,
         focusNode: _focus,
         autofocus: widget.isActive,
@@ -1142,8 +1095,52 @@ class _SessionViewState extends State<_SessionView> {
         onSecondaryTapDown: (details, _) =>
             _showContextMenu(context, details.globalPosition),
         padding: const EdgeInsets.all(6),
-      ),
-    );
+      );
+
+  /// Opens the find bar, or focuses it when it is already open. A one-line
+  /// selection becomes the query; otherwise the last query comes back.
+  void _openFind() {
+    if (_search != null) {
+      _findBarKey.currentState?.focusQuery();
+      return;
+    }
+    final terminal = widget.tab.engine.terminal;
+    final selection = _terminalController.selection;
+    final selected = selection == null
+        ? ''
+        : terminal.buffer.getText(selection).trim();
+    final query =
+        selected.isNotEmpty &&
+            !selected.contains('\n') &&
+            selected.length <= 200
+        ? selected
+        : _lastFindQuery;
+    setState(() {
+      _search =
+          TerminalSearchSession(
+              terminal: terminal,
+              controller: _terminalController,
+              viewport: TerminalViewSearchViewport(_viewKey, _scroll),
+              theme: TerminalAppearance.resolve(
+                widget.state.services.settings,
+                Theme.of(context).brightness,
+              ).theme,
+            )
+            ..caseSensitive = _lastFindCaseSensitive
+            ..search(query);
+    });
+  }
+
+  /// Closes the find bar, clearing its highlights, and hands the keyboard
+  /// back to the shell.
+  void _closeFind() {
+    final search = _search;
+    if (search == null) return;
+    _lastFindQuery = search.query;
+    _lastFindCaseSensitive = search.caseSensitive;
+    setState(() => _search = null);
+    search.dispose();
+    _focus.requestFocus();
   }
 
   Future<void> _openLink(Uri uri) async {
@@ -1152,9 +1149,10 @@ class _SessionViewState extends State<_SessionView> {
   }
 
   /// Intercept a few shortcuts before the terminal consumes the keystroke: the
-  /// command generator, and copy/paste. Copy/paste use ⌘C/⌘V on macOS and
-  /// Ctrl+Shift+C/V elsewhere (leaving Ctrl+C as the shell interrupt). Plain
-  /// Ctrl+K is left alone because that's readline's "kill to end of line".
+  /// tab shortcuts, the command generator, and copy/paste. Copy/paste use
+  /// ⌘C/⌘V on macOS and Ctrl+Shift+C/V elsewhere (leaving Ctrl+C as the shell
+  /// interrupt). Plain Ctrl+K is left alone because that's readline's "kill
+  /// to end of line".
   ///
   /// Note: on macOS the native Edit menu claims ⌘C/⌘V/⌘A at the OS level, so
   /// those never reach here — the right-click menu is the reliable path there.
@@ -1168,6 +1166,10 @@ class _SessionViewState extends State<_SessionView> {
         ).accepts(event, keys)) {
       return KeyEventResult.skipRemainingHandlers;
     }
+    // Held repeats included: xterm would send a tab shortcut on to the
+    // shell as the keys underneath.
+    final tabShortcut = handleTabShortcut(context, widget.state, event);
+    if (tabShortcut != KeyEventResult.ignored) return tabShortcut;
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     if (event.logicalKey == LogicalKeyboardKey.keyK &&
@@ -1200,6 +1202,15 @@ class _SessionViewState extends State<_SessionView> {
         keys.isAltPressed &&
         event.logicalKey == LogicalKeyboardKey.keyF &&
         ServerListPane.revealFilter()) {
+      return KeyEventResult.handled;
+    }
+    // Find in scrollback: ⌘F / Ctrl+Shift+F. Plain Ctrl+F stays readline's
+    // forward-char, and a held Alt is the filter chord above or, on
+    // Windows, AltGr typing a character.
+    if (clip &&
+        !keys.isAltPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyF) {
+      _openFind();
       return KeyEventResult.handled;
     }
     // Open another tab for this server: ⌘T / Ctrl+Shift+T.
@@ -1238,7 +1249,8 @@ class _SessionViewState extends State<_SessionView> {
     return KeyEventResult.ignored;
   }
 
-  /// Right-click menu: Copy (when there's a selection), Paste, Select all.
+  /// Right-click menu: Copy (when there's a selection), Paste, Select all,
+  /// Find, and the keyboard shortcut list.
   Future<void> _showContextMenu(
     BuildContext context,
     Offset globalPosition,
@@ -1262,6 +1274,12 @@ class _SessionViewState extends State<_SessionView> {
         const PopupMenuItem(value: 'paste', child: Text('Paste')),
         const PopupMenuDivider(),
         const PopupMenuItem(value: 'selectAll', child: Text('Select all')),
+        const PopupMenuItem(value: 'find', child: Text('Find…')),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'shortcuts',
+          child: Text('Keyboard shortcuts'),
+        ),
       ],
     );
     switch (choice) {
@@ -1271,6 +1289,11 @@ class _SessionViewState extends State<_SessionView> {
         await terminalPaste(widget.tab);
       case 'selectAll':
         terminalSelectAll(widget.tab);
+      case 'find':
+        // The tab may have closed while the menu was open.
+        if (mounted) _openFind();
+      case 'shortcuts':
+        if (context.mounted) await showKeyboardShortcuts(context);
     }
   }
 }

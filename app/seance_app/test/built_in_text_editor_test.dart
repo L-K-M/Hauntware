@@ -979,7 +979,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ln 1, Col 1 · 3 lines · 8 bytes'), findsOneWidget);
-    expect(find.text('LF · UTF-8'), findsOneWidget);
+    expect(find.text('LF · UTF-8 · Spaces: 4 · Plain Text'), findsOneWidget);
 
     final controller = tester
         .widget<TextField>(find.byType(TextField))
@@ -992,6 +992,34 @@ void main() {
     await tester.pump();
     expect(find.text('Ln 3, Col 6 · 3 lines · 13 bytes'), findsOneWidget);
     expect(find.textContaining('Unsaved edits'), findsOneWidget);
+
+    controller.selection = const TextSelection(baseOffset: 2, extentOffset: 9);
+    await tester.pump();
+    expect(find.textContaining('7 selected on 3 lines'), findsOneWidget);
+  });
+
+  testWidgets('the status bar names the language and opens Go to Line', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: BuiltInTextEditorScreen(
+          file: file,
+          remotePath: '/srv/app/deploy.py',
+          initialText: 'def main():\n  return 1\n',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Spaces: 2 · Python'), findsOneWidget);
+
+    await tester.tap(find.text('Ln 1, Col 1 · 3 lines · 23 bytes'));
+    await tester.pumpAndSettle();
+    final editor = tester.widget<PlanchetteEditor>(
+      find.byType(PlanchetteEditor),
+    );
+    expect(editor.controller.goToLineOpen, isTrue);
   });
 
   testWidgets('the status bar counts UTF-8 bytes, not characters', (
@@ -1051,7 +1079,10 @@ void main() {
         tester,
         () => find.textContaining('CRLF').evaluate().isNotEmpty,
       );
-      expect(find.text('CRLF · UTF-8 BOM'), findsOneWidget);
+      expect(
+        find.text('CRLF · UTF-8 BOM · Spaces: 4 · Plain Text'),
+        findsOneWidget,
+      );
     });
   });
 
