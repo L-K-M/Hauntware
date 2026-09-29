@@ -135,6 +135,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   before the next frame after a dialog being refused.
 
 ### Fixed
+- On Linux, Open and Save As work on desktops that run no XDG desktop
+  portal, such as a bare window manager: the dialogs now come from
+  Flutter's `file_selector`, which shows GTK's own chooser there, instead
+  of `file_picker`, which needed the portal.
 - A file whose name nearly fills the 255-byte limit can be saved.
 - Saving text that contains a NUL character is refused instead of writing a
   file the editor would then refuse to open.

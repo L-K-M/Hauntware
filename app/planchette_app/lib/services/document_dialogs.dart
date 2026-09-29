@@ -1,4 +1,4 @@
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as paths;
 
@@ -8,23 +8,26 @@ final class AppDocumentDialogs implements DocumentDialogs {
   AppDocumentDialogs(this.navigatorKey);
   final GlobalKey<NavigatorState> navigatorKey;
 
+  // file_selector shows each platform's own dialog. On Linux that is GTK's
+  // chooser, which goes through the desktop portal only where GTK would, so
+  // Open and Save As work on desktops that run no portal service.
   @override
   Future<List<String>> pickOpenFiles() async {
-    final result = await FilePicker.pickFiles(
-      dialogTitle: 'Open text documents',
-      allowMultiple: true,
-    );
-    return result?.paths.whereType<String>().toList() ?? [];
+    final files = await openFiles(confirmButtonText: 'Open');
+    return [for (final file in files) file.path];
   }
 
   @override
-  Future<String?> pickSavePath(String suggestedName) => FilePicker.saveFile(
-    dialogTitle: 'Save document',
-    fileName: paths.basename(suggestedName),
-    initialDirectory: paths.isAbsolute(suggestedName)
-        ? paths.dirname(suggestedName)
-        : null,
-  );
+  Future<String?> pickSavePath(String suggestedName) async {
+    final location = await getSaveLocation(
+      suggestedName: paths.basename(suggestedName),
+      initialDirectory: paths.isAbsolute(suggestedName)
+          ? paths.dirname(suggestedName)
+          : null,
+      confirmButtonText: 'Save',
+    );
+    return location?.path;
+  }
 
   @override
   Future<bool> confirmReplace(String path) async {

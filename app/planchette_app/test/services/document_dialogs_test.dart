@@ -1,9 +1,81 @@
+import 'package:file_selector_platform_interface/file_selector_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as paths;
 import 'package:planchette_app/services/document_dialogs.dart';
 import 'package:planchette_app/services/document_workspace.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+
+/// Records what the dialogs ask the platform for, and answers as a user
+/// would.
+final class _FakeFileSelector extends FileSelectorPlatform
+    with MockPlatformInterfaceMixin {
+  List<String> opened = [];
+  String? saveAt;
+  String? openButton;
+  SaveDialogOptions? saveOptions;
+
+  @override
+  Future<List<XFile>> openFiles({
+    List<XTypeGroup>? acceptedTypeGroups,
+    String? initialDirectory,
+    String? confirmButtonText,
+  }) async {
+    openButton = confirmButtonText;
+    return [for (final path in opened) XFile(path)];
+  }
+
+  @override
+  Future<FileSaveLocation?> getSaveLocation({
+    List<XTypeGroup>? acceptedTypeGroups,
+    SaveDialogOptions options = const SaveDialogOptions(),
+  }) async {
+    saveOptions = options;
+    final path = saveAt;
+    return path == null ? null : FileSaveLocation(path);
+  }
+}
 
 void main() {
+  group('file dialogs', () {
+    late _FakeFileSelector platform;
+    final dialogs = AppDocumentDialogs(GlobalKey<NavigatorState>());
+
+    setUp(() {
+      final original = FileSelectorPlatform.instance;
+      platform = _FakeFileSelector();
+      FileSelectorPlatform.instance = platform;
+      addTearDown(() => FileSelectorPlatform.instance = original);
+    });
+
+    test('Open returns every chosen path, and nothing for Cancel', () async {
+      final notes = paths.absolute('notes.txt');
+      final todo = paths.absolute('todo.md');
+      platform.opened = [notes, todo];
+      expect(await dialogs.pickOpenFiles(), [notes, todo]);
+      expect(platform.openButton, 'Open');
+
+      platform.opened = [];
+      expect(await dialogs.pickOpenFiles(), isEmpty);
+    });
+
+    test('Save As starts beside the file, named after it', () async {
+      final current = paths.absolute('docs', 'notes.txt');
+      final chosen = paths.absolute('docs', 'renamed.txt');
+      platform.saveAt = chosen;
+      expect(await dialogs.pickSavePath(current), chosen);
+      expect(platform.saveOptions?.suggestedName, 'notes.txt');
+      expect(platform.saveOptions?.initialDirectory, paths.absolute('docs'));
+      expect(platform.saveOptions?.confirmButtonText, 'Save');
+    });
+
+    test('an untitled document suggests its name only', () async {
+      expect(await dialogs.pickSavePath('Untitled 2'), isNull);
+      expect(platform.saveOptions?.suggestedName, 'Untitled 2');
+      expect(platform.saveOptions?.initialDirectory, isNull);
+    });
+  });
+
   for (final (button, choice) in [
     ('Cancel', ReadOnlyChoice.cancel),
     ('Save Anyway', ReadOnlyChoice.saveAnyway),
