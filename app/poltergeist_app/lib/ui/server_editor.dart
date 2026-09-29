@@ -1101,27 +1101,6 @@ class _ServerEditorState extends State<_ServerEditor> {
       secretRef: widget.existing?.secretRef,
       now: DateTime.now().millisecondsSinceEpoch,
     );
-    // Refused like a real connect (jump_host_guard.dart): the pinned opener
-    // would authenticate straight to the host, around the bastion the route
-    // names, with whatever credential the form holds. The pinned
-    // `runConnectionTest` tests anyway and only notes the skipped jump host;
-    // a trial is still a dial.
-    if (config.jumpHostId != null) {
-      final summary = AppLocalizations.of(
-        context,
-      ).connectionJumpHostUnsupported;
-      setState(() {
-        _testing = false;
-        // Nothing was dialed, so the transcript is the summary alone: it
-        // ends with the summary, as every failed trial's does.
-        _testResult = ConnectionTestResult(
-          ok: false,
-          summary: summary,
-          log: summary,
-        );
-      });
-      return;
-    }
     final ConnectionTestResult result;
     try {
       result = await widget.delegate.testConnection(

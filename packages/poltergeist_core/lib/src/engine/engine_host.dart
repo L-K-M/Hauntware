@@ -19,6 +19,9 @@ import 'local_directory_watcher.dart';
 import 'local_file_opener.dart';
 import 'protocol.dart';
 
+/// Matches seance_core's bounded ProxyJump route contract at the pinned rev.
+const int _maximumCatalogJumpHosts = 16;
+
 /// The drain's own abandon-signal: thrown by the timeout wrapper, never
 /// by a retirement — so `settled` classification cannot conflate a
 /// retirement that rejects with its own TimeoutException with the drain
@@ -513,9 +516,6 @@ class EngineHost {
     final current = _catalogServers[supplied.id];
     if (current != null) {
       if (_sameConnectionConfig(current, supplied)) return current;
-      // Preserve the authoritative typed refusal instead of reducing a
-      // known jump route to a transient catalog-mismatch failure.
-      if (current.jumpHostId != null) return current;
 
       throw RemoteFileException(
         kind: RemoteFileErrorKind.disconnected,
@@ -538,6 +538,7 @@ class EngineHost {
   /// bookmarks, restored transfers, and sync endpoints. Replace every known
   /// alias and retire aliases whose record disappeared from the snapshot.
   void _replaceServerCatalog(List<ServerConfig> configs) {
+    final previousCatalog = Map<String, ServerConfig>.of(_catalogServers);
     final replacements = {for (final config in configs) config.id: config};
     _knownCatalogIds.addAll(replacements.keys);
     _catalogServers
@@ -546,20 +547,91 @@ class EngineHost {
 
     final aliases = _servers.entries.toList(growable: false);
     for (final alias in aliases) {
+      final previousRoute = _catalogRoute(alias.value, previousCatalog);
       final replacement = replacements[alias.value.id];
       if (replacement != null) {
+        final replacementRoute = _catalogRoute(replacement, replacements);
+        if (!_sameCatalogRoute(previousRoute, replacementRoute)) {
+          _servers[alias.key] = replacement;
+          _manager.retireServerConfig(alias.key);
+          continue;
+        }
+
         _adoptServerConfig(alias.key, replacement);
         continue;
       }
-      if (!_knownCatalogIds.contains(alias.value.id)) continue;
+      if (!_knownCatalogIds.contains(alias.value.id)) {
+        final currentRoute = _catalogRoute(alias.value, replacements);
+        if (!_sameCatalogRoute(previousRoute, currentRoute)) {
+          _manager.retireServerConfig(alias.key);
+        }
+        continue;
+      }
 
       _servers.remove(alias.key);
       _manager.retireServerConfig(alias.key);
     }
   }
 
+  _CatalogRoute _catalogRoute(
+    ServerConfig target,
+    Map<String, ServerConfig> catalog,
+  ) {
+    final configs = <ServerConfig>[target];
+    final visited = <String>{target.id};
+    var current = target;
+
+    while (current.jumpHostId != null) {
+      final jumpHostId = current.jumpHostId!;
+      if (!visited.add(jumpHostId)) {
+        return _CatalogRoute(
+          configs,
+          failure: _CatalogRouteFailure.cycle,
+          failureId: jumpHostId,
+        );
+      }
+      if (configs.length > _maximumCatalogJumpHosts) {
+        return _CatalogRoute(
+          configs,
+          failure: _CatalogRouteFailure.tooLong,
+          failureId: jumpHostId,
+        );
+      }
+
+      final jumpHost = catalog[jumpHostId];
+      if (jumpHost == null) {
+        return _CatalogRoute(
+          configs,
+          failure: _CatalogRouteFailure.missing,
+          failureId: jumpHostId,
+        );
+      }
+
+      configs.add(jumpHost);
+      current = jumpHost;
+    }
+
+    return _CatalogRoute(configs);
+  }
+
+  bool _sameCatalogRoute(_CatalogRoute first, _CatalogRoute second) {
+    if (first.failure != second.failure ||
+        first.failureId != second.failureId ||
+        first.configs.length != second.configs.length) {
+      return false;
+    }
+
+    for (var index = 0; index < first.configs.length; index++) {
+      if (!_sameConnectionConfig(first.configs[index], second.configs[index])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   Future<ServerConfig> _resolveKnownServer(String serverId) async {
-    final config = _servers[serverId];
+    final config = _servers[serverId] ?? _catalogServers[serverId];
     if (config == null) {
       throw RemoteFileException(
         kind: RemoteFileErrorKind.other,
@@ -567,15 +639,6 @@ class EngineHost {
         message:
             'No connection request has supplied a config for '
             '"$serverId" yet.',
-      );
-    }
-    if (config.jumpHostId != null) {
-      throw const RemoteFileException(
-        kind: RemoteFileErrorKind.unsupported,
-        operation: 'connect through jump host',
-        message:
-            'This server connects through a jump host, which Poltergeist '
-            'does not support yet.',
       );
     }
     return config;
@@ -1408,6 +1471,21 @@ final class _PromptBroker {
     final prompt = _open[promptId];
     if (prompt != null && prompt.completer.isCompleted) _open.remove(promptId);
   }
+}
+
+enum _CatalogRouteFailure { missing, cycle, tooLong }
+
+/// Connection-relevant catalog state for one target and all of its hops.
+class _CatalogRoute {
+  final List<ServerConfig> configs;
+  final _CatalogRouteFailure? failure;
+  final String? failureId;
+
+  _CatalogRoute(
+    List<ServerConfig> configs, {
+    this.failure,
+    this.failureId,
+  }) : configs = List.unmodifiable(configs);
 }
 
 /// [environment] with [fallbackHome] as `HOME` when it names no home of

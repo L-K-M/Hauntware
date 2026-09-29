@@ -49,6 +49,37 @@ Bookmark _bookmark(
   updatedAt: DateTime.utc(2026, 9, 14),
 );
 
+Bookmark _catalogBookmark() => Bookmark(
+  id: 'db',
+  kind: BookmarkKind.remotePath,
+  label: 'Database',
+  server: const BookmarkServerRef(serverConfigId: 'catalog-db'),
+  remotePath: '/srv/home',
+  sortKey: 'db',
+  createdAt: DateTime.utc(2026, 9, 29),
+  updatedAt: DateTime.utc(2026, 9, 29),
+);
+
+const _catalogRoute = ServerConfig(
+  id: 'catalog-db',
+  label: 'Database',
+  host: 'db.internal',
+  username: 'deploy',
+  jumpHostId: 'bastion',
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+const _updatedCatalogRoute = ServerConfig(
+  id: 'catalog-db',
+  label: 'Database',
+  host: 'db-new.internal',
+  username: 'deploy',
+  jumpHostId: 'new-bastion',
+  createdAt: 0,
+  updatedAt: 1,
+);
+
 /// Engine-faithful local lanes: like engine_host, the minted channel's
 /// homePath is the canonicalized OPENING root — a tab opened at a
 /// non-home path reports that path as its home. Only '~' opens at the
@@ -76,6 +107,7 @@ void main() {
     Future<bool> Function(PaneTab, List<TabCloseTrigger>)? confirmClose,
     bool Function(String serverId, PaneController excluding)?
         serverStillShared,
+    PaneServerConfigLookup? serverConfigLookup,
     void Function(Object error, StackTrace stackTrace)? onError,
   }) {
     final controller = PaneTabsController(
@@ -83,6 +115,7 @@ void main() {
       lanes: lanes,
       newTabTarget: newTabTarget,
       doubleClickAction: doubleClickAction,
+      serverConfigLookup: serverConfigLookup,
       confirmClose: confirmClose,
       serverStillShared: serverStillShared,
       onError: onError,
@@ -252,6 +285,59 @@ void main() {
       // duplicated deep path.
       expect(second.controller.location?.path, '/srv/home');
       expect(second.controller.remoteBookmark?.id, 'srv-1');
+    });
+
+    test('duplicate re-resolves a catalog-only route', () async {
+      var catalogRoute = _catalogRoute;
+      final controller = tabs(
+        serverConfigLookup: (id) =>
+            id == 'catalog-db' ? catalogRoute : null,
+      );
+      lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
+        ..listings['/srv/home'] = [_entry('source.txt', parent: '/srv/home')];
+      final first = controller.newTab(target: NewTabTarget.launcher);
+      await first.controller.connectRemote(
+        _catalogBookmark(),
+        resolvedConfig: _catalogRoute,
+      );
+      await settle();
+
+      catalogRoute = _updatedCatalogRoute;
+      lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
+        ..listings['/srv/home'] = [_entry('copy.txt', parent: '/srv/home')];
+      final duplicate = controller.newTab(target: NewTabTarget.duplicate);
+      await settle();
+
+      expect(duplicate.controller.phase, PanePhase.browsing);
+      expect(duplicate.controller.error, isNull);
+      expect(lanes.lastRemoteConfig, _updatedCatalogRoute);
+    });
+
+    test('home re-resolves a catalog-only route', () async {
+      var catalogRoute = _catalogRoute;
+      final controller = tabs(
+        newTabTarget: NewTabTarget.home,
+        serverConfigLookup: (id) =>
+            id == 'catalog-db' ? catalogRoute : null,
+      );
+      lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
+        ..listings['/srv/home'] = [_entry('source.txt', parent: '/srv/home')];
+      final first = controller.newTab(target: NewTabTarget.launcher);
+      await first.controller.connectRemote(
+        _catalogBookmark(),
+        resolvedConfig: _catalogRoute,
+      );
+      await settle();
+
+      catalogRoute = _updatedCatalogRoute;
+      lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
+        ..listings['/srv/home'] = [_entry('home.txt', parent: '/srv/home')];
+      final home = controller.newTab();
+      await settle();
+
+      expect(home.controller.phase, PanePhase.browsing);
+      expect(home.controller.error, isNull);
+      expect(lanes.lastRemoteConfig, _updatedCatalogRoute);
     });
 
     test('launcher leaves the tab unbound — no channel opens', () async {
@@ -697,6 +783,36 @@ void main() {
 
       expect(reopened!.controller.remoteBookmark?.id, 'srv-1');
       expect(reopened.controller.location?.path, '/srv/home/deep');
+    });
+
+    test('reopen re-resolves a catalog-only route', () async {
+      var catalogRoute = _catalogRoute;
+      final controller = tabs(
+        serverConfigLookup: (id) =>
+            id == 'catalog-db' ? catalogRoute : null,
+      );
+      lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
+        ..listings['/srv/home'] = [_entry('source.txt', parent: '/srv/home')];
+      final tab = controller.newTab(target: NewTabTarget.launcher);
+      await tab.controller.connectRemote(
+        _catalogBookmark(),
+        resolvedConfig: _catalogRoute,
+      );
+      await settle();
+      await controller.requestCloseTab(tab);
+
+      catalogRoute = _updatedCatalogRoute;
+      lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
+        ..listings['/srv/home'] = [
+          _entry('reopened.txt', parent: '/srv/home'),
+        ];
+      final reopened = await controller.reopenClosedTab();
+      await settle();
+
+      expect(reopened, isNotNull);
+      expect(reopened!.controller.phase, PanePhase.browsing);
+      expect(reopened.controller.error, isNull);
+      expect(lanes.lastRemoteConfig, _updatedCatalogRoute);
     });
 
     test('the ring is capped at 10 — the oldest ghost drops first', () async {

@@ -114,9 +114,18 @@ final class ServerEditorBackend extends ServerEditorDelegate {
         hostKeys: _hostKeys,
         onHostKey: _promptForHostKey,
         onKeyboardInteractive: _promptKeyboardInteractive,
+        resolveJumpHost: _resolveJumpHost,
       ),
       log: log,
     );
+  }
+
+  /// Resolves saved hops from the same pulled snapshot the editor displays.
+  Future<ResolvedSshHost?> _resolveJumpHost(String serverId) async {
+    final config = _backups.catalog?.byId(serverId);
+    if (config == null) return null;
+
+    return ResolvedSshHost(config, await _resolveCredentials(config));
   }
 
   /// What a connection authenticates with, draft fields first — the port of

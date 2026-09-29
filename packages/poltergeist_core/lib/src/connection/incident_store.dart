@@ -24,9 +24,19 @@ final class IncidentRecord {
   final int port;
   final String username;
 
-  /// D10 seam: carried so a jump-hosted endpoint keys separately, never
-  /// executed here.
+  /// Immediate route edge. Routed and direct incidents never share a key.
   final String? jumpHostId;
+
+  /// Structural identity of the jump route that owned the blocked pool.
+  final String? routeContext;
+
+  /// Endpoint whose key changed. One record value keeps its host and port
+  /// inseparable; null means the pool target for direct and legacy records.
+  final ({String host, int port})? _hostKeyEndpoint;
+
+  String get hostKeyHost => _hostKeyEndpoint?.host ?? host;
+
+  int get hostKeyPort => _hostKeyEndpoint?.port ?? port;
 
   /// Fingerprint of the declined (changed) key.
   final String presentedFingerprintSha256;
@@ -41,9 +51,13 @@ final class IncidentRecord {
     required this.port,
     required this.username,
     this.jumpHostId,
+    this.routeContext,
+    ({String host, int port})? hostKeyEndpoint,
     required this.presentedFingerprintSha256,
     this.pinnedFingerprintSha256,
-  });
+  }) : // Keep the atomic value private while exposing a readable parameter.
+       // ignore: prefer_initializing_formals
+       _hostKeyEndpoint = hostKeyEndpoint;
 
   /// The endpoint identity in normalized pool-key form — [PoolKey.normalize],
   /// the single factory configs key through, so a record written from one
@@ -53,6 +67,7 @@ final class IncidentRecord {
     port: port,
     username: username,
     jumpHostId: jumpHostId,
+    routeContext: routeContext,
   );
 
   /// Strict decode: wrong-typed or out-of-range fields throw instead of
@@ -64,6 +79,9 @@ final class IncidentRecord {
     final port = json['port'];
     final username = json['username'];
     final jumpHostId = json['jumpHostId'];
+    final routeContext = json['routeContext'];
+    final hostKeyHost = json['hostKeyHost'];
+    final hostKeyPort = json['hostKeyPort'];
     final presented = json['presentedFingerprintSha256'];
     final pinned = json['pinnedFingerprintSha256'];
     if (serverId is! String ||
@@ -76,6 +94,13 @@ final class IncidentRecord {
         username is! String ||
         username.trim().isEmpty ||
         (jumpHostId != null && jumpHostId is! String) ||
+        (routeContext != null &&
+            (routeContext is! String || routeContext.isEmpty)) ||
+        ((hostKeyHost == null) != (hostKeyPort == null)) ||
+        (hostKeyHost != null &&
+            (hostKeyHost is! String || hostKeyHost.trim().isEmpty)) ||
+        (hostKeyPort != null &&
+            (hostKeyPort is! int || hostKeyPort < 1 || hostKeyPort > 65535)) ||
         presented is! String ||
         presented.isEmpty ||
         (pinned != null && (pinned is! String || pinned.isEmpty))) {
@@ -87,6 +112,10 @@ final class IncidentRecord {
       port: port,
       username: username,
       jumpHostId: jumpHostId as String?,
+      routeContext: routeContext as String?,
+      hostKeyEndpoint: hostKeyHost == null
+          ? null
+          : (host: hostKeyHost as String, port: hostKeyPort as int),
       presentedFingerprintSha256: presented,
       pinnedFingerprintSha256: pinned as String?,
     );
@@ -98,6 +127,9 @@ final class IncidentRecord {
     'port': port,
     'username': username,
     'jumpHostId': jumpHostId,
+    'routeContext': routeContext,
+    'hostKeyHost': hostKeyHost,
+    'hostKeyPort': hostKeyPort,
     'presentedFingerprintSha256': presentedFingerprintSha256,
     'pinnedFingerprintSha256': pinnedFingerprintSha256,
   };
@@ -110,6 +142,9 @@ final class IncidentRecord {
       other.port == port &&
       other.username == username &&
       other.jumpHostId == jumpHostId &&
+      other.routeContext == routeContext &&
+      other.hostKeyHost == hostKeyHost &&
+      other.hostKeyPort == hostKeyPort &&
       other.presentedFingerprintSha256 == presentedFingerprintSha256 &&
       other.pinnedFingerprintSha256 == pinnedFingerprintSha256;
 
@@ -120,13 +155,16 @@ final class IncidentRecord {
     port,
     username,
     jumpHostId,
+    routeContext,
+    hostKeyHost,
+    hostKeyPort,
     presentedFingerprintSha256,
     pinnedFingerprintSha256,
   );
 
   @override
   String toString() =>
-      'IncidentRecord($serverId, $host:$port, presented '
+      'IncidentRecord($serverId, $host:$port via $hostKeyHost:$hostKeyPort, presented '
       '$presentedFingerprintSha256, pinned $pinnedFingerprintSha256)';
 }
 

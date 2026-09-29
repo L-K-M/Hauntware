@@ -15,6 +15,14 @@ const _generatedDartSuffixes = {'.freezed.dart', '.g.dart', '.mocks.dart'};
 
 // Technical literals are reviewed per file so an allowlist cannot hide UI copy.
 const _allowedTechnicalLiterals = <String, Set<String>>{
+  // The trusted keyboard-interactive endpoint brackets IPv6 machine data
+  // before the localized endpoint template renders it.
+  'lib/ui/prompts/keyboard_interactive_dialog.dart': {
+    "':'",
+    "'['",
+    "']'",
+    r"'[$rawHost]'",
+  },
   // Flutter menu serialization and the AppKit checkmark channel protocol.
   'lib/services/checked_platform_menu.dart': {
     "'checked'",
@@ -117,7 +125,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'incidents.json'",
     "'identity_reads.jsonl'",
     "'review'",
-    "'review-connect serverId must equal bookmark.id'",
     r"'$supportDirectoryPath$separator$_pinStoreFileName'",
     r"'$supportDirectoryPath$separator$_incidentStoreFileName'",
     r"'$supportDirectoryPath$separator$_identityAuditLogFileName'",
@@ -321,10 +328,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'active window messenger'",
   },
   // 00 D39's window command ids (D21 plumbing), never rendered.
-  'lib/ui/shell/window_commands.dart': {
-    "'window.new'",
-    "'window.close'",
-  },
+  'lib/ui/shell/window_commands.dart': {"'window.new'", "'window.close'"},
   // The workspace document's on-disk schema (02 §3): the session-shape
   // tab fields it reuses plus the persisted lens keys — the same
   // posture as the sibling versioned stores, never rendered UI copy.
@@ -1469,9 +1473,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$paneTabId.column.${key.name}'",
   },
   // The context menu's row keys — registry plumbing, never copy.
-  'lib/ui/panes/pane_context_menu.dart': {
-    r"'pane.context.${command.id}'",
-  },
+  'lib/ui/panes/pane_context_menu.dart': {r"'pane.context.${command.id}'"},
   // The missing-mirror cause's empty-name fallback — a null-safety
   // placeholder, never rendered as copy.
   'lib/ui/panes/sync_browse_chip.dart': {"''"},
@@ -1773,6 +1775,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sidebar.menu.disconnect'",
     r"'\n'",
     r"'sidebar.menu.review.$id'",
+    r"'sidebar.catalog.menu.review.${server.id}'",
     "'sidebar.menu.localEdits'",
     r"'${identity.username}@${identity.host}:${identity.port}'",
     r"'${server.username}@${server.host}:${server.port}'",
@@ -2596,11 +2599,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // prefixes, and the settings.json document key — wire format, never
   // rendered UI copy.
   // Bookmark JSON keys and the home landing path ("/").
-  'lib/services/bookmark_landing_path.dart': {
-    "'kind'",
-    "'remotePath'",
-    "'/'",
-  },
+  'lib/services/bookmark_landing_path.dart': {"'kind'", "'remotePath'", "'/'"},
   'lib/services/recent_locations.dart': {
     "'quickOpen.recentLocations'",
     "'version'",

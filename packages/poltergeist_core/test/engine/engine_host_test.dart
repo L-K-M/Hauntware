@@ -468,6 +468,105 @@ void main() {
     );
   });
 
+  test('a catalog jump route resolves every hop before dialing', () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+    final target = _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion');
+    final bastion = _config(
+      id: 'bastion',
+    ).copyWith(host: 'bastion.example.com');
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [target, bastion],
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+
+    final opened = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: 'tab-1',
+        config: target,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+
+    expect(await opened, isA<BrowseChannelOpened>());
+    expect(h.opener.calls, hasLength(1));
+    expect(
+      h.opener.calls.single.jumpHosts.single.config.host,
+      'bastion.example.com',
+    );
+  });
+
+  test('a changed outer hop retires a pending catalog route', () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+    final target = _config(id: 'catalog-1').copyWith(jumpHostId: 'inner');
+    final inner = _config(
+      id: 'inner',
+    ).copyWith(host: 'inner.example.com', jumpHostId: 'outer');
+    final outer = _config(
+      id: 'outer',
+    ).copyWith(host: 'outer.example.com');
+    final catalog = [target, inner, outer];
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: catalog,
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+    final opened = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: 'tab-1',
+        config: target,
+      ),
+    );
+    await h.pumping();
+    final credential = h.takePrompt();
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [
+            target,
+            inner,
+            outer.copyWith(host: 'new-outer.example.com'),
+          ],
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+    await h.pumping();
+
+    final failure = await expectError(opened);
+    expect(failure.kind, RemoteFileErrorKind.disconnected);
+    expect(h.opener.calls, isEmpty);
+    expect(
+      h.events.whereType<PromptDismissedEvent>().single.promptId,
+      credential.promptId,
+    );
+  });
+
   for (final lease in [false, true]) {
     test('a changed catalog request refuses a stale snapshot '
         'for ${lease ? 'a lease' : 'an open'}', () async {
@@ -612,6 +711,7 @@ void main() {
           requestId: id,
           configs: [
             _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion'),
+            _config(id: 'bastion').copyWith(host: 'bastion.example.com'),
           ],
         ),
       );
@@ -624,7 +724,7 @@ void main() {
         reason: 'the retired direct route must not request credentials',
       );
       final failure = await expectError(attempt);
-      expect(failure.kind, RemoteFileErrorKind.unsupported);
+      expect(failure.kind, RemoteFileErrorKind.disconnected);
       expect(h.opener.calls, isEmpty);
     });
   }
@@ -646,7 +746,10 @@ void main() {
         await h.call(
           (id) => ReplaceServerCatalogRequest(
             requestId: id,
-            configs: [jumpRoute],
+            configs: [
+              jumpRoute,
+              _config(id: 'bastion').copyWith(host: 'bastion.example.com'),
+            ],
           ),
         ),
         isA<EngineAck>(),
@@ -671,7 +774,7 @@ void main() {
 
       expect(h.events.whereType<EnginePromptEvent>(), isEmpty);
       final failure = await expectError(attempt);
-      expect(failure.kind, RemoteFileErrorKind.unsupported);
+      expect(failure.kind, RemoteFileErrorKind.disconnected);
       expect(h.opener.calls, isEmpty);
     });
   }

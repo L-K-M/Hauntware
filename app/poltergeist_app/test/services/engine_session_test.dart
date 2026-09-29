@@ -51,6 +51,28 @@ Bookmark _blockedBookmark() {
   );
 }
 
+ServerConfig _catalogServer(String id, {String? jumpHostId}) => ServerConfig(
+  id: id,
+  label: id,
+  host: '$id.internal',
+  username: 'deploy',
+  authMethod: AuthMethod.agent,
+  jumpHostId: jumpHostId,
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+Bookmark _catalogBookmark(String id, String serverConfigId) => Bookmark(
+  id: id,
+  kind: BookmarkKind.remotePath,
+  label: id,
+  server: BookmarkServerRef(serverConfigId: serverConfigId),
+  remotePath: '/',
+  sortKey: id,
+  createdAt: _now,
+  updatedAt: _now,
+);
+
 /// The engine surface, socket-free: scripted prompts/trust events over
 /// broadcast lanes, recorded calls (the FakeSftpDemoEngine pattern, over
 /// the production [AppEngine] facet).
@@ -874,6 +896,72 @@ void main() {
       // not a session.
       expect(channel.closeCalls, 1);
       expect(engine.disconnectIds, ['b1']);
+    });
+
+    test(
+      'uses the current routed config for a catalog-backed favorite',
+      () async {
+        final target = _catalogServer('target', jumpHostId: 'bastion');
+        final bastion = _catalogServer('bastion');
+        final catalog = ValueNotifier<List<ServerConfig>>([target, bastion]);
+        addTearDown(catalog.dispose);
+        bookmarks.bookmarks = [_catalogBookmark('favorite', target.id)];
+        final (session, engine) = await startSession();
+        addTearDown(session!.shutdown);
+        engine!.channel = FakeAppBrowseChannel();
+        session.bindServerCatalog(changes: catalog, read: () => catalog.value);
+        await pumpEventQueue();
+
+        await session.reviewBlockedHostKey('favorite');
+
+        expect(engine.openCalls, hasLength(1));
+        final call = engine.openCalls.single;
+        expect(call.serverId, 'favorite');
+        expect(call.config, same(target));
+        expect(call.config.jumpHostId, bastion.id);
+        expect(engine.disconnectIds, ['favorite']);
+      },
+    );
+
+    test('reviews a catalog server without a bookmark', () async {
+      final target = _catalogServer('target', jumpHostId: 'bastion');
+      final bastion = _catalogServer('bastion');
+      final catalog = ValueNotifier<List<ServerConfig>>([target, bastion]);
+      addTearDown(catalog.dispose);
+      bookmarks.bookmarks = const [];
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+      engine!.channel = FakeAppBrowseChannel();
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
+      await pumpEventQueue();
+
+      await session.reviewBlockedHostKey(target.id);
+
+      expect(engine.openCalls, hasLength(1));
+      final call = engine.openCalls.single;
+      expect(call.serverId, target.id);
+      expect(call.config, same(target));
+      expect(call.config.jumpHostId, bastion.id);
+      expect(engine.disconnectIds, [target.id]);
+    });
+
+    test('a removed referenced config cannot be reviewed', () async {
+      final target = _catalogServer('target', jumpHostId: 'bastion');
+      final catalog = ValueNotifier<List<ServerConfig>>([target]);
+      addTearDown(catalog.dispose);
+      bookmarks.bookmarks = [_catalogBookmark('favorite', target.id)];
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+      engine!.channel = FakeAppBrowseChannel();
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
+      await pumpEventQueue();
+      catalog.value = const [];
+      await pumpEventQueue();
+
+      await session.reviewBlockedHostKey('favorite');
+
+      expect(engine.openCalls, isEmpty);
+      expect(engine.disconnectIds, isEmpty);
     });
 
     test('a declined review drops the reference without a fault', () async {

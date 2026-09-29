@@ -5,7 +5,6 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
 import 'engine_session.dart' show serverConfigForBookmark;
-import 'jump_host_guard.dart';
 
 /// The app's answer to "what does this serverId dial" for the bridged
 /// transfer lease (protocol v13): a transfer, a checkout, a preview, or a
@@ -20,7 +19,8 @@ import 'jump_host_guard.dart';
 /// 2. the stored bookmark: a `serverConfigId` reference resolves through
 ///    the pulled catalog (it carries fields an embedded identity cannot
 ///    express), falling back to the embedded identity beside it;
-/// 3. otherwise null — a Quick Connect `adhoc:` id lives only in its
+/// 3. a raw catalog-row id resolves directly through the pulled catalog;
+/// 4. otherwise null — a Quick Connect `adhoc:` id lives only in its
 ///    tab, and the engine then uses the config that tab's browse open
 ///    supplied (refusing typed when there was none).
 final class AppServerConfigSource implements ServerConfigSource {
@@ -60,18 +60,8 @@ final class AppServerConfigSource implements ServerConfigSource {
     return serverId;
   }
 
-  /// Every lease dials what this answers, so a route this build cannot
-  /// execute is refused here: a transfer, checkout, preview, or sync run
-  /// reaches a server no pane opened (a task restored after a relaunch),
-  /// and must not dial it directly either.
   @override
-  Future<ServerConfig?> configFor(String serverId) async {
-    final config = await _resolve(serverId);
-    if (config != null) {
-      refuseJumpHostRoute(config, operation: 'resolve server');
-    }
-    return config;
-  }
+  Future<ServerConfig?> configFor(String serverId) => _resolve(serverId);
 
   Future<ServerConfig?> _resolve(String serverId) async {
     final registered = _adHoc[serverId];
@@ -84,8 +74,10 @@ final class AppServerConfigSource implements ServerConfigSource {
     final bookmark = (await _bookmarks.load())
         .where((candidate) => candidate.id == serverId)
         .firstOrNull;
-    final ref = bookmark?.server;
-    if (bookmark == null || ref == null) return null;
+    if (bookmark == null) return _catalogLookup?.call(serverId);
+
+    final ref = bookmark.server;
+    if (ref == null) return null;
 
     final catalogId = ref.serverConfigId;
     if (catalogId != null) {

@@ -19,6 +19,7 @@ IncidentRecord _record({
   int port = 22,
   String username = 'test',
   String? jumpHostId,
+  ({String host, int port})? hostKeyEndpoint,
   String presented = 'SHA256:presented',
   String? pinned = 'SHA256:pinned',
 }) => IncidentRecord(
@@ -27,6 +28,7 @@ IncidentRecord _record({
   port: port,
   username: username,
   jumpHostId: jumpHostId,
+  hostKeyEndpoint: hostKeyEndpoint,
   presentedFingerprintSha256: presented,
   pinnedFingerprintSha256: pinned,
 );
@@ -34,7 +36,11 @@ IncidentRecord _record({
 void main() {
   group('IncidentRecord', () {
     test('round-trips through JSON verbatim', () {
-      final record = _record(jumpHostId: 'jump-1', pinned: null);
+      final record = _record(
+        jumpHostId: 'jump-1',
+        hostKeyEndpoint: (host: 'jump.example.com', port: 2200),
+        pinned: null,
+      );
       final decoded = IncidentRecord.fromJson(record.toJson());
 
       expect(decoded, record);
@@ -48,6 +54,19 @@ void main() {
           jumpHostId: 'jump-1',
         ),
       );
+      expect(record.hostKeyHost, 'jump.example.com');
+      expect(record.hostKeyPort, 2200);
+    });
+
+    test('legacy records use the pool endpoint as the host-key endpoint', () {
+      final json = _record().toJson()
+        ..remove('hostKeyHost')
+        ..remove('hostKeyPort');
+
+      final decoded = IncidentRecord.fromJson(json);
+
+      expect(decoded.hostKeyHost, decoded.host);
+      expect(decoded.hostKeyPort, decoded.port);
     });
 
     test('normalizes the endpoint identity like PoolKey.of', () {
@@ -87,6 +106,10 @@ void main() {
         valid()..['username'] = null,
         valid()..['username'] = '   ',
         valid()..['jumpHostId'] = 42,
+        valid()..remove('hostKeyPort'),
+        valid()..remove('hostKeyHost'),
+        valid()..['hostKeyHost'] = '',
+        valid()..['hostKeyPort'] = 65536,
         valid()..['presentedFingerprintSha256'] = 3,
         valid()..['presentedFingerprintSha256'] = '',
         valid()..['pinnedFingerprintSha256'] = 3,
@@ -99,6 +122,15 @@ void main() {
           reason: 'must reject $json',
         );
       }
+    });
+
+    test('keeps a programmatic host-key endpoint atomic', () {
+      final record = _record(
+        hostKeyEndpoint: (host: 'jump.example.com', port: 2200),
+      );
+
+      expect(record.hostKeyHost, 'jump.example.com');
+      expect(record.hostKeyPort, 2200);
     });
   });
 
@@ -357,9 +389,12 @@ void main() {
       await file.writeAsString('not json at all');
 
       expect(
-        await FileIncidentStore(file, onLoadError: (_) {
-          throw StateError('The observer is diagnostics, not control flow.');
-        }).load(),
+        await FileIncidentStore(
+          file,
+          onLoadError: (_) {
+            throw StateError('The observer is diagnostics, not control flow.');
+          },
+        ).load(),
         isEmpty,
       );
     });

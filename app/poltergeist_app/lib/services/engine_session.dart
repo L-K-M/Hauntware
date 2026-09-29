@@ -418,6 +418,7 @@ final class EngineSession {
 
   Listenable? _serverCatalogChanges;
   VoidCallback? _serverCatalogListener;
+  Map<String, ServerConfig> _serverCatalogById = const {};
 
   bool _reviewInFlight = false;
   Future<void>? _shutdownFuture;
@@ -443,16 +444,20 @@ final class EngineSession {
   /// Keeps the engine's cached routes aligned with the shared server catalog.
   ///
   /// Updates retire stale pool references without opening the replacement
-  /// route. This matters while jump hosts are refused: a live direct route
-  /// must not recover after sync adds a bastion.
+  /// route. A live route must not recover after sync changes its hops.
   void publishServerCatalog(List<ServerConfig> configs) {
     if (_shutdownFuture != null) return;
+
+    final snapshot = List<ServerConfig>.unmodifiable(configs);
+    _serverCatalogById = Map.unmodifiable({
+      for (final config in snapshot) config.id: config,
+    });
 
     // EngineClient sends before returning its Future. Catalog publication
     // therefore precedes later connection requests on the same FIFO port,
     // even while this acknowledgement is pending.
     _errors.observe(
-      _engine.replaceServerCatalog(List.unmodifiable(configs)),
+      _engine.replaceServerCatalog(snapshot),
     );
   }
 
@@ -576,21 +581,30 @@ final class EngineSession {
           break;
         }
       }
-      final identity = bookmark?.server?.identity;
-      if (bookmark == null || identity == null) return;
+      final ServerConfig reviewConfig;
+      if (bookmark == null) {
+        final catalogConfig = _serverCatalogById[serverId];
+        if (catalogConfig == null) return;
+        reviewConfig = catalogConfig;
+      } else {
+        final ref = bookmark.server;
+        if (ref == null) return;
+        final catalogId = ref.serverConfigId;
+        if (catalogId != null) {
+          final catalogConfig = _serverCatalogById[catalogId];
+          // Never reconstruct a catalog route from its embedded fallback.
+          if (catalogConfig == null) return;
+          reviewConfig = catalogConfig;
+        } else {
+          if (ref.identity == null) return;
+          reviewConfig = serverConfigForBookmark(bookmark);
+        }
+      }
 
       try {
-        final reviewConfig = serverConfigForBookmark(bookmark);
-        assert(
-          reviewConfig.id == serverId,
-          'review-connect serverId must equal bookmark.id',
-        );
-        // bookmark.id is also the panes' serverId: the finally below
-        // drops the whole server reference after the review — correct,
-        // because a reviewed endpoint blocks every pane on it until the
-        // verdict (D18), so no live pane binding survives to sever.
+        // serverId is the row and pane alias; config.id may be a catalog id.
         final channel = await _engine.openBrowseChannel(
-          serverId: reviewConfig.id,
+          serverId: serverId,
           paneTabId: kHostKeyReviewPaneTabId,
           config: reviewConfig,
         );

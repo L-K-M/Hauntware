@@ -246,10 +246,6 @@
   "@connectionRetry": {
     "description": "Reopens the connection after a failure."
   },
-  "connectionJumpHostUnsupported": "This server connects through a jump host, which Poltergeist does not support yet.",
-  "@connectionJumpHostUnsupported": {
-    "description": "Why a synced server whose route runs through a jump host (ProxyJump) is refused instead of dialed directly: shown on the pane's connection error, a failed transfer or sync row, and the server editor's connection test (D10)."
-  },
   "vaultSaveFailed": "Could not save the secret to the vault. The connection will continue.",
   "@vaultSaveFailed": {
     "description": "Transient notice when saving a prompted secret failed."
@@ -308,8 +304,8 @@
   "@sshImportColumnNotes": {
     "description": "Table header for the duplicate/limitation notes column."
   },
-  "sshImportAuthPassword": "Password",
-  "@sshImportAuthPassword": {
+  "sshImportAuthAgent": "ssh-agent",
+  "@sshImportAuthAgent": {
     "description": "Auth cell for a host without an IdentityFile."
   },
   "sshImportAuthKey": "Key: {path}",

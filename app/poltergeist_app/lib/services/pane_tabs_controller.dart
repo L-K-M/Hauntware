@@ -192,6 +192,7 @@ class PaneTabsController extends ChangeNotifier {
     this.builtInEditorOpen,
     this.externalEditorOpen,
     this.onLocationCommitted,
+    this.serverConfigLookup,
     this.confirmClose,
     this.serverStillShared,
     void Function(Object error, StackTrace stackTrace)? onError,
@@ -267,6 +268,9 @@ class PaneTabsController extends ChangeNotifier {
   /// record through the same seam.
   final void Function(PaneLocation location, {Bookmark? remoteBookmark})?
   onLocationCommitted;
+
+  /// Fresh shared-catalog lookup for every remote bind and rebind.
+  final PaneServerConfigLookup? serverConfigLookup;
 
   /// The close-confirmation presenter (the confirm lives inside the
   /// close operation — call sites never decide). Null makes a triggered
@@ -866,6 +870,7 @@ class PaneTabsController extends ChangeNotifier {
     // Keep the active pointer on its own tab through the insertion.
     if (_activeIndex >= insertion) _activeIndex++;
     tab.controller.doubleClickAction = _doubleClickAction;
+    tab.controller.serverConfigLookup = serverConfigLookup;
     tab.controller.addListener(_forwardTabChange);
     _tabs.insert(insertion, tab);
     activateTab(tab);
@@ -900,6 +905,7 @@ class PaneTabsController extends ChangeNotifier {
     controller.builtInEditorOpen = builtInEditorOpen;
     controller.externalEditorOpen = externalEditorOpen;
     controller.onLocationCommitted = onLocationCommitted;
+    controller.serverConfigLookup = serverConfigLookup;
     final tab = PaneTab(id: controller.paneTabId, controller: controller);
     // Strip surfaces (title, connection dot) follow the tab's own
     // browsing state — forward its changes as strip changes.

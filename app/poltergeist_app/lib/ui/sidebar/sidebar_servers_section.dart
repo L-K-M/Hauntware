@@ -716,6 +716,7 @@ class _CatalogServerRow extends StatelessWidget {
       status: status,
       probe: probe,
     );
+    final blocked = appearance.glyph == ServerIndicatorGlyph.blocked;
     final live = _isLive(status);
     final connection =
         _connectionOf(data, server.id) ??
@@ -783,6 +784,12 @@ class _CatalogServerRow extends StatelessWidget {
           ),
           const SidebarMenuDivider(),
           ?_disconnectVerb(data, connection, live),
+          if (blocked && view.onReviewBlocked != null)
+            SidebarMenuAction(
+              key: ValueKey('sidebar.catalog.menu.review.${server.id}'),
+              label: l10n.connectionsReviewHostKey,
+              onSelected: () => view.onReviewBlocked!(connection),
+            ),
           const SidebarMenuDivider(),
           SidebarMenuAction(
             key: const ValueKey('sidebar.catalog.menu.pin'),

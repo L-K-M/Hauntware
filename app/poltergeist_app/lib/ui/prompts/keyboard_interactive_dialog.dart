@@ -22,14 +22,18 @@ Future<List<String>> showKeyboardInteractiveDialog(
   return result ?? const <String>[];
 }
 
-String _trustedTarget(KeyboardInteractivePromptData data) {
+String _trustedTarget(
+  AppLocalizations l10n,
+  KeyboardInteractivePromptData data,
+) {
   final rawHost = data.host;
   final host =
       rawHost.contains(':') &&
           !(rawHost.startsWith('[') && rawHost.endsWith(']'))
       ? '[$rawHost]'
       : rawHost;
-  return '${data.username}@$host:${data.port}';
+
+  return l10n.credentialEndpoint(data.username, host, data.port);
 }
 
 class _KeyboardInteractiveDialog extends StatefulWidget {
@@ -92,7 +96,7 @@ class _KeyboardInteractiveDialogState
             style: Theme.of(context).textTheme.labelMedium,
           ),
           SelectableText(
-            _trustedTarget(widget.data),
+            _trustedTarget(l10n, widget.data),
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 12),

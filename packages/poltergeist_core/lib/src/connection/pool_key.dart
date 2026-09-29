@@ -12,11 +12,9 @@ import 'package:seance_core/seance_core.dart';
 /// one server behind one reference-counted pool, so the TOFU prompt fires
 /// once and transports are not doubled.
 ///
-/// The connection-security context half of §3.5's key is, today, exactly the
-/// `jumpHostId` seam: every v1 connection resolves host-key trust through
-/// the same shared TOFU store, so the "pinned known_hosts entry vs.
-/// TOFU-accepted key" distinction does not exist yet. A future strict-pinning
-/// mode extends this key — it does not get a second pool structure.
+/// Routed pools also carry a secret-free structural route context. Reusing an
+/// immediate jump-host id after editing a deeper hop must not inherit the old
+/// pool or one of its host-key incidents.
 class PoolKey {
   /// Hostname, normalized: trimmed, lowercased — DNS names are
   /// case-insensitive and `Example.com`/`example.com` are one endpoint.
@@ -32,18 +30,24 @@ class PoolKey {
   /// because one would silently bypass the other's routing.
   final String? jumpHostId;
 
+  /// Canonical structural identity of every resolved jump hop.
+  final String? routeContext;
+
   const PoolKey({
     required this.host,
     required this.port,
     required this.username,
     this.jumpHostId,
+    this.routeContext,
   });
 
-  factory PoolKey.of(ServerConfig config) => PoolKey.normalize(
+  factory PoolKey.of(ServerConfig config, {String? routeContext}) =>
+      PoolKey.normalize(
     host: config.host,
     port: config.port,
     username: config.username,
     jumpHostId: config.jumpHostId,
+    routeContext: routeContext,
   );
 
   /// The single normalization both config-derived keys and persisted
@@ -54,11 +58,13 @@ class PoolKey {
     required int port,
     required String username,
     String? jumpHostId,
+    String? routeContext,
   }) => PoolKey(
     host: host.trim().toLowerCase(),
     port: port,
     username: username.trim(),
     jumpHostId: jumpHostId,
+    routeContext: routeContext,
   );
 
   @override
@@ -67,8 +73,15 @@ class PoolKey {
       other.host == host &&
       other.port == port &&
       other.username == username &&
-      other.jumpHostId == jumpHostId;
+      other.jumpHostId == jumpHostId &&
+      other.routeContext == routeContext;
 
   @override
-  int get hashCode => Object.hash(host, port, username, jumpHostId);
+  int get hashCode => Object.hash(
+    host,
+    port,
+    username,
+    jumpHostId,
+    routeContext,
+  );
 }

@@ -42,6 +42,7 @@ final class _FakeDelegate extends ServerEditorDelegate {
   Secret? storedSecret;
   ConnectionTestResult? testResult;
   int testCalls = 0;
+  ServerConfig? testedConfig;
   TransferConcurrency defaultLimit = const TransferConcurrency.automatic();
   final Map<String, TransferConcurrency> limits = {};
   final List<(String, TransferConcurrency?)> limitWrites = [];
@@ -98,6 +99,7 @@ final class _FakeDelegate extends ServerEditorDelegate {
     SshConnectionLog? log,
   }) async {
     testCalls++;
+    testedConfig = config;
     log?.add('trial handshake');
     return testResult ??
         const ConnectionTestResult(
@@ -523,11 +525,9 @@ void main() {
       expect(find.textContaining('Connected and authenticated'), findsWidgets);
     });
 
-    testWidgets('a jump-routed server is refused without a trial dial', (
+    testWidgets('a jump-routed server tests through its saved route', (
       tester,
     ) async {
-      // The pinned opener would authenticate straight to the host, around
-      // the bastion, typed credentials included (X-05).
       final existing = _server('db', jumpHostId: 'bastion');
       delegate.serverList = [existing];
       await openEditor(tester, existing: existing);
@@ -535,15 +535,9 @@ void main() {
       await tester.tap(find.text('Test connection'));
       await tester.pumpAndSettle();
 
-      expect(delegate.testCalls, 0);
-      expect(
-        find.text(
-          lookupAppLocalizations(
-            const Locale('en'),
-          ).connectionJumpHostUnsupported,
-        ),
-        findsOneWidget,
-      );
+      expect(delegate.testCalls, 1);
+      expect(delegate.testedConfig?.jumpHostId, 'bastion');
+      expect(find.textContaining('Connected.'), findsWidgets);
     });
   });
 

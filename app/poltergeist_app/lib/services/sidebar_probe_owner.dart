@@ -94,9 +94,8 @@ final class SidebarProbeOwner extends ChangeNotifier {
   /// probe under the config's own id — the same key the catalog rows
   /// read their status by. A catalog row's facts persist under that id;
   /// a record the account drops simply stops being probed. A server
-  /// routed through a jump host is never probed: the probe would dial it
-  /// directly, around the bastion, and report that path's reachability as
-  /// the server's (jump_host_guard.dart).
+  /// routed through a jump host is never probed: this raw endpoint probe
+  /// cannot traverse SSH forwarding and would report the wrong path.
   void syncCatalog(Iterable<ServerConfig> servers) {
     if (_disposed) return;
     _catalogConfigs

@@ -5,6 +5,8 @@
 // preflight over OpenSSH is exercised by the env-gated
 // engine_transfer_sshd_test.
 
+import 'dart:async';
+
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
@@ -97,6 +99,56 @@ void main() {
     await lease.release();
   });
 
+  test('a config edit cannot split one first-connect snapshot', () async {
+    final preflightStarted = Completer<void>();
+    final releasePreflight = Completer<void>();
+    final pool = PoolHarness(
+      hostKeyPreflight:
+          ({
+            required ServerConfig config,
+            required TofuVerifier tofu,
+            required HostKeyPrompter onHostKey,
+            Duration timeout = const Duration(seconds: 15),
+            SshConnectionLog? log,
+          }) async {
+            preflightStarted.complete();
+            await releasePreflight.future;
+          },
+      credentialsFor: (config) => ResolvedCredentials(
+        credentials: switch (config.authMethod) {
+          AuthMethod.password => const SshCredentials.password('old-secret'),
+          AuthMethod.agent => const SshCredentials.agent(),
+          AuthMethod.privateKey => const SshCredentials.privateKey('old-key'),
+        },
+        origin: CredentialOrigin.stored,
+      ),
+    )..addServer('s1', authMethod: AuthMethod.password);
+    addTearDown(() => pool.manager.disconnectServer('s1'));
+
+    final pending = pool.manager.leaseTransferChannel('s1');
+    await preflightStarted.future;
+
+    final replacement = ServerConfig(
+      id: 's1',
+      label: 's1',
+      host: 'example.com',
+      port: 22,
+      username: 'test',
+      authMethod: AuthMethod.agent,
+      createdAt: 0,
+      updatedAt: 1,
+    );
+    pool.servers['s1'] = replacement;
+    pool.manager.updateServerConfig('s1', replacement);
+    releasePreflight.complete();
+
+    final lease = await pending;
+    final open = pool.opener.calls.single;
+    expect(open.config.authMethod, AuthMethod.password);
+    expect(open.credentials.method, AuthMethod.password);
+    await lease.release();
+  });
+
   test('a rejected key never reaches the credential resolver', () async {
     final pool = harness(accept: false);
     await expectLater(
@@ -111,40 +163,30 @@ void main() {
     expect(status.detail, contains('not accepted'));
   });
 
-  test(
-    'an unresolved jump route fails before any connection side effect',
-    () async {
-      var preflightCalls = 0;
-      final pool = PoolHarness(
-        hostKeyPreflight:
-            ({
-              required ServerConfig config,
-              required TofuVerifier tofu,
-              required HostKeyPrompter onHostKey,
-              Duration timeout = const Duration(seconds: 15),
-              SshConnectionLog? log,
-            }) async {
-              preflightCalls++;
-            },
-      )..addServer('s1', jumpHostId: 'bastion');
-      addTearDown(() => pool.manager.disconnectServer('s1'));
+  test('a jump route skips the unsafe direct host-key preflight', () async {
+    var preflightCalls = 0;
+    final pool =
+        PoolHarness(
+            hostKeyPreflight:
+                ({
+                  required ServerConfig config,
+                  required TofuVerifier tofu,
+                  required HostKeyPrompter onHostKey,
+                  Duration timeout = const Duration(seconds: 15),
+                  SshConnectionLog? log,
+                }) async {
+                  preflightCalls++;
+                },
+          )
+          ..addServer('s1', jumpHostId: 'bastion')
+          ..addServer('bastion', host: 'bastion.example.com');
+    addTearDown(() => pool.manager.disconnectServer('s1'));
 
-      await expectLater(
-        pool.manager.leaseTransferChannel('s1'),
-        throwsA(
-          isA<RemoteFileException>()
-              .having(
-                (error) => error.kind,
-                'kind',
-                RemoteFileErrorKind.unsupported,
-              )
-              .having((error) => error.message, 'message', contains('bastion')),
-        ),
-      );
+    final lease = await pool.manager.leaseTransferChannel('s1');
 
-      expect(preflightCalls, 0);
-      expect(pool.credentialResolveCalls, 0);
-      expect(pool.opener.calls, isEmpty);
-    },
-  );
+    expect(preflightCalls, 0);
+    expect(pool.credentialResolveCalls, 2);
+    expect(pool.opener.calls, hasLength(1));
+    await lease.release();
+  });
 }

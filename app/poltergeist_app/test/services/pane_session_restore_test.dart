@@ -28,6 +28,37 @@ Bookmark _bookmark(String id) => Bookmark(
   updatedAt: _now,
 );
 
+Bookmark _catalogBookmark() => Bookmark(
+  id: 'db',
+  kind: BookmarkKind.remotePath,
+  label: 'Database',
+  server: const BookmarkServerRef(serverConfigId: 'catalog-db'),
+  remotePath: '/srv/www',
+  sortKey: 'db',
+  createdAt: _now,
+  updatedAt: _now,
+);
+
+const _catalogRoute = ServerConfig(
+  id: 'catalog-db',
+  label: 'Database',
+  host: 'db.internal',
+  username: 'deploy',
+  jumpHostId: 'bastion',
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+const _updatedCatalogRoute = ServerConfig(
+  id: 'catalog-db',
+  label: 'Database',
+  host: 'db-new.internal',
+  username: 'deploy',
+  jumpHostId: 'new-bastion',
+  createdAt: 0,
+  updatedAt: 1,
+);
+
 RemoteFileEntry _row(String name) => RemoteFileEntry(
   path: '/srv/www/$name',
   name: name,
@@ -42,6 +73,13 @@ SessionTabState _remoteTab(String serverId, {List<RemoteFileEntry>? rows}) =>
       bookmark: _bookmark(serverId),
       listing: rows ?? [_row('a.txt'), _row('b.txt')],
     );
+
+SessionTabState _catalogTab() => SessionTabState.remote(
+  serverId: 'db',
+  path: '/srv/www',
+  bookmark: _catalogBookmark(),
+  listing: [_row('a.txt')],
+);
 
 SessionPaneState _pane(List<SessionTabState> tabs, {int activeTab = 0}) =>
     SessionPaneState(
@@ -139,6 +177,30 @@ void main() {
       expect(controller.staleRows, isFalse);
       expect(remoteChannel.listCalls, ['/srv/www']);
       expect(controller.entries.map((e) => e.name), ['live.txt']);
+    });
+
+    test('a catalog-only remote tab re-resolves its route', () async {
+      final remoteChannel = FakePaneChannel('/srv')
+        ..listings['/srv/www'] = [_row('live.txt')];
+      lanes.nextRemoteChannel = remoteChannel;
+      final controller = PaneController(
+        paneTabId: 'pane.left.tab1',
+        lanes: lanes,
+      );
+      addTearDown(controller.dispose);
+      var catalogRoute = _catalogRoute;
+      controller.serverConfigLookup = (id) =>
+          id == 'catalog-db' ? catalogRoute : null;
+      controller.markRestored(_catalogTab());
+
+      catalogRoute = _updatedCatalogRoute;
+      await controller.resumeRestored();
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.phase, PanePhase.browsing);
+      expect(controller.error, isNull);
+      expect(lanes.lastRemoteConfig, _updatedCatalogRoute);
+      expect(remoteChannel.listCalls, ['/srv/www']);
     });
 
     test('a local tab rebinds live on its restored path', () async {

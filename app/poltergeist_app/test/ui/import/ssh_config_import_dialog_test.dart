@@ -202,7 +202,7 @@ void main() {
     expect(find.text('web.example.com:2222'), findsNWidgets(2));
     expect(find.text('Key: ~/.ssh/id_ed25519'), findsOneWidget);
     expect(find.text('deploy'), findsNWidgets(2));
-    expect(find.text('Password'), findsNWidgets(2));
+    expect(find.text('ssh-agent'), findsNWidgets(2));
 
     // Both rows target the bookmarked endpoint; the existing-bookmark
     // chip outranks the earlier-row chip when both would apply.
@@ -319,10 +319,10 @@ Host second
     await tester.pumpAndSettle();
 
     // Only `dup` was imported; the reference-style key path travels with
-    // key auth rows (none here), and password rows keep password auth.
+    // key auth rows (none here), and keyless rows keep agent auth.
     expect(
       find.text(
-        'result:dup:web.example.com:2222:deploy:password:-',
+        'result:dup:web.example.com:2222:deploy:agent:-',
       ),
       findsOneWidget,
     );

@@ -235,34 +235,48 @@ extension _PoolRecovery on PooledConnectionManager {
     _EndpointPool pool,
     _ReconnectCycle cycle,
   ) async {
-    final config = pool.references.values.first.config;
-    _requireRoutableServer(config);
-
-    final status = await _prober.probe(config.host, config.port);
-    _checkReconnect(pool, cycle);
-    if (status != ProbeStatus.online) throw const _ReconnectUnavailable();
+    final reference = pool.references.values.first;
+    final config = reference.config;
+    final routeConfigs = reference.routeConfigs;
+    // Probing the target directly would bypass its bastion. Routed recovery
+    // lets the outer-hop connect inside the SSH executor be the reachability
+    // check; the retry backoff still bounds failures.
+    if (config.jumpHostId == null) {
+      final status = await _prober.probe(config.host, config.port);
+      _checkReconnect(pool, cycle);
+      if (status != ProbeStatus.online) throw const _ReconnectUnavailable();
+    }
     if (_hasLiveTransport(pool)) return;
 
     final prompting = cycle._prompting;
-    ResolvedCredentials? resolved;
+    _ResolvedRouteCredentials? resolvedRoute;
     if (prompting == ConnectPrompting.enabled ||
         pool.resolvedCredentials == null) {
       final scope = _PoolResolution();
       pool._resolution = scope;
-      pool.resolvedCredentials = null;
+      _clearResolvedCredentials(pool);
       try {
-        resolved = await _resolveCredentials(config, scope);
+        resolvedRoute = await _resolveRouteCredentials(
+          routeConfigs,
+          scope,
+          _forwardingLogFor(pool),
+        );
         _checkReconnect(pool, cycle);
       } on Object catch (error, stack) {
         throw _ReconnectResolutionFailure(error, stack);
       } finally {
+        // Route credential prompts end before SSH negotiation begins.
         if (identical(pool._resolution, scope)) pool._resolution = null;
       }
     }
 
-    final credentials = resolved?.credentials ?? pool.resolvedCredentials!;
+    final credentials =
+        resolvedRoute?.target.credentials ?? pool.resolvedCredentials!;
+    final jumpHosts = resolvedRoute?.jumpHosts ?? pool.resolvedJumpHosts;
     final hostKey = _hostKeyPrompterFor(pool, ConnectPrompting.disabled);
     final attempt = cycle._authAttempt = Object();
+    final reconnectResponder = _reconnectResponder(pool, cycle, attempt);
+    var routeChallenged = false;
     final SshTransport transport;
     try {
       transport = await _openTransport(
@@ -272,14 +286,20 @@ extension _PoolRecovery on PooledConnectionManager {
         // Even an auth-prompting reconnect cannot approve an unknown key.
         onHostKey: (decision) async =>
             _isCurrentAuth(pool, cycle, attempt) ? hostKey(decision) : false,
-        onKeyboardInteractive: _reconnectResponder(pool, cycle, attempt),
+        onKeyboardInteractive: reconnectResponder == null
+            ? null
+            : (challenge) {
+                routeChallenged = true;
+                return reconnectResponder(challenge);
+              },
+        resolveJumpHost: _cachedJumpHostResolver(config, jumpHosts),
         prompting: prompting,
         log: _forwardingLogFor(pool),
       );
     } on AuthChallengeRequiredError {
       if (_isCurrentReconnect(pool, cycle)) {
         cycle._prompting = ConnectPrompting.enabled;
-        pool.resolvedCredentials = null;
+        _clearResolvedCredentials(pool);
       }
       rethrow;
     } finally {
@@ -296,9 +316,13 @@ extension _PoolRecovery on PooledConnectionManager {
     }
 
     pool.resolvedCredentials = credentials;
+    if (resolvedRoute != null) {
+      pool.resolvedJumpHosts = resolvedRoute.jumpHosts;
+    }
     pool.interactiveOnly =
         pool.interactiveOnly ||
-        resolved?.origin == CredentialOrigin.prompted ||
+        resolvedRoute?.prompted == true ||
+        routeChallenged ||
         transport.authKind == AuthKind.keyboardInteractive ||
         transport.authKind == AuthKind.promptedPassword;
     // The first transport's cache role never migrates after failure (§3.3).

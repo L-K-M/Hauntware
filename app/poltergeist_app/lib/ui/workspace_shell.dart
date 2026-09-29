@@ -1364,6 +1364,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         builtInEditorOpen: _openBuiltInEditor,
         externalEditorOpen: _openWithExternal,
         onLocationCommitted: widget.recentLocations?.recordLocation,
+        serverConfigLookup: _serverConfigById,
         confirmClose: _confirmTabClose,
         // The cross-pane half of a remote tab's last-binding check: read
         // the workspace lazily — the strips are built before it exists.

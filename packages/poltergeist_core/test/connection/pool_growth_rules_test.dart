@@ -95,7 +95,7 @@ void main() {
     expect(harness.opener.calls, hasLength(3));
   });
 
-  test('a jump host remains part of pool identity while routing is off', () {
+  test('a jump host remains part of pool identity', () {
     final harness = PoolHarness()
       ..addServer('direct')
       ..addServer('jumped', jumpHostId: 'bastion');

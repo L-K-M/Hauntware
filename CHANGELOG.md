@@ -2,10 +2,8 @@
 
 ## Unreleased
 
-- **ssh-agent authentication.** New servers default to the system SSH agent,
-  with no private key stored by Poltergeist. Saved jump-host routes remain
-  blocked until ProxyJump wiring lands; they never fall back to a direct
-  connection.
+- **SSH-agent authentication.** New servers default to the system SSH agent,
+  with no private key stored by Poltergeist.
 - **The active pane's accent line is above its tabs.** The coloured line
   that shows which pane is active now runs along the top of that pane's
   tab bar instead of under the tabs, so it no longer sits between a tab
@@ -208,15 +206,12 @@
   deleted while you leave the choice open or keep the folder, no longer
   count twice toward the deletion limits, and no longer show "changed
   since preview" after the replace.
-- **Servers behind a jump host stay behind it.** Editing a Séance
-  server in Poltergeist no longer deletes its jump host (ProxyJump) from
-  the record both apps share, which removed it in Séance too.
-  Poltergeist cannot connect through a jump host yet, so opening such a
-  server, testing it in its editor, or transferring to it now says so
-  instead of connecting to the server directly, around the jump host.
-  Its sidebar row no longer checks whether it is online either. If sync
-  adds a jump host or removes a connected server, existing work may
-  finish, but that old route cannot reconnect.
+- **Servers behind a jump host stay behind it.** Saved ProxyJump chains
+  resolve completely before connecting, dial only the outer host, and
+  authenticate and verify every hop. Editing preserves the route, Test
+  connection exercises it, and the raw sidebar probe never bypasses it.
+  If sync changes a hop or removes a connected server, existing work may
+  finish, but the old route cannot reconnect.
 - Pre-1.0 history lives in the commit log and the GitHub pre-releases
   (v0.1.0, v0.2.0).
 

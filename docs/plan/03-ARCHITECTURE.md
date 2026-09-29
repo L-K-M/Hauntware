@@ -449,13 +449,20 @@ concurrency.
 
 Growth rules (the part that must never be improvised):
 
-Config lookup resolves only secret-free `ServerConfig` metadata before pool
-lookup. Vault/prompt resolution belongs inside the pool's serialized first
-connect, so sibling bookmarks neither resolve nor retain duplicate secrets.
-Its result carries explicit stored/prompted provenance: the SSH opener sees
-an ordinary supplied password and cannot infer an earlier UI prompt.
-Server references retain config only; teardown drops the pool's credential
-reference, and the next first connect resolves afresh after first-connect failure.
+Config lookup resolves and validates the complete secret-free
+`ServerConfig` route before pool lookup. Missing hosts, mismatched ids, cycles,
+and overlong routes therefore fail before any vault read, prompt, or network
+I/O. Vault/prompt resolution belongs inside the pool's serialized first
+connect and covers the target and every hop before the opener runs, so sibling
+bookmarks neither resolve nor retain duplicate secrets. Results carry explicit
+stored/prompted provenance: the SSH opener sees an ordinary supplied password
+and cannot infer an earlier UI prompt. A direct unpinned target keeps the
+host-key preflight before credential resolution. A routed target cannot be
+probed directly without bypassing its bastion; the route opener instead
+verifies each hop's key before transmitting that hop's credential.
+Server references retain only the secret-free target and route; teardown drops
+the pool's target and hop credential references, and the next first connect
+resolves them afresh after first-connect failure.
 A resolution may outlive the pool that requested it — the last serverId can
 disconnect while the vault prompt is still open. The resolver receives a
 per-resolution dismissal scope (`CredentialResolutionScope`); the pool trips
@@ -506,9 +513,10 @@ boundary when it wraps resolvers — one mechanism, both sides.
    a pin store that failed to load and erasing a persisted decline cannot be
    undone. Incident seeding and pin seeding therefore land together (§5's
    `EngineConfig`).
-2. **Interactive auth caps the pool at one transport.** Record how the first
-   connect authenticated. If keyboard-interactive ran or a password was
-   prompted interactively, `maxTransports` is effectively 1 — additional
+2. **Interactive auth caps the pool at one transport.** Record how every route
+   member authenticated. If keyboard-interactive ran or a password was
+   prompted interactively at any hop, `maxTransports` is effectively 1 —
+   additional
    parallelism comes only from extra SFTP channels on that transport,
    which all share one TCP connection: on interactive-auth servers,
    listings can slow while transfers saturate that connection — the
@@ -518,8 +526,9 @@ boundary when it wraps resolvers — one mechanism, both sides.
    parallel 2FA prompts (D5).
 3. **Non-interactive auth may grow the pool** (agent, key auth, stored
    password): up
-   to `maxTransports`, reusing the resolved in-memory `SshCredentials` from
-   the first connect — the secret lives only as long as the pool does.
+   to `maxTransports`, reusing the resolved in-memory `SshCredentials` for
+   the target and every hop from the first connect — the secrets live only as
+   long as the pool does.
    Growth connects run with prompting disabled
    (`onKeyboardInteractive: null`, no password prompt): a server that
    requires keyboard-interactive on every new TCP connection (not just
@@ -600,8 +609,10 @@ including those behind transfer waiters: sharing consumes no transfer slot.
   stays until its leases are released, so closing tabs cannot park a
   running transfer.
 - **Reconnect:** on `RemoteFileErrorKind.disconnected` or transport closure,
-  browse channels auto-reconnect: probe first with `TcpBannerProber` (cheap,
-  keeps sshd logs quiet), then `openAuthenticatedClient` with backoff
+  browse channels auto-reconnect: direct targets probe first with
+  `TcpBannerProber` (cheap, keeps sshd logs quiet); routed targets skip that
+  unsafe direct probe and let the outer-hop connect test reachability. Then
+  `openAuthenticatedClient` retries with backoff
   1 s → 2 s → 4 s → … clamped to `reconnectBackoffCap` **first**, then
   jittered downward only (`delay = min(base, cap) * (1 - 0.3 * random())`)
   — jittering an upward-only ±30% before clamping would clip every
@@ -741,7 +752,9 @@ does not own persistence or override live connection state.
   pinned bookmark silently ride a transport another, more lenient
   bookmark at the same endpoint had TOFU-accepted, or let one bookmark's
   jump-host routing be silently bypassed by a sibling that connects
-  direct. Two bookmarks matching on all of that
+  direct. The jump context names every resolved hop and route edge, so editing
+  a deeper hop cannot reuse an old pool or persisted incident. Two bookmarks
+  matching on all of that
   keep distinct serverIds. Shared pools are reference-counted
   by serverId: `disconnectServer(serverId)` drops that id's reference —
   closing its browse channels and **releasing** its transfer leases:
