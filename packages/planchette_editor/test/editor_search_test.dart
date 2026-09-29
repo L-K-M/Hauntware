@@ -46,6 +46,43 @@ Finder _field(TextEditingController controller) => find.byWidgetPredicate(
   (widget) => widget is TextField && widget.controller == controller,
 );
 
+/// Backtracks catastrophically: each extra `a` doubles the time, and this
+/// many take minutes, far past any budget used here.
+const _catastrophic = r'(a+)+$';
+final _catastrophicText = '${'a' * 28}!';
+
+/// Long enough for the regular-expression search's settle delay to pass.
+const _settleDelay = Duration(milliseconds: 200);
+
+EditorController _editor(String text, {Duration? budget}) {
+  final editor = EditorController(
+    displayPath: 'test.txt',
+    initialText: text,
+    patternSearchBudget: budget,
+  );
+  addTearDown(editor.dispose);
+  return editor;
+}
+
+/// The same inside a widget test, whose timers are fake: fake time fires the
+/// settle delay and, advanced by [step], a budget; real time lets the worker
+/// answer.
+Future<void> _settledInWidgets(
+  WidgetTester tester,
+  EditorController editor, {
+  Duration step = Duration.zero,
+}) async {
+  await tester.pump(_settleDelay);
+  for (var i = 0; i < 2000 && editor.patternSearchPending; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+    await tester.pump(step);
+  }
+  expect(editor.patternSearchPending, isFalse);
+  await tester.pump();
+}
+
 void main() {
   for (final width in [320.0, 360.0]) {
     for (final scale in [1.0, 2.0]) {
@@ -143,8 +180,9 @@ void main() {
       isSemantics(isSelected: true, isButton: true),
     );
 
-    // Traverse previous, next, replace toggle, close, replacement, replace, all.
-    for (var step = 0; step < 7; step++) {
+    // Traverse regular expression, previous, next, replace toggle, close,
+    // replacement, replace, all.
+    for (var step = 0; step < 8; step++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     }
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -207,8 +245,9 @@ void main() {
     await tester.pumpAndSettle();
     final selection = controller.search.selection;
 
-    // Match case, whole words, previous, next, then the replace toggle.
-    for (var step = 0; step < 5; step++) {
+    // Match case, whole words, regular expression, previous, next, then the
+    // replace toggle.
+    for (var step = 0; step < 6; step++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     }
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -382,4 +421,123 @@ void main() {
       expect(controller.editorFocus.hasFocus, isTrue);
     },
   );
+
+  group('regular expressions', () {
+    Widget app(EditorController editor, {double width = 800}) => MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: SizedBox(
+            width: width,
+            child: PlanchetteEditor(controller: editor),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('the toggle is labelled, reports its state and searches', (
+      tester,
+    ) async {
+      final editor = _editor('a TODO here\nTODO: fix');
+      await tester.pumpWidget(app(editor));
+      editor
+        ..openSearch()
+        ..search.text = r'\bTODO\b';
+      await tester.pump();
+      expect(find.text('No matches'), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byTooltip('Regular expression')),
+        isSemantics(isSelected: false, isButton: true),
+      );
+
+      await tester.tap(find.byTooltip('Regular expression'));
+      await tester.pump();
+      expect(editor.useRegularExpression, isTrue);
+      expect(
+        tester.getSemantics(find.byTooltip('Regular expression')),
+        isSemantics(isSelected: true, isButton: true),
+      );
+      // Nothing is claimed while the matches are on their way.
+      expect(find.text('No matches'), findsNothing);
+      await _settledInWidgets(tester, editor);
+      expect(find.text('1/2'), findsOneWidget);
+    });
+
+    testWidgets('the keyboard reaches the toggle after whole words', (
+      tester,
+    ) async {
+      final editor = _editor('cat');
+      await tester.pumpWidget(app(editor));
+      editor.openSearch();
+      await tester.pumpAndSettle();
+      for (var step = 0; step < 3; step++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(editor.useRegularExpression, isTrue);
+      expect(editor.caseSensitive, isFalse);
+      expect(editor.wholeWord, isFalse);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(editor.searchOpen, isFalse);
+      expect(editor.editorFocus.hasFocus, isTrue);
+    });
+
+    testWidgets('a broken pattern is shown in the error colour, then cleared', (
+      tester,
+    ) async {
+      final editor = _editor('anything at all');
+      await tester.pumpWidget(app(editor, width: 320));
+      editor
+        ..openSearch()
+        ..toggleRegularExpression()
+        ..search.text = '(unclosed';
+      await tester.pump();
+      final message = find.text('Invalid pattern: Unterminated group');
+      expect(message, findsOneWidget);
+      final context = tester.element(message);
+      expect(
+        tester.widget<Text>(message).style?.color,
+        Theme.of(context).colorScheme.error,
+      );
+      expect(tester.takeException(), isNull);
+
+      editor.search.text = 'any';
+      await tester.pump();
+      expect(message, findsNothing);
+      await _settledInWidgets(tester, editor);
+      expect(find.text('1/1'), findsOneWidget);
+    });
+
+    testWidgets('a pattern that runs too long says so', (tester) async {
+      final editor = _editor(
+        _catastrophicText,
+        budget: const Duration(milliseconds: 50),
+      );
+      await tester.pumpWidget(app(editor));
+      editor
+        ..openSearch()
+        ..toggleRegularExpression()
+        ..search.text = _catastrophic;
+      await _settledInWidgets(
+        tester,
+        editor,
+        step: const Duration(milliseconds: 20),
+      );
+      expect(find.text('Pattern took too long to search'), findsOneWidget);
+      expect(editor.matches, isEmpty);
+    });
+
+    testWidgets('the find field hints at pattern mode', (tester) async {
+      final editor = _editor('text');
+      await tester.pumpWidget(app(editor));
+      editor.openSearch();
+      await tester.pump();
+      expect(find.text('Find in file'), findsOneWidget);
+      editor.toggleRegularExpression();
+      await tester.pump();
+      expect(find.text('Find by regular expression'), findsOneWidget);
+    });
+  });
 }

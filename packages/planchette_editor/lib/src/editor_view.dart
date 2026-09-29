@@ -404,15 +404,22 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   Widget _searchBar(BuildContext context) {
     final strings = widget.strings;
     final theme = Theme.of(context);
-    final counter = c.search.text.isEmpty
-        ? ''
-        : c.matches.isEmpty
-        ? strings.noMatches
-        : strings.matchCount(
-            c.matchOffset + c.activeMatch + 1,
-            c.matchOffset + c.matches.length,
-            capped: c.matchesMayContinue,
-          );
+    // A pattern that cannot be searched says why instead of reporting no
+    // matches, which would look like a file with nothing to find. While its
+    // matches are on their way, nothing is claimed either way.
+    final failure = c.patternFailure;
+    final counter = switch (failure) {
+      PatternUnusable(:final message) => strings.patternInvalid(message),
+      PatternTimedOut() => strings.patternTooSlow,
+      null when c.search.text.isEmpty => '',
+      null when c.matches.isEmpty && c.patternSearchPending => '',
+      null when c.matches.isEmpty => strings.noMatches,
+      null => strings.matchCount(
+        c.matchOffset + c.activeMatch + 1,
+        c.matchOffset + c.matches.length,
+        capped: c.matchesMayContinue,
+      ),
+    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
       child: Column(
@@ -426,7 +433,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               enableSuggestions: false,
               style: theme.textTheme.bodyMedium,
               decoration: InputDecoration(
-                hintText: strings.findHint,
+                hintText: c.useRegularExpression
+                    ? strings.findPatternHint
+                    : strings.findHint,
                 isDense: true,
                 border: InputBorder.none,
               ),
@@ -443,7 +452,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               if (counter.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(counter, style: theme.textTheme.labelSmall),
+                  child: Semantics(
+                    liveRegion: failure != null,
+                    child: Text(
+                      counter,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: failure != null ? theme.colorScheme.error : null,
+                      ),
+                    ),
+                  ),
                 ),
               if (c.caseFoldingLimited)
                 Tooltip(
@@ -487,6 +504,21 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                             ? TextDecoration.underline
                             : TextDecoration.none,
                         color: c.wholeWord
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    isSelected: c.useRegularExpression,
+                    tooltip: strings.regularExpression,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.toggleRegularExpression,
+                    icon: Text(
+                      '.*',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: c.useRegularExpression
                             ? theme.colorScheme.primary
                             : theme.colorScheme.onSurfaceVariant,
                       ),
