@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:seance_sync_server/seance_sync_server.dart';
 import 'package:shelf/shelf.dart';
@@ -487,6 +488,12 @@ void _inboxTests(Storage Function() newStorage) {
       expect(py.status, 200);
       expect(py.contentType, startsWith('text/x-python'));
       expect(py.text, startsWith('#!/usr/bin/env python3'));
+      // Séance hands agents this hash so they can check the download; a
+      // client edited without updating it would fail every check.
+      expect(
+        sha256.convert(utf8.encode(py.text)).toString(),
+        kInboxReferenceClientSha256,
+      );
 
       final landing = await h.send('GET', '/');
       expect(landing.text, contains('/llms.txt'));

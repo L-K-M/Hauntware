@@ -236,7 +236,13 @@ class _ProposalReviewState extends State<ProposalReview> {
     setState(() => _busy = true);
     final overlay = Overlay.of(context, rootOverlay: true);
     try {
-      await widget.state.dismissProposal(widget.pending);
+      final result = await widget.state.dismissProposal(widget.pending);
+      if (result == InboxClaim.handledElsewhere) {
+        showTopToast(
+          overlay,
+          message: 'Another device already ran or dismissed this proposal.',
+        );
+      }
       if (mounted) widget.onBack();
     } catch (e) {
       if (mounted) showTopToast(overlay, message: 'Could not dismiss: $e');

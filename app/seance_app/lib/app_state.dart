@@ -2464,13 +2464,19 @@ class AppState extends ChangeNotifier {
     _scheduleAutoSync();
   }
 
-  Future<void> dismissProposal(PendingProposal proposal) async {
-    await _mutate(() async {
-      await services.withInbox((inbox) => inbox.dismiss(proposal));
+  /// Returns [InboxClaim.handledElsewhere] when another device ran or
+  /// dismissed it first, in which case nothing is recorded here.
+  Future<InboxClaim> dismissProposal(PendingProposal proposal) async {
+    final result = await _mutate(() async {
+      final result = await services.withInbox(
+        (inbox) => inbox.dismiss(proposal),
+      );
       await _loadInbox();
+      return result;
     });
     notifyListeners();
     _scheduleAutoSync();
+    return result;
   }
 
   /// Stage [proposal] on [server] and place the line that runs it in the

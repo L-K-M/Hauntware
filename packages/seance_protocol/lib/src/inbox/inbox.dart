@@ -37,6 +37,17 @@ const int _kMacBytes = 16;
 const String kInboxPairingPrefix = 'seance-inbox:';
 const String _kAadPrefix = 'seance/v1/inbox/';
 
+/// SHA-256 (hex) of the reference client, `seance-propose.py`, as this
+/// release's sync server serves it.
+///
+/// The client reads the pairing string, so whoever supplies it could take
+/// the app key and forge proposals. The sync server serves it for
+/// convenience, but the server is exactly what the design does not trust,
+/// so Séance hands the agent this hash itself and the agent checks the
+/// download against it. A server test pins it to the served bytes.
+const String kInboxReferenceClientSha256 =
+    'aac46f62e20fdf297e17cb00b41dcb3a07a9c5891c902066b20e7738584d7218';
+
 /// Record-id prefixes for the two synced inbox kinds.
 const String kInboxAppIdPrefix = 'inboxapp:';
 const String kInboxStatusIdPrefix = 'inboxstatus:';

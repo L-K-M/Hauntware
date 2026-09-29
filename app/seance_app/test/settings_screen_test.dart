@@ -807,6 +807,11 @@ void main() {
         find.textContaining('https://sync.example.com/llms.txt'),
         findsOneWidget,
       );
+      // The hash comes from Séance, not from the server it pins.
+      expect(
+        find.textContaining(kInboxReferenceClientSha256),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byKey(const ValueKey('inbox.pairing.done')));
       await tester.pumpAndSettle();

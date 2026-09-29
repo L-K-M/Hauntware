@@ -308,14 +308,31 @@ class InboxService {
     return InboxClaim.claimed;
   }
 
-  /// Dismiss a proposal. The status is written first, so it stops being
-  /// announced everywhere even if the server cannot be reached now; the item
-  /// then goes at retention, and any device that fetches it meanwhile finds
-  /// the status and deletes it.
-  Future<void> dismiss(PendingProposal pending) async {
+  /// Dismiss a proposal.
+  ///
+  /// The item is deleted first, the same way a claim does, so a proposal
+  /// another device just ran is not recorded as dismissed here: that
+  /// status would be newer and would win everywhere, saying a command that
+  /// ran did not. If the server cannot be reached, the status is written
+  /// anyway, so the proposal stops being announced on every device; the
+  /// item then goes at retention, and any device that fetches it meanwhile
+  /// finds the status and deletes it.
+  Future<InboxClaim> dismiss(PendingProposal pending) async {
     final cached = pending.cached;
+    try {
+      if (!await api.deleteItem(cached.appId, cached.itemId)) {
+        await _forget(cached);
+        return InboxClaim.handledElsewhere;
+      }
+    } catch (error) {
+      developer.log(
+        'Could not delete inbox item ${cached.itemId}: ${error.runtimeType}',
+        name: _inboxLoggerName,
+        level: _warningLogLevel,
+      );
+    }
     await _settle(cached, InboxStatusState.dismissed);
-    await _deleteQuietly(cached.appId, cached.itemId);
+    return InboxClaim.claimed;
   }
 
   /// Drop statuses too old to name anything a server still holds.

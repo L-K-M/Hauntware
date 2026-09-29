@@ -132,7 +132,7 @@ Plaintext, UTF-8 JSON:
 | Field | Rule |
 |---|---|
 | `v` | Must be 1. Anything else is rejected, not guessed at. |
-| `id` | Producer-chosen, 1 to 64 chars `[A-Za-z0-9._-]`. Unique per app; a repeat is dropped. |
+| `id` | Producer-chosen, 1 to 64 chars `[A-Za-z0-9._-]`. Unique per app, enforced by the client (the server cannot see it): a repeat of a proposal still cached, or of one with a status, is deleted unannounced. A repeat of an expired one is still expired, since the expiry travels in the same sealed payload. |
 | `host` | Matched case-insensitively against the server's name, then its host name; more than one match counts as none. No match, or a server outside the app's allowed set, shows the proposal as *unassigned*: it can be read and dismissed, never run. Séance never guesses. |
 | `title` | 1 to 200 chars, one line. |
 | `reason` | Optional, up to 4,000 chars. Shown as plain text. |
@@ -219,6 +219,15 @@ Documentation for producers, unauthenticated and static:
   script.sh`, reading the pairing string from `$SEANCE_INBOX`. Agents
   should use it rather than implement the crypto themselves.
 
+The client receives the pairing string, so a tampered copy could send the
+app key elsewhere and let its holder forge proposals. The server serving
+it is exactly what this design does not trust, so the server is only a
+mirror: Séance's own instructions for the agent carry the client's SHA-256
+(`kInboxReferenceClientSha256`, pinned to the served bytes by a server
+test), and `/llms.txt` tells the agent to refuse a client that does not
+match and to let the user's instructions win over the page. What remains is
+an agent that ignores both, which no server-side measure can fix.
+
 An MCP wrapper around `seance-propose` (one `propose_command` tool) is
 left to users; it needs nothing from Séance.
 
@@ -267,8 +276,11 @@ Actions:
   The name is the hash of the bytes shown, so the file cannot be swapped
   between review and run without the line changing. An interpreter line
   (`#!`) is honoured by running the file by path instead of through `sh`.
-- **Copy**, **Dismiss** (Dismiss writes the `dismissed` status and
-  deletes the item the same way, without the claim check).
+- **Copy**, **Dismiss**. Dismiss deletes the item first; a `not_found`
+  means another device ran or dismissed it, and Séance says so and records
+  nothing, since a newer `dismissed` would win over that device's `ran`.
+  If the server cannot be reached, it writes `dismissed` anyway so the
+  proposal stops being announced.
 
 When two devices hold the same proposal and one runs it, the other learns
 on its next sync, from the `inboxStatus` record, and shows the proposal as
@@ -290,7 +302,8 @@ assistant's staged commands.
   kind skip it, as for any unknown kind.
 - `inboxStatus` is a new `RecordKind` keyed by `appId` and proposal `id`:
   `ran` or `dismissed`, with a timestamp. It lets every device agree what
-  is done, and also serves as the replay filter. It holds no script and no
+  is done, and is the replay filter for handled proposals (the cache is
+  the one for pending ones). It holds no script and no
   output. A status older than 30 days is neither published nor
   applied, and is pruned locally: no server still holds its proposal.
 - The proposals themselves are not synced records. Each device fetches
@@ -300,13 +313,14 @@ assistant's staged commands.
 
 ## Out of scope for version 1
 
-- Anything flowing back to the producer. A later version may let the
-  token read the status (`ran`/`dismissed`) of its own proposals, never
-  output.
+- Anything flowing back to the producer, so a producer cannot tell
+  whether a proposal was run, dismissed or refused. A later version may let
+  the token read the status (`ran`/`dismissed`) of its own proposals, but
+  never any command output.
 - Running a proposal on several servers at once.
 - Push notifications. The badge updates on the next sync cycle.
 
-## Open questions
+## Decided
 
-1. Whether PR #151 should be closed in favour of this, or kept for
-   read-only reference snippets, which it does well.
+- PR #151 (snippet sources) stays open for reference until this lands, and
+  is then closed.

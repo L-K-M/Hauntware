@@ -239,6 +239,25 @@ void main() {
     expect(await b.inbox.claim(onB), InboxClaim.handledElsewhere);
   });
 
+  test('dismissing what another device ran records nothing', () async {
+    final pairing = await connect(a);
+    await a.sync.run(records);
+    await b.sync.run(records);
+    await server.deposit(pairing, _proposal('p1'));
+    final onA = (await a.inbox.refresh()).single;
+    final onB = (await b.inbox.refresh()).single;
+
+    expect(await a.inbox.claim(onA), InboxClaim.claimed);
+    expect(await b.inbox.dismiss(onB), InboxClaim.handledElsewhere);
+    expect(await b.statuses.getStatus(pairing.appId, 'p1'), isNull);
+    expect(await b.inbox.pending(), isEmpty);
+
+    await a.sync.run(records);
+    await b.sync.run(records);
+    final status = await b.statuses.getStatus(pairing.appId, 'p1');
+    expect(status?.state, InboxStatusState.ran);
+  });
+
   test('dismiss writes the status and removes the item', () async {
     final pairing = await connect(a);
     await server.deposit(pairing, _proposal('p1'));
