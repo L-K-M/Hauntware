@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
 import 'layout/pane_allocation.dart';
+import 'shell/shell_splitter.dart';
 
 const _defaultPaneRatio = 0.5;
 const _keyboardResizeStep = 16.0;
@@ -129,28 +130,36 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
     );
     if (!allocation.showsSecondPane) return primary;
 
-    return Row(
-      children: [
-        primary,
-        SizedBox(
-          width: allocation.splitterWidth,
-          child: _PaneSplitter(
-            key: AdaptiveShell.splitterKey,
-            focusNode: _splitterFocusNode,
-            label: widget.resizeLabel,
-            value: widget.formatRatio(displayedRatio),
-            increasedValue: widget.formatRatio(increasedRatio),
-            decreasedValue: widget.formatRatio(decreasedRatio),
-            onResize: (delta) => _resize(context, delta),
-            onResizeEnd: _commitPaneRatio,
+    // A 1 px seam between the panes, so each pane's own borders (the
+    // active-side accent) run up to it; the grab area floats over it and
+    // the secondary pane takes the pixels the splitter no longer holds.
+    return ShellSeam.straddle(
+      Row(
+        children: [
+          primary,
+          ShellSeam(color: Theme.of(context).dividerColor),
+          SizedBox(
+            key: AdaptiveShell.secondaryPaneKey,
+            width:
+                allocation.secondaryWidth +
+                allocation.splitterWidth -
+                shellSeamWidth,
+            child: widget.secondary,
           ),
-        ),
-        SizedBox(
-          key: AdaptiveShell.secondaryPaneKey,
-          width: allocation.secondaryWidth,
-          child: widget.secondary,
-        ),
-      ],
+        ],
+      ),
+      start: allocation.primaryWidth,
+      extent: allocation.splitterWidth,
+      handle: _PaneSplitter(
+        key: AdaptiveShell.splitterKey,
+        focusNode: _splitterFocusNode,
+        label: widget.resizeLabel,
+        value: widget.formatRatio(displayedRatio),
+        increasedValue: widget.formatRatio(increasedRatio),
+        decreasedValue: widget.formatRatio(decreasedRatio),
+        onResize: (delta) => _resize(context, delta),
+        onResizeEnd: _commitPaneRatio,
+      ),
     );
   }
 
