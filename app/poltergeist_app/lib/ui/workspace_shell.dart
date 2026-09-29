@@ -570,6 +570,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// the engine session identity changes; the panes rebind their initial
   /// location with the new lanes.
   WorkspaceController? _workspace;
+  // Pane activity and tab changes repaint their own surfaces. Only
+  // visibility intent changes need to rebuild the surrounding layout.
+  final _workspaceLayout = ValueNotifier<
+    ({bool sidebarHidden, bool inspectorHidden, bool secondPaneHidden})?
+  >(null);
   FocusNode? _leftFocus;
   FocusNode? _rightFocus;
 
@@ -907,6 +912,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     _headerFilterFocus.dispose();
     _connections?.dispose();
     _disposeWorkspace();
+    _workspaceLayout.dispose();
     switch (_defaultQuickLook) {
       case final InAppQuickLook overlay:
         overlay.dispose();
@@ -1460,6 +1466,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     // focus handoff before the first frame. Seed the tracker from the
     // settled state, never a hardcoded shown.
     workspace.addListener(_onWorkspaceChanged);
+    _updateWorkspaceLayout(workspace);
     _secondPaneWasShown = workspace.secondPaneShown;
     _sidebarWasHidden = workspace.sidebarHidden;
     // 06 §5's preview driver binds the workspace's focus chain — it is
@@ -1814,7 +1821,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
                   ? const SizedBox.shrink()
                   : LayoutBuilder(
                       builder: (context, constraints) => ListenableBuilder(
-                        listenable: workspace,
+                        listenable: _workspaceLayout,
                         builder: (context, _) => _buildWorkspaceLayout(
                           context,
                           constraints.maxWidth,
@@ -2559,6 +2566,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   void _onWorkspaceChanged() {
     final workspace = _workspace;
     if (workspace == null) return;
+    _updateWorkspaceLayout(workspace);
     _persistSidebarHiddenIfChanged(workspace);
     final shown = workspace.secondPaneShown;
     final becameHidden = _secondPaneWasShown && !shown;
@@ -2570,6 +2578,14 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     if (primary == null || _focusInsideDisappearingPanes(primary)) {
       left.requestFocus();
     }
+  }
+
+  void _updateWorkspaceLayout(WorkspaceController workspace) {
+    _workspaceLayout.value = (
+      sidebarHidden: workspace.sidebarHidden,
+      inspectorHidden: workspace.inspectorHidden,
+      secondPaneHidden: workspace.secondPaneHidden,
+    );
   }
 
   /// Persists the sidebar's explicit visibility intent on the flip edge

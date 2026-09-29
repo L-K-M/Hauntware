@@ -386,6 +386,15 @@ Future<int> measureTabSwitchMicros(
         '${painted!.rasterFinishUs} precedes trigger $triggerUs',
       );
     }
+    // Keep scheduling, build, and raster costs visible in regression logs.
+    // ignore: avoid_print
+    print(
+      'P4 phases (us): wait=${painted!.buildStartUs - triggerUs} '
+      'build=${painted!.buildFinishUs - painted!.buildStartUs} '
+      'rasterWait=${painted!.rasterStartUs - painted!.buildFinishUs} '
+      'raster=${painted!.rasterFinishUs - painted!.rasterStartUs} '
+      'loadingTabs=${tabs.tabs.where((tab) => tab.controller.loading).length}',
+    );
     return latency;
   } finally {
     capture.detach();

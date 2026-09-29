@@ -12,6 +12,7 @@ import 'package:flutter/gestures.dart'
         kSecondaryMouseButton,
         kTouchSlop;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -212,10 +213,30 @@ class _PaneViewState extends State<PaneView> {
   // in didUpdateWidget — a session swap replaces the controllers under a
   // reused element.
   late Listenable _listenable = _merged();
+  late final ValueNotifier<({bool active, bool otherPaneShowsSyncChip})>
+  _workspacePresentation;
+
+  @override
+  void initState() {
+    super.initState();
+    _workspacePresentation = ValueNotifier(_readWorkspacePresentation());
+    widget.workspace.addListener(_onWorkspaceChanged);
+  }
+
+  ({bool active, bool otherPaneShowsSyncChip}) _readWorkspacePresentation() => (
+    active: identical(widget.workspace.activePane, widget.pane),
+    otherPaneShowsSyncChip: _otherPaneShowsSyncChip(),
+  );
+
+  void _onWorkspaceChanged() {
+    _workspacePresentation.value = _readWorkspacePresentation();
+  }
 
   Listenable _merged() => Listenable.merge([
     widget.controller,
-    widget.workspace,
+    // A tab switch in the other pane only affects this listing when
+    // it changes the active-pane treatment or the paired link chip.
+    _workspacePresentation,
     // 02 §7's link chip state — suspension transitions must repaint the
     // location header even when the pane's own controller did not
     // change.
@@ -300,6 +321,14 @@ class _PaneViewState extends State<PaneView> {
   @override
   void didUpdateWidget(PaneView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.workspace, widget.workspace)) {
+      oldWidget.workspace.removeListener(_onWorkspaceChanged);
+      widget.workspace.addListener(_onWorkspaceChanged);
+    }
+    if (!identical(oldWidget.workspace, widget.workspace) ||
+        !identical(oldWidget.pane, widget.pane)) {
+      _onWorkspaceChanged();
+    }
     if (!identical(oldWidget.controller, widget.controller) ||
         !identical(oldWidget.workspace, widget.workspace) ||
         !identical(oldWidget.checkoutSession, widget.checkoutSession)) {
@@ -331,6 +360,8 @@ class _PaneViewState extends State<PaneView> {
   @override
   void dispose() {
     _disposed = true;
+    widget.workspace.removeListener(_onWorkspaceChanged);
+    _workspacePresentation.dispose();
     _graceTimer?.cancel();
     _armedClickTimer?.cancel();
     _scrollController.dispose();
@@ -1846,6 +1877,12 @@ class _PaneSurface extends StatelessWidget {
           key: listAreaKey,
           controller: scrollController,
           itemExtent: extent,
+          // Keep the next row available to accessibility traversal without
+          // constructing a full offscreen band each time a desktop tab mounts.
+          // Touch scrolling retains Flutter's default cache.
+          scrollCacheExtent: isDesktopPlatform(Theme.of(context).platform)
+              ? ScrollCacheExtent.pixels(extent)
+              : null,
           itemCount: controller.entries.length,
           itemBuilder: (context, index) => _buildRow(context, index),
         ),

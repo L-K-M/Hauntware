@@ -1805,6 +1805,66 @@ void main() {
     },
   );
 
+  for (final (value, expectedExit) in [(40, 0), (60, 1)]) {
+    test(
+      'tier-A-only verdict ignores stale tier-B history at $value ms',
+      () async {
+        final budgets = await writeFixture(
+          'budgets.json',
+          _budgetsJson(calibrated: _fingerprintJson(), landedIds: {'P3'}),
+        );
+        final results = await writeFixture(
+          'results.json',
+          _resultsJson(
+            rows: [
+              for (var i = 0; i < 5; i++) _rowJson(repetition: i, value: value),
+            ],
+          ),
+        );
+        final prior = const DriftState({
+          'tier-b/cpu': DriftNoticeState(
+            consecutiveMainRuns: driftStaleThreshold,
+            lastSeenUtc: '2026-09-14T00:00:00Z',
+          ),
+          'tier-b/controlled/runnerImage': DriftNoticeState(
+            consecutiveMainRuns: driftStaleThreshold + 1,
+            lastSeenUtc: '2026-09-14T00:00:00Z',
+          ),
+        }).toJson('2026-09-14T00:00:00Z');
+        final statePath = await writeFixture('state.json', prior);
+        final before = await File(statePath).readAsString();
+
+        final (exitCodeValue, stdoutText, _) = await runChecker(
+          arguments: [
+            '--results',
+            results,
+            '--tiers',
+            'a',
+            '--budgets',
+            budgets,
+            '--drift-state',
+            statePath,
+          ],
+          environment: {'BENCH_ENFORCE_A': '1', 'BENCH_ENFORCE_B': '1'},
+        );
+
+        expect(exitCodeValue, expectedExit, reason: stdoutText);
+        expect(stdoutText, isNot(contains('FAIL: baseline stale')));
+        expect(stdoutText, contains('tier B is outside this run'));
+        expect(
+          stdoutText.contains('FAIL: scenario P3'),
+          expectedExit != 0,
+          reason: 'tier-A enforcement still grades the measured scenario',
+        );
+        expect(
+          await File(statePath).readAsString(),
+          before,
+          reason: 'an undeclared tier cannot clear persisted drift history',
+        );
+      },
+    );
+  }
+
   test('a persisted stale streak reddens a read-only call', () async {
     final budgets = await writeFixture(
       'budgets.json',

@@ -4,6 +4,73 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 drift scope and tab-switch work (2026-09-28)
+
+Tier-A-only benchmark runs now report persisted tier-B drift as a notice,
+so pull requests are graded on the scenarios they actually run. Tier-B
+enforcement, historical drift counts, thresholds, and baselines are unchanged.
+Only a clean main-branch tier-B observation may clear stale history.
+
+The tier-A benchmark job pins Dart to its calibrated `3.13.4` runtime,
+preventing stable SDK updates from silently disabling its comparisons.
+A workflow regression requires the exact SDK pin to match the committed
+calibration; runtime changes require a deliberate calibration update.
+Ordinary Dart CI stays on latest stable, and the budgets are unchanged.
+
+Automatic local watch refreshes are retired when their tab leaves the
+foreground. Their cached rows and selection remain intact, late responses
+skip sorting and rebuilding inactive listings, and activation still re-arms
+the watch before re-listing. Explicit navigation and refresh continue in
+background tabs. Cached local tab activation now coalesces for 300 ms,
+matching the ordinary watch debounce, so rapidly skipped tabs do not start
+obsolete scans. The accepted rows remain usable while the tab settles;
+navigation and explicit Refresh start immediately. Deactivation, disposal,
+and binding changes cancel delayed work, while watch-before-list preserves
+freshness. Nine fake-clock regressions cover that policy; seven failed
+before the change, and all nine pass afterward.
+
+The P4 collector logs scheduling, build, and raster phases
+to distinguish regressions. Manual CI dispatch accepts `skip_m0=true` to
+collect all D12 scenarios without the historical M0 SSH measurement shards.
+
+Workspace layout updates now follow visibility changes, and pane workspace
+updates follow active-pane treatment and paired sync-chip visibility. A tab
+switch no longer rebuilds the surrounding layout or the unchanged opposite
+listing; tab content, focus, sync state, and inspector updates keep their own
+listeners.
+
+Each pane also isolates its painting, so switching one tab retains the
+opposite pane's display list. Empty selection payloads no longer scan every
+cached row when menu enablement or preview listeners request them. The
+activation-watch regression covers switching away before arming completes,
+as well as dropping a listing response that arrives after deactivation.
+
+Desktop listings prebuild one row beyond the viewport, reducing work when
+mounting a tab while retaining the next row for accessibility scrolling.
+Mobile keeps Flutter's default cache. Modified-time formatting reuses parsed
+patterns for the current explicit locale, without caching dates or relative
+labels. Regression coverage checks scrolling and selection at two text
+scales, successive accessibility reveals, mobile cache behavior, and locale
+switches. All 161 affected pane tests pass and Flutter analysis is clean.
+On the calibrated Linux CPU, the combined change measured
+48.694 ms against unchanged controls of 53.156 and 52.841 ms; full production
+verification is recorded with the PR.
+
+Regressions reproduced the stale-history scope failure and unnecessary
+background refresh before the fixes. The paint regression reproduced an
+opposite-pane repaint before isolation and none afterward. All 133 affected
+watch, selection, preview, and command tests, 97 pane/shell tests, and 139
+benchmark tests pass locally, with one existing host-dependent benchmark
+skip. Flutter and benchmark analysis are clean. The first Linux profile
+iteration still exceeded P4's unchanged budget; subsequent profile evidence
+and CI results are recorded with the PR.
+
+The existing queue-restart widget fixture now boots each replay from a disk
+snapshot, preventing abandoned simulated-crash sessions from writing to the
+new session's journal. No extra flush is added at the tested durability
+boundary. The original fixture lost a persisted pause during stress; the
+isolated version passes ten repeats and all three composition tests.
+
 ## Upload permissions on ACL-managed servers (2026-09-28)
 
 Ordinary local-to-server uploads now follow Séance's permission policy: new

@@ -6,6 +6,12 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
+    inputs:
+      skip_m0:
+        description: Skip the historical M0 SSH measurements
+        type: boolean
+        required: false
+        default: false
 
 # Least privilege: the jobs only need to read the repo.
 permissions:
@@ -413,7 +419,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dart-lang/setup-dart@v1
         with:
-          sdk: stable
+          # Match budgets.json's calibration; update through recalibration.
+          sdk: '3.13.4'
       - name: Resolve workspace
         run: dart pub get
       # runnerImage is a controlled fingerprint axis: record the runner
@@ -586,7 +593,7 @@ jobs:
   m0_bench:
     name: M0 SSH fitness measurements (${{ matrix.shard }})
     needs: [dart, dart_tools, seance_pin_audit]
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && !inputs.skip_m0
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
