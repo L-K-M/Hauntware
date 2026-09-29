@@ -75,6 +75,8 @@ class EngineHost {
   StreamSubscription<ConnectLogLine>? _connectLogSubscription;
 
   final Map<String, ServerConfig> _servers = {};
+  final Map<String, ServerConfig> _catalogServers = {};
+  final Set<String> _knownCatalogIds = {};
   final Map<int, PaneChannel> _channels = {};
 
   /// Channel retirements still in flight: the close request removed the
@@ -264,7 +266,10 @@ class EngineHost {
       case final OpenBrowseChannelRequest request:
         _guard(request.requestId, () async {
           _rejectIfShuttingDown();
-          _adoptServerConfig(request.serverId, request.config);
+          _adoptServerConfig(
+            request.serverId,
+            _authoritativeServerConfig(request.config),
+          );
           final channel = await _manager.openBrowseChannel(
             request.serverId,
             paneTabId: request.paneTabId,
@@ -333,7 +338,10 @@ class EngineHost {
           // server (a restored task, a sync run): the config rides along.
           final config = request.config;
           if (config != null) {
-            _adoptServerConfig(request.serverId, config);
+            _adoptServerConfig(
+              request.serverId,
+              _authoritativeServerConfig(config),
+            );
           } else if (!_servers.containsKey(request.serverId)) {
             // No config from the app and none from a browse open: there
             // is nothing to dial, and inventing one would be worse.
@@ -395,6 +403,11 @@ class EngineHost {
       case final SetProbeActivityRequest request:
         _guard(request.requestId, () async {
           _probes.setActivity(request.activity);
+          return const EngineAck();
+        });
+      case final ReplaceServerCatalogRequest request:
+        _guard(request.requestId, () async {
+          _replaceServerCatalog(request.configs);
           return const EngineAck();
         });
       case final DisconnectServerRequest request:
@@ -470,20 +483,102 @@ class EngineHost {
   /// or synced, reach the next connection instead of the session's first.
   /// The map goes first: a retired reference re-resolves through it.
   void _adoptServerConfig(String serverId, ServerConfig config) {
+    final previous = _servers[serverId];
     _servers[serverId] = config;
+    if (previous != null && _sameConnectionConfig(previous, config)) return;
+
     _manager.updateServerConfig(serverId, config);
+  }
+
+  /// Presentation and sync-policy edits do not disturb a matching open that
+  /// is already resolving. Route or credential changes must retire it. Keep
+  /// this list exhaustive for every [ServerConfig] field connection setup
+  /// consumes.
+  bool _sameConnectionConfig(ServerConfig first, ServerConfig second) =>
+      first.id == second.id &&
+      first.host == second.host &&
+      first.port == second.port &&
+      first.username == second.username &&
+      first.jumpHostId == second.jumpHostId &&
+      first.authMethod == second.authMethod &&
+      first.secretRef == second.secretRef &&
+      first.identityFilePath == second.identityFilePath;
+
+  /// Resolves a request's catalog record against the latest full snapshot.
+  /// Deleted ids remain tombstoned so a request captured before deletion
+  /// cannot recreate its old route. Payload timestamps are not the catalog's
+  /// LWW tuple, so a route mismatch refuses until the ordered snapshot lands
+  /// instead of guessing which side is newer.
+  ServerConfig _authoritativeServerConfig(ServerConfig supplied) {
+    final current = _catalogServers[supplied.id];
+    if (current != null) {
+      if (_sameConnectionConfig(current, supplied)) return current;
+      // Preserve the authoritative typed refusal instead of reducing a
+      // known jump route to a transient catalog-mismatch failure.
+      if (current.jumpHostId != null) return current;
+
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'resolve server',
+        message:
+            'The server connection changed in the current catalog. Retry '
+            'the connection.',
+      );
+    }
+    if (!_knownCatalogIds.contains(supplied.id)) return supplied;
+
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.disconnected,
+      operation: 'resolve server',
+      message: 'The server was removed from the current catalog.',
+    );
+  }
+
+  /// A catalog id can back several engine ids: its own sidebar row, favorite
+  /// bookmarks, restored transfers, and sync endpoints. Replace every known
+  /// alias and retire aliases whose record disappeared from the snapshot.
+  void _replaceServerCatalog(List<ServerConfig> configs) {
+    final replacements = {for (final config in configs) config.id: config};
+    _knownCatalogIds.addAll(replacements.keys);
+    _catalogServers
+      ..clear()
+      ..addAll(replacements);
+
+    final aliases = _servers.entries.toList(growable: false);
+    for (final alias in aliases) {
+      final replacement = replacements[alias.value.id];
+      if (replacement != null) {
+        _adoptServerConfig(alias.key, replacement);
+        continue;
+      }
+      if (!_knownCatalogIds.contains(alias.value.id)) continue;
+
+      _servers.remove(alias.key);
+      _manager.retireServerConfig(alias.key);
+    }
   }
 
   Future<ServerConfig> _resolveKnownServer(String serverId) async {
     final config = _servers[serverId];
-    if (config != null) return config;
-    throw RemoteFileException(
-      kind: RemoteFileErrorKind.other,
-      operation: 'resolve server',
-      message:
-          'No connection request has supplied a config for '
-          '"$serverId" yet.',
-    );
+    if (config == null) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.other,
+        operation: 'resolve server',
+        message:
+            'No connection request has supplied a config for '
+            '"$serverId" yet.',
+      );
+    }
+    if (config.jumpHostId != null) {
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'connect through jump host',
+        message:
+            'This server connects through a jump host, which Poltergeist '
+            'does not support yet.',
+      );
+    }
+    return config;
   }
 
   /// Closes the channel (03 §3.2): routing retires synchronously, the

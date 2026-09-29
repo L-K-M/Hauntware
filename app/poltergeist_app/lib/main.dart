@@ -444,6 +444,7 @@ Future<void> main(List<String> args) async {
     vaultKey: masterKeys.probeKeystore,
     servers: servers,
     vaultStore: vaultStore,
+    serverCatalogPublisher: engineSession?.publishServerCatalog,
     settings: settingsStore,
     recordQuarantinePath: () => syncRecords.quarantinedPath,
   );
@@ -456,6 +457,10 @@ Future<void> main(List<String> args) async {
   // Leases for `serverConfigId` bookmarks resolve through the pulled
   // catalog, exactly like the sidebar's open path.
   serverConfigs.catalogLookup = (id) => bookmarkBackup.catalog?.byId(id);
+  engineSession?.bindServerCatalog(
+    changes: bookmarkBackup,
+    read: () => bookmarkBackup.catalog?.servers ?? const [],
+  );
 
   // The server editor's application layer (04 §4.2's management verbs):
   // catalog truth and sync writes through the backup service, credential

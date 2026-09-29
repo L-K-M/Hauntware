@@ -208,6 +208,15 @@
   deleted while you leave the choice open or keep the folder, no longer
   count twice toward the deletion limits, and no longer show "changed
   since preview" after the replace.
+- **Servers behind a jump host stay behind it.** Editing a Séance
+  server in Poltergeist no longer deletes its jump host (ProxyJump) from
+  the record both apps share, which removed it in Séance too.
+  Poltergeist cannot connect through a jump host yet, so opening such a
+  server, testing it in its editor, or transferring to it now says so
+  instead of connecting to the server directly, around the jump host.
+  Its sidebar row no longer checks whether it is online either. If sync
+  adds a jump host or removes a connected server, existing work may
+  finish, but that old route cannot reconnect.
 - Pre-1.0 history lives in the commit log and the GitHub pre-releases
   (v0.1.0, v0.2.0).
 

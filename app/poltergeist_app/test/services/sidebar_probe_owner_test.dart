@@ -252,6 +252,120 @@ void main() {
     expect(settings.calls, isNot(contains('remove:b2')));
   });
 
+  test('a jump-routed catalog server is never probed', () async {
+    ServerConfig pulled(String id, {String? jumpHostId}) => ServerConfig(
+      id: id,
+      label: id,
+      host: '$id.internal',
+      username: 'ops',
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    owner.syncCatalog([pulled('web'), pulled('db', jumpHostId: 'bastion')]);
+    owner.noteVisible('web');
+    owner.noteVisible('db');
+    await pump();
+
+    // The probe would dial db directly, around its bastion (X-05).
+    expect(settings.calls, ['write:web']);
+    expect(bridge.targets.map((target) => target.id), ['web']);
+  });
+
+  test('a visible catalog server starts probing when its jump route clears',
+      () async {
+    ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+    owner.noteVisible('db');
+    await pump();
+    expect(bridge.targets, isEmpty);
+
+    // The row remains mounted while sync makes the route directly usable.
+    owner.syncCatalog([pulled()]);
+    await pump();
+
+    expect(settings.calls, ['write:db']);
+    expect(bridge.targets.map((target) => target.id), ['db']);
+  });
+
+  test(
+    'a hidden catalog server waits for remount when its route clears',
+    () async {
+      ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'ops',
+        jumpHostId: jumpHostId,
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      owner.forwardLifecycle(AppLifecycleState.resumed);
+      owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+      owner.noteVisible('db');
+      await pump();
+
+      owner.noteHidden('db');
+      owner.syncCatalog([pulled()]);
+      await pump();
+
+      expect(settings.calls, isEmpty);
+      expect(bridge.targets, isEmpty);
+
+      owner.noteVisible('db');
+      await pump();
+
+      expect(settings.calls, ['write:db']);
+      expect(bridge.targets.map((target) => target.id), ['db']);
+    },
+  );
+
+  test(
+    'visibility remains active until every copy of a row unmounts',
+    () async {
+      ServerConfig pulled({required String host}) => ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: host,
+        username: 'ops',
+        jumpHostId: 'bastion',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      owner.syncCatalog([pulled(host: 'db.internal')]);
+      owner.noteVisible('db');
+      owner.noteVisible('db');
+
+      owner.noteHidden('db');
+      owner.syncCatalog([
+        pulled(host: 'db.internal').copyWith(clearJumpHostId: true),
+      ]);
+      await pump();
+      expect(settings.calls, ['write:db']);
+
+      owner.noteHidden('db');
+      owner.syncCatalog([
+        pulled(host: 'db-new.internal').copyWith(clearJumpHostId: true),
+      ]);
+      await pump();
+      expect(settings.calls, ['write:db']);
+
+      owner.noteVisible('db');
+      await pump();
+      expect(settings.calls, ['write:db', 'write:db']);
+    },
+  );
+
   test('noteRemoved purges the record and drops the target', () async {
     owner.forwardLifecycle(AppLifecycleState.resumed);
     owner.syncFavorites([_remoteFavorite('b1')]);

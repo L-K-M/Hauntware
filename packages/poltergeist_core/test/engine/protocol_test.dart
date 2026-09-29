@@ -42,6 +42,16 @@ final _config = ServerConfig(
   updatedAt: 1700000001,
 );
 
+final _jumpConfig = ServerConfig(
+  id: 'srv-jump',
+  label: 'Jump Server',
+  host: 'private.example.com',
+  username: 'user',
+  jumpHostId: 'srv-1',
+  createdAt: 1700000000,
+  updatedAt: 1700000001,
+);
+
 const _entry = RemoteFileEntry(
   path: '/tmp/a.txt',
   name: 'a.txt',
@@ -398,6 +408,14 @@ void main() {
         incoming,
         engine,
         SetProbeTargetsRequest(requestId: 17, targets: []),
+      );
+      await _roundTrip(
+        incoming,
+        engine,
+        ReplaceServerCatalogRequest(
+          requestId: 20,
+          configs: [_config, _jumpConfig],
+        ),
       );
       for (final activity in ProbeActivity.values) {
         await _roundTrip(
@@ -926,6 +944,15 @@ Future<void> _roundTrip(
     ):
       expect(got.requestId, sent.requestId);
       expect(got.activity, sent.activity);
+    case (
+      final ReplaceServerCatalogRequest sent,
+      final ReplaceServerCatalogRequest got,
+    ):
+      expect(got.requestId, sent.requestId);
+      expect(
+        got.configs.map((config) => config.toJson()),
+        sent.configs.map((config) => config.toJson()),
+      );
     case (final ShutdownRequest sent, final ShutdownRequest got):
       expect(got.requestId, sent.requestId);
     case (final PromptReplyRequest sent, final PromptReplyRequest got):

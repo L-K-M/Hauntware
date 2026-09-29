@@ -23,7 +23,7 @@ import 'probe_settings_store.dart';
 ///   drops out of probing but keeps its device-local record (a collapsed
 ///   group or a transient reload must not erase history; only
 ///   [noteRemoved] purges).
-/// - [noteVisible] marks exposure when a row mounts — 02 §4 defers a
+/// - [noteVisible] and [noteHidden] track mounted rows — 02 §4 defers a
 ///   favorite's first probe until it is visible in the sidebar.
 /// - [noteConnected] records a successful connect from this device — the
 ///   only fact that makes a sync-origin favorite probe-eligible.
@@ -54,7 +54,8 @@ final class SidebarProbeOwner extends ChangeNotifier {
   ProbePreference _preference = ProbePreference.enabled;
   final Map<String, ServerConfig> _configs = {};
   final Map<String, ServerConfig> _catalogConfigs = {};
-  final Set<String> _seenMarked = {};
+  final Map<String, int> _visible = {};
+  final Set<(String, String, int)> _seenMarked = {};
   final Set<String> _connectedMarked = {};
   Future<void> _tail = Future.value();
   bool _disposed = false;
@@ -84,6 +85,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
     _configs
       ..clear()
       ..addAll(configs);
+    _markVisibleConfigs();
     _enqueue(_reconfigure);
   }
 
@@ -91,23 +93,57 @@ final class SidebarProbeOwner extends ChangeNotifier {
   /// pulled `serverConfig` records carry their own endpoints, so they
   /// probe under the config's own id — the same key the catalog rows
   /// read their status by. A catalog row's facts persist under that id;
-  /// a record the account drops simply stops being probed.
+  /// a record the account drops simply stops being probed. A server
+  /// routed through a jump host is never probed: the probe would dial it
+  /// directly, around the bastion, and report that path's reachability as
+  /// the server's (jump_host_guard.dart).
   void syncCatalog(Iterable<ServerConfig> servers) {
     if (_disposed) return;
     _catalogConfigs
       ..clear()
-      ..addAll({for (final server in servers) server.id: server});
+      ..addAll({
+        for (final server in servers)
+          if (server.jumpHostId == null) server.id: server,
+      });
+    _markVisibleConfigs();
     _enqueue(_reconfigure);
   }
 
   /// The favorite's row mounted: persist exposure and re-apply policy —
   /// the first probe waits for this mark (02 §4). Idempotent per id per
-  /// owner lifetime; a re-seeded store re-reads persisted facts anyway.
+  /// endpoint; a route that becomes eligible while mounted is marked then.
   void noteVisible(String serverId) {
     if (_disposed) return;
+    _visible.update(serverId, (count) => count + 1, ifAbsent: () => 1);
+    _markSeen(serverId);
+  }
+
+  /// The favorite's row unmounted. Counts are balanced because pinned and
+  /// grouped copies of one server can briefly coexist during a rebuild.
+  void noteHidden(String serverId) {
+    if (_disposed) return;
+    final count = _visible[serverId];
+    if (count == null) return;
+    if (count > 1) {
+      _visible[serverId] = count - 1;
+      return;
+    }
+
+    _visible.remove(serverId);
+  }
+
+  /// Marks mounted rows whenever their current endpoint becomes probeable.
+  void _markVisibleConfigs() {
+    for (final serverId in _visible.keys) {
+      _markSeen(serverId);
+    }
+  }
+
+  void _markSeen(String serverId) {
     final config = _configs[serverId] ?? _catalogConfigs[serverId];
     if (config == null) return;
-    if (!_seenMarked.add(serverId)) return;
+    final key = (serverId, config.host.toLowerCase(), config.port);
+    if (!_seenMarked.add(key)) return;
     _enqueue(() async {
       if (_disposed) return;
       try {
@@ -158,7 +194,8 @@ final class SidebarProbeOwner extends ChangeNotifier {
     if (_disposed) return;
     _configs.remove(serverId);
     _catalogConfigs.remove(serverId);
-    _seenMarked.remove(serverId);
+    _visible.remove(serverId);
+    _seenMarked.removeWhere((key) => key.$1 == serverId);
     // The dedupe keys too: a re-added favorite with the same id/endpoint
     // must re-persist markConnected — the record was just deleted.
     _connectedMarked.removeWhere((key) => key.startsWith('$serverId@'));

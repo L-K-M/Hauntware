@@ -9297,6 +9297,52 @@ subsumption shapes, plus a source-side directory that keeps its copy
 rows) and a `scanned plans` group in `executor_test.dart` that scans
 real trees, diffs and runs them. All but the source-side guard failed
 before the fix. `dart test packages/poltergeist_sync` passes.
+## Jump-host servers: route kept, never dialed directly (2026-09-26)
+
+Review findings X-02 and X-05. Since the D4 amendment, Poltergeist
+writes Séance's `serverConfig` records, and the pinned model (v0.9.1)
+already carries `jumpHostId`.
+
+- **X-02.** The ported editor rebuilt the config on save without
+  `jumpHostId`, so renaming a jump-routed server pushed a record that
+  dropped the route on every device, Séance included. `_formConfig` now
+  keeps it (Séance #131's fix). The other writers (duplication, the
+  store's re-stamp, the tombstone revive, pull apply) already carried it.
+  Keys the pinned model does not know (X-03) are still dropped; that
+  needs `ServerConfig` to round-trip unknown keys upstream, then a pin
+  bump.
+- **X-05.** The pinned opener ignores `jumpHostId` and dials the host
+  directly. `refuseJumpHostRoute` (`lib/services/jump_host_guard.dart`)
+  now fails a jump-routed config before the engine sees it, as a typed
+  `unsupported` error with an ARB sentence, in the pane's connect and in
+  `AppServerConfigSource.configFor` (transfers, checkouts, previews,
+  sync runs). The editor's Test connection reports the same sentence as
+  a failed trial without calling the delegate, and the sidebar no longer
+  probes such a server. Protocol v14 also pushes complete catalog snapshots
+  into the engine without acquiring a channel. The app publishes each
+  materialized snapshot synchronously before its mutation returns, clears it
+  on sign-out or account replacement, and ignores callbacks from superseded
+  catalogs. Overlapping coordinator rebuilds commit only their newest
+  account/key generation. Snapshots are authoritative by arrival order, not
+  by `ServerConfig.updatedAt` (payload metadata): adding a jump route or
+  removing a record retires every old alias, while a captured request whose
+  connection no longer matches refuses instead of restoring the old route.
+  Work already authenticated may drain, but it cannot recover or issue
+  another lease there. This matches 01 §4 differentiator 8 (not connectable
+  until D10), so no plan edit.
+
+Tests: the editor keeps `jumpHostId` on an edit (failed before the fix),
+and `saveServer` seals it into the pushed record. The pane, the config
+source and the editor's test refuse a jump-routed server without
+dialing, and the probe owner skips it (all four failed before the fix).
+Review added regressions for live and pending route retirement, stale opens
+and leases, skewed payload timestamps, catalog tombstones, matching concurrent
+opens, mounted versus hidden probe rows, synchronous publication, sign-out,
+and overlapping account rebuilds. The routing and lifecycle regressions failed
+before their fixes; the skew cases pin snapshot arrival order. The v14 snapshot
+also crosses the isolate contract test. Validation: Dart and Flutter analysis
+are clean; the full core suite passes 1724 tests with 27 environment skips,
+and the full app suite passes 2899 tests (17 app tests new).
 
 ## Open items
 

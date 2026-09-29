@@ -265,6 +265,26 @@ void main() {
       final (config, _) = delegate.saved!;
       expect(config.updatedAt, greaterThan(pulled));
     });
+
+    testWidgets('an edit keeps the jump route the form does not show', (
+      tester,
+    ) async {
+      // A Séance server routed through a bastion: the saved record is
+      // pushed to every device, so dropping the route here would remove
+      // it from Séance too (X-02).
+      final existing = _server('db', jumpHostId: 'bastion');
+      delegate.serverList = [existing];
+      await openEditor(tester, existing: existing);
+
+      await tester.enterText(field('Label'), 'db (renamed)');
+      await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final (config, _) = delegate.saved!;
+      expect(config.label, 'db (renamed)');
+      expect(config.jumpHostId, 'bastion');
+    });
   });
 
   // D37: the server's own cap on simultaneous transfers, stored on the
@@ -501,6 +521,29 @@ void main() {
 
       expect(delegate.testCalls, 1);
       expect(find.textContaining('Connected and authenticated'), findsWidgets);
+    });
+
+    testWidgets('a jump-routed server is refused without a trial dial', (
+      tester,
+    ) async {
+      // The pinned opener would authenticate straight to the host, around
+      // the bastion, typed credentials included (X-05).
+      final existing = _server('db', jumpHostId: 'bastion');
+      delegate.serverList = [existing];
+      await openEditor(tester, existing: existing);
+      await scrollTo(tester, find.text('Test connection'));
+      await tester.tap(find.text('Test connection'));
+      await tester.pumpAndSettle();
+
+      expect(delegate.testCalls, 0);
+      expect(
+        find.text(
+          lookupAppLocalizations(
+            const Locale('en'),
+          ).connectionJumpHostUnsupported,
+        ),
+        findsOneWidget,
+      );
     });
   });
 

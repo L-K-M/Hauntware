@@ -3,6 +3,7 @@
 // durable effect asserted against the real seams (in-memory record store,
 // fake transport/server, temp-dir SettingsStore) rather than mocked
 // internals.
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -59,6 +60,8 @@ final class _Harness {
   final tripwires = InMemorySyncTripwireStore();
   var records = InMemorySyncRecordStore();
   var clock = _fixedNow;
+  Future<List<int>?> Function()? vaultKeyOverride;
+  void Function(List<ServerConfig> snapshot)? catalogPublisher;
 
   late final service = BookmarkBackupService(
     credentials: credentials,
@@ -71,9 +74,15 @@ final class _Harness {
     pinVerdicts: pinVerdicts,
     tripwires: tripwires,
     transportFactory: fakeTransportFactory(server, transports),
-    vaultKey: () async => credentials.vaultKey,
+    vaultKey: () async {
+      final override = vaultKeyOverride;
+      if (override != null) return override();
+
+      return credentials.vaultKey;
+    },
     servers: servers,
     vaultStore: vaultStore,
+    serverCatalogPublisher: (snapshot) => catalogPublisher?.call(snapshot),
     settings: settings,
     now: () => clock,
   );
@@ -593,6 +602,91 @@ void main() {
       expect(h.service.catalog!.byId('web'), isNotNull);
     });
 
+    test('save and delete notify complete catalog snapshots', () async {
+      await h.enrollSharedDirectly();
+      final snapshots = <List<String>>[];
+      void capture() => snapshots.add([
+        for (final server in h.service.catalog?.servers ?? const []) server.id,
+      ]);
+      h.service.addListener(capture);
+      addTearDown(() => h.service.removeListener(capture));
+
+      await h.service.saveServer(config('web'));
+      await h.service.deleteServer(config('web'));
+
+      expect(snapshots, [
+        ['web'],
+        <String>[],
+      ]);
+    });
+
+    test('publishes each catalog mutation before its operation returns',
+        () async {
+      await h.enrollSharedDirectly();
+      final snapshots = <List<String>>[];
+      final completedAtPublish = <bool>[];
+      var operationCompleted = false;
+      h.catalogPublisher = (snapshot) {
+        snapshots.add([for (final server in snapshot) server.id]);
+        completedAtPublish.add(operationCompleted);
+      };
+
+      await h.service.saveServer(config('web')).then((_) {
+        operationCompleted = true;
+      });
+      operationCompleted = false;
+      await h.service.deleteServer(config('web')).then((_) {
+        operationCompleted = true;
+      });
+
+      expect(snapshots, [
+        ['web'],
+        <String>[],
+      ]);
+      expect(completedAtPublish, [isFalse, isFalse]);
+    });
+
+    test('publishes an empty catalog before sign-out returns', () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(config('web'));
+      final staleCatalog = h.service.catalog!;
+      final snapshots = <List<String>>[];
+      var signOutCompleted = false;
+      h.catalogPublisher = (snapshot) {
+        snapshots.add([for (final server in snapshot) server.id]);
+        expect(signOutCompleted, isFalse);
+      };
+
+      await h.service.signOut().then((_) {
+        signOutCompleted = true;
+      });
+      staleCatalog.replace([config('stale')]);
+
+      expect(snapshots, [<String>[]]);
+    });
+
+    test('saveServer seals a jump route into the pushed record', () async {
+      // The editor hands over the route it does not show (X-02); the
+      // re-stamp and the seal must carry it on to Séance's devices.
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'u',
+        jumpHostId: 'bastion',
+        createdAt: 1,
+        updatedAt: 1,
+      ));
+
+      final record = (await h.records.dirtyRecords()).single;
+      final opened = await RecordCrypto(
+        RecordCodec(h.credentials.vaultKey!),
+      ).open(record);
+      expect(opened.data['jumpHostId'], 'bastion');
+      expect((await h.servers.byId('db'))!.jumpHostId, 'bastion');
+    });
+
     test('deleteServer drops the row and seals the tombstone', () async {
       await h.enrollSharedDirectly();
       await h.service.saveServer(config('web'));
@@ -633,6 +727,69 @@ void main() {
 
       expect((await h.service.serverSecretById('s1'))!.value, 'hunter2');
       expect(await h.records.getRecord('secret:s1'), isNull);
+    });
+
+    test('a shared rebind keeps its live catalog until replacement',
+        () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(config('web'));
+      final catalog = h.service.catalog;
+      final snapshots = <List<String>>[];
+      h.catalogPublisher = (snapshot) {
+        snapshots.add([for (final server in snapshot) server.id]);
+      };
+
+      await h.service.setSyncSecrets(true);
+
+      expect(identical(h.service.catalog, catalog), isTrue);
+      expect(snapshots, [
+        ['web'],
+      ]);
+    });
+
+    test('an older rebuild cannot replace a newer account binding', () async {
+      const oldAccount = SyncAccount(
+        baseUrl: 'https://old.example',
+        username: 'old',
+        mode: SyncAccountMode.shared,
+      );
+      const newAccount = SyncAccount(
+        baseUrl: 'https://new.example',
+        username: 'new',
+        mode: SyncAccountMode.shared,
+      );
+      final oldKey = List<int>.filled(32, 1);
+      final newKey = List<int>.filled(32, 2);
+      final firstStarted = Completer<void>();
+      final releaseFirst = Completer<void>();
+      var vaultKeyCalls = 0;
+      h.state.enrolled = oldAccount;
+      h.credentials.vaultKey = oldKey;
+      h.vaultKeyOverride = () async {
+        vaultKeyCalls += 1;
+        if (vaultKeyCalls != 1) return h.credentials.vaultKey;
+
+        firstStarted.complete();
+        await releaseFirst.future;
+        return oldKey;
+      };
+
+      final olderLoad = h.service.load();
+      await firstStarted.future;
+      h.state.enrolled = newAccount;
+      h.credentials.vaultKey = newKey;
+      await h.service.load();
+      final newerCatalog = h.service.catalog;
+
+      releaseFirst.complete();
+      await olderLoad;
+
+      expect(h.service.account, newAccount);
+      expect(identical(h.service.catalog, newerCatalog), isTrue);
+      await h.service.saveServer(config('new-route'));
+      final record = await h.records.getRecord('new-route');
+      final opened = await RecordCrypto(RecordCodec(newKey)).open(record!);
+      expect(opened.id, 'new-route');
     });
 
     test('turning the switch on persists and publishes what it held back',
