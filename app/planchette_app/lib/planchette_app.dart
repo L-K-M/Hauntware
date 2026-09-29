@@ -10,6 +10,7 @@ import 'services/document_workspace.dart';
 import 'services/settings_dialog.dart';
 import 'theme/planchette_theme.dart';
 import 'widgets/command_palette.dart';
+import 'widgets/disk_notice.dart';
 import 'widgets/tab_strip.dart';
 
 /// The color the native window shows before the first Flutter frame. Must be
@@ -456,7 +457,11 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Revert to Saved',
           _revert,
-          enabled: ready && active?.path != null,
+          // A deleted file has no saved version to go back to.
+          enabled:
+              ready &&
+              active?.path != null &&
+              active?.disk != DiskState.missing,
         ),
         _Command('Export as HTML…', _exportHtml, enabled: ready),
         const _Separator(),
@@ -941,6 +946,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                               ),
                               controller: tab.editor,
                               isActive: tab == active,
+                              banner: _diskNotice(tab),
                               // No editingLocked here: the workspace locks
                               // each controller the moment a dialog opens
                               // and unlocks it the moment it closes. A view
@@ -965,6 +971,22 @@ class _DocumentShellState extends State<_DocumentShell> {
     );
     if (mac) body = _nativeMenu(menus, body);
     return body;
+  }
+
+  /// Tabs without edits take an outside change silently; everything else
+  /// the disk check found is explained here.
+  Widget? _diskNotice(DocumentTab tab) {
+    if (tab.disk == DiskState.current) return null;
+    return DiskNotice(
+      key: ValueKey('disk-notice-${tab.id}'),
+      state: tab.disk,
+      name: tab.name,
+      // A reload in flight would replace the text after Keep Mine.
+      enabled: !workspace.interactionLocked && !tab.busy && !tab.editor.isBusy,
+      onReload: () => unawaited(workspace.reloadFromDisk(tab)),
+      onKeepMine: tab.editor.isDirty ? () => workspace.keepMine(tab) : null,
+      onSave: () => unawaited(workspace.save(tab)),
+    );
   }
 
   Widget _errorBanner({
