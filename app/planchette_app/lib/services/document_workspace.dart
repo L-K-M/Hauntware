@@ -28,6 +28,42 @@ enum _SaveRun {
   final EditorSaveAccess access;
 }
 
+/// How an open document's file relates to the text its tab last read from
+/// it or wrote to it, as the latest disk check found it.
+enum DiskState {
+  /// The file holds what the tab last read or saved.
+  current,
+
+  /// Another program changed the file and the tab kept its own text: it had
+  /// edits, or the new version could not be read.
+  changed,
+
+  /// The file was deleted or moved away; saving creates it again.
+  missing,
+}
+
+/// Why a disk check runs, which decides what it may do about a change.
+enum _DiskCheck {
+  /// The window came back to the front: an unchanged stamp skips hashing,
+  /// and a tab without edits takes the new version.
+  focus,
+
+  /// A write to the tab's own file failed. The failure is the evidence, so
+  /// the file is hashed whatever its stamp, and nothing is replaced while
+  /// the user is trying to save.
+  failedSave,
+}
+
+/// Who asked for a tab's text to be read again from its file.
+enum _Reread {
+  /// Revert to Saved or the notice's Reload: the user chose to drop edits.
+  chosen,
+
+  /// A disk check found a new version for a tab without edits. It installs
+  /// only over the text it found unedited.
+  background,
+}
+
 abstract interface class DocumentDialogs {
   Future<List<String>> pickOpenFiles();
   Future<String?> pickSavePath(String suggestedName);
@@ -59,6 +95,23 @@ final class DocumentTab {
   /// Set while a confirmed revert reads the file. The buffer is about to be
   /// replaced, so it takes no edits and no save may write it.
   bool _reverting = false;
+
+  /// Whether the file still holds what this tab last read or wrote. The
+  /// shell shows a notice for the other states.
+  DiskState get disk => _disk;
+  DiskState _disk = DiskState.current;
+
+  /// The digest of the version another program wrote, while [disk] is
+  /// [DiskState.changed]. Keep Mine makes it the next save's guard.
+  String? _diskDigest;
+
+  /// The baseline and file stamp [disk] was last decided for. A check that
+  /// finds the same pair again skips hashing the file.
+  ({TextDocument baseline, FileStamp stamp})? _decided;
+
+  /// The last failure to read this tab's file that a check reported, so the
+  /// next window focus does not report the same failure again.
+  ({FileStamp? stamp, String message})? _unreadable;
 
   /// Bumped when the tab is chosen by opening a document it already holds, so
   /// the shell can point at it. Monotonic, never reset: a view compares it to
@@ -202,6 +255,7 @@ final class DocumentWorkspace extends ChangeNotifier {
         tab.path = document.file.path;
         tab.editor.adoptDocument(document);
         tab.editor.displayPath = document.file.path;
+        _settle(tab);
         return document.sha256;
       },
     );
@@ -522,8 +576,9 @@ final class DocumentWorkspace extends ChangeNotifier {
     }
     tab.busy = true;
     _notify();
+    _SaveTarget? target;
     try {
-      final target = await _saveTarget(tab, saveAs: saveAs);
+      target = await _saveTarget(tab, saveAs: saveAs);
       if (target == null) return false;
       _saveTargets[tab] = (path: target.path, digest: target.digest);
       final result = await tab.editor.save(access: access);
@@ -534,6 +589,13 @@ final class DocumentWorkspace extends ChangeNotifier {
       _clearScope(tab);
       return true;
     } catch (error) {
+      if (await _explainedByDisk(tab, target) case final reason?) {
+        // The notice says what happened and offers the way on; the save's
+        // own error would only repeat it less helpfully.
+        _saveFailures[tab] = reason;
+        _clearScope(tab);
+        return false;
+      }
       _reportError('Could not save ${tab.name}: $error', scope: tab);
       _saveFailures[tab] = '$error';
       return false;
@@ -576,9 +638,11 @@ final class DocumentWorkspace extends ChangeNotifier {
         target = tab.path!;
       }
       final own = tab.path != null && _pathKey(target) == _pathKey(tab.path!);
-      // Choosing the same file must not bypass its external-change guard.
+      // Choosing the same file must not bypass its external-change guard. A
+      // file found missing expects none, so the save creates it again, and
+      // exclusively: a file back in its place is never overwritten.
       final digest = own
-          ? tab.baseline!.sha256
+          ? (tab.disk == DiskState.missing ? null : tab.baseline!.sha256)
           : await store.existingDigest(target);
 
       // Every route onto a protected file asks, Save As included. Consent
@@ -905,17 +969,44 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// A failed reload keeps the buffer and reports through [error], so a
   /// broken read never destroys the user's text.
   Future<bool> revert(DocumentTab tab) async {
-    if (interactionLocked ||
-        tab.busy ||
-        !_documents.contains(tab) ||
-        tab.path == null ||
-        tab.editor.isBusy) {
-      return false;
-    }
+    if (!_canReread(tab)) return false;
     if (tab.editor.isDirty) {
       final confirmed = await _dialog(() => dialogs.confirmRevert(tab.name));
       if (!confirmed) return false;
     }
+    return _rereadChosen(tab, 'revert');
+  }
+
+  /// The disk notice's Reload. Choosing it already says to drop the edits
+  /// for the version on disk, so unlike [revert] it does not ask again.
+  Future<bool> reloadFromDisk(DocumentTab tab) async {
+    if (!_canReread(tab)) return false;
+    return _rereadChosen(tab, 'reload');
+  }
+
+  bool _canReread(DocumentTab tab) =>
+      !interactionLocked &&
+      !tab.busy &&
+      _documents.contains(tab) &&
+      tab.path != null &&
+      !tab.editor.isBusy;
+
+  Future<bool> _rereadChosen(DocumentTab tab, String verb) async {
+    try {
+      return await _reread(tab, _Reread.chosen);
+    } catch (error) {
+      // Runs unawaited from the menu and the notice; report instead of
+      // leaking an unhandled async error.
+      _reportError('Could not $verb ${tab.name}: $error', scope: tab);
+      return false;
+    }
+  }
+
+  /// Reads [tab]'s file and installs it as the buffer and its baseline,
+  /// rethrowing a failed read. The tab stays on screen, locked, while the
+  /// file is read.
+  Future<bool> _reread(DocumentTab tab, _Reread why) async {
+    final baseline = tab.baseline;
     tab.busy = true;
     tab._reverting = true;
     _notify();
@@ -926,25 +1017,232 @@ final class DocumentWorkspace extends ChangeNotifier {
       // follows the tab's current path, which Save As may have changed.
       final document = await store.load(tab.path!);
       if (_disposed || !_documents.contains(tab)) return false;
+      if (why == _Reread.background &&
+          (tab.editor.isDirty || !identical(tab.baseline, baseline))) {
+        return false;
+      }
       tab.baseline = document;
       tab.path = document.file.path;
-      // An install: the view starts a fresh undo history, so the reverted
-      // edits cannot be undone back into a buffer whose baseline has moved.
+      // An install: the view starts a fresh undo history, so the replaced
+      // text cannot be undone back into a buffer whose baseline has moved.
+      // The caret and scroll position stay where they still fit.
       tab.editor.adoptDocument(document, replaceText: true);
       tab.editor.displayPath = document.file.path;
-      _clearScope(tab);
+      _settle(tab);
+      if (why == _Reread.chosen) _clearScope(tab);
       return true;
-    } catch (error) {
-      // revert() runs unawaited from the menu; report instead of leaking an
-      // unhandled async error.
-      _reportError('Could not revert ${tab.name}: $error', scope: tab);
-      return false;
     } finally {
       tab.busy = false;
       tab._reverting = false;
       _notify();
     }
   }
+
+  /// The disk notice's Keep Mine: keep the edits, and let the next save
+  /// replace the version now on disk. Only that version: its digest becomes
+  /// the save's guard, so a later outside change is still caught. A tab
+  /// without edits is refused, since nothing would mark its text unsaved
+  /// and the file would keep the other version while the tab shows this one.
+  void keepMine(DocumentTab tab) {
+    final baseline = tab.baseline;
+    final digest = tab._diskDigest;
+    if (interactionLocked ||
+        tab.busy ||
+        !_documents.contains(tab) ||
+        tab.disk != DiskState.changed ||
+        !tab.editor.isDirty ||
+        baseline == null ||
+        digest == null) {
+      return;
+    }
+    tab.baseline = baseline.copyWith(sha256: digest);
+    // The file was hashed at this stamp, so an unchanged file needs no
+    // second look against the adopted digest.
+    if (tab._decided case final decided?) {
+      tab._decided = (baseline: tab.baseline!, stamp: decided.stamp);
+    }
+    _settle(tab);
+  }
+
+  /// Compares each open file with the text its tab last read or wrote,
+  /// typically when the window comes back to the front. A tab without edits
+  /// takes the new version in place, a tab with edits gets a notice, and a
+  /// vanished file is flagged so Save creates it again. A request while a
+  /// check runs sends it round once more: it may have passed the file that
+  /// changed.
+  Future<void> checkDisk() {
+    if (_diskCheck case final running?) {
+      _checkAgain = true;
+      return running;
+    }
+    return _diskCheck = _checkDiskRounds().whenComplete(
+      () => _diskCheck = null,
+    );
+  }
+
+  Future<void>? _diskCheck;
+  bool _checkAgain = false;
+
+  Future<void> _checkDiskRounds() async {
+    do {
+      _checkAgain = false;
+      for (final tab in List.of(_documents)) {
+        // A question on screen owns the window: a notice or a reload now
+        // would change what it asks about. Checking resumes once it closes.
+        while (interactionLocked && !_quitAccepted && !_disposed) {
+          await (_unlocked ??= Completer<void>()).future;
+        }
+        if (_disposed || _quitAccepted) return;
+        if (!_documents.contains(tab) ||
+            tab.path == null ||
+            tab.baseline == null ||
+            tab.busy ||
+            tab.editor.isBusy ||
+            tab.editor.error != null) {
+          continue;
+        }
+        await _checkTab(tab, _DiskCheck.focus);
+      }
+    } while (_checkAgain && !_disposed);
+  }
+
+  /// Decides [tab]'s [DiskState] from its file, and returns the digest found
+  /// there (null for no file), or null when the check could not tell or its
+  /// result was dropped. Only a stamp that changed since the last decision
+  /// is worth hashing the file for.
+  Future<({String? digest})?> _checkTab(DocumentTab tab, _DiskCheck why) async {
+    final path = tab.path!;
+    final baseline = tab.baseline!;
+
+    // Another operation took the tab over while the file was read, and its
+    // own outcome decides what the tab holds now.
+    bool superseded() =>
+        _disposed ||
+        !_documents.contains(tab) ||
+        !identical(tab.baseline, baseline) ||
+        (why == _DiskCheck.focus && (tab.busy || tab.editor.isBusy));
+
+    FileStamp? stamp;
+    String? digest;
+    var steady = false;
+    try {
+      stamp = await store.stamp(path);
+      if (stamp != null) {
+        final decided = tab._decided;
+        if (why == _DiskCheck.focus &&
+            decided != null &&
+            identical(decided.baseline, baseline) &&
+            decided.stamp == stamp) {
+          return null;
+        }
+        digest = await store.existingDigest(path);
+        // Only a stamp that held across the read describes this digest.
+        steady = await store.stamp(path) == stamp;
+      }
+    } catch (error) {
+      if (!superseded()) {
+        _reportUnreadable(
+          tab,
+          stamp,
+          'Could not check ${tab.name} for changes on disk: $error',
+        );
+      }
+      return null;
+    }
+    if (superseded()) return null;
+    tab._unreadable = null;
+    _clearScope(_diskScope(tab));
+
+    if (stamp == null || digest == null) {
+      tab._decided = null;
+      tab._diskDigest = null;
+      _setDisk(tab, DiskState.missing);
+      return (digest: null);
+    }
+    final decision = steady ? (baseline: baseline, stamp: stamp) : null;
+    if (digest == baseline.sha256) {
+      tab._decided = decision;
+      _settle(tab);
+      return (digest: digest);
+    }
+    if (why == _DiskCheck.focus && !tab.editor.isDirty) {
+      // A later check tries again if the tab cannot take the text now.
+      if (!_canReread(tab)) return null;
+      try {
+        if (!await _reread(tab, _Reread.background)) return null;
+      } catch (error) {
+        if (superseded()) return null;
+        _flagChanged(tab, digest, decision);
+        _reportUnreadable(
+          tab,
+          stamp,
+          'Could not read the new version of ${tab.name}: $error',
+        );
+      }
+      return (digest: digest);
+    }
+    _flagChanged(tab, digest, decision);
+    return (digest: digest);
+  }
+
+  /// Why a failed write to [tab]'s own file failed, when the file explains
+  /// it: it no longer holds what the save expected, and the notice now says
+  /// so. Null for any other failure, such as a permission error, whose own
+  /// message must stay visible, notice or not.
+  Future<String?> _explainedByDisk(DocumentTab tab, _SaveTarget? target) async {
+    final path = tab.path;
+    if (target == null ||
+        path == null ||
+        tab.baseline == null ||
+        _pathKey(target.path) != _pathKey(path)) {
+      return null;
+    }
+    final found = await _checkTab(tab, _DiskCheck.failedSave);
+    if (found == null || found.digest == target.digest) return null;
+    return switch (tab.disk) {
+      DiskState.current => null,
+      DiskState.changed => 'it changed on disk',
+      DiskState.missing => 'it was deleted or moved',
+    };
+  }
+
+  void _flagChanged(
+    DocumentTab tab,
+    String digest,
+    ({TextDocument baseline, FileStamp stamp})? decision,
+  ) {
+    tab._diskDigest = digest;
+    tab._decided = decision;
+    _setDisk(tab, DiskState.changed);
+  }
+
+  /// The file holds what [tab] last read or wrote.
+  void _settle(DocumentTab tab) {
+    tab._diskDigest = null;
+    tab._unreadable = null;
+    _clearScope(_diskScope(tab));
+    _setDisk(tab, DiskState.current);
+  }
+
+  void _setDisk(DocumentTab tab, DiskState state) {
+    if (tab._disk == state) return;
+    tab._disk = state;
+    _notify();
+  }
+
+  /// Reports a file a check could not read, once for each failure: every
+  /// window focus checks again, and the same message each time would make
+  /// the banner impossible to dismiss.
+  void _reportUnreadable(DocumentTab tab, FileStamp? stamp, String message) {
+    final failure = (stamp: stamp, message: message);
+    if (tab._unreadable == failure) return;
+    tab._unreadable = failure;
+    _reportError(message, scope: _diskScope(tab));
+  }
+
+  /// A tab's disk-check failures, apart from its save failures: a save says
+  /// nothing about whether the file can be read.
+  static Object _diskScope(DocumentTab tab) => (diskOf: tab);
 
   /// Both the native close button and the OS Quit route share this decision.
   /// No tab is removed until every document has consented; a later Cancel
@@ -1162,8 +1460,8 @@ final class DocumentWorkspace extends ChangeNotifier {
     _documents.remove(tab);
     _saveFailures.remove(tab);
     _declinedSaves.remove(tab);
-    // An export of a closed tab cannot be retried from it.
-    if (_errorScope == _exportScope(tab)) {
+    // An export or a disk check of a closed tab cannot be retried from it.
+    if (_errorScope == _exportScope(tab) || _errorScope == _diskScope(tab)) {
       _error = null;
       _errorScope = null;
     }

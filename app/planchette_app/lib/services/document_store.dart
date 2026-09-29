@@ -3,9 +3,20 @@ import 'dart:io';
 import 'package:path/path.dart' as paths;
 import 'package:planchette_core/planchette_core.dart';
 
+/// A cheap summary of a file's state, read without opening it. Equal stamps
+/// mean the file almost certainly did not change, so the costlier digest is
+/// read only when they differ. A same-size rewrite within the file system's
+/// timestamp granularity can slip past a check; the digest guard on save
+/// still catches it.
+typedef FileStamp = ({DateTime modified, int size});
+
 /// The shell's filesystem boundary. Tests substitute an in-memory store.
 abstract interface class DocumentStore {
   Future<TextDocument> load(String path);
+
+  /// Null when no regular file exists at [path], as when a directory has
+  /// taken its place: for an open document, both mean the file is gone.
+  Future<FileStamp?> stamp(String path);
   Future<String> canonicalSavePath(String path);
   Future<String?> existingDigest(String path);
 
@@ -24,6 +35,15 @@ final class LocalDocumentStore implements DocumentStore {
   @override
   Future<TextDocument> load(String path) =>
       loadTextDocument(File(path), symlinkPolicy: SymlinkPolicy.resolveOnce);
+
+  @override
+  Future<FileStamp?> stamp(String path) async {
+    // Follows a link, as [load] does, so the stamp describes the file whose
+    // text the tab holds.
+    final stat = await FileStat.stat(path);
+    if (stat.type != FileSystemEntityType.file) return null;
+    return (modified: stat.modified, size: stat.size);
+  }
 
   @override
   Future<String> canonicalSavePath(String path) async {

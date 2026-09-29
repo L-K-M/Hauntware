@@ -39,6 +39,18 @@ void main() {
     },
   );
 
+  test('the window coming back to the front asks for a disk check', () {
+    var focused = 0;
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      onFocus: () => focused++,
+    );
+    addTearDown(desktop.dispose);
+    desktop.onWindowFocus();
+    expect(focused, 1);
+  });
+
   test(
     'the native window opens on the app surface, not the platform default',
     () {
