@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # Build the desktop app for this host and stage it under dist/.
-# Usage: scripts/build.sh [--debug] [--install] [app]
+# Usage: scripts/build.sh [--debug] [--install] [--flatpak] [app]
 # --install additionally installs the app for the current user/host.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode=release
 install=false
+flatpak=false
 for argument in "$@"; do
   case "$argument" in
     --debug) mode=debug ;;
     --install) install=true ;;
+    --flatpak) flatpak=true ;;
     app) ;;
     --help|-h)
       echo 'Usage: scripts/build.sh [--debug] [--install] [app]'
@@ -53,6 +55,9 @@ case "$target" in
     cp "$root/media-sources/icon.png" "$destination/planchette.png"
     if [[ "$mode" == release ]]; then
       "$root/scripts/package-linux.sh" --bundle "$source" --appimage=best-effort
+      if $flatpak; then
+        "$root/scripts/build-flatpak.sh" "$(ls -t "$root"/dist/planchette_*.deb | head -1)"
+      fi
     fi
     if $install; then
       installed="$HOME/.local/opt/planchette"
