@@ -26,6 +26,8 @@ enum RecordKind {
   snippet,
   bookmark,
   assistantSettings,
+  inboxApp,
+  inboxStatus,
   unknown,
 }
 

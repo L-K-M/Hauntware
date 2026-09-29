@@ -716,6 +716,8 @@ class SyncCoordinator {
 
             await store.putAssistantSettings(assistant);
           case RecordKind.bookmark:
+          case RecordKind.inboxApp:
+          case RecordKind.inboxStatus:
           case RecordKind.unknown:
             continue;
         }
