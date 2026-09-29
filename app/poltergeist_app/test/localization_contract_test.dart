@@ -86,6 +86,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'rows'",
     "'duplicate row identities'",
     "'key'",
+    "'not a row'",
   },
   'lib/main.dart': {
     r"'${supportDirectory.path}${Platform.pathSeparator}settings.json'",

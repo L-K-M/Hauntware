@@ -65,9 +65,10 @@ PaneController? _otherPaneTarget(WorkspaceController workspace) {
 }
 
 /// The roots a selection verb acts on: the selected rows, else the
-/// cursor row (Finder's "the focused item is the selection" rule).
+/// cursor row (Finder's "the focused item is the selection" rule). A row
+/// inside a selected folder is not a root of its own (02 §2.5).
 List<String> _selectionRoots(PaneController pane) {
-  final selected = pane.selectedEntries;
+  final selected = pane.selectedRoots;
   if (selected.isNotEmpty) return [for (final e in selected) e.path];
   final cursor = pane.cursorIndex;
   if (cursor == null || cursor < 0 || cursor >= pane.entries.length) {

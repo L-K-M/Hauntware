@@ -109,6 +109,18 @@ class PaneColumnMetrics {
   static const glyphSize = 16.0;
   static const glyphGap = 6.0;
 
+  /// The disclosure triangle's column before the kind glyph (02 §2.5):
+  /// reserved on every desktop row, folder or not, so names line up.
+  static const disclosureWidth = 16.0;
+
+  /// How far each level of an expanded folder's rows steps in.
+  static const depthIndent = 16.0;
+
+  /// The space a desktop row at [depth] puts before its kind glyph,
+  /// past [startPadding]; nothing on touch rows, which never expand.
+  static double outlineInset({required bool outline, required int depth}) =>
+      outline ? disclosureWidth + depth * depthIndent : 0;
+
   /// Space between the name, size, and date columns.
   static const columnGap = 12.0;
 
@@ -294,9 +306,16 @@ class PaneColumnHeader extends StatelessWidget {
               ? [chevron, text]
               : [
                   // The name column's label starts over the row's name
-                  // text, past the kind glyph (Finder's alignment).
-                  const SizedBox(
+                  // text, past the kind glyph (Finder's alignment) and,
+                  // on desktop, the disclosure column (02 §2.5).
+                  SizedBox(
                     width:
+                        PaneColumnMetrics.outlineInset(
+                          outline: isDesktopPlatform(
+                            Theme.of(context).platform,
+                          ),
+                          depth: 0,
+                        ) +
                         PaneColumnMetrics.glyphSize +
                         PaneColumnMetrics.glyphGap,
                   ),

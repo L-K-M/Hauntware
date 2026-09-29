@@ -176,6 +176,32 @@ splitter extent, so the stages switch at the same widths; the secondary
 pane and the main column take the 6 px each seam frees. Covered by
 `test/ui/shell/shell_seams_test.dart`. Owner-reported; 10 §3.1 amended.
 
+## Folders expand in place (2026-09-26)
+
+Desktop listings show a disclosure triangle on folder rows (02 §2.5,
+owner-directed; 10 §12 had deferred it as its own slice). A click on
+the triangle, or → / ← on the cursor row, opens and closes a folder in
+place, its rows indented below it and listed on demand through the
+pane's channel. Hidden files, sort and the filter apply inside open
+folders. Every accepted listing of the location re-lists them;
+navigating elsewhere closes them, and Esc-cancel keeps them.
+
+The selection spans nested rows. Closing a folder with selected rows
+inside selects the folder. Delete, duplicate, copy/move to the other
+pane, download and drags act on the selection's roots
+(`PaneController.selectedRoots`): a row inside a selected folder is not
+acted on a second time. Duplicate now copies each root into its own
+folder (previously always the pane's location). Drops onto a row
+inside an open folder land in that folder.
+
+Not done: open folders are not watched on their own (the local watch
+still covers the location), their state is not persisted, and touch
+rows do not expand. Recursive expand (⌥-click / ⌥→) is not offered.
+
+Validation: new controller (`pane_expansion_test.dart`, 21 tests),
+view (`pane_outline_test.dart`, 6) and file-verb/drop tests; the
+affected pane suites pass.
+
 ## Desktop file interactions (2026-09-26)
 
 Show Hidden Files now carries its checked state into the macOS menu. The
