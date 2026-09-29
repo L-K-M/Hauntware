@@ -478,6 +478,57 @@ void main() {
       expect(await journalFile.exists(), isFalse);
     });
 
+    for (final writeThrows in [false, true]) {
+      for (final restart in [false, true]) {
+        test(
+            'a failed settle preserves the session until recovery '
+            '(writeThrows=$writeThrows, restart=$restart)', () async {
+          await enrolled();
+          final blockedWrite = Directory('${vaultFile.path}.tmp');
+          // Staging has already succeeded by the time the keystore writes.
+          // Refuse only the final vault write after the new key is installed.
+          keystore.onWrite = () => blockedWrite.create();
+          keystore.throwAfterWrite = writeThrows;
+
+          await expectLater(
+            () => services.rekeyVaultForTesting(newKey),
+            throwsA(writeThrows
+                ? isA<KeystoreException>()
+                : isA<FileSystemException>()),
+          );
+
+          // The caller has not adopted a new key after a failed settle. The
+          // store must keep its previous cache readable by this session too.
+          expect(services.vaultKey, equals(oldKey));
+          expect((await services.vault.getSecret('a'))!.value, 'value-a');
+          expect(await journalFile.exists(), isTrue);
+          await expectLater(() => services.vault.putSecret(secret('b')),
+              throwsA(isA<StateError>()));
+
+          await blockedWrite.delete();
+          keystore.onWrite = null;
+          keystore.throwAfterWrite = false;
+          if (restart) {
+            final next = await AppServices.initialize(
+                masterKeyManager: MasterKeyManager(keystore));
+            addTearDown(next.probe.dispose);
+            expect(next.vaultKey, equals(newKey));
+            expect((await next.vault.getSecret('a'))!.value, 'value-a');
+          } else {
+            await services.rekeyVaultForTesting(newKey);
+            expect(services.vaultKey, equals(newKey));
+            expect((await services.vault.getSecret('a'))!.value, 'value-a');
+          }
+          expect(await journalFile.exists(), isFalse);
+          expect(
+              (await SecretVault(FileVaultStore(vaultFile), newKey)
+                      .getSecret('a'))!
+                  .value,
+              'value-a');
+        });
+      }
+    }
+
     test('a key matching neither generation leaves the session readable',
         () async {
       await enrolled();

@@ -424,13 +424,66 @@ class AppServices {
     );
   }
 
+  Future<void> _syncOperationTail = Future<void>.value();
+
+  /// Enrollment changes the vault key and account together. A round already
+  /// running must finish first, and a queued round must see the final account
+  /// or the disconnected state left by a failed enrollment.
+  Future<T> _serializeSyncOperation<T>(Future<T> Function() operation) {
+    final result = _syncOperationTail.then((_) => operation());
+    _syncOperationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
+
+  /// Publish an authenticated account only once its key and token are durable.
+  /// A failed local step leaves sync disconnected; sign in to finish enrolling
+  /// the account already accepted by the server. Clearing the old endpoint
+  /// first also prevents a restart from using an old account with a newly
+  /// installed account's vault key.
+  Future<void> _completeSyncEnrollment({
+    required String baseUrl,
+    required String username,
+    required String token,
+    required List<int> key,
+  }) async {
+    final previousUrl = settings.syncBaseUrl;
+    final previousUsername = settings.syncUsername;
+    settings.syncBaseUrl = null;
+    settings.syncUsername = null;
+    try {
+      await saveSettings();
+    } catch (_) {
+      // Nothing else changed yet, so retaining the previous account is safe.
+      settings.syncBaseUrl = previousUrl;
+      settings.syncUsername = previousUsername;
+      rethrow;
+    }
+
+    await _rekeyVault(key);
+    await masterKeys.putApiKey(syncTokenKeyName, token);
+    settings.syncBaseUrl = baseUrl;
+    settings.syncUsername = username;
+    try {
+      await saveSettings();
+    } catch (_) {
+      // The last durable endpoint is absent. Keep the live state absent too,
+      // so another settings save cannot activate an enrollment reported failed.
+      settings.syncBaseUrl = null;
+      settings.syncUsername = null;
+      rethrow;
+    }
+  }
+
   /// Create a sync account and adopt its separately protected vault key.
   Future<void> registerSync({
     required String baseUrl,
     required String username,
     required String password,
     required String encryptionPassphrase,
-  }) async {
+  }) => _serializeSyncOperation(() async {
     final salt = secureRandomBytes(16);
     final keys = await _deriveSyncKeys(
       password: password,
@@ -447,13 +500,14 @@ class AppServices {
           argonParams: const Argon2Params(),
         ),
       );
-      settings.syncBaseUrl = baseUrl;
-      settings.syncUsername = username;
-      await saveSettings();
-      await masterKeys.putApiKey(syncTokenKeyName, client.token!);
-      await _rekeyVault(keys.vaultKey);
+      await _completeSyncEnrollment(
+        baseUrl: baseUrl,
+        username: username,
+        token: client.token!,
+        key: keys.vaultKey,
+      );
     });
-  }
+  });
 
   /// Enrol this device against an existing account and adopt its vault key.
   Future<void> loginSync({
@@ -461,55 +515,60 @@ class AppServices {
     required String username,
     required String password,
     required String encryptionPassphrase,
-  }) => _withSyncClient(baseUrl, (client) async {
-    final pre = await client.prelogin(username);
-    // Refuse a KDF downgrade: the Argon2 parameters come from the server, so a
-    // malicious/compromised one could return weak factors to make the vault key
-    // cheap to brute-force. Never derive with anything weaker than the minimum.
-    if (!pre.argonParams.meetsMinimum(Argon2Params.minimum)) {
-      throw StateError(
-        'The sync server returned weaker password-hashing parameters than '
-        'Séance accepts — refusing to derive your key (possible downgrade '
-        'attack).',
-      );
-    }
-    final keys = await _deriveSyncKeys(
-      password: password,
-      encryptionPassphrase: encryptionPassphrase,
-      salt: base64.decode(pre.argonSalt),
-      params: pre.argonParams,
-    );
-    await client.login(
-      LoginRequest(
-        username: username,
-        authVerifier: base64.encode(keys.authVerifier),
-      ),
-    );
-    // Authentication cannot prove that the separate encryption passphrase is
-    // correct. Verify it against one remote payload before changing the local
-    // vault or persisting enrollment, so a typo cannot overwrite synced data.
-    final remote = await client.pull(since: 0);
-    for (final record in remote.records) {
-      if (record.deleted || record.blob.isEmpty) continue;
-      try {
-        await RecordCodec(keys.vaultKey).decrypt(record);
-      } catch (_) {
+  }) => _serializeSyncOperation(
+    () => _withSyncClient(baseUrl, (client) async {
+      final pre = await client.prelogin(username);
+      // Refuse a KDF downgrade: the Argon2 parameters come from the server, so a
+      // malicious/compromised one could return weak factors to make the vault key
+      // cheap to brute-force. Never derive with anything weaker than the minimum.
+      if (!pre.argonParams.meetsMinimum(Argon2Params.minimum)) {
         throw StateError(
-          'The vault encryption passphrase could not decrypt this account. '
-          'Check it and try again.',
+          'The sync server returned weaker password-hashing parameters than '
+          'Séance accepts — refusing to derive your key (possible downgrade '
+          'attack).',
         );
       }
-      break;
-    }
-    settings.syncBaseUrl = baseUrl;
-    settings.syncUsername = username;
-    await saveSettings();
-    await masterKeys.putApiKey(syncTokenKeyName, client.token!);
-    await _rekeyVault(keys.vaultKey);
-  });
+      final keys = await _deriveSyncKeys(
+        password: password,
+        encryptionPassphrase: encryptionPassphrase,
+        salt: base64.decode(pre.argonSalt),
+        params: pre.argonParams,
+      );
+      await client.login(
+        LoginRequest(
+          username: username,
+          authVerifier: base64.encode(keys.authVerifier),
+        ),
+      );
+      // Authentication cannot prove that the separate encryption passphrase is
+      // correct. Verify it against one remote payload before changing the local
+      // vault or persisting enrollment, so a typo cannot overwrite synced data.
+      final remote = await client.pull(since: 0);
+      for (final record in remote.records) {
+        if (record.deleted || record.blob.isEmpty) continue;
+        try {
+          await RecordCodec(keys.vaultKey).decrypt(record);
+        } catch (_) {
+          throw StateError(
+            'The vault encryption passphrase could not decrypt this account. '
+            'Check it and try again.',
+          );
+        }
+        break;
+      }
+      await _completeSyncEnrollment(
+        baseUrl: baseUrl,
+        username: username,
+        token: client.token!,
+        key: keys.vaultKey,
+      );
+    }),
+  );
 
   /// Run one synchronization round against the configured server.
-  Future<SyncOutcome> runSync() async {
+  Future<SyncOutcome> runSync() => _serializeSyncOperation(_runSync);
+
+  Future<SyncOutcome> _runSync() async {
     // First statement, above every guard. The guards below all throw today,
     // so nothing can read a stale answer — but placing the reset after them
     // means that stays true only while they keep throwing, and a guard that

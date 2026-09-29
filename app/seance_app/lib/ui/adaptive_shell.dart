@@ -28,6 +28,12 @@ class AdaptiveShell extends StatefulWidget {
   static const double minimumUtilityWidth = 260;
   static const double defaultUtilityWidth = 340;
   static const double maximumUtilityWidth = 680;
+
+  /// The visible line between two panes: all the width the layout gives
+  /// it, so the panes' own borders run into it.
+  static const double seamWidth = 1;
+
+  /// The drag target centred on a seam, floating over the panes' edges.
   static const double resizeHandleWidth = 10;
   static const double breakpoint =
       minimumListWidth +
@@ -197,10 +203,14 @@ AdaptivePaneWidths? allocateAdaptivePaneWidths({
       )
       .toDouble();
 
+  // The side panes are sized as if each handle took its full width, which
+  // keeps the breakpoint and every pane width where they were. The seams
+  // take one pixel each, and the terminal gets the rest: the handles'
+  // overhang, [AdaptiveShell.resizeHandleWidth] less a seam per edge, lies
+  // over its edges.
   return AdaptivePaneWidths(
     list: list,
-    terminal:
-        availableWidth - list - utility - AdaptiveShell.resizeHandleWidth * 2,
+    terminal: availableWidth - list - utility - AdaptiveShell.seamWidth * 2,
     utility: utility,
   );
 }
@@ -283,38 +293,47 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
         }
 
         final header = widget.header;
-        final panes = [
-          Expanded(
-            child: SizedBox(
-              key: AdaptivePaneLayout.terminalPaneKey,
-              child: widget.terminalPane,
-            ),
+        final utilityHandle = _ResizeHandle(
+          key: AdaptivePaneLayout.utilityResizeHandleKey,
+          label: 'Resize utility panel',
+          width: widths.utility,
+          minimumWidth: AdaptiveShell.minimumUtilityWidth,
+          maximumWidth: _maximumUtilityWidth(widths),
+          edge: _PaneEdge.trailing,
+          widthAfterStep: (delta) => _widthAfterStep(
+            _PaneEdge.trailing,
+            currentWidths()!,
+            constraints.maxWidth,
+            delta,
           ),
-          _ResizeHandle(
-            key: AdaptivePaneLayout.utilityResizeHandleKey,
-            label: 'Resize utility panel',
-            width: widths.utility,
-            minimumWidth: AdaptiveShell.minimumUtilityWidth,
-            maximumWidth: _maximumUtilityWidth(widths),
-            edge: _PaneEdge.trailing,
-            widthAfterStep: (delta) => _widthAfterStep(
-              _PaneEdge.trailing,
-              currentWidths()!,
-              constraints.maxWidth,
-              delta,
-            ),
-            onStep: (delta) =>
-                _stepPane(_PaneEdge.trailing, currentWidths()!, delta),
-            onStart: () => _startUtilityResize(currentWidths()!),
-            onDelta: _resizeUtility,
-            onEnd: _endUtilityResize,
+          onStep: (delta) =>
+              _stepPane(_PaneEdge.trailing, currentWidths()!, delta),
+          onStart: () => _startUtilityResize(currentWidths()!),
+          onDelta: _resizeUtility,
+          onEnd: _endUtilityResize,
+        );
+        // The terminal, its seam and the utility pane, with the utility
+        // handle floated over that seam.
+        final panes = _straddle(
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  key: AdaptivePaneLayout.terminalPaneKey,
+                  child: widget.terminalPane,
+                ),
+              ),
+              const _Seam(),
+              SizedBox(
+                key: AdaptivePaneLayout.utilityPaneKey,
+                width: widths.utility,
+                child: widget.utilityPane,
+              ),
+            ],
           ),
-          SizedBox(
-            key: AdaptivePaneLayout.utilityPaneKey,
-            width: widths.utility,
-            child: widget.utilityPane,
-          ),
-        ];
+          handle: utilityHandle,
+          end: widths.utility,
+        );
         Widget listHandle = _ResizeHandle(
           key: AdaptivePaneLayout.listResizeHandleKey,
           label: 'Resize server list',
@@ -336,16 +355,20 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
         );
         if (header == null) {
           return Scaffold(
-            body: Row(
-              children: [
-                SizedBox(
-                  key: AdaptivePaneLayout.listPaneKey,
-                  width: widths.list,
-                  child: widget.listPane,
-                ),
-                listHandle,
-                ...panes,
-              ],
+            body: _straddle(
+              Row(
+                children: [
+                  SizedBox(
+                    key: AdaptivePaneLayout.listPaneKey,
+                    width: widths.list,
+                    child: widget.listPane,
+                  ),
+                  const _Seam(),
+                  Expanded(child: panes),
+                ],
+              ),
+              handle: listHandle,
+              start: widths.list,
             ),
           );
         }
@@ -358,43 +381,74 @@ class _AdaptivePaneLayoutState extends State<AdaptivePaneLayout> {
         }
         return ClaimMacosToolbarBand(
           child: Scaffold(
-            body: Row(
-              children: [
-                SizedBox(
-                  key: AdaptivePaneLayout.listPaneKey,
-                  width: widths.list,
-                  // The traffic lights sit over the list's top, which
-                  // drags the window natively: Finder's layout, and
-                  // Poltergeist's.
-                  child: ColoredBox(
-                    color: chrome.sidebarBackground,
+            body: _straddle(
+              Row(
+                children: [
+                  SizedBox(
+                    key: AdaptivePaneLayout.listPaneKey,
+                    width: widths.list,
+                    // The traffic lights sit over the list's top, which
+                    // drags the window natively: Finder's layout, and
+                    // Poltergeist's.
+                    child: ColoredBox(
+                      color: chrome.sidebarBackground,
+                      child: Column(
+                        children: [
+                          SizedBox(height: chrome.headerHeight),
+                          Expanded(child: widget.listPane),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const _Seam(),
+                  Expanded(
                     child: Column(
                       children: [
-                        SizedBox(height: chrome.headerHeight),
-                        Expanded(child: widget.listPane),
+                        header,
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: chrome.separator,
+                        ),
+                        Expanded(child: panes),
                       ],
                     ),
                   ),
-                ),
-                listHandle,
-                Expanded(
-                  child: Column(
-                    children: [
-                      header,
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: chrome.separator,
-                      ),
-                      Expanded(child: Row(children: panes)),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
+              handle: listHandle,
+              start: widths.list,
             ),
           ),
         );
       },
+    );
+  }
+
+  /// [row] with [handle] floated over the seam that follows [start] logical
+  /// pixels of it, or precedes the last [end]. Only the one-pixel seam takes
+  /// layout width, so the panes' borders meet it; the drag target overhangs
+  /// both panes by the same amount instead of pushing them apart.
+  Widget _straddle(
+    Widget row, {
+    required Widget handle,
+    double? start,
+    double? end,
+  }) {
+    const overhang =
+        (AdaptiveShell.resizeHandleWidth - AdaptiveShell.seamWidth) / 2;
+    return Stack(
+      children: [
+        Positioned.fill(child: row),
+        PositionedDirectional(
+          top: 0,
+          bottom: 0,
+          start: start == null ? null : start - overhang,
+          end: end == null ? null : end - overhang,
+          width: AdaptiveShell.resizeHandleWidth,
+          child: handle,
+        ),
+      ],
     );
   }
 
@@ -546,6 +600,20 @@ enum _PaneEdge { leading, trailing }
 
 const double _resizeKeyStep = 16;
 
+/// The one-pixel line between two panes (see [AdaptiveShell.seamWidth]).
+class _Seam extends StatelessWidget {
+  const _Seam();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: AdaptiveShell.seamWidth,
+    // A childless ColoredBox takes the smallest size it may, and a Row
+    // leaves the height loose: ask for all of it.
+    height: double.infinity,
+    child: ColoredBox(color: Theme.of(context).dividerColor),
+  );
+}
+
 /// A labelled, keyboard-adjustable divider with the same clamping and
 /// persistence boundary as a pointer drag. Physical arrow direction follows
 /// the divider; assistive increase/decrease follows the owned pane's width.
@@ -636,16 +704,18 @@ class _ResizeHandleState extends State<_ResizeHandle> {
                 widget.onDelta(d.delta.dx * _direction),
             onHorizontalDragEnd: (_) => widget.onEnd(),
             onHorizontalDragCancel: widget.onEnd,
+            // The line itself is the layout's [_Seam] underneath; the
+            // handle draws only its focus ring over it.
             child: SizedBox(
               width: AdaptiveShell.resizeHandleWidth,
-              child: Center(
-                child: Container(
-                  width: _focused ? 3 : 1,
-                  color: _focused
-                      ? theme.colorScheme.primary
-                      : theme.dividerColor,
-                ),
-              ),
+              child: _focused
+                  ? Center(
+                      child: Container(
+                        width: 3,
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  : null,
             ),
           ),
         ),
