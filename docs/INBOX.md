@@ -41,13 +41,14 @@ sequenceDiagram
     participant S as Séance (user's device)
     participant Srv as seance-sync
     participant B as Producer (bot)
-    S->>Srv: create app (logged-in session): appId, tokenHash
+    S->>Srv: create app (logged-in session): appId, token
     S-->>B: pairing string (by the user, out of band)
     B->>Srv: POST /v1/inbox/{appId} Bearer token, sealed proposal
     Srv-->>B: 201 {itemId}
     S->>Srv: GET /v1/inbox (logged-in session)
     Srv-->>S: sealed items
     S->>S: open with app key, validate, show badge
+    Note over S: user runs or dismisses it
     S->>Srv: DELETE /v1/inbox/{appId}/{itemId}
 ```
 
@@ -172,7 +173,7 @@ User side (existing session auth, `_withAuth`):
 POST   /v1/apps                    {"app", "name", "token"}  -> 201
 GET    /v1/apps                    -> [{"app", "name", "created", "pending"}]
 DELETE /v1/apps/{appId}            -> 204
-GET    /v1/inbox                   -> [{"app", "item", "received", "blob"}]
+GET    /v1/inbox?since=<received>  -> [{"app", "item", "received", "blob"}]
 DELETE /v1/inbox/{appId}/{itemId}  -> 204
 ```
 
@@ -180,6 +181,13 @@ Storage: two SQLite tables, `inbox_apps(username, app_id, name,
 token_salt, token_hash, created)` and `inbox_items(username, app_id,
 item_id, received, blob)`, with `ON DELETE CASCADE` from apps. The
 in-memory storage gets the same. Deleting the account deletes both.
+
+Items stay on the server until a device deletes one after the user has
+run or dismissed it, or until 7 days after `received`, when the server
+drops it. The server cannot read `expires`, so it applies its own
+retention, matching the 7-day cap on `expires`. `received` is assigned by
+the server and strictly increasing per user, so `since` lets a device ask
+only for items it has not seen.
 
 Documentation for producers, unauthenticated and static:
 
@@ -197,14 +205,16 @@ left to users; it needs nothing from Séance.
 
 ## Client
 
-Fetching: the sync coordinator calls `GET /v1/inbox` on every sync cycle
-while logged in. For each item it looks up the `inboxApp` record,
-decrypts, validates and stores the proposal in a device-local inbox file
-(owner-only, like the other stores). It deletes the item on the server
-once it is stored locally, or when it fails to decrypt or validate (a
-counter on the app records the failures, so a misconfigured producer is
-visible). An item for an unknown app is left alone: another device may
-not have synced the app record yet.
+Fetching: the sync coordinator calls `GET /v1/inbox?since=` on every
+sync cycle while logged in. For each item it looks up the `inboxApp`
+record, decrypts, validates and keeps the proposal in a device-local
+cache (owner-only, like the other stores). Every device fetches the same
+items, so each sees every proposal without any device-to-device sync of
+proposals. A device deletes an item on the server when the user runs or
+dismisses it, or when it fails to decrypt or validate (a counter on the
+app records the failures, so a misconfigured producer is visible). An
+item for an unknown app is left alone: this device may not have synced
+the app record yet.
 
 UI: a badge with the count of new proposals, and an Inbox pane listing
 them newest first with the app name, target and title. Opening one
@@ -244,11 +254,10 @@ assistant's staged commands.
   `ran` or `dismissed`, with a timestamp. It lets every device agree what
   is done, and also serves as the replay filter. It holds no script and no
   output.
-- The proposals themselves are device-local. Each device fetches the
-  server queue, but the first to fetch deletes the item. To make sure all
-  devices see a proposal, the fetching device also writes it into an
-  `inboxItem` record (sealed, synced, tombstoned once it has a status and
-  30 days have passed). This is the one open question below.
+- The proposals themselves are not synced records. Each device fetches
+  them from the server queue, where they stay until handled or expired.
+  A device that fetched a proposal before another device handled it
+  learns from the `inboxStatus` record that it is done.
 
 ## Out of scope for version 1
 
@@ -260,8 +269,5 @@ assistant's staged commands.
 
 ## Open questions
 
-1. Syncing proposals between the user's devices (`inboxItem`) versus
-   leaving them on the device that fetched first. Syncing is more code but
-   avoids a proposal disappearing onto a laptop that is closed.
-2. Whether PR #151 should be closed in favour of this, or kept for
+1. Whether PR #151 should be closed in favour of this, or kept for
    read-only reference snippets, which it does well.
