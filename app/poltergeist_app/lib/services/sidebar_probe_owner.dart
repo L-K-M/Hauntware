@@ -277,15 +277,19 @@ final class SidebarProbeOwner extends ChangeNotifier {
     // State changes enqueue their own pass; never let this older snapshot
     // briefly restore a removed endpoint or a newly jump-routed target.
     if (_disposed || revision != _configurationRevision) return;
-    await _controller.update(
-      favorites: favorites,
-      preference: _preference,
-      lifecycle: _lifecycle,
+    // Keep bridge acknowledgements outside the settings queue. A newer
+    // restriction must reach the controller while an older ack is pending.
+    _errors.observe(
+      _controller.update(
+        favorites: favorites,
+        preference: _preference,
+        lifecycle: _lifecycle,
+      ),
     );
   }
 
-  /// Serializes store reads/writes and the controller updates they feed,
-  /// so a stale configuration can never land after a removal.
+  /// Serializes store reads, writes, and configuration decisions. Controller
+  /// acknowledgements stay outside the tail so restrictions may overtake.
   void _enqueue(Future<void> Function() operation) {
     final run = _tail.then((_) => operation());
     _tail = run.then<void>((_) {}, onError: (_, _) {});

@@ -39,6 +39,8 @@ final class _Bridge implements ProbeBridge {
   final events = StreamController<ProbeStatusesEvent>.broadcast(sync: true);
   final calls = <String>[];
   List<ServerConfig> targets = const [];
+  Completer<void>? targetsStarted;
+  Completer<void>? targetsRelease;
 
   /// True if every command observed a live snapshot listener.
   bool subscribedBeforeCommands = true;
@@ -50,7 +52,11 @@ final class _Bridge implements ProbeBridge {
   Future<void> setProbeTargets(List<ServerConfig> targets) {
     _record('targets:${targets.map((target) => target.id).join(',')}');
     this.targets = targets;
-    return Future.value();
+    final started = targetsStarted;
+    if (started != null && !started.isCompleted) started.complete();
+    final release = targetsRelease;
+    targetsRelease = null;
+    return release?.future ?? Future.value();
   }
 
   @override
@@ -308,6 +314,43 @@ void main() {
     expect(bridge.calls, isNot(contains('targets:db')));
     expect(bridge.targets, isEmpty);
   });
+
+  test(
+    'a jump route overtakes a pending direct target acknowledgement',
+    () async {
+      ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'ops',
+        jumpHostId: jumpHostId,
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      settings.servers['db'] = (
+        host: 'db.internal',
+        port: 22,
+        connected: false,
+      );
+      owner.forwardLifecycle(AppLifecycleState.resumed);
+      owner.noteVisible('db');
+      await pump();
+
+      bridge.targetsStarted = Completer<void>();
+      final release = bridge.targetsRelease = Completer<void>();
+      owner.syncCatalog([pulled()]);
+      await bridge.targetsStarted!.future;
+
+      owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+      await pump();
+      final targetsBeforeAck = List<ServerConfig>.of(bridge.targets);
+
+      release.complete();
+      await pump();
+
+      expect(targetsBeforeAck, isEmpty);
+    },
+  );
 
   test('a visible catalog server starts probing when its jump route clears',
       () async {

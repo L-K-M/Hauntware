@@ -9408,16 +9408,17 @@ before their fixes. Review regressions also failed before route-attempt
 snapshots, atomic incident endpoints, fresh catalog rebind/review, raw catalog
 lease restoration, and blocked-status watch lifetime were fixed.
 
-Pre-merge review found four more route-boundary failures. Catalog hop lookup
+Pre-merge review found five more route-boundary failures. Catalog hop lookup
 now uses only the catalog namespace, so a bookmark alias cannot shadow a jump
 id. A restored incident still rejects first use at its own endpoint but allows
 first-use review on another hop. Startup binds the materialized catalog before
 checkout repair can lease a connection. Probe reconfiguration discards a
 direct-target snapshot when sync adds a jump route while settings reads are in
-flight. All four regression tests failed before their fixes.
+flight, and a restrictive update overtakes a pending direct-target
+acknowledgement. All five regression tests failed before their fixes.
 
 Core analysis is clean; 1,751 tests pass with 27 environment skips. Sync
-analysis and all 249 tests pass with 3 skips. Flutter analysis and all 2,946
+analysis and all 249 tests pass with 3 skips. Flutter analysis and all 2,947
 app tests pass. The 140 root benchmark tests, import-boundary check, and
 Séance pin audit pass. One concurrent core/app run reported the real incident
 store round-trip once; its focused rerun and the exclusive full core rerun
