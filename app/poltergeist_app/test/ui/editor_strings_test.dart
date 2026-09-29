@@ -54,7 +54,13 @@ void main() {
     await tester.tap(find.byTooltip('[regex]'));
     await tester.pump();
     expect(find.text('[pattern]'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).first, '(');
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.hintText == '[pattern]',
+      ),
+      '(',
+    );
     await tester.pump();
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 50)),
@@ -66,8 +72,17 @@ void main() {
     controller.openGoToLine();
     await tester.pump();
     expect(find.byTooltip('[close go to line]'), findsOneWidget);
-    await tester.enterText(find.byType(TextField).first, '');
+    final goToLineField = find.byWidgetPredicate(
+      (widget) =>
+          widget is TextField && widget.decoration?.hintText == '[1..3]',
+    );
+    await tester.enterText(goToLineField, '');
     await tester.pump();
-    expect(find.text('[1..3]'), findsOneWidget);
+    expect(goToLineField, findsOneWidget);
+
+    await tester.enterText(goToLineField, 'abc');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(find.text('[not 1..3]'), findsOneWidget);
   });
 }

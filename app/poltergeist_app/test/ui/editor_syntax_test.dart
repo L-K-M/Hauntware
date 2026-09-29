@@ -40,6 +40,7 @@ void main() {
       expect(syntaxLanguageFor('/tmp/data.json')?.id, 'json');
       expect(syntaxLanguageFor('compose.yaml')?.id, 'yaml');
       expect(syntaxLanguageFor('main.go')?.id, 'go');
+      expect(syntaxLanguageFor('main.c')?.id, 'c-family');
       expect(syntaxLanguageFor('query.sql')?.id, 'sql');
       expect(syntaxLanguageFor('notes.xyz'), isNull);
       expect(syntaxLanguageFor('README'), isNull);

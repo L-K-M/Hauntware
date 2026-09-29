@@ -27,9 +27,9 @@ bars' new strings come from the ARB file like the rest of the find bar;
 the status-row strings stay unused because this editor draws its own. Go
 files now detect as Go, not C-family. No shortcut the surface installs is
 bound by the editor window's menu. Local validation after merging main:
-core analysis is clean and 1,701 core tests pass. The two root-only
-cleanup-failure checkout tests fail here on main too, and the Linux watch
-test failed once under load and passes alone. Flutter
+core analysis is clean; 1,701 core tests pass and 3 fail, all unrelated:
+the two root-only cleanup-failure checkout tests fail here on main too,
+and the Linux watch test failed once under load and passes alone. Flutter
 analysis is clean and all 2,907 other app tests pass; the Go expectation
 was the one failure and is updated.
 

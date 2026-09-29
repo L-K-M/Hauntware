@@ -51,9 +51,12 @@ Future<BuiltInTextDocument> loadBuiltInTextDocumentDetails(
   sha256Of: sha256Of,
 );
 
-/// Preserve the prefix recognized by Poltergeist's checkout recovery sweep.
-/// Existing callers may omit a baseline; editor views always supply the
-/// digest captured when opening their document.
+/// Saves [text] to [file] through the shared guarded replacement, keeping
+/// the `.poltergeist` prefix that the checkout recovery sweep recognizes.
+/// Existing callers may omit [expectedSha256]; the digest found on disk just
+/// before the save then guards it, so a write racing the save still fails
+/// rather than being overwritten. Editor views always supply the digest
+/// captured when their document was opened.
 Future<String> saveBuiltInTextDocument(
   File file,
   String text, {

@@ -10,6 +10,10 @@ environment:
   sdk: ^3.12.0
 
 dependencies:
+  # Shared editor document layer (bounded load, BOM and line endings,
+  # guarded saves): git-pinned to Planchette, never forked or copied, at the
+  # same reviewed revision as planchette_editor in the app and as Séance's
+  # pin. Bump both pins together (docs/PORTS.md records each audit).
   planchette_core:
     git:
       url: https://github.com/L-K-M/Planchette.git
