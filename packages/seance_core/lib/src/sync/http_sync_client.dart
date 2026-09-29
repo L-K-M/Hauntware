@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:seance_protocol/seance_protocol.dart';
 
+import '../inbox/inbox_api.dart';
 import 'sync_engine.dart';
 
 /// HTTP client for the Séance sync server. Handles account setup and auth, then
 /// serves as the [SyncApi] the [SyncEngine] drives. All record payloads are
 /// already end-to-end encrypted before they reach this layer.
-class HttpSyncClient implements SyncApi {
+class HttpSyncClient implements SyncApi, InboxApi {
   final String baseUrl;
   final http.Client _client;
   final bool _ownsClient;
@@ -172,4 +173,72 @@ class HttpSyncClient implements SyncApi {
     if (res.statusCode >= 400) _fail(res);
     return PushResponse.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
   }
+
+  @override
+  Future<void> createApp(CreateInboxAppRequest request) async {
+    final res = await _client
+        .post(_uri('/v1/apps'),
+            headers: _authHeaders, body: jsonEncode(request.toJson()))
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+  }
+
+  @override
+  Future<List<InboxAppInfo>> listApps() async {
+    final res =
+        await _client.get(_uri('/v1/apps'), headers: _authHeaders).timeout(
+              timeout,
+            );
+    if (res.statusCode >= 400) _fail(res);
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    return [
+      for (final app in json['apps'] as List)
+        InboxAppInfo.fromJson((app as Map).cast()),
+    ];
+  }
+
+  @override
+  Future<bool> deleteApp(String appId) =>
+      _deleteReportingAbsence(_uri('/v1/apps/${Uri.encodeComponent(appId)}'));
+
+  @override
+  Future<List<InboxItem>> listItems({required int since}) async {
+    final res = await _client
+        .get(_uri('/v1/inbox', {'since': '$since'}), headers: _authHeaders)
+        .timeout(timeout);
+    if (res.statusCode >= 400) _fail(res);
+    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    return [
+      for (final item in json['items'] as List)
+        InboxItem.fromJson((item as Map).cast()),
+    ];
+  }
+
+  @override
+  Future<bool> deleteItem(String appId, String itemId) =>
+      _deleteReportingAbsence(_uri(
+        '/v1/inbox/${Uri.encodeComponent(appId)}/'
+        '${Uri.encodeComponent(itemId)}',
+      ));
+
+  /// A 404 counts as "already gone" only when the server itself says so
+  /// (`not_found`). A plain 404 is a server too old to have the route, or a
+  /// proxy in the way, and reading that as "another device claimed it" would
+  /// quietly drop the user's proposal.
+  Future<bool> _deleteReportingAbsence(Uri uri) async {
+    final res =
+        await _client.delete(uri, headers: _authHeaders).timeout(timeout);
+    if (res.statusCode < 400) return true;
+    if (res.statusCode == 404) {
+      try {
+        _fail(res);
+      } on ApiError catch (error) {
+        if (error.code == _notFound) return false;
+        rethrow;
+      }
+    }
+    _fail(res);
+  }
 }
+
+const String _notFound = 'not_found';

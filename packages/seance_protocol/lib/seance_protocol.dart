@@ -20,6 +20,8 @@ export 'src/models/snippet.dart';
 export 'src/models/assistant_settings.dart';
 export 'src/models/bookmark.dart';
 
+export 'src/inbox/inbox.dart';
+
 export 'src/records/record.dart';
 export 'src/records/record_codec.dart';
 export 'src/records/lww.dart';
