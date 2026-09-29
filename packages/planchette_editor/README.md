@@ -2,7 +2,7 @@
 
 The shared Flutter editing surface used by Planchette, Poltergeist, and Séance.
 It depends on `planchette_core` for document formats, safe file writes, language
-detection, tokenization, and literal search.
+detection, tokenization, and literal and regular-expression search.
 
 `EditorController` owns one buffer, search/replacement fields, selection, focus,
 scroll position, saved digest, and dirty/busy state. `PlanchetteEditor` renders
@@ -63,6 +63,13 @@ instead.
 `EditorSyntaxTheme` is a `ThemeExtension`: add one to a host's
 `ThemeData.extensions` to style every editor, and it animates with theme
 changes. An explicit `syntaxTheme` on a `PlanchetteEditor` still wins.
+
+The find bar's regular-expression mode (`toggleRegularExpression`) matches in
+a worker isolate, so a catastrophic pattern cannot freeze the UI: a search that
+runs past `patternSearchBudget` (one second by default, settable per
+controller) is stopped and reported through `patternFailure`, as is a pattern
+that does not compile. `patternSearchPending` is true while an answer is on its
+way, and `replaceAll()` completes with whether it replaced anything.
 
 `EditorStrings` adapts existing host localization resources. Token colors,
 monospace style, an external-change banner, and the status row can be supplied

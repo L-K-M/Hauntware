@@ -10,9 +10,11 @@ import 'package:planchette_core/planchette_core.dart'
         deleteLines,
         duplicateLines,
         joinLines,
-        moveLines;
+        moveLines,
+        patternSearchBudget;
 
 import 'code_editing_controller.dart';
+import 'pattern_find.dart';
 
 enum EditorSaveMode { local, primary }
 
@@ -51,8 +53,10 @@ class EditorController extends ChangeNotifier {
     this.onSaved,
     this.onPublish,
     CaseFolder? caseFolder,
+    Duration? patternSearchBudget,
   }) : _displayPath = displayPath,
-       _fold = caseFolder ?? _defaultCaseFolder {
+       _fold = caseFolder ?? _defaultCaseFolder,
+       _patternSearchBudget = patternSearchBudget ?? core.patternSearchBudget {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
@@ -88,6 +92,11 @@ class EditorController extends ChangeNotifier {
   final CaseFolder _fold;
 
   static String _defaultCaseFolder(String value) => value.toLowerCase();
+
+  /// How long one regular-expression search may run in its worker before it
+  /// is stopped and the find bar reports [PatternTimedOut]. Defaults to
+  /// [core.patternSearchBudget].
+  final Duration _patternSearchBudget;
 
   late final CodeEditingController text;
   final search = TextEditingController();
@@ -152,6 +161,18 @@ class EditorController extends ChangeNotifier {
   bool _replaceOpen = false;
   bool _caseSensitive = false;
   bool _wholeWord = false;
+  bool _useRegularExpression = false;
+
+  /// The regular-expression search, while that mode is on.
+  PatternFind? _patternFind;
+
+  /// Whether the pattern search on its way was asked for by a new query or
+  /// setting, whose first match the view should scroll to when it arrives.
+  bool _revealPatternResults = false;
+
+  /// Find commands given while a pattern search was on its way, run in
+  /// order once it arrives.
+  final List<void Function()> _afterPatternSearch = [];
   CaseFolding _caseFolding = CaseFolding.exact;
   bool _updatingSearch = false;
   bool _updatingQuery = false;
@@ -221,6 +242,20 @@ class EditorController extends ChangeNotifier {
   /// `cat` inside `concat`.
   bool get wholeWord => _wholeWord;
 
+  /// Whether the query is a regular expression rather than literal text.
+  bool get useRegularExpression => _useRegularExpression;
+
+  /// Why the regular expression in the find field finds nothing: it does not
+  /// compile, or its search failed or took longer than the budget. Null in
+  /// literal mode and whenever the pattern searched normally.
+  PatternFailure? get patternFailure =>
+      _useRegularExpression ? _patternFind?.failure : null;
+
+  /// Whether a regular-expression search is waiting or running, so the
+  /// matches shown may be about to change. Literal search never waits.
+  bool get patternSearchPending =>
+      _useRegularExpression && (_patternFind?.pending ?? false);
+
   /// True when the last case-insensitive search had to compare exactly
   /// because this text could not be lowercased without moving its offsets.
   /// The find bar says so rather than showing a short count as if it were
@@ -239,7 +274,11 @@ class EditorController extends ChangeNotifier {
 
   /// Whether more matches may follow the last of [matches], unknown until
   /// the find bar pages there; a counter shows its total as a lower bound.
-  bool get matchesMayContinue => _matchesMayContinue;
+  /// A regular expression with more than [patternMatchLimit] matches lists
+  /// only that many, so its total is always a lower bound.
+  bool get matchesMayContinue =>
+      _matchesMayContinue ||
+      (_useRegularExpression && (_patternFind?.capped ?? false));
   int get revealRequest => _revealRequest;
 
   /// Increments whenever a whole buffer is installed: loaded, reloaded or
@@ -759,7 +798,9 @@ class EditorController extends ChangeNotifier {
       if (selected.isNotEmpty &&
           !selected.contains('\n') &&
           selected.length <= 200) {
-        prefill = selected;
+        // A pattern finds the selection as it stands, not as an expression:
+        // a selected `a.b` should not also find `axb`.
+        prefill = _useRegularExpression ? RegExp.escape(selected) : selected;
       }
     }
     // Assign the prefill while the query listener cannot scan — still
@@ -796,6 +837,9 @@ class EditorController extends ChangeNotifier {
     _activeMatch = -1;
     _lastQuery = null;
     _caseFolding = CaseFolding.exact;
+    _patternFind?.reset();
+    _revealPatternResults = false;
+    _afterPatternSearch.clear();
     text.setSearchMatches(const [], -1);
     // Go to Line may stay open with the user typing in it.
     if (!goToLineFocus.hasFocus) editorFocus.requestFocus();
@@ -916,6 +960,22 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  /// Switches the query between literal text and a regular expression. The
+  /// pattern's matches arrive from a worker shortly after, and until then
+  /// the find bar shows none.
+  void toggleRegularExpression() {
+    _useRegularExpression = !_useRegularExpression;
+    if (!_useRegularExpression) {
+      _patternFind?.dispose();
+      _patternFind = null;
+      _revealPatternResults = false;
+      _afterPatternSearch.clear();
+    }
+    _updateMatches(resetActive: true);
+    _revealRequest++;
+    _notify();
+  }
+
   void _queryChanged() {
     if (!_searchOpen ||
         _disposed ||
@@ -930,6 +990,21 @@ class EditorController extends ChangeNotifier {
 
   void _updateMatches({required bool resetActive}) {
     _lastQuery = search.text;
+    if (_searchOpen && _useRegularExpression) {
+      final find = _patternFind ??= PatternFind(
+        budget: _patternSearchBudget,
+        onSettled: _patternSearchSettled,
+      );
+      find.update(
+        text.text,
+        search.text,
+        caseSensitive: _caseSensitive,
+        wholeWord: _wholeWord,
+      );
+      // Every caller that resets the active match then reveals it, which
+      // for a pattern has to wait for its matches.
+      if (resetActive && find.pending) _revealPatternResults = true;
+    }
     if (_searchOpen) {
       // Stay on the user's page: a new query or a replacement starts from
       // the caret.
@@ -962,6 +1037,20 @@ class EditorController extends ChangeNotifier {
   /// active match are found again at their offsets carried through the edit,
   /// so typing anywhere keeps the find bar on the same occurrence.
   void _followEdit(String before) {
+    _Edit? edit;
+    final find = _useRegularExpression ? _patternFind : null;
+    if (find != null) {
+      // Carried through the edit first, so the pages below come from the
+      // edited text while it is searched again.
+      edit = _Edit.between(before, text.text);
+      find.followEdit(
+        before,
+        text.text,
+        start: edit._start,
+        end: edit._end,
+        delta: edit._delta,
+      );
+    }
     if (_matches.isEmpty ||
         _activeMatch < 0 ||
         _activeMatch >= _matches.length) {
@@ -969,12 +1058,20 @@ class EditorController extends ChangeNotifier {
       return;
     }
     _lastQuery = search.text;
-    final edit = _Edit.between(before, text.text);
-    final active = edit.map(_matches[_activeMatch].start);
+    edit ??= _Edit.between(before, text.text);
+    _stayOn(
+      active: edit.map(_matches[_activeMatch].start),
+      pageStart: edit.map(_matches.first.start),
+    );
+  }
+
+  /// Shows the page and the match the user was on, found again at [active]
+  /// and on the page that starts at [pageStart].
+  void _stayOn({required int active, required int pageStart}) {
     if (_matchOffset == 0) {
       _showPage(_page(), offset: 0);
     } else {
-      _showPageFrom(edit.map(_matches.first.start));
+      _showPageFrom(pageStart);
     }
     // Matches added earlier on the page can push the active one past it.
     if (_matches.isEmpty ||
@@ -1021,23 +1118,64 @@ class EditorController extends ChangeNotifier {
       }
       // Makes the first match at or after the caret active.
       _updateMatches(resetActive: true);
-      if (_matches.isEmpty) {
+      if (patternSearchPending) {
+        _afterPatternSearch.add(() => _stepReopened(delta, selection));
         _notify();
         return;
       }
-      final active = _matches[_activeMatch];
-      final onActive =
-          selection.isValid &&
-          selection.start == active.start &&
-          selection.end == active.end;
-      // Unless it is the match an earlier find left selected, Find Next
-      // takes that match as it is.
-      if (delta > 0 && !onActive) {
-        _selectMatch(_activeMatch);
-        return;
-      }
+      _stepReopened(delta, selection);
+      return;
+    }
+    if (patternSearchPending) {
+      _afterPatternSearch.add(() => _findAgain(delta));
+      return;
     }
     _stepMatch(delta);
+  }
+
+  /// Find Next or Previous from a find bar that was closed, once its matches
+  /// are known: [selection] is where the caret was when it was asked.
+  void _stepReopened(int delta, TextSelection selection) {
+    if (_matches.isEmpty) {
+      _notify();
+      return;
+    }
+    final active = _matches[_activeMatch];
+    final onActive =
+        selection.isValid &&
+        selection.start == active.start &&
+        selection.end == active.end;
+    // Unless it is the match an earlier find left selected, Find Next
+    // takes that match as it is.
+    if (delta > 0 && !onActive) {
+      _selectMatch(_activeMatch);
+      return;
+    }
+    _stepMatch(delta);
+  }
+
+  /// Adopts a pattern search's answer, keeping the user's place when it only
+  /// refreshed an edited text, then runs the find commands that waited for
+  /// it.
+  void _patternSearchSettled() {
+    if (_disposed || !_searchOpen) return;
+    final reveal = _revealPatternResults;
+    _revealPatternResults = false;
+    if (reveal || _activeMatch < 0 || _activeMatch >= _matches.length) {
+      _updateMatches(resetActive: reveal);
+      if (reveal) _revealRequest++;
+    } else {
+      _stayOn(
+        active: _matches[_activeMatch].start,
+        pageStart: _matches.first.start,
+      );
+    }
+    final waiting = List.of(_afterPatternSearch);
+    _afterPatternSearch.clear();
+    for (final command in waiting) {
+      command();
+    }
+    _notify();
   }
 
   /// The find bar holds one window of matches, capped so a minified file cannot
@@ -1169,6 +1307,21 @@ class EditorController extends ChangeNotifier {
     bool reverse = false,
     int limit = searchMatchLimit,
   }) {
+    if (_useRegularExpression) {
+      // The engine folds case itself, so the host's fold is not involved.
+      _caseFolding = CaseFolding.exact;
+      return _patternFind?.page(
+            text.text,
+            start: start,
+            reverse: reverse,
+            limit: limit,
+          ) ??
+          const SearchResult(
+            matches: [],
+            caseFolding: CaseFolding.exact,
+            precedingCount: 0,
+          );
+    }
     final result = searchText(
       text.text,
       search.text,
@@ -1185,31 +1338,53 @@ class EditorController extends ChangeNotifier {
     return result;
   }
 
+  /// Replaces the active match. A regular expression's replacement expands
+  /// `$1`, `${1}`, `${name}` and `$$`; while its search is on its way, the
+  /// replacement waits for it, so it never acts on a match carried through
+  /// an edit that may no longer match.
   void replaceCurrent() {
     if (editingLocked || isBusy || _activeMatch < 0 || _matches.isEmpty) {
       return;
     }
+    if (patternSearchPending) {
+      _afterPatternSearch.add(replaceCurrent);
+      return;
+    }
     final match = _matches[_activeMatch];
-    final value = text.text.replaceRange(
-      match.start,
-      match.end,
-      replacement.text,
-    );
+    var replaced = replacement.text;
+    if (_useRegularExpression) {
+      // The worker found this match in this very text, so repeating the one
+      // anchored attempt here costs no more than it did within the budget.
+      final found = _patternFind?.pattern?.matchAt(
+        text.text,
+        match.start,
+        wholeWord: _wholeWord,
+      );
+      if (found == null || found.end != match.end) return;
+      replaced = expandPatternReplacement(replacement.text, found);
+    }
+    final value = text.text.replaceRange(match.start, match.end, replaced);
     text.value = TextEditingValue(
       text: value,
-      selection: TextSelection.collapsed(
-        offset: match.start + replacement.text.length,
-      ),
+      selection: TextSelection.collapsed(offset: match.start + replaced.length),
     );
     _updateMatches(resetActive: true);
     _revealRequest++;
     _notify();
   }
 
-  /// Replace every literal occurrence, including matches beyond the display cap.
-  /// Offsets come from the original text so replacements never match themselves.
-  void replaceAll() {
-    if (editingLocked || isBusy || search.text.isEmpty) return;
+  /// Replace every occurrence, including matches beyond the display cap.
+  /// Offsets come from the original text so replacements never match
+  /// themselves. Completes with whether anything was replaced.
+  ///
+  /// Literal text is replaced before this returns. A regular expression is
+  /// replaced in a worker under the search budget, expanding `$1`, `${1}`,
+  /// `${name}` and `$$`; its result is dropped if the document was edited,
+  /// locked or closed meanwhile, since it describes the text as it was, and
+  /// a timeout is reported through [patternFailure].
+  Future<bool> replaceAll() async {
+    if (editingLocked || isBusy || search.text.isEmpty) return false;
+    if (_useRegularExpression) return _replaceAllMatches();
     final source = text.text;
     final matches = findSearchMatches(
       source,
@@ -1219,7 +1394,7 @@ class EditorController extends ChangeNotifier {
       limit: source.length + 1,
       fold: _fold,
     );
-    if (matches.isEmpty) return;
+    if (matches.isEmpty) return false;
     final buffer = StringBuffer();
     var offset = 0;
     for (final match in matches) {
@@ -1237,6 +1412,47 @@ class EditorController extends ChangeNotifier {
     _updateMatches(resetActive: true);
     _revealRequest++;
     _notify();
+    return true;
+  }
+
+  Future<bool> _replaceAllMatches() async {
+    final source = text.text;
+    // Replace All covers the matches that find commands queued on the
+    // search were waiting for; run later, they would edit its result.
+    _revealPatternResults = false;
+    _afterPatternSearch.clear();
+    final find = _patternFind ??= PatternFind(
+      budget: _patternSearchBudget,
+      onSettled: _patternSearchSettled,
+    );
+    final outcome = await find.replaceAll(
+      source,
+      search.text,
+      replacement.text,
+      caseSensitive: _caseSensitive,
+      wholeWord: _wholeWord,
+    );
+    if (_disposed) return false;
+    // By content: an input method may send the same text back as a new
+    // string, and one comparison per Replace All is cheap.
+    if (editingLocked || isBusy || text.text != source) {
+      _notify();
+      return false;
+    }
+    if (outcome case PatternCompleted(value: final replaced?)) {
+      text.value = TextEditingValue(
+        text: replaced.text,
+        selection: TextSelection.collapsed(offset: replaced.firstEnd),
+      );
+      _updateMatches(resetActive: true);
+      _revealRequest++;
+      _notify();
+      return true;
+    }
+    // Nothing matched, or the pattern is unusable, timed out or was
+    // replaced by a newer Replace All; a failure is in patternFailure.
+    _notify();
+    return false;
   }
 
   void _notify() {
@@ -1246,6 +1462,7 @@ class EditorController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _patternFind?.dispose();
     text.removeListener(_textChanged);
     search.removeListener(_queryChanged);
     goToLineInput.removeListener(_goToLineEdited);

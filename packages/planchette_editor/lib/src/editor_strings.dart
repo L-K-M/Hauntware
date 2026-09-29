@@ -8,6 +8,13 @@ class EditorStrings {
   String get findHint => 'Find in file';
   String get matchCase => 'Match case';
   String get wholeWords => 'Whole words';
+  String get regularExpression => 'Regular expression';
+  String get findPatternHint => 'Find by regular expression';
+
+  /// Why a regular expression cannot be searched; [detail] is the engine's
+  /// own explanation, such as "Unterminated group".
+  String patternInvalid(String detail) => 'Invalid pattern: $detail';
+  String get patternTooSlow => 'Pattern took too long to search';
   String get previousMatch => 'Previous match';
   String get nextMatch => 'Next match';
   String get closeSearch => 'Close search';

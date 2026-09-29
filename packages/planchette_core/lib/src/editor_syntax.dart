@@ -9,10 +9,13 @@
 /// cannot consume later lines.
 library;
 
+import 'dart:async';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 part 'diff_syntax.dart';
 part 'dotenv_syntax.dart';
+part 'pattern_search.dart';
 
 /// Above this size the editor skips syntax highlighting (and the precise
 /// scroll-to-match layout): tokenizing stays linear, but building and painting
