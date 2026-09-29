@@ -184,14 +184,19 @@ build_flatpak() {
   if ! have flatpak-builder; then
     skip_or_fail flatpak "flatpak-builder not found"; return
   fi
-  # Reuse the .deb the app target just packaged; build one when absent.
-  local deb
+  # Reuse the .deb the app target just packaged; rebuild when absent or
+  # stale. (SECONDS is this script's runtime, so `start` is its launch time.)
+  local deb start
+  start=$(( $(date +%s) - SECONDS ))
   deb="$(ls -t dist/poltergeist_*.deb 2>/dev/null | head -1 || true)"
-  if [[ -z "$deb" ]]; then
+  if [[ -z "$deb" || "$(stat -c %Y "$deb" 2>/dev/null || echo 0)" -lt "$start" ]]; then
     build_app || { record "flatpak: FAILED (app build)"; return 1; }
     deb="$(ls -t dist/poltergeist_*.deb 2>/dev/null | head -1 || true)"
+    if [[ -z "$deb" || "$(stat -c %Y "$deb" 2>/dev/null || echo 0)" -lt "$start" ]]; then
+      record "flatpak: FAILED (no fresh .deb produced; a release 'app' build is required)"
+      return 1
+    fi
   fi
-  [[ -n "$deb" ]] || { record "flatpak: FAILED (no .deb produced)"; return 1; }
   if scripts/build-flatpak.sh "$deb"; then
     record "flatpak: built -> dist/"
   else
