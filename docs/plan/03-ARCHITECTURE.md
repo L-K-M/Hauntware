@@ -295,10 +295,10 @@ excluding `client.shell(pty:)`:
 ```dart
 // Upstream, in seance_core. Behavior byte-identical to today's connect()
 // through the authentication step.
-// Returns the client plus how auth resolved — key, storedPassword,
-// keyboardInteractive, or promptedPassword (AuthKind). Callers that pool
-// connections can use it to cap or allow growth; Séance's recomposed
-// connect() discards it.
+// Returns the client plus how destination auth resolved — agent, key,
+// storedPassword, keyboardInteractive, or promptedPassword (AuthKind).
+// Callers that pool connections use it to cap or allow growth; Séance's
+// recomposed connect() discards it.
 Future<(SSHClient, AuthKind)> openAuthenticatedClient({
   required ServerConfig config,
   required SshCredentials credentials,
@@ -306,6 +306,9 @@ Future<(SSHClient, AuthKind)> openAuthenticatedClient({
   required HostKeyPrompter onHostKey,
   KeyboardInteractiveResponder? onKeyboardInteractive,
   Future<SSHSocket> Function(String, int, Duration)? connect, // test seam
+  SshJumpHostResolver? resolveJumpHost,
+  SshForwardConnector? forward,                 // test seam
+  SshAgentIdentityLoader? loadAgentIdentities,  // test seam
   Duration timeout = const Duration(seconds: 15),
   Duration? keepAliveInterval = const Duration(seconds: 10),
   SshConnectionLog? log,
@@ -316,11 +319,15 @@ Future<(SSHClient, AuthKind)> openAuthenticatedClient({
 its timer so Poltergeist can own the idle-only policy (§3.3). Positive
 intervals pass through; nonpositive values fail before opening a socket.
 
-It carries the agent-method rejection, PEM key loading with per-key
-fingerprint logging, TCP connect, `SSHClient` construction (TOFU verify
+It carries native ssh-agent identity loading, PEM key loading with per-key
+fingerprint logging, complete ProxyJump route resolution before network I/O,
+TCP/direct-tcpip connection, `SSHClient` construction per hop (TOFU verify
 callback, password request, keyboard-interactive responder, debug/trace into
 the log), and on failure the `_summarizeFailure` machinery producing the
-actionable one-liner. Séance recomposes `SshSessionManager.connect()` as
+actionable one-liner. A `KeyboardInteractiveChallenge` carries the trusted
+`ServerConfig` separately from the remote peer's untrusted name, instruction,
+and prompts; UI must preserve that separation. Séance recomposes
+`SshSessionManager.connect()` as
 `openAuthenticatedClient` + shell/PTY/login-script — behavior unchanged, tests
 unchanged. Poltergeist never opens a shell channel at all: `client.sftp()`
 works without `client.shell()`.
@@ -509,7 +516,8 @@ boundary when it wraps resolvers — one mechanism, both sides.
    snappy" comment, because D5's no-second-prompt rule outranks
    throughput. Never N
    parallel 2FA prompts (D5).
-3. **Non-interactive auth may grow the pool** (key auth, stored password): up
+3. **Non-interactive auth may grow the pool** (agent, key auth, stored
+   password): up
    to `maxTransports`, reusing the resolved in-memory `SshCredentials` from
    the first connect — the secret lives only as long as the pool does.
    Growth connects run with prompting disabled

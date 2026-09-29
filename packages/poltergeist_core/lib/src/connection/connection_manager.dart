@@ -170,6 +170,21 @@ abstract interface class TransferChannelLease {
 /// A supplied password does not tell SSH whether the vault resolver prompted.
 enum CredentialOrigin { stored, prompted }
 
+void _requireRoutableServer(ServerConfig config) {
+  final jumpHostId = config.jumpHostId;
+  if (jumpHostId == null) return;
+
+  // Route composition is not wired yet. Refuse before preflight or auth so a
+  // saved jump route can never degrade into a direct connection to its target.
+  throw RemoteFileException(
+    kind: RemoteFileErrorKind.unsupported,
+    operation: 'connect',
+    message:
+        'Cannot connect through jump host "$jumpHostId": '
+        'ProxyJump routing is not available yet.',
+  );
+}
+
 /// Pool-owned secrets and their prompt provenance (03 §3.2, D18).
 class ResolvedCredentials {
   final SshCredentials credentials;
@@ -1114,6 +1129,8 @@ class PooledConnectionManager implements ConnectionManager {
     final config = reference.config;
 
     try {
+      _requireRoutableServer(config);
+
       // Serialize vault access with first connect; joining bookmarks need
       // only metadata. Never open with a secret returned to a retired pool.
       final trustEpoch = pool._trustEpoch;

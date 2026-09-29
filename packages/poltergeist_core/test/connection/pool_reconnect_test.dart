@@ -15,6 +15,14 @@ const _firstDelay = Duration(seconds: 1);
 
 enum _StopRecovery { paneClose, disconnect }
 
+KeyboardInteractiveChallenge _challenge(ServerConfig server) =>
+    KeyboardInteractiveChallenge(
+      server: server,
+      prompts: const ['Code'],
+      name: '2FA',
+      instruction: '',
+    );
+
 void main() {
   test(
     'rejects nonpositive reconnect caps instead of spinning on an outage',
@@ -553,7 +561,7 @@ void main() {
       completeWithoutTimers(
         time,
         expectLater(
-          responder(['Code'], '2FA', ''),
+          responder(_challenge(h.servers['s1']!)),
           throwsA(isA<RemoteFileException>()),
         ),
       );
@@ -582,9 +590,7 @@ void main() {
         time.flushMicrotasks();
         final answer = h.keyboardGate = Completer<List<String>>();
         final response = h.opener.calls.last.onKeyboardInteractive!(
-          ['Code'],
-          '2FA',
-          '',
+          _challenge(h.servers['s1']!),
         );
         final failed = expectLater(
           response,
@@ -624,7 +630,7 @@ void main() {
       completeWithoutTimers(
         time,
         expectLater(
-          responder(['Code'], '2FA', ''),
+          responder(_challenge(h.servers['s1']!)),
           throwsA(isA<RemoteFileException>()),
         ),
       );

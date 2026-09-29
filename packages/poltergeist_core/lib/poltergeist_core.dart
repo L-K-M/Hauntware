@@ -38,6 +38,7 @@ export 'package:seance_core/seance_core.dart'
         ImportedHost,
         InMemoryHostKeyStore,
         InMemoryVaultStore,
+        KeyboardInteractiveChallenge,
         KeyboardInteractiveResponder,
         PreferredPane,
         Prober,

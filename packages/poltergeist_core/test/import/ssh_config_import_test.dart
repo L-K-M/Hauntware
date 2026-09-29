@@ -123,11 +123,11 @@ Host blankKey
 
     expect(
       preview.rows[1].toBookmark(now: now).server!.identity!.authMethod,
-      AuthMethod.password,
+      AuthMethod.agent,
     );
     expect(
       preview.rows[2].toBookmark(now: now).server!.identity!.authMethod,
-      AuthMethod.password,
+      AuthMethod.agent,
     );
     expect(
       preview.rows[2].toBookmark(now: now).server!.identity!.identityFilePath,

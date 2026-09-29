@@ -329,7 +329,7 @@ class _PoolHarness {
       _decisions.add(decision);
       return _onHostKey(decision);
     },
-    onKeyboardInteractive: (_, _, _) async {
+    onKeyboardInteractive: (_) async {
       _unexpectedPrompts.add('keyboard interactive');
       fail('Key-auth fixture must not prompt for credentials.');
     },

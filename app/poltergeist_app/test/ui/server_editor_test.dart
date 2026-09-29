@@ -1,5 +1,5 @@
 // The server editor against its [ServerEditorDelegate] seam — the port of
-// Séance's server_editor_test.dart @ 035b0d8 minus its AppServices boot (the
+// Séance's server_editor_test.dart @ 5d578b9 minus its AppServices boot (the
 // delegate is the seam the real services sit behind here), plus direct
 // coverage of the pure save-planning helpers the port exposes.
 import 'package:flutter/material.dart';
@@ -16,6 +16,7 @@ ServerConfig _server(
   String label = 'web',
   String? secretRef,
   AuthMethod authMethod = AuthMethod.agent,
+  String? jumpHostId,
   bool excludeFromSync = false,
   int updatedAt = _nowMs,
 }) => ServerConfig(
@@ -26,6 +27,7 @@ ServerConfig _server(
   username: 'deploy',
   authMethod: authMethod,
   secretRef: secretRef,
+  jumpHostId: jumpHostId,
   excludeFromSync: excludeFromSync,
   createdAt: _nowMs,
   updatedAt: updatedAt,
@@ -176,6 +178,7 @@ void main() {
       expect(config.host, 'box.example.com');
       expect(config.username, 'deploy');
       expect(config.port, 22);
+      expect(config.authMethod, AuthMethod.agent);
       expect(secret, isNull);
       expect(config.secretRef, isNull);
       // The dialog closed on success.
@@ -202,6 +205,21 @@ void main() {
       expect(secret?.value, 'hunter2');
       expect(config.secretRef, secret?.id);
       expect(config.authMethod, AuthMethod.password);
+    });
+
+    testWidgets('an unrelated edit preserves the jump-host route', (
+      tester,
+    ) async {
+      final existing = _server('web', jumpHostId: 'bastion');
+      delegate.serverList = [existing];
+      await openEditor(tester, existing: existing);
+
+      await tester.enterText(field('Label'), 'renamed');
+      await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      expect(delegate.saved?.$1.jumpHostId, 'bastion');
     });
 
     testWidgets('an edit with the credential left blank keeps the stored '

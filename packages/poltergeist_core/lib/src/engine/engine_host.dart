@@ -1167,17 +1167,16 @@ final class _PromptBroker {
     }
   }
 
-  Future<List<String>> keyboard(
-    List<String> prompts,
-    String name,
-    String instruction,
-  ) async {
+  Future<List<String>> keyboard(KeyboardInteractiveChallenge challenge) async {
     final promptId = _mint(
       EnginePromptKind.keyboardInteractive,
       KeyboardInteractivePromptData(
-        name: name,
-        instruction: instruction,
-        prompts: prompts,
+        host: challenge.server.host,
+        port: challenge.server.port,
+        username: challenge.server.username,
+        name: challenge.name,
+        instruction: challenge.instruction,
+        prompts: challenge.prompts,
       ),
     );
 

@@ -93,6 +93,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get keyboardAuthTitle => 'Authentication';
 
   @override
+  String get keyboardRequestFrom => 'Request from';
+
+  @override
+  String get keyboardServerMessage => 'Server message';
+
+  @override
   String get keyboardSubmit => 'Submit';
 
   @override
@@ -3508,10 +3514,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Keys are provided by your ssh-agent; nothing is stored.';
 
   @override
-  String get serverEditorAgentUnsupported =>
-      'ssh-agent auth isn\'t supported yet — connecting will fail. Choose Password or Private key for now.';
-
-  @override
   String get serverEditorPasswordLabel => 'Password';
 
   @override
@@ -3758,7 +3760,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String serverMarkPickerImageExplanation(String formats, int side) {
-    return '$formats. The image is cropped square, stored at $side pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the badge’s own background through it.';
+    return '$formats. The image is cropped square, stored at $side pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the server’s colour through it.';
   }
 
   @override

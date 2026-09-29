@@ -41,12 +41,14 @@ class ScriptedVault extends SecretVault {
   Secret? secret;
   Object? readFailure;
   Object? writeFailure;
+  final List<String> reads = [];
   final List<Secret> puts = [];
 
   ScriptedVault() : super(InMemoryVaultStore(), const []);
 
   @override
   Future<Secret?> getSecret(String id) async {
+    reads.add(id);
     await readGate?.future;
 
     final failure = readFailure;
@@ -235,6 +237,9 @@ void main() {
         'p2',
         EnginePromptKind.keyboardInteractive,
         const KeyboardInteractivePromptData(
+          host: 'example.com',
+          port: 22,
+          username: 'alice',
           name: 'Duo',
           instruction: '',
           prompts: ['Passcode'],
@@ -266,6 +271,7 @@ void main() {
           port: 2222,
           username: 'deploy',
           authMethod: AuthMethod.agent,
+          secretRef: 'obsolete-secret',
         ),
       ),
     );
@@ -274,6 +280,7 @@ void main() {
     final reply = bridge.replies.single.$3 as CredentialPromptReply;
     expect(reply.origin, CredentialOrigin.stored);
     expect(reply.password, isNull);
+    expect(vault.reads, isEmpty);
     expect(find.byType(AlertDialog), findsNothing);
   });
 
@@ -615,6 +622,9 @@ void main() {
         'b',
         EnginePromptKind.keyboardInteractive,
         const KeyboardInteractivePromptData(
+          host: 'example.com',
+          port: 22,
+          username: 'alice',
           name: 'Duo',
           instruction: '',
           prompts: ['Passcode'],
@@ -715,6 +725,9 @@ void main() {
         'b',
         EnginePromptKind.keyboardInteractive,
         const KeyboardInteractivePromptData(
+          host: 'example.com',
+          port: 22,
+          username: 'alice',
           name: 'Duo',
           instruction: '',
           prompts: ['Passcode'],

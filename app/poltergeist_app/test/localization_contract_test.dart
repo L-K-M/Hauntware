@@ -2789,11 +2789,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/server_grouping.dart': {
     // Section sentinels — identity keys the view substitutes localized
     // headers for; never rendered raw in Poltergeist.
-    "''",
-    "'Ungrouped'",
     "' pinned'",
+    "' servers'",
     "'Pinned'",
-    "'Other servers'",
+    "'Servers'",
   },
   // D32 §11's platform integration: Dock progress diagnostics and the
   // file-manager reveal's process arguments (never user-facing copy).

@@ -119,14 +119,17 @@ class ScriptedFs implements RemoteFileSystem {
   );
 }
 
-ServerConfig _config() => const ServerConfig(
+ServerConfig _config({
+  AuthMethod authMethod = AuthMethod.password,
+  String? secretRef = 'secret-7',
+}) => ServerConfig(
   id: 'srv-1',
   label: 'Test',
   host: 'example.com',
   port: 2222,
   username: 'user',
-  authMethod: AuthMethod.password,
-  secretRef: 'secret-7',
+  authMethod: authMethod,
+  secretRef: secretRef,
   createdAt: 0,
   updatedAt: 0,
 );
@@ -222,12 +225,12 @@ class HostHarness {
     return completer.future;
   }
 
-  Future<EngineResult> openBrowse() => call(
+  Future<EngineResult> openBrowse({ServerConfig? config}) => call(
     (id) => OpenBrowseChannelRequest(
       requestId: id,
       serverId: 'srv-1',
       paneTabId: 'tab-1',
-      config: _config(),
+      config: config ?? _config(),
     ),
   );
 
@@ -577,6 +580,34 @@ void main() {
     );
   });
 
+  test('an empty agent reply reaches the SSH opener as agent auth', () async {
+    final h = HostHarness(opener: FakeTransportOpener(authKind: AuthKind.agent));
+    addTearDown(h.dispose);
+
+    final opened = h.openBrowse(
+      config: _config(
+        authMethod: AuthMethod.agent,
+        secretRef: 'obsolete-secret',
+      ),
+    );
+    await h.pumping();
+
+    final credential = h.takePrompt();
+    final data = credential.data as CredentialPromptData;
+    expect(data.authMethod, AuthMethod.agent);
+    h.reply(
+      credential,
+      const CredentialPromptReply(origin: CredentialOrigin.stored),
+    );
+    await h.pumping();
+
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+    expect(await opened, isA<BrowseChannelOpened>());
+    expect(h.opener.calls.single.credentials.method, AuthMethod.agent);
+    expect(h.opener.calls.single.credentials.password, isNull);
+    expect(h.opener.calls.single.credentials.privateKeyPem, isNull);
+  });
+
   test('declined first-use host key fails the open without pinning', () async {
     final h = HostHarness();
     addTearDown(h.dispose);
@@ -692,12 +723,22 @@ void main() {
 
     // The connect is parked; the server issues a 2FA challenge.
     final responder = h.opener.calls.single.onKeyboardInteractive!;
-    final answers = responder(['Enter code'], '2FA', 'verify me');
+    final answers = responder(
+      KeyboardInteractiveChallenge(
+        server: _config(),
+        prompts: const ['Enter code'],
+        name: '2FA',
+        instruction: 'verify me',
+      ),
+    );
     await h.pumping();
 
     final challenge = h.takePrompt();
     expect(challenge.kind, EnginePromptKind.keyboardInteractive);
     final data = challenge.data as KeyboardInteractivePromptData;
+    expect(data.host, 'example.com');
+    expect(data.port, 2222);
+    expect(data.username, 'user');
     expect(data.prompts, ['Enter code']);
     expect(data.instruction, 'verify me');
 

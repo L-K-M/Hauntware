@@ -11,7 +11,8 @@ environment:
 
 dependencies:
   # Path dependency: the bench package keeps its own frozen resolution
-  # (dartssh2 3.0.2, seance_core v0.9.1) outside the root workspace.
+  # (dartssh2 3.0.2, seance_core at the benchmark package's exact revision)
+  # outside the root workspace.
   # Keep this shim out of any root pub workspace so that frozen git-pinned
   # resolution is never merged into the root solver.
   poltergeist_m0_bench:

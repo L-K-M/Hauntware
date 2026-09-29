@@ -6,8 +6,9 @@ const resolvedDartssh2Version = '3.0.2';
 
 /// Live harness pin; frozen M0 evidence retains its measured revisions.
 /// The harness test keeps this aligned with tool/bench/pubspec.yaml and its
-/// resolved lock (Séance tag v0.9.1).
-const pinnedSeanceRevision = '035b0d880b47639e390af8cbbd6d316cb5edc86d';
+/// resolved lock. This temporary revision bridge returns to a tag when the
+/// next Séance release contains PR-S4.
+const pinnedSeanceRevision = '4c0a960289c919379d016507fa7ebae6b14b2e7c';
 
 /// One attributable measurement row. Rates stay derived from raw values.
 class BenchResult {

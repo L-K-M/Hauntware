@@ -1,6 +1,6 @@
 // The production [ServerEditorDelegate]: what the editor's seams resolve to
 // when the catalog drives it. Written to the shape Séance's AppState +
-// AppServices answered (testServerConnection/resolveCredentials @ 035b0d8),
+// AppServices answered (testServerConnection/resolveCredentials @ 5d578b9),
 // recomposed over Poltergeist's services — see docs/PORTS.md.
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -204,18 +204,19 @@ final class ServerEditorBackend extends ServerEditorDelegate {
   /// A keyboard-interactive challenge during the trial — the same dialog a
   /// real connect raises; an empty answer list cancels.
   Future<List<String>> _promptKeyboardInteractive(
-    List<String> prompts,
-    String name,
-    String instruction,
+    KeyboardInteractiveChallenge challenge,
   ) async {
     final context = _navigatorKey.currentContext;
     if (context == null || !context.mounted) return const <String>[];
     return showKeyboardInteractiveDialog(
       context,
       KeyboardInteractivePromptData(
-        name: name,
-        instruction: instruction,
-        prompts: prompts,
+        host: challenge.server.host,
+        port: challenge.server.port,
+        username: challenge.server.username,
+        name: challenge.name,
+        instruction: challenge.instruction,
+        prompts: challenge.prompts,
       ),
     );
   }

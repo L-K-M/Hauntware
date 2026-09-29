@@ -236,6 +236,8 @@ extension _PoolRecovery on PooledConnectionManager {
     _ReconnectCycle cycle,
   ) async {
     final config = pool.references.values.first.config;
+    _requireRoutableServer(config);
+
     final status = await _prober.probe(config.host, config.port);
     _checkReconnect(pool, cycle);
     if (status != ProbeStatus.online) throw const _ReconnectUnavailable();
@@ -323,13 +325,13 @@ extension _PoolRecovery on PooledConnectionManager {
     if (responder == null || cycle._prompting == ConnectPrompting.disabled) {
       return null;
     }
-    return (prompts, name, instruction) async {
+    return (challenge) async {
       // A handshake can outlive both its pool and its retry attempt. Neither
       // a late challenge nor a late answer may interact with that old socket.
       if (!_isCurrentAuth(pool, cycle, attempt)) {
         throw _disconnectedAcquisition();
       }
-      final answers = await responder(prompts, name, instruction);
+      final answers = await responder(challenge);
       if (!_isCurrentAuth(pool, cycle, attempt)) {
         throw _disconnectedAcquisition();
       }

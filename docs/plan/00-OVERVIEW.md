@@ -1054,8 +1054,10 @@ ownership
 
 - **D10 — Agent auth and ProxyJump are table stakes, not "eventually".**
   Both will be implemented in `seance_core`, serving both apps — ssh-agent via
-  `$SSH_AUTH_SOCK` / Windows named pipe with a custom `SSHKeyPair` signer,
-  and ProxyJump execution behind the already-modeled `jumpHostId`.
+  `$SSH_AUTH_SOCK` / Windows named pipe with `SSHIdentity.custom` signing,
+  and ProxyJump execution behind the already-modeled `jumpHostId`: resolve
+  the full route before network I/O, dial only the outer hop, then forward
+  through each inner hop.
   Scheduled as the first fast-follow after v1.0 (07), with the transport
   seams prepared during M2.
 - **D29 — Mobile is later, but never foreclosed.** v1 architecture keeps

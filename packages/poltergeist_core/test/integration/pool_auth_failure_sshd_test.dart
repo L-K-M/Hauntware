@@ -342,9 +342,14 @@ class _AuthHarness {
     // responder that throws would kill dartssh2's transport instead of
     // letting the failure summarize. Per-test assertions pin how many
     // prompt-bearing rounds each case reaches.
-    onKeyboardInteractive: (prompts, name, _) {
-      _challenges.add((prompts: prompts, name: name));
-      return Future.value([for (final _ in prompts) _challengeAnswer]);
+    onKeyboardInteractive: (challenge) {
+      _challenges.add((
+        prompts: challenge.prompts,
+        name: challenge.name,
+      ));
+      return Future.value([
+        for (final _ in challenge.prompts) _challengeAnswer,
+      ]);
     },
     policy: _defaultPolicy,
     openTransport: _open,

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **ssh-agent authentication.** New servers default to the system SSH agent,
+  with no private key stored by Poltergeist. Saved jump-host routes remain
+  blocked until ProxyJump wiring lands; they never fall back to a direct
+  connection.
 - **The active pane's accent line is above its tabs.** The coloured line
   that shows which pane is active now runs along the top of that pane's
   tab bar instead of under the tabs, so it no longer sits between a tab

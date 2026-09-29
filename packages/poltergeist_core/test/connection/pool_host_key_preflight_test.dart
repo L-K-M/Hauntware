@@ -110,4 +110,41 @@ void main() {
     expect(status.state, ServerConnectionState.disconnected);
     expect(status.detail, contains('not accepted'));
   });
+
+  test(
+    'an unresolved jump route fails before any connection side effect',
+    () async {
+      var preflightCalls = 0;
+      final pool = PoolHarness(
+        hostKeyPreflight:
+            ({
+              required ServerConfig config,
+              required TofuVerifier tofu,
+              required HostKeyPrompter onHostKey,
+              Duration timeout = const Duration(seconds: 15),
+              SshConnectionLog? log,
+            }) async {
+              preflightCalls++;
+            },
+      )..addServer('s1', jumpHostId: 'bastion');
+      addTearDown(() => pool.manager.disconnectServer('s1'));
+
+      await expectLater(
+        pool.manager.leaseTransferChannel('s1'),
+        throwsA(
+          isA<RemoteFileException>()
+              .having(
+                (error) => error.kind,
+                'kind',
+                RemoteFileErrorKind.unsupported,
+              )
+              .having((error) => error.message, 'message', contains('bastion')),
+        ),
+      );
+
+      expect(preflightCalls, 0);
+      expect(pool.credentialResolveCalls, 0);
+      expect(pool.opener.calls, isEmpty);
+    },
+  );
 }

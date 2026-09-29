@@ -195,7 +195,9 @@ class SshConfigImportRow {
           host: host.effectiveHost,
           port: port,
           username: username,
-          authMethod: hasKey ? AuthMethod.privateKey : AuthMethod.password,
+          // OpenSSH tries its agent when no IdentityFile is declared. Match
+          // that keyless default without manufacturing a password prompt.
+          authMethod: hasKey ? AuthMethod.privateKey : AuthMethod.agent,
           identityFilePath: hasKey ? keyPath : null,
         ),
       ),

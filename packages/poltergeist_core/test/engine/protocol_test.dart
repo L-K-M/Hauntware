@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
-const _expectedProtocolVersion = 13;
+const _expectedProtocolVersion = 14;
 const _probeStatuses = {
   'reachable': ProbeStatus.online,
   'refused': ProbeStatus.offline,
@@ -222,6 +222,9 @@ void main() {
           promptId: 'p2',
           kind: EnginePromptKind.keyboardInteractive,
           data: KeyboardInteractivePromptData(
+            host: 'example.com',
+            port: 2222,
+            username: 'alice',
             name: 'name',
             instruction: 'instruction',
             prompts: ['Token:', 'Pass:'],
@@ -512,7 +515,7 @@ void main() {
   );
 
   test(
-    'v13 bridge messages round-trip through a spawned isolate',
+    'v14 bridge messages round-trip through a spawned isolate',
     () async {
       final messages = ReceivePort();
       final incoming = StreamIterator<dynamic>(messages);
@@ -994,6 +997,9 @@ void _expectPromptData(EnginePromptData actual, EnginePromptData expected) {
       final KeyboardInteractivePromptData sent,
       final KeyboardInteractivePromptData got,
     ):
+      expect(got.host, sent.host);
+      expect(got.port, sent.port);
+      expect(got.username, sent.username);
       expect(got.name, sent.name);
       expect(got.instruction, sent.instruction);
       expect(got.prompts, sent.prompts);

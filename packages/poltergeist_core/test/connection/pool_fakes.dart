@@ -562,6 +562,10 @@ class PoolHarness {
     Prober? prober,
     Random? random,
     IncidentStore? incidentStore,
+    ResolvedCredentials resolvedCredentials = const ResolvedCredentials(
+      credentials: SshCredentials.privateKey('TEST KEY'),
+      origin: CredentialOrigin.stored,
+    ),
     void Function(Object error)? onIncidentStoreError,
     void Function(String, RemoteFileException, {String? paneTabId})?
         onRecoveryFailure,
@@ -576,18 +580,16 @@ class PoolHarness {
         await credentialGate?.future;
         final failure = credentialFailure;
         if (failure != null) throw failure;
-        return const ResolvedCredentials(
-          credentials: SshCredentials.privateKey('TEST KEY'),
-          origin: CredentialOrigin.stored,
-        );
+        return resolvedCredentials;
       },
       tofu: TofuVerifier(store),
       onHostKey: (decision) => onHostKey(decision),
       // A trivial responder: interactive-auth servers still complete their
       // first connect, which is what the pool reasons about.
-      onKeyboardInteractive: (prompts, name, instruction) async {
+      onKeyboardInteractive: (challenge) async {
         keyboardCalls++;
-        return await keyboardGate?.future ?? List.filled(prompts.length, '');
+        return await keyboardGate?.future ??
+            List.filled(challenge.prompts.length, '');
       },
       policy: policy,
       openTransport: this.opener.opener,
@@ -629,6 +631,7 @@ class PoolHarness {
     String host = 'example.com',
     int port = 22,
     String username = 'test',
+    AuthMethod authMethod = AuthMethod.privateKey,
     String? jumpHostId,
   }) {
     servers[serverId] = ServerConfig(
@@ -637,7 +640,7 @@ class PoolHarness {
       host: host,
       port: port,
       username: username,
-      authMethod: AuthMethod.privateKey,
+      authMethod: authMethod,
       jumpHostId: jumpHostId,
       createdAt: 0,
       updatedAt: 0,

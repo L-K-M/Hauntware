@@ -244,11 +244,23 @@ abstract class AppLocalizations {
   /// **'Trust the new key'**
   String get hostKeyTrustNewKey;
 
-  /// Fallback title when the server sends no challenge name.
+  /// Title of the keyboard-interactive authentication dialog.
   ///
   /// In en, this message translates to:
   /// **'Authentication'**
   String get keyboardAuthTitle;
+
+  /// Label above the trusted endpoint in a keyboard-interactive challenge.
+  ///
+  /// In en, this message translates to:
+  /// **'Request from'**
+  String get keyboardRequestFrom;
+
+  /// Label separating untrusted server text from the trusted endpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Server message'**
+  String get keyboardServerMessage;
 
   /// Sends the keyboard-interactive answers.
   ///
@@ -5424,12 +5436,6 @@ abstract class AppLocalizations {
   /// **'Keys are provided by your ssh-agent; nothing is stored.'**
   String get serverEditorAgentInfo;
 
-  /// Warning under the ssh-agent auth choice that the backend cannot authenticate that way yet.
-  ///
-  /// In en, this message translates to:
-  /// **'ssh-agent auth isn\'t supported yet — connecting will fail. Choose Password or Private key for now.'**
-  String get serverEditorAgentUnsupported;
-
   /// Label of the password field.
   ///
   /// In en, this message translates to:
@@ -5865,7 +5871,7 @@ abstract class AppLocalizations {
   /// Explainer at the bottom of the image tab. {formats} is the accepted-format list; {side} is the stored edge length in pixels.
   ///
   /// In en, this message translates to:
-  /// **'{formats}. The image is cropped square, stored at {side} pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the badge’s own background through it.'**
+  /// **'{formats}. The image is cropped square, stored at {side} pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the server’s colour through it.'**
   String serverMarkPickerImageExplanation(String formats, int side);
 
   /// Title of the custom colour picker dialog.
