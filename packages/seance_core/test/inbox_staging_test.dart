@@ -142,6 +142,23 @@ void main() {
       expect(r.hiddenCount, 5);
     });
 
+    test('escapes blanks the shell does not treat as spaces', () {
+      // Reads as `true || rm x`; bash runs `rm x`.
+      final r = revealInvisibles('true\u00A0|| rm x');
+      expect(r.text, 'true<U+00A0>|| rm x');
+      for (final blank in [
+        0x2000, 0x202f, 0x3000, 0x115f, 0x3164, 0xffa0, //
+        0x034f, 0x180b, 0x17b4, 0x1d173, 0x2800,
+      ]) {
+        expect(
+          revealInvisibles('a${String.fromCharCode(blank)}b').hasHidden,
+          isTrue,
+          reason: blank.toRadixString(16),
+        );
+      }
+      expect(revealInvisibles('a b\tc').hasHidden, isFalse);
+    });
+
     test('escapes variation selectors', () {
       final r = revealInvisibles('echo a\uFE0Fb\u{E0100}');
       expect(r.text, 'echo a<U+FE0F>b<U+E0100>');

@@ -45,7 +45,22 @@ RevealedScript revealInvisibles(String script) {
   return RevealedScript(out.toString(), hidden);
 }
 
+/// Spaces other than U+0020, and code points Unicode itself says to render
+/// as nothing. The first look like a space but are not one to a shell:
+/// `true<U+00A0>|| rm x` reads as a no-op, while bash takes `true<U+00A0>`
+/// as one word, fails to find it and runs `rm x`.
+final RegExp _deceptiveBlank = RegExp(
+  r'[\p{Zs}\p{Default_Ignorable_Code_Point}]',
+  unicode: true,
+);
+
+/// Braille blank: in neither class, and drawn as nothing.
+const int _kBrailleBlank = 0x2800;
+
 bool _isInvisible(int rune) =>
+    (rune != 0x20 &&
+        (rune == _kBrailleBlank ||
+            _deceptiveBlank.hasMatch(String.fromCharCode(rune)))) ||
     rune < 0x20 ||
     (rune >= 0x7f && rune <= 0x9f) ||
     rune == 0x00ad ||
