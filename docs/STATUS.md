@@ -40,6 +40,12 @@ skip. Flutter and benchmark analysis are clean. The first Linux profile
 iteration still exceeded P4's unchanged budget; subsequent profile evidence
 and CI results are recorded with the PR.
 
+The existing queue-restart widget fixture now boots each replay from a disk
+snapshot, preventing abandoned simulated-crash sessions from writing to the
+new session's journal. No extra flush is added at the tested durability
+boundary. The original fixture lost a persisted pause during stress; the
+isolated version passes ten repeats and all three composition tests.
+
 ## Upload permissions on ACL-managed servers (2026-09-28)
 
 Ordinary local-to-server uploads now follow Séance's permission policy: new
