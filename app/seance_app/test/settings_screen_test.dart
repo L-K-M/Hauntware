@@ -125,8 +125,16 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
     key: newInboxKey(),
   ).encode();
 
+  /// Makes the next inbox load fail once, as an unreachable backend would.
+  Object? failInboxLoadOnce;
+
   @override
-  Future<InboxAppsView> inboxApps() async => inbox;
+  Future<InboxAppsView> inboxApps() async {
+    final failure = failInboxLoadOnce;
+    failInboxLoadOnce = null;
+    if (failure != null) throw failure;
+    return inbox;
+  }
 
   @override
   Future<String> addInboxApp(InboxAppDraft draft) async {
@@ -914,6 +922,44 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
       await tester.pumpAndSettle();
       expect(backend.removedApps, ['a1']);
+      expect(find.text('No apps connected.'), findsOneWidget);
+    });
+
+    testWidgets('a failed action keeps its error after the reload', (
+      tester,
+    ) async {
+      backend.inbox = const InboxAppsView(
+        syncConfigured: true,
+        apps: [
+          InboxAppSummary(
+            id: 'a1',
+            name: 'bots',
+            allowedServerIds: [],
+            refused: 0,
+          ),
+        ],
+        servers: [],
+      );
+      await pumpScreen(tester, tab: SettingsTab.inbox);
+      backend.failWrites = StateError('the server said no');
+      addTearDown(() => backend.failWrites = null);
+
+      await tester.tap(find.byTooltip('Remove'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('the server said no'), findsOneWidget);
+    });
+
+    testWidgets('a failed first load offers a retry', (tester) async {
+      backend.failInboxLoadOnce = StateError('offline');
+      await pumpScreen(tester, tab: SettingsTab.inbox);
+      expect(find.textContaining('offline'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('inbox.retry')));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('offline'), findsNothing);
       expect(find.text('No apps connected.'), findsOneWidget);
     });
 

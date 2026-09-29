@@ -49,14 +49,17 @@ class _InboxSettingsState extends State<InboxSettings> {
       _busy = true;
       _error = null;
     });
+    Object? failure;
     try {
       return await action();
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      failure = e;
       return null;
     } finally {
       if (mounted) setState(() => _busy = false);
       await _reload();
+      // After the reload, which clears the error when it succeeds.
+      if (failure != null && mounted) setState(() => _error = '$failure');
     }
   }
 
@@ -155,8 +158,17 @@ class _InboxSettingsState extends State<InboxSettings> {
               style: TextStyle(color: theme.colorScheme.error),
             ),
           ),
-        if (view == null)
+        if (view == null && _error == null)
           const Center(child: CircularProgressIndicator())
+        else if (view == null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonal(
+              key: const ValueKey('inbox.retry'),
+              onPressed: _reload,
+              child: const Text('Retry'),
+            ),
+          )
         else if (!view.syncConfigured)
           const Text(
             'Set up sync first: the inbox uses your sync server.',
