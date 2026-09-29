@@ -868,4 +868,133 @@ void main() {
       TargetPlatform.windows,
     }),
   );
+
+  testWidgets(
+    'Go to Matching Bracket runs once from the Find menu and the keyboard',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'f(a, b)';
+      await mount(tester);
+      tab.editor.text.selection = const TextSelection.collapsed(offset: 1);
+      await tester.pump();
+
+      await tester.tap(find.text('Find'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Go to Matching Bracket'));
+      await tester.pumpAndSettle();
+      expect(tab.editor.text.selection.extentOffset, 6);
+
+      // Both the document and the menu bind the chord; a second run would
+      // jump straight back.
+      tab.editor.editorFocus.requestFocus();
+      await tester.pump();
+      await chord(tester, LogicalKeyboardKey.keyB, shift: true);
+      expect(
+        tab.editor.text.selection,
+        const TextSelection(baseOffset: 6, extentOffset: 1),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets('native text menus target the focused Go to Line field', (
+    tester,
+  ) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'document text';
+    await mount(tester);
+    tab.editor.openGoToLine();
+    await tester.pumpAndSettle();
+    tab.editor.goToLineInput.text = '12';
+    tab.editor.goToLineInput.selection = const TextSelection.collapsed(
+      offset: 1,
+    );
+    tab.editor.goToLineFocus.requestFocus();
+    await tester.pump();
+    final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+    final edit = bar.menus.whereType<PlatformMenu>().firstWhere(
+      (menu) => menu.label == 'Edit',
+    );
+    final selectAll = edit.menus
+        .whereType<PlatformMenuItemGroup>()
+        .expand((group) => group.members)
+        .firstWhere((item) => item.label == 'Select All');
+
+    selectAll.onSelected!();
+    await tester.pump();
+    // Select All acts on the field that has focus, not the document.
+    expect(
+      tab.editor.goToLineInput.selection,
+      const TextSelection(baseOffset: 0, extentOffset: 2),
+    );
+    expect(tab.editor.goToLineFocus.hasFocus, isTrue);
+    expect(tab.editor.text.selection.isCollapsed, isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  testWidgets(
+    'review fix: a bracket jump typed in the find field leaves the text',
+    (tester) async {
+      // The shell bound the Find menu's bracket keys app-wide, so Ctrl+B in
+      // the find field moved the hidden document's caret.
+      final tab = workspace.newDocument()!..editor.text.text = 'f(a, b)';
+      await mount(tester);
+      tab.editor.text.selection = const TextSelection.collapsed(offset: 1);
+      tab.editor.openSearch();
+      await tester.pumpAndSettle();
+      expect(tab.editor.searchFocus.hasFocus, isTrue);
+
+      await chord(tester, LogicalKeyboardKey.keyB);
+      expect(
+        tab.editor.text.selection,
+        const TextSelection.collapsed(offset: 1),
+      );
+      expect(tab.editor.searchFocus.hasFocus, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
+  testWidgets('review fix: document commands wait for the document on macOS', (
+    tester,
+  ) async {
+    // Keys a find field does not handle reach the native menu, whose
+    // document commands then edited the hidden text.
+    final tab = workspace.newDocument()!..editor.text.text = 'f(a, b)';
+    await mount(tester);
+    tab.editor.text.selection = const TextSelection.collapsed(offset: 1);
+    PlatformMenuItem item(String menuLabel, String label) {
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+      final menu = bar.menus.whereType<PlatformMenu>().firstWhere(
+        (menu) => menu.label == menuLabel,
+      );
+      return menu.menus
+          .whereType<PlatformMenuItemGroup>()
+          .expand((group) => group.members)
+          .whereType<PlatformMenuItem>()
+          .firstWhere((item) => item.label == label);
+    }
+
+    tab.editor.editorFocus.requestFocus();
+    await tester.pumpAndSettle();
+    expect(item('Edit', 'Duplicate Line').onSelected, isNotNull);
+    expect(item('Find', 'Go to Matching Bracket').onSelected, isNotNull);
+
+    tab.editor.openSearch();
+    await tester.pumpAndSettle();
+    expect(item('Edit', 'Duplicate Line').onSelected, isNull);
+    expect(item('Find', 'Go to Matching Bracket').onSelected, isNull);
+    expect(item('Edit', 'Select All').onSelected, isNotNull);
+
+    tab.editor.closeSearch();
+    await tester.pumpAndSettle();
+    expect(item('Edit', 'Duplicate Line').onSelected, isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 }

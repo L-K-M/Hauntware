@@ -189,4 +189,70 @@ void main() {
     await press(tester, LogicalKeyboardKey.keyZ, primary: true);
     expect(editor.text.text, 'one\ntwo');
   }, variant: desktop);
+
+  testWidgets('the primary key and slash toggle a comment in the document', (
+    tester,
+  ) async {
+    final editor = EditorController(displayPath: 'a.py', initialText: 'x = 1');
+    addTearDown(editor.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: PlanchetteEditor(controller: editor)),
+      ),
+    );
+    await tester.pump();
+    editor.editorFocus.requestFocus();
+    editor.text.selection = const TextSelection.collapsed(offset: 2);
+    await tester.pump();
+
+    await press(tester, LogicalKeyboardKey.slash, primary: true);
+    expect(editor.text.text, '# x = 1');
+    await press(tester, LogicalKeyboardKey.slash, primary: true);
+    expect(editor.text.text, 'x = 1');
+
+    // From the find field the chord must not edit the document behind it.
+    editor.openSearch();
+    await tester.pump();
+    await press(tester, LogicalKeyboardKey.slash, primary: true);
+    expect(editor.text.text, 'x = 1');
+  }, variant: desktop);
+
+  test('toggleComment respects the lock, compositions and the language', () {
+    final editor = EditorController(displayPath: 'a.py', initialText: 'x');
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 0);
+    expect(editor.canToggleComment, isTrue);
+
+    editor.setEditingLocked(true);
+    expect(editor.canToggleComment, isFalse);
+    expect(editor.toggleComment(), isFalse);
+    editor.setEditingLocked(false);
+
+    editor.text.value = const TextEditingValue(
+      text: 'x',
+      selection: TextSelection.collapsed(offset: 1),
+      composing: TextRange(start: 0, end: 1),
+    );
+    expect(editor.toggleComment(), isFalse);
+    expect(editor.text.text, 'x');
+
+    // Plain text has no comment marker, so the command is not offered.
+    final prose = EditorController(displayPath: 'a.md', initialText: 'x');
+    addTearDown(prose.dispose);
+    prose.text.selection = const TextSelection.collapsed(offset: 0);
+    expect(prose.canToggleComment, isFalse);
+    expect(prose.toggleComment(), isFalse);
+  });
+
+  test('review fix: a .env file comments with #', () {
+    // Its own tokenizer already highlighted # lines as comments.
+    final editor = EditorController(displayPath: '.env', initialText: 'KEY=1');
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 0);
+    expect(editor.canToggleComment, isTrue);
+    expect(editor.toggleComment(), isTrue);
+    expect(editor.text.text, '# KEY=1');
+    expect(editor.toggleComment(), isTrue);
+    expect(editor.text.text, 'KEY=1');
+  });
 }

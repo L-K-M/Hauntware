@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/desktop_window.dart';
 import 'package:planchette_app/services/document_workspace.dart';
+import 'package:planchette_app/theme/planchette_theme.dart';
 
 import 'document_workspace_test.dart' show MemoryDocuments, FakeDialogs;
 
@@ -33,6 +36,47 @@ void main() {
       expect(workspace.documents, [tab]);
       await desktop.requestQuit();
       expect(attempts, 2);
+    },
+  );
+
+  test(
+    'the native window opens on the app surface, not the platform default',
+    () {
+      final desktop = DesktopWindow(
+        confirmQuit: () async => true,
+        onQuitFailed: (_) {},
+        windowBackgroundColor: const Color(0xff0e1415),
+      );
+      addTearDown(desktop.dispose);
+      expect(desktop.windowOptions.backgroundColor, const Color(0xff0e1415));
+      expect(desktop.windowOptions.size, const Size(1080, 760));
+      expect(desktop.windowOptions.minimumSize, const Size(640, 400));
+      expect(desktop.windowOptions.title, 'Planchette');
+    },
+  );
+
+  test('the window backdrop is the surface the app paints', () {
+    for (final brightness in Brightness.values) {
+      expect(
+        windowBackdrop(brightness),
+        planchetteTheme(brightness).scaffoldBackgroundColor,
+      );
+    }
+    // The app's own pages: a second theme builder shadowing the imported one
+    // would still pass the check above.
+    expect(windowBackdrop(Brightness.light), PlanchettePalette.parchment.page);
+    expect(windowBackdrop(Brightness.dark), PlanchettePalette.seance.page);
+  });
+
+  test(
+    'a forced theme mode paints the window that theme, not the system one',
+    () {
+      expect(effectiveBrightness(ThemeMode.light), Brightness.light);
+      expect(effectiveBrightness(ThemeMode.dark), Brightness.dark);
+      expect(
+        windowBackdrop(effectiveBrightness(ThemeMode.dark)),
+        windowBackdrop(Brightness.dark),
+      );
     },
   );
 

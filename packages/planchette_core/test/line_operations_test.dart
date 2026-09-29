@@ -240,4 +240,59 @@ void main() {
       expect(run(commands['moveLines up']!, 'a\r\nb|\nc'), 'b|\r\na\nc');
     });
   });
+
+  group('toggleLineComments', () {
+    LineEdit? hash(String t, int b, int e) =>
+        toggleLineComments(t, b, e, const ['#']);
+    LineEdit? slashes(String t, int b, int e) =>
+        toggleLineComments(t, b, e, const ['//']);
+    LineEdit? ini(String t, int b, int e) =>
+        toggleLineComments(t, b, e, const ['#', ';']);
+
+    test('marks then lifts a caret line, keeping the caret in its text', () {
+      expect(run(hash, 'a |= 1\nb = 2\n'), '# a |= 1\nb = 2\n');
+      expect(run(hash, '# a |= 1\nb = 2\n'), 'a |= 1\nb = 2\n');
+    });
+
+    test('keeps indentation and skips blank lines in a selection', () {
+      expect(
+        run(slashes, '[void f() {\n  int a;\n\n  int b;\n}]'),
+        '[// void f() {\n  // int a;\n\n  // int b;\n// }]',
+      );
+      expect(run(hash, '[one\n   \ntwo]'), '[# one\n   \n# two]');
+    });
+
+    test('keeps a backward selection pointing at its anchor', () {
+      expect(run(hash, ']one\ntwo['), ']# one\n# two[');
+    });
+
+    test('lifts the marker and one space from each line', () {
+      expect(run(hash, '[# one\n  # two\n#three\n]'), '[one\n  two\nthree]\n');
+    });
+
+    test('a caret on a blank line comments it', () {
+      expect(run(hash, 'a\n|\nb'), 'a\n# |\nb');
+    });
+
+    test('a caret inside a removed marker lands where it began', () {
+      expect(run(hash, '#| x'), '|x');
+    });
+
+    test('uncomments with any of the language markers', () {
+      // INI accepts both; commenting uses the first.
+      expect(run(ini, '; |x'), '|x');
+      expect(run(ini, '[; a\n# b]'), '[a\nb]');
+      expect(run(ini, '|x'), '# |x');
+    });
+
+    test('does nothing without a marker or with only blank lines selected', () {
+      expect(toggleLineComments('x', 0, 0, const []), isNull);
+      expect(run(hash, '[\n  \n]'), 'null');
+    });
+
+    test('keeps each line\'s own CRLF break', () {
+      expect(run(hash, '[one\r\ntwo]'), '[# one\r\n# two]');
+      expect(run(hash, '[# one\r\n# two]'), '[one\r\ntwo]');
+    });
+  });
 }

@@ -210,6 +210,83 @@ void main() {
       expect(editor.canPublish, isFalse);
     },
   );
+  test('toggle comment marks then lifts a single caret line', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'a = 1\nb = 2\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 2);
+    editor.toggleComment();
+    expect(editor.text.text, '# a = 1\nb = 2\n');
+    expect(editor.text.selection.extentOffset, 4);
+    editor.toggleComment();
+    expect(editor.text.text, 'a = 1\nb = 2\n');
+    expect(editor.text.selection.extentOffset, 2);
+  });
+  test('toggle comment preserves indent and skips blank lines', () {
+    final editor = EditorController(
+      displayPath: 'x.dart',
+      initialText: 'void f() {\n  int a;\n\n  int b;\n}',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 31,
+    );
+    editor.toggleComment();
+    expect(editor.text.text, '// void f() {\n  // int a;\n\n  // int b;\n// }');
+  });
+  test('toggle comment skips whitespace-only lines like blank ones', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'one\n   \ntwo',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 11,
+    );
+    editor.toggleComment();
+    expect(editor.text.text, '# one\n   \n# two');
+  });
+  test('toggle comment keeps a backward selection pointing at its anchor', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: 'one\ntwo',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(baseOffset: 7, extentOffset: 0);
+    editor.toggleComment();
+    expect(editor.text.text, '# one\n# two');
+    expect(
+      editor.text.selection,
+      const TextSelection(baseOffset: 11, extentOffset: 0),
+    );
+  });
+  test('toggle comment lifts marker and one space per line', () {
+    final editor = EditorController(
+      displayPath: 'x.py',
+      initialText: '# one\n  # two\n#three\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 21,
+    );
+    editor.toggleComment();
+    expect(editor.text.text, 'one\n  two\nthree\n');
+  });
+  test('toggle comment is a no-op without a line comment marker', () {
+    final editor = EditorController(
+      displayPath: 'x.json',
+      initialText: '{"a": 1}',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 1);
+    editor.toggleComment();
+    expect(editor.text.text, '{"a": 1}');
+  });
   test('statistics count UTF-8 and trailing empty lines', () {
     final editor = EditorController(
       displayPath: 'test',
@@ -404,5 +481,38 @@ void main() {
     closed.search.text = 'strasse';
     closed.closeSearch();
     expect(closed.caseFoldingLimited, isFalse);
+  });
+
+  // Ported from #67, which counted the selection the way the line commands
+  // pick their lines.
+  group('selectionStats', () {
+    ({int characters, int lines}) stats(String text, int base, int extent) {
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: text,
+      );
+      addTearDown(editor.dispose);
+      editor.text.selection = TextSelection(
+        baseOffset: base,
+        extentOffset: extent,
+      );
+      return editor.selectionStats;
+    }
+
+    test('counts code units and touched lines in either direction', () {
+      expect(stats('one\ntwo\nthree', 2, 10), (characters: 8, lines: 3));
+      expect(stats('one\ntwo\nthree', 10, 2), (characters: 8, lines: 3));
+      expect(stats('one\ntwo\nthree', 0, 13), (characters: 13, lines: 3));
+    });
+
+    test('a selection ending at a line start does not count that line', () {
+      expect(stats('one\ntwo\nthree', 0, 4), (characters: 4, lines: 1));
+      expect(stats('one\ntwo\n', 0, 8), (characters: 8, lines: 2));
+      expect(stats('one\n\ntwo', 3, 5), (characters: 2, lines: 2));
+    });
+
+    test('a collapsed selection counts nothing', () {
+      expect(stats('one', 1, 1), (characters: 0, lines: 0));
+    });
   });
 }

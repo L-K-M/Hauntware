@@ -58,12 +58,17 @@ or a colon in Python and YAML), and Backspace in space indentation removes a
 whole level. The unit is learned from the document and exposed as
 `EditorController.indentation`; hosts may set it. Pass
 `tabKeyBehavior: EditorTabKeyBehavior.moveFocus` where Tab must traverse focus
-instead. Tabs render at the indentation width rather than one space wide.
+instead.
+
+`EditorSyntaxTheme` is a `ThemeExtension`: add one to a host's
+`ThemeData.extensions` to style every editor, and it animates with theme
+changes. An explicit `syntaxTheme` on a `PlanchetteEditor` still wins.
 
 `EditorStrings` adapts existing host localization resources. Token colors,
 monospace style, an external-change banner, and the status row can be supplied
 without introducing application dependencies into the package. The surface
-installs find/replace shortcuts only; Save, Open, New, Close, and Quit belong to
-the host.
+installs find/replace and Go to Line shortcuts only, using Command on Apple
+platforms and Control elsewhere (Cmd+L or Ctrl+G opens Go to Line); Save,
+Open, New, Close, and Quit belong to the host.
 
 Run `flutter analyze` and `flutter test` from this directory.
