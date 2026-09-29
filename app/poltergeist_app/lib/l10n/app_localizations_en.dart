@@ -2322,6 +2322,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openWithConfirmOpen => 'Open';
 
   @override
+  String fileOpenProgramRefused(String name) {
+    return '“$name” could run as a program on this computer, so it wasn\'t opened with the system default app.';
+  }
+
+  @override
   String checkoutDirtyUploadPrompt(String name) {
     return '“$name” changed locally. Upload it?';
   }
