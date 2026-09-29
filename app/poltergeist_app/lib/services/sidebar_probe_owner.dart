@@ -52,13 +52,18 @@ final class SidebarProbeOwner extends ChangeNotifier {
 
   AppLifecycleState? _lifecycle;
   ProbePreference _preference = ProbePreference.enabled;
+  AppLifecycleState? _appliedLifecycle;
+  ProbePreference _appliedPreference = ProbePreference.enabled;
   final Map<String, ServerConfig> _configs = {};
   final Map<String, ServerConfig> _catalogConfigs = {};
   final Map<String, int> _visible = {};
   final Set<(String, String, int)> _seenMarked = {};
   final Set<String> _connectedMarked = {};
   Future<void> _tail = Future.value();
+  Map<String, ProbeFavorite> _appliedFavorites = const {};
+  Map<String, (String, int)> _appliedEndpoints = const {};
   int _configurationRevision = 0;
+  bool _hasAppliedSnapshot = false;
   bool _disposed = false;
 
   /// Live probe truth per favorite id; unknown for ineligible rows. Live
@@ -87,6 +92,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
       ..clear()
       ..addAll(configs);
     _configurationRevision++;
+    _restrictToCurrentConfiguration();
     _markVisibleConfigs();
     _enqueue(_reconfigure);
   }
@@ -107,6 +113,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
           if (server.jumpHostId == null) server.id: server,
       });
     _configurationRevision++;
+    _restrictToCurrentConfiguration();
     _markVisibleConfigs();
     _enqueue(_reconfigure);
   }
@@ -199,6 +206,7 @@ final class SidebarProbeOwner extends ChangeNotifier {
     _visible.remove(serverId);
     _seenMarked.removeWhere((key) => key.$1 == serverId);
     _configurationRevision++;
+    _restrictToCurrentConfiguration();
     // The dedupe keys too: a re-added favorite with the same id/endpoint
     // must re-persist markConnected — the record was just deleted.
     _connectedMarked.removeWhere((key) => key.startsWith('$serverId@'));
@@ -222,7 +230,38 @@ final class SidebarProbeOwner extends ChangeNotifier {
     if (_disposed || _lifecycle == state) return;
     _lifecycle = state;
     _configurationRevision++;
+    if (state != AppLifecycleState.resumed) {
+      _restrictToCurrentConfiguration();
+    }
     _enqueue(_reconfigure);
+  }
+
+  /// Applies only removals, endpoint changes, and lifecycle stops from the
+  /// last proven snapshot. Additions still wait for their persisted facts.
+  void _restrictToCurrentConfiguration() {
+    if (!_hasAppliedSnapshot) return;
+    final configs = {..._catalogConfigs, ..._configs};
+    final favorites = <String, ProbeFavorite>{};
+    final endpoints = <String, (String, int)>{};
+    for (final entry in _appliedFavorites.entries) {
+      final config = configs[entry.key];
+      final endpoint = _appliedEndpoints[entry.key];
+      if (config == null || endpoint == null) continue;
+      if (_endpoint(config) != endpoint) continue;
+
+      favorites[entry.key] = entry.value;
+      endpoints[entry.key] = endpoint;
+    }
+    _dispatchController(
+      favorites: favorites,
+      endpoints: endpoints,
+      preference: _preference == ProbePreference.disabled
+          ? ProbePreference.disabled
+          : _appliedPreference,
+      lifecycle: _lifecycle == AppLifecycleState.resumed
+          ? _appliedLifecycle
+          : _lifecycle,
+    );
   }
 
   /// Re-reads facts and re-applies the complete policy snapshot. Fails
@@ -237,7 +276,12 @@ final class SidebarProbeOwner extends ChangeNotifier {
       _errors.report(error, stackTrace);
       _preference = ProbePreference.disabled;
     }
-    final favorites = <ProbeFavorite>[];
+    if (_preference == ProbePreference.disabled) {
+      // A known opt-out is a restriction; do not hold it behind fact reads.
+      _restrictToCurrentConfiguration();
+    }
+    final favorites = <String, ProbeFavorite>{};
+    final endpoints = <String, (String, int)>{};
     // A syncFavorites/noteRemoved landing mid-loop mutates the config
     // maps — iterate a snapshot so an awaited read cannot throw
     // ConcurrentModificationError. One entry per id, with the same
@@ -259,33 +303,62 @@ final class SidebarProbeOwner extends ChangeNotifier {
         _errors.report(error, stackTrace);
         facts = ProbeServerFacts.unseen;
       }
-      favorites.add(
-        ProbeFavorite(
-          server: config,
-          // Every favorite listed here was created on this device or
-          // adopted at import; M6's sync pull marks its rows at apply
-          // time. Sync-origin favorites gate on the connection fact.
-          origin: FavoriteOrigin.device,
-          exposure: facts.exposure,
-          connection: facts.connected,
-          // Per-favorite probe opt-out persists with the settings slice
-          // (02 §4); nothing the store carries today expresses one.
-          preference: ProbePreference.enabled,
-        ),
+      favorites[config.id] = ProbeFavorite(
+        server: config,
+        // Every favorite listed here was created on this device or
+        // adopted at import; M6's sync pull marks its rows at apply
+        // time. Sync-origin favorites gate on the connection fact.
+        origin: FavoriteOrigin.device,
+        exposure: facts.exposure,
+        connection: facts.connected,
+        // Per-favorite probe opt-out persists with the settings slice
+        // (02 §4); nothing the store carries today expresses one.
+        preference: ProbePreference.enabled,
       );
+      endpoints[config.id] = _endpoint(config);
     }
     // State changes enqueue their own pass; never let this older snapshot
     // briefly restore a removed endpoint or a newly jump-routed target.
     if (_disposed || revision != _configurationRevision) return;
-    // Keep bridge acknowledgements outside the settings queue. A newer
-    // restriction must reach the controller while an older ack is pending.
-    _errors.observe(
-      _controller.update(
-        favorites: favorites,
-        preference: _preference,
-        lifecycle: _lifecycle,
-      ),
+    _dispatchController(
+      favorites: favorites,
+      endpoints: endpoints,
+      preference: _preference,
+      lifecycle: _lifecycle,
     );
+  }
+
+  (String, int) _endpoint(ServerConfig config) =>
+      (config.host.toLowerCase(), config.port);
+
+  /// Keeps bridge acknowledgements outside the settings queue so newer
+  /// restrictions can reach the controller immediately.
+  void _dispatchController({
+    required Map<String, ProbeFavorite> favorites,
+    required Map<String, (String, int)> endpoints,
+    required ProbePreference preference,
+    required AppLifecycleState? lifecycle,
+  }) {
+    if (_disposed) return;
+    final favoriteSnapshot = Map<String, ProbeFavorite>.unmodifiable(favorites);
+    final endpointSnapshot = Map<String, (String, int)>.unmodifiable(endpoints);
+    _appliedFavorites = favoriteSnapshot;
+    _appliedEndpoints = endpointSnapshot;
+    _appliedPreference = preference;
+    _appliedLifecycle = lifecycle;
+    _hasAppliedSnapshot = true;
+
+    try {
+      unawaited(
+        _controller.update(
+          favorites: favoriteSnapshot.values.toList(growable: false),
+          preference: preference,
+          lifecycle: lifecycle,
+        ),
+      );
+    } on Object catch (error, stackTrace) {
+      _errors.report(error, stackTrace);
+    }
   }
 
   /// Serializes store reads, writes, and configuration decisions. Controller
