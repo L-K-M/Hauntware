@@ -692,8 +692,10 @@ class AppServices {
       // from before the inbox, which is worth saying in those words.
       if (error.code != _plainNotFound) rethrow;
       throw StateError(
-        'Your sync server does not have the command inbox yet. Update it '
-        '(on the server: ./update.sh) and try again.',
+        'The sync server answered "not found" for the command inbox. It is '
+        'probably from before the inbox: update it (on the server: '
+        './update.sh) and try again. If it is up to date, check what is in '
+        'front of it (a reverse proxy) for the /v1/apps and /v1/inbox paths.',
       );
     }
   }

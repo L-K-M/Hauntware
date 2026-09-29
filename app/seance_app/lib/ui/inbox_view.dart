@@ -209,6 +209,9 @@ class _ProposalReviewState extends State<ProposalReview> {
   InboxProposal get _proposal => widget.pending.proposal;
 
   Future<void> _run(ServerConfig server) async {
+    // setState only schedules the rebuild that disables the buttons, so a
+    // second tap in the same frame would get through without this.
+    if (_busy) return;
     setState(() => _busy = true);
     final navigator = Navigator.of(context);
     final overlay = Overlay.of(context, rootOverlay: true);
@@ -233,6 +236,7 @@ class _ProposalReviewState extends State<ProposalReview> {
   }
 
   Future<void> _dismiss() async {
+    if (_busy) return;
     setState(() => _busy = true);
     final overlay = Overlay.of(context, rootOverlay: true);
     try {

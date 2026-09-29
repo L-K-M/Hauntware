@@ -2491,6 +2491,19 @@ class AppState extends ChangeNotifier {
     PendingProposal proposal,
     ServerConfig server,
   ) async {
+    // The review screen only offers servers the resolver allows, but this is
+    // the point that acts, so it checks again rather than trusting callers:
+    // the app's server list may have changed since the screen was built.
+    final target = resolveInboxTarget(
+      proposal.proposal.host,
+      proposal.app,
+      servers,
+    );
+    if (target.server?.id != server.id) {
+      return const ProposalRunResult.failed(
+        'This app may not run commands on that server.',
+      );
+    }
     if (services.isSyncConfigured) {
       try {
         await _runSyncAndRefresh();
@@ -2507,11 +2520,11 @@ class AppState extends ChangeNotifier {
       );
     }
     final String line;
+    final RemoteFileSystem fs;
+    final StagedScript staged;
     try {
-      final staged = await stageProposalScript(
-        await ssh.openRemoteFileSystem(),
-        proposal.proposal,
-      );
+      fs = await ssh.openRemoteFileSystem();
+      staged = await stageProposalScript(fs, proposal.proposal);
       // Built from a quoted path, so it never holds a line break; it goes
       // through the same gate as every paste regardless, and before the
       // claim, so a refusal leaves the proposal pending.
@@ -2519,19 +2532,29 @@ class AppState extends ChangeNotifier {
     } catch (error) {
       return ProposalRunResult.failed('Could not upload the script: $error');
     }
-    final claim = await _mutate(() async {
-      final claim = await services.withInbox((inbox) => inbox.claim(proposal));
-      await _loadInbox();
-      return claim;
-    });
+    final InboxClaim claim;
+    try {
+      claim = await _mutate(() async {
+        final claim = await services.withInbox(
+          (inbox) => inbox.claim(proposal),
+        );
+        await _loadInbox();
+        return claim;
+      });
+    } catch (error) {
+      await _unstage(fs, staged);
+      return ProposalRunResult.failed('Could not claim the proposal: $error');
+    }
     notifyListeners();
     _scheduleAutoSync();
     switch (claim) {
       case InboxClaim.handledElsewhere:
+        await _unstage(fs, staged);
         return const ProposalRunResult.failed(
           'Another device already ran or dismissed this proposal.',
         );
       case InboxClaim.unavailable:
+        await _unstage(fs, staged);
         return const ProposalRunResult.failed(
           'This proposal expired or its app was removed.',
         );
@@ -2541,6 +2564,21 @@ class AppState extends ChangeNotifier {
     session.engine.injectInput(line);
     focusTab(session.id);
     return ProposalRunResult.staged(line);
+  }
+
+  /// Remove a script staged for a proposal that will not run here, so
+  /// `~/.seance/inbox/` does not collect files nothing will run. Best effort:
+  /// a leftover is inert (nothing runs it without the user typing its path).
+  Future<void> _unstage(RemoteFileSystem fs, StagedScript staged) async {
+    try {
+      await fs.delete(await fs.stat(staged.path, followLinks: false));
+    } catch (error) {
+      developer.log(
+        'Could not remove staged inbox script: ${error.runtimeType}',
+        name: 'seance.app',
+        level: 900,
+      );
+    }
   }
 
   /// A connected terminal on [server]: the last one used there if it is up,

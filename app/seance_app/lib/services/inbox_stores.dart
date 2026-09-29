@@ -18,6 +18,10 @@ const String _keySecretPrefix = 'inbox-key:';
 ///
 /// [vault] is a getter because `AppServices.vault` is swapped when the vault
 /// unlocks or is re-keyed.
+///
+/// Single writer by construction: every write comes from `AppState` inside
+/// its mutation queue, the sync round included, so flushes never interleave
+/// and the file needs no lock of its own.
 class FileInboxAppStore implements InboxAppStore {
   final File file;
   final SecretVault Function() vault;
@@ -117,9 +121,12 @@ class FileInboxStatusStore implements InboxStatusStore {
     _loaded = true;
   }
 
+  /// Owner-only like the cache: which proposals were run or dismissed, and
+  /// when, is a record of activity on the user's servers.
   Future<void> _flush() => writeStringAtomically(
         file,
         jsonEncode([for (final s in _cache.values) s.toJson()]),
+        privacy: AtomicFilePrivacy.ownerOnly,
       );
 
   @override

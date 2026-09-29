@@ -235,11 +235,19 @@ class _AppDialogState extends State<_AppDialog> {
     super.dispose();
   }
 
+  /// The picked servers that still exist. An app limited to servers that
+  /// were all deleted since must not save as an empty list, which means
+  /// "any server": that would widen it without anyone asking.
+  List<String> get _selected => [
+    for (final s in widget.servers)
+      if (_allowed.contains(s.id)) s.id,
+  ];
+
   bool get _valid {
     final name = _name.text.trim();
     return name.isNotEmpty &&
         name.length <= kInboxMaxNameChars &&
-        (_anyServer || _allowed.isNotEmpty);
+        (_anyServer || _selected.isNotEmpty);
   }
 
   @override
@@ -311,12 +319,7 @@ class _AppDialogState extends State<_AppDialog> {
                   context,
                   InboxAppDraft(
                     name: _name.text.trim(),
-                    allowedServerIds: _anyServer
-                        ? const []
-                        : [
-                            for (final s in widget.servers)
-                              if (_allowed.contains(s.id)) s.id,
-                          ],
+                    allowedServerIds: _anyServer ? const [] : _selected,
                   ),
                 )
               : null,

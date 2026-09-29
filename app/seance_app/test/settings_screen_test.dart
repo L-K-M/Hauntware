@@ -148,9 +148,28 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
     return pairing;
   }
 
+  final List<(String, InboxAppDraft)> updatedApps = [];
+
   @override
-  Future<void> updateInboxApp(String appId, InboxAppDraft draft) =>
-      _write('updateInboxApp');
+  Future<void> updateInboxApp(String appId, InboxAppDraft draft) async {
+    await _write('updateInboxApp');
+    updatedApps.add((appId, draft));
+    inbox = InboxAppsView(
+      syncConfigured: inbox.syncConfigured,
+      apps: [
+        for (final a in inbox.apps)
+          a.id == appId
+              ? InboxAppSummary(
+                  id: a.id,
+                  name: draft.name,
+                  allowedServerIds: draft.allowedServerIds,
+                  refused: a.refused,
+                )
+              : a,
+      ],
+      servers: inbox.servers,
+    );
+  }
 
   @override
   Future<void> removeInboxApp(String appId) async {
@@ -773,6 +792,53 @@ void main() {
   });
 
   group('Inbox tab', () {
+    // The same fake serves every test; start each from the default view.
+    setUp(() {
+      backend.inbox = const InboxAppsView(
+        syncConfigured: true,
+        apps: [],
+        servers: [InboxServerChoice(id: 's1', label: 'prod-db-1')],
+      );
+      backend.addedApps.clear();
+      backend.removedApps.clear();
+      backend.updatedApps.clear();
+    });
+
+    testWidgets('an app whose servers were deleted cannot save as "any"', (
+      tester,
+    ) async {
+      backend.inbox = const InboxAppsView(
+        syncConfigured: true,
+        apps: [
+          InboxAppSummary(
+            id: 'a1',
+            name: 'bots',
+            allowedServerIds: ['gone'],
+            refused: 0,
+          ),
+        ],
+        servers: [InboxServerChoice(id: 's1', label: 'prod-db-1')],
+      );
+      await pumpScreen(tester, tab: SettingsTab.inbox);
+      await tester.tap(find.byTooltip('Edit'));
+      await tester.pumpAndSettle();
+
+      // Renaming alone would save an empty list, which means any server.
+      await tester.enterText(
+        find.byKey(const ValueKey('inbox.app.name')),
+        'renamed',
+      );
+      await tester.pumpAndSettle();
+      final save = find.byKey(const ValueKey('inbox.app.save'));
+      expect(tester.widget<FilledButton>(save).onPressed, isNull);
+
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'prod-db-1'));
+      await tester.pumpAndSettle();
+      await tester.tap(save);
+      await tester.pumpAndSettle();
+      expect(backend.updatedApps.single.$2.allowedServerIds, ['s1']);
+    });
+
     testWidgets('connecting an app shows its pairing string once', (
       tester,
     ) async {

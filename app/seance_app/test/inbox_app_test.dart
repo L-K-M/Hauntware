@@ -223,6 +223,36 @@ void main() {
       expect(run.onPressed, isNull);
     });
 
+    test('staging refuses a server the app may not target', () async {
+      final (app, _) = await seed();
+      addTearDown(disposeState);
+      final other = ServerConfig(
+        id: 's2',
+        label: 'other',
+        host: 'other.example.com',
+        username: 'deploy',
+        createdAt: 1,
+        updatedAt: 1,
+      );
+      final result = await state.runProposal(
+        state.inboxPending.single,
+        other,
+      );
+      expect(result.ok, isFalse);
+      expect(result.error, contains('may not run'));
+
+      // Limited to another server after the proposal arrived.
+      await services.inboxApps.putApp(
+        app.copyWith(allowedServerIds: const ['s2'], updatedAt: 2),
+      );
+      await state.load();
+      final limited = await state.runProposal(
+        state.inboxPending.single,
+        state.servers.single,
+      );
+      expect(limited.ok, isFalse);
+    });
+
     testWidgets('the banner counts what waits', (tester) async {
       await tester.runAsync(() => seed());
       addTearDown(() => tester.runAsync(disposeState));
