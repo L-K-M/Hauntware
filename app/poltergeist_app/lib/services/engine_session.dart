@@ -65,6 +65,9 @@ abstract interface class AppEngine implements PromptBridge, ProbeBridge, PaneEng
   @override
   Future<void> disconnectServer(String serverId);
 
+  /// Replaces the engine's authoritative catalog without acquiring a channel.
+  Future<void> replaceServerCatalog(List<ServerConfig> configs);
+
   /// The bookmark-removal cascade (03 §6's delete path): drops the pool
   /// reference and every trust-incident record the engine holds for
   /// [serverId]. The app calls this AFTER the store delete — the engine's
@@ -254,6 +257,10 @@ final class _EngineClientAppEngine implements AppEngine {
       _client.disconnectServer(serverId);
 
   @override
+  Future<void> replaceServerCatalog(List<ServerConfig> configs) =>
+      _client.replaceServerCatalog(configs);
+
+  @override
   Future<void> removeBookmark(String serverId) =>
       _client.removeBookmark(serverId);
 
@@ -407,6 +414,9 @@ final class EngineSession {
   /// never overtake it).
   Future<void> _incidentTail = Future<void>.value();
 
+  Listenable? _serverCatalogChanges;
+  VoidCallback? _serverCatalogListener;
+
   bool _reviewInFlight = false;
   Future<void>? _shutdownFuture;
 
@@ -427,6 +437,39 @@ final class EngineSession {
   /// the pane banner cancels recovery through. Stable across rebuilds
   /// for the same reason as [connectionLanes].
   late final PaneEngineLanes paneLanes = _engine;
+
+  /// Keeps the engine's cached routes aligned with the shared server catalog.
+  ///
+  /// Updates retire stale pool references without opening the replacement
+  /// route. This matters while jump hosts are refused: a live direct route
+  /// must not recover after sync adds a bastion.
+  void bindServerCatalog({
+    required Listenable changes,
+    required Iterable<ServerConfig> Function() read,
+  }) {
+    if (_shutdownFuture != null) return;
+    final previousListener = _serverCatalogListener;
+    if (previousListener != null) {
+      _serverCatalogChanges?.removeListener(previousListener);
+    }
+
+    void refresh() {
+      if (_shutdownFuture != null) return;
+      final List<ServerConfig> configs;
+      try {
+        configs = List.unmodifiable(read());
+      } on Object catch (error, stackTrace) {
+        _errors.report(error, stackTrace);
+        return;
+      }
+      _errors.observe(_engine.replaceServerCatalog(configs));
+    }
+
+    _serverCatalogChanges = changes;
+    _serverCatalogListener = refresh;
+    changes.addListener(refresh);
+    refresh();
+  }
 
   /// The bridged transfer-lease seam (see [AppEngine.transferConnections]):
   /// the transfer queue session, the checkout session, and the sync
@@ -597,6 +640,12 @@ final class EngineSession {
     final pending = _shutdownFuture;
     if (pending != null) return pending;
     return _shutdownFuture = () async {
+      final catalogListener = _serverCatalogListener;
+      if (catalogListener != null) {
+        _serverCatalogChanges?.removeListener(catalogListener);
+      }
+      _serverCatalogChanges = null;
+      _serverCatalogListener = null;
       try {
         _prompts.dispose();
       } on Object catch (error, stackTrace) {

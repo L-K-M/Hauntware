@@ -78,6 +78,7 @@ class FakeAppEngine implements AppEngine {
   final _pendingReplies = <String, Completer<PromptReply>>{};
 
   final replies = <(String, EnginePromptKind, PromptReply)>[];
+  final catalogSnapshots = <List<ServerConfig>>[];
   final openCalls =
       <({String serverId, String paneTabId, ServerConfig config})>[];
 
@@ -140,6 +141,11 @@ class FakeAppEngine implements AppEngine {
 
   @override
   Future<void> setProbeActivity(ProbeActivity activity) async {}
+
+  @override
+  Future<void> replaceServerCatalog(List<ServerConfig> configs) async {
+    catalogSnapshots.add(List.unmodifiable(configs));
+  }
 
   @override
   Future<AppBrowseChannel> openBrowseChannel({
@@ -752,6 +758,73 @@ void main() {
       await pumpEventQueue();
 
       expect(engine!.shutdownCalls, 1);
+    });
+  });
+
+  group('catalog config refresh', () {
+    test('sends an empty snapshot when sync removes the catalog', () async {
+      const direct = ServerConfig(
+        id: 'catalog-1',
+        label: 'Database',
+        host: 'db.internal',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final catalog = ValueNotifier<List<ServerConfig>>([direct]);
+      addTearDown(catalog.dispose);
+      final (session, engine) = await startSession();
+
+      session!.bindServerCatalog(
+        changes: catalog,
+        read: () => catalog.value,
+      );
+      catalog.value = const [];
+      await pumpEventQueue();
+
+      expect(engine!.catalogSnapshots, [
+        [direct],
+        <ServerConfig>[],
+      ]);
+    });
+
+    test('pushes route changes and detaches on shutdown', () async {
+      const direct = ServerConfig(
+        id: 'catalog-1',
+        label: 'Database',
+        host: 'db.internal',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final catalog = ValueNotifier<List<ServerConfig>>([direct]);
+      addTearDown(catalog.dispose);
+      final (session, engine) = await startSession();
+
+      session!.bindServerCatalog(
+        changes: catalog,
+        read: () => catalog.value,
+      );
+      await pumpEventQueue();
+      expect(engine!.catalogSnapshots, [
+        [direct],
+      ]);
+
+      final routed = direct.copyWith(jumpHostId: 'bastion');
+      catalog.value = [routed];
+      await pumpEventQueue();
+      expect(engine.catalogSnapshots, [
+        [direct],
+        [routed],
+      ]);
+
+      await session.shutdown();
+      catalog.value = [direct];
+      await pumpEventQueue();
+      expect(engine.catalogSnapshots, [
+        [direct],
+        [routed],
+      ]);
     });
   });
 

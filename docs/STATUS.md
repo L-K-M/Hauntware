@@ -9318,15 +9318,25 @@ already carries `jumpHostId`.
   `AppServerConfigSource.configFor` (transfers, checkouts, previews,
   sync runs). The editor's Test connection reports the same sentence as
   a failed trial without calling the delegate, and the sidebar no longer
-  probes such a server. This matches 01 §4 differentiator 8 (not
-  connectable until D10), so no plan edit.
+  probes such a server. Protocol v14 also pushes complete catalog snapshots
+  into the engine without acquiring a channel. They are authoritative even
+  before an alias opens: adding a jump route or removing a record retires
+  every old alias, and a request captured before sync cannot restore it.
+  Work already authenticated may drain, but it cannot recover or issue
+  another lease there. This matches 01 §4 differentiator 8 (not connectable
+  until D10), so no plan edit.
 
 Tests: the editor keeps `jumpHostId` on an edit (failed before the fix),
 and `saveServer` seals it into the pushed record. The pane, the config
 source and the editor's test refuse a jump-routed server without
 dialing, and the probe owner skips it (all four failed before the fix).
-Validation: `flutter analyze` is clean, and the full app suite passes
-(2792 tests, 6 of them new).
+Review added regressions for live and pending route retirement, stale opens
+and leases, catalog tombstones, matching concurrent opens, and mounted versus
+hidden probe rows; each failed before its fix. Local catalog changes notify
+the snapshot listener, and the v14 snapshot crosses the isolate contract test.
+Validation: Dart and Flutter analysis are clean; the full core suite passes
+1720 tests with 27 environment skips, and the full app suite passes 2894 tests
+(12 app tests new).
 
 ## Open items
 

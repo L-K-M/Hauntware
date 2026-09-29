@@ -573,6 +573,10 @@ class PooledConnectionManager implements ConnectionManager {
   /// id's panes and leases there keep working until they close, but
   /// nothing new is acquired there and it never reconnects for this id.
   void updateServerConfig(String serverId, ServerConfig config) {
+    // A pending resolution has not entered [_references] yet. Remove its
+    // identity so it fails before credentials or transport work begins.
+    _pendingReferences.remove(serverId);
+
     // Unresolved ids read the resolver when they first connect.
     final reference = _references[serverId];
     if (reference == null) return;
@@ -581,6 +585,16 @@ class PooledConnectionManager implements ConnectionManager {
       reference.config = config;
       return;
     }
+    _retireReference(reference);
+  }
+
+  /// Retires a catalog route that no longer exists. Existing authenticated
+  /// work drains, but unresolved or future acquisitions cannot use it.
+  void retireServerConfig(String serverId) {
+    _pendingReferences.remove(serverId);
+    final reference = _references[serverId];
+    if (reference == null) return;
+
     _retireReference(reference);
   }
 

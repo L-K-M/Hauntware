@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
-const _expectedProtocolVersion = 13;
+const _expectedProtocolVersion = 14;
 const _probeStatuses = {
   'reachable': ProbeStatus.online,
   'refused': ProbeStatus.offline,
@@ -396,6 +396,11 @@ void main() {
         engine,
         SetProbeTargetsRequest(requestId: 17, targets: []),
       );
+      await _roundTrip(
+        incoming,
+        engine,
+        ReplaceServerCatalogRequest(requestId: 20, configs: [_config]),
+      );
       for (final activity in ProbeActivity.values) {
         await _roundTrip(
           incoming,
@@ -512,7 +517,7 @@ void main() {
   );
 
   test(
-    'v13 bridge messages round-trip through a spawned isolate',
+    'v14 bridge messages round-trip through a spawned isolate',
     () async {
       final messages = ReceivePort();
       final incoming = StreamIterator<dynamic>(messages);
@@ -923,6 +928,15 @@ Future<void> _roundTrip(
     ):
       expect(got.requestId, sent.requestId);
       expect(got.activity, sent.activity);
+    case (
+      final ReplaceServerCatalogRequest sent,
+      final ReplaceServerCatalogRequest got,
+    ):
+      expect(got.requestId, sent.requestId);
+      expect(
+        got.configs.map((config) => config.toJson()),
+        sent.configs.map((config) => config.toJson()),
+      );
     case (final ShutdownRequest sent, final ShutdownRequest got):
       expect(got.requestId, sent.requestId);
     case (final PromptReplyRequest sent, final PromptReplyRequest got):

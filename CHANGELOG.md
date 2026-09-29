@@ -210,7 +210,9 @@
   Poltergeist cannot connect through a jump host yet, so opening such a
   server, testing it in its editor, or transferring to it now says so
   instead of connecting to the server directly, around the jump host.
-  Its sidebar row no longer checks whether it is online either.
+  Its sidebar row no longer checks whether it is online either. If sync
+  adds a jump host or removes a connected server, existing work may
+  finish, but that old route cannot reconnect.
 - Pre-1.0 history lives in the commit log and the GitHub pre-releases
   (v0.1.0, v0.2.0).
 

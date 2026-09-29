@@ -593,6 +593,24 @@ void main() {
       expect(h.service.catalog!.byId('web'), isNotNull);
     });
 
+    test('save and delete notify complete catalog snapshots', () async {
+      await h.enrollSharedDirectly();
+      final snapshots = <List<String>>[];
+      void capture() => snapshots.add([
+        for (final server in h.service.catalog?.servers ?? const []) server.id,
+      ]);
+      h.service.addListener(capture);
+      addTearDown(() => h.service.removeListener(capture));
+
+      await h.service.saveServer(config('web'));
+      await h.service.deleteServer(config('web'));
+
+      expect(snapshots, [
+        ['web'],
+        <String>[],
+      ]);
+    });
+
     test('saveServer seals a jump route into the pushed record', () async {
       // The editor hands over the route it does not show (X-02); the
       // re-stamp and the seal must carry it on to Séance's devices.

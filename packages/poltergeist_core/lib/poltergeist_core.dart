@@ -482,6 +482,7 @@ export 'src/engine/protocol.dart'
         ProbeActivity,
         ProbeStatusesEvent,
         RecoveryFailedEvent,
+        ReplaceServerCatalogRequest,
         RemoveBookmarkRequest,
         RenameEntryRequest,
         ResponseEvent,

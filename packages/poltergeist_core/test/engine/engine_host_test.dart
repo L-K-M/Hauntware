@@ -119,8 +119,8 @@ class ScriptedFs implements RemoteFileSystem {
   );
 }
 
-ServerConfig _config() => const ServerConfig(
-  id: 'srv-1',
+ServerConfig _config({String id = 'srv-1'}) => ServerConfig(
+  id: id,
   label: 'Test',
   host: 'example.com',
   port: 2222,
@@ -418,6 +418,218 @@ void main() {
       [for (final call in h.opener.calls) call.config.host],
       ['example.com', 'new.example.com'],
     );
+  });
+
+  test('a catalog refresh retires every known alias without dialing', () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+    h.watch('favorite-1');
+    await h.pumping();
+
+    final opened = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: 'tab-1',
+        config: _config(id: 'catalog-1'),
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+    final channel = await opened as BrowseChannelOpened;
+
+    final refreshed = await h.call(
+      (id) => ReplaceServerCatalogRequest(
+        requestId: id,
+        configs: [
+          _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion'),
+        ],
+      ),
+    );
+    await h.pumping();
+
+    expect(refreshed, isA<EngineAck>());
+    expect(h.opener.calls, hasLength(1));
+    expect(
+      h.events.whereType<ServerStateEvent>().last.state,
+      ServerConnectionState.disconnected,
+    );
+    // Work already authenticated drains, but this id cannot reconnect there.
+    expect(
+      await h.list(channel.channelId, '/home/test'),
+      isA<DirectoryListed>(),
+    );
+  });
+
+  test('a removed catalog route drains work and refuses stale requests',
+      () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+    final direct = _config(id: 'catalog-1');
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [direct],
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+
+    final opened = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: 'tab-1',
+        config: direct,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+    final channel = await opened as BrowseChannelOpened;
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(requestId: id, configs: const []),
+      ),
+      isA<EngineAck>(),
+    );
+    expect(
+      await h.list(channel.channelId, '/home/test'),
+      isA<DirectoryListed>(),
+    );
+
+    for (final attempt in [
+      h.call(
+        (id) => OpenBrowseChannelRequest(
+          requestId: id,
+          serverId: 'favorite-1',
+          paneTabId: 'stale-tab',
+          config: direct,
+        ),
+      ),
+      h.call(
+        (id) => LeaseTransferChannelRequest(
+          requestId: id,
+          serverId: 'favorite-1',
+          config: direct,
+        ),
+      ),
+    ]) {
+      final failure = await expectError(attempt);
+      expect(failure.kind, RemoteFileErrorKind.disconnected);
+    }
+    expect(h.events.whereType<EnginePromptEvent>(), isEmpty);
+    expect(h.opener.calls, hasLength(1));
+  });
+
+  test(
+    'a catalog refresh cancels a pending direct open before dialing',
+    () async {
+      final h = HostHarness();
+      addTearDown(h.dispose);
+
+      final opened = h.call(
+        (id) => OpenBrowseChannelRequest(
+          requestId: id,
+          serverId: 'favorite-1',
+          paneTabId: 'tab-1',
+          config: _config(id: 'catalog-1'),
+        ),
+      );
+      final refreshed = h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [
+            _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion'),
+          ],
+        ),
+      );
+      await h.pumping();
+
+      expect(await refreshed, isA<EngineAck>());
+      expect(
+        h.events.whereType<EnginePromptEvent>(),
+        isEmpty,
+        reason: 'the retired direct route must not request credentials',
+      );
+      final failure = await expectError(opened);
+      expect(failure.kind, RemoteFileErrorKind.unsupported);
+      expect(h.opener.calls, isEmpty);
+    },
+  );
+
+  for (final lease in [false, true]) {
+    test('an authoritative jump route refuses a stale '
+        '${lease ? 'lease' : 'open'} before dialing', () async {
+      final h = HostHarness();
+      addTearDown(h.dispose);
+
+      expect(
+        await h.call(
+          (id) => ReplaceServerCatalogRequest(
+            requestId: id,
+            configs: [
+              _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion'),
+            ],
+          ),
+        ),
+        isA<EngineAck>(),
+      );
+      final attempt = lease
+          ? h.call(
+              (id) => LeaseTransferChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                config: _config(id: 'catalog-1'),
+              ),
+            )
+          : h.call(
+              (id) => OpenBrowseChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                paneTabId: 'tab-1',
+                config: _config(id: 'catalog-1'),
+              ),
+            );
+      await h.pumping();
+
+      expect(h.events.whereType<EnginePromptEvent>(), isEmpty);
+      final failure = await expectError(attempt);
+      expect(failure.kind, RemoteFileErrorKind.unsupported);
+      expect(h.opener.calls, isEmpty);
+    });
+  }
+
+  test('matching concurrent opens share their pending route', () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+
+    Future<EngineResult> open(String paneTabId) => h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: paneTabId,
+        config: _config(id: 'catalog-1'),
+      ),
+    );
+
+    final first = open('tab-1');
+    final second = open('tab-2');
+    await h.pumping();
+
+    expect(h.events.whereType<EnginePromptEvent>(), hasLength(1));
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+
+    expect(await first, isA<BrowseChannelOpened>());
+    expect(await second, isA<BrowseChannelOpened>());
+    expect(h.opener.calls, hasLength(1));
   });
 
   test('a lease with an edited config dials it while the old pane keeps '

@@ -288,7 +288,11 @@ final class BookmarkBackupService extends ChangeNotifier
   /// directly — the coordinator persists the row AND seals its record
   /// dirty for the next round in one call. A no-op outside shared mode.
   Future<void> saveServer(ServerConfig server) async {
-    await _coordinator?.onServerSaved(server);
+    final coordinator = _coordinator;
+    if (coordinator == null) return;
+
+    await coordinator.onServerSaved(server);
+    notifyListeners();
   }
 
   /// Delete a shared-mode server: drops the row and seals the tombstone
@@ -299,7 +303,11 @@ final class BookmarkBackupService extends ChangeNotifier
   /// exists for (Séance's `_mutate` queue, narrowed to the server domain).
   Future<void> deleteServer(ServerConfig server) =>
       _mutateServer(() async {
-        await _coordinator?.onServerDeleted(server);
+        final coordinator = _coordinator;
+        if (coordinator == null) return;
+
+        await coordinator.onServerDeleted(server);
+        notifyListeners();
       });
 
   /// The server-domain mutation tail delete and duplicate serialize on.
