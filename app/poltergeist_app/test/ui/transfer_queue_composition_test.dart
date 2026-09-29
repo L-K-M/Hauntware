@@ -84,6 +84,22 @@ void main() {
     return session;
   }
 
+  Future<TransferQueueSession> restartFromDisk() {
+    // A real process death stops its journal writer. These abandoned
+    // sessions remain alive for teardown, so replay a disk snapshot in
+    // a new directory before their late scans can share the new writer's
+    // journal. Do not flush here: the caller's durability boundary is
+    // what the next boot must prove.
+    final previous = supportDir;
+    supportDir = Directory('${tempDir.path}/support-${sessions.length}')
+      ..createSync();
+    for (final name in [transferJournalFileName, transferHistoryFileName]) {
+      final file = File('${previous.path}/$name');
+      if (file.existsSync()) file.copySync('${supportDir.path}/$name');
+    }
+    return boot();
+  }
+
   TransferTaskSpec copySpec(String name) => TransferTaskSpec(
     source: const LocalFsLocation(),
     destination: const LocalFsLocation(),
@@ -245,7 +261,7 @@ void main() {
         // session gets.
 
         // Session 2: the production boot composition.
-        session = await boot();
+        session = await restartFromDisk();
         expect(session.queue.isPaused, isTrue);
         final restoredPaused = session.queue.tasks.singleWhere(
           (task) => task.id == pausedId,
@@ -352,7 +368,7 @@ void main() {
       // fsynced — the quit verb's pause made every survivor journaled
       // paused, and the completed task stays in history.
       await tester.runAsync(() async {
-        final third = await boot();
+        final third = await restartFromDisk();
         expect(
           third.queue.tasks.map((task) => task.id),
           containsAll([pausedId, queuedId, dropped.id]),

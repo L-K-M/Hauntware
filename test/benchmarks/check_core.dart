@@ -1469,7 +1469,19 @@ CheckReport evaluate({
         )
         .toList();
     for (final entry in stale) {
-      if (enforceB) {
+      // Persisted drift streaks are a tier-B policy. Tier-A hardware
+      // drift deliberately never fails a run or creates a streak.
+      if (!tiers.contains(BenchTier.b)) {
+        // PRs deliberately observe only tier A. Failing them on saved
+        // tier-B history would also block the PR needed to fix that
+        // history, which only a clean main tier-B run may clear.
+        notices.add(
+          'NOTICE: persisted ${entry.key} drift is stale after '
+          '${entry.value.consecutiveMainRuns} main-branch runs; '
+          'tier B is outside this run\'s declared scope and its history '
+          'is unchanged',
+        );
+      } else if (enforceB) {
         failures.add(
           'baseline stale — refresh required: drift notice ${entry.key} '
           'has fired on >= $driftStaleThreshold consecutive main-branch '

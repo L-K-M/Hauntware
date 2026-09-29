@@ -180,7 +180,7 @@ class PaneTabsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final content = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _TabStrip(
@@ -243,6 +243,9 @@ class PaneTabsView extends StatelessWidget {
         ),
       ],
     );
+    // A tab switch repaints this pane's surface while the opposite
+    // pane can retain its unchanged display list.
+    return RepaintBoundary(child: content);
   }
 }
 
