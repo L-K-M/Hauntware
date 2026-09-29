@@ -399,7 +399,7 @@ jobs:
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file
           flatpak flatpak-builder
-          && sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          && { sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true; }
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
