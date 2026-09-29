@@ -56,6 +56,7 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
         (action: 'Copy', keys: terminal(LogicalKeyboardKey.keyC)),
         (action: 'Paste', keys: terminal(LogicalKeyboardKey.keyV)),
         (action: 'Select all', keys: terminal(LogicalKeyboardKey.keyA)),
+        (action: 'Find', keys: terminal(LogicalKeyboardKey.keyF)),
         // Apple writes ⌘+; elsewhere Shift is already in the chord, so the
         // row names the key it is pressed on.
         (
