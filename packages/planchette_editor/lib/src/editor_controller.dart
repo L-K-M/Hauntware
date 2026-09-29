@@ -134,6 +134,12 @@ class EditorController extends ChangeNotifier {
   TextDocument? _document;
   String _displayPath;
   String _savedText = '';
+  // A full-buffer comparison per call is O(document); the shell and status
+  // bar ask several times per frame, so remember the answer per text pair.
+  // Strings are immutable, so an identical pair always has the same answer.
+  String? _dirtyText;
+  String? _dirtySavedText;
+  bool _dirty = false;
   String? _error;
   bool _loading = false;
   bool _saving = false;
@@ -145,9 +151,13 @@ class EditorController extends ChangeNotifier {
   String? _invalidGoToLine;
   bool _replaceOpen = false;
   bool _caseSensitive = false;
+  bool _wholeWord = false;
   CaseFolding _caseFolding = CaseFolding.exact;
   bool _updatingSearch = false;
+  bool _updatingQuery = false;
   List<TextRange> _matches = const [];
+  int _matchOffset = 0;
+  bool _matchesMayContinue = false;
   int _activeMatch = -1;
   FocusNode? _focusMemory;
   int _revision = 0;
@@ -182,7 +192,18 @@ class EditorController extends ChangeNotifier {
   bool get isLoading => _loading;
   bool get isSaving => _saving;
   bool get isBusy => _loading || _saving;
-  bool get isDirty => !_loading && text.text != _savedText;
+  bool get isDirty {
+    if (_loading) return false;
+    final current = text.text;
+    if (!identical(current, _dirtyText) ||
+        !identical(_savedText, _dirtySavedText)) {
+      _dirtyText = current;
+      _dirtySavedText = _savedText;
+      _dirty = current != _savedText;
+    }
+    return _dirty;
+  }
+
   bool get canSave => !isBusy && !editingLocked && _error == null;
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;
@@ -194,13 +215,29 @@ class EditorController extends ChangeNotifier {
   bool get replaceOpen => _replaceOpen;
   bool get caseSensitive => _caseSensitive;
 
+  /// Whether find and Replace All skip hits that run on into a word, such as
+  /// `cat` inside `concat`.
+  bool get wholeWord => _wholeWord;
+
   /// True when the last case-insensitive search had to compare exactly
   /// because this text could not be lowercased without moving its offsets.
   /// The find bar says so rather than showing a short count as if it were
   /// complete.
   bool get caseFoldingLimited => _caseFolding == CaseFolding.lengthChanging;
+
+  /// The page of matches the find bar highlights and steps through: at most
+  /// [searchMatchLimit] of them, so a minified file cannot flood the text
+  /// with spans. [activeMatch] indexes this page.
   List<TextRange> get matches => _matches;
   int get activeMatch => _activeMatch;
+
+  /// How many of the document's matches come before [matches], so a counter
+  /// can number a match on a later page, such as 1,001 of 1,003.
+  int get matchOffset => _matchOffset;
+
+  /// Whether more matches may follow the last of [matches], unknown until
+  /// the find bar pages there; a counter shows its total as a lower bound.
+  bool get matchesMayContinue => _matchesMayContinue;
   int get revealRequest => _revealRequest;
 
   /// Increments when a command moved the caret somewhere the view should
@@ -289,6 +326,12 @@ class EditorController extends ChangeNotifier {
     _updateMetrics();
     return _bytes;
   }
+
+  /// Whether the buffer is small enough to highlight. Above
+  /// [syntaxHighlightingMaxChars] it edits as plain text, and the status bar
+  /// says so rather than leaving the missing colours unexplained.
+  bool get highlightingEnabled =>
+      text.text.length <= syntaxHighlightingMaxChars;
 
   /// The size the document has once saved: the buffer holds no byte-order
   /// mark, and saving writes each line break as the document's own ending,
@@ -564,11 +607,12 @@ class EditorController extends ChangeNotifier {
   void _textChanged() {
     if (_updatingSearch || _disposed) return;
     if (text.text != _lastText) {
+      final before = _lastText;
       _lastText = text.text;
       _revision++;
       _refreshLanguage();
       _detectIndentation();
-      if (_searchOpen) _updateMatches(resetActive: false);
+      if (_searchOpen) _followEdit(before);
     }
     _notify();
   }
@@ -698,9 +742,17 @@ class EditorController extends ChangeNotifier {
         prefill = selected;
       }
     }
+    // Assign the prefill while the query listener cannot scan — still
+    // closed on a fresh open, guarded on re-entry — so the explicit call
+    // below stays the single whole-document scan on every path.
+    _updatingQuery = true;
+    try {
+      if (prefill != null) search.text = prefill;
+    } finally {
+      _updatingQuery = false;
+    }
     _searchOpen = true;
     _replaceOpen = replace || _replaceOpen;
-    if (prefill != null) search.text = prefill;
     _updateMatches(resetActive: true);
     search.selection = TextSelection(
       baseOffset: 0,
@@ -719,6 +771,8 @@ class EditorController extends ChangeNotifier {
       _focusMemory = null;
     }
     _matches = const [];
+    _matchOffset = 0;
+    _matchesMayContinue = false;
     _activeMatch = -1;
     _lastQuery = null;
     _caseFolding = CaseFolding.exact;
@@ -835,8 +889,20 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  void toggleWholeWord() {
+    _wholeWord = !_wholeWord;
+    _updateMatches(resetActive: true);
+    _revealRequest++;
+    _notify();
+  }
+
   void _queryChanged() {
-    if (!_searchOpen || _disposed || search.text == _lastQuery) return;
+    if (!_searchOpen ||
+        _disposed ||
+        _updatingQuery ||
+        search.text == _lastQuery) {
+      return;
+    }
     _updateMatches(resetActive: true);
     _revealRequest++;
     _notify();
@@ -844,18 +910,17 @@ class EditorController extends ChangeNotifier {
 
   void _updateMatches({required bool resetActive}) {
     _lastQuery = search.text;
-    final result = _searchOpen
-        ? searchText(
-            text.text,
-            search.text,
-            caseSensitive: _caseSensitive,
-            fold: _fold,
-          )
-        : const SearchResult(matches: [], caseFolding: CaseFolding.exact);
-    // Reported, not hidden: a case-insensitive search that could not fold this
-    // text found fewer matches than the user asked for.
-    _caseFolding = result.caseFolding;
-    _matches = result.matches;
+    if (_searchOpen) {
+      // Stay on the user's page: a new query or a replacement starts from
+      // the caret.
+      final caret = text.selection.isValid ? text.selection.start : 0;
+      _showPageAt(
+        resetActive || _matches.isEmpty ? caret : _matches.first.start,
+      );
+    } else {
+      _caseFolding = CaseFolding.exact;
+      _adoptPage(const [], offset: 0, mayContinue: false);
+    }
     if (_matches.isEmpty) {
       _activeMatch = -1;
     } else if (resetActive ||
@@ -873,11 +938,114 @@ class EditorController extends ChangeNotifier {
     }
   }
 
-  void nextMatch() => _stepMatch(1);
-  void previousMatch() => _stepMatch(-1);
+  /// Searches again after an edit without moving the user: the page and the
+  /// active match are found again at their offsets carried through the edit,
+  /// so typing anywhere keeps the find bar on the same occurrence.
+  void _followEdit(String before) {
+    if (_matches.isEmpty ||
+        _activeMatch < 0 ||
+        _activeMatch >= _matches.length) {
+      _updateMatches(resetActive: false);
+      return;
+    }
+    _lastQuery = search.text;
+    final edit = _Edit.between(before, text.text);
+    final active = edit.map(_matches[_activeMatch].start);
+    if (_matchOffset == 0) {
+      _showPage(_page(), offset: 0);
+    } else {
+      _showPageFrom(edit.map(_matches.first.start));
+    }
+    // Matches added earlier on the page can push the active one past it.
+    if (_matches.isEmpty ||
+        (_matchesMayContinue && _matches.last.start < active)) {
+      _showPageFrom(active);
+    }
+    final index = _matches.indexWhere((match) => match.start >= active);
+    // With the active occurrence gone and nothing after it, the nearest
+    // earlier match takes its place.
+    _activeMatch = _matches.isEmpty
+        ? -1
+        : index < 0
+        ? _matches.length - 1
+        : index;
+    _updatingSearch = true;
+    try {
+      text.setSearchMatches(_matches, _activeMatch);
+    } finally {
+      _updatingSearch = false;
+    }
+  }
+
+  void nextMatch() => _findAgain(1);
+
+  void previousMatch() => _findAgain(-1);
+
+  /// Find Next and Find Previous. With the find bar closed, they reopen it
+  /// on the remembered query and step from the caret, leaving focus in the
+  /// document so typing still edits it; with nothing remembered, they open
+  /// the find field to type a query.
+  void _findAgain(int delta) {
+    if (!_searchOpen) {
+      if (search.text.isEmpty) {
+        openSearch();
+        return;
+      }
+      if (_loading || _error != null) return;
+      final selection = text.selection;
+      _searchOpen = true;
+      // With nothing focused, the reopened find field would take focus as it
+      // appears, and typing would edit the query instead of the document.
+      if (!textFocusNodes.any((node) => node.hasFocus)) {
+        editorFocus.requestFocus();
+      }
+      // Makes the first match at or after the caret active.
+      _updateMatches(resetActive: true);
+      if (_matches.isEmpty) {
+        _notify();
+        return;
+      }
+      final active = _matches[_activeMatch];
+      final onActive =
+          selection.isValid &&
+          selection.start == active.start &&
+          selection.end == active.end;
+      // Unless it is the match an earlier find left selected, Find Next
+      // takes that match as it is.
+      if (delta > 0 && !onActive) {
+        _selectMatch(_activeMatch);
+        return;
+      }
+    }
+    _stepMatch(delta);
+  }
+
+  /// The find bar holds one window of matches, capped so a minified file cannot
+  /// flood it with spans. Stepping inside the window is instant; stepping off
+  /// its end pages the query, so every occurrence in the document is reachable
+  /// instead of only the first [searchMatchLimit] of them.
   void _stepMatch(int delta) {
     if (_matches.isEmpty) return;
-    _activeMatch = (_activeMatch + delta + _matches.length) % _matches.length;
+    final stepped = _activeMatch + delta;
+    if (stepped >= 0 && stepped < _matches.length) {
+      _selectMatch(stepped);
+      return;
+    }
+    if (delta > 0) {
+      _pageForward();
+    } else {
+      _pageBackward();
+    }
+  }
+
+  void _selectMatch(int index) {
+    if (_matches.isEmpty) {
+      _activeMatch = -1;
+      text.setSearchMatches(_matches, _activeMatch);
+      _notify();
+      return;
+    }
+    _activeMatch = index;
     text.setSearchMatches(_matches, _activeMatch);
     final match = _matches[_activeMatch];
     text.selection = TextSelection(
@@ -886,6 +1054,115 @@ class EditorController extends ChangeNotifier {
     );
     _revealRequest++;
     _notify();
+  }
+
+  /// Adopts a page of matches, replacing the highlighted set so what is
+  /// painted stays the page the user is stepping through.
+  void _adoptPage(
+    List<TextRange> page, {
+    required int offset,
+    required bool mayContinue,
+  }) {
+    _matches = page;
+    _matchOffset = offset;
+    _matchesMayContinue = mayContinue;
+  }
+
+  /// Shows the first page of matches, unless [anchor] lies past it: then the
+  /// page that starts with the first match at or after [anchor].
+  void _showPageAt(int anchor) {
+    final first = _page();
+    if (first.matches.length >= searchMatchLimit &&
+        first.matches.last.start < anchor) {
+      final later = _pageFrom(anchor);
+      if (later.page.matches.isNotEmpty) {
+        _showPage(later.page, offset: later.offset);
+        return;
+      }
+    }
+    _showPage(first, offset: 0);
+  }
+
+  /// The page that starts with the first match at or after [anchor]. It
+  /// continues the enumeration after the last match before the anchor, so it
+  /// never overlaps the page before it, and [offset] counts the matches
+  /// before it.
+  ({SearchResult page, int offset}) _pageFrom(int anchor) {
+    final before = _page(start: anchor, reverse: true, limit: 1);
+    if (before.matches.isEmpty) return (page: _page(), offset: 0);
+    return (
+      page: _page(start: before.matches.last.end),
+      offset: before.precedingCount! + 1,
+    );
+  }
+
+  void _showPageFrom(int anchor) {
+    final later = _pageFrom(anchor);
+    _showPage(later.page, offset: later.offset);
+  }
+
+  void _showPage(SearchResult page, {required int offset}) => _adoptPage(
+    page.matches,
+    offset: offset,
+    mayContinue: page.matches.length >= searchMatchLimit,
+  );
+
+  void _pageForward() {
+    // Matches at or after the end of this page, or the first page again when
+    // the document is exhausted.
+    final next = _page(start: _matches.last.end);
+    if (next.matches.isNotEmpty) {
+      _adoptPage(
+        next.matches,
+        offset: _matchOffset + _matches.length,
+        mayContinue: next.matches.length >= searchMatchLimit,
+      );
+    } else {
+      final first = _page();
+      _adoptPage(
+        first.matches,
+        offset: 0,
+        mayContinue: first.matches.length >= searchMatchLimit,
+      );
+    }
+    _selectMatch(0);
+  }
+
+  void _pageBackward() {
+    // Matches strictly before this page, which this page follows, or the
+    // last page in the document when there is nothing earlier left.
+    final previous = _page(start: _matches.first.start, reverse: true);
+    final wrapped = previous.matches.isEmpty;
+    final page = wrapped ? _page(reverse: true) : previous;
+    _adoptPage(
+      page.matches,
+      offset: page.precedingCount!,
+      mayContinue: !wrapped,
+    );
+    _selectMatch(_matches.length - 1);
+  }
+
+  /// One page of the query's matches, searched as the find bar searches:
+  /// with the case setting and the host's fold, whose report it records.
+  SearchResult _page({
+    int? start,
+    bool reverse = false,
+    int limit = searchMatchLimit,
+  }) {
+    final result = searchText(
+      text.text,
+      search.text,
+      caseSensitive: _caseSensitive,
+      wholeWord: _wholeWord,
+      fold: _fold,
+      limit: limit,
+      start: start,
+      reverse: reverse,
+    );
+    // Reported, not hidden: a case-insensitive search that could not fold
+    // this text found fewer matches than the user asked for.
+    _caseFolding = result.caseFolding;
+    return result;
   }
 
   void replaceCurrent() {
@@ -918,6 +1195,7 @@ class EditorController extends ChangeNotifier {
       source,
       search.text,
       caseSensitive: _caseSensitive,
+      wholeWord: _wholeWord,
       limit: source.length + 1,
       fold: _fold,
     );
@@ -968,3 +1246,45 @@ class EditorController extends ChangeNotifier {
 bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
 
 bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
+
+/// Where one edit changed the text, found by comparing it before and after:
+/// the unchanged runs at both ends are the prefix and suffix, and the rest
+/// is what the edit replaced. Lets offsets from before the edit be carried
+/// to where the same text sits after it.
+final class _Edit {
+  _Edit._(this._start, this._end, this._delta);
+
+  factory _Edit.between(String before, String after) {
+    final shorter = before.length < after.length ? before.length : after.length;
+    var prefix = 0;
+    while (prefix < shorter &&
+        before.codeUnitAt(prefix) == after.codeUnitAt(prefix)) {
+      prefix++;
+    }
+    var suffix = 0;
+    while (suffix < shorter - prefix &&
+        before.codeUnitAt(before.length - 1 - suffix) ==
+            after.codeUnitAt(after.length - 1 - suffix)) {
+      suffix++;
+    }
+    return _Edit._(
+      prefix,
+      before.length - suffix,
+      after.length - before.length,
+    );
+  }
+
+  /// The replaced run in the text before the edit.
+  final int _start;
+  final int _end;
+  final int _delta;
+
+  /// [offset], from the text before the edit, in the text after it. Text
+  /// typed at the offset lands before it; an offset inside the replaced run
+  /// moves to the end of what replaced it.
+  int map(int offset) {
+    if (offset >= _end) return offset + _delta;
+    if (offset <= _start) return offset;
+    return _end + _delta;
+  }
+}

@@ -7,6 +7,7 @@ class EditorStrings {
 
   String get findHint => 'Find in file';
   String get matchCase => 'Match case';
+  String get wholeWords => 'Whole words';
   String get previousMatch => 'Previous match';
   String get nextMatch => 'Next match';
   String get closeSearch => 'Close search';
@@ -18,6 +19,7 @@ class EditorStrings {
   String get replace => 'Replace';
   String get replaceAll => 'Replace all';
   String get unsaved => 'Unsaved edits';
+  String get largeFile => 'Large file: no highlighting';
   String get saving => 'Saving…';
   String matchCount(int current, int total, {bool capped = false}) =>
       '$current/$total${capped ? '+' : ''}';

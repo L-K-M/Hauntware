@@ -514,6 +514,7 @@ void main() {
       expect(searchText('Die Straße', 'Straße', fold: fold).matches, [
         const TextMatch(start: 4, end: 10),
       ]);
+      expect(findSearchMatches('ab ab', 'ab', start: 99), isEmpty);
     });
 
     test('a case-sensitive search is never limited', () {
@@ -554,6 +555,180 @@ void main() {
         ).matches,
         [const TextMatch(start: 2, end: 7)],
       );
+    });
+
+    test('a start offset skips the matches before it', () {
+      expect(findSearchMatches('ab ab ab ab', 'ab', start: 3), [
+        const TextMatch(start: 3, end: 5),
+        const TextMatch(start: 6, end: 8),
+        const TextMatch(start: 9, end: 11),
+      ]);
+      expect(findSearchMatches('ab ab', 'ab', start: 99), isEmpty);
+    });
+
+    test('a reverse window returns the matches before the bound', () {
+      expect(findSearchMatches('ab ab ab ab', 'ab', start: 5, reverse: true), [
+        const TextMatch(start: 0, end: 2),
+        const TextMatch(start: 3, end: 5),
+      ]);
+      expect(findSearchMatches('ab ab ab ab', 'ab', reverse: true), [
+        const TextMatch(start: 0, end: 2),
+        const TextMatch(start: 3, end: 5),
+        const TextMatch(start: 6, end: 8),
+        const TextMatch(start: 9, end: 11),
+      ]);
+      expect(findSearchMatches('ab', 'ab', start: 0, reverse: true), isEmpty);
+    });
+
+    test('a reverse window still honours the limit', () {
+      final text = List.filled(50, 'a').join();
+      expect(findSearchMatches(text, 'a', limit: 3, reverse: true), [
+        const TextMatch(start: 47, end: 48),
+        const TextMatch(start: 48, end: 49),
+        const TextMatch(start: 49, end: 50),
+      ]);
+    });
+
+    // Lost from #85 when a force-push replaced its first revision.
+    test('a reverse window offers the same occurrences as a forward scan', () {
+      for (final text in ['aaaa', 'aaaaa', 'ababab', 'ababa', 'cat CAT cat']) {
+        for (final query in ['a', 'aa', 'aba', 'cat']) {
+          expect(
+            findSearchMatches(text, query, reverse: true),
+            findSearchMatches(text, query),
+            reason: 'reverse window of "$query" in "$text"',
+          );
+        }
+      }
+    });
+
+    test(
+      'a reverse window ends at the limit without losing the oldest hit',
+      () {
+        final text = List.filled(10, 'a').join();
+        expect(
+          findSearchMatches(text, 'a', limit: 3, start: 6, reverse: true),
+          [
+            const TextMatch(start: 3, end: 4),
+            const TextMatch(start: 4, end: 5),
+            const TextMatch(start: 5, end: 6),
+          ],
+        );
+      },
+    );
+
+    test('a window says how many matches come before it', () {
+      const text = 'ab ab ab ab';
+      expect(searchText(text, 'ab', limit: 2).precedingCount, 0);
+      expect(searchText(text, 'ab', start: 3).precedingCount, isNull);
+      final back = searchText(text, 'ab', limit: 1, start: 6, reverse: true);
+      expect(back.matches, [const TextMatch(start: 3, end: 5)]);
+      expect(back.precedingCount, 1);
+      expect(searchText(text, 'ab', limit: 3, reverse: true).precedingCount, 1);
+      expect(searchText(text, 'x', reverse: true).precedingCount, 0);
+    });
+
+    test('an empty limit finds nothing in either direction', () {
+      expect(findSearchMatches('ab ab', 'ab', limit: 0), isEmpty);
+      expect(
+        findSearchMatches('ab ab', 'ab', limit: 0, reverse: true),
+        isEmpty,
+      );
+    });
+
+    // From #12, with a Unicode word classifier.
+    test('whole words respect boundaries, edges and underscore', () {
+      const text = 'cat concat cat. (cat) cat_cat café cat';
+      expect(findSearchMatches(text, 'cat', wholeWord: true), const [
+        TextMatch(start: 0, end: 3),
+        TextMatch(start: 11, end: 14),
+        TextMatch(start: 17, end: 20),
+        TextMatch(start: 35, end: 38),
+      ]);
+      expect(
+        findSearchMatches('cat cat', 'cat', wholeWord: true),
+        hasLength(2),
+      );
+      expect(findSearchMatches('concat', 'cat', wholeWord: true), isEmpty);
+      expect(findSearchMatches('cat_cat', 'cat', wholeWord: true), isEmpty);
+      expect(
+        findSearchMatches('Cat CAT', 'cat', wholeWord: true),
+        hasLength(2),
+      );
+      expect(findSearchMatches('a == b', '==', wholeWord: true), hasLength(1));
+      // Emoji are boundaries, as with \b in other editors.
+      expect(findSearchMatches('cat🙂', 'cat', wholeWord: true), const [
+        TextMatch(start: 0, end: 3),
+      ]);
+      expect(findSearchMatches('🙂cat', 'cat', wholeWord: true), const [
+        TextMatch(start: 2, end: 5),
+      ]);
+    });
+
+    test('prose punctuation ends a word, letters of any script do not', () {
+      for (final text in ['“cat”', 'cat—dog', 'le cat\u00A0!', '«cat»']) {
+        expect(
+          findSearchMatches(text, 'cat', wholeWord: true),
+          hasLength(1),
+          reason: text,
+        );
+      }
+      expect(findSearchMatches('catécat', 'cat', wholeWord: true), isEmpty);
+      expect(findSearchMatches('猫猫', '猫', wholeWord: true), isEmpty);
+      expect(findSearchMatches('猫、犬', '猫', wholeWord: true), hasLength(1));
+      // An astral letter is word content too, read as one code point.
+      expect(findSearchMatches('𝒜cat', 'cat', wholeWord: true), isEmpty);
+    });
+
+    test('a match edge that is not a word character needs no boundary', () {
+      expect(findSearchMatches('a==b', '==', wholeWord: true), hasLength(1));
+      expect(findSearchMatches('cat ', 'cat ', wholeWord: true), hasLength(1));
+      expect(findSearchMatches('cat x', 'cat ', wholeWord: true), hasLength(1));
+      expect(findSearchMatches('concat x', 'cat ', wholeWord: true), isEmpty);
+    });
+
+    test('a rejected hit can hide a whole word that starts inside it', () {
+      expect(findSearchMatches('xab ab ab', 'ab ab', wholeWord: true), const [
+        TextMatch(start: 4, end: 9),
+      ]);
+    });
+
+    test('whole words page the same way in both directions', () {
+      for (final text in ['cat concat cat', 'cat_cat cat', 'aa aaa aa']) {
+        for (final query in ['cat', 'aa']) {
+          expect(
+            findSearchMatches(text, query, wholeWord: true, reverse: true),
+            findSearchMatches(text, query, wholeWord: true),
+            reason: 'reverse whole-word window of "$query" in "$text"',
+          );
+        }
+      }
+    });
+
+    test('whole words work with a case fold', () {
+      String fold(String value) => value.toLowerCase().replaceAll('ς', 'σ');
+      expect(
+        searchText(
+          'σοφος σοφοςx',
+          'ΣΟΦΟΣ',
+          wholeWord: true,
+          fold: fold,
+        ).matches,
+        const [TextMatch(start: 0, end: 5)],
+      );
+    });
+
+    test('a reverse window over many matches takes linear time', () {
+      // Evicting the oldest hit from the front of a list is O(limit) per
+      // match: Find Previous from the first match of a 2 MB run of one
+      // character took seconds.
+      final text = 'a' * 2000000;
+      final watch = Stopwatch()..start();
+      final window = findSearchMatches(text, 'a', reverse: true);
+      watch.stop();
+      expect(window, hasLength(searchMatchLimit));
+      expect(window.last, const TextMatch(start: 1999999, end: 2000000));
+      expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
     });
   });
 

@@ -79,6 +79,63 @@ void main() {
       );
     },
   );
+  test('an unchanged title is not sent to the window again', () {
+    final titles = <String>[];
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) async => titles.add(title),
+    );
+    desktop
+      ..setTitle('a — Planchette')
+      ..setTitle('a — Planchette')
+      ..setTitle('● a — Planchette')
+      ..setTitle('● a — Planchette');
+    expect(titles, ['a — Planchette', '● a — Planchette']);
+  });
+
+  test('a late failure of an older title keeps the newer one', () async {
+    final titles = <String>[];
+    final older = Completer<void>();
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) {
+        titles.add(title);
+        return title == 'a — Planchette' ? older.future : Future.value();
+      },
+    );
+    desktop
+      ..setTitle('a — Planchette')
+      ..setTitle('b — Planchette');
+    older.completeError(StateError('channel closed'));
+    await Future<void>.delayed(Duration.zero);
+    // The window shows b; forgetting it because a failed would resend it.
+    desktop.setTitle('b — Planchette');
+    expect(titles, ['a — Planchette', 'b — Planchette']);
+  });
+
+  test('a title that failed to arrive is sent again', () async {
+    final titles = <String>[];
+    var failNext = true;
+    final desktop = DesktopWindow(
+      confirmQuit: () async => true,
+      onQuitFailed: (_) {},
+      setWindowTitle: (title) async {
+        titles.add(title);
+        if (failNext) {
+          failNext = false;
+          throw StateError('channel closed');
+        }
+      },
+    );
+    desktop.setTitle('a — Planchette');
+    await Future<void>.delayed(Duration.zero);
+    desktop.setTitle('a — Planchette');
+    await Future<void>.delayed(Duration.zero);
+    desktop.setTitle('a — Planchette');
+    expect(titles, ['a — Planchette', 'a — Planchette']);
+  });
 
   test('overlapping close callbacks request native destruction once', () async {
     final decision = Completer<bool>();

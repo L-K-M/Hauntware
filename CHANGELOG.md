@@ -55,8 +55,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and says what it takes when the input is not a number. The status bar
   also shows the selection's size and lines, the size the file has once
   saved, the indentation and the language.
+- Past 200,000 characters, where syntax colours stop, the status bar says
+  "Large file: no highlighting".
 - View › Zoom In (`Cmd/Ctrl+=`), Zoom Out (`Cmd/Ctrl+-`) and Actual Size
   (`Cmd/Ctrl+0`) resize the text in every tab, from 9 to 48 points.
+- Find Next and Find Previous reach every match in a large file: past the
+  1,000 matches the find bar highlights, they page on, and the counter
+  numbers each match within the whole document.
+- The find bar's Whole words toggle (`ab`) skips hits that run on into a
+  word, in find, paging and Replace All. Letters of any script are part of
+  a word; curly quotes, dashes, no-break spaces and emoji end one.
+- Every find and replace control can be reached with Tab and tells screen
+  readers whether it is on, and on a narrow window the bar puts its
+  controls under the field.
 - Planchette has its own looks: Parchment for light mode and Séance for
   dark, with syntax colors that keep 4.5:1 contrast on the page, the
   current line and the selection. Hosts can style the shared editor through
@@ -68,6 +79,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - Loading and saving a large file takes about half the time and a third of
   the peak memory.
+- Typing no longer rebuilds the whole window: the tabs, menus and window
+  title update only when what they show changes.
 - Save errors name their cause: an unwritable or deleted folder, or the
   operating system's error code when the original cannot be moved aside.
 - A refused quit says what it is waiting for (a save, an open, a close or a
@@ -110,6 +123,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fell back to the proportional system font. `PlanchetteEditor.textStyle`
   now merges over the platform's family (`editorMonospaceFor`), and a host
   passing the generic name gets that family too.
+- Find Next and Find Previous work after the find bar is closed: they
+  reopen it on the last query and move from the caret, leaving the cursor
+  in the document.
+- Opening a file that no longer exists says so, instead of showing
+  `dart:io`'s `PathNotFoundException` with its errno.
 - The window opens on the app's own background in the current light or
   dark mode, instead of the platform's default colour before the first
   frame and while resizing.
