@@ -313,16 +313,22 @@ void main() {
       );
       await capture(tester, boundary, 'rail-comfortable-$tone');
 
-      // Hover a connected row: the disconnect glyph replaces `×2`.
+      // Hover a connected row to reveal its disconnect glyph. The title
+      // can ellipsize around that action, so target the stable server key.
+      final workerRow = find.byKey(const ValueKey('prod-worker'));
       final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await mouse.addPointer(location: Offset.zero);
       addTearDown(mouse.removePointer);
-      await mouse.moveTo(tester.getCenter(find.text('prod-worker')));
+      await mouse.moveTo(tester.getCenter(workerRow));
       await tester.pump(const Duration(milliseconds: 300));
+      expect(
+        find.byKey(const ValueKey('server.disconnect.prod-worker')),
+        findsOneWidget,
+      );
       await capture(tester, boundary, 'rail-hover-$tone');
 
       await tester.tap(
-        find.text('prod-worker'),
+        workerRow,
         buttons: kSecondaryButton,
         kind: PointerDeviceKind.mouse,
       );
@@ -353,7 +359,7 @@ void main() {
       await useDensity(tester, ServerListDensity.comfortable);
       await tester.tap(find.text('Production'));
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('prod-worker'), findsNothing);
+      expect(workerRow, findsNothing);
       expect(
         tester
             .widgetList<SidebarSectionHeader>(find.byType(SidebarSectionHeader))

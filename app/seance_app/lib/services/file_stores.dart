@@ -516,15 +516,24 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
       _rekeySnapshots = null;
       return VaultRekeyOutcome.discarded;
     }
-    _blobs
-      ..clear()
-      ..addAll(blobs);
-    // The cache is not restored if the flush fails: it now holds the
-    // generation [key] opens, which is the one this session has to read with.
-    // The journal stays on disk for the next launch to settle again, and lands
-    // on the same generation because the installed key has not changed.
-    await _flush();
-    if (await _rekeyFile.exists()) await _rekeyFile.delete();
+    final previous = Map<String, String>.from(_blobs);
+    try {
+      _blobs
+        ..clear()
+        ..addAll(blobs);
+      await _flush();
+      if (await _rekeyFile.exists()) await _rekeyFile.delete();
+    } catch (_) {
+      // The caller adopts [key] only after settling succeeds. Keep this
+      // session readable with its existing key when persistence or cleanup
+      // fails, even if the vault file already holds the new generation.
+      // The staged snapshots still block mutations and let a retry or the
+      // next launch finish against the key the keystore actually holds.
+      _blobs
+        ..clear()
+        ..addAll(previous);
+      rethrow;
+    }
     _rekeySnapshots = null;
     return VaultRekeyOutcome.adopted;
   });
