@@ -4,6 +4,35 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Shared Planchette editor (2026-09-27)
+
+The owner approved shared editor packages and a standalone Planchette app.
+Poltergeist's migration retains native editor windows, localized chrome,
+menus, and managed-checkout/upload behavior while using the shared syntax,
+document I/O, editing controller, and surface. The common editor adds a
+line-number gutter and find/replace. Both packages are pinned to the same
+immutable Planchette revision in the pubspecs and lockfiles.
+
+Local validation: core analysis and 58 document/checkout tests pass; Flutter
+analysis and 90 editor, window, localization, syntax, checkout and activity
+tests pass. Light/dark before-and-after captures use real fonts and record
+their provenance in `tasks/planchette-editor/screenshots/README.md`.
+Cross-platform CI and final review results are recorded on the adoption PR.
+
+Update (2026-09-29): the pin moved from `5b75f9dc` to `ff487394`,
+Planchette main, the revision Séance adopts too. The surface now brings
+indentation, line commands, Go to Line, bracket matching, whole-word and
+regular-expression search, and new highlighting. The find and Go to Line
+bars' new strings come from the ARB file like the rest of the find bar;
+the status-row strings stay unused because this editor draws its own. Go
+files now detect as Go, not C-family. No shortcut the surface installs is
+bound by the editor window's menu. Local validation after merging main:
+core analysis is clean; 1,701 core tests pass and 3 fail, all unrelated:
+the two root-only cleanup-failure checkout tests fail here on main too,
+and the Linux watch test failed once under load and passes alone. Flutter
+analysis is clean and all 2,907 other app tests pass; the Go expectation
+was the one failure and is updated.
+
 ## D12 drift scope and tab-switch work (2026-09-28)
 
 Tier-A-only benchmark runs now report persisted tier-B drift as a notice,

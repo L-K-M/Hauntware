@@ -1,29 +1,22 @@
-// Ported from Séance
-// app/seance_app/lib/ui/built_in_text_editor.dart @ 2e6d1f1; see
-// docs/PORTS.md. Divergences per 06 §2.3/§2.5: the document I/O lives in
-// poltergeist_core (BuiltInTextDocument with LF/no-BOM in-memory
-// invariants, LineEnding enum, typed BuiltInEditorException), temp
-// suffixes are `.poltergeist-*`, and toast/mono-font/basename are
-// injected seams instead of SeanceTheme/remoteBasename hardcodes. All
-// user-visible copy resolves through AppLocalizations (D20).
+// Poltergeist owns localized chrome, native commands and checkout hooks.
+// The shared Planchette package owns the buffer, editing surface, and search.
+// See docs/PORTS.md for the extraction provenance and retained host policy.
 
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:planchette_editor/planchette_editor.dart' as pe;
 
 import '../l10n/app_localizations.dart';
 import '../services/registered_command.dart';
 import 'menus/app_menu_host.dart';
 import 'menus/app_menu_commands.dart';
-import 'editor_syntax.dart';
+import 'editor_strings.dart';
 
 /// The built-in text editor (06 §2): one document per desktop window, or
-/// a full-window route on phones and tablets. No session/SFTP coupling inside
-/// the widget: the
-/// caller wires [onSaved] (the per-copy reconcile) and [onUpload] (the
+/// a full-window route on phones and tablets. The caller wires [onSaved] (the per-copy reconcile) and [onUpload] (the
 /// conflict-aware save-and-upload) for a managed checkout, or leaves
 /// [onUpload] null for a plain local file (the upload UI then vanishes).
 class BuiltInTextEditorScreen extends StatefulWidget {
@@ -102,301 +95,72 @@ class BuiltInTextEditorScreen extends StatefulWidget {
 }
 
 class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
-  late final CodeEditingController _text = CodeEditingController(
-    language: syntaxLanguageFor(_displayPath),
+  late final pe.EditorController _editor = pe.EditorController(
+    displayPath: _displayPath,
+    initialText: widget.initialText,
+    loadDocument: () => loadBuiltInTextDocumentDetails(widget.file),
+    saveDocument: (text, baseline) {
+      final customSave = widget.saveDocument;
+      if (customSave != null) return customSave(widget.file, text);
+      return saveBuiltInTextDocument(
+        baseline?.file ?? widget.file,
+        text,
+        hasUtf8Bom: baseline?.hasUtf8Bom ?? false,
+        lineEnding: baseline?.lineEnding ?? LineEnding.lf,
+        expectedSha256: baseline?.sha256,
+      );
+    },
+    onSaved: widget.onSaved,
+    onPublish: widget.onUpload,
   );
-  final ScrollController _scroll = ScrollController();
-  final FocusNode _editorFocus = FocusNode();
-  final TextEditingController _search = TextEditingController();
-  final FocusNode _searchFocus = FocusNode();
-  String _savedText = '';
-  String? _error;
-  String? _baselineSha256;
-  bool _hasUtf8Bom = false;
-  LineEnding _lineEnding = LineEnding.lf;
-  bool _loading = true;
-  bool _saving = false;
-  bool _searchOpen = false;
-  Future<bool>? _discardDecision;
-  bool _searchCaseSensitive = false;
-  List<TextRange> _matches = const [];
-  int _activeMatch = -1;
-  String _lastSearchedText = '';
-  String? _lastQuery;
-  double? _editorWidth;
 
-  // Status-bar counters, cached: _changed fires on every controller
-  // notification — caret moves included — so build must not re-split and
-  // re-encode the whole document per frame on megabyte files.
-  String _lastStatusText = '';
-  int _statusLines = 1;
-  int _statusBytes = 0;
-
-  /// Inset around the document text; also part of the scroll-to-match math.
-  static const double _editorPadding = 14;
-
-  /// The path the title and language detection render: the remote path
-  /// for a managed checkout, the local file's own path otherwise.
   String get _displayPath => widget.remotePath ?? widget.file.path;
-
-  bool get _dirty => !_loading && _text.text != _savedText;
-
-  TextStyle get _editorTextStyle => TextStyle(
-    fontFamily: widget.monoFontFallback.first,
-    fontFamilyFallback: widget.monoFontFallback,
-    fontSize: 14,
-    height: 1.35,
-  );
+  bool get _dirty => _editor.isDirty;
+  bool get _loading => _editor.isLoading;
+  bool get _saving => _editor.isSaving;
+  String? get _error => _editor.error;
+  bool get _searchOpen => _editor.searchOpen;
+  int get _statusLines => _editor.lineStarts.length;
+  int get _statusBytes => _editor.byteCount;
 
   @override
   void initState() {
     super.initState();
+    _editor.setEditingLocked(widget.quitPending, notify: false);
+    _editor.addListener(_changed);
     widget.onCloseGuardChanged?.call(_confirmClose);
-    _text.addListener(_changed);
-    _search.addListener(_searchChanged);
-    final initialText = widget.initialText;
-    if (initialText == null) {
-      _load();
-    } else {
-      _applyLoadedText(initialText);
-      _loading = false;
-    }
-  }
-
-  Future<void> _load() async {
-    try {
-      final document = await loadBuiltInTextDocumentDetails(widget.file);
-      if (!mounted) return;
-      _applyLoadedText(document.text);
-      _baselineSha256 = document.sha256;
-      _hasUtf8Bom = document.hasUtf8Bom;
-      _lineEnding = document.lineEnding;
-    } catch (error) {
-      if (mounted) _error = error.toString();
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  /// Install the document with the caret and viewport at the very top, and
-  /// re-detect the language now that a `#!` line is available.
-  void _applyLoadedText(String text) {
-    _savedText = text;
-    _statusBytes = utf8.encode(text).length;
-    var lines = 1;
-    for (var i = 0; i < text.length; i++) {
-      if (text.codeUnitAt(i) == 0x0a) lines++;
-    }
-    _statusLines = lines;
-    _lastStatusText = text;
-    final newline = text.indexOf('\n');
-    _text.language = syntaxLanguageFor(
-      _displayPath,
-      firstLine: newline < 0 ? text : text.substring(0, newline),
-    );
-    _text.value = TextEditingValue(
-      text: text,
-      selection: const TextSelection.collapsed(offset: 0),
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scroll.hasClients) _scroll.jumpTo(0);
-    });
+    _editor.initialize();
   }
 
   void _changed() {
-    if (!mounted || _loading) return;
-    final text = _text.text;
-    if (!identical(text, _lastStatusText)) {
-      _lastStatusText = text;
-      _statusBytes = utf8.encode(text).length;
-      var lines = 1;
-      for (var i = 0; i < text.length; i++) {
-        if (text.codeUnitAt(i) == 0x0a) lines++;
-      }
-      _statusLines = lines;
-    }
-    if (_searchOpen &&
-        !identical(_text.text, _lastSearchedText) &&
-        _text.text != _lastSearchedText) {
-      _updateSearchMatches(resetActive: false);
-    }
-    setState(() {});
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(BuiltInTextEditorScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _editor.onSaved = widget.onSaved;
+    _editor.onPublish = widget.onUpload;
+    _editor.setEditingLocked(widget.quitPending, notify: false);
   }
 
   @override
   void dispose() {
     widget.onCloseGuardChanged?.call(null);
-    _search.removeListener(_searchChanged);
-    _text.removeListener(_changed);
-    _text.dispose();
-    _search.dispose();
-    _searchFocus.dispose();
-    _editorFocus.dispose();
-    _scroll.dispose();
+    _editor.removeListener(_changed);
+    _editor.dispose();
     super.dispose();
   }
 
-  // ---- Search -------------------------------------------------------------
+  void _openSearch() => _editor.openSearch();
+  void _closeSearch() => _editor.closeSearch();
+  void _nextMatch() => _editor.nextMatch();
+  void _previousMatch() => _editor.previousMatch();
 
-  void _openSearch() {
-    if (_loading || _error != null) return;
-    final selection = _text.selection;
-    String? prefill;
-    if (selection.isValid && !selection.isCollapsed) {
-      final selected = selection.textInside(_text.text);
-      if (selected.isNotEmpty &&
-          !selected.contains('\n') &&
-          selected.length <= 200) {
-        prefill = selected;
-      }
-    }
-    _searchOpen = true;
-    if (prefill != null) {
-      _search.text = prefill; // Listener recomputes the matches.
-    } else {
-      _updateSearchMatches(resetActive: true);
-    }
-    _search.selection = TextSelection(
-      baseOffset: 0,
-      extentOffset: _search.text.length,
-    );
-    _searchFocus.requestFocus();
-    setState(() {});
-    _revealActiveMatch();
-  }
-
-  void _closeSearch() {
-    if (!_searchOpen) return;
-    _searchOpen = false;
-    _matches = const [];
-    _activeMatch = -1;
-    _lastQuery = null;
-    _text.setSearchMatches(const [], -1);
-    setState(() {});
-    _editorFocus.requestFocus();
-  }
-
-  void _searchChanged() {
-    if (!mounted || !_searchOpen) return;
-    // The controller also notifies on selection changes inside the query
-    // field; only an actual query edit warrants re-searching the document.
-    if (_search.text == _lastQuery) return;
-    _updateSearchMatches(resetActive: true);
-    setState(() {});
-    _revealActiveMatch();
-  }
-
-  void _updateSearchMatches({required bool resetActive}) {
-    _lastSearchedText = _text.text;
-    _lastQuery = _search.text;
-    _matches = _searchOpen
-        ? findSearchMatches(
-            _text.text,
-            _search.text,
-            caseSensitive: _searchCaseSensitive,
-          )
-        : const [];
-    if (_matches.isEmpty) {
-      _activeMatch = -1;
-    } else if (resetActive ||
-        _activeMatch < 0 ||
-        _activeMatch >= _matches.length) {
-      // Start from the first match at or after the caret.
-      final caret = _text.selection.isValid ? _text.selection.start : 0;
-      final index = _matches.indexWhere((match) => match.start >= caret);
-      _activeMatch = index < 0 ? 0 : index;
-    }
-    _text.setSearchMatches(_matches, _activeMatch);
-  }
-
-  void _nextMatch() => _stepMatch(1);
-
-  void _previousMatch() => _stepMatch(-1);
-
-  void _stepMatch(int delta) {
-    if (_matches.isEmpty) return;
-    _activeMatch = _activeMatch < 0
-        ? (delta > 0 ? 0 : _matches.length - 1)
-        : (_activeMatch + delta + _matches.length) % _matches.length;
-    _text.setSearchMatches(_matches, _activeMatch);
-    // Park the caret on the match so editing or Escape resumes there. Both
-    // controller mutations notify, and _changed rebuilds — no setState here.
-    final match = _matches[_activeMatch];
-    _text.selection = TextSelection(
-      baseOffset: match.start,
-      extentOffset: match.end,
-    );
-    _revealActiveMatch();
-  }
-
-  void _toggleCaseSensitive() {
-    _searchCaseSensitive = !_searchCaseSensitive;
-    _updateSearchMatches(resetActive: true);
-    setState(() {});
-    _revealActiveMatch();
-  }
-
-  /// Scroll the viewport so the active match is about a third from the top.
-  /// Small files get a precise text layout; very large ones fall back to a
-  /// line-count estimate rather than laying out megabytes of text.
-  void _revealActiveMatch() {
-    if (_activeMatch < 0 || _activeMatch >= _matches.length) return;
-    if (!_scroll.hasClients) return;
-    final match = _matches[_activeMatch];
-    final text = _text.text;
-    final width = _editorWidth;
-    double dy;
-    if (text.length <= syntaxHighlightingMaxChars && width != null) {
-      final textWidth = width - 2 * _editorPadding;
-      // Only the text before the match determines its vertical position, so
-      // lay out just that prefix: a full-document layout on every search
-      // keystroke would jank on files approaching the highlighting cap. (A
-      // soft wrap mid-word at the boundary can be off by one line — fine
-      // for positioning the viewport.)
-      final prefix = text.substring(0, match.start);
-      final painter = TextPainter(
-        text: TextSpan(text: prefix, style: _editorTextStyle),
-        textDirection: TextDirection.ltr,
-        textScaler: MediaQuery.textScalerOf(context),
-      )..layout(maxWidth: textWidth > 1 ? textWidth : 1);
-      dy = painter
-          .getOffsetForCaret(TextPosition(offset: prefix.length), Rect.zero)
-          .dy;
-      painter.dispose();
-    } else {
-      var line = 0;
-      for (var i = 0; i < match.start; i++) {
-        if (text.codeUnitAt(i) == 0x0a) line++;
-      }
-      final fontSize = MediaQuery.textScalerOf(
-        context,
-      ).scale(_editorTextStyle.fontSize!);
-      dy = line * fontSize * _editorTextStyle.height!;
-    }
-    dy += _editorPadding; // The text sits below the field's top content inset.
-    final position = _scroll.position;
-    final target = (dy - position.viewportDimension / 3).clamp(
-      0.0,
-      position.maxScrollExtent,
-    );
-    _scroll.animateTo(
-      target,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  Future<bool> _confirmClose() async {
-    // A pending write/upload owns the document until its bookkeeping has
-    // settled; closing now could hide a failure or its conflict dialog.
-    if (_saving && widget.onCloseRequested != null) return false;
-    final discard = await (_discardDecision ??= _confirmDiscard().whenComplete(
-      () => _discardDecision = null,
-    ));
-    // The native Save menu remains available while the discard dialog is
-    // open. A save started there must retain its window until it settles.
-    return discard && (!_saving || widget.onCloseRequested == null);
-  }
+  Future<bool> _confirmClose() => _editor.confirmClose(
+    _confirmDiscard,
+    allowWhileSaving: widget.onCloseRequested == null,
+  );
 
   Future<bool> _confirmDiscard() async {
     if (!_dirty) return true;
@@ -422,66 +186,25 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
   }
 
   Future<void> _save({bool upload = false}) async {
-    if (_saving || _loading || _error != null || widget.quitPending) return;
-    final uploadAfterSave = upload && widget.onUpload != null;
-    setState(() => _saving = true);
-    final value = _text.text;
     try {
-      final customSave = widget.saveDocument;
-      if (customSave == null) {
-        _baselineSha256 = await saveBuiltInTextDocument(
-          widget.file,
-          value,
-          hasUtf8Bom: _hasUtf8Bom,
-          lineEnding: _lineEnding,
-          expectedSha256: _baselineSha256,
-        );
-      } else {
-        _baselineSha256 = await customSave(widget.file, value);
-      }
-      // The disk write already committed, so the caller's reconcile
-      // hooks must run even when the screen was popped mid-save —
-      // skipping them would diverge a managed checkout's bookkeeping
-      // from disk with nothing surfaced.
-      if (mounted) setState(() => _savedText = value);
-      var uploaded = false;
-      if (uploadAfterSave) {
-        // Upload immediately, no confirmation. The upload reconciles this
-        // copy itself; onSaved only needs to run when the upload didn't —
-        // including when it throws, hence the finally.
-        try {
-          uploaded = await widget.onUpload!();
-        } finally {
-          if (!uploaded) await widget.onSaved?.call();
-        }
-      } else {
-        await widget.onSaved?.call();
-      }
-      if (mounted) {
-        final l10n = AppLocalizations.of(context);
-        widget.showToast(
-          context,
-          uploadAfterSave
-              ? uploaded
-                    ? _dirty
-                          ? l10n.editorSavedUploadedDirty
-                          : l10n.editorSavedUploaded
-                    : l10n.editorSavedLocallyNotUploaded
-              : l10n.editorSavedLocally,
-        );
-      }
+      final result = await _editor.save(
+        mode: upload ? pe.EditorSaveMode.primary : pe.EditorSaveMode.local,
+      );
+      if (result == null || !mounted) return;
+      final l10n = AppLocalizations.of(context);
+      widget.showToast(
+        context,
+        result.publishRequested
+            ? result.published
+                  ? result.hasUnsavedChanges
+                        ? l10n.editorSavedUploadedDirty
+                        : l10n.editorSavedUploaded
+                  : l10n.editorSavedLocallyNotUploaded
+            : l10n.editorSavedLocally,
+      );
     } catch (error) {
       if (mounted) widget.showToast(context, error.toString());
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Theme.of registers the dependency, so brightness flips land here.
-    _text.theme = EditorSyntaxTheme.of(Theme.of(context).brightness);
   }
 
   @override
@@ -588,14 +311,19 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
                   icon: const Icon(Icons.cloud_upload_outlined),
                 ),
             ],
-            bottom: _searchOpen
-                ? PreferredSize(
-                    preferredSize: const Size.fromHeight(52),
-                    child: _searchBar(context),
-                  )
-                : null,
           ),
-          body: _body(),
+          body: pe.PlanchetteEditor(
+            controller: _editor,
+            strings: PoltergeistEditorStrings(l10n),
+            editingLocked: widget.quitPending,
+            showStatus: false,
+            textStyle: TextStyle(
+              fontFamily: widget.monoFontFallback.first,
+              fontFamilyFallback: widget.monoFontFallback,
+              fontSize: 14,
+              height: 1.35,
+            ),
+          ),
           bottomNavigationBar: _loading || _error != null
               ? null
               : SafeArea(
@@ -771,147 +499,4 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     control: platform != TargetPlatform.macOS,
     shift: shift,
   );
-
-  Widget _searchBar(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    final counter = _search.text.isEmpty
-        ? ''
-        : _matches.isEmpty
-        ? l10n.editorNoMatches
-        : _matches.length >= searchMatchLimit
-        ? l10n.editorMatchCountCapped(_activeMatch + 1, _matches.length)
-        : l10n.editorMatchCount(_activeMatch + 1, _matches.length);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _search,
-              focusNode: _searchFocus,
-              autofocus: true,
-              autocorrect: false,
-              enableSuggestions: false,
-              style: theme.textTheme.bodyMedium,
-              decoration: InputDecoration(
-                hintText: l10n.editorFindHint,
-                isDense: true,
-                border: InputBorder.none,
-              ),
-              onSubmitted: (_) {
-                if (HardwareKeyboard.instance.isShiftPressed) {
-                  _previousMatch();
-                } else {
-                  _nextMatch();
-                }
-                _searchFocus.requestFocus();
-              },
-            ),
-          ),
-          // Keep focus in the query field: the buttons act without taking it.
-          ExcludeFocus(
-            child: Row(
-              children: [
-                if (counter.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(counter, style: theme.textTheme.labelSmall),
-                  ),
-                IconButton(
-                  tooltip: l10n.editorMatchCaseTooltip,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _toggleCaseSensitive,
-                  icon: Text(
-                    'Aa',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: _searchCaseSensitive
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: l10n.editorPreviousMatchTooltip,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _matches.isEmpty ? null : _previousMatch,
-                  icon: const Icon(Icons.keyboard_arrow_up),
-                ),
-                IconButton(
-                  tooltip: l10n.editorNextMatchTooltip,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _matches.isEmpty ? null : _nextMatch,
-                  icon: const Icon(Icons.keyboard_arrow_down),
-                ),
-                IconButton(
-                  tooltip: l10n.editorCloseSearchTooltip,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: _closeSearch,
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _body() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.text_snippet_outlined, size: 40),
-              const SizedBox(height: 12),
-              Text(_error!, textAlign: TextAlign.center),
-            ],
-          ),
-        ),
-      );
-    }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        _editorWidth = constraints.maxWidth;
-        return Actions(
-          actions: {
-            if (widget.quitPending) ...{
-              UndoTextIntent: CallbackAction<UndoTextIntent>(
-                onInvoke: (_) => null,
-              ),
-              RedoTextIntent: CallbackAction<RedoTextIntent>(
-                onInvoke: (_) => null,
-              ),
-            },
-          },
-          child: TextField(
-            controller: _text,
-            readOnly: widget.quitPending,
-            focusNode: _editorFocus,
-            scrollController: _scroll,
-            autofocus: true,
-            expands: true,
-            maxLines: null,
-            minLines: null,
-            keyboardType: TextInputType.multiline,
-            textAlignVertical: TextAlignVertical.top,
-            autocorrect: false,
-            enableSuggestions: false,
-            smartDashesType: SmartDashesType.disabled,
-            smartQuotesType: SmartQuotesType.disabled,
-            style: _editorTextStyle,
-            decoration: const InputDecoration(
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.all(_editorPadding),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }

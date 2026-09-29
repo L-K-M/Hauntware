@@ -8,6 +8,17 @@ requirements R8 (built-in editor) and R9 (external editors). Architecture
 placement (notifiers, channels, isolates) is 03's; UX chrome, shortcuts, and
 dialogs are 02's; this chapter owns the behavior.
 
+## Shared implementation (2026-09-27)
+
+The owner approved extracting the reusable editor into Planchette. D2 now
+assigns syntax, search, guarded document I/O, and the Flutter editing surface
+and controller to `planchette_core` and `planchette_editor`. Both hosts retain
+thin adapters for their own chrome, strings, menus, remote files, and windows.
+The common surface adds line numbers and find/replace; the per-document
+window policy and managed-checkout/upload semantics below still belong to
+Poltergeist. The original port descriptions remain provenance, with current
+ownership recorded in PORTS.md and the package architecture document.
+
 ## 1. Scope: what "editor" means here
 
 Poltergeist's built-in editor is a **config-file editor, not an IDE** — the
@@ -23,8 +34,8 @@ small scripts. Concretely:
   Native close and Quit protect unsaved buffers; native close waits for
   an in-flight save/upload to finish. Phones, tablets, and runners without
   the window host use the full-window route (Séance's model).
-  No editor tabs, no split editing, no line numbers, no soft-wrap
-  toggle, no multiple cursors. The rendering body is a single Flutter
+  No editor tabs, split editing, soft-wrap toggle, or multiple cursors.
+  Line numbers come from the shared Planchette surface. The rendering body is a single Flutter
   `TextField` (`expands: true, maxLines: null`) with a custom controller —
   the I/O layer, find logic, and syntax engine are all independent of it, so
   a richer body can be swapped in later without touching them.

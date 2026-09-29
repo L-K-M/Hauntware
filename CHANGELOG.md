@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **The built-in editor is the one Planchette and Séance use.** It gains
+  line numbers, find and replace with whole-word and regular-expression
+  search, Go to Line (⌘L on a Mac, Ctrl+G elsewhere), Tab and Shift+Tab
+  to indent and outdent (Enter keeps the indentation, learned from each
+  file), line commands (duplicate, move, delete and join lines), Toggle
+  Comment, Go to Matching Bracket, and highlighting for Go, diffs and
+  more. Saving, uploads and conflict checks work as before.
 - **Lines meet at the region edges.** The line under the header and the
   active pane's accent line stopped a few pixels short of the sidebar's
   edge, the divider between the two panes and the inspector's edge. They

@@ -92,6 +92,14 @@ ownership
     `docs/PORTS.md` ledger (source path + Séance commit + local
     divergences). Upstream extraction into shared packages is a welcome
     later step, never a blocker.
+  - **Shared editor extraction (2026-09-27, owner-directed).** The editor
+    engine and surface move to `planchette_core` and `planchette_editor` in
+    [Planchette](https://github.com/L-K-M/Planchette), consumed by both apps
+    at the same reviewed Git revision. This supersedes copy-with-attribution
+    for syntax, search, document I/O, gutter/status, and editing state.
+    App wrappers retain localized chrome, windows, managed checkouts,
+    upload/conflict routing, and native menu integration. The common surface
+    includes Séance's line numbers and find/replace for all three apps.
   - New pure-Dart packages in this repo: `poltergeist_core` (local VFS
     adapter, connection manager/pool, transfer queue, bookmark
     model/coordinator) and `poltergeist_sync` (scan/diff/plan/executor/
