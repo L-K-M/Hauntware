@@ -281,6 +281,15 @@ void main() {
       );
     });
 
+    test('dispose while the worker starts reports only the cancel', () async {
+      final worker = PatternWorker();
+      final starting = worker.findAll('abc', 'b');
+      worker.dispose();
+      expect(await starting, isA<PatternCancelled<PatternMatches>>());
+      // Let the spawn finish, so an error it left unobserved would surface.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+
     test('dispose cancels a running request', () async {
       final worker = PatternWorker(budget: const Duration(seconds: 2));
       final running = worker.findAll(_catastrophicText, _catastrophic);

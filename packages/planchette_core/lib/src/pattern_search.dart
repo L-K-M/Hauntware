@@ -492,6 +492,9 @@ final class PatternWorker {
   Future<SendPort> _start() {
     final inbox = RawReceivePort();
     final handshake = Completer<SendPort>();
+    // A stop while the isolate spawns fails the handshake before [_ready]
+    // chains onto it; the request that waited has been answered already.
+    handshake.future.ignore();
     inbox.handler = (Object? message) {
       if (message is SendPort) {
         if (!handshake.isCompleted) handshake.complete(message);
