@@ -2,7 +2,7 @@ name: Release
 
 # Tag a version (scripts/release.sh X.Y.Z --push) to test, build, and publish
 # Poltergeist's release artifacts: the app client for every platform folder
-# the repo carries — Android APK, Linux packages (.deb + AppImage, x64 —
+# the repo carries — Android APK, Linux packages (.deb + Flatpak + AppImage, x64 —
 # Flutter publishes no linux-arm64 host artifacts), macOS/Windows desktop
 # bundles, and an unsigned iOS IPA. Poltergeist has no server component
 # (bookmark backup rides Séance's sync server), so unlike Séance there are no
@@ -251,8 +251,8 @@ jobs:
             target: android
             build: apk --release
             files: poltergeist-android.apk
-          # The .deb and AppImage ride along with the plain bundle (three
-          # assets); the .deb keeps its versioned Debian filename, hence the
+          # The .deb, AppImage and Flatpak ride along with the plain bundle
+          # (four assets); the .deb keeps its versioned Debian filename, hence the
           # glob. x64 only: Flutter publishes no linux-arm64 host artifacts
           # (releases_linux.json is x64-only), so an arm runner can't build it.
           - os: ubuntu-latest
@@ -263,6 +263,7 @@ jobs:
               poltergeist-linux-x64.tar.gz
               poltergeist_*.deb
               poltergeist-linux-x64.AppImage
+              poltergeist-linux-x64.flatpak
           - os: macos-latest
             target: macos
             build: macos --release
@@ -400,6 +401,13 @@ jobs:
               # point the packager at it explicitly (--bundle asks the ELF for
               # its arch).
               scripts/package-linux.sh --bundle "poltergeist-linux-${{ matrix.flavor }}" --output-dir .
+              # The .flatpak is the same .deb's payload staged under /app —
+              # one packaging path, four assets.
+              sudo apt-get install --no-install-recommends -y flatpak flatpak-builder
+              # Ubuntu 24.04 denies the unprivileged user namespaces
+              # bubblewrap (flatpak's sandbox helper) builds in.
+              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+              scripts/build-flatpak.sh "$(ls -t poltergeist_*.deb | head -1)"
               ;;
             macos)
               # ditto keeps the bundle's symlinks and metadata intact inside
@@ -470,12 +478,13 @@ jobs:
             --dir "$assets_dir" --clobber
 
           # Rehearsal floor (07 §3.2): the APK and the Linux
-          # .deb/AppImage/bundle must publish; everything they need builds on
+          # .deb/AppImage/Flatpak/bundle must publish; everything they need builds on
           # ubuntu-latest, so a miss here is a pipeline bug the tag must wait
           # for.
           floor_missing=()
           for asset in 'poltergeist-android.apk' 'poltergeist_*.deb' \
                        'poltergeist-linux-x64.AppImage' \
+                       'poltergeist-linux-x64.flatpak' \
                        'poltergeist-linux-x64.tar.gz'; do
             compgen -G "$assets_dir/$asset" >/dev/null \
               || floor_missing+=("$asset")

@@ -69,7 +69,7 @@ flutter pub get && flutter analyze && flutter test
 flutter run -d linux    # or macos / windows / a device
 
 # Everything this host can build, staged into dist/
-scripts/build.sh          # app + apk; missing toolchains are skipped
+scripts/build.sh          # app + apk + flatpak; missing toolchains are skipped
 scripts/build.sh --install  # build + install the app for this host
 ```
 
@@ -84,7 +84,7 @@ push/PR. Its client matrix compiles all five platform projects.
 step, commits, and tags `v<version>` — pushing that tag triggers
 `.github/workflows/release.yml`, which tests, then builds and publishes the
 app for every client platform as the GitHub Release (Android APK, Linux
-`.deb` + AppImage + bundle for x64, macOS/Windows desktop bundles, unsigned
+`.deb` + Flatpak + AppImage + bundle for x64, macOS/Windows desktop bundles, unsigned
 iOS IPA — the same asset shape as Séance). Poltergeist has **no server
 component**: bookmark backup rides Séance's sync server (see the plan), so
 there are no server binaries or Docker images to publish.

@@ -849,3 +849,14 @@ jobs:
       - name: Package Linux artifacts (.deb + AppImage)
         if: startsWith(matrix.target, 'linux')
         run: scripts/package-linux.sh --output-dir dist-packages
+      # Repack the same .deb as a Flatpak bundle; no upload — ordinary CI
+      # does not publish binaries (see the comment above).
+      - name: Flatpak bundle (build check only)
+        if: startsWith(matrix.target, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder
+          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+          # (flatpak's sandbox helper) builds in.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          scripts/build-flatpak.sh "$(ls -t dist-packages/poltergeist_*.deb | head -1)"

@@ -57,11 +57,14 @@ click **More info → Run anyway**.
 
 ## Linux
 
-Three assets, pick one:
+Four assets, pick one:
 
 - `poltergeist_<version>-1_amd64.deb` (Debian/Ubuntu):
   `sudo apt install ./poltergeist_*_amd64.deb` — apt resolves the
   dependencies from the package metadata.
+- `poltergeist-linux-x64.flatpak` (any distro with Flatpak):
+  `flatpak install poltergeist-linux-x64.flatpak` — sandboxed; pulls the
+  GNOME runtime from Flathub on first install.
 - `poltergeist-linux-x64.AppImage` (any distro):
   `chmod +x poltergeist-linux-x64.AppImage` and run it.
 - `poltergeist-linux-x64.tar.gz` (plain bundle): extract and run the
@@ -73,7 +76,8 @@ Keyring or KWallet. Without one the app runs fine but refuses to store
 secrets rather than writing them somewhere weaker (that is deliberate).
 The `.deb` declares the library; AppImage and tarball users may need to
 install `libsecret-1-0` (Debian/Ubuntu), `libsecret` (Fedora/Arch), or
-equivalent themselves.
+equivalent themselves. The Flatpak talks to the host keyring through the
+Secret Service portal — no extra package needed.
 
 ## Android
 
