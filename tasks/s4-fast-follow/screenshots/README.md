@@ -13,7 +13,7 @@ PR's worktree. Each pair uses the same 1000×900 Linux-target harness.
 The capture command in each worktree was:
 
 ```bash
-FLUTTER_ROOT=/home/paseo/sdks/flutter \
+FLUTTER_ROOT=<flutter-sdk> \
 POLTERGEIST_CAPTURE_DIR=<pr-worktree>/tasks/s4-fast-follow/screenshots \
 flutter test test/_tmp_s4_capture_test.dart
 ```

@@ -343,7 +343,7 @@ patch reuses that policy and does not claim to repair it or add remote fsync.
 | The plan | Complete in [`docs/plan/`](plan/) — overview + decision log (D1–D31), product, UX spec, architecture, Séance integration, sync, editor, milestones, testing, playbook. Reviewed via the GLM PR workflow, internal consistency passes, and a final whole-plan coherence pass (2026-08-31). |
 | Séance pin | Exact upstream revision `4c0a960289c919379d016507fa7ebae6b14b2e7c`, the merge of PR-S4. No release tag contains it, so this is D2's temporary revision bridge: both declarations, four lockfiles, and the live benchmark revision match; dartssh2 remains 3.0.2. PORTS.md carries the full re-diff and regenerated ancestor/tree/license/identity audit. Re-pin the first containing tag under open item 2. Frozen M0 evidence remains bound to the revisions it measured. |
 | Séance PR-S0 | LICENSE audit and Unlicense grant merged in [Séance #57](https://github.com/L-K-M/Seance/pull/57), merge `4d8ee1e026ce4e5d939d6390d9fd98a78fabcf6e`. |
-| Séance PR-S1 | Record-kind forward compatibility merged in [Séance #58](https://github.com/L-K-M/Seance/pull/58), merge `599ff936b8222e6cd77920495dcdcc4a50643f44`. The release wait ended 2026-09-14 (`v0.9.1` contains the merge; the pin now sits on that tag — M8 dated section). |
+| Séance PR-S1 | Record-kind forward compatibility merged in [Séance #58](https://github.com/L-K-M/Seance/pull/58), merge `599ff936b8222e6cd77920495dcdcc4a50643f44`. The release wait ended 2026-09-14 when `v0.9.1` included it; D10 later advanced the pin to the exact PR-S4 merge above. |
 | Séance cancellation cleanup | dartssh2 3.0.2 and bounded asynchronous SSH teardown merged in [Séance #59](https://github.com/L-K-M/Seance/pull/59), merge `da9d45492ac7d25cbc4eefb97a6ec29254de219f`. |
 | Séance PR-S2 | `openAuthenticatedClient` split merged in [Séance #61](https://github.com/L-K-M/Seance/pull/61), merge `dad6d4f66dbfba6c170b98c204980e5801a890cb`. |
 | Séance PR-S3 | `RemoteFileSystem` additions (`setTimes`, `setOwner`, opt-out `computeHash` on transfers) merged in [Séance #62](https://github.com/L-K-M/Seance/pull/62), merge `2f99f4efb25a83340605464635bdf0f3ba95d931`. The upstream-and-pin gate is satisfied by #13 (bench) and #14 (core); remote sync, chown UI, and bulk verification remain future milestone work. |
@@ -9370,6 +9370,7 @@ subsumption shapes, plus a source-side directory that keeps its copy
 rows) and a `scanned plans` group in `executor_test.dart` that scans
 real trees, diffs and runs them. All but the source-side guard failed
 before the fix. `dart test packages/poltergeist_sync` passes.
+
 ## SSH-agent authentication and ProxyJump (D10, 2026-09-29)
 
 The first post-v1 fast-follow consumes Séance PR-S4 at exact merge
@@ -9423,7 +9424,14 @@ after late acknowledgement failure, including synchronous listener re-entry.
 The reproduced regressions failed before their fixes; endpoint-retarget
 coverage guards the same restriction path.
 
-Core analysis is clean; 1,751 tests pass with 27 environment skips. Sync
+The first automated PR review found one important reconnect cancellation
+gap. Cancellation during the target credential read could still allow later
+jump-host credential reads. Reconnect now checks cancellation after every
+awaited route credential read; its regression failed before the fix. The same
+round removed duplicate engine catalog publication and tightened review-action
+and teardown coverage. Broader OpenSSH default-key discovery remains deferred.
+
+Core analysis is clean; 1,752 tests pass with 27 environment skips. Sync
 analysis and all 249 tests pass with 3 skips. Flutter analysis and all 2,955
 app tests pass. The 140 root benchmark tests, import-boundary check, and
 Séance pin audit pass. One concurrent core/app run reported the real incident

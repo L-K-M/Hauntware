@@ -327,6 +327,62 @@ void main() {
     });
   });
 
+  test('a cancelled routed reconnect stops between credential reads', () {
+    fakeAsync((time) {
+      final targetResolutionStarted = Completer<void>();
+      final releaseTargetResolution = Completer<void>();
+      final reconnectCredentialIds = <String>[];
+      var holdReconnect = false;
+      final opener = FakeTransportOpener(growthRequiresChallenge: true);
+      final harness = PoolHarness(
+        opener: opener,
+        credentialsFor: (config) async {
+          if (!holdReconnect) {
+            return ResolvedCredentials(
+              credentials: SshCredentials.password('${config.id}-secret'),
+              origin: CredentialOrigin.stored,
+            );
+          }
+
+          reconnectCredentialIds.add(config.id);
+          if (config.id == _targetId) {
+            targetResolutionStarted.complete();
+            await releaseTargetResolution.future;
+          }
+
+          return ResolvedCredentials(
+            credentials: SshCredentials.password('${config.id}-secret'),
+            origin: CredentialOrigin.stored,
+          );
+        },
+      );
+      _addRoute(harness);
+      final pane = browsePane(time, harness, 'tab', server: _targetId);
+
+      opener.transports.single.simulateExternalDeath();
+      time.flushMicrotasks();
+      time.elapse(_firstReconnectDelay);
+      time.flushMicrotasks();
+      expect(opener.calls, hasLength(2));
+
+      holdReconnect = true;
+      time.elapse(const Duration(seconds: 2));
+      time.flushMicrotasks();
+      expect(targetResolutionStarted.isCompleted, isTrue);
+      expect(reconnectCredentialIds, [_targetId]);
+
+      completeWithoutTimers(time, harness.manager.disconnectServer(_targetId));
+      releaseTargetResolution.complete();
+      time.flushMicrotasks();
+
+      // Cancellation dismisses the active prompt and must not start another.
+      expect(reconnectCredentialIds, [_targetId]);
+      expect(opener.calls, hasLength(2));
+      completeWithoutTimers(time, pane.close());
+      expect(time.pendingTimers, isEmpty);
+    });
+  });
+
   test('disconnect after route credentials does not dismiss their scope', () {
     fakeAsync((time) {
       final gate = Completer<void>();

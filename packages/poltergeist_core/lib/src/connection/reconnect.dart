@@ -260,6 +260,7 @@ extension _PoolRecovery on PooledConnectionManager {
           routeConfigs,
           scope,
           _forwardingLogFor(pool),
+          ensureActive: () => _checkReconnect(pool, cycle),
         );
         _checkReconnect(pool, cycle);
       } on Object catch (error, stack) {

@@ -809,6 +809,33 @@ void main() {
       await pumpEventQueue();
     });
 
+    test('coalesces publisher and listener snapshots', () async {
+      const direct = ServerConfig(
+        id: 'catalog-1',
+        label: 'Database',
+        host: 'db.internal',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final catalog = ValueNotifier<List<ServerConfig>>([direct]);
+      addTearDown(catalog.dispose);
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      // Catalog replacement publishes before notifying its bound listener.
+      session.publishServerCatalog(catalog.value);
+      session.bindServerCatalog(
+        changes: catalog,
+        read: () => catalog.value,
+      );
+      await pumpEventQueue();
+
+      expect(engine!.catalogSnapshots, [
+        [direct],
+      ]);
+    });
+
     test('sends an empty snapshot when sync removes the catalog', () async {
       const direct = ServerConfig(
         id: 'catalog-1',
@@ -821,8 +848,9 @@ void main() {
       final catalog = ValueNotifier<List<ServerConfig>>([direct]);
       addTearDown(catalog.dispose);
       final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
 
-      session!.bindServerCatalog(
+      session.bindServerCatalog(
         changes: catalog,
         read: () => catalog.value,
       );

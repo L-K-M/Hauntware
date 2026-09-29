@@ -568,6 +568,16 @@ void main() {
     final reviewed = <ConnectionServer>[];
     catalog.replace([_server('s1')]);
     await pump(tester, workspace: workspace, onReviewBlocked: reviewed.add);
+
+    await tester.tap(row('s1'), buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('sidebar.catalog.menu.review.s1')),
+      findsNothing,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
     final now = DateTime.utc(2026, 10, 1);
     await left.connectRemote(
       Bookmark(

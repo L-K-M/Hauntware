@@ -811,8 +811,8 @@ counterpart is ported here.
 ## app/poltergeist_app/test/ui/server_mark_picker_test.dart
 
 - Source: app/seance_app/test/server_mark_picker_test.dart
-- Séance commit: 66411c1 (accent-preview regression; re-diffed at
-  `d811309`)
+- Séance commit: 66411c1 (accent-preview regression; re-diffed at the exact
+  `4c0a960` pin)
 - Ported: 2026-09-29
 - Divergences: adapts only the source's accent-preview regression, wrapped in
   `AppLocalizations`; the broader upstream picker suite is not copied here.

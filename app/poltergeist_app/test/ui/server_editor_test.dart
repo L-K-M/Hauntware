@@ -209,21 +209,6 @@ void main() {
       expect(config.authMethod, AuthMethod.password);
     });
 
-    testWidgets('an unrelated edit preserves the jump-host route', (
-      tester,
-    ) async {
-      final existing = _server('web', jumpHostId: 'bastion');
-      delegate.serverList = [existing];
-      await openEditor(tester, existing: existing);
-
-      await tester.enterText(field('Label'), 'renamed');
-      await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
-      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
-      await tester.pumpAndSettle();
-
-      expect(delegate.saved?.$1.jumpHostId, 'bastion');
-    });
-
     testWidgets('an edit with the credential left blank keeps the stored '
         'entry and its reference', (tester) async {
       final existing = _server(

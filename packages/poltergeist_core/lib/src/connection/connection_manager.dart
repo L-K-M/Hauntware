@@ -1337,10 +1337,13 @@ class PooledConnectionManager implements ConnectionManager {
   Future<_ResolvedRouteCredentials> _resolveRouteCredentials(
     List<ServerConfig> configs,
     _PoolResolution resolution,
-    SshConnectionLog log,
-  ) async {
+    SshConnectionLog log, {
+    void Function()? ensureActive,
+  }) async {
+    ensureActive?.call();
     final target = configs.first;
     final targetCredentials = await _resolveCredentials(target, resolution);
+    ensureActive?.call();
     final jumpHosts = <String, ResolvedSshHost>{};
     var prompted = targetCredentials.origin == CredentialOrigin.prompted;
 
@@ -1355,6 +1358,8 @@ class PooledConnectionManager implements ConnectionManager {
           log,
         );
       }
+      // A cancelled recovery must not continue into the next vault prompt.
+      ensureActive?.call();
       prompted = prompted || credentials.origin == CredentialOrigin.prompted;
       jumpHosts[config.id] = ResolvedSshHost(config, credentials.credentials);
     }

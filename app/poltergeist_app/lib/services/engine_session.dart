@@ -419,6 +419,7 @@ final class EngineSession {
   Listenable? _serverCatalogChanges;
   VoidCallback? _serverCatalogListener;
   Map<String, ServerConfig> _serverCatalogById = const {};
+  bool _hasPublishedServerCatalog = false;
 
   bool _reviewInFlight = false;
   Future<void>? _shutdownFuture;
@@ -447,11 +448,13 @@ final class EngineSession {
   /// route. A live route must not recover after sync changes its hops.
   void publishServerCatalog(List<ServerConfig> configs) {
     if (_shutdownFuture != null) return;
+    if (_isPublishedServerCatalog(configs)) return;
 
     final snapshot = List<ServerConfig>.unmodifiable(configs);
     _serverCatalogById = Map.unmodifiable({
       for (final config in snapshot) config.id: config,
     });
+    _hasPublishedServerCatalog = true;
 
     // EngineClient sends before returning its Future. Catalog publication
     // therefore precedes later connection requests on the same FIFO port,
@@ -459,6 +462,20 @@ final class EngineSession {
     _errors.observe(
       _engine.replaceServerCatalog(snapshot),
     );
+  }
+
+  bool _isPublishedServerCatalog(List<ServerConfig> configs) {
+    if (!_hasPublishedServerCatalog ||
+        configs.length != _serverCatalogById.length) {
+      return false;
+    }
+
+    // The publisher and notifier expose the same materialized objects.
+    // Rematerialized configs still cross so field changes are never guessed.
+    for (final config in configs) {
+      if (!identical(_serverCatalogById[config.id], config)) return false;
+    }
+    return true;
   }
 
   void bindServerCatalog({
