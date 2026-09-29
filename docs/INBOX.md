@@ -123,7 +123,7 @@ Plaintext, UTF-8 JSON:
 |---|---|
 | `v` | Must be 1. Anything else is rejected, not guessed at. |
 | `id` | Producer-chosen, 1 to 64 chars `[A-Za-z0-9._-]`. Unique per app; a repeat is dropped. |
-| `host` | Matched case-insensitively against the server's name, then its host alias. No match, or a server outside the app's allowed set, shows the proposal as *unassigned*: it can be read and dismissed, never run. Séance never guesses. |
+| `host` | Matched case-insensitively against the server's name, then its host name; more than one match counts as none. No match, or a server outside the app's allowed set, shows the proposal as *unassigned*: it can be read and dismissed, never run. Séance never guesses. |
 | `title` | 1 to 200 chars, one line. |
 | `reason` | Optional, up to 4,000 chars. Shown as plain text. |
 | `script` | 1 to 64 KiB. Multi-line allowed. |
