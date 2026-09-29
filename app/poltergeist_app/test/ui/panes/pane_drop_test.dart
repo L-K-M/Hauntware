@@ -450,6 +450,51 @@ void main() {
     );
   });
 
+  // 02 §2.5: a file row inside a folder opened in place lies in that
+  // folder, so a drop on it lands there, not in the pane's location.
+  dndWidgets('a drop on a row inside an open folder lands in that folder', (
+    tester,
+  ) async {
+    await bindLocals();
+    await tester.pump();
+    expect(right.expandAt(0), isTrue); // images
+    await pumpShell(tester);
+    await tester.pump();
+
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('report.txt'),
+      tester.getCenter(find.text('logo.png')),
+    );
+    await endDrag(tester, gesture);
+
+    expect(
+      queue.enqueuedSpecs.single.destinationDir,
+      '/srv/other/images',
+    );
+  });
+
+  dndWidgets('a dragged selection leaves out rows its folders carry', (
+    tester,
+  ) async {
+    await bindLocals();
+    await tester.pump();
+    expect(left.expandAt(0), isTrue); // docs
+    await tester.pump();
+    left.setCursorIndex(0); // docs
+    left.setCursorIndex(1, update: SelectionUpdate.toggle); // nested.txt
+    await pumpShell(tester);
+
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('docs'),
+      rightPaneBackground(tester),
+    );
+    await endDrag(tester, gesture);
+
+    expect(queue.enqueuedSpecs.single.rootPaths, ['/home/tester/docs']);
+  });
+
   dndWidgets('a dragged selected row carries the whole selection in '
       'listing order', (tester) async {
     await bindLocals();

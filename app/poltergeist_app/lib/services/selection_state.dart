@@ -189,6 +189,22 @@ final class SelectionState<Key extends Object> {
     );
   }
 
+  /// Moves the cursor and the range anchor to [key] without touching
+  /// the selection — a folder collapsing over the cursor row hands the
+  /// cursor to itself (02 §2.5). [key] must be a row.
+  SelectionState<Key> withCursor(Key key) {
+    if (!_rows.contains(key)) {
+      throw ArgumentError.value(key, 'key', 'not a row');
+    }
+    if (cursorKey == key && anchorKey == key) return this;
+    return SelectionState._(
+      rows: _rows,
+      selection: _selection,
+      cursorKey: key,
+      anchorKey: key,
+    );
+  }
+
   /// Replaces the ordered visible rows (navigation, sort, filter, or hidden
   /// policy change). Selection, cursor, and anchor keep their surviving
   /// identities; keys missing from [rows] are pruned, never re-targeted by

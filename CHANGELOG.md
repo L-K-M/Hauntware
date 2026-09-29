@@ -6,6 +6,14 @@
   active pane's accent line stopped a few pixels short of the sidebar's
   edge, the divider between the two panes and the inspector's edge. They
   now run all the way to those lines.
+- **Folders open in place.** Folder rows have a small triangle on the
+  left, as in Finder and Transmit: click it, or press → and ←, to show a
+  folder's contents indented below it without leaving the folder you
+  are in. You can select rows at any level. When a folder and something
+  inside it are both selected, delete, duplicate, copy, move and drag
+  act on the folder once instead of on its contents twice, and a row
+  inside an unselected folder is handled on its own. Duplicate now puts
+  each copy next to its original.
 - **The active pane's accent line is above its tabs.** The coloured line
   that shows which pane is active now runs along the top of that pane's
   tab bar instead of under the tabs, so it no longer sits between a tab
