@@ -235,10 +235,10 @@ build_flatpak() {
   # stale. (SECONDS is this script's runtime, so `start` is its launch time.)
   local deb start
   start=$(( $(date +%s) - SECONDS ))
-  deb="$(ls -t dist/seance_*.deb 2>/dev/null | head -1 || true)"
+  deb="$(find dist -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n1 | cut -f2- || true)"
   if [[ -z "$deb" || "$(stat -c %Y "$deb" 2>/dev/null || echo 0)" -lt "$start" ]]; then
     build_app || { record "flatpak: FAILED (app build)"; return 1; }
-    deb="$(ls -t dist/seance_*.deb 2>/dev/null | head -1 || true)"
+    deb="$(find dist -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n1 | cut -f2- || true)"
     if [[ -z "$deb" || "$(stat -c %Y "$deb" 2>/dev/null || echo 0)" -lt "$start" ]]; then
       record "flatpak: FAILED (no fresh .deb produced; a release 'app' build is required)"
       return 1
