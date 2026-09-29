@@ -267,7 +267,9 @@ jobs:
               # Ubuntu 24.04 denies the unprivileged user namespaces
               # bubblewrap (flatpak's sandbox helper) builds in.
               sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-              scripts/build-flatpak.sh "$(find . -maxdepth 1 -name 'seance_*.deb' -type f -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+              deb="$(find . -maxdepth 1 -name 'seance_*.deb' -type f -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+              [ -n "$deb" ] || { echo "::error::no seance_*.deb found" >&2; exit 1; }
+              scripts/build-flatpak.sh "$deb"
               ;;
             macos)
               # Xcode builds the ASCII "Seance.app" (codesign rejects accented
