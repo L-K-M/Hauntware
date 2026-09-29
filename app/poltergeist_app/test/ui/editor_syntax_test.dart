@@ -39,7 +39,7 @@ void main() {
       expect(syntaxLanguageFor('/etc/nginx/nginx.conf')?.id, 'ini');
       expect(syntaxLanguageFor('/tmp/data.json')?.id, 'json');
       expect(syntaxLanguageFor('compose.yaml')?.id, 'yaml');
-      expect(syntaxLanguageFor('main.go')?.id, 'c-family');
+      expect(syntaxLanguageFor('main.go')?.id, 'go');
       expect(syntaxLanguageFor('query.sql')?.id, 'sql');
       expect(syntaxLanguageFor('notes.xyz'), isNull);
       expect(syntaxLanguageFor('README'), isNull);

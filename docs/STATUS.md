@@ -19,6 +19,20 @@ tests pass. Light/dark before-and-after captures use real fonts and record
 their provenance in `tasks/planchette-editor/screenshots/README.md`.
 Cross-platform CI and final review results are recorded on the adoption PR.
 
+Update (2026-09-29): the pin moved from `5b75f9dc` to `ff487394`,
+Planchette main, the revision Séance adopts too. The surface now brings
+indentation, line commands, Go to Line, bracket matching, whole-word and
+regular-expression search, and new highlighting. The find and Go to Line
+bars' new strings come from the ARB file like the rest of the find bar;
+the status-row strings stay unused because this editor draws its own. Go
+files now detect as Go, not C-family. No shortcut the surface installs is
+bound by the editor window's menu. Local validation after merging main:
+core analysis is clean and 1,701 core tests pass. The two root-only
+cleanup-failure checkout tests fail here on main too, and the Linux watch
+test failed once under load and passes alone. Flutter
+analysis is clean and all 2,907 other app tests pass; the Go expectation
+was the one failure and is updated.
+
 ## D12 drift scope and tab-switch work (2026-09-28)
 
 Tier-A-only benchmark runs now report persisted tier-B drift as a notice,

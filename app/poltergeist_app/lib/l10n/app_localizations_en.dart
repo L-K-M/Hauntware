@@ -2259,6 +2259,43 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get editorWholeWordsTooltip => 'Whole words';
+
+  @override
+  String get editorRegularExpressionTooltip => 'Regular expression';
+
+  @override
+  String get editorFindPatternHint => 'Find by regular expression';
+
+  @override
+  String editorPatternInvalid(String detail) {
+    return 'Invalid pattern: $detail';
+  }
+
+  @override
+  String get editorPatternTooSlow => 'Pattern took too long to search';
+
+  @override
+  String get editorCaseFoldLimited =>
+      'This text cannot be compared without case, so matching was exact.';
+
+  @override
+  String get editorGoToLineTooltip => 'Go to line';
+
+  @override
+  String get editorCloseGoToLineTooltip => 'Close go to line';
+
+  @override
+  String editorGoToLineHint(int lines) {
+    return 'Line or line:column, 1 to $lines';
+  }
+
+  @override
+  String editorGoToLineInvalid(int lines) {
+    return 'Enter a line from 1 to $lines, or line:column.';
+  }
+
+  @override
   String editorStatusClean(int lines, int bytes) {
     return '$lines lines · $bytes bytes';
   }

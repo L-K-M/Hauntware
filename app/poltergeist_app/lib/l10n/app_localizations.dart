@@ -3583,6 +3583,66 @@ abstract class AppLocalizations {
   /// **'{current}/{total}+'**
   String editorMatchCountCapped(int current, int total);
 
+  /// Tooltip of the find bar's whole-word toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Whole words'**
+  String get editorWholeWordsTooltip;
+
+  /// Tooltip of the find bar's regular-expression toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Regular expression'**
+  String get editorRegularExpressionTooltip;
+
+  /// Hint text of the find query field while regular-expression mode is on.
+  ///
+  /// In en, this message translates to:
+  /// **'Find by regular expression'**
+  String get editorFindPatternHint;
+
+  /// Find bar notice for a regular expression that does not compile; detail is the engine's own explanation, such as 'Unterminated group'.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid pattern: {detail}'**
+  String editorPatternInvalid(String detail);
+
+  /// Find bar notice for a regular expression stopped at the search time budget.
+  ///
+  /// In en, this message translates to:
+  /// **'Pattern took too long to search'**
+  String get editorPatternTooSlow;
+
+  /// Find bar notice when a case-insensitive search had to fall back to exact matching.
+  ///
+  /// In en, this message translates to:
+  /// **'This text cannot be compared without case, so matching was exact.'**
+  String get editorCaseFoldLimited;
+
+  /// Label of the editor's Go to Line bar (Cmd+L on Apple platforms, Ctrl+G elsewhere).
+  ///
+  /// In en, this message translates to:
+  /// **'Go to line'**
+  String get editorGoToLineTooltip;
+
+  /// Tooltip of the Go to Line bar's close button.
+  ///
+  /// In en, this message translates to:
+  /// **'Close go to line'**
+  String get editorCloseGoToLineTooltip;
+
+  /// Hint text of the Go to Line field; lines is the document's line count.
+  ///
+  /// In en, this message translates to:
+  /// **'Line or line:column, 1 to {lines}'**
+  String editorGoToLineHint(int lines);
+
+  /// Go to Line error for input that is not a line or line:column in range.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a line from 1 to {lines}, or line:column.'**
+  String editorGoToLineInvalid(int lines);
+
   /// Editor status bar for a saved document (06 §2.3).
   ///
   /// In en, this message translates to:

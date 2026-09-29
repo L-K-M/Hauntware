@@ -20,6 +20,11 @@ keeps compatibility names and the checkout byte sink but delegates document
 mechanics. User-local links resolve once before the regular-file loader;
 managed copies retain rejection. No SSH dependency enters Planchette.
 
+Pin audit (2026-09-29): both packages move from `5b75f9dc` to
+`ff4873947c93ac4e259338b7f80dac93947259e6` (Planchette main, merge of its
+#104), in both pubspecs and both lockfiles. Séance moves to the same
+revision in its own PR, so the two hosts stay on one reviewed revision.
+
 ## Destination collision ownership (2026-09-27)
 
 Original Poltergeist implementation; no Séance source was copied and no pin

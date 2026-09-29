@@ -277,8 +277,8 @@ packages:
     dependency: transitive
     description:
       path: "packages/planchette_core"
-      ref: "5b75f9dc213d2615a3845c942314d810f7acc4b3"
-      resolved-ref: "5b75f9dc213d2615a3845c942314d810f7acc4b3"
+      ref: ff4873947c93ac4e259338b7f80dac93947259e6
+      resolved-ref: ff4873947c93ac4e259338b7f80dac93947259e6
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"
