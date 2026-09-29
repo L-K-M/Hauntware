@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Built-in editor: the shared Planchette editor brings Tab and Shift+Tab
+  to indent and outdent (Enter keeps the indentation, learned from each
+  file), line commands (duplicate, move, delete and join lines), Toggle
+  Comment, Go to Matching Bracket, Go to Line (click the caret position
+  in the status bar, or Cmd+L on macOS and Ctrl+G elsewhere), whole-word
+  and regular-expression search, and highlighting for Go, diffs and
+  more. The status bar also shows the selection's size, the indentation
+  and the language, and says when a file is too large to highlight.
 - On macOS the window no longer has a separate title bar. The traffic
   lights sit over the server list, and a header across the terminal and
   side panel shows the server you are on (name and `user@host`) with
