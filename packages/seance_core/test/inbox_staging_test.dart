@@ -141,5 +141,11 @@ void main() {
       );
       expect(r.hiddenCount, 5);
     });
+
+    test('escapes variation selectors', () {
+      final r = revealInvisibles('echo a\uFE0Fb\u{E0100}');
+      expect(r.text, 'echo a<U+FE0F>b<U+E0100>');
+      expect(r.hiddenCount, 2);
+    });
   });
 }

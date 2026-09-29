@@ -266,6 +266,29 @@ void _inboxTests(Storage Function() newStorage) {
       expect((await h.apps(alice)).single.pending, 1);
     });
 
+    test('an account holds at most 50 apps', () async {
+      for (var i = 0; i < 50; i++) {
+        expect((await h.createApp(alice)).status, 201);
+      }
+      final over = await h.createApp(alice);
+      expect(over.status, 429);
+      expect(over.code, 'too_many_apps');
+    });
+
+    test('the Bearer scheme is case-insensitive', () async {
+      final app = await h.app(alice);
+      final r = await h.send(
+        'POST',
+        '/v1/inbox/${app.id}',
+        headers: {
+          'authorization': 'bearer ${app.token}',
+          'content-type': 'application/octet-stream',
+        },
+        body: _blob(),
+      );
+      expect(r.status, 201, reason: r.text);
+    });
+
     test('unknown app and wrong token are the same 401', () async {
       final app = await h.app(alice);
       final replies = [
@@ -360,7 +383,8 @@ void _inboxTests(Storage Function() newStorage) {
 
       // Strangers cannot spend the app's budget.
       for (var i = 0; i < 40; i++) {
-        await h.deposit(app.id, newInboxToken(), _blob());
+        final r = await h.deposit(app.id, newInboxToken(), _blob());
+        expect(r.status, 401);
       }
       for (var i = 0; i < 30; i++) {
         expect((await h.deposit(app.id, app.token, _blob())).status, 201);

@@ -551,6 +551,9 @@ class SyncCoordinator {
     // so unlike a config it cannot outrank its retraction on its own.
     final revivedSecrets = <(String, int)>[];
     final skippedIds = <String>[];
+    // Inbox app removals re-dated past a live copy that beat them; see the
+    // inboxApp case. Counted with the other re-datings so [run] pushes them.
+    var redatedRemovals = 0;
     Object? firstError;
     StackTrace? firstStackTrace;
     void skip(String id, Object error, StackTrace stackTrace) {
@@ -780,7 +783,30 @@ class SyncCoordinator {
             // Removal is final: an app id is never reused, so a live copy
             // arriving after this device saw the removal is a stale one, and
             // adopting it would bring back a revoked key.
-            if (existing != null && existing.removed) continue;
+            //
+            // It can only arrive by beating the removal at last-write-wins,
+            // though: another device edited the app later, or under a clock
+            // ahead of this one. Skipping it alone would leave that copy on
+            // the account for good, and every other device keeping the key.
+            // So the removal is re-dated past it and pushed again, the same
+            // escalation [rescheduleOutranked] makes for a retraction.
+            if (existing != null && existing.removed) {
+              if (!app.removed) {
+                final redated = existing.asRemoved(
+                  updatedAt: app.updatedAt + 1,
+                );
+                await local.putLocal(await codec.encrypt(DecryptedRecord(
+                  id: redated.recordId,
+                  kind: RecordKind.inboxApp,
+                  updatedAt: redated.updatedAt,
+                  deviceId: deviceId,
+                  data: redated.toJson(),
+                )));
+                await store.putApp(redated);
+                redatedRemovals++;
+              }
+              continue;
+            }
             // Strictly older, for the reason the assistant path gives: an
             // edit made between rounds is newer than the mirror knows.
             if (existing != null && app.updatedAt < existing.updatedAt) {
@@ -818,7 +844,8 @@ class SyncCoordinator {
     // the log line, not after it: a tombstone that could not be minted or a
     // revival that could not be staged was landing in `skippedIds` a moment
     // after the only reader of `skippedIds` had already spoken.
-    final redated = await rescheduleOutranked(outranked, skip) +
+    final redated = redatedRemovals +
+        await rescheduleOutranked(outranked, skip) +
         await _revive(revived, skip) +
         await _reviveSecrets(revivedSecrets, servers, skip);
     if (skippedIds.isNotEmpty) {

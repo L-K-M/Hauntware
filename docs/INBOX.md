@@ -133,7 +133,7 @@ Plaintext, UTF-8 JSON:
 |---|---|
 | `v` | Must be 1. Anything else is rejected, not guessed at. |
 | `id` | Producer-chosen, 1 to 64 chars `[A-Za-z0-9._-]`. Unique per app, enforced by the client (the server cannot see it): a repeat of a proposal still cached, or of one with a status, is deleted unannounced. A repeat of an expired one is still expired, since the expiry travels in the same sealed payload. |
-| `host` | Matched case-insensitively against the server's name, then its host name; more than one match counts as none. No match, or a server outside the app's allowed set, shows the proposal as *unassigned*: it can be read and dismissed, never run. Séance never guesses. |
+| `host` | One line, 1 to 200 chars. Matched case-insensitively against the server's name, then its host name; more than one match counts as none. No match, or a server outside the app's allowed set, shows the proposal as *unassigned*: it can be read and dismissed, never run. Séance never guesses. |
 | `title` | 1 to 200 chars, one line. |
 | `reason` | Optional, up to 4,000 chars. Shown as plain text. |
 | `script` | 1 to 64 KiB. Multi-line allowed. |
@@ -170,7 +170,7 @@ Body: blob (at most 96 KiB)
 201 {"item": "<itemId>"}
 401 unknown app or wrong token (indistinguishable)
 413 too large
-429 rate limited, or the app has 100 pending items
+429 rate_limited (30 a minute), or inbox_full (100 pending items)
 ```
 
 The token can only add items to its own app. It cannot list, read or
@@ -180,7 +180,7 @@ delete anything. Rate limit per app: 30 per minute, reusing
 User side (existing session auth, `_withAuth`):
 
 ```
-POST   /v1/apps                    {"app", "name", "token"}  -> 201 {}
+POST   /v1/apps                    {"app", "name", "token"}  -> 201 {}, 429 too_many_apps (50 per account)
 GET    /v1/apps                    -> {"apps": [{"app", "name", "created", "pending"}]}
 DELETE /v1/apps/{appId}            -> 204, 404 not_found
 GET    /v1/inbox?since=<received>  -> {"items": [{"app", "item", "received", "blob"}]}
@@ -202,11 +202,12 @@ each deposit. The in-memory storage does the same. Deleting the account
 deletes all of it.
 
 Items stay on the server until a device deletes one after the user has
-run or dismissed it, or until 7 days after `received`, when the server
-drops it. The server cannot read `expires`, so it applies its own
-retention, matching the 7-day cap on `expires`. `received` is assigned by
-the server and strictly increasing per user, so `since` lets a device ask
-only for items it has not seen.
+run or dismissed it, or until 7 days after the server stored it
+(`stored_at`), when the server drops it. The server cannot read `expires`,
+so it applies its own retention, matching the 7-day cap on `expires`.
+`received` is a per-account counter, not a time: strictly increasing, so
+`since` lets a device ask only for items it has not seen, even for two
+deposits in the same instant.
 
 Documentation for producers, unauthenticated and static:
 

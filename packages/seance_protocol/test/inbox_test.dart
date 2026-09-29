@@ -40,16 +40,30 @@ void main() {
         InboxCrypto.open(key, newInboxAppId(), blob),
         throwsA(isA<SecretBoxAuthenticationError>()),
       );
-      final tampered = Uint8List.fromList(blob)..[30] ^= 1;
-      await expectLater(
-        InboxCrypto.open(key, appId, tampered),
-        throwsA(isA<SecretBoxAuthenticationError>()),
-      );
+      // A flipped byte in the nonce, the ciphertext and the tag.
+      for (final at in [3, 25, 30]) {
+        final tampered = Uint8List.fromList(blob)..[at] ^= 1;
+        await expectLater(
+          InboxCrypto.open(key, appId, tampered),
+          throwsA(isA<SecretBoxAuthenticationError>()),
+          reason: 'byte $at',
+        );
+      }
     });
 
-    test('refuses a blob too short to hold a nonce and a mac', () async {
+    test('refuses a blob too short or too long to be a proposal', () async {
       await expectLater(
         InboxCrypto.open(key, appId, Uint8List(39)),
+        throwsFormatException,
+      );
+      // Exactly the minimum is a box with no plaintext: it fails to
+      // authenticate, not to parse.
+      await expectLater(
+        InboxCrypto.open(key, appId, Uint8List(40)),
+        throwsA(isA<SecretBoxAuthenticationError>()),
+      );
+      await expectLater(
+        InboxCrypto.open(key, appId, Uint8List(kInboxMaxBlobBytes + 1)),
         throwsFormatException,
       );
     });
@@ -151,6 +165,11 @@ void main() {
       rejects(_proposal({'id': 'x' * 65}));
       rejects(_proposal({'host': ''}));
       rejects(_proposal({'host': 'a\nb'}));
+      rejects(_proposal({'host': 'x' * 201}));
+      rejects(_proposal({'title': 'a\u2029b'}));
+      for (final field in ['id', 'host', 'title', 'script', 'created']) {
+        rejects({..._proposal()}..remove(field));
+      }
       rejects(_proposal({'title': 'two\nlines'}));
       rejects(_proposal({'title': 'x' * 201}));
       rejects(_proposal({'reason': 'x' * 4001}));
@@ -201,8 +220,29 @@ void main() {
         () => InboxApp.fromJson({'id': id, 'key': 'AAAA', 'removed': true}),
         throwsFormatException,
       );
+      final key = base64Url.encode(newInboxKey()).replaceAll('=', '');
       expect(
-        () => InboxApp.fromJson({'id': 'bad', 'key': 'x'}),
+        () => InboxApp.fromJson({'id': 'bad', 'key': key}),
+        throwsFormatException,
+      );
+      expect(
+        () => InboxApp.fromJson({'id': id, 'key': 'x'}),
+        throwsFormatException,
+      );
+      expect(
+        () => InboxApp.fromJson({'id': id, 'key': key, 'servers': 'all'}),
+        throwsFormatException,
+      );
+      expect(
+        () => InboxApp.fromJson({'id': id, 'key': key, 'servers': [1]}),
+        throwsFormatException,
+      );
+      expect(
+        () => InboxApp.fromJson({
+          'id': id,
+          'removed': true,
+          'servers': ['s1'],
+        }),
         throwsFormatException,
       );
     });
@@ -225,6 +265,19 @@ void main() {
         throwsFormatException,
       );
     });
+  });
+
+  test('a malformed inbox item is a FormatException', () {
+    expect(
+      () => InboxItem.fromJson({'app': 'a', 'item': 'i', 'blob': ''}),
+      throwsFormatException,
+    );
+    expect(
+      () => InboxItem.fromJson(
+        {'app': 'a', 'item': 'i', 'received': '1', 'blob': ''},
+      ),
+      throwsFormatException,
+    );
   });
 
   test('record kinds resolve by name', () {

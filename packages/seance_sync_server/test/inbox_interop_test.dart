@@ -15,12 +15,18 @@ import 'package:test/test.dart';
 /// as an [InboxProposal]. This is the check that the docs, the Python and
 /// the Dart agree byte for byte. Skipped where python3 or PyNaCl is missing.
 void main() {
-  final pythonReady =
-      Process.runSync('python3', [
-        '-c',
-        'import nacl.bindings',
-      ], runInShell: false).exitCode ==
-      0;
+  // A missing python3 throws rather than exiting non-zero, and must skip.
+  bool pythonReady;
+  try {
+    pythonReady =
+        Process.runSync('python3', [
+          '-c',
+          'import nacl.bindings',
+        ], runInShell: false).exitCode ==
+        0;
+  } on ProcessException {
+    pythonReady = false;
+  }
 
   test('seance-propose.py deposits a proposal Séance can open', () async {
     final server = SyncServer(
@@ -46,6 +52,7 @@ void main() {
         ).toJson(),
       ),
     );
+    expect(register.statusCode, 200, reason: register.body);
     final session = jsonDecode(register.body)['token'] as String;
     final auth = {'authorization': 'Bearer $session'};
 

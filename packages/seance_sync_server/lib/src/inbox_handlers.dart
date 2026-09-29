@@ -4,6 +4,13 @@ part of 'server.dart';
 /// nobody reads them is stopped here rather than filling the database.
 const int _inboxMaxPendingPerApp = 100;
 
+/// Apps one account may register. Without it the per-app pending cap bounds
+/// nothing: a session could keep adding apps, and every one's queue lands in
+/// each `GET /v1/inbox`. The check and the insert are not atomic, so two
+/// concurrent registrations can pass it by one; it bounds growth, it is not
+/// an exact quota.
+const int _inboxMaxAppsPerAccount = 50;
+
 const int _inboxDepositsPerWindow = 30;
 const Duration _inboxDepositWindow = Duration(minutes: 1);
 
@@ -46,6 +53,15 @@ extension _InboxHandlers on SyncServer {
             'bad_request',
             'Name must be 1 to $kInboxMaxNameChars characters without '
                 'control characters',
+          );
+        }
+        if ((await storage.listInboxApps(username)).length >=
+            _inboxMaxAppsPerAccount) {
+          return _error(
+            429,
+            'too_many_apps',
+            'The account has $_inboxMaxAppsPerAccount inbox apps; remove one '
+                'first',
           );
         }
         // Stored like the auth verifier: a copied database yields no token
@@ -161,8 +177,10 @@ extension _InboxHandlers on SyncServer {
   /// away nothing guessable either.)
   Future<bool> _producerAuthorized(Request req, String appId) async {
     final auth = req.headers['authorization'];
-    final token = auth != null && auth.startsWith('Bearer ')
-        ? auth.substring(7)
+    // The scheme is case-insensitive (RFC 9110 11.1); hand-written producer
+    // clients are the ones likely to send `bearer`.
+    final token = auth != null && auth.toLowerCase().startsWith('bearer ')
+        ? auth.substring(7).trim()
         : '';
     final app = isValidInboxAppId(appId)
         ? await storage.getInboxApp(appId)

@@ -12,6 +12,9 @@ class _FakeInbox implements InboxApi {
   int _received = 0;
   int _itemSeq = 0;
 
+  /// Answer newest first, as a server that does not sort might.
+  bool reverse = false;
+
   @override
   Future<void> createApp(CreateInboxAppRequest request) async {
     if (tokens.containsKey(request.appId)) {
@@ -33,9 +36,11 @@ class _FakeInbox implements InboxApi {
   }
 
   @override
-  Future<List<InboxItem>> listItems({required int since}) async =>
-      items.values.where((i) => i.received > since).toList()
-        ..sort((a, b) => a.received.compareTo(b.received));
+  Future<List<InboxItem>> listItems({required int since}) async {
+    final out = items.values.where((i) => i.received > since).toList()
+      ..sort((a, b) => a.received.compareTo(b.received));
+    return reverse ? out.reversed.toList() : out;
+  }
 
   @override
   Future<bool> deleteItem(String appId, String itemId) async {
@@ -180,11 +185,9 @@ void main() {
     b = _Device('B', server, codec);
   });
 
-  Future<InboxPairing> connect(_Device device, {List<String>? only}) =>
-      device.inbox.addApp(
+  Future<InboxPairing> connect(_Device device) => device.inbox.addApp(
         name: 'bots',
         serverUrl: 'https://sync.example.com',
-        allowedServerIds: only ?? const [],
       );
 
   test('a proposal reaches every device and a run settles it on all', () async {
@@ -312,6 +315,23 @@ void main() {
     expect(server.items, hasLength(1));
   });
 
+  test('an unsorted listing never skips an item waiting for its app',
+      () async {
+    final known = await connect(b);
+    final unknown = await connect(a);
+    await server.deposit(known, _proposal('k1'));
+    await server.deposit(unknown, _proposal('u1'));
+    await server.deposit(known, _proposal('k2'));
+    server.reverse = true;
+
+    expect([for (final p in await b.inbox.refresh()) p.proposal.id]..sort(),
+        ['k1', 'k2']);
+    await a.sync.run(records);
+    await b.sync.run(records);
+    final ids = [for (final p in await b.inbox.refresh()) p.proposal.id];
+    expect(ids, contains('u1'));
+  });
+
   test('an item for an app not synced here yet waits for it', () async {
     final pairing = await connect(a);
     await server.deposit(pairing, _proposal('p1'));
@@ -369,13 +389,33 @@ void main() {
     expect((await a.apps.getApp(pairing.appId))?.removed, isTrue);
   });
 
+  test('a removal outranked by a later edit elsewhere still wins', () async {
+    final pairing = await connect(a);
+    await a.sync.run(records);
+    await b.sync.run(records);
+
+    // B renames the app under a clock ahead of A's removal, and pushes first.
+    b.clock = _t0.add(const Duration(hours: 1));
+    await b.inbox.updateApp(pairing.appId, name: 'renamed');
+    await b.sync.run(records);
+    await a.inbox.removeApp(pairing.appId);
+    await a.sync.run(records);
+    await b.sync.run(records);
+
+    expect((await a.apps.getApp(pairing.appId))?.removed, isTrue);
+    final onB = await b.apps.getApp(pairing.appId);
+    expect(onB?.removed, isTrue);
+    expect(onB?.key, isNull);
+  });
+
   test('an unsealed tombstone does not delete an app', () async {
     final pairing = await connect(a);
     await a.sync.run(records);
     await b.sync.run(records);
     records.plant(EncryptedRecord.tombstone(
       id: 'inboxapp:${pairing.appId}',
-      updatedAt: DateTime.now().millisecondsSinceEpoch * 2,
+      // Far past anything the devices' clock has stamped.
+      updatedAt: _t0.millisecondsSinceEpoch + 365 * 86400000,
       deviceId: 'server',
     ));
     await b.sync.run(records);

@@ -17,6 +17,7 @@ const int kInboxMaxBlobBytes = 96 * 1024;
 const int kInboxMaxScriptBytes = 64 * 1024;
 
 const int kInboxMaxTitleChars = 200;
+const int kInboxMaxHostChars = 200;
 const int kInboxMaxReasonChars = 4000;
 const int kInboxMaxNameChars = 100;
 
@@ -46,7 +47,7 @@ const String _kAadPrefix = 'seance/v1/inbox/';
 /// so Séance hands the agent this hash itself and the agent checks the
 /// download against it. A server test pins it to the served bytes.
 const String kInboxReferenceClientSha256 =
-    'aac46f62e20fdf297e17cb00b41dcb3a07a9c5891c902066b20e7738584d7218';
+    '198863b0ad4ba9762ee9213ddff29939adf705e1269989287528bd26f9860f9f';
 
 /// Record-id prefixes for the two synced inbox kinds.
 const String kInboxAppIdPrefix = 'inboxapp:';
@@ -115,8 +116,14 @@ class InboxCrypto {
     String appId,
     Uint8List blob,
   ) async {
+    // Both bounds: the blob comes from the sync server, which is not
+    // trusted, and the whole of it is authenticated before anything is
+    // refused, so an oversized one would cost its full size in work.
     if (blob.length < _kNonceBytes + _kMacBytes) {
       throw const FormatException('Inbox item is too short to be sealed');
+    }
+    if (blob.length > kInboxMaxBlobBytes) {
+      throw const FormatException('Inbox item is larger than any producer sends');
     }
     final box = SecretBox.fromConcatenation(
       blob,
@@ -279,8 +286,13 @@ class InboxProposal {
       );
     }
     final host = json['host'];
-    if (host is! String || host.trim().isEmpty || _hasLineBreak(host)) {
-      throw const InboxProposalException('host must be a non-empty line');
+    if (host is! String ||
+        host.trim().isEmpty ||
+        host.length > kInboxMaxHostChars ||
+        _hasLineBreak(host)) {
+      throw const InboxProposalException(
+        'host must be one line of 1 to $kInboxMaxHostChars characters',
+      );
     }
     final title = json['title'];
     if (title is! String ||
@@ -332,8 +344,13 @@ class InboxProposal {
     );
   }
 
+  /// Escapes, not literals: a literal separator is invisible in an editor
+  /// and a diff, and would silently become something else in an edit.
   static bool _hasLineBreak(String s) =>
-      s.contains('\n') || s.contains('\r') || s.contains(' ');
+      s.contains('\n') ||
+      s.contains('\r') ||
+      s.contains('\u2028') ||
+      s.contains('\u2029');
 }
 
 /// A producer the user has connected. Synced as a sealed `inboxapp:` record,
@@ -422,13 +439,19 @@ class InboxApp {
     if (keyText is String && !_isBase64UrlOfLength(keyText, _kKeyBytes)) {
       throw const FormatException('Inbox app key is malformed');
     }
+    final name = json['name'] ?? '';
+    final servers = json['servers'] ?? const <Object?>[];
+    if (name is! String ||
+        servers is! List ||
+        servers.any((s) => s is! String) ||
+        (removed && servers.isNotEmpty)) {
+      throw const FormatException('Inbox app name or servers are malformed');
+    }
     return InboxApp(
       id: id,
-      name: json['name'] as String? ?? '',
+      name: name,
       key: keyText is String ? _unb64(keyText) : null,
-      allowedServerIds: [
-        for (final s in json['servers'] as List? ?? const []) s as String,
-      ],
+      allowedServerIds: servers.cast<String>(),
       createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
       updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
       removed: removed,
@@ -564,10 +587,21 @@ class InboxItem {
         'blob': base64.encode(blob),
       };
 
-  factory InboxItem.fromJson(Map<String, dynamic> json) => InboxItem(
-        appId: json['app'] as String,
-        itemId: json['item'] as String,
-        received: (json['received'] as num).toInt(),
-        blob: base64.decode(json['blob'] as String),
-      );
+  /// Throws [FormatException] for anything that is not an item, so a
+  /// damaged server response reads as such rather than as a cast failure.
+  factory InboxItem.fromJson(Map<String, dynamic> json) {
+    final app = json['app'];
+    final item = json['item'];
+    final received = json['received'];
+    final blob = json['blob'];
+    if (app is! String || item is! String || received is! int || blob is! String) {
+      throw const FormatException('Inbox item is malformed');
+    }
+    return InboxItem(
+      appId: app,
+      itemId: item,
+      received: received,
+      blob: base64.decode(blob),
+    );
+  }
 }

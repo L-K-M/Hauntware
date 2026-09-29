@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
 import 'package:seance_protocol/seance_protocol.dart';
@@ -54,6 +55,9 @@ bool _isInvisible(int rune) =>
     (rune >= 0x2028 && rune <= 0x202e) ||
     (rune >= 0x2060 && rune <= 0x206f) ||
     rune == 0xfeff ||
+    // Variation selectors: zero-width, and able to carry hidden data.
+    (rune >= 0xfe00 && rune <= 0xfe0f) ||
+    (rune >= 0xe0100 && rune <= 0xe01ef) ||
     (rune >= 0xfff9 && rune <= 0xfffb) ||
     (rune >= 0xe0000 && rune <= 0xe007f);
 
@@ -117,6 +121,16 @@ Future<StagedScript> stageProposalScript(
     preserveMode: _kScriptMode,
   );
   final uploaded = entry.contentSha256;
+  if (uploaded == null) {
+    // Every implementation in this repo hashes by default, so this is a
+    // backend that cannot; the path still names the reviewed bytes, but the
+    // second check did not happen and that should be visible.
+    developer.log(
+      'Upload returned no digest; the staged script was not re-verified',
+      name: 'seance.inbox',
+      level: 900,
+    );
+  }
   if (uploaded != null && uploaded.toLowerCase() != digest) {
     throw const InboxStagingException(
       'The uploaded script does not match the one you reviewed.',
