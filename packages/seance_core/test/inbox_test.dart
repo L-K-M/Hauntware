@@ -389,6 +389,27 @@ void main() {
     expect((await a.apps.getApp(pairing.appId))?.removed, isTrue);
   });
 
+  test('a removal is re-dated past an outranking envelope', () async {
+    final pairing = await connect(a);
+    final live = (await a.apps.getApp(pairing.appId))!;
+    a.clock = a.clock.add(const Duration(minutes: 5));
+    await a.inbox.removeApp(pairing.appId);
+    final removedAt = (await a.apps.getApp(pairing.appId))!.updatedAt;
+    // The envelope outranks the removal so the record is applied; the app
+    // it carries is older than the removal.
+    records.plant(await codec.encrypt(DecryptedRecord(
+      id: live.recordId,
+      kind: RecordKind.inboxApp,
+      updatedAt: removedAt + 1000000,
+      deviceId: 'B',
+      data: live.toJson(),
+    )));
+    await a.sync.run(records);
+    final after = (await a.apps.getApp(pairing.appId))!;
+    expect(after.removed, isTrue);
+    expect(after.updatedAt, greaterThan(removedAt + 1000000));
+  });
+
   test('a removal outranked by a later edit elsewhere still wins', () async {
     final pairing = await connect(a);
     await a.sync.run(records);

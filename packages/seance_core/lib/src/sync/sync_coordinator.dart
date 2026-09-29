@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:math' show max;
 
 import 'package:meta/meta.dart';
 import 'package:seance_protocol/seance_protocol.dart';
@@ -791,9 +792,13 @@ class SyncCoordinator {
             // So the removal is re-dated past it and pushed again, the same
             // escalation [rescheduleOutranked] makes for a retraction.
             if (existing != null && existing.removed) {
+              // Past the later of the copy's stamps and the removal's own, so
+              // the removal never moves backwards.
               if (!app.removed) {
                 final redated = existing.asRemoved(
-                  updatedAt: app.updatedAt + 1,
+                  updatedAt: [dec.updatedAt, app.updatedAt, existing.updatedAt]
+                          .reduce(max) +
+                      1,
                 );
                 await local.putLocal(await codec.encrypt(DecryptedRecord(
                   id: redated.recordId,

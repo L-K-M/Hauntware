@@ -321,7 +321,8 @@ def decode_pairing(text):
 def one_line(name, value, limit=None):
     if not value.strip() or any(c in value for c in LINE_BREAKS):
         raise UsageError("%s must be a non-empty single line" % name)
-    if limit is not None and utf16_length(value) > limit:
+    # Measured as sent: build_proposal strips the value.
+    if limit is not None and utf16_length(value.strip()) > limit:
         raise UsageError("%s is longer than %d characters" % (name, limit))
 
 

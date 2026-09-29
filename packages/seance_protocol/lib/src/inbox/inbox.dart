@@ -47,7 +47,7 @@ const String _kAadPrefix = 'seance/v1/inbox/';
 /// so Séance hands the agent this hash itself and the agent checks the
 /// download against it. A server test pins it to the served bytes.
 const String kInboxReferenceClientSha256 =
-    '198863b0ad4ba9762ee9213ddff29939adf705e1269989287528bd26f9860f9f';
+    'e05f53abdf0a830fa88878e4ee613a0038395c45a0d2af38bd972f0a63b13dc7';
 
 /// Record-id prefixes for the two synced inbox kinds.
 const String kInboxAppIdPrefix = 'inboxapp:';
@@ -451,7 +451,7 @@ class InboxApp {
       id: id,
       name: name,
       key: keyText is String ? _unb64(keyText) : null,
-      allowedServerIds: servers.cast<String>(),
+      allowedServerIds: List<String>.unmodifiable(servers.cast<String>()),
       createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
       updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
       removed: removed,

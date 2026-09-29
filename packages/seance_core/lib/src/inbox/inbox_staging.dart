@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:developer' as developer;
 
 import 'package:crypto/crypto.dart';
 import 'package:seance_protocol/seance_protocol.dart';
@@ -58,6 +57,10 @@ final RegExp _deceptiveBlank = RegExp(
 const int _kBrailleBlank = 0x2800;
 
 bool _isInvisible(int rune) =>
+    // Printable ASCII, which is nearly every script, skips the regex.
+    (rune >= 0x20 && rune < 0x7f) ? false : _isInvisibleSlow(rune);
+
+bool _isInvisibleSlow(int rune) =>
     (rune != 0x20 &&
         (rune == _kBrailleBlank ||
             _deceptiveBlank.hasMatch(String.fromCharCode(rune)))) ||
@@ -137,16 +140,14 @@ Future<StagedScript> stageProposalScript(
   );
   final uploaded = entry.contentSha256;
   if (uploaded == null) {
-    // Every implementation in this repo hashes by default, so this is a
-    // backend that cannot; the path still names the reviewed bytes, but the
-    // second check did not happen and that should be visible.
-    developer.log(
-      'Upload returned no digest; the staged script was not re-verified',
-      name: 'seance.inbox',
-      level: 900,
+    // Every implementation in this repo hashes by default; one that cannot
+    // leaves the uploaded bytes unverified, so nothing is run.
+    throw const InboxStagingException(
+      'The server did not report a checksum for the uploaded script, so it '
+      'could not be checked against the one you reviewed.',
     );
   }
-  if (uploaded != null && uploaded.toLowerCase() != digest) {
+  if (uploaded.toLowerCase() != digest) {
     throw const InboxStagingException(
       'The uploaded script does not match the one you reviewed.',
     );
