@@ -13,6 +13,7 @@ import 'package:seance_app/theme/app_appearance.dart';
 import 'package:seance_app/theme/theme_presets.dart';
 import 'package:seance_app/ui/sync_enrollment_validation.dart';
 import 'package:seance_app/ui/terminal_appearance.dart';
+import 'package:seance_core/seance_core.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
@@ -180,6 +181,38 @@ void main() {
     expect(result.keysStored, isTrue);
     expect(result.version, state.llmConfigVersion);
     expect(await services.masterKeys.getApiKey('anthropic'), 'sk-typed');
+  });
+
+  test('the inbox crosses the link both ways', () async {
+    await state.saveServer(ServerConfig(
+      id: 's1',
+      label: 'prod-db-1',
+      host: 'db.example.com',
+      username: 'u',
+      createdAt: 1,
+      updatedAt: 1,
+    ));
+    final window = await openWindow(SettingsTab.inbox);
+    addTearDown(window.dispose);
+
+    final view = await window.inboxApps();
+    expect(view.syncConfigured, isFalse);
+    expect(view.apps, isEmpty);
+    expect(view.servers.single.label, 'prod-db-1');
+
+    // Without a sync account the app refuses, and says why, in the window.
+    await expectLater(
+      window.addInboxApp(
+        const InboxAppDraft(name: 'bots', allowedServerIds: []),
+      ),
+      throwsA(
+        isA<SettingsBackendException>().having(
+          (e) => e.message,
+          'message',
+          contains('Set up sync first'),
+        ),
+      ),
+    );
   });
 
   test('a failure in the app reaches the window with its message', () async {

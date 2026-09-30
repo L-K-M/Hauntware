@@ -11,7 +11,7 @@ import 'external_file_opener.dart';
 /// The Settings screen's tabs, in the order the screen shows them. Here
 /// rather than beside the screen because the settings window's opener names
 /// one across the isolate boundary.
-enum SettingsTab { general, appearance, assistant, files, sync }
+enum SettingsTab { general, appearance, assistant, files, sync, inbox }
 
 /// Everything the Settings screen reads and does, apart from where it runs.
 ///
@@ -87,6 +87,18 @@ abstract class SettingsBackend implements Listenable {
   Future<void> enrollSync(SyncEnrollment enrollment);
 
   Future<SyncCounts> syncNow();
+
+  /// The Inbox tab's state: connected apps and the servers they may target.
+  Future<InboxAppsView> inboxApps();
+
+  /// Connects a producer and returns its pairing string, which the screen
+  /// shows once.
+  Future<String> addInboxApp(InboxAppDraft draft);
+
+  Future<void> updateInboxApp(String appId, InboxAppDraft draft);
+
+  /// Revokes the app's token on the server and its key on every device.
+  Future<void> removeInboxApp(String appId);
 }
 
 /// Thrown by a backend whose work failed in the app's isolate, carrying the
@@ -463,4 +475,104 @@ class SyncCounts {
       SyncCounts(pulled: json['pulled'] as int, pushed: json['pushed'] as int);
 
   Map<String, dynamic> toJson() => {'pulled': pulled, 'pushed': pushed};
+}
+
+/// A server as the Inbox tab's server picker lists it.
+@immutable
+class InboxServerChoice {
+  const InboxServerChoice({required this.id, required this.label});
+
+  final String id;
+  final String label;
+
+  factory InboxServerChoice.fromJson(Map<String, dynamic> json) =>
+      InboxServerChoice(
+        id: json['id'] as String,
+        label: json['label'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {'id': id, 'label': label};
+}
+
+/// One connected app, without its key: the screen never needs it.
+@immutable
+class InboxAppSummary {
+  const InboxAppSummary({
+    required this.id,
+    required this.name,
+    required this.allowedServerIds,
+    required this.refused,
+  });
+
+  final String id;
+  final String name;
+
+  /// Empty means any server.
+  final List<String> allowedServerIds;
+
+  /// Items from this app that could not be opened or validated.
+  final int refused;
+
+  factory InboxAppSummary.fromJson(Map<String, dynamic> json) =>
+      InboxAppSummary(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        allowedServerIds: (json['servers'] as List).cast<String>(),
+        refused: json['refused'] as int,
+      );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'servers': allowedServerIds,
+    'refused': refused,
+  };
+}
+
+@immutable
+class InboxAppsView {
+  const InboxAppsView({
+    required this.syncConfigured,
+    required this.apps,
+    required this.servers,
+  });
+
+  /// The inbox rides the sync account; without one there is nothing to add.
+  final bool syncConfigured;
+  final List<InboxAppSummary> apps;
+  final List<InboxServerChoice> servers;
+
+  factory InboxAppsView.fromJson(Map<String, dynamic> json) => InboxAppsView(
+    syncConfigured: json['syncConfigured'] == true,
+    apps: [
+      for (final a in json['apps'] as List)
+        InboxAppSummary.fromJson((a as Map).cast()),
+    ],
+    servers: [
+      for (final s in json['servers'] as List)
+        InboxServerChoice.fromJson((s as Map).cast()),
+    ],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'syncConfigured': syncConfigured,
+    'apps': [for (final a in apps) a.toJson()],
+    'servers': [for (final s in servers) s.toJson()],
+  };
+}
+
+/// What the add and edit forms send.
+@immutable
+class InboxAppDraft {
+  const InboxAppDraft({required this.name, required this.allowedServerIds});
+
+  final String name;
+  final List<String> allowedServerIds;
+
+  factory InboxAppDraft.fromJson(Map<String, dynamic> json) => InboxAppDraft(
+    name: json['name'] as String,
+    allowedServerIds: (json['servers'] as List).cast<String>(),
+  );
+
+  Map<String, dynamic> toJson() => {'name': name, 'servers': allowedServerIds};
 }

@@ -13,6 +13,7 @@ import 'external_file_opener.dart';
 import 'file_stores.dart';
 import 'identity_audit_log.dart';
 import 'identity_bookmarks.dart';
+import 'inbox_stores.dart';
 import 'managed_remote_file_store.dart';
 import 'secure_master_key.dart';
 
@@ -99,6 +100,12 @@ class AppServices {
   final CommandStats commandStats;
   final ManagedRemoteFileStore managedRemoteFiles;
   final IdentityFileBookmarks identityBookmarks;
+
+  /// The command inbox's connected apps (keys in [vault]), handled statuses
+  /// and this device's copy of the server queue. See docs/INBOX.md.
+  final InboxAppStore inboxApps;
+  final InboxStatusStore inboxStatuses;
+  final InboxCacheStore inboxCache;
   final IdentityAuditLog identityAudit;
   /// Null while the vault is locked (keystore unavailable at bootstrap — see
   /// [LockedSecretVault] and [unlockVaultFromKeystore]).
@@ -142,6 +149,9 @@ class AppServices {
     required this.commandStats,
     required this.managedRemoteFiles,
     required this.identityBookmarks,
+    required this.inboxApps,
+    required this.inboxStatuses,
+    required this.inboxCache,
     required this.identityAudit,
     required this.vaultKey,
     required this.settings,
@@ -213,7 +223,8 @@ class AppServices {
       }
     }
 
-    return AppServices._(
+    late final AppServices services;
+    services = AppServices._(
       configStore: configStore,
       snippetStore: snippetStore,
       tombstoneStore: tombstoneStore,
@@ -229,11 +240,18 @@ class AppServices {
       commandStats: await commandStatsStore.load(),
       managedRemoteFiles: managedRemoteFiles,
       identityBookmarks: IdentityFileBookmarks(),
+      inboxApps: FileInboxAppStore(
+        File(p('inbox_apps.json')),
+        () => services.vault,
+      ),
+      inboxStatuses: FileInboxStatusStore(File(p('inbox_statuses.json'))),
+      inboxCache: FileInboxCacheStore(File(p('inbox_cache.json'))),
       identityAudit: IdentityAuditLog(File(p('identity_reads.jsonl'))),
       vaultKey: vaultKey,
       settings: settings,
       rekeyJournal: vaultStore,
     );
+    return services;
   }
 
   /// Re-probe the OS keystore and, if it's back, unlock the vault in place
@@ -621,6 +639,8 @@ class AppServices {
       syncSecrets: settings.syncSecrets,
       secretVault: settings.syncSecrets ? vault : null,
       tombstoneStore: tombstoneStore,
+      inboxAppStore: inboxApps,
+      inboxStatusStore: inboxStatuses,
     );
     try {
       return await _withSyncClient(baseUrl, (client) {
@@ -637,6 +657,46 @@ class AppServices {
       // the old model and key until some unrelated edit happened to rebuild
       // it.
       _assistantSettingsChanged = assistant?.applied ?? false;
+    }
+  }
+
+  /// Run [action] against the inbox with this account's session. Throws
+  /// [StateError] when sync is not set up or the vault is locked, the same
+  /// conditions [runSync] refuses on: the inbox rides the sync account, and
+  /// app keys live in the vault.
+  Future<T> withInbox<T>(Future<T> Function(InboxService inbox) action) async {
+    final baseUrl = settings.syncBaseUrl;
+    final token = await masterKeys.getApiKey(syncTokenKeyName);
+    if (baseUrl == null || baseUrl.isEmpty || token == null) {
+      throw StateError('Sync is not set up');
+    }
+    if (vaultKey == null) await unlockVaultFromKeystore();
+    if (vaultKey == null) {
+      throw StateError(
+        'The vault is locked: the OS keyring is unavailable. Unlock the '
+        'keyring and try again.',
+      );
+    }
+    try {
+      return await _withSyncClient(baseUrl, (client) {
+        client.token = token;
+        return action(InboxService(
+          api: client,
+          apps: inboxApps,
+          statuses: inboxStatuses,
+          cache: inboxCache,
+        ));
+      });
+    } on ApiError catch (error) {
+      // A plain 404 (not the server's own `not_found`) is a sync server
+      // from before the inbox, which is worth saying in those words.
+      if (error.code != _plainNotFound) rethrow;
+      throw StateError(
+        'The sync server answered "not found" for the command inbox. It is '
+        'probably from before the inbox: update it (on the server: '
+        './update.sh) and try again. If it is up to date, check what is in '
+        'front of it (a reverse proxy) for the /v1/apps and /v1/inbox paths.',
+      );
     }
   }
 
@@ -990,3 +1050,5 @@ class AppServices {
     return HttpSyncClient(baseUrl: url);
   }
 }
+
+const String _plainNotFound = 'http_404';

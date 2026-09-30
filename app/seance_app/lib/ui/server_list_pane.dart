@@ -9,6 +9,7 @@ import '../app_state.dart';
 import '../main.dart';
 import '../theme.dart';
 import 'app_menus.dart';
+import 'inbox_view.dart';
 import 'server_editor.dart';
 import 'server_filter.dart';
 import 'server_grouping.dart';
@@ -341,6 +342,8 @@ class _ServerListPaneState extends State<ServerListPane> {
         // A newer release exists: a dismissible banner above the list.
         if (update != null)
           _UpdateBanner(info: update, onDismiss: state.dismissUpdateNotice),
+        // Proposals from connected apps wait here for review.
+        InboxBanner(state: state),
         if (showFilter)
           SidebarFilterField(
             key: const ValueKey('servers.filter'),

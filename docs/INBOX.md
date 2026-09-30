@@ -2,9 +2,9 @@
 
 Status: implemented. The wire format is `seance_protocol`'s
 `src/inbox/inbox.dart`, the client is `seance_core`'s `src/inbox/`, the
-server is `seance_sync_server`'s `inbox_handlers.dart`. The app's parts
-(Settings > Inbox, the banner, the review and staging) land separately,
-after these. Where the code differs from the first draft of this
+server is `seance_sync_server`'s `inbox_handlers.dart`, and the app's
+parts are Settings > Inbox (`ui/inbox_settings.dart`) and the review
+(`ui/inbox_view.dart`). Where the code differs from the first draft of this
 document, this document was updated to match.
 
 ## Problem

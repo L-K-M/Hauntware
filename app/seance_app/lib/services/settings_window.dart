@@ -73,6 +73,10 @@ abstract final class _Link {
   static const setSyncPrefs = 'setSyncPrefs';
   static const enrollSync = 'enrollSync';
   static const syncNow = 'syncNow';
+  static const inboxApps = 'inboxApps';
+  static const addInboxApp = 'addInboxApp';
+  static const updateInboxApp = 'updateInboxApp';
+  static const removeInboxApp = 'removeInboxApp';
   static const requestAppExit = 'requestAppExit';
 
   // App → window.
@@ -296,6 +300,18 @@ class SettingsWindowHost {
         await _backend.enrollSync(SyncEnrollment.fromJson(map()));
       case _Link.syncNow:
         return (await _backend.syncNow()).toJson();
+      case _Link.inboxApps:
+        return (await _backend.inboxApps()).toJson();
+      case _Link.addInboxApp:
+        return await _backend.addInboxApp(InboxAppDraft.fromJson(map()));
+      case _Link.updateInboxApp:
+        final json = map();
+        await _backend.updateInboxApp(
+          json['app'] as String,
+          InboxAppDraft.fromJson((json['draft'] as Map).cast()),
+        );
+      case _Link.removeInboxApp:
+        await _backend.removeInboxApp(argument! as String);
       case _Link.requestAppExit:
         return (await _requestAppExit()).name;
       default:
@@ -520,6 +536,22 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
   @override
   Future<SyncCounts> syncNow() async =>
       SyncCounts.fromJson(_map(await _call(_Link.syncNow)));
+
+  @override
+  Future<InboxAppsView> inboxApps() async =>
+      InboxAppsView.fromJson(_map(await _call(_Link.inboxApps)));
+
+  @override
+  Future<String> addInboxApp(InboxAppDraft draft) async =>
+      (await _call(_Link.addInboxApp, draft.toJson()))! as String;
+
+  @override
+  Future<void> updateInboxApp(String appId, InboxAppDraft draft) =>
+      _call(_Link.updateInboxApp, {'app': appId, 'draft': draft.toJson()});
+
+  @override
+  Future<void> removeInboxApp(String appId) =>
+      _call(_Link.removeInboxApp, appId);
 
   /// Whether the application may quit, as the app's isolate decides it.
   ///
