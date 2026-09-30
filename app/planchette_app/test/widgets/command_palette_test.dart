@@ -43,10 +43,14 @@ void main() {
   group('CommandPalette', () {
     late List<String> ran;
     late List<PaletteCommand> commands;
+    PaletteCommand command(String path, String label) => PaletteCommand(
+      id: label,
+      path: path,
+      label: label,
+      run: () => ran.add(label),
+    );
     setUp(() {
       ran = [];
-      PaletteCommand command(String group, String label) =>
-          PaletteCommand(group: group, label: label, run: () => ran.add(label));
       commands = [
         command('File', 'New'),
         command('File', 'Save'),
@@ -117,8 +121,8 @@ void main() {
       // matches were given, so the two tied and menu order decided.
       expect(fuzzyMatch('pe', 'Replace…')!.score, lessThanOrEqualTo(-1));
       commands = [
-        PaletteCommand(group: 'Open', label: 'Recent', run: () {}),
-        PaletteCommand(group: 'Find', label: 'Replace…', run: () {}),
+        PaletteCommand(id: 'r', path: 'Open', label: 'Recent', run: () {}),
+        PaletteCommand(id: 'x', path: 'Find', label: 'Replace…', run: () {}),
       ];
       await open(tester);
       await type(tester, 'pe');
@@ -182,6 +186,56 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(CommandPalette), findsOneWidget);
+      expect(ran, isEmpty);
+    });
+
+    testWidgets('a keyword matches a command and says so', (tester) async {
+      commands = [
+        PaletteCommand(
+          id: 'dedupe',
+          path: 'Text > Lines',
+          label: 'Remove Duplicate Lines…',
+          description: 'Deletes repeated lines, keeping the first of each.',
+          keywords: const ['dedupe', 'uniq'],
+          run: () => ran.add('dedupe'),
+        ),
+      ];
+      await open(tester);
+      await type(tester, 'dedupe');
+
+      expect(find.text('Remove Duplicate Lines…'), findsOneWidget);
+      expect(find.text('Text > Lines'), findsOneWidget);
+      expect(find.textContaining('matches "dedupe"'), findsOneWidget);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(ran, ['dedupe']);
+    });
+
+    testWidgets('a disabled command stays listed greyed and does not run', (
+      tester,
+    ) async {
+      commands = [
+        PaletteCommand(
+          id: 'sort',
+          path: 'Text > Lines',
+          label: 'Sort Lines…',
+          description: 'Orders lines alphabetically.',
+          run: () => ran.add('sort'),
+          enabled: false,
+        ),
+        command('File', 'New'),
+      ];
+      await open(tester);
+      await type(tester, 'sort');
+
+      expect(find.text('Sort Lines…'), findsOneWidget);
+      expect(find.text('Orders lines alphabetically.'), findsOneWidget);
+      await tester.tap(find.text('Sort Lines…'));
+      await tester.pumpAndSettle();
+      expect(ran, isEmpty);
+      expect(find.byType(CommandPalette), findsOneWidget);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
       expect(ran, isEmpty);
     });
   });
