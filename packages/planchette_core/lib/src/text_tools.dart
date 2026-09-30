@@ -1071,15 +1071,10 @@ int _indentWidth(TextToolRun run) {
       : indentation.width;
 }
 
-/// The visual column a leading run of spaces and tabs reaches at
-/// [width]-wide stops.
-int _indentColumn(String line, int width) {
-  var column = 0;
+/// The length of [line]'s leading run of spaces and tabs.
+int _indentEnd(String line) {
   var at = 0;
   while (at < line.length && _isSpaceOrTab(line.codeUnitAt(at))) {
-    column = line.codeUnitAt(at) == _tabUnit
-        ? column + width - column % width
-        : column + 1;
     at++;
   }
   return at;
@@ -1096,7 +1091,7 @@ TextToolOutcome _indentationToSpaces(TextToolRun run) {
   final edits = <_Edit>[];
   for (var i = 0; i < block.contents.length; i++) {
     final content = block.contents[i];
-    final end = _indentColumn(content, width);
+    final end = _indentEnd(content);
     if (end == 0) continue;
     final replacement = ' ' * _indentColumnsTo(content, end, width);
     if (content.substring(0, end) != replacement) {
@@ -1123,7 +1118,7 @@ TextToolOutcome _indentationToTabs(TextToolRun run) {
   final edits = <_Edit>[];
   for (var i = 0; i < block.contents.length; i++) {
     final content = block.contents[i];
-    final end = _indentColumn(content, width);
+    final end = _indentEnd(content);
     if (end == 0) continue;
     final column = _indentColumnsTo(content, end, width);
     final replacement = '\t' * (column ~/ width) + ' ' * (column % width);
