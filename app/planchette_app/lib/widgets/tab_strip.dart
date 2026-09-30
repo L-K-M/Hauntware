@@ -19,13 +19,13 @@ typedef TabStripItem = ({
 
 /// The window's single chrome row: document tabs, then the new-tab button
 /// and the file actions pinned at the trailing edge. The tabs take the
-/// sibling apps' shape (Séance's terminal tabs, Poltergeist's pane tabs):
-/// flat chips from the leading edge, divided by hairlines, over a rule;
-/// the active one filled with the editor's surface and underlined in the
-/// accent. A dirty tab shows a dot where its close button appears on
-/// hover. Middle-click closes a tab, a right click asks the host for its
-/// tab menu, a mouse wheel scrolls the strip, and a newly active tab
-/// scrolls into view.
+/// family's shape, Poltergeist's pane tabs (its 10 §6), which Séance's
+/// terminal tabs share: flat chips from the leading edge, divided by
+/// hairlines, over a rule; the active one filled with the editor's
+/// surface, with no accent line. A dirty tab shows a dot where its close
+/// button appears on hover. Middle-click closes a tab, a right click asks
+/// the host for its tab menu, a mouse wheel scrolls the strip, and a newly
+/// active tab scrolls into view.
 class TabStrip extends StatefulWidget {
   const TabStrip({
     super.key,
@@ -284,9 +284,6 @@ class _TabState extends State<_Tab> {
   /// Long enough to notice between two glances, short enough not to linger.
   static const _flashDuration = Duration(milliseconds: 700);
 
-  /// The active tab's underline, as thick as Séance's.
-  static const _accentWidth = 2.0;
-
   bool _flashing = false;
 
   /// The last flash request this tab reacted to. Initialised from the item,
@@ -425,16 +422,10 @@ class _TabState extends State<_Tab> {
                       ? scheme.surfaceContainerHighest
                       : Colors.transparent,
                   // A hairline after every tab tells inactive tabs apart
-                  // while they show no close button (Poltergeist's pane
-                  // tabs); the active one is underlined (Séance's).
+                  // while they show no close button, as in Poltergeist's
+                  // pane tabs, which keep the accent off the tabs.
                   border: BorderDirectional(
                     end: BorderSide(color: scheme.outlineVariant),
-                    bottom: BorderSide(
-                      width: _accentWidth,
-                      color: widget.active
-                          ? scheme.primary
-                          : Colors.transparent,
-                    ),
                   ),
                 ),
                 foregroundDecoration: _focused

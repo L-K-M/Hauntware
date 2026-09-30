@@ -385,8 +385,9 @@ void main() {
                 .decoration!
             as BoxDecoration;
 
-    // Séance's terminal tabs and Poltergeist's pane tabs: flat chips
-    // from the leading edge, each followed by a hairline.
+    // Poltergeist's pane tabs, which Séance's share: flat chips from the
+    // leading edge, each followed by a hairline, and no accent line; the
+    // active one takes the editor's surface, over the strip's rule.
     expect(tester.getTopLeft(find.byKey(ValueKey('tab-${active.id}'))).dx, 0);
     final open = chip(active.name);
     final other = chip(workspace.documents[1].name);
@@ -394,15 +395,10 @@ void main() {
     for (final decoration in [open, other]) {
       final border = decoration.border! as BorderDirectional;
       expect(border.end.color, scheme.outlineVariant);
+      expect(border.bottom, BorderSide.none);
     }
-    // The active tab is underlined in the accent, over the strip's rule.
-    final underline = (open.border! as BorderDirectional).bottom;
-    expect(underline.color, scheme.primary);
-    expect(underline.width, 2);
-    expect(
-      (other.border! as BorderDirectional).bottom.color,
-      Colors.transparent,
-    );
+    expect(open.color, scheme.surface);
+    expect(other.color, Colors.transparent);
     final rule = tester
         .widget<Container>(
           find.descendant(of: strip, matching: find.byType(Container)).first,
