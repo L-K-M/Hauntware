@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/family_hues.dart';
 import 'package:seance_app/theme.dart';
+import 'package:seance_app/ui/sidebar_panel.dart';
 
 const _minimumNonTextContrast = 3.0; // WCAG non-text contrast
 const _luminanceOffset = 0.05; // WCAG relative-luminance formula
@@ -49,6 +50,29 @@ void main() {
                 reason: '${hue.name} glyph on $state (${brightness.name})',
               );
             }
+          }
+        }
+      });
+
+      test('every glyph hue stays ≥ 3:1 on its open side-panel tab', () {
+        // The panel sits on the scaffold on wide layouts and in the end
+        // drawer on narrow ones.
+        final surfaces = <(String, Color)>[
+          ('panel', scheme.surface),
+          ('drawer', scheme.surfaceContainerLow),
+        ];
+        for (final hue in FamilyHue.values) {
+          final glyph = palette!.glyph(hue);
+          for (final (name, surface) in surfaces) {
+            final wash = Color.alphaBlend(
+              glyph.withValues(alpha: panelTabWashAlpha),
+              surface,
+            );
+            expect(
+              _contrast(glyph, wash),
+              greaterThanOrEqualTo(_minimumNonTextContrast),
+              reason: '${hue.name} on its $name tab wash (${brightness.name})',
+            );
           }
         }
       });

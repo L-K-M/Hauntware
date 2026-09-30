@@ -15,6 +15,7 @@ import 'package:seance_app/ui/adaptive_shell.dart';
 import 'package:seance_app/ui/header_toolbar.dart';
 import 'package:seance_app/ui/macos_toolbar_band.dart';
 import 'package:seance_app/ui/server_list_pane.dart';
+import 'package:seance_app/ui/sidebar_panel.dart';
 import 'package:seance_app/ui/terminal_pane.dart';
 import 'package:seance_core/seance_core.dart';
 
@@ -175,7 +176,10 @@ void main() {
       find.byKey(AdaptivePaneLayout.utilityPaneKey),
     );
     expect(utility.top, header.bottom + 1);
-    expect(tester.getRect(find.byType(TabBar)).top, utility.top);
+    expect(
+      tester.getRect(find.byKey(SidebarPanel.tabStripKey)).top,
+      utility.top,
+    );
 
     // Generate command moved up into the header; the strip keeps "+".
     expect(find.byKey(HeaderToolbar.generateCommandKey), findsOneWidget);

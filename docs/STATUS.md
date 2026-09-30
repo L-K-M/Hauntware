@@ -26,6 +26,23 @@ is no longer locked while a reload runs: Planchette now keeps the view's
 lock apart from the host's, and a view lock would refuse the reload itself.
 The two server-drift reload tests caught that before the fix.
 
+The side panel's tabs now follow Poltergeist's inspector header: a centred
+row of icon tabs in their family hues, named by tooltips, the open one
+filled on a wash of its hue (`panelTabWashAlpha`, 0.16, Poltergeist's
+value). `family_hues_test.dart` holds every hue at 3:1 on that wash over
+the panel and the drawer; `family_hues_capture_test.dart` checks the hues,
+the wash and the open tab's semantics, and the before/after pair is in
+`docs/captures/panel-tabs/`.
+
+On macOS, ⌘W and ⇧⌘W close the Settings window while it is key. Its host
+claims them with a local key-down monitor before AppKit dispatches the
+event: the menu bar has no Close item, and the chord went on to the main
+window, whose ⌘W closed a terminal tab. Not verified here: there is no
+macOS host in this environment, so CI's macOS build is the compile check,
+and the behaviour needs a manual check on a Mac (open Settings with a
+terminal tab open, press ⌘W: Settings hides and the tab stays; ⌘, brings
+Settings back).
+
 macOS now preserves Command shortcuts injected with only the aggregate
 Command flag, such as Easydict's synthetic Command+C. The native controller
 supplies a missing device-side bit before Flutter processes key-down and
