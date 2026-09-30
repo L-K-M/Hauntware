@@ -62,6 +62,8 @@ android {
     }
 
     defaultConfig {
+        // Frozen after the first shipped release: changing applicationId makes
+        // new builds install as a separate app instead of upgrading in place.
         applicationId = "ch.lkmc.poltergeist"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
