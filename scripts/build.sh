@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 # Build the desktop app for this host and stage it under dist/.
-# Usage: scripts/build.sh [--debug] [--install] [app]
+# Usage: scripts/build.sh [--debug] [--install] [--flatpak] [app]
 # --install additionally installs the app for the current user/host.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mode=release
 install=false
+flatpak=false
 for argument in "$@"; do
   case "$argument" in
     --debug) mode=debug ;;
     --install) install=true ;;
+    --flatpak) flatpak=true ;;
     app) ;;
     --help|-h)
-      echo 'Usage: scripts/build.sh [--debug] [--install] [app]'
+      echo 'Usage: scripts/build.sh [--debug] [--install] [--flatpak] [app]'
       exit 0 ;;
     *) echo "Unknown argument: $argument" >&2; exit 1 ;;
   esac
@@ -53,6 +55,11 @@ case "$target" in
     cp "$root/media-sources/icon.png" "$destination/planchette.png"
     if [[ "$mode" == release ]]; then
       "$root/scripts/package-linux.sh" --bundle "$source" --appimage=best-effort
+    elif $flatpak; then
+      "$root/scripts/package-linux.sh" --bundle "$source" --skip-appimage
+    fi
+    if $flatpak; then
+      "$root/scripts/build-flatpak.sh" "$(find "$root/dist" -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
     fi
     if $install; then
       installed="$HOME/.local/opt/planchette"

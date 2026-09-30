@@ -358,6 +358,73 @@ jobs:
           # at the source, for every leg.
           fail_on_unmatched_files: true
 
+  # Repack the Linux .deb as a Flatpak bundle — the same files the .deb
+  # installs, relaid under the /app prefix.
+  flatpak:
+    name: Linux Flatpak
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    steps:
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned: the publish path must not follow a mutable tag)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend; flatpak-builder repacks
+      # the .deb.
+      - name: Install Linux desktop toolchain
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+          flatpak flatpak-builder elfutils
+          && { sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true; }
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Resolve app dependencies
+        working-directory: app/planchette_app
+        run: flutter pub get
+      - name: Build
+        working-directory: app/planchette_app
+        run: flutter build linux --release
+      - name: Package and repack
+        shell: bash
+        run: |
+          scripts/package-linux.sh \
+            --bundle "$(ls -d app/planchette_app/build/linux/*/release/bundle)" \
+            --output-dir . --skip-appimage
+          scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: dist/planchette-linux-x64.flatpak
+          fail_on_unmatched_files: true
+
   # Every release carries SHA-256 checksums for all assets — SHA256SUMS
   # beside the assets, the same sums in the notes — computed by CI after
   # all assets attach (00 D23's decision change: an integrity channel,
@@ -366,7 +433,7 @@ jobs:
   # floor check below makes even a silent upload miss loud.
   sums:
     name: Checksums
-    needs: client
+    needs: [client, flatpak]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -382,10 +449,11 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$REPO" \
             --dir "$assets_dir" --clobber
 
-          # All five desktop assets must exist before checksums or publication.
+          # All six desktop assets must exist before checksums or publication.
           floor_missing=()
           for asset in 'planchette_*.deb' \
                        'planchette-linux-x64.AppImage' \
+                       'planchette-linux-x64.flatpak' \
                        'planchette-linux-x64.tar.gz' \
                        'planchette-macos-universal.zip' \
                        'planchette-windows-x64.zip'; do
