@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- On a Mac, ⌘W and ⇧⌘W close the Settings window when it is in front.
+  ⌘W used to close a terminal tab in the window behind it and leave
+  Settings open.
 - The side panel's tabs look like Poltergeist's inspector tabs: a
   centred row of icons in their colours, each named by its tooltip,
   with the open tab's icon filled on a tint of its colour. They replace

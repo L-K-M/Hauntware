@@ -34,6 +34,15 @@ the panel and the drawer; `family_hues_capture_test.dart` checks the hues,
 the wash and the open tab's semantics, and the before/after pair is in
 `docs/captures/panel-tabs/`.
 
+On macOS, ⌘W and ⇧⌘W close the Settings window while it is key. Its host
+claims them with a local key-down monitor before AppKit dispatches the
+event: the menu bar has no Close item, and the chord went on to the main
+window, whose ⌘W closed a terminal tab. Not verified here: there is no
+macOS host in this environment, so CI's macOS build is the compile check,
+and the behaviour needs a manual check on a Mac (open Settings with a
+terminal tab open, press ⌘W: Settings hides and the tab stays; ⌘, brings
+Settings back).
+
 macOS now preserves Command shortcuts injected with only the aggregate
 Command flag, such as Easydict's synthetic Command+C. The native controller
 supplies a missing device-side bit before Flutter processes key-down and
