@@ -1,5 +1,7 @@
 import 'package:planchette_core/planchette_core.dart';
 
+import 'text_tool_history.dart';
+
 /// User-facing editor copy. Hosts can adapt their existing localization system
 /// without taking a dependency on another application's generated resources.
 class EditorStrings {
@@ -83,8 +85,108 @@ class EditorStrings {
     'convertIndentationToTabs' => 'Convert Indentation to Tabs',
     'straightenQuotes' => 'Straighten Quotes',
     'zapGremlins' => 'Zap Gremlins',
+    'prefixSuffixLines' => 'Prefix/Suffix Lines',
+    'numberLines' => 'Number Lines',
+    'joinLinesWith' => 'Join Lines With',
     _ => id,
   };
+
+  /// The menu label: a tool with options ends in an ellipsis, because the
+  /// item opens the tool bar rather than running at defaults.
+  String textToolMenuLabel(String id) {
+    final tool = textToolById(id);
+    final name = textToolName(id);
+    return tool != null && tool.options.isNotEmpty ? '$name…' : name;
+  }
+
+  /// An option's label in the tool bar, keyed by tool and option id.
+  String textToolOptionName(String toolId, String optionId) =>
+      switch ((toolId, optionId)) {
+        ('sortLines', 'order') => 'Order',
+        ('sortLines', 'ignoreCase') => 'Ignore case',
+        ('sortLines', 'numbersByValue') => 'Numbers by value',
+        ('sortLines', 'byLength') => 'By length',
+        ('sortLines', 'ignoreLeadingWhitespace') => 'Ignore leading whitespace',
+        ('sortLines', 'keepFirstLine') => 'Leave first line in place',
+        ('removeDuplicateLines', 'adjacentOnly') => 'Adjacent only',
+        ('removeDuplicateLines', 'ignoreCase') => 'Ignore case',
+        ('removeDuplicateLines', 'ignoreSurroundingWhitespace') =>
+          'Ignore surrounding whitespace',
+        ('removeDuplicateLines', 'keepBlankLines') => 'Keep blank lines',
+        ('removeDuplicateLines', 'removeEveryCopy') => 'Remove every copy',
+        ('zapGremlins', 'controls') => 'Control characters',
+        ('zapGremlins', 'invisible') => 'Invisible characters',
+        ('zapGremlins', 'bidi') => 'Bidirectional controls',
+        ('zapGremlins', 'damaged') => 'Damaged encoding',
+        ('zapGremlins', 'nonAscii') => 'All non-ASCII',
+        ('zapGremlins', 'action') => 'Action',
+        ('zapGremlins', 'character') => 'Replacement character',
+        ('prefixSuffixLines', 'mode') => 'Mode',
+        ('prefixSuffixLines', 'where') => 'Where',
+        ('prefixSuffixLines', 'text') => 'Text',
+        ('prefixSuffixLines', 'skipBlankLines') => 'Skip blank lines',
+        ('numberLines', 'mode') => 'Mode',
+        ('numberLines', 'start') => 'Start at',
+        ('numberLines', 'step') => 'Step by',
+        ('numberLines', 'separator') => 'Separator',
+        ('numberLines', 'padding') => 'Padding',
+        ('joinLinesWith', 'separator') => 'Separator',
+        ('joinLinesWith', 'trim') => 'Trim lines',
+        ('joinLinesWith', 'skipBlankLines') => 'Skip blank lines',
+        _ => optionId,
+      };
+
+  /// A choice's display name, keyed by its id — choices share ids across
+  /// tools where the words already agree.
+  String textToolChoiceName(String choiceId) => switch (choiceId) {
+    'ascending' => 'A to Z',
+    'descending' => 'Z to A',
+    'insert' => 'Insert',
+    'remove' => 'Remove',
+    'add' => 'Add',
+    'prefix' => 'Prefix',
+    'suffix' => 'Suffix',
+    'none' => 'None',
+    'spaces' => 'Spaces',
+    'zeros' => 'Zeros',
+    'delete' => 'Delete',
+    'escape' => r'Escape as \u{…}',
+    'replace' => 'Replace with character',
+    'entity' => 'Numeric entity',
+    _ => choiceId,
+  };
+
+  /// A run's short option summary for Repeat and Recent rows — the choice
+  /// options that differ from their defaults, so "Repeat Sort Lines (Z to
+  /// A)" says what the re-run does. Empty when nothing distinguishes it.
+  String textToolOptionsSummary(TextToolRunRecord record) {
+    final tool = textToolById(record.toolId);
+    if (tool == null) return '';
+    final parts = <String>[
+      for (final option in tool.options)
+        if (option is ChoiceOption &&
+            record.options[option.id] is String &&
+            record.options[option.id] != option.defaultValue)
+          textToolChoiceName(record.options[option.id] as String),
+    ];
+    return parts.join(', ');
+  }
+
+  /// The Repeat row: "Repeat Sort Lines (Z to A)", or "Repeat" alone before
+  /// the first run.
+  String repeatTextToolLabel(TextToolRunRecord? record) {
+    if (record == null) return 'Repeat';
+    final summary = textToolOptionsSummary(record);
+    final name = textToolName(record.toolId);
+    return summary.isEmpty ? 'Repeat $name' : 'Repeat $name ($summary)';
+  }
+
+  /// A Recent row: "Sort Lines (Z to A)".
+  String recentTextToolLabel(TextToolRunRecord record) {
+    final summary = textToolOptionsSummary(record);
+    final name = textToolName(record.toolId);
+    return summary.isEmpty ? name : '$name ($summary)';
+  }
 
   /// The submenu a [TextToolGroup] becomes in the Text menu.
   String textToolGroupName(TextToolGroup group) => switch (group) {
@@ -114,6 +216,10 @@ class EditorStrings {
     'straightenQuotes' => 'Replaces curly quotes with straight ASCII quotes.',
     'zapGremlins' =>
       'Removes or replaces characters that do not belong in text.',
+    'prefixSuffixLines' =>
+      'Adds or removes the same text at the start or end of each line.',
+    'numberLines' => 'Adds or removes line numbers.',
+    'joinLinesWith' => 'Joins the selected lines with a separator.',
     _ => '',
   };
 
@@ -134,6 +240,9 @@ class EditorStrings {
     'convertIndentationToTabs' => const ['spaces to tabs', 'entab'],
     'straightenQuotes' => const ['smart quotes', 'typographic quotes'],
     'zapGremlins' => const ['control characters', 'invisible characters'],
+    'prefixSuffixLines' => const ['quote level', 'comment out', 'affix'],
+    'numberLines' => const ['line numbers', 'enumerate'],
+    'joinLinesWith' => const ['join', 'unlines', 'flatten'],
     _ => const [],
   };
 
@@ -214,6 +323,48 @@ class EditorStrings {
     TextToolRefusal.resultNotText => 'the result is binary, not text',
     TextToolRefusal.tooLarge => 'the result is too large to save',
     TextToolRefusal.requiresTabs => 'this format requires tab indentation',
+  };
+
+  // ── Tool bar ──
+
+  String get textToolApply => 'Apply';
+  String get textToolClose => 'Close';
+  String get textToolAppliesTo => 'Applies to';
+
+  /// The scope radio for a selection, as in "12 selected lines".
+  String textToolSelectedLines(int count) => '${_lines(count)} selected';
+
+  /// The scope radio for the document, as in "Whole document, 310 lines".
+  String textToolWholeDocument(int count) => 'Whole document, ${_lines(count)}';
+
+  /// The scope line with no selection: only the document exists.
+  String textToolNothingSelected(int count) =>
+      'Nothing selected: whole document, ${_lines(count)}';
+
+  /// The count line under the bar, such as "9 of 12 lines will move".
+  /// Past the preview limit the count is deferred to Apply.
+  String textToolPreview(TextToolReport report) {
+    if (report.outcome case TextToolChanged(:final changed, :final scope)) {
+      return _previewText(report.tool.id, changed, scope);
+    }
+    return switch (report.outcome) {
+      TextToolRefused(:final reason) => 'not applied, ${_refusalText(reason)}',
+      TextToolUnchanged() => 'nothing to change',
+      _ => '',
+    };
+  }
+
+  /// Shown instead of a count on a buffer too large to dry-run.
+  String get textToolPreviewDeferred => 'count is computed on Apply';
+
+  String _previewText(String id, int changed, int scope) => switch (id) {
+    'sortLines' => '$changed of ${_lines(scope)} will move',
+    'removeDuplicateLines' => 'will remove $changed of ${_lines(scope)}',
+    'zapGremlins' => 'will zap ${_plural(changed, 'gremlin')}',
+    'prefixSuffixLines' => 'will change $changed of ${_lines(scope)}',
+    'numberLines' => 'will renumber ${_lines(scope)}',
+    'joinLinesWith' => 'will join ${_lines(changed)}',
+    _ => 'will change $scope units',
   };
 
   String _lines(int count) => _plural(count, 'line');

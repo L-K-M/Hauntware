@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:planchette_editor/planchette_editor.dart';
 
 import 'planchette_app.dart';
 import 'services/app_settings.dart';
@@ -23,6 +24,7 @@ Future<void> main(List<String> arguments) async {
   final workspace = DocumentWorkspace(
     store: LocalDocumentStore(),
     dialogs: AppDocumentDialogs(navigatorKey),
+    toolHistory: TextToolHistory.decode(settings.value.recentTextTools),
   );
   final desktop = DesktopWindow(
     confirmQuit: () async {

@@ -1,5 +1,6 @@
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
@@ -264,6 +265,191 @@ void main() {
       c.text.value = const TextEditingValue(text: 'z');
       await tester.pump();
       expect(find.textContaining('Sort Lines'), findsNothing);
+    });
+  });
+
+  group('tool bar', () {
+    testWidgets('opens with declared options and a dry-run count', (
+      tester,
+    ) async {
+      final c = await pumpEditor(tester, 'b\na\nc');
+
+      c.openTextTool('sortLines');
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+
+      expect(c.toolBarOpen, isTrue);
+      expect(c.toolBarTool?.id, 'sortLines');
+      expect(c.toolBarOptions['order'], 'ascending');
+      expect(find.text('Order'), findsOneWidget);
+      expect(find.text('Applies to'), findsOneWidget);
+      expect(find.text('2 of 3 lines will move'), findsOneWidget);
+    });
+
+    testWidgets('changing an option re-runs the preview', (tester) async {
+      final c = await pumpEditor(tester, 'x\nc\na\nb');
+      c.openTextTool('sortLines');
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(find.text('4 of 4 lines will move'), findsOneWidget);
+
+      // 'Leave first line in place' pins x; c, a and b still reorder.
+      await tester.tap(find.text('Leave first line in place'));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(c.toolBarOptions['keepFirstLine'], isTrue);
+      expect(find.text('3 of 4 lines will move'), findsOneWidget);
+    });
+
+    testWidgets('a text option feeds the run', (tester) async {
+      final c = await pumpEditor(tester, 'a\nb');
+      c.openTextTool('prefixSuffixLines');
+      await tester.pump();
+
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (w) => w is TextField && w.decoration?.labelText == 'Text',
+        ),
+        '> ',
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(c.toolBarOptions['text'], '> ');
+      expect(find.text('will change 2 of 2 lines'), findsOneWidget);
+
+      await tester.tap(find.text('Apply'));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(c.text.text, '> a\n> b');
+      expect(c.toolBarOpen, isFalse);
+    });
+
+    testWidgets('the scope radio reruns on the whole document', (tester) async {
+      final c = await pumpEditor(tester, 'c\nb\na');
+      c.text.selection = const TextSelection(baseOffset: 0, extentOffset: 3);
+      c.openTextTool('sortLines');
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(find.text('2 lines selected'), findsOneWidget);
+      expect(c.toolBarWholeDocument, isFalse);
+
+      await tester.tap(find.text('Whole document, 3 lines'));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(c.toolBarWholeDocument, isTrue);
+
+      await tester.tap(find.text('Apply'));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(c.text.text, 'a\nb\nc');
+    });
+
+    testWidgets('opens pre-filled with the options the tool last ran', (
+      tester,
+    ) async {
+      final c = await pumpEditor(tester, 'b\na');
+      c.toolHistory.record('sortLines', {'order': 'descending'});
+
+      c.openTextTool('sortLines');
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(c.toolBarOptions['order'], 'descending');
+    });
+
+    testWidgets('opening find or go to line closes the bar', (tester) async {
+      final c = await pumpEditor(tester, 'b\na');
+      c.openTextTool('sortLines');
+      await tester.pump();
+      c.openSearch();
+      await tester.pump();
+      expect(c.toolBarOpen, isFalse);
+
+      c.openTextTool('sortLines');
+      await tester.pump();
+      c.openGoToLine();
+      await tester.pump();
+      expect(c.toolBarOpen, isFalse);
+    });
+
+    testWidgets('Escape closes the bar and returns focus to the document', (
+      tester,
+    ) async {
+      final c = await pumpEditor(tester, 'b\na');
+      c.editorFocus.requestFocus();
+      await tester.pump();
+      c.openTextTool('sortLines');
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(c.toolBarOpen, isFalse);
+      expect(c.editorFocus.hasFocus, isTrue);
+    });
+
+    testWidgets('Escape from a bar field still closes the bar', (tester) async {
+      final c = await pumpEditor(tester, 'a\nb');
+      c.openTextTool('numberLines');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(c.toolBarOpen, isFalse);
+    });
+
+    testWidgets('Apply stays disabled while the run is refused', (
+      tester,
+    ) async {
+      // uppercase is word/selection scoped; a caret on a space refuses.
+      final c = await pumpEditor(tester, 'a  b', caret: 2);
+      c.openTextTool('uppercase');
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(find.text('not applied, no word at the caret'), findsOneWidget);
+
+      final apply = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Apply'),
+      );
+      expect(apply.onPressed, isNull);
+    });
+
+    testWidgets('the first text field takes the focus', (tester) async {
+      final c = await pumpEditor(tester, 'a');
+      c.openTextTool('numberLines');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      final field = tester.widget<TextField>(
+        find.byWidgetPredicate(
+          (w) => w is TextField && w.decoration?.labelText == 'Start at',
+        ),
+      );
+      expect(field.focusNode?.hasFocus, isTrue);
+      // The bar's fields count as document focus for clipboard routing.
+      expect(c.textFocusNodes, contains(field.focusNode));
+    });
+  });
+
+  group('history', () {
+    testWidgets('a run is recorded for Repeat and Recent', (tester) async {
+      final c = await pumpEditor(tester, 'b\na');
+      await runTool(tester, c, 'sortLines', options: {'order': 'descending'});
+
+      expect(c.toolHistory.last?.toolId, 'sortLines');
+      expect(c.toolHistory.last?.options['order'], 'descending');
+    });
+
+    test('a shared history sees runs from every controller', () async {
+      final history = TextToolHistory();
+      for (final text in ['b\na', 'x']) {
+        final c = EditorController(
+          displayPath: 'a.txt',
+          initialText: text,
+          toolHistory: history,
+          undoQuiet: Duration.zero,
+        );
+        addTearDown(c.dispose);
+        await c.runTextTool('uppercase');
+      }
+      expect(history.recent.length, 1);
+      expect(history.last?.toolId, 'uppercase');
     });
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -85,6 +87,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// so Escape can tell which open bar the user is in.
   final _searchBarFocus = FocusNode(
     debugLabel: 'find bar',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+
+  /// The same for the tool bar's fields and controls.
+  final _toolBarFocus = FocusNode(
+    debugLabel: 'tool bar',
     canRequestFocus: false,
     skipTraversal: true,
   );
@@ -285,7 +294,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// Closes the bar that has focus, or from the document the Go to Line
   /// bar first, since it opens above the find bar.
   void _escape() {
-    if (c.goToLineOpen && !_searchBarFocus.hasFocus) {
+    if (c.toolBarOpen) {
+      c.closeTextTool();
+    } else if (c.goToLineOpen && !_searchBarFocus.hasFocus) {
       c.closeGoToLine();
     } else {
       c.closeSearch();
@@ -363,7 +374,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             c.previousMatch,
-        if (c.searchOpen || c.goToLineOpen)
+        if (c.searchOpen || c.goToLineOpen || c.toolBarOpen)
           const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
       child: Column(
@@ -379,6 +390,17 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               canRequestFocus: false,
               skipTraversal: true,
               child: _searchBar(context),
+            ),
+            const Divider(height: 1),
+          ],
+          // The tool bar shares the find bar's slot; the controller keeps
+          // the two mutually exclusive.
+          if (c.toolBarOpen && c.toolBarTool != null) ...[
+            Focus(
+              focusNode: _toolBarFocus,
+              canRequestFocus: false,
+              skipTraversal: true,
+              child: _toolBar(context, c.toolBarTool!),
             ),
             const Divider(height: 1),
           ],
@@ -687,6 +709,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       ),
     );
   }
+
+  /// The inline options bar a "…" text tool opens: its declared options,
+  /// a scope line, and the dry-run count, in the find bar's slot.
+  Widget _toolBar(BuildContext context, TextTool tool) => _ToolBar(
+    key: ValueKey(tool.id),
+    controller: c,
+    strings: widget.strings,
+    locked: _locked,
+  );
 
   Widget _statusBar(BuildContext context) {
     final (line, column) = c.caretLineColumn;
@@ -1043,6 +1074,276 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     painter.dispose();
     return _gutterInset * 2 + width + 1;
   }
+}
+
+/// The tool bar itself. It owns one text field per free-text and integer
+/// option for as long as the bar is open; those fields join the
+/// controller's [EditorController.textFocusNodes], so clipboard routing
+/// and the host's document-in-use gate see them like the find fields.
+class _ToolBar extends StatefulWidget {
+  const _ToolBar({
+    super.key,
+    required this.controller,
+    required this.strings,
+    required this.locked,
+  });
+
+  final EditorController controller;
+  final EditorStrings strings;
+  final bool locked;
+
+  @override
+  State<_ToolBar> createState() => _ToolBarState();
+}
+
+class _ToolBarState extends State<_ToolBar> {
+  final _fields = <String, TextEditingController>{};
+  final _nodes = <String, FocusNode>{};
+
+  /// The first field's option id — it opens focused.
+  String? _firstField;
+
+  EditorController get c => widget.controller;
+  TextTool get tool => c.toolBarTool!;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final option in tool.options) {
+      if (option is! TextOption && option is! IntegerOption) continue;
+      final value = c.toolBarOptions[option.id];
+      _fields[option.id] = TextEditingController(
+        text: value is int ? '$value' : value as String? ?? '',
+      );
+      final node = FocusNode(debugLabel: 'tool option ${option.id}');
+      _nodes[option.id] = node;
+      c.trackTextField(node);
+      _firstField ??= option.id;
+    }
+    // The document field is autofocus too and, being earlier in the scope,
+    // wins every autofocus race — so the bar asks for its first field
+    // outright once it exists.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _nodes[_firstField]?.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final node in _nodes.values) {
+      c.untrackTextField(node);
+      node.dispose();
+    }
+    for (final field in _fields.values) {
+      field.dispose();
+    }
+    super.dispose();
+  }
+
+  void _submitInteger(TextToolOption option, String raw) {
+    final parsed = int.tryParse(raw.trim());
+    if (parsed == null) return;
+    final minimum = (option as IntegerOption).min;
+    c.setToolOption(option.id, parsed < minimum ? minimum : parsed);
+  }
+
+  void _apply() {
+    unawaited(c.applyTextTool());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    final options = c.toolBarOptions;
+    final preview = c.toolBarPreview;
+    final canApply =
+        !widget.locked &&
+        c.canEditText &&
+        c.toolBarTool != null &&
+        c.toolBarPreview?.outcome is! TextToolRefused;
+
+    final controls = <Widget>[
+      Text(toolBarName(strings), style: theme.textTheme.titleSmall),
+      for (final option in tool.options)
+        switch (option) {
+          ToggleOption() => _toggle(strings, option, options[option.id]),
+          ChoiceOption() => _choice(strings, option, options[option.id]),
+          _ => _field(strings, option),
+        },
+      IconButton(
+        tooltip: strings.textToolClose,
+        visualDensity: VisualDensity.compact,
+        onPressed: c.closeTextTool,
+        icon: const Icon(Icons.close),
+      ),
+    ];
+
+    final (selected, document) = c.toolBarScopeLines;
+    final scope = _scopeLine(strings, tool, selected, document);
+    final count = preview != null
+        ? strings.textToolPreview(preview)
+        : c.toolBarPreviewDeferred
+        ? strings.textToolPreviewDeferred
+        : '';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            runSpacing: 4,
+            children: controls,
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 16,
+            children: [
+              ...scope,
+              FilledButton(
+                onPressed: canApply ? _apply : null,
+                child: Text(strings.textToolApply),
+              ),
+            ],
+          ),
+          if (count.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(count, style: theme.textTheme.labelSmall),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The tool's name as the bar's heading.
+  String toolBarName(EditorStrings strings) => strings.textToolName(tool.id);
+
+  List<Widget> _scopeLine(
+    EditorStrings strings,
+    TextTool tool,
+    int selected,
+    int document,
+  ) {
+    final label = Text(
+      strings.textToolAppliesTo,
+      style: Theme.of(context).textTheme.labelSmall,
+    );
+    // A document tool with a selection offers the choice; the rest state
+    // their scope plainly.
+    if (tool.scope == TextToolScope.document && selected > 0) {
+      return [
+        label,
+        _scopeRadio(strings.textToolSelectedLines(selected), false),
+        _scopeRadio(strings.textToolWholeDocument(document), true),
+      ];
+    }
+    final text = switch (tool.scope) {
+      TextToolScope.document => strings.textToolNothingSelected(document),
+      TextToolScope.selection => strings.textToolSelectedLines(selected),
+      TextToolScope.paragraph => 'the paragraph at the caret',
+      TextToolScope.word => 'the word at the caret',
+      TextToolScope.insertion => 'the caret',
+    };
+    return [label, Text(text, style: Theme.of(context).textTheme.labelSmall)];
+  }
+
+  Widget _scopeRadio(String label, bool wholeDocument) => InkWell(
+    onTap: () => c.setToolBarScope(wholeDocument: wholeDocument),
+    borderRadius: BorderRadius.circular(4),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          c.toolBarWholeDocument == wholeDocument
+              ? Icons.radio_button_checked
+              : Icons.radio_button_off,
+          size: 16,
+          color: c.toolBarWholeDocument == wholeDocument
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: Theme.of(context).textTheme.labelSmall),
+      ],
+    ),
+  );
+
+  Widget _toggle(EditorStrings strings, ToggleOption option, Object? value) =>
+      InkWell(
+        onTap: () => c.setToolOption(option.id, value != true),
+        borderRadius: BorderRadius.circular(4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Checkbox(
+              value: value == true,
+              visualDensity: VisualDensity.compact,
+              onChanged: (next) => c.setToolOption(option.id, next ?? false),
+            ),
+            Text(
+              strings.textToolOptionName(tool.id, option.id),
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ],
+        ),
+      );
+
+  Widget _choice(EditorStrings strings, ChoiceOption option, Object? value) =>
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            strings.textToolOptionName(tool.id, option.id),
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          const SizedBox(width: 6),
+          DropdownButton<String>(
+            value: value as String? ?? option.defaultValue as String,
+            isDense: true,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final choice in option.choices)
+                DropdownMenuItem(
+                  value: choice,
+                  child: Text(
+                    strings.textToolChoiceName(choice),
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ),
+            ],
+            onChanged: (next) {
+              if (next != null) c.setToolOption(option.id, next);
+            },
+          ),
+        ],
+      );
+
+  Widget _field(EditorStrings strings, TextToolOption option) => SizedBox(
+    width: option is IntegerOption ? 72 : 160,
+    child: TextField(
+      controller: _fields[option.id],
+      focusNode: _nodes[option.id],
+      autocorrect: false,
+      enableSuggestions: false,
+      keyboardType: option is IntegerOption
+          ? TextInputType.number
+          : TextInputType.text,
+      style: Theme.of(context).textTheme.bodyMedium,
+      decoration: InputDecoration(
+        labelText: strings.textToolOptionName(tool.id, option.id),
+        isDense: true,
+      ),
+      onChanged: (value) => option is IntegerOption
+          ? _submitInteger(option, value)
+          : c.setToolOption(option.id, value),
+      onSubmitted: (_) => _apply(),
+    ),
+  );
 }
 
 final class _IndentIntent extends Intent {

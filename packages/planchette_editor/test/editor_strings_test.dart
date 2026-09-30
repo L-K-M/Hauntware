@@ -17,4 +17,33 @@ void main() {
       'Ln 3, Col 4 · 12 lines · 345 bytes',
     );
   });
+
+  test('every catalog tool names a palette description and keywords', () {
+    const strings = EditorStrings();
+    for (final tool in textToolCatalog) {
+      expect(
+        strings.textToolDescription(tool.id),
+        isNotEmpty,
+        reason: '${tool.id} has no palette description',
+      );
+      expect(
+        strings.textToolKeywords(tool.id),
+        isNotEmpty,
+        reason: '${tool.id} has no palette keywords',
+      );
+    }
+  });
+
+  test('every declared option has a bar label', () {
+    const strings = EditorStrings();
+    for (final tool in textToolCatalog) {
+      for (final option in tool.options) {
+        expect(
+          strings.textToolOptionName(tool.id, option.id),
+          isNot(option.id),
+          reason: '${tool.id}.${option.id} has no bar label',
+        );
+      }
+    }
+  });
 }

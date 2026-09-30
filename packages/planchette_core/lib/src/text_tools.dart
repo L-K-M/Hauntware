@@ -309,6 +309,31 @@ const textToolCatalog = <TextTool>[
     scope: TextToolScope.document,
     run: _removeBlankLines,
   ),
+  TextTool(
+    id: 'prefixSuffixLines',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    options: [
+      ChoiceOption('mode', ['insert', 'remove'], value: 'insert'),
+      ChoiceOption('where', ['prefix', 'suffix'], value: 'prefix'),
+      TextOption('text'),
+      ToggleOption('skipBlankLines', value: true),
+    ],
+    run: _prefixSuffixLines,
+  ),
+  TextTool(
+    id: 'numberLines',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    options: [
+      ChoiceOption('mode', ['add', 'remove'], value: 'add'),
+      IntegerOption('start', value: 1),
+      IntegerOption('step', value: 1, min: 1),
+      TextOption('separator', value: '. '),
+      ChoiceOption('padding', ['none', 'spaces', 'zeros'], value: 'none'),
+    ],
+    run: _numberLines,
+  ),
 
   // Case
   TextTool(
@@ -371,6 +396,19 @@ const textToolCatalog = <TextTool>[
     ],
     run: _zapGremlins,
   ),
+
+  // Wrap
+  TextTool(
+    id: 'joinLinesWith',
+    group: TextToolGroup.wrap,
+    scope: TextToolScope.selection,
+    options: [
+      TextOption('separator', value: ', '),
+      ToggleOption('trim', value: true),
+      ToggleOption('skipBlankLines', value: true),
+    ],
+    run: _joinLinesWith,
+  ),
 ];
 
 /// The catalog entry for [id], or null.
@@ -393,10 +431,16 @@ TextTool? textToolById(String id) {
   TextToolRanOn ranOn,
   TextToolRefusal? refusal,
 })
-resolveTextToolRange(TextTool tool, String text, int base, int extent) {
+resolveTextToolRange(
+  TextTool tool,
+  String text,
+  int base,
+  int extent, {
+  bool wholeDocument = false,
+}) {
   RangeError.checkValueInInterval(base, 0, text.length, 'base');
   RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
-  if (base != extent) {
+  if (base != extent && !wholeDocument) {
     return (
       base: base,
       extent: extent,
@@ -405,7 +449,7 @@ resolveTextToolRange(TextTool tool, String text, int base, int extent) {
       refusal: null,
     );
   }
-  return switch (tool.scope) {
+  return switch (wholeDocument ? TextToolScope.document : tool.scope) {
     TextToolScope.document => (
       base: 0,
       extent: text.length,
@@ -1267,5 +1311,131 @@ TextToolOutcome _zapGremlins(TextToolRun run) {
     changed: edits.length,
     scope: end - start,
     detail: action == 'delete' ? null : action,
+  );
+}
+
+TextToolOutcome _prefixSuffixLines(TextToolRun run) {
+  final insert = run.option<String>('mode') == 'insert';
+  final prefix = run.option<String>('where') == 'prefix';
+  final affix = run.option<String>('text');
+  final skipBlank = run.option<bool>('skipBlankLines');
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+  if (affix.isEmpty) return TextToolUnchanged(scope: block.contents.length);
+
+  final edits = <_Edit>[];
+  var changed = 0;
+  for (var i = 0; i < block.contents.length; i++) {
+    final line = block.contents[i];
+    if (skipBlank && _isBlankRange(line, 0, line.length)) continue;
+    if (insert) {
+      edits.add((
+        start: prefix ? block.starts[i] : block.starts[i] + line.length,
+        end: prefix ? block.starts[i] : block.starts[i] + line.length,
+        insert: affix,
+      ));
+      changed++;
+    } else {
+      final matches = prefix ? line.startsWith(affix) : line.endsWith(affix);
+      if (!matches) continue;
+      edits.add((
+        start: prefix
+            ? block.starts[i]
+            : block.starts[i] + line.length - affix.length,
+        end: prefix
+            ? block.starts[i] + affix.length
+            : block.starts[i] + line.length,
+        insert: '',
+      ));
+      changed++;
+    }
+  }
+  return _spanEdit(
+    run,
+    edits,
+    changed: changed,
+    scope: block.contents.length,
+    detail: insert ? null : 'remove',
+  );
+}
+
+TextToolOutcome _numberLines(TextToolRun run) {
+  final add = run.option<String>('mode') == 'add';
+  final separator = run.option<String>('separator');
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+  final n = block.contents.length;
+
+  if (!add) {
+    // Removal only strips a number that is followed by the declared
+    // separator, so prose that merely starts with digits survives.
+    final pattern = RegExp(
+      separator.isEmpty ? '^\\s*\\d+' : '^\\s*\\d+${RegExp.escape(separator)}',
+    );
+    final edits = <_Edit>[];
+    var changed = 0;
+    for (var i = 0; i < n; i++) {
+      final match = pattern.firstMatch(block.contents[i]);
+      if (match == null) continue;
+      edits.add((
+        start: block.starts[i],
+        end: block.starts[i] + match.end,
+        insert: '',
+      ));
+      changed++;
+    }
+    return _spanEdit(run, edits, changed: changed, scope: n, detail: 'remove');
+  }
+
+  final start = run.option<int>('start');
+  final step = run.option<int>('step');
+  final last = start + (n - 1) * step;
+  final width = switch (run.option<String>('padding')) {
+    'spaces' || 'zeros' => last.toString().length,
+    _ => 0,
+  };
+  final pad = switch (run.option<String>('padding')) {
+    'zeros' => '0',
+    _ => ' ',
+  };
+
+  final contents = <String>[
+    for (var i = 0; i < n; i++)
+      '${(start + i * step).toString().padLeft(width, pad)}$separator'
+          '${block.contents[i]}',
+  ];
+  return _blockEdit(
+    run,
+    range.start,
+    range.end,
+    _joinLines(contents, block.breaks),
+    changed: n,
+    scope: n,
+  );
+}
+
+TextToolOutcome _joinLinesWith(TextToolRun run) {
+  final separator = run.option<String>('separator');
+  final trim = run.option<bool>('trim');
+  final skipBlank = run.option<bool>('skipBlankLines');
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+
+  final lines = <String>[];
+  for (final line in block.contents) {
+    final trimmed = trim ? line.trim() : line;
+    if (skipBlank && trimmed.isEmpty) continue;
+    lines.add(trimmed);
+  }
+  if (lines.length <= 1) {
+    return TextToolUnchanged(scope: block.contents.length);
+  }
+  return _blockEdit(
+    run,
+    range.start,
+    range.end,
+    lines.join(separator),
+    changed: lines.length,
+    scope: block.contents.length,
   );
 }

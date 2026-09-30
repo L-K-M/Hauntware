@@ -375,51 +375,57 @@ class _CommandPaletteState extends State<CommandPalette> {
     final matched = row.positions.toSet();
     return Material(
       color: highlighted ? scheme.secondaryContainer : Colors.transparent,
-      child: InkWell(
-        // Always tappable so a tap cannot fall through to the barrier;
-        // _run declines a disabled command.
-        onTap: () => _run(index),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          for (var i = 0; i < label.length; i++)
-                            TextSpan(
-                              text: label[i],
-                              style: matched.contains(i)
-                                  ? const TextStyle(fontWeight: FontWeight.w700)
-                                  : null,
-                            ),
-                        ],
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: !command.enabled
-                            ? scheme.onSurface.withValues(alpha: 0.4)
-                            : highlighted
-                            ? scheme.onSecondaryContainer
-                            : scheme.onSurface,
+      child: Semantics(
+        // The row stays tappable so a tap cannot fall through to the
+        // barrier, but assistive tech still hears it is unavailable.
+        enabled: command.enabled,
+        child: InkWell(
+          // Always tappable; _run declines a disabled command.
+          onTap: () => _run(index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            for (var i = 0; i < label.length; i++)
+                              TextSpan(
+                                text: label[i],
+                                style: matched.contains(i)
+                                    ? const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                      )
+                                    : null,
+                              ),
+                          ],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: !command.enabled
+                              ? scheme.onSurface.withValues(alpha: 0.4)
+                              : highlighted
+                              ? scheme.onSecondaryContainer
+                              : scheme.onSurface,
+                        ),
                       ),
                     ),
-                  ),
-                  Text(command.path, style: dim),
-                  if (command.shortcut case final shortcut?) ...[
-                    const SizedBox(width: 12),
-                    Text(shortcutLabel(shortcut, apple: apple), style: dim),
+                    Text(command.path, style: dim),
+                    if (command.shortcut case final shortcut?) ...[
+                      const SizedBox(width: 12),
+                      Text(shortcutLabel(shortcut, apple: apple), style: dim),
+                    ],
                   ],
-                ],
-              ),
-              if (detail.isNotEmpty)
-                Text(detail, style: dim, overflow: TextOverflow.ellipsis),
-            ],
+                ),
+                if (detail.isNotEmpty)
+                  Text(detail, style: dim, overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
         ),
       ),

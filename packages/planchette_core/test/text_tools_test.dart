@@ -493,4 +493,129 @@ void main() {
       expect(run('zapGremlins', 'a😀b|', options: {'nonAscii': true}), 'ab|');
     });
   });
+
+  group('prefixSuffixLines', () {
+    test('inserts a prefix on every line by default', () {
+      expect(
+        run('prefixSuffixLines', '|b\na', options: {'text': '> '}),
+        '|> b\n> a',
+      );
+    });
+
+    test('inserts a suffix, skipping blank lines by default', () {
+      expect(
+        run(
+          'prefixSuffixLines',
+          '|a\n\nb',
+          options: {'where': 'suffix', 'text': ';'},
+        ),
+        '|a;\n\nb;',
+      );
+      expect(
+        run(
+          'prefixSuffixLines',
+          '|a\n\nb',
+          options: {'where': 'suffix', 'text': ';', 'skipBlankLines': false},
+        ),
+        '|a;\n;\nb;',
+      );
+    });
+
+    test('remove strips the affix only where it appears', () {
+      expect(
+        run(
+          'prefixSuffixLines',
+          '|> a\nb\n> c',
+          options: {'mode': 'remove', 'text': '> '},
+        ),
+        '|a\nb\nc',
+      );
+      expect(
+        run(
+          'prefixSuffixLines',
+          '|a;\nb\nc;',
+          options: {'mode': 'remove', 'where': 'suffix', 'text': ';'},
+        ),
+        '|a\nb\nc',
+      );
+    });
+
+    test('an empty affix changes nothing', () {
+      expect(run('prefixSuffixLines', '|a\nb'), 'unchanged');
+    });
+  });
+
+  group('numberLines', () {
+    test('adds numbers with the default separator', () {
+      expect(run('numberLines', '|b\na'), '|1. b\n2. a');
+    });
+
+    test('honours start, step and padding', () {
+      expect(
+        run(
+          'numberLines',
+          '|a\nb\nc',
+          options: {'start': 8, 'step': 2, 'padding': 'zeros'},
+        ),
+        '|08. a\n10. b\n12. c',
+      );
+      expect(
+        run('numberLines', '|a\nb\nc', options: {'padding': 'spaces'}),
+        '|1. a\n2. b\n3. c',
+      );
+    });
+
+    test('pads to the widest number', () {
+      expect(
+        run(
+          'numberLines',
+          '|a\nb\nc\nd\ne\nf\ng\nh\ni\nj',
+          options: {'padding': 'spaces'},
+        ),
+        '| 1. a\n 2. b\n 3. c\n 4. d\n 5. e'
+        '\n 6. f\n 7. g\n 8. h\n 9. i\n10. j',
+      );
+    });
+
+    test('removes numbers followed by the separator', () {
+      expect(
+        run('numberLines', '|1. a\n2. b\n3x', options: {'mode': 'remove'}),
+        '|a\nb\n3x',
+      );
+      expect(
+        run(
+          'numberLines',
+          '|  4) a\n2020 report',
+          options: {'mode': 'remove', 'separator': ') '},
+        ),
+        '|a\n2020 report',
+      );
+    });
+  });
+
+  group('joinLinesWith', () {
+    test('needs a selection', () {
+      expect(run('joinLinesWith', '|a\nb'), 'refused:nothingSelected');
+    });
+
+    test('joins the touched lines with the separator', () {
+      expect(run('joinLinesWith', '[a\nb\nc]'), '[a, b, c]');
+    });
+
+    test('trims and skips blanks by default', () {
+      expect(run('joinLinesWith', '[  a \n\n  b]'), '[a, b]');
+      expect(
+        run(
+          'joinLinesWith',
+          '[  a \n\n  b]',
+          options: {'trim': false, 'skipBlankLines': false},
+        ),
+        '[  a , ,   b]',
+      );
+    });
+
+    test('one line is nothing to join', () {
+      expect(run('joinLinesWith', '[a]b'), 'unchanged');
+    });
+  });
 }
