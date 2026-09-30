@@ -70,7 +70,7 @@ case "$target" in
       rm -f "$HOME/.local/share/applications/com.lkm.planchette_app.desktop"
       # Repoint any saved default-handler association to the renamed desktop file.
       for mf in "$HOME/.config/mimeapps.list" "$HOME/.local/share/applications/mimeapps.list"; do
-        sed -i 's/com\.lkm\.planchette_app\.desktop/ch.lkmc.planchette.desktop/g' "$mf" 2>/dev/null || true
+        sed -i --follow-symlinks 's/com\.lkm\.planchette_app\.desktop/ch.lkmc.planchette.desktop/g' "$mf" 2>/dev/null || true
       done
       cat > "$HOME/.local/share/applications/ch.lkmc.planchette.desktop" <<DESKTOP
 [Desktop Entry]
