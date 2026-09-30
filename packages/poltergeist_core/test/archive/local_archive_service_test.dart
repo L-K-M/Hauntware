@@ -1621,7 +1621,11 @@ void main() {
       sourcePaths: [source.path],
       destinationPath: pathOf('ownership-lock-cancelled.zip'),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    if (Platform.isLinux) {
+      await _waitForLinuxDescriptor(keyPath);
+    } else {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
     final stopwatch = Stopwatch()..start();
     job.cancel();
 
@@ -1688,13 +1692,7 @@ void main() {
     }
 
     try {
-      final deadline = DateTime.now().add(const Duration(seconds: 5));
-      while (_linuxDescriptorsFor(keyPath).isEmpty) {
-        if (DateTime.now().isAfter(deadline)) {
-          fail('ownership key waiter did not open the key');
-        }
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
+      await _waitForLinuxDescriptor(keyPath);
       await Future<void>.delayed(const Duration(milliseconds: 500));
 
       expect(_linuxDescriptorsFor(keyPath), hasLength(1));
@@ -2197,6 +2195,16 @@ List<String> _linuxDescriptorsFor(String path) {
     }
   }
   return descriptors;
+}
+
+Future<void> _waitForLinuxDescriptor(String path) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (_linuxDescriptorsFor(path).isEmpty) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('archive file descriptor did not open');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
 }
 
 Future<void> _waitForStage(Directory root) async {
