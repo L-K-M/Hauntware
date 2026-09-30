@@ -365,6 +365,67 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 
+  testWidgets('tabs take the sibling apps\' shape', (tester) async {
+    for (var i = 0; i < 30; i++) {
+      workspace.newDocument();
+    }
+    final active = workspace.documents.first;
+    workspace.select(active);
+    await mount(tester, width: 700);
+    final strip = find.byType(TabStrip);
+    final scheme = Theme.of(tester.element(strip)).colorScheme;
+    BoxDecoration chip(String name) =>
+        tester
+                .widget<AnimatedContainer>(
+                  find.ancestor(
+                    of: find.text(name),
+                    matching: find.byType(AnimatedContainer),
+                  ),
+                )
+                .decoration!
+            as BoxDecoration;
+
+    // Séance's terminal tabs and Poltergeist's pane tabs: flat chips
+    // from the leading edge, each followed by a hairline.
+    expect(tester.getTopLeft(find.byKey(ValueKey('tab-${active.id}'))).dx, 0);
+    final open = chip(active.name);
+    final other = chip(workspace.documents[1].name);
+    expect(open.borderRadius, isNull);
+    for (final decoration in [open, other]) {
+      final border = decoration.border! as BorderDirectional;
+      expect(border.end.color, scheme.outlineVariant);
+    }
+    // The active tab is underlined in the accent, over the strip's rule.
+    final underline = (open.border! as BorderDirectional).bottom;
+    expect(underline.color, scheme.primary);
+    expect(underline.width, 2);
+    expect(
+      (other.border! as BorderDirectional).bottom.color,
+      Colors.transparent,
+    );
+    final rule = tester
+        .widget<Container>(
+          find.descendant(of: strip, matching: find.byType(Container)).first,
+        )
+        .decoration!;
+    expect(
+      ((rule as BoxDecoration).border! as Border).bottom.color,
+      scheme.outlineVariant,
+    );
+
+    // The new-tab button stays at the trailing edge, out of the scroll.
+    final add = find.descendant(of: strip, matching: find.byIcon(Icons.add));
+    expect(
+      find.descendant(
+        of: find.descendant(of: strip, matching: find.byType(Scrollable)),
+        matching: find.byIcon(Icons.add),
+      ),
+      findsNothing,
+    );
+    expect(add.hitTestable(), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
+
   testWidgets('tabs are buttons a screen reader can press and close', (
     tester,
   ) async {

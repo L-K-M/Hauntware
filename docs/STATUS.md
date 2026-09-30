@@ -12,9 +12,9 @@ ownership boundaries and compatibility policies are documented in
   documents, and saving over a read-only file asks first. Outside changes
   are checked when the window regains focus: unedited documents reload in
   place, and edited, deleted or moved ones show a notice.
-- A single tab strip: dirty dots, middle-click close, Close Others and Close
-  All, Copy Full Path, labels that tell same-named files apart by folder, and
-  the active tab kept in view.
+- A single tab strip in the sibling apps' shape: dirty dots, middle-click
+  close, Close Others and Close All, Copy Full Path, labels that tell
+  same-named files apart by folder, and the active tab kept in view.
 - Settings for theme (Parchment and Séance), text size and indentation, a
   command palette, and Export as HTML.
 - Shared with Poltergeist and Séance: syntax highlighting including `.env`
