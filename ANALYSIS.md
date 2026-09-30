@@ -1562,6 +1562,26 @@ detection now changes under typing, with no visible acknowledgement.
 Also applies to extensionless *files* (`script` with a `#!/bin/sh` first
 line), not only untitled buffers — the original entry missed that.
 
+### E13. Text tools: BBEdit-style transforms — L (idea, 2026-09-30)
+Sort, dedupe, filter, prefix, number, case, whitespace, gremlin, encode and
+insert tools as one const catalog of pure functions in core. Each returns an
+outcome: changed (the existing `LineEdit`, E2's single edit type, plus a
+count), unchanged or refused. The triage of BBEdit's Text, Edit and Search
+menus, per-tool scope and option rules, and the build order are in
+[docs/TEXT_TOOLS.md](docs/TEXT_TOOLS.md). Extends, not duplicates: E1 (block
+comment fallback), E5 (find in selection, replacement preview), E9 (trim and
+final newline share the manual tools' functions), E10 (line ending and BOM
+stay metadata; Convert Indentation is the catalog tool), P5 (size
+preflight). Blocked parts: Hard Wrap and interior tabs on B8,
+multi-selection tools on B7, Unicode normalization on a dependency decision.
+Risk: low for hosts until the find-bar slice; earlier pin bumps add unused
+API.
+**Done when** (first slice): the ten tools in slice 1 run from the menu and
+palette on all three desktops; each has CRLF, astral, empty-input and
+selection-mapping tests; a no-op and a refusal are reported as such; a
+result that grows past the save limit is refused; the 500 ms undo-throttle
+behaviour is pinned by a test.
+
 ## 6. App features
 
 ### A1. Settings store — partly assigned to #37 (enables FU4, E9, A3, A4)
@@ -1758,6 +1778,23 @@ with bounded concurrency, a result cap, and each hit opening through the
 guarded load path. Keeps the programmer's-editor promise. Design after the
 shell rewrites and one geometry owner land, so the panel is built once;
 do not grow a second search engine beside E5.
+
+### A16. Text menu, tool bar, Repeat and Recent — L, risk: medium (idea, 2026-09-30)
+Exposure for E13, designed in [docs/TEXT_TOOLS.md](docs/TEXT_TOOLS.md): a
+Text menu generated from the catalog (nine rows, seven submenus, every
+catalog tool a real item), an inline options bar in the find bar's slot with
+a scope control and a dry-run count, a result notice, and Repeat/Recent in
+place of BBEdit's Option-key short forms. Needs a submenu entry type in the
+five places that walk `_menus()` (`_nativeItems`, `_menuBar`, the shortcut
+map, `_openPalette`, `_runCurrent`) and stable command ids: the palette
+resolves commands by label today. Builds on A6: palette rows gain keywords,
+descriptions and the menu path. The tool bar, result notice and find-bar
+rows live in `planchette_editor` and reach both hosts on a pin bump;
+validate there. Each new bar states its D4 focus contract. Seven owner
+decisions are listed in the document's last section.
+**Done when** (menu slice): the Text menu is generated from the catalog on
+both menu bars; the palette shows keyword, description and path; a catalog
+test fails on a duplicate id or a submenu over 12 items.
 
 ## 7. Platform integration
 
