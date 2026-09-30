@@ -709,9 +709,14 @@ Future<(int, int)> _extractZipInWorker(
   }
 
   final archiveStat = FileStat.statSync(archivePath);
-  final input = InputFileStream.withFileHandle(
-    _openArchiveInput(archivePath, archiveStat),
-  );
+  final archiveHandle = _openArchiveInput(archivePath, archiveStat);
+  late final InputFileStream input;
+  try {
+    input = InputFileStream.withFileHandle(archiveHandle);
+  } on Object {
+    archiveHandle.closeSync();
+    rethrow;
+  }
   try {
     final ZipDirectory directory;
     final List<_ExtractionEntry> entries;
@@ -1671,8 +1676,20 @@ final class _ArchivePathNode {
 }
 
 final class _ProgressInputFileStream extends InputFileStream {
-  _ProgressInputFileStream(_CreationEntry entry, this._onBytes)
-    : super.withFileHandle(_openCreationInput(entry));
+  factory _ProgressInputFileStream(
+    _CreationEntry entry,
+    void Function(int count) onBytes,
+  ) {
+    final handle = _openCreationInput(entry);
+    try {
+      return _ProgressInputFileStream._(handle, onBytes);
+    } on Object {
+      handle.closeSync();
+      rethrow;
+    }
+  }
+
+  _ProgressInputFileStream._(super.fh, this._onBytes) : super.withFileHandle();
 
   final void Function(int count) _onBytes;
 
