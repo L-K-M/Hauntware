@@ -107,6 +107,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Colors.transparent` to turn it off.
 
 ### Changed
+- Tabs look like Séance's and Poltergeist's: flat, starting at the
+  window's edge, with a hairline between them and a rule under the strip,
+  and the active tab underlined in the accent colour. The + button stays
+  at the trailing edge beside Open and Save, so a crowded strip no longer
+  scrolls it out of reach.
 - One tab strip replaces the header and toolbar: tabs, a + button, and
   Open and Save at its trailing edge, with the menu bar and tabs starting
   at the window's leading edge. Tabs take keyboard focus and speak to

@@ -17,12 +17,15 @@ typedef TabStripItem = ({
   int flashRequest,
 });
 
-/// The window's single chrome row: document tabs with a new-tab button, and
-/// the file actions at the trailing edge. The active tab joins the editor
-/// surface below it and carries an accent; a dirty tab shows a dot where its
-/// close button appears on hover. Middle-click closes a tab, a right click
-/// asks the host for its tab menu, a mouse wheel scrolls the strip, and a
-/// newly active tab scrolls into view.
+/// The window's single chrome row: document tabs, then the new-tab button
+/// and the file actions pinned at the trailing edge. The tabs take the
+/// sibling apps' shape (Séance's terminal tabs, Poltergeist's pane tabs):
+/// flat chips from the leading edge, divided by hairlines, over a rule;
+/// the active one filled with the editor's surface and underlined in the
+/// accent. A dirty tab shows a dot where its close button appears on
+/// hover. Middle-click closes a tab, a right click asks the host for its
+/// tab menu, a mouse wheel scrolls the strip, and a newly active tab
+/// scrolls into view.
 class TabStrip extends StatefulWidget {
   const TabStrip({
     super.key,
@@ -146,8 +149,13 @@ class _TabStripState extends State<TabStrip> {
     final scheme = Theme.of(context).colorScheme;
     return Material(
       color: scheme.surfaceContainerLow,
-      child: SizedBox(
+      child: Container(
         height: TabStrip.height,
+        // The rule between the strip and the editor, under the active tab
+        // too, as the siblings draw it.
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -180,7 +188,6 @@ class _TabStripState extends State<TabStrip> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox(width: 6),
                       for (final tab in widget.tabs)
                         KeyedSubtree(
                           key: ValueKey('tab-${tab.id}'),
@@ -200,19 +207,25 @@ class _TabStripState extends State<TabStrip> {
                             },
                           ),
                         ),
-                      Center(
-                        child: IconButton(
-                          tooltip: widget.newTooltip,
-                          visualDensity: VisualDensity.compact,
-                          iconSize: 18,
-                          onPressed: widget.enabled ? widget.onNew : null,
-                          icon: const Icon(Icons.add),
-                        ),
-                      ),
                     ],
                   ),
                 ),
               ),
+            ),
+            // Pinned, as in the siblings, so a crowded strip never scrolls
+            // it away.
+            IconButton(
+              tooltip: widget.newTooltip,
+              visualDensity: VisualDensity.compact,
+              iconSize: 18,
+              onPressed: widget.enabled ? widget.onNew : null,
+              icon: const Icon(Icons.add),
+            ),
+            VerticalDivider(
+              width: 1,
+              indent: 9,
+              endIndent: 9,
+              color: scheme.outlineVariant,
             ),
             if (widget.busy)
               const Padding(
@@ -270,6 +283,9 @@ class _Tab extends StatefulWidget {
 class _TabState extends State<_Tab> {
   /// Long enough to notice between two glances, short enough not to linger.
   static const _flashDuration = Duration(milliseconds: 700);
+
+  /// The active tab's underline, as thick as Séance's.
+  static const _accentWidth = 2.0;
 
   bool _flashing = false;
 
@@ -408,12 +424,13 @@ class _TabState extends State<_Tab> {
                       : _hovered
                       ? scheme.surfaceContainerHighest
                       : Colors.transparent,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(8),
-                  ),
-                  border: Border(
-                    top: BorderSide(
-                      width: 2,
+                  // A hairline after every tab tells inactive tabs apart
+                  // while they show no close button (Poltergeist's pane
+                  // tabs); the active one is underlined (Séance's).
+                  border: BorderDirectional(
+                    end: BorderSide(color: scheme.outlineVariant),
+                    bottom: BorderSide(
+                      width: _accentWidth,
                       color: widget.active
                           ? scheme.primary
                           : Colors.transparent,
@@ -423,9 +440,6 @@ class _TabState extends State<_Tab> {
                 foregroundDecoration: _focused
                     ? BoxDecoration(
                         border: Border.all(color: scheme.primary, width: 2),
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(8),
-                        ),
                       )
                     : null,
                 child: Row(
