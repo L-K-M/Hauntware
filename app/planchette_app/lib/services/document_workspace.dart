@@ -140,6 +140,11 @@ typedef _ShellState = ({
   String? path,
   bool canEditText,
   bool canToggleComment,
+
+  /// Selection state is a boundary — collapsed or not — so a caret move
+  /// inside a selection never reaches the shell, but the Find menu's "Find
+  /// in Selection" enablement still follows it.
+  bool hasSelection,
 });
 
 /// Where one save writes: the resolved path, the digest the write expects to
@@ -298,6 +303,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       path: tab.path,
       canEditText: editor.canEditText,
       canToggleComment: editor.canToggleComment,
+      hasSelection: editor.hasSelection,
     );
     if (state == tab._shown) return;
     tab._shown = state;

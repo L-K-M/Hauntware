@@ -64,15 +64,18 @@ class PatternFind {
   /// Whether the held matches stop at [patternMatchLimit] with more to come.
   bool get capped => _results?.matches.capped ?? false;
 
-  /// Brings the search up to date with [text], [query] and the flags. When
-  /// the held matches are not for exactly these, it schedules a search, and
-  /// [page] serves nothing (or the matches carried through an edit) until it
-  /// settles.
+  /// Brings the search up to date with [text], [query] and the flags. With
+  /// [scope] — a stored find-in-selection range — the worker enumerates
+  /// only matches lying wholly inside it, so its limit bounds the scope,
+  /// not the document. When the held matches are not for exactly these, it
+  /// schedules a search, and [page] serves nothing (or the matches carried
+  /// through an edit) until it settles.
   void update(
     String text,
     String query, {
     required bool caseSensitive,
     required bool wholeWord,
+    required ({int start, int end})? scope,
   }) {
     _compile(query, caseSensitive);
     if (_pattern == null) {
@@ -81,7 +84,14 @@ class PatternFind {
       _replaceFailure = null;
       return;
     }
-    final key = _Key(text, query, caseSensitive, wholeWord);
+    final key = _Key(
+      text,
+      query,
+      caseSensitive,
+      wholeWord,
+      scope?.start,
+      scope?.end,
+    );
     final results = _results;
     if (results != null && results.key.sameAs(key) && !results.provisional) {
       return;
@@ -93,19 +103,22 @@ class PatternFind {
   }
 
   /// Carries the held matches from [before] into [after], an edit that
-  /// replaced `[start, end)` with text [delta] code units longer, and searches
-  /// the edited text again.
+  /// replaced `[start, end)` with text [delta] code units longer, and
+  /// searches the edited text again. [scope] is the stored search scope
+  /// as the edit left it — the controller maps it first, so a scope the
+  /// edit consumed has already become null here.
   void followEdit(
     String before,
     String after, {
     required int start,
     required int end,
     required int delta,
+    required ({int start, int end})? scope,
   }) {
     final results = _results;
     if (results != null && identical(results.key.text, before)) {
       _results = _Results(
-        results.key.withText(after),
+        results.key.withText(after).withScope(scope),
         results.matches.afterEdit(start: start, end: end, delta: delta),
         failure: results.failure,
         provisional: true,
@@ -116,15 +129,19 @@ class PatternFind {
     _replaceFailure = null;
     final search = _wanted ?? results?.key;
     if (_pattern == null || search == null) return;
-    _schedule(search.withText(after));
+    _schedule(search.withText(after).withScope(scope));
   }
 
   /// One page of the held matches of [text], in the shape literal search
   /// returns, with [SearchResult.precedingCount] always counted. [start] and
-  /// [reverse] mean what they mean to `searchText`.
+  /// [reverse] mean what they mean to `searchText`. With [scope] — a stored
+  /// find-in-selection range — the page is a window of the matches lying
+  /// wholly inside it, so counts stay scope-relative and stepping never
+  /// leaves the range.
   SearchResult page(
     String text, {
     int? start,
+    ({int start, int end})? scope,
     bool reverse = false,
     int limit = searchMatchLimit,
   }) {
@@ -137,14 +154,31 @@ class PatternFind {
       );
     }
     final matches = results.matches;
+    // The held list spans the document; the page is its in-scope window.
+    // One match can still straddle the scope's far edge — a start inside
+    // with an end outside — and matches never overlap, so it is the last
+    // one in the window and simply drops.
+    var low = 0;
+    var high = matches.length;
+    if (scope != null) {
+      low = matches.indexAtOrAfter(scope.start);
+      high = matches.indexAtOrAfter(scope.end);
+      if (high > low && matches.endOf(high - 1) > scope.end) high--;
+    }
     final int first;
     final int end;
     if (reverse) {
-      end = start == null ? matches.length : matches.indexAtOrAfter(start);
-      first = math.max(0, end - limit);
+      end = math.min(
+        high,
+        start == null ? high : matches.indexAtOrAfter(start),
+      );
+      first = math.max(low, end - limit);
     } else {
-      first = start == null ? 0 : matches.indexAtOrAfter(start);
-      end = math.min(matches.length, first + limit);
+      first = math.max(
+        low,
+        start == null ? low : matches.indexAtOrAfter(start),
+      );
+      end = math.min(high, first + limit);
     }
     return SearchResult(
       matches: [
@@ -152,19 +186,21 @@ class PatternFind {
           TextRange(start: matches.startOf(i), end: matches.endOf(i)),
       ],
       caseFolding: CaseFolding.exact,
-      precedingCount: first,
+      precedingCount: first - low,
     );
   }
 
   /// Replace All in a worker of its own, under the same budget, so it
   /// neither waits behind a search nor cancels one. Null when [query] is not
-  /// a usable pattern, which [failure] then explains.
+  /// a usable pattern, which [failure] then explains. With [scope], only
+  /// the matches lying wholly inside it are replaced.
   Future<PatternOutcome<PatternReplacement?>?> replaceAll(
     String text,
     String query,
     String template, {
     required bool caseSensitive,
     required bool wholeWord,
+    ({int start, int end})? scope,
   }) async {
     _compile(query, caseSensitive);
     if (_pattern == null) return null;
@@ -177,6 +213,7 @@ class PatternFind {
         template,
         caseSensitive: caseSensitive,
         wholeWord: wholeWord,
+        scope: scope,
       );
       if (!_disposed && outcome is PatternFailed<PatternReplacement?>) {
         _replaceFailure = outcome.failure;
@@ -229,6 +266,7 @@ class PatternFind {
       key.query,
       caseSensitive: key.caseSensitive,
       wholeWord: key.wholeWord,
+      scope: key.scope,
     );
     // A newer search, a closed find bar or disposal makes this answer
     // stale: the text or query it describes may be gone.
@@ -260,20 +298,39 @@ class PatternFind {
 /// What a search was for: the text by identity, since a full comparison of
 /// a large document per keystroke is what the cache is there to avoid.
 final class _Key {
-  const _Key(this.text, this.query, this.caseSensitive, this.wholeWord);
+  const _Key(
+    this.text,
+    this.query,
+    this.caseSensitive,
+    this.wholeWord, [
+    this.scopeStart,
+    this.scopeEnd,
+  ]);
 
   final String text;
   final String query;
   final bool caseSensitive;
   final bool wholeWord;
+  final int? scopeStart;
+  final int? scopeEnd;
+
+  /// The stored find-in-selection range as the core's bounds record.
+  ({int start, int end})? get scope =>
+      scopeStart == null ? null : (start: scopeStart!, end: scopeEnd!);
 
   bool sameAs(_Key other) =>
       identical(text, other.text) &&
       query == other.query &&
       caseSensitive == other.caseSensitive &&
-      wholeWord == other.wholeWord;
+      wholeWord == other.wholeWord &&
+      scopeStart == other.scopeStart &&
+      scopeEnd == other.scopeEnd;
 
-  _Key withText(String value) => _Key(value, query, caseSensitive, wholeWord);
+  _Key withText(String value) =>
+      _Key(value, query, caseSensitive, wholeWord, scopeStart, scopeEnd);
+
+  _Key withScope(({int start, int end})? scope) =>
+      _Key(text, query, caseSensitive, wholeWord, scope?.start, scope?.end);
 }
 
 final class _Results {

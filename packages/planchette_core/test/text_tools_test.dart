@@ -61,6 +61,12 @@ String run(
   if (resolved.refusal != null) {
     return describe(TextToolRefused(resolved.refusal!));
   }
+  for (final key in options.keys) {
+    assert(
+      tool.options.any((option) => option.id == key),
+      'unknown option "$key" for tool "$id"',
+    );
+  }
   final merged = {
     for (final option in tool.options)
       option.id: options[option.id] ?? option.defaultValue,
@@ -993,9 +999,11 @@ void main() {
     });
 
     test('matches literally until the regex option is on', () {
+      // The buffer ends with a break that belongs to the dropped line's
+      // kept sibling — 'a.b' keeps its own '\n'.
       expect(
         run('keepLinesMatching', 'a.b|\naxb\n', options: {'pattern': 'a.b'}),
-        'a.b|',
+        'a.b|\n',
       );
       expect(
         run(
@@ -1216,6 +1224,18 @@ void main() {
         run('unescapeBackslashSequences', r'[\uD83D\uDE00]'),
         '[\u{1F600}]',
       );
+    });
+
+    test('a backward selection keeps its direction through a run', () {
+      // A dragged-backwards selection reports base > extent; the resolved
+      // range carries anchor and caret un-ordered so a reselect keeps the
+      // drag direction, while the run still edits the covered text.
+      final tool = textToolById('uppercase')!;
+      final resolved = resolveTextToolRange(tool, 'abcd', 3, 1);
+      expect((resolved.base, resolved.extent), (3, 1));
+      expect(resolved.caret, 1);
+      expect(resolved.ranOn, TextToolRanOn.selection);
+      expect(run('uppercase', 'a]bc[d'), 'a]BC[d');
     });
   });
 }

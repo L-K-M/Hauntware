@@ -490,6 +490,21 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               },
             ),
             controls: [
+              if (c.searchScope != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Tooltip(
+                    message: strings.searchScopeHint,
+                    child: InputChip(
+                      label: Text(strings.searchInSelection),
+                      labelStyle: theme.textTheme.labelSmall,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: EdgeInsets.zero,
+                      onDeleted: c.clearSearchScope,
+                    ),
+                  ),
+                ),
               if (counter.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -650,7 +665,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       _ when count != null => strings.lineMatchCount(count),
       _ => '',
     };
-    final ready = !_locked && !c.isBusy && count != null;
+    final ready = !_locked && !c.isBusy && c.canEditText && count != null;
     return _searchRow(
       field: Text(
         label,
@@ -682,6 +697,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     final theme = Theme.of(context);
     final failure = c.lineCountFailure;
     final count = c.lineActionCount;
+    final ready = !_locked && !c.isBusy && c.canEditText && count != null;
     final targets = [
       'inPlace',
       'clipboard',
@@ -699,7 +715,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           isDense: true,
           border: InputBorder.none,
         ),
-        onSubmitted: (_) => unawaited(c.applyExtract()),
+        onSubmitted: (_) {
+          if (ready) unawaited(c.applyExtract());
+        },
       ),
       controls: [
         if (failure != null)
@@ -750,9 +768,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           },
         ),
         TextButton(
-          onPressed: !_locked && !c.isBusy && count != null
-              ? () => unawaited(c.applyExtract())
-              : null,
+          onPressed: ready ? () => unawaited(c.applyExtract()) : null,
           child: Text(strings.extractAction),
         ),
       ],

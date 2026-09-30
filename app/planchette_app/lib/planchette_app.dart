@@ -378,6 +378,9 @@ class _DocumentShellState extends State<_DocumentShell> {
   Future<void> _openPalette() async {
     if (_paletteOpen || workspace.interactionLocked) return;
     final commands = <PaletteCommand>[];
+    // A command can appear in two menus (a catalog id next to an explicit
+    // one); the palette keeps the first, the resolution _commandById does.
+    final seenIds = <String>{};
     void collect(List<_MenuEntry> items, String path) {
       for (final entry in items) {
         switch (entry) {
@@ -385,9 +388,11 @@ class _DocumentShellState extends State<_DocumentShell> {
             collect(items, '$path > $label');
           case _Command() when entry.run != _openPalette && entry.inPalette:
             final tool = entry.id == null ? null : textToolById(entry.id!);
+            final id = _paletteId(entry, path);
+            if (!seenIds.add(id)) continue;
             commands.add(
               PaletteCommand(
-                id: _paletteId(entry, path),
+                id: id,
                 label: entry.label,
                 path: path,
                 description: tool == null
@@ -520,6 +525,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     // A composing input method or a host lock refuses line edits too.
     final inDocument = ready && _documentInUse;
     final lineCommands = inDocument && (active?.editor.canEditText ?? false);
+    final hasSelection = inDocument && (active?.editor.hasSelection ?? false);
     return [
       _ShellMenu('File', [
         _Command(
@@ -765,6 +771,11 @@ class _DocumentShellState extends State<_DocumentShell> {
               ? _shortcut(LogicalKeyboardKey.keyG, shift: true)
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
           enabled: ready,
+        ),
+        _Command(
+          _editorStrings.findInSelection,
+          () => active?.editor.findInSelection(),
+          enabled: hasSelection,
         ),
         _Command(
           _editorStrings.textToolMenuLabel('extractMatches'),

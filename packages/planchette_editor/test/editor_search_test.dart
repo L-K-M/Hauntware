@@ -422,6 +422,209 @@ void main() {
     },
   );
 
+  group('find in selection', () {
+    // 'cat' sits at 0-3, 8-11 and 16-19.
+    const text = 'cat one cat two cat';
+
+    testWidgets('bounds the search to the stored range', (tester) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      await tester.pump();
+
+      expect(controller.searchScope, const TextRange(start: 4, end: 19));
+      expect(controller.text.searchScope, const TextRange(start: 4, end: 19));
+      controller.search.text = 'cat';
+      await tester.pump();
+      // The match before the scope never appears, and stepping past the
+      // last in-scope match wraps to its first.
+      expect(controller.matches, [
+        const TextRange(start: 8, end: 11),
+        const TextRange(start: 16, end: 19),
+      ]);
+      // The search anchors at the selection's start, so the first
+      // in-scope match is active; stepping moves on to the second, then
+      // wraps — the match before the scope never appears.
+      controller.nextMatch();
+      expect(
+        controller.text.selection,
+        const TextSelection(baseOffset: 16, extentOffset: 19),
+      );
+      controller.nextMatch();
+      expect(
+        controller.text.selection,
+        const TextSelection(baseOffset: 8, extentOffset: 11),
+        reason: 'Find Next wraps inside the scope',
+      );
+    });
+
+    testWidgets('the chip clears the scope back to the document', (
+      tester,
+    ) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      await tester.pump();
+      expect(find.text('in selection'), findsOneWidget);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(InputChip),
+          matching: find.byType(Icon),
+        ),
+      );
+      await tester.pump();
+      expect(controller.searchScope, isNull);
+      expect(controller.text.searchScope, isNull);
+      expect(controller.matches, hasLength(3));
+      expect(controller.searchOpen, isTrue);
+    });
+
+    testWidgets('closing the find bar retires the scope', (tester) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      await tester.pump();
+      controller.closeSearch();
+      await tester.pump();
+      expect(controller.searchScope, isNull);
+      expect(controller.text.searchScope, isNull);
+
+      // A plain Find afterwards searches the document again — and the
+      // selection that scoped before does not prefill the field.
+      controller.text.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 3,
+      );
+      controller.openSearch();
+      await tester.pump();
+      expect(controller.search.text, 'cat');
+    });
+
+    testWidgets('an edit maps the scope through it', (tester) async {
+      final controller = _editor('cat one cat two cat');
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 8,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      await tester.pump();
+      // Inserting before the scope shifts it; the text and the wash move
+      // together.
+      controller.text.value = const TextEditingValue(
+        text: 'XXcat one cat two cat',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+      await tester.pump();
+      expect(controller.searchScope, const TextRange(start: 10, end: 21));
+      expect(controller.text.searchScope, const TextRange(start: 10, end: 21));
+      controller.search.text = 'cat';
+      await tester.pump();
+      expect(controller.matches, [
+        const TextRange(start: 10, end: 13),
+        const TextRange(start: 18, end: 21),
+      ]);
+    });
+
+    testWidgets('an edit that swallows the scope drops it', (tester) async {
+      final controller = _editor('cat one cat two cat');
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 8,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      await tester.pump();
+      controller.text.value = const TextEditingValue(
+        text: 'clean',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+      await tester.pump();
+      expect(controller.searchScope, isNull);
+    });
+
+    testWidgets('a scoped Replace All leaves the rest alone', (tester) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      controller.replacement.text = 'dog';
+      await tester.pump();
+      expect(await controller.replaceAll(), isTrue);
+      expect(controller.text.text, 'cat one dog two dog');
+      // The scope follows the replaced region: same bounds, new text.
+      expect(controller.searchScope, const TextRange(start: 4, end: 19));
+    });
+
+    testWidgets('a length-changing Replace All remaps the scope', (
+      tester,
+    ) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      controller.replacement.text = 'cats';
+      await tester.pump();
+      // Same-length results cannot tell a remapped scope from a stale
+      // one — a longer replacement moves the end bound.
+      expect(await controller.replaceAll(), isTrue);
+      expect(controller.text.text, 'cat one cats two cats');
+      expect(controller.searchScope, const TextRange(start: 4, end: 21));
+    });
+
+    testWidgets('a backwards selection scopes the search the same', (
+      tester,
+    ) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      // Dragged backwards: the anchor sits at 19 and the caret at 4.
+      controller.text.selection = const TextSelection(
+        baseOffset: 19,
+        extentOffset: 4,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      await tester.pump();
+      expect(controller.searchScope, const TextRange(start: 4, end: 19));
+      expect(controller.matches, [
+        const TextRange(start: 8, end: 11),
+        const TextRange(start: 16, end: 19),
+      ]);
+    });
+
+    testWidgets('a collapsed caret cannot scope the search', (tester) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection.collapsed(offset: 4);
+      controller.findInSelection();
+      await tester.pump();
+      expect(controller.searchScope, isNull);
+      expect(controller.searchOpen, isFalse);
+    });
+  });
+
   group('regular expressions', () {
     Widget app(EditorController editor, {double width = 800}) => MaterialApp(
       home: Scaffold(

@@ -42,6 +42,7 @@ abstract final class PlanchettePalette {
     matchForeground: Color(0xFF2B2522),
     activeMatchBackground: Color(0xFF8B2E3C),
     activeMatchForeground: Color(0xFFFFF8EE),
+    searchScopeBackground: Color(0x33E8C87A),
   );
 
   /// Smoke comments, moss strings, brass numbers, ember keywords.
@@ -55,6 +56,7 @@ abstract final class PlanchettePalette {
     matchForeground: Color(0xFFF4EDE2),
     activeMatchBackground: Color(0xFFF2916A),
     activeMatchForeground: Color(0xFF1B1716),
+    searchScopeBackground: Color(0x26E6B56A),
   );
 }
 

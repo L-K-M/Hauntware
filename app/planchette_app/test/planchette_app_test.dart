@@ -986,6 +986,54 @@ void main() {
     }),
   );
 
+  testWidgets('Find in Selection needs a selection and scopes the bar', (
+    tester,
+  ) async {
+    PlatformMenuItem item(String menuLabel, String label) {
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+      final menu = bar.menus.whereType<PlatformMenu>().firstWhere(
+        (menu) => menu.label == menuLabel,
+      );
+      return menu.menus
+          .whereType<PlatformMenuItemGroup>()
+          .expand((group) => group.members)
+          .whereType<PlatformMenuItem>()
+          .firstWhere((item) => item.label == label);
+    }
+
+    final tab = workspace.newDocument()!
+      ..editor.text.text = 'cat one cat two cat';
+    await mount(tester);
+
+    // A collapsed caret leaves it disabled.
+    tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
+    expect(item('Find', 'Find in Selection').onSelected, isNull);
+
+    // With a selection it runs: the find bar opens scoped to it.
+    tab.editor.text.selection = const TextSelection(
+      baseOffset: 4,
+      extentOffset: 19,
+    );
+    await tester.pump();
+    item('Find', 'Find in Selection').onSelected!();
+    await tester.pump();
+    expect(tab.editor.searchOpen, isTrue);
+    expect(tab.editor.searchScope, const TextRange(start: 4, end: 19));
+    tab.editor.search.text = 'cat';
+    await tester.pump();
+    expect(tab.editor.matches, hasLength(2));
+
+    // Collapsing the selection disables the row again.
+    tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
+    expect(item('Find', 'Find in Selection').onSelected, isNull);
+    // Unmount with the bar closed, so its field's focus is released.
+    tab.editor.closeSearch();
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
   testWidgets('native text menus target the focused Go to Line field', (
     tester,
   ) async {

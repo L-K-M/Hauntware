@@ -12,6 +12,7 @@ const custom = EditorSyntaxTheme(
   matchForeground: Color(0xFF000007),
   activeMatchBackground: Color(0xFF000008),
   activeMatchForeground: Color(0xFF000009),
+  searchScopeBackground: Color(0xFF00000A),
 );
 
 void main() {

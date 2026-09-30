@@ -730,6 +730,57 @@ void main() {
       expect(window.last, const TextMatch(start: 1999999, end: 2000000));
       expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
     });
+
+    group('scoped to a stored range', () {
+      const text = 'cat one cat two cat';
+      //                       0123456789012345678
+      // 'cat' sits at 0-3, 8-11 and 16-19.
+
+      test('only matches lying wholly inside count', () {
+        expect(
+          findSearchMatches(text, 'cat', scope: (start: 4, end: 19)),
+          const [TextMatch(start: 8, end: 11), TextMatch(start: 16, end: 19)],
+        );
+        // A match that straddles either edge does not count.
+        expect(
+          findSearchMatches(text, 'cat', scope: (start: 4, end: 18)),
+          const [TextMatch(start: 8, end: 11)],
+        );
+        expect(
+          findSearchMatches(text, 'cat', scope: (start: 1, end: 4)),
+          isEmpty,
+        );
+      });
+
+      test('counts and pages are scope-relative', () {
+        const scope = (start: 4, end: 20);
+        // Forward pages keep the document's contract: a mid-text start
+        // does not count backwards.
+        final page = searchText(text, 'cat', scope: scope, start: 12);
+        expect(page.matches, const [TextMatch(start: 16, end: 19)]);
+        // Reverse windows count only what the scope holds: unscoped, one
+        // match at 0-3 would raise precedingCount to 2.
+        final window = searchText(
+          text,
+          'cat',
+          scope: scope,
+          reverse: true,
+          limit: 1,
+        );
+        expect(window.matches, const [TextMatch(start: 16, end: 19)]);
+        expect(window.precedingCount, 1);
+        expect(
+          searchText(
+            text,
+            'cat',
+            scope: scope,
+            start: 16,
+            reverse: true,
+          ).matches,
+          const [TextMatch(start: 8, end: 11)],
+        );
+      });
+    });
   });
 
   group('language fixes', () {

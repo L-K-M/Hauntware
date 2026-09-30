@@ -55,14 +55,24 @@ final class FindPattern {
   /// that runs on into a word is skipped the way literal search skips one,
   /// and the scan resumes just after its start, since a whole word may begin
   /// inside it.
+  /// With [scope] — a stored find-in-selection range — only the matches
+  /// lying wholly inside it are enumerated, so [limit] bounds the scope,
+  /// not the document: a selection past the cap's first page still
+  /// reports its matches.
   PatternMatches findAll(
     String text, {
     bool wholeWord = false,
     int limit = patternMatchLimit,
+    ({int start, int end})? scope,
   }) {
     final bounds = <int>[];
     var capped = false;
-    for (final match in _matchesIn(text, wholeWord: wholeWord)) {
+    for (final match in _matchesIn(
+      text,
+      wholeWord: wholeWord,
+      from: scope?.start ?? 0,
+      end: scope?.end,
+    )) {
       if (bounds.length >> 1 >= limit) {
         capped = true;
         break;
@@ -77,17 +87,24 @@ final class FindPattern {
   /// [text] with every match [findAll] would report replaced by [template],
   /// expanded for that match by [expandPatternReplacement]; null when nothing
   /// matched. Unlike [findAll] this has no limit: Replace All covers the
-  /// whole document.
+  /// whole document — or, with [scope], only the matches lying wholly
+  /// inside it, as a stored find-in-selection range would bound it.
   PatternReplacement? replaceAll(
     String text,
     String template, {
     bool wholeWord = false,
+    ({int start, int end})? scope,
   }) {
     final replaced = StringBuffer();
     var copied = 0;
     var count = 0;
     var firstEnd = 0;
-    for (final match in _matchesIn(text, wholeWord: wholeWord)) {
+    for (final match in _matchesIn(
+      text,
+      wholeWord: wholeWord,
+      from: scope?.start ?? 0,
+      end: scope?.end,
+    )) {
       final expanded = expandPatternReplacement(template, match);
       replaced
         ..write(text.substring(copied, match.start))
@@ -129,11 +146,23 @@ final class FindPattern {
       _matchesIn(line, wholeWord: wholeWord).isNotEmpty;
 
   /// How many lines of [text] hold a match — the live count the find
-  /// bar's line row shows.
-  int countMatchingLines(String text, {bool wholeWord = false}) {
+  /// bar's line row shows. With [scope], only the lines the range touches
+  /// are counted: a partly covered line is covered.
+  int countMatchingLines(
+    String text, {
+    bool wholeWord = false,
+    ({int start, int end})? scope,
+  }) {
     var count = 0;
-    var at = 0;
-    while (at < text.length) {
+    final range = scope == null
+        ? (start: 0, end: text.length)
+        : touchedLineRange(
+            text,
+            scope.start.clamp(0, text.length),
+            scope.end.clamp(0, text.length),
+          );
+    var at = range.start;
+    while (at < range.end) {
       final end = lineContentEnd(text, at);
       if (matchesLine(text.substring(at, end), wholeWord: wholeWord)) {
         count++;
@@ -152,14 +181,28 @@ final class FindPattern {
     String text, {
     required bool keep,
     bool wholeWord = false,
+    ({int start, int end})? scope,
   }) {
+    // With a scope — a stored find-in-selection range — only the lines it
+    // touches are filtered; lines outside pass through unchanged, so the
+    // result still describes the whole document. A scoped line's break
+    // belongs to the line and goes with it; the buffer's last line has
+    // none to take.
+    final range = scope == null
+        ? (start: 0, end: text.length)
+        : touchedLineRange(
+            text,
+            scope.start.clamp(0, text.length),
+            scope.end.clamp(0, text.length),
+          );
+    final filterEnd = range.end + lineSeparatorAt(text, range.end).length;
     final contents = <String>[];
     final breaks = <String>[];
     var matched = 0;
     var total = 0;
-    var at = 0;
+    var at = range.start;
     var lastDropped = false;
-    while (at < text.length) {
+    while (at < filterEnd) {
       final end = lineContentEnd(text, at);
       final separator = lineSeparatorAt(text, end);
       final hit = matchesLine(text.substring(at, end), wholeWord: wholeWord);
@@ -172,13 +215,30 @@ final class FindPattern {
       }
       at = end + separator.length;
     }
-    if (contents.isNotEmpty && lastDropped) breaks[breaks.length - 1] = '';
-    final out = StringBuffer();
+    // The trailing-break trim belongs to a drop at the buffer's end — and
+    // only when the buffer's last line lacked a break of its own: a kept
+    // line's break is that line's to keep, so a break-terminated buffer
+    // ends break-terminated however its last line fared. With lines after
+    // the scope, a dropped last scoped line still needs the trim. A lone
+    // `\r` is line content in this engine — only `\n` and `\r\n` are
+    // breaks — so `endsWith('\n')` is the right terminator test.
+    var prefixEnd = range.start;
+    if (lastDropped && filterEnd == text.length && !text.endsWith('\n')) {
+      if (contents.isNotEmpty) {
+        breaks[breaks.length - 1] = '';
+      } else if (range.start > 0) {
+        // Every scoped line went, so the break that joined the prefix to
+        // the scope now dangles at the buffer's end.
+        prefixEnd -= lineSeparatorBefore(text, range.start).length;
+      }
+    }
+    final out = StringBuffer(text.substring(0, prefixEnd));
     for (var i = 0; i < contents.length; i++) {
       out
         ..write(contents[i])
         ..write(breaks[i]);
     }
+    out.write(text.substring(filterEnd));
     return PatternLineFilter(
       text: out.toString(),
       matched: matched,
@@ -188,17 +248,27 @@ final class FindPattern {
 
   /// Every match's text — or with [wholeLines] the content of each line
   /// holding one — expanded through [template] when it is given. The
-  /// empty matches [findAll] skips never extract either.
+  /// empty matches [findAll] skips never extract either. With [scope] —
+  /// a stored find-in-selection range — matches must lie wholly inside
+  /// it; [wholeLines] extracts the lines it touches instead.
   List<String> extractMatches(
     String text, {
     bool wholeWord = false,
     bool wholeLines = false,
     String? template,
+    ({int start, int end})? scope,
   }) {
     final out = <String>[];
     if (wholeLines) {
-      var at = 0;
-      while (at < text.length) {
+      final range = scope == null
+          ? (start: 0, end: text.length)
+          : touchedLineRange(
+              text,
+              scope.start.clamp(0, text.length),
+              scope.end.clamp(0, text.length),
+            );
+      var at = range.start;
+      while (at < range.end) {
         final end = lineContentEnd(text, at);
         final line = text.substring(at, end);
         if (matchesLine(line, wholeWord: wholeWord)) out.add(line);
@@ -206,7 +276,12 @@ final class FindPattern {
       }
       return out;
     }
-    for (final match in _matchesIn(text, wholeWord: wholeWord)) {
+    for (final match in _matchesIn(
+      text,
+      wholeWord: wholeWord,
+      from: scope?.start ?? 0,
+      end: scope?.end,
+    )) {
       out.add(
         template == null
             ? match[0]!
@@ -219,16 +294,22 @@ final class FindPattern {
   Iterable<RegExpMatch> _matchesIn(
     String text, {
     required bool wholeWord,
+    int from = 0,
+    int? end,
   }) sync* {
-    var from = 0;
+    // With [end], a match straddling the boundary does not count — and
+    // since matches never overlap, the next starts past it anyway.
+    var restartFrom = from.clamp(0, text.length);
+    final ceiling = (end ?? text.length).clamp(0, text.length);
     restart:
     while (true) {
       // allMatches steps past an empty match by itself, a whole character
       // in unicode mode, so skipping one needs no bookkeeping here.
-      for (final match in _regExp.allMatches(text, from)) {
+      for (final match in _regExp.allMatches(text, restartFrom)) {
         if (match.end == match.start) continue;
+        if (match.end > ceiling) return;
         if (wholeWord && !_isWholeWordMatch(text, match.start, match.end)) {
-          from = _nextCharacter(text, match.start);
+          restartFrom = _nextCharacter(text, match.start);
           continue restart;
         }
         yield match;
@@ -497,6 +578,7 @@ final class PatternWorker {
     bool caseSensitive = false,
     bool wholeWord = false,
     int limit = patternMatchLimit,
+    ({int start, int end})? scope,
   }) => _submit<PatternMatches>(
     (reply) => reply! as PatternMatches,
     kind: _RequestKind.search,
@@ -505,6 +587,8 @@ final class PatternWorker {
     caseSensitive: caseSensitive,
     wholeWord: wholeWord,
     limit: limit,
+    scopeStart: scope?.start,
+    scopeEnd: scope?.end,
   );
 
   /// [text] with every match of [source] replaced; see
@@ -515,6 +599,7 @@ final class PatternWorker {
     String template, {
     bool caseSensitive = false,
     bool wholeWord = false,
+    ({int start, int end})? scope,
   }) => _submit<PatternReplacement?>(
     (reply) => reply as PatternReplacement?,
     kind: _RequestKind.replace,
@@ -523,6 +608,8 @@ final class PatternWorker {
     caseSensitive: caseSensitive,
     wholeWord: wholeWord,
     template: template,
+    scopeStart: scope?.start,
+    scopeEnd: scope?.end,
   );
 
   /// How many lines of [text] hold a match; see
@@ -534,6 +621,7 @@ final class PatternWorker {
     bool caseSensitive = false,
     bool wholeWord = false,
     bool literal = false,
+    ({int start, int end})? scope,
   }) => _submit<int>(
     (reply) => reply! as int,
     kind: _RequestKind.countLines,
@@ -542,6 +630,8 @@ final class PatternWorker {
     caseSensitive: caseSensitive,
     wholeWord: wholeWord,
     literal: literal,
+    scopeStart: scope?.start,
+    scopeEnd: scope?.end,
   );
 
   /// [text] filtered to the lines that hold a match ([keep]) or don't;
@@ -553,6 +643,7 @@ final class PatternWorker {
     bool caseSensitive = false,
     bool wholeWord = false,
     bool literal = false,
+    ({int start, int end})? scope,
   }) => _submit<PatternLineFilter>(
     (reply) => reply! as PatternLineFilter,
     kind: _RequestKind.filterLines,
@@ -562,6 +653,8 @@ final class PatternWorker {
     wholeWord: wholeWord,
     literal: literal,
     keep: keep,
+    scopeStart: scope?.start,
+    scopeEnd: scope?.end,
   );
 
   /// Every match of [source] — or every line holding one with
@@ -575,6 +668,7 @@ final class PatternWorker {
     bool wholeLines = false,
     String? template,
     bool literal = false,
+    ({int start, int end})? scope,
   }) => _submit<List<String>>(
     (reply) => reply! as List<String>,
     kind: _RequestKind.extract,
@@ -585,6 +679,8 @@ final class PatternWorker {
     literal: literal,
     wholeLines: wholeLines,
     template: template,
+    scopeStart: scope?.start,
+    scopeEnd: scope?.end,
   );
 
   /// Stops the worker. A request still running reports [PatternCancelled],
@@ -610,6 +706,8 @@ final class PatternWorker {
     bool keep = true,
     bool wholeLines = false,
     String? template,
+    int? scopeStart,
+    int? scopeEnd,
   }) {
     if (_disposed) return Future.value(PatternCancelled<T>());
     _cancelPending();
@@ -630,6 +728,8 @@ final class PatternWorker {
           keep: keep,
           wholeLines: wholeLines,
           template: template,
+          scopeStart: scopeStart,
+          scopeEnd: scopeEnd,
         ),
       ),
     );
@@ -767,6 +867,8 @@ final class _PatternRequest {
     required this.keep,
     required this.wholeLines,
     required this.template,
+    required this.scopeStart,
+    required this.scopeEnd,
   });
 
   final int ticket;
@@ -789,6 +891,12 @@ final class _PatternRequest {
 
   /// The replacement for Replace All, or null for a search.
   final String? template;
+
+  /// The stored find-in-selection range, when the request is scoped.
+  /// Records do not cross an isolate boundary cheaply, so it travels as
+  /// two offsets; both or neither is set.
+  final int? scopeStart;
+  final int? scopeEnd;
 }
 
 final class _PatternReply {
@@ -818,31 +926,45 @@ void _patternWorkerMain(SendPort replies) {
           caseSensitive: request.caseSensitive,
         );
       }
+      final scope = request.scopeStart == null && request.scopeEnd == null
+          ? null
+          : (
+              start: ArgumentError.checkNotNull(
+                request.scopeStart,
+                'scopeStart',
+              ),
+              end: ArgumentError.checkNotNull(request.scopeEnd, 'scopeEnd'),
+            );
       final Object? payload = switch (request.kind) {
         _RequestKind.search => pattern.findAll(
           request.text,
           wholeWord: request.wholeWord,
           limit: request.limit,
+          scope: scope,
         ),
         _RequestKind.replace => pattern.replaceAll(
           request.text,
           request.template!,
           wholeWord: request.wholeWord,
+          scope: scope,
         ),
         _RequestKind.countLines => pattern.countMatchingLines(
           request.text,
           wholeWord: request.wholeWord,
+          scope: scope,
         ),
         _RequestKind.filterLines => pattern.filterMatchingLines(
           request.text,
           keep: request.keep,
           wholeWord: request.wholeWord,
+          scope: scope,
         ),
         _RequestKind.extract => pattern.extractMatches(
           request.text,
           wholeWord: request.wholeWord,
           wholeLines: request.wholeLines,
           template: request.template,
+          scope: scope,
         ),
       };
       replies.send(_PatternReply(request.ticket, payload, null));

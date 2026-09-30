@@ -405,5 +405,72 @@ void main() {
       editor.dispose();
       await Future<void>.delayed(const Duration(milliseconds: 100));
     });
+
+    test('a stored scope bounds pattern matches and Replace All', () async {
+      final editor = _editor('cat one cat two cat');
+      editor.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      editor.findInSelection();
+      editor
+        ..toggleRegularExpression()
+        ..search.text = 'c.t';
+      await _settled(editor);
+
+      // Only the matches lying wholly inside the scope are served.
+      expect(_found(editor), ['cat', 'cat']);
+      expect(_counter(editor), (1, 2, false));
+
+      editor.replacement.text = 'dog';
+      expect(await editor.replaceAll(), isTrue);
+      expect(editor.text.text, 'cat one dog two dog');
+    });
+
+    test('a scoped search sees matches past the document cap', () async {
+      // More matches than the worker's per-document cap precede the
+      // scope — windowing a capped list would report nothing here.
+      final prefix = 'x' * (patternMatchLimit + 2);
+      final editor = _editor('$prefix tail x');
+      // The last 'x' sits past the cap; the scope covers the tail alone.
+      editor.text.selection = TextSelection(
+        baseOffset: prefix.length,
+        extentOffset: prefix.length + 7,
+      );
+      editor.findInSelection();
+      editor
+        ..toggleRegularExpression()
+        ..search.text = 'x';
+      await _settled(editor);
+      expect(_found(editor), ['x']);
+      expect(_counter(editor), (1, 1, false));
+    });
+
+    test('a scope wider than one page steps across pages', () async {
+      // 1200 in-scope matches pass the 1000-match page limit; the
+      // counter and paging stay scope-relative.
+      final text = 'a${'x,' * 1200}b';
+      final editor = _editor(text);
+      editor.text.selection = const TextSelection(
+        baseOffset: 1,
+        extentOffset: 2400,
+      );
+      editor.findInSelection();
+      editor
+        ..toggleRegularExpression()
+        ..search.text = 'x';
+      await _settled(editor);
+      expect(editor.matches, hasLength(1000));
+      expect(_counter(editor), (1, 1000, true));
+
+      for (var step = 0; step < 999; step++) {
+        editor.nextMatch();
+      }
+      expect(_counter(editor), (1000, 1000, true));
+      // Stepping off the last match of the page fetches the next one.
+      editor.nextMatch();
+      expect(_counter(editor), (1001, 1200, false));
+      expect(editor.matches, hasLength(200));
+    });
   });
 }
