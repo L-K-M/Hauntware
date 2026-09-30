@@ -951,4 +951,131 @@ void main() {
       expect(run('insertDate', 'a[bc]d', now: now), 'a2026-01-15|d');
     });
   });
+
+  group('keepLinesMatching', () {
+    test('keeps the lines that hold the pattern', () {
+      expect(
+        run('keepLinesMatching', 'one|\ntwo\nthree', options: {'pattern': 'o'}),
+        'one|\ntwo',
+      );
+    });
+
+    test('ignores the live selection: the document is the scope', () {
+      expect(
+        run(
+          'keepLinesMatching',
+          'one\n[t]wo\nthree',
+          options: {'pattern': 'three'},
+        ),
+        'three|',
+      );
+    });
+
+    test('matches literally until the regex option is on', () {
+      expect(
+        run('keepLinesMatching', 'a.b|\naxb\n', options: {'pattern': 'a.b'}),
+        'a.b|',
+      );
+      expect(
+        run(
+          'keepLinesMatching',
+          'a.b|\naxb\n',
+          options: {'pattern': 'a.b', 'regularExpression': true},
+        ),
+        'unchanged',
+      );
+    });
+
+    test('refuses an empty pattern rather than deleting nothing', () {
+      expect(
+        run('keepLinesMatching', 'a\nb|', options: {'pattern': ''}),
+        'refused:noPattern',
+      );
+    });
+
+    test('refuses a pattern that does not compile', () {
+      expect(
+        run(
+          'keepLinesMatching',
+          'a\nb|',
+          options: {'pattern': '(', 'regularExpression': true},
+        ),
+        'refused:invalidPattern',
+      );
+    });
+  });
+
+  group('deleteLinesMatching', () {
+    test('drops the matching lines', () {
+      expect(
+        run(
+          'deleteLinesMatching',
+          'one\ntwo|\nthree',
+          options: {'pattern': 'o'},
+        ),
+        'three|',
+      );
+    });
+
+    test('honours whole words and case', () {
+      expect(
+        run(
+          'deleteLinesMatching',
+          'cat\nconcat\nCAT|',
+          options: {'pattern': 'cat', 'wholeWord': true, 'caseSensitive': true},
+        ),
+        'concat\nCAT|',
+      );
+    });
+  });
+
+  group('extractMatches', () {
+    test('replaces the document with its matches, one per line', () {
+      expect(
+        run(
+          'extractMatches',
+          'a1 b22\nc333|',
+          options: {'pattern': r'\d+', 'regularExpression': true},
+        ),
+        '1\n22\n333|',
+      );
+    });
+
+    test('takes whole matching lines instead', () {
+      expect(
+        run(
+          'extractMatches',
+          'a1 b\nc2|',
+          options: {
+            'pattern': r'\d+',
+            'regularExpression': true,
+            'wholeLines': true,
+          },
+        ),
+        'a1 b\nc2|',
+      );
+    });
+
+    test('expands matches through the template', () {
+      expect(
+        run(
+          'extractMatches',
+          'a@b x c@d|',
+          options: {
+            'pattern': r'(\w+)@(\w+)',
+            'regularExpression': true,
+            'template': r'$2/$1',
+          },
+        ),
+        'b/a\nd/c|',
+      );
+    });
+
+    test('a pattern without matches leaves the buffer unchanged', () {
+      expect(
+        run('extractMatches', 'abc|', options: {'pattern': 'z'}),
+        'unchanged',
+      );
+    });
+  });
 }

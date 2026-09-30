@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
 import 'package:planchette_core/planchette_core.dart'
@@ -69,11 +70,13 @@ class EditorController extends ChangeNotifier {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
+    extraction.addListener(_extractionChanged);
     goToLineInput.addListener(_goToLineEdited);
     for (final node in [
       editorFocus,
       searchFocus,
       replacementFocus,
+      extractionFocus,
       goToLineFocus,
     ]) {
       trackTextField(node);
@@ -90,6 +93,10 @@ class EditorController extends ChangeNotifier {
   saveDocument;
   Future<void> Function()? onSaved;
   Future<bool> Function()? onPublish;
+
+  /// What Extract Matches to a new document calls. Left null, the
+  /// destination stays off and the row's picker omits it.
+  void Function(String text)? onNewDocument;
 
   /// How a case-insensitive find compares text. Defaults to
   /// [String.toLowerCase]; a host can supply a fold that fixes case
@@ -135,9 +142,11 @@ class EditorController extends ChangeNotifier {
   late final CodeEditingController text;
   final search = TextEditingController();
   final replacement = TextEditingController();
+  final extraction = TextEditingController();
   final goToLineInput = TextEditingController();
   final editorFocus = FocusNode();
   final searchFocus = FocusNode();
+  final extractionFocus = FocusNode();
   final replacementFocus = FocusNode();
   final goToLineFocus = FocusNode();
 
@@ -217,6 +226,25 @@ class EditorController extends ChangeNotifier {
   bool _caseSensitive = false;
   bool _wholeWord = false;
   bool _useRegularExpression = false;
+
+  /// The line-action row (Keep/Delete Lines Matching) and the extraction
+  /// row (Extract Matches) the find bar can carry, mutually exclusive.
+  bool _lineActionsOpen = false;
+  bool _extractOpen = false;
+  bool _extractWholeLines = false;
+
+  /// Where Extract Matches sends its list: 'inPlace', 'clipboard' or
+  /// 'newDocument' — the Extract tool's declared `target` choices.
+  String _extractTarget = 'inPlace';
+
+  /// The debounced matching-line/extraction count while a row is open;
+  /// worker-backed like the pattern search itself.
+  int? _lineActionCount;
+  bool _lineCountPending = false;
+  PatternFailure? _lineCountFailure;
+  PatternWorker? _linesWorker;
+  Timer? _linesCountDelay;
+  int _linesGeneration = 0;
 
   /// The regular-expression search, while that mode is on.
   PatternFind? _patternFind;
@@ -300,6 +328,32 @@ class EditorController extends ChangeNotifier {
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;
   bool get goToLineOpen => _goToLineOpen;
+
+  /// Whether the find bar shows its line-action row — Keep and Delete
+  /// Lines Matching on the find field's pattern.
+  bool get lineActionsOpen => _lineActionsOpen;
+
+  /// Whether the find bar shows its extraction row.
+  bool get extractOpen => _extractOpen;
+
+  /// Whether Extract collects whole matching lines rather than each match.
+  bool get extractWholeLines => _extractWholeLines;
+
+  /// Where Extract Matches sends its list: 'inPlace', 'clipboard' or
+  /// 'newDocument'.
+  String get extractTarget => _extractTarget;
+
+  /// Whether 'newDocument' is a live Extract destination for this editor.
+  bool get canExtractToNewDocument => onNewDocument != null;
+
+  /// The count a find-bar action row reports: matching lines for Keep and
+  /// Delete, produced entries for Extract. Null while the first count is
+  /// on its way or after it failed — [lineCountFailure] says why.
+  int? get lineActionCount => _lineActionCount;
+
+  /// Whether the action row's count is being recomputed.
+  bool get lineCountPending => _lineCountPending;
+  PatternFailure? get lineCountFailure => _lineCountFailure;
 
   /// Whether the Go to Line field holds input [submitGoToLine] could not
   /// read, until that input is edited or the field closes.
@@ -770,6 +824,8 @@ class EditorController extends ChangeNotifier {
     if (tool == null) {
       throw ArgumentError.value(toolId, 'toolId', 'No text tool');
     }
+    // A pattern tool's options live in the find bar, not here.
+    if (tool.usesFindBar) return openFindTool(toolId);
     if (_searchOpen) closeSearch();
     if (_goToLineOpen) closeGoToLine();
     _barTool = tool;
@@ -1173,6 +1229,9 @@ class EditorController extends ChangeNotifier {
     if (_loading || _error != null) return;
     // The find bar and the tool bar share one slot.
     if (_barTool != null) closeTextTool(refocus: false);
+    // A plain Find reopens without the pattern-tool rows; the menu paths
+    // that want them set them after this returns.
+    _closeFindRows();
     final selection = text.selection;
     String? prefill;
     if (selection.isValid && !selection.isCollapsed) {
@@ -1210,7 +1269,10 @@ class EditorController extends ChangeNotifier {
     if (!_searchOpen) return;
     _searchOpen = false;
     _replaceOpen = false;
-    if (_focusMemory == searchFocus || _focusMemory == replacementFocus) {
+    _closeFindRows();
+    if (_focusMemory == searchFocus ||
+        _focusMemory == replacementFocus ||
+        _focusMemory == extractionFocus) {
       _focusMemory = null;
     }
     _matches = const [];
@@ -1226,6 +1288,348 @@ class EditorController extends ChangeNotifier {
     // Go to Line may stay open with the user typing in it.
     if (!goToLineFocus.hasFocus) editorFocus.requestFocus();
     _notify();
+  }
+
+  /// Closes the line-action and extraction rows: their count, its debounce
+  /// and its worker die with the row.
+  void _closeFindRows() {
+    _lineActionsOpen = false;
+    _extractOpen = false;
+    _linesCountDelay?.cancel();
+    _linesCountDelay = null;
+    _linesGeneration++;
+    _linesWorker?.dispose();
+    _linesWorker = null;
+    _lineActionCount = null;
+    _lineCountPending = false;
+    _lineCountFailure = null;
+  }
+
+  // ── Find-bar pattern tools ──
+
+  /// Opens the find bar armed for a pattern tool — the find field collects
+  /// the query and the bar shows the tool's action row.
+  /// 'keepLinesMatching' and 'deleteLinesMatching' open the line-action
+  /// row; 'extractMatches' the extraction row. [options], when given —
+  /// from a recorded run — reseeds the field, the toggles and the row.
+  void openFindTool(String toolId, {Map<String, Object?>? options}) {
+    final tool = textToolById(toolId);
+    if (tool == null) {
+      throw ArgumentError.value(toolId, 'toolId', 'No text tool');
+    }
+    if (!tool.usesFindBar) {
+      throw ArgumentError.value(toolId, 'toolId', 'Not a find-bar tool');
+    }
+    final saved = options ?? _toolHistory.lastOptionsFor(toolId);
+    // Set the toggles through their methods so regex-mode cleanup runs.
+    if ((saved['regularExpression'] == true) != _useRegularExpression) {
+      toggleRegularExpression();
+    }
+    if ((saved['caseSensitive'] == true) != _caseSensitive) {
+      toggleCaseSensitive();
+    }
+    if ((saved['wholeWord'] == true) != _wholeWord) {
+      toggleWholeWord();
+    }
+    openSearch();
+    final pattern = saved['pattern'];
+    if (pattern is String && pattern.isNotEmpty) {
+      _updatingQuery = true;
+      try {
+        search.text = pattern;
+      } finally {
+        _updatingQuery = false;
+      }
+      // openSearch scanned with the old field's contents.
+      _updateMatches(resetActive: true);
+    }
+    _extractWholeLines = saved['wholeLines'] == true;
+    final target = saved['target'];
+    _extractTarget = target is String ? target : 'inPlace';
+    final template = saved['template'];
+    extraction.value = TextEditingValue(
+      text: template is String ? template : '',
+    );
+    if (toolId == 'extractMatches') {
+      _extractOpen = true;
+    } else {
+      _lineActionsOpen = true;
+    }
+    _scheduleLineCount();
+    _notify();
+  }
+
+  /// The find bar's Lines control: shows or hides the line-action row.
+  void toggleLineActions() {
+    _lineActionsOpen = !_lineActionsOpen;
+    if (_lineActionsOpen) _extractOpen = false;
+    if (_lineActionsOpen) {
+      _scheduleLineCount();
+    } else {
+      _closeFindRows();
+    }
+    _notify();
+  }
+
+  /// Sets whether Extract collects whole matching lines; the row's count
+  /// changes meaning with it, so it recomputes.
+  void setExtractWholeLines(bool value) {
+    if (_extractWholeLines == value) return;
+    _extractWholeLines = value;
+    _scheduleLineCount();
+    _notify();
+  }
+
+  /// Sets the Extract destination: 'inPlace', 'clipboard' or
+  /// 'newDocument'.
+  void setExtractTarget(String value) {
+    if (_extractTarget == value) return;
+    _extractTarget = value;
+    _notify();
+  }
+
+  void _extractionChanged() {
+    if (_extractOpen) _scheduleLineCount();
+  }
+
+  /// The options a find-bar tool would run with now: the find field's
+  /// query, the bar's toggles and the row's own controls.
+  Map<String, Object?> _findToolOptions(TextTool tool) => _toolOptions(tool, {
+    'pattern': search.text,
+    'regularExpression': _useRegularExpression,
+    'caseSensitive': _caseSensitive,
+    'wholeWord': _wholeWord,
+    'wholeLines': _extractWholeLines,
+    'template': extraction.text,
+    'target': _extractTarget,
+  });
+
+  /// Schedules the action row's count — debounced like the pattern search,
+  /// worker-backed for the same reason: a catastrophic expression must not
+  /// reach the UI isolate.
+  void _scheduleLineCount() {
+    if (!_lineActionsOpen && !_extractOpen) return;
+    _lineCountPending = true;
+    _linesCountDelay?.cancel();
+    _linesCountDelay = Timer(PatternFind.settleDelay, _countLineAction);
+    _notify();
+  }
+
+  Future<void> _countLineAction() async {
+    final generation = ++_linesGeneration;
+    final query = search.text;
+    if (query.isEmpty) {
+      _lineActionCount = 0;
+      _lineCountPending = false;
+      _lineCountFailure = null;
+      _notify();
+      return;
+    }
+    final worker = _linesWorker ??= PatternWorker(budget: _patternSearchBudget);
+    final source = text.text;
+    final outcome = _extractOpen
+        ? await worker.extractMatches(
+            source,
+            query,
+            caseSensitive: _caseSensitive,
+            wholeWord: _wholeWord,
+            wholeLines: _extractWholeLines,
+            template: extraction.text.isEmpty ? null : extraction.text,
+            literal: !_useRegularExpression,
+          )
+        : await worker.countMatchingLines(
+            source,
+            query,
+            caseSensitive: _caseSensitive,
+            wholeWord: _wholeWord,
+            literal: !_useRegularExpression,
+          );
+    // A newer count, a closed row or an edit makes this answer stale.
+    if (_disposed ||
+        generation != _linesGeneration ||
+        !identical(text.text, source)) {
+      return;
+    }
+    _lineCountPending = false;
+    switch (outcome) {
+      case PatternCompleted(:final value):
+        _lineActionCount = switch (value) {
+          final int count => count,
+          final List<String> lines => lines.length,
+          _ => null,
+        };
+        _lineCountFailure = null;
+      case PatternFailed(:final failure):
+        _lineActionCount = null;
+        _lineCountFailure = failure;
+      case PatternCancelled():
+        return;
+    }
+    _notify();
+  }
+
+  /// Applies Keep or Delete Lines Matching — the line row's buttons and
+  /// its Enter. The find field holds the pattern; the live selection is
+  /// the active match, never the scope, so the action spans the document.
+  Future<TextToolOutcome?> applyLineFilter({required bool keep}) async {
+    final tool = textToolById(
+      keep ? 'keepLinesMatching' : 'deleteLinesMatching',
+    )!;
+    if (!canEditText) return null;
+    final options = _findToolOptions(tool);
+    final query = search.text;
+    closeSearch();
+    await _waitForUndoQuiet();
+    if (_disposed || !canEditText) return null;
+    final outcome = await _runPatternOutcome(
+      tool,
+      query,
+      (worker, source) => worker.filterLines(
+        source,
+        query,
+        keep: keep,
+        caseSensitive: _caseSensitive,
+        wholeWord: _wholeWord,
+        literal: !_useRegularExpression,
+      ),
+      (value, source) {
+        final filtered = value! as PatternLineFilter;
+        final removed = keep
+            ? filtered.total - filtered.matched
+            : filtered.matched;
+        if (removed == 0) return TextToolUnchanged(scope: filtered.total);
+        final caret = (text.selection.isValid ? text.selection.extentOffset : 0)
+            .clamp(0, filtered.text.length);
+        _requestCaretReveal(CaretReveal.nearest);
+        text.value = TextEditingValue(
+          text: filtered.text,
+          selection: TextSelection.collapsed(offset: caret),
+        );
+        return TextToolChanged(
+          LineEdit(filtered.text, caret, caret),
+          changed: removed,
+          scope: filtered.total,
+        );
+      },
+    );
+    if (outcome == null) return null;
+    _toolReport = TextToolReport(
+      tool: tool,
+      outcome: outcome,
+      ranOn: TextToolRanOn.document,
+    );
+    _toolHistory.record(tool.id, options);
+    _notify();
+    return outcome;
+  }
+
+  /// Applies Extract Matches to the row's destination. 'inPlace' rewrites
+  /// the document to the extraction; 'clipboard' and 'newDocument' leave
+  /// it alone — the latter asks [onNewDocument].
+  Future<TextToolOutcome?> applyExtract() async {
+    final tool = textToolById('extractMatches')!;
+    if (!canEditText) return null;
+    final options = _findToolOptions(tool);
+    final query = search.text;
+    final target = _extractTarget;
+    final wholeLines = _extractWholeLines;
+    final template = extraction.text.isEmpty ? null : extraction.text;
+    closeSearch();
+    await _waitForUndoQuiet();
+    if (_disposed || !canEditText) return null;
+    final outcome = await _runPatternOutcome(
+      tool,
+      query,
+      (worker, source) => worker.extractMatches(
+        source,
+        query,
+        caseSensitive: _caseSensitive,
+        wholeWord: _wholeWord,
+        wholeLines: wholeLines,
+        template: template,
+        literal: !_useRegularExpression,
+      ),
+      (value, source) {
+        final lines = value! as List<String>;
+        final unit = wholeLines ? 'lines' : 'matches';
+        if (lines.isEmpty) return TextToolUnchanged(scope: 0);
+        final joined = lines.join('\n');
+        switch (target) {
+          case 'clipboard':
+            unawaited(Clipboard.setData(ClipboardData(text: joined)));
+            return TextToolUnchanged(
+              scope: lines.length,
+              detail: 'clipboard:$unit',
+            );
+          case 'newDocument' when onNewDocument != null:
+            onNewDocument!(joined);
+            return TextToolUnchanged(
+              scope: lines.length,
+              detail: 'newDocument:$unit',
+            );
+          default:
+            if (joined.length > source.length &&
+                utf8EncodedLength(joined) > maximumBytes) {
+              return const TextToolRefused(TextToolRefusal.tooLarge);
+            }
+            _requestCaretReveal(CaretReveal.nearest);
+            text.value = TextEditingValue(
+              text: joined,
+              selection: TextSelection.collapsed(offset: joined.length),
+            );
+            return TextToolChanged(
+              LineEdit(joined, joined.length, joined.length),
+              changed: lines.length,
+              scope: lines.length,
+              detail: 'inPlace:$unit',
+            );
+        }
+      },
+    );
+    if (outcome == null) return null;
+    _toolReport = TextToolReport(
+      tool: tool,
+      outcome: outcome,
+      ranOn: TextToolRanOn.document,
+    );
+    _toolHistory.record(tool.id, options);
+    _notify();
+    return outcome;
+  }
+
+  /// The worker round-trip both applies share: compile failures and worker
+  /// failures become refusals, an edit that lands mid-run retries on the
+  /// new text, and a disposed worker reports nothing.
+  Future<TextToolOutcome?> _runPatternOutcome(
+    TextTool tool,
+    String query,
+    Future<PatternOutcome<Object?>> Function(PatternWorker, String) request,
+    TextToolOutcome? Function(Object? value, String source) install,
+  ) async {
+    if (query.isEmpty) {
+      return const TextToolRefused(TextToolRefusal.noPattern);
+    }
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final source = text.text;
+      final worker = PatternWorker(budget: _patternSearchBudget);
+      final PatternOutcome<Object?> outcome;
+      try {
+        outcome = await request(worker, source);
+      } finally {
+        worker.dispose();
+      }
+      if (_disposed || outcome is PatternCancelled) return null;
+      if (!identical(text.text, source)) continue;
+      if (outcome case PatternFailed(:final failure)) {
+        return TextToolRefused(
+          failure is PatternUnusable
+              ? TextToolRefusal.invalidPattern
+              : TextToolRefusal.patternFailed,
+        );
+      }
+      return install((outcome as PatternCompleted).value, source);
+    }
+    return null;
   }
 
   void openGoToLine() {
@@ -1373,6 +1777,7 @@ class EditorController extends ChangeNotifier {
 
   void _updateMatches({required bool resetActive}) {
     _lastQuery = search.text;
+    _scheduleLineCount();
     if (_searchOpen && _useRegularExpression) {
       final find = _patternFind ??= PatternFind(
         budget: _patternSearchBudget,
@@ -1421,6 +1826,7 @@ class EditorController extends ChangeNotifier {
   /// so typing anywhere keeps the find bar on the same occurrence.
   void _followEdit(String before) {
     _Edit? edit;
+    _scheduleLineCount();
     final find = _useRegularExpression ? _patternFind : null;
     if (find != null) {
       // Carried through the edit first, so the pages below come from the
@@ -1846,12 +2252,16 @@ class EditorController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _patternFind?.dispose();
+    _linesWorker?.dispose();
+    _linesCountDelay?.cancel();
     text.removeListener(_textChanged);
     search.removeListener(_queryChanged);
+    extraction.removeListener(_extractionChanged);
     goToLineInput.removeListener(_goToLineEdited);
     text.dispose();
     search.dispose();
     replacement.dispose();
+    extraction.dispose();
     goToLineInput.dispose();
     for (final MapEntry(:key, :value) in _fieldListeners.entries) {
       key.removeListener(value);
@@ -1861,6 +2271,7 @@ class EditorController extends ChangeNotifier {
     editorFocus.dispose();
     searchFocus.dispose();
     replacementFocus.dispose();
+    extractionFocus.dispose();
     goToLineFocus.dispose();
     scroll.dispose();
     undoController.dispose();

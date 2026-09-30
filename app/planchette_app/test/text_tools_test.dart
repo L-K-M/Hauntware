@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
+import 'package:planchette_core/planchette_core.dart';
 import 'package:planchette_app/services/app_settings.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
@@ -174,7 +175,8 @@ void main() {
         if (item case PlatformMenuItemGroup(:final members))
           for (final member in members) member.label,
     ];
-    // An option tool's label ends in an ellipsis: it opens the tool bar.
+    // An option tool's label ends in an ellipsis: it opens the tool bar —
+    // or the find bar, for the pattern tools.
     expect(leaves, [
       'Sort Lines…',
       'Reverse Lines',
@@ -182,6 +184,8 @@ void main() {
       'Remove Duplicate Lines…',
       'Remove Blank Lines',
       'Collapse Blank Lines',
+      'Keep Lines Matching…',
+      'Delete Lines Matching…',
       'Prefix/Suffix Lines…',
       'Number Lines…',
     ]);
@@ -275,6 +279,71 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(settings.value.recentTextTools, [containsPair('id', 'sortLines')]);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('Keep Lines Matching opens the find bar\'s line row', (
+    tester,
+  ) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'a\nb';
+    await mount(tester);
+
+    item(tester, 'Text', 'Keep Lines Matching…').onSelected!();
+    await tester.pump();
+
+    expect(tab.editor.searchOpen, isTrue);
+    expect(tab.editor.lineActionsOpen, isTrue);
+    expect(tab.editor.toolBarOpen, isFalse);
+    expect(tester.takeException(), isNull);
+    // The row's count debounce and its worker settle on real time.
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('Extract Matches opens the find bar\'s extraction row', (
+    tester,
+  ) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'a1';
+    await mount(tester);
+
+    item(tester, 'Find', 'Extract Matches…').onSelected!();
+    await tester.pump();
+
+    expect(tab.editor.searchOpen, isTrue);
+    expect(tab.editor.extractOpen, isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('Extract to a new document opens a tab with the matches', (
+    tester,
+  ) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'a1 b\nc2';
+    await mount(tester);
+    tab.editor
+      ..openFindTool('extractMatches')
+      ..toggleRegularExpression();
+    tab.editor
+      ..search.text = r'\d'
+      ..setExtractTarget('newDocument');
+    // Settle the undo merge window the apply waits out.
+    await tester.pump(const Duration(milliseconds: 600));
+
+    final outcome = await tester.runAsync(tab.editor.applyExtract);
+    await tester.pump();
+
+    expect(outcome, isA<TextToolUnchanged>());
+    expect(tab.editor.text.text, 'a1 b\nc2');
+    expect(workspace.documents, hasLength(2));
+    expect(workspace.active!.editor.text.text, '1\n2');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));

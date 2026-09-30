@@ -3,7 +3,7 @@ import 'dart:math' as math;
 
 import 'package:uuid/uuid.dart';
 
-import 'editor_syntax.dart' show isWordRune;
+import 'editor_syntax.dart' show FindPattern, isWordRune;
 import 'indentation.dart';
 import 'line_operations.dart';
 
@@ -63,6 +63,15 @@ enum TextToolRefusal {
 
   /// The file format mandates tab indentation (Makefile, Go).
   requiresTabs,
+
+  /// A pattern tool was run with an empty pattern.
+  noPattern,
+
+  /// A pattern tool was run with a pattern that does not compile.
+  invalidPattern,
+
+  /// A pattern tool's search failed or ran out of time in the worker.
+  patternFailed,
 }
 
 /// What a run did. Only [TextToolChanged] touches the buffer; a tool that
@@ -102,7 +111,7 @@ final class TextToolChanged extends TextToolOutcome {
 
 /// The run found nothing to change. [scope] says how much it looked at.
 final class TextToolUnchanged extends TextToolOutcome {
-  const TextToolUnchanged({this.scope = 0, this.indentation});
+  const TextToolUnchanged({this.scope = 0, this.indentation, this.detail});
 
   final int scope;
 
@@ -110,6 +119,10 @@ final class TextToolUnchanged extends TextToolOutcome {
   /// conversion commands set the document's setting whether or not any
   /// line needed it.
   final Indentation? indentation;
+
+  /// A discriminator the notice can phrase on, such as the Extract
+  /// Matches destination when the extraction left the buffer alone.
+  final String? detail;
 }
 
 /// The run did not apply; [reason] says why, in a way the notice can show.
@@ -254,6 +267,9 @@ final class TextTool {
     required this.group,
     required this.scope,
     this.options = const [],
+    this.ignoresSelection = false,
+    this.usesFindBar = false,
+    this.showsInMenu = true,
     required this.run,
   });
 
@@ -270,10 +286,31 @@ final class TextTool {
   /// Declared options, in shown order.
   final List<TextToolOption> options;
 
+  /// Whether a live selection narrows the run. Pattern tools ignore it —
+  /// the selection is the active match, not a scope.
+  final bool ignoresSelection;
+
+  /// Whether the find bar collects this tool's options — its pattern
+  /// comes from the find field — rather than the options tool bar.
+  final bool usesFindBar;
+
+  /// Whether the generated Text menu lists it. A pattern tool that
+  /// another menu already exposes stays out of its submenu.
+  final bool showsInMenu;
+
   /// The transform. Returns an outcome rather than editing in place so the
   /// caller can preflight size, record the result and map the selection.
   final TextToolOutcome Function(TextToolRun run) run;
 }
+
+/// The options every pattern tool declares: the query from the find
+/// field and the bar's three toggles, so a recorded run replays exactly.
+const _linePatternOptions = <TextToolOption>[
+  TextOption('pattern'),
+  ToggleOption('regularExpression'),
+  ToggleOption('caseSensitive'),
+  ToggleOption('wholeWord'),
+];
 
 /// The catalog, in menu order. Menus, the palette and the options bar are
 /// generated from this list; nothing else decides what exists.
@@ -329,6 +366,45 @@ const textToolCatalog = <TextTool>[
     group: TextToolGroup.lines,
     scope: TextToolScope.document,
     run: _collapseBlankLines,
+  ),
+  TextTool(
+    id: 'keepLinesMatching',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    ignoresSelection: true,
+    usesFindBar: true,
+    options: _linePatternOptions,
+    run: _keepLinesMatching,
+  ),
+  TextTool(
+    id: 'deleteLinesMatching',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    ignoresSelection: true,
+    usesFindBar: true,
+    options: _linePatternOptions,
+    run: _deleteLinesMatching,
+  ),
+  TextTool(
+    id: 'extractMatches',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    ignoresSelection: true,
+    usesFindBar: true,
+    showsInMenu: false,
+    options: [
+      ..._linePatternOptions,
+      ToggleOption('wholeLines'),
+      TextOption('template'),
+      // The destination is a host action the find bar's row owns; the
+      // tool's own run() only ever applies 'inPlace'.
+      ChoiceOption('target', [
+        'inPlace',
+        'clipboard',
+        'newDocument',
+      ], value: 'inPlace'),
+    ],
+    run: _extractMatches,
   ),
   TextTool(
     id: 'prefixSuffixLines',
@@ -603,7 +679,7 @@ resolveTextToolRange(
 }) {
   RangeError.checkValueInInterval(base, 0, text.length, 'base');
   RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
-  if (base != extent && !wholeDocument) {
+  if (base != extent && !wholeDocument && !tool.ignoresSelection) {
     return (
       base: base,
       extent: extent,
@@ -1600,6 +1676,78 @@ TextToolOutcome _joinLinesWith(TextToolRun run) {
     lines.join(separator),
     changed: lines.length,
     scope: block.contents.length,
+  );
+}
+
+// ── Pattern line tools ────────────────────────────────────────────────
+
+/// The compiled pattern a pattern tool's options describe: the query as a
+/// regular expression or — with the find bar's toggle off — literal text.
+FindPattern _patternOf(TextToolRun run) => FindPattern(
+  run.option<bool>('regularExpression')
+      ? run.option<String>('pattern')
+      : RegExp.escape(run.option<String>('pattern')),
+  caseSensitive: run.option<bool>('caseSensitive'),
+);
+
+/// The outcome a missing or broken pattern gets: refusing is quieter than
+/// deleting everything an empty pattern would match.
+TextToolOutcome? _patternRefusal(TextToolRun run) {
+  final source = run.option<String>('pattern');
+  if (source.isEmpty) {
+    return const TextToolRefused(TextToolRefusal.noPattern);
+  }
+  try {
+    _patternOf(run);
+    return null;
+  } on FormatException {
+    return const TextToolRefused(TextToolRefusal.invalidPattern);
+  }
+}
+
+TextToolOutcome _linesMatching(TextToolRun run, {required bool keep}) {
+  if (_patternRefusal(run) case final refused?) return refused;
+  final filtered = _patternOf(run).filterMatchingLines(
+    run.text,
+    keep: keep,
+    wholeWord: run.option<bool>('wholeWord'),
+  );
+  final removed = keep ? filtered.total - filtered.matched : filtered.matched;
+  if (removed == 0) return TextToolUnchanged(scope: filtered.total);
+  return _replaceSlice(
+    run,
+    filtered.text,
+    changed: removed,
+    scope: filtered.total,
+  );
+}
+
+TextToolOutcome _keepLinesMatching(TextToolRun run) =>
+    _linesMatching(run, keep: true);
+
+TextToolOutcome _deleteLinesMatching(TextToolRun run) =>
+    _linesMatching(run, keep: false);
+
+/// Replaces the range with the matches it holds, one per line — the
+/// in-place Extract destination. Clipboard and new document are host
+/// actions on the same extraction, not buffer edits.
+TextToolOutcome _extractMatches(TextToolRun run) {
+  if (_patternRefusal(run) case final refused?) return refused;
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final template = run.option<String>('template');
+  final lines = _patternOf(run).extractMatches(
+    run.text.substring(start, end),
+    wholeWord: run.option<bool>('wholeWord'),
+    wholeLines: run.option<bool>('wholeLines'),
+    template: template.isEmpty ? null : template,
+  );
+  if (lines.isEmpty) return TextToolUnchanged(scope: end - start);
+  return _replaceSlice(
+    run,
+    lines.join('\n'),
+    changed: lines.length,
+    scope: end - start,
   );
 }
 

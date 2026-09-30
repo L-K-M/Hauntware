@@ -456,11 +456,14 @@ class _DocumentShellState extends State<_DocumentShell> {
   }
 
   /// A no-options tool runs straight away; a tool that declares options
-  /// opens the bar so the user sets them first.
+  /// opens the bar so the user sets them first. A find-bar tool opens find
+  /// instead: its options are the query and the toggles.
   void _runOrOpenTextTool(TextTool tool) {
     final editor = workspace.active?.editor;
     if (editor == null) return;
-    if (tool.options.isEmpty) {
+    if (tool.usesFindBar) {
+      editor.openFindTool(tool.id);
+    } else if (tool.options.isEmpty) {
       unawaited(editor.runTextTool(tool.id));
     } else {
       editor.openTextTool(tool.id);
@@ -474,7 +477,15 @@ class _DocumentShellState extends State<_DocumentShell> {
   void _runRecentTextTool(TextToolRunRecord? record) {
     final editor = workspace.active?.editor;
     if (record == null || editor == null) return;
-    unawaited(editor.runTextTool(record.toolId, options: record.options));
+    final tool = textToolById(record.toolId);
+    // A pattern tool replays by reopening its find-bar row seeded with the
+    // recorded query, so a catastrophic expression never runs on the UI
+    // isolate and the destination is chosen where it lives.
+    if (tool != null && tool.usesFindBar) {
+      editor.openFindTool(record.toolId, options: record.options);
+    } else {
+      unawaited(editor.runTextTool(record.toolId, options: record.options));
+    }
   }
 
   void _find({bool replace = false}) {
@@ -701,10 +712,12 @@ class _DocumentShellState extends State<_DocumentShell> {
         ]),
         const _Separator(),
         for (final group in TextToolGroup.values)
-          if (textToolCatalog.any((tool) => tool.group == group))
+          if (textToolCatalog.any(
+            (tool) => tool.group == group && tool.showsInMenu,
+          ))
             _Submenu(_editorStrings.textToolGroupName(group), [
               for (final tool in textToolCatalog)
-                if (tool.group == group)
+                if (tool.group == group && tool.showsInMenu)
                   _Command(
                     _editorStrings.textToolMenuLabel(tool.id),
                     () => _runOrOpenTextTool(tool),
@@ -743,6 +756,12 @@ class _DocumentShellState extends State<_DocumentShell> {
               ? _shortcut(LogicalKeyboardKey.keyG, shift: true)
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
           enabled: ready,
+        ),
+        _Command(
+          _editorStrings.textToolMenuLabel('extractMatches'),
+          () => active?.editor.openFindTool('extractMatches'),
+          enabled: lineCommands,
+          id: 'extractMatches',
         ),
         const _Separator(),
         _Command(

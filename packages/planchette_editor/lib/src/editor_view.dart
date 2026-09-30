@@ -561,6 +561,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     ),
                   ),
                   IconButton(
+                    isSelected: c.lineActionsOpen,
+                    tooltip: strings.lineActions,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.toggleLineActions,
+                    icon: const Icon(Icons.filter_list),
+                  ),
+                  IconButton(
                     tooltip: strings.previousMatch,
                     visualDensity: VisualDensity.compact,
                     onPressed: c.matches.isEmpty ? null : c.previousMatch,
@@ -589,6 +596,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               ),
             ],
           ),
+          if (c.lineActionsOpen) _lineActionsRow(context),
+          if (c.extractOpen) _extractRow(context),
           if (c.replaceOpen)
             _searchRow(
               field: TextField(
@@ -620,6 +629,128 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             ),
         ],
       ),
+    );
+  }
+
+  /// The line-action row: the live matching-line count and the Keep and
+  /// Delete buttons that apply it to the document.
+  Widget _lineActionsRow(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    final failure = c.lineCountFailure;
+    final count = c.lineActionCount;
+    final label = switch (failure) {
+      PatternUnusable(:final message) => strings.patternInvalid(message),
+      PatternTimedOut() => strings.patternTooSlow,
+      _ when count != null => strings.lineMatchCount(count),
+      _ => '',
+    };
+    final ready = !_locked && !c.isBusy && count != null;
+    return _searchRow(
+      field: Text(
+        label,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: failure != null ? theme.colorScheme.error : null,
+        ),
+      ),
+      controls: [
+        TextButton(
+          onPressed: ready
+              ? () => unawaited(c.applyLineFilter(keep: true))
+              : null,
+          child: Text(strings.keepMatchingLines),
+        ),
+        TextButton(
+          onPressed: ready
+              ? () => unawaited(c.applyLineFilter(keep: false))
+              : null,
+          child: Text(strings.deleteMatchingLines),
+        ),
+      ],
+    );
+  }
+
+  /// The extraction row: the optional replacement template, the whole
+  /// lines toggle, the destination picker and the Extract button.
+  Widget _extractRow(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    final failure = c.lineCountFailure;
+    final count = c.lineActionCount;
+    final targets = [
+      'inPlace',
+      'clipboard',
+      if (c.canExtractToNewDocument) 'newDocument',
+    ];
+    return _searchRow(
+      field: TextField(
+        controller: c.extraction,
+        focusNode: c.extractionFocus,
+        autocorrect: false,
+        enableSuggestions: false,
+        style: theme.textTheme.bodyMedium,
+        decoration: InputDecoration(
+          hintText: strings.extractTemplateHint,
+          isDense: true,
+          border: InputBorder.none,
+        ),
+        onSubmitted: (_) => unawaited(c.applyExtract()),
+      ),
+      controls: [
+        if (failure != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              switch (failure) {
+                PatternUnusable(:final message) => strings.patternInvalid(
+                  message,
+                ),
+                _ => strings.patternTooSlow,
+              },
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          )
+        else if (count != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              strings.extractCount(count, wholeLines: c.extractWholeLines),
+              style: theme.textTheme.labelSmall,
+            ),
+          ),
+        IconButton(
+          isSelected: c.extractWholeLines,
+          tooltip: strings.extractWholeLinesTooltip,
+          visualDensity: VisualDensity.compact,
+          onPressed: () => c.setExtractWholeLines(!c.extractWholeLines),
+          icon: const Icon(Icons.subject),
+        ),
+        DropdownButton<String>(
+          value: targets.contains(c.extractTarget)
+              ? c.extractTarget
+              : 'inPlace',
+          underline: const SizedBox.shrink(),
+          isDense: true,
+          items: [
+            for (final target in targets)
+              DropdownMenuItem(
+                value: target,
+                child: Text(strings.textToolChoiceName(target)),
+              ),
+          ],
+          onChanged: (value) {
+            if (value != null) c.setExtractTarget(value);
+          },
+        ),
+        TextButton(
+          onPressed: !_locked && !c.isBusy && count != null
+              ? () => unawaited(c.applyExtract())
+              : null,
+          child: Text(strings.extractAction),
+        ),
+      ],
     );
   }
 

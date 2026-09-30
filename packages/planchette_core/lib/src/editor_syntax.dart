@@ -13,6 +13,8 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'line_operations.dart';
+
 part 'diff_syntax.dart';
 part 'dotenv_syntax.dart';
 part 'pattern_search.dart';

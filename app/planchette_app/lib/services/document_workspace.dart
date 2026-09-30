@@ -229,6 +229,16 @@ final class DocumentWorkspace extends ChangeNotifier {
     return tab;
   }
 
+  /// Extract Matches's "new document" destination: an untitled tab holding
+  /// the extraction.
+  void _extractedDocument(String text) {
+    if (interactionLocked) return;
+    final tab = _makeTab(initialText: text);
+    _documents.add(tab);
+    _active = tab;
+    _notify();
+  }
+
   DocumentTab _makeTab({String? path, String? initialText}) {
     final id = _nextId++;
     final tab = DocumentTab._(id, path == null ? _freeUntitledName() : '')
@@ -267,6 +277,8 @@ final class DocumentWorkspace extends ChangeNotifier {
       },
     );
     tab.editor.indentationPreference = _indentationPreference;
+    // Extract Matches can send its result to a fresh tab.
+    tab.editor.onNewDocument = _extractedDocument;
     tab._editorListener = () => _editorChanged(tab);
     tab.editor.addListener(tab._editorListener);
     return tab;
