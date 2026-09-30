@@ -261,11 +261,11 @@ CI, and looks like the beginning of Poltergeist, not a counter demo.
 
 **Scope.**
 
-- `flutter create --org com.lkm app/poltergeist_app` — the `--org` is
-  load-bearing: it yields Android id `com.lkm.poltergeist_app`, Apple
-  bundle id `com.lkm.poltergeistApp`, and Linux `APPLICATION_ID`
-  `com.lkm.poltergeist_app`; the packaged build reports X11 `WM_CLASS` as
-  instance `com.lkm.poltergeist_app`, class `Com.lkm.poltergeist_app`, so
+- `flutter create --org ch.lkmc app/poltergeist_app` — the `--org` is
+  load-bearing: it yields Android id `ch.lkmc.poltergeist`, Apple
+  bundle id `ch.lkmc.poltergeistApp`, and Linux `APPLICATION_ID`
+  `ch.lkmc.poltergeist`; the packaged build reports X11 `WM_CLASS` as
+  instance `ch.lkmc.poltergeist`, class `Com.lkm.poltergeist_app`, so
   the `.desktop` entry must carry the literal
   `StartupWMClass=Com.lkm.poltergeist_app` — kept in sync in
   `scripts/package-linux.sh` (AGENTS.md §3). Commit the

@@ -286,9 +286,9 @@ say "Poltergeist file transfer" once per page for search discoverability.
 The product name is plain ASCII everywhere a file name or identifier appears
 — this is a tested invariant in `packages/poltergeist_core` (Séance's
 codesign lesson), and identifiers are already fixed:
-`com.lkm.poltergeist_app` (Linux GApplication; reserved, not currently
+`ch.lkmc.poltergeist` (Linux GApplication; reserved, not currently
 used, for the mobile build D29 keeps open),
-`com.lkm.poltergeistApp` (Apple), Linux binary `poltergeist`. The
+`ch.lkmc.poltergeistApp` (Apple), Linux binary `poltergeist`. The
 underscore-vs-camelCase difference between the Linux and Apple ids is
 deliberate, not an inconsistency to "clean up" — each follows that
 platform's own convention, and unifying them would break whichever side
