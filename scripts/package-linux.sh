@@ -278,9 +278,9 @@ Icon=seance
 Terminal=false
 Categories=Network;System;Utility;
 # The GApplication id is also the prgname GTK reports to the session (seen
-# in its warnings: "(com.lkm.seance_app:pid): …"), hence StartupWMClass —
+# in its warnings: "(ch.lkmc.seance:pid): …"), hence StartupWMClass —
 # that's what lets desktops map windows onto this entry.
-StartupWMClass=com.lkm.seance_app
+StartupWMClass=ch.lkmc.seance
 EOF
 }
 

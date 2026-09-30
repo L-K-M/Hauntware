@@ -249,8 +249,8 @@ the -34018 error of the data-protection keychain), and the launcher icons. Icons
 `media-sources/seance-icon.png` via `dart run flutter_launcher_icons` (config
 in `app/seance_app/flutter_launcher_icons.yaml`); the server favicon is
 embedded in `packages/seance_sync_server/lib/src/favicon.dart` (regeneration
-recipe in its header). Bundle ids are `com.lkm.seance_app` (Android) /
-`com.lkm.seanceApp` (Apple).
+recipe in its header). Bundle ids are `ch.lkmc.seance` (Android) /
+`ch.lkmc.seanceApp` (Apple).
 
 The macOS floor is **12.0**, not the 10.15 the Flutter template once
 generated. It is `MACOSX_DEPLOYMENT_TARGET` in
