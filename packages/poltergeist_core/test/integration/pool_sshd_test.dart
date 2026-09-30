@@ -401,7 +401,7 @@ class _PoolHarness {
       _unexpectedPrompts.add('host key');
       fail('A pre-seeded fixture must never prompt.');
     },
-    onKeyboardInteractive: (_, _, _) async {
+    onKeyboardInteractive: (_) async {
       _unexpectedPrompts.add('keyboard interactive');
       fail('Stored credentials must not prompt.');
     },
@@ -424,6 +424,7 @@ class _PoolHarness {
     required TofuVerifier tofu,
     required HostKeyPrompter onHostKey,
     KeyboardInteractiveResponder? onKeyboardInteractive,
+    required SshJumpHostResolver? resolveJumpHost,
     required ConnectPrompting prompting,
     Duration timeout = SshTransport.defaultOpenTimeout,
     SshConnectionLog? log,
@@ -437,6 +438,7 @@ class _PoolHarness {
         tofu: tofu,
         onHostKey: onHostKey,
         onKeyboardInteractive: onKeyboardInteractive,
+        resolveJumpHost: resolveJumpHost,
         prompting: prompting,
         timeout: timeout,
         log: log,

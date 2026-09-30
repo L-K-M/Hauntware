@@ -805,9 +805,9 @@ overflows, the §6 cut lines apply — never quiet scope-dropping.
 
 1. **Agent auth + ProxyJump** (D10, PR-S4 in `seance_core`, 04 §5.5) —
    first, and explicitly not "eventually": `$SSH_AUTH_SOCK` / Windows
-   named-pipe agent client with a custom `SSHKeyPair` signer; ProxyJump
-   as recursive `openAuthenticatedClient` behind `jumpHostId`. The M2
-   seams make this additive.
+   named-pipe agent client with `SSHIdentity.custom` signing; ProxyJump
+   resolves the complete route before I/O, then dials the outer hop and
+   forwards through each inner hop. The M2 seams make this additive.
 2. **OS drag-out** (D14): spike `super_drag_and_drop` 0.10.x on current
    Flutter; if it fights the queue or the engine, custom per-platform
    plugins, macOS `NSFilePromiseProvider` first. The produce-on-demand

@@ -19,6 +19,9 @@ import 'local_directory_watcher.dart';
 import 'local_file_opener.dart';
 import 'protocol.dart';
 
+/// Matches seance_core's bounded ProxyJump route contract at the pinned rev.
+const int _maximumCatalogJumpHosts = 16;
+
 /// The drain's own abandon-signal: thrown by the timeout wrapper, never
 /// by a retirement — so `settled` classification cannot conflate a
 /// retirement that rejects with its own TimeoutException with the drain
@@ -75,6 +78,8 @@ class EngineHost {
   StreamSubscription<ConnectLogLine>? _connectLogSubscription;
 
   final Map<String, ServerConfig> _servers = {};
+  final Map<String, ServerConfig> _catalogServers = {};
+  final Set<String> _knownCatalogIds = {};
   final Map<int, PaneChannel> _channels = {};
 
   /// Channel retirements still in flight: the close request removed the
@@ -157,6 +162,7 @@ class EngineHost {
     host._logCoalescer = ConnectLogCoalescer(events.send);
     host._manager = PooledConnectionManager(
       resolveServer: host._resolveKnownServer,
+      resolveJumpHost: host._resolveCatalogServer,
       resolveCredentials: host._prompts.resolveCredentials,
       onHostKey: host._prompts.hostKey,
       onKeyboardInteractive: host._prompts.keyboard,
@@ -264,7 +270,10 @@ class EngineHost {
       case final OpenBrowseChannelRequest request:
         _guard(request.requestId, () async {
           _rejectIfShuttingDown();
-          _adoptServerConfig(request.serverId, request.config);
+          _adoptServerConfig(
+            request.serverId,
+            _authoritativeServerConfig(request.config),
+          );
           final channel = await _manager.openBrowseChannel(
             request.serverId,
             paneTabId: request.paneTabId,
@@ -333,7 +342,10 @@ class EngineHost {
           // server (a restored task, a sync run): the config rides along.
           final config = request.config;
           if (config != null) {
-            _adoptServerConfig(request.serverId, config);
+            _adoptServerConfig(
+              request.serverId,
+              _authoritativeServerConfig(config),
+            );
           } else if (!_servers.containsKey(request.serverId)) {
             // No config from the app and none from a browse open: there
             // is nothing to dial, and inventing one would be worse.
@@ -395,6 +407,11 @@ class EngineHost {
       case final SetProbeActivityRequest request:
         _guard(request.requestId, () async {
           _probes.setActivity(request.activity);
+          return const EngineAck();
+        });
+      case final ReplaceServerCatalogRequest request:
+        _guard(request.requestId, () async {
+          _replaceServerCatalog(request.configs);
           return const EngineAck();
         });
       case final DisconnectServerRequest request:
@@ -470,19 +487,173 @@ class EngineHost {
   /// or synced, reach the next connection instead of the session's first.
   /// The map goes first: a retired reference re-resolves through it.
   void _adoptServerConfig(String serverId, ServerConfig config) {
+    final previous = _servers[serverId];
     _servers[serverId] = config;
+    if (previous != null && _sameConnectionConfig(previous, config)) return;
+
     _manager.updateServerConfig(serverId, config);
   }
 
+  /// Presentation and sync-policy edits do not disturb a matching open that
+  /// is already resolving. Route or credential changes must retire it. Keep
+  /// this list exhaustive for every [ServerConfig] field connection setup
+  /// consumes.
+  bool _sameConnectionConfig(ServerConfig first, ServerConfig second) =>
+      first.id == second.id &&
+      first.host == second.host &&
+      first.port == second.port &&
+      first.username == second.username &&
+      first.jumpHostId == second.jumpHostId &&
+      first.authMethod == second.authMethod &&
+      first.secretRef == second.secretRef &&
+      first.identityFilePath == second.identityFilePath;
+
+  /// Resolves a request's catalog record against the latest full snapshot.
+  /// Deleted ids remain tombstoned so a request captured before deletion
+  /// cannot recreate its old route. Payload timestamps are not the catalog's
+  /// LWW tuple, so a route mismatch refuses until the ordered snapshot lands
+  /// instead of guessing which side is newer.
+  ServerConfig _authoritativeServerConfig(ServerConfig supplied) {
+    final current = _catalogServers[supplied.id];
+    if (current != null) {
+      if (_sameConnectionConfig(current, supplied)) return current;
+
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'resolve server',
+        message:
+            'The server connection changed in the current catalog. Retry '
+            'the connection.',
+      );
+    }
+    if (!_knownCatalogIds.contains(supplied.id)) return supplied;
+
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.disconnected,
+      operation: 'resolve server',
+      message: 'The server was removed from the current catalog.',
+    );
+  }
+
+  /// A catalog id can back several engine ids: its own sidebar row, favorite
+  /// bookmarks, restored transfers, and sync endpoints. Replace every known
+  /// alias and retire aliases whose record disappeared from the snapshot.
+  void _replaceServerCatalog(List<ServerConfig> configs) {
+    final previousCatalog = Map<String, ServerConfig>.of(_catalogServers);
+    final replacements = {for (final config in configs) config.id: config};
+    _knownCatalogIds.addAll(replacements.keys);
+    _catalogServers
+      ..clear()
+      ..addAll(replacements);
+
+    final aliases = _servers.entries.toList(growable: false);
+    for (final alias in aliases) {
+      final previousRoute = _catalogRoute(alias.value, previousCatalog);
+      final replacement = replacements[alias.value.id];
+      if (replacement != null) {
+        final replacementRoute = _catalogRoute(replacement, replacements);
+        if (!_sameCatalogRoute(previousRoute, replacementRoute)) {
+          _servers[alias.key] = replacement;
+          _manager.retireServerConfig(alias.key);
+          continue;
+        }
+
+        _adoptServerConfig(alias.key, replacement);
+        continue;
+      }
+      if (!_knownCatalogIds.contains(alias.value.id)) {
+        final currentRoute = _catalogRoute(alias.value, replacements);
+        if (!_sameCatalogRoute(previousRoute, currentRoute)) {
+          _manager.retireServerConfig(alias.key);
+        }
+        continue;
+      }
+
+      _servers.remove(alias.key);
+      _manager.retireServerConfig(alias.key);
+    }
+  }
+
+  _CatalogRoute _catalogRoute(
+    ServerConfig target,
+    Map<String, ServerConfig> catalog,
+  ) {
+    final configs = <ServerConfig>[target];
+    final visited = <String>{target.id};
+    var current = target;
+
+    while (current.jumpHostId != null) {
+      final jumpHostId = current.jumpHostId!;
+      if (!visited.add(jumpHostId)) {
+        return _CatalogRoute(
+          configs,
+          failure: _CatalogRouteFailure.cycle,
+          failureId: jumpHostId,
+        );
+      }
+      if (configs.length > _maximumCatalogJumpHosts) {
+        return _CatalogRoute(
+          configs,
+          failure: _CatalogRouteFailure.tooLong,
+          failureId: jumpHostId,
+        );
+      }
+
+      final jumpHost = catalog[jumpHostId];
+      if (jumpHost == null) {
+        return _CatalogRoute(
+          configs,
+          failure: _CatalogRouteFailure.missing,
+          failureId: jumpHostId,
+        );
+      }
+
+      configs.add(jumpHost);
+      current = jumpHost;
+    }
+
+    return _CatalogRoute(configs);
+  }
+
+  bool _sameCatalogRoute(_CatalogRoute first, _CatalogRoute second) {
+    if (first.failure != second.failure ||
+        first.failureId != second.failureId ||
+        first.configs.length != second.configs.length) {
+      return false;
+    }
+
+    for (var index = 0; index < first.configs.length; index++) {
+      if (!_sameConnectionConfig(first.configs[index], second.configs[index])) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   Future<ServerConfig> _resolveKnownServer(String serverId) async {
-    final config = _servers[serverId];
+    final config = _servers[serverId] ?? _catalogServers[serverId];
+    if (config == null) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.other,
+        operation: 'resolve server',
+        message:
+            'No connection request has supplied a config for '
+            '"$serverId" yet.',
+      );
+    }
+    return config;
+  }
+
+  /// Jump ids belong only to the shared catalog, never the engine-alias map.
+  Future<ServerConfig> _resolveCatalogServer(String serverId) async {
+    final config = _catalogServers[serverId];
     if (config != null) return config;
+
     throw RemoteFileException(
       kind: RemoteFileErrorKind.other,
-      operation: 'resolve server',
-      message:
-          'No connection request has supplied a config for '
-          '"$serverId" yet.',
+      operation: 'resolve jump host',
+      message: 'No catalog entry exists for jump host "$serverId".',
     );
   }
 
@@ -1167,17 +1338,16 @@ final class _PromptBroker {
     }
   }
 
-  Future<List<String>> keyboard(
-    List<String> prompts,
-    String name,
-    String instruction,
-  ) async {
+  Future<List<String>> keyboard(KeyboardInteractiveChallenge challenge) async {
     final promptId = _mint(
       EnginePromptKind.keyboardInteractive,
       KeyboardInteractivePromptData(
-        name: name,
-        instruction: instruction,
-        prompts: prompts,
+        host: challenge.server.host,
+        port: challenge.server.port,
+        username: challenge.server.username,
+        name: challenge.name,
+        instruction: challenge.instruction,
+        prompts: challenge.prompts,
       ),
     );
 
@@ -1314,6 +1484,21 @@ final class _PromptBroker {
     final prompt = _open[promptId];
     if (prompt != null && prompt.completer.isCompleted) _open.remove(promptId);
   }
+}
+
+enum _CatalogRouteFailure { missing, cycle, tooLong }
+
+/// Connection-relevant catalog state for one target and all of its hops.
+class _CatalogRoute {
+  final List<ServerConfig> configs;
+  final _CatalogRouteFailure? failure;
+  final String? failureId;
+
+  _CatalogRoute(
+    List<ServerConfig> configs, {
+    this.failure,
+    this.failureId,
+  }) : configs = List.unmodifiable(configs);
 }
 
 /// [environment] with [fallbackHome] as `HOME` when it names no home of

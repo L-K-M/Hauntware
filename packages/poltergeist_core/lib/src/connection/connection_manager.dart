@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:seance_core/seance_core.dart';
@@ -170,6 +171,9 @@ abstract interface class TransferChannelLease {
 /// A supplied password does not tell SSH whether the vault resolver prompted.
 enum CredentialOrigin { stored, prompted }
 
+/// Matches seance_core's bounded ProxyJump route contract at the pinned rev.
+const int _maximumJumpHosts = 16;
+
 /// Pool-owned secrets and their prompt provenance (03 §3.2, D18).
 class ResolvedCredentials {
   final SshCredentials credentials;
@@ -183,7 +187,7 @@ class ResolvedCredentials {
 /// ```
 /// serverId (bookmark) ─► reference ─┐
 /// serverId (bookmark) ─► reference ─┼─► pool keyed by (host, port,
-///                                    │   username, jump host) — 03 §3.5
+///                                    │   username, full route) — 03 §3.5
 ///                                    │     transport 1: browse + transfer ch
 ///                                    │     transport 2: transfer ch (growth)
 ///                                    └─► one shared TOFU verifier, one
@@ -201,6 +205,7 @@ class ResolvedCredentials {
 ///    exhaustion queues or shares instead of failing.
 class PooledConnectionManager implements ConnectionManager {
   final Future<ServerConfig> Function(String serverId) _resolveServer;
+  final Future<ServerConfig> Function(String serverId) _resolveJumpHost;
   final Future<ResolvedCredentials> Function(
     ServerConfig config,
     CredentialResolutionScope scope,
@@ -242,8 +247,10 @@ class PooledConnectionManager implements ConnectionManager {
   final StreamController<ConnectLogLine> _connectLog =
       StreamController<ConnectLogLine>.broadcast();
 
-  /// [resolveServer] loads config only; [resolveCredentials] may access the
-  /// vault or prompt and runs once inside each pool's first connect. It
+  /// [resolveServer] loads a connection alias; [resolveJumpHost] loads route
+  /// members and defaults to the same resolver when both share a namespace.
+  /// [resolveCredentials] may access the vault or prompt and runs once inside
+  /// each pool's first connect. It
   /// receives the resolution's dismissal scope: the manager trips it when
   /// the pool's lifetime ends mid-resolution, so a resolver-owned prompt
   /// closes instead of parking on an answer the pool rejects as stale.
@@ -268,7 +275,8 @@ class PooledConnectionManager implements ConnectionManager {
   /// before any password prompt (02 §10). Null skips it — the host key is
   /// then verified inside the authenticated connect, after resolution.
   PooledConnectionManager({
-    required this._resolveServer,
+    required Future<ServerConfig> Function(String serverId) resolveServer,
+    Future<ServerConfig> Function(String serverId)? resolveJumpHost,
     required this._resolveCredentials,
     required this._tofu,
     required this._onHostKey,
@@ -281,7 +289,9 @@ class PooledConnectionManager implements ConnectionManager {
     this._incidentStore,
     this._onIncidentStoreError,
     this._onRecoveryFailure,
-  }) : _reconnectRandom = reconnectRandom ?? Random() {
+  }) : _resolveServer = resolveServer,
+       _resolveJumpHost = resolveJumpHost ?? resolveServer,
+       _reconnectRandom = reconnectRandom ?? Random() {
     // A nonpositive cap turns an outage into a zero-delay retry loop.
     if (_policy.reconnectBackoffCap <= Duration.zero) {
       throw ArgumentError.value(
@@ -573,14 +583,29 @@ class PooledConnectionManager implements ConnectionManager {
   /// id's panes and leases there keep working until they close, but
   /// nothing new is acquired there and it never reconnects for this id.
   void updateServerConfig(String serverId, ServerConfig config) {
+    // A pending resolution has not entered [_references] yet. Remove its
+    // identity so it fails before credentials or transport work begins.
+    _pendingReferences.remove(serverId);
+
     // Unresolved ids read the resolver when they first connect.
     final reference = _references[serverId];
     if (reference == null) return;
 
     if (reference.pool.key == PoolKey.of(config)) {
       reference.config = config;
+      reference.routeConfigs = List.unmodifiable([config]);
       return;
     }
+    _retireReference(reference);
+  }
+
+  /// Retires a catalog route that no longer exists. Existing authenticated
+  /// work drains, but unresolved or future acquisitions cannot use it.
+  void retireServerConfig(String serverId) {
+    _pendingReferences.remove(serverId);
+    final reference = _references[serverId];
+    if (reference == null) return;
+
     _retireReference(reference);
   }
 
@@ -1101,7 +1126,7 @@ class PooledConnectionManager implements ConnectionManager {
 
     // Dead-slot eviction can leave a cached secret. A fresh attempt must
     // neither retain it on failure nor lend it to growth while resolving.
-    pool.resolvedCredentials = null;
+    _clearResolvedCredentials(pool);
 
     // The resolution may own a prompt that outlives this connect attempt.
     // Register its scope on the pool so the last reference out can dismiss
@@ -1112,55 +1137,76 @@ class PooledConnectionManager implements ConnectionManager {
     // One attempt verifies, resolves, and dials the same config, even if an
     // edit swaps the reference's copy while it awaits.
     final config = reference.config;
+    final routeConfigs = reference.routeConfigs;
 
     try {
       // Serialize vault access with first connect; joining bookmarks need
       // only metadata. Never open with a secret returned to a retired pool.
       final trustEpoch = pool._trustEpoch;
-      final observation = _TrustObservation();
+      final reviewedIncident = pool._incident;
+      final observation = _TrustObservation(
+        onTrusted: (decision) {
+          if (reviewedIncident == null ||
+              !_isCurrentTrustEpoch(pool, trustEpoch) ||
+              !_isCurrentIncident(pool, reviewedIncident)) {
+            return;
+          }
+          final key = decision.presented;
+          if (key.host != reviewedIncident.host ||
+              key.port != reviewedIncident.port) {
+            return;
+          }
+
+          // Lift the matching block before a routed open verifies later hops.
+          _forgetIncident(pool);
+          _setState(pool, ServerConnectionState.connecting);
+        },
+      );
       // Trust before secrets (02 §10): an endpoint with no pin gets its
       // first-use prompt on a short unauthenticated connection before the
       // resolver may prompt for a password. A pinned endpoint skips it —
       // its key is trusted or a changed-key incident either way, and the
       // authenticated connect below re-checks it.
-      await _preflightHostKey(pool, config, observation);
+      // A direct preflight would bypass a configured bastion. Routed opens
+      // verify every hop inside the upstream route executor instead.
+      if (config.jumpHostId == null) {
+        await _preflightHostKey(pool, config, observation);
+      }
       if (!_isCurrentTrustEpoch(pool, trustEpoch) || pool.references.isEmpty) {
         _throwIfBlocked(pool);
         throw _disconnectedAcquisition();
       }
-      final resolved = await _resolveCredentials(config, resolution);
-      // The resolution finished — retire its scope now, not at the end of
-      // the whole connect: a last-reference disconnect during the transport
-      // handshake must not fire `dismissed` for a resolution that already
-      // completed (the scope's contract). The `finally` below covers the
-      // path where the resolver itself throws.
-      if (identical(pool._resolution, resolution)) pool._resolution = null;
+      final log = _forwardingLogFor(pool);
+      final _ResolvedRouteCredentials route;
+      try {
+        route = await _resolveRouteCredentials(routeConfigs, resolution, log);
+      } finally {
+        // Credential prompts are finished before any network work begins.
+        // A disconnect during SSH negotiation must not dismiss a closed prompt.
+        if (identical(pool._resolution, resolution)) pool._resolution = null;
+      }
       if (!_isCurrentTrustEpoch(pool, trustEpoch) || pool.references.isEmpty) {
         _throwIfBlocked(pool);
         throw _disconnectedAcquisition();
       }
 
+      var routeChallenged = false;
+      final keyboard = _onKeyboardInteractive;
       final transport = await _openTransport(
         config: config,
-        credentials: resolved.credentials,
+        credentials: route.target.credentials,
         tofu: _observingTofu(observation),
         onHostKey: _hostKeyPrompterFor(pool, ConnectPrompting.enabled),
-        onKeyboardInteractive: _onKeyboardInteractive,
+        onKeyboardInteractive: keyboard == null
+            ? null
+            : (challenge) {
+                routeChallenged = true;
+                return keyboard(challenge);
+              },
+        resolveJumpHost: route.resolverFor(config),
         prompting: ConnectPrompting.enabled,
-        log: _forwardingLogFor(pool),
+        log: log,
       );
-
-      // Owner decision 1a: a presented key that returns to the pinned one
-      // lifts a declined changed-key block. The opener never invokes the
-      // prompter for a trusted key, so this attempt observes its verdict
-      // through the wrapper — nothing is re-verdict'd, nothing is pinned,
-      // and only this exact match unblocks (D18's changed-key block is
-      // otherwise unchanged).
-      if (pool.blocked &&
-          _isCurrentTrustEpoch(pool, trustEpoch) &&
-          observation.decision?.isTrusted == true) {
-        _forgetIncident(pool);
-      }
 
       // Every serverId may have disconnected while the connect was in
       // flight (the disconnect hook tears the pool down immediately). A
@@ -1176,12 +1222,14 @@ class PooledConnectionManager implements ConnectionManager {
         );
       }
 
-      pool.resolvedCredentials = resolved.credentials;
+      pool.resolvedCredentials = route.target.credentials;
+      pool.resolvedJumpHosts = route.jumpHosts;
 
       // Rule 2: interactive auth caps the pool at one transport from now
       // on — growth must never re-trigger a 2FA prompt (D5).
       pool.interactiveOnly =
-          resolved.origin == CredentialOrigin.prompted ||
+          route.prompted ||
+          routeChallenged ||
           transport.authKind == AuthKind.keyboardInteractive ||
           transport.authKind == AuthKind.promptedPassword;
 
@@ -1230,6 +1278,131 @@ class PooledConnectionManager implements ConnectionManager {
     );
   }
 
+  /// Resolves and validates the complete secret-free route graph.
+  Future<List<ServerConfig>> _resolveRouteConfigs(
+    ServerConfig target,
+    SshConnectionLog log,
+  ) async {
+    final configs = <ServerConfig>[target];
+    final visited = <String>{target.id};
+    var current = target;
+
+    // Validate the whole config graph before a vault read or user prompt.
+    while (current.jumpHostId != null) {
+      final jumpHostId = current.jumpHostId!;
+      if (!visited.add(jumpHostId)) {
+        throw SshConnectException(
+          'The jump-host route contains a cycle at "$jumpHostId".',
+          StateError('ProxyJump cycle at $jumpHostId'),
+          log,
+        );
+      }
+      if (configs.length > _maximumJumpHosts) {
+        throw SshConnectException(
+          'The jump-host route exceeds $_maximumJumpHosts hops.',
+          StateError('ProxyJump route exceeds $_maximumJumpHosts hops'),
+          log,
+        );
+      }
+
+      final ServerConfig config;
+      try {
+        config = await _resolveJumpHost(jumpHostId);
+      } on Object catch (error) {
+        throw SshConnectException(
+          'Could not resolve jump host "$jumpHostId": $error',
+          error,
+          log,
+        );
+      }
+      if (config.id != jumpHostId) {
+        final cause = StateError(
+          'Resolved ${config.id} for requested jump host $jumpHostId',
+        );
+        throw SshConnectException(
+          'Jump host "$jumpHostId" resolved to a different server.',
+          cause,
+          log,
+        );
+      }
+
+      configs.add(config);
+      current = config;
+    }
+
+    return List.unmodifiable(configs);
+  }
+
+  /// Resolves every credential before the opener can perform network I/O.
+  Future<_ResolvedRouteCredentials> _resolveRouteCredentials(
+    List<ServerConfig> configs,
+    _PoolResolution resolution,
+    SshConnectionLog log, {
+    void Function()? ensureActive,
+  }) async {
+    ensureActive?.call();
+    final target = configs.first;
+    final targetCredentials = await _resolveCredentials(target, resolution);
+    ensureActive?.call();
+    final jumpHosts = <String, ResolvedSshHost>{};
+    var prompted = targetCredentials.origin == CredentialOrigin.prompted;
+
+    for (final config in configs.skip(1)) {
+      final ResolvedCredentials credentials;
+      try {
+        credentials = await _resolveCredentials(config, resolution);
+      } on Object catch (error) {
+        throw SshConnectException(
+          'Could not resolve jump host "${config.id}": $error',
+          error,
+          log,
+        );
+      }
+      // A cancelled recovery must not continue into the next vault prompt.
+      ensureActive?.call();
+      prompted = prompted || credentials.origin == CredentialOrigin.prompted;
+      jumpHosts[config.id] = ResolvedSshHost(config, credentials.credentials);
+    }
+
+    return _ResolvedRouteCredentials(
+      target: targetCredentials,
+      jumpHosts: Map.unmodifiable(jumpHosts),
+      prompted: prompted,
+    );
+  }
+
+  /// Stable, secret-free identity for every jump endpoint and route edge.
+  String? _routeContext(List<ServerConfig> configs) {
+    if (configs.length == 1) return null;
+
+    return jsonEncode([
+      for (final config in configs.skip(1))
+        [
+          config.id,
+          config.host.trim().toLowerCase(),
+          config.port,
+          config.username.trim(),
+          config.jumpHostId,
+        ],
+    ]);
+  }
+
+  /// Growth and non-prompting reconnects reuse the complete first-connect
+  /// route. No vault read or second 2FA prompt is allowed in the background.
+  SshJumpHostResolver? _cachedJumpHostResolver(
+    ServerConfig target,
+    Map<String, ResolvedSshHost>? jumpHosts,
+  ) {
+    if (target.jumpHostId == null) return null;
+
+    return (serverId) async => jumpHosts?[serverId];
+  }
+
+  void _clearResolvedCredentials(_EndpointPool pool) {
+    pool.resolvedCredentials = null;
+    pool.resolvedJumpHosts = null;
+  }
+
   // ── Growth (rules 2–4) ─────────────────────────────────────────────────
 
   bool _canGrow(_EndpointPool pool) =>
@@ -1272,6 +1445,10 @@ class PooledConnectionManager implements ConnectionManager {
         // demands interaction per TCP connection must never pop a second
         // concurrent 2FA prompt from a background growth attempt.
         onKeyboardInteractive: null,
+        resolveJumpHost: _cachedJumpHostResolver(
+          reference.config,
+          pool.resolvedJumpHosts,
+        ),
         prompting: ConnectPrompting.disabled,
         log: _forwardingLogFor(pool),
       );
@@ -1344,9 +1521,15 @@ class PooledConnectionManager implements ConnectionManager {
 
         case HostKeyVerdict.firstUse:
           if (prompting == ConnectPrompting.disabled) return false;
-          // Removing a pin does not authorize first-use approval of a hard block.
-          if (pool.blocked) return false;
           final incident = pool._incident;
+          // A missing pin cannot downgrade the incident endpoint to first use.
+          // Other route hops still need review before the opener can reach it.
+          if (incident != null &&
+              decision.presented.host.trim().toLowerCase() ==
+                  incident.host.trim().toLowerCase() &&
+              decision.presented.port == incident.port) {
+            return false;
+          }
           final accepted = await _onHostKey(decision);
           return accepted &&
               _isCurrentTrustEpoch(pool, trustEpoch) &&
@@ -1386,7 +1569,7 @@ class PooledConnectionManager implements ConnectionManager {
     pool.browseByClient.clear();
     pool.idleTransfer.clear();
     pool.leasedTransfer.clear();
-    pool.resolvedCredentials = null;
+    _clearResolvedCredentials(pool);
 
     _failAllWaiters(pool, message: pool.blockDetail);
     _setState(pool, ServerConnectionState.blocked, detail: pool.blockDetail);
@@ -1462,11 +1645,9 @@ class PooledConnectionManager implements ConnectionManager {
   /// real pin, and the verifier — never a persisted record — is the trust
   /// authority (D18).
   Future<_PinMatch> _pinMatchOf(IncidentRecord record) async {
-    // The verifier's own lookup key: the opener passes the config's host and
-    // port to it verbatim, and the record stored them the same way. The same
-    // fingerprint pinned at ANOTHER endpoint (a cloned machine, a shared jump
-    // host) says nothing about this one.
-    final key = await _tofu.store.get(record.host, record.port);
+    // A routed record looks up the affected hop, not the target pool it
+    // re-associates with after restart.
+    final key = await _tofu.store.get(record.hostKeyHost, record.hostKeyPort);
     if (key == null) return _PinMatch.absent;
     return key.fingerprintSha256 == record.pinnedFingerprintSha256
         ? _PinMatch.names
@@ -1788,7 +1969,7 @@ class PooledConnectionManager implements ConnectionManager {
     if (pool.acquisitions != 0) return;
     if (!_hasDemand(pool) && pool._reconnect != null) {
       _cancelReconnect(pool);
-      pool.resolvedCredentials = null;
+      _clearResolvedCredentials(pool);
       if (!pool.blocked) _setState(pool, ServerConnectionState.disconnected);
     }
     if (pool.firstConnect != null) return;
@@ -1824,7 +2005,7 @@ class PooledConnectionManager implements ConnectionManager {
     // Credential references drop with the transports (03 §3.2 rule 3) —
     // Dart strings cannot be zeroized; clearing references is the best
     // available. The next first connect re-resolves from the vault.
-    pool.resolvedCredentials = null;
+    _clearResolvedCredentials(pool);
 
     _failAllWaiters(pool, message: detail);
     _setState(pool, ServerConnectionState.disconnected, detail: detail);
@@ -2075,6 +2256,7 @@ class PooledConnectionManager implements ConnectionManager {
   ) async {
     await _ensureIncidentsLoaded();
     final config = await _resolveServer(serverId);
+    final routeConfigs = await _resolveRouteConfigs(config, SshConnectionLog());
     // A cancelled resolve must not register or erase a newer session.
     if (!identical(_pendingReferences[serverId], pendingIdentity)) {
       throw _disconnectedAcquisition();
@@ -2082,12 +2264,12 @@ class PooledConnectionManager implements ConnectionManager {
 
     // The reference keeps this config until [updateServerConfig] refreshes
     // or retires it.
-    final key = PoolKey.of(config);
+    final key = PoolKey.of(config, routeContext: _routeContext(routeConfigs));
     final pool = _pools.putIfAbsent(
       key,
       () => _EndpointPool(key, _incidents[key]),
     );
-    final reference = _ServerReference(serverId, config, pool);
+    final reference = _ServerReference(serverId, config, routeConfigs, pool);
 
     // Edited back onto a pool it drains from: those channels are current
     // again, not leftovers a disconnect must chase separately.
@@ -2239,42 +2421,59 @@ class _PoolResolution implements CredentialResolutionScope {
   }
 }
 
+/// Secrets resolved as one route before its outer socket is opened.
+class _ResolvedRouteCredentials {
+  final ResolvedCredentials target;
+  final Map<String, ResolvedSshHost> jumpHosts;
+  final bool prompted;
+
+  const _ResolvedRouteCredentials({
+    required this.target,
+    required this.jumpHosts,
+    required this.prompted,
+  });
+
+  SshJumpHostResolver? resolverFor(ServerConfig config) {
+    if (config.jumpHostId == null) return null;
+
+    return (serverId) async => jumpHosts[serverId];
+  }
+}
+
 class _ServerReference {
   final String serverId;
 
   /// Swapped in place by a same-endpoint edit ([updateServerConfig]).
   ServerConfig config;
+  List<ServerConfig> routeConfigs;
   final _EndpointPool pool;
 
-  _ServerReference(this.serverId, this.config, this.pool);
+  _ServerReference(this.serverId, this.config, this.routeConfigs, this.pool);
 }
 
 /// Unresolved review state survives pool retirement without retaining secrets.
 class _HostKeyIncident {
+  /// The target pool and full route this incident blocks.
+  final PoolKey poolKey;
+
   /// The presented (declined) key's endpoint, verbatim for the block detail.
   final String host;
   final int port;
-
-  /// The endpoint identity the record re-keys under ([PoolKey]).
-  final String username;
-  final String? jumpHostId;
 
   final String presentedFingerprintSha256;
   final String? pinnedFingerprintSha256;
 
   _HostKeyIncident(PoolKey key, HostKeyDecision decision)
-    : host = decision.presented.host,
+    : poolKey = key,
+      host = decision.presented.host,
       port = decision.presented.port,
-      username = key.username,
-      jumpHostId = key.jumpHostId,
       presentedFingerprintSha256 = decision.presented.fingerprintSha256,
       pinnedFingerprintSha256 = decision.pinned?.fingerprintSha256;
 
   _HostKeyIncident.fromRecord(IncidentRecord record)
-    : host = record.host,
-      port = record.port,
-      username = record.username,
-      jumpHostId = record.jumpHostId,
+    : poolKey = record.poolKey,
+      host = record.hostKeyHost,
+      port = record.hostKeyPort,
       presentedFingerprintSha256 = record.presentedFingerprintSha256,
       pinnedFingerprintSha256 = record.pinnedFingerprintSha256;
 
@@ -2288,10 +2487,12 @@ class _HostKeyIncident {
 
   IncidentRecord recordFor(String serverId) => IncidentRecord(
     serverId: serverId,
-    host: host,
-    port: port,
-    username: username,
-    jumpHostId: jumpHostId,
+    host: poolKey.host,
+    port: poolKey.port,
+    username: poolKey.username,
+    jumpHostId: poolKey.jumpHostId,
+    routeContext: poolKey.routeContext,
+    hostKeyEndpoint: (host: host, port: port),
     presentedFingerprintSha256: presentedFingerprintSha256,
     pinnedFingerprintSha256: pinnedFingerprintSha256,
   );
@@ -2314,11 +2515,17 @@ enum _PinMatch {
   absent,
 }
 
-/// The TOFU verdict of one connect attempt. The opener never invokes the
-/// prompter for a trusted key, so first-connect unblocking (1a) reads the
-/// observed verdict after the transport lands.
+/// Observes TOFU verdicts within one connect attempt. The opener never invokes
+/// the prompter for a trusted key, so the callback synchronously lifts a
+/// matching current incident before a routed open verifies later hops.
 class _TrustObservation {
-  HostKeyDecision? decision;
+  final void Function(HostKeyDecision decision) _onTrusted;
+
+  _TrustObservation({required this._onTrusted});
+
+  void record(HostKeyDecision decision) {
+    if (decision.isTrusted) _onTrusted(decision);
+  }
 }
 
 /// A [TofuVerifier] decorator that records each check's verdict and
@@ -2334,7 +2541,7 @@ class _ObservingTofu extends TofuVerifier {
   @override
   Future<HostKeyDecision> check(HostKey presented) async {
     final decision = await _inner.check(presented);
-    _observation.decision = decision;
+    _observation.record(decision);
     return decision;
   }
 
@@ -2359,6 +2566,10 @@ class _EndpointPool {
   final Queue<_ChannelWaiter> waiters = Queue();
 
   SshCredentials? resolvedCredentials;
+
+  /// Resolved jump configs and credentials from the successful transport.
+  /// Background growth/reconnect reuse these without touching the vault.
+  Map<String, ResolvedSshHost>? resolvedJumpHosts;
   bool interactiveOnly = false;
   _HostKeyIncident? _incident;
   Object _trustEpoch = Object();

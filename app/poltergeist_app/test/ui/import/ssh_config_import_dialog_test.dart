@@ -202,7 +202,7 @@ void main() {
     expect(find.text('web.example.com:2222'), findsNWidgets(2));
     expect(find.text('Key: ~/.ssh/id_ed25519'), findsOneWidget);
     expect(find.text('deploy'), findsNWidgets(2));
-    expect(find.text('Password'), findsNWidgets(2));
+    expect(find.text('ssh-agent'), findsNWidgets(2));
 
     // Both rows target the bookmarked endpoint; the existing-bookmark
     // chip outranks the earlier-row chip when both would apply.
@@ -277,6 +277,30 @@ Host second
     );
   });
 
+  testWidgets('ProxyJump rows start skipped', (tester) async {
+    const config = '''
+Host web
+  HostName web.example.com
+  ProxyJump bastion
+''';
+    await _open(tester, _service(_FakeSource({_configPath: config})));
+
+    expect(
+      find.text(
+        'Won\u2019t behave as in ssh: ProxyJump \u2014 connects directly, '
+        'not through the jump host',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+    expect(
+      tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Import'),
+      ).onPressed,
+      isNull,
+    );
+  });
+
   testWidgets('unresolved include notices are listed', (tester) async {
     await _open(
       tester,
@@ -319,10 +343,10 @@ Host second
     await tester.pumpAndSettle();
 
     // Only `dup` was imported; the reference-style key path travels with
-    // key auth rows (none here), and password rows keep password auth.
+    // key auth rows (none here), and keyless rows keep agent auth.
     expect(
       find.text(
-        'result:dup:web.example.com:2222:deploy:password:-',
+        'result:dup:web.example.com:2222:deploy:agent:-',
       ),
       findsOneWidget,
     );

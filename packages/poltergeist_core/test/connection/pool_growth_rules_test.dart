@@ -86,13 +86,24 @@ void main() {
     final harness = PoolHarness()
       ..addServer('s1', host: 'a.example.com')
       ..addServer('s2', host: 'a.example.com', username: 'other')
-      ..addServer('s3', host: 'a.example.com', jumpHostId: 'bastion');
+      ..addServer('s3', host: 'a.example.com', port: 2222);
 
     await harness.manager.openBrowseChannel('s1', paneTabId: 't');
     await harness.manager.openBrowseChannel('s2', paneTabId: 't');
     await harness.manager.openBrowseChannel('s3', paneTabId: 't');
 
     expect(harness.opener.calls, hasLength(3));
+  });
+
+  test('a jump host remains part of pool identity', () {
+    final harness = PoolHarness()
+      ..addServer('direct')
+      ..addServer('jumped', jumpHostId: 'bastion');
+
+    expect(
+      PoolKey.of(harness.servers['direct']!),
+      isNot(PoolKey.of(harness.servers['jumped']!)),
+    );
   });
 
   test('re-opening a pane tab reuses its channel', () async {
@@ -196,6 +207,35 @@ void main() {
       }
     },
   );
+
+  test('agent auth grows without another prompt or credential read', () async {
+    final harness = PoolHarness(
+      opener: FakeTransportOpener(authKind: AuthKind.agent),
+      resolvedCredentials: const ResolvedCredentials(
+        credentials: SshCredentials.agent(),
+        origin: CredentialOrigin.stored,
+      ),
+    )..addServer('s1', authMethod: AuthMethod.agent);
+
+    await harness.manager.openBrowseChannel('s1', paneTabId: 't');
+    final leases = [
+      for (var i = 0; i < 8; i++) harness.manager.leaseTransferChannel('s1'),
+    ];
+    await Future.wait(leases);
+
+    expect(harness.opener.calls, hasLength(2));
+    expect(harness.credentialResolveCalls, 1);
+    expect(
+      harness.opener.calls.map((call) => call.credentials.method),
+      everyElement(AuthMethod.agent),
+    );
+    expect(harness.opener.calls.last.onKeyboardInteractive, isNull);
+    expect(harness.opener.calls.last.prompting, ConnectPrompting.disabled);
+
+    for (final lease in leases) {
+      await (await lease).release();
+    }
+  });
 
   test('a growth auth challenge marks the pool interactive-capped', () async {
     final harness = PoolHarness(

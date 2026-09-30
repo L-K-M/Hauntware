@@ -19,7 +19,8 @@ import 'engine_session.dart' show serverConfigForBookmark;
 /// 2. the stored bookmark: a `serverConfigId` reference resolves through
 ///    the pulled catalog (it carries fields an embedded identity cannot
 ///    express), falling back to the embedded identity beside it;
-/// 3. otherwise null — a Quick Connect `adhoc:` id lives only in its
+/// 3. a raw catalog-row id resolves directly through the pulled catalog;
+/// 4. otherwise null — a Quick Connect `adhoc:` id lives only in its
 ///    tab, and the engine then uses the config that tab's browse open
 ///    supplied (refusing typed when there was none).
 final class AppServerConfigSource implements ServerConfigSource {
@@ -60,7 +61,9 @@ final class AppServerConfigSource implements ServerConfigSource {
   }
 
   @override
-  Future<ServerConfig?> configFor(String serverId) async {
+  Future<ServerConfig?> configFor(String serverId) => _resolve(serverId);
+
+  Future<ServerConfig?> _resolve(String serverId) async {
     final registered = _adHoc[serverId];
     if (registered != null) return registered;
     final endpointRef = _refs[serverId];
@@ -71,8 +74,10 @@ final class AppServerConfigSource implements ServerConfigSource {
     final bookmark = (await _bookmarks.load())
         .where((candidate) => candidate.id == serverId)
         .firstOrNull;
-    final ref = bookmark?.server;
-    if (bookmark == null || ref == null) return null;
+    if (bookmark == null) return _catalogLookup?.call(serverId);
+
+    final ref = bookmark.server;
+    if (ref == null) return null;
 
     final catalogId = ref.serverConfigId;
     if (catalogId != null) {

@@ -329,7 +329,7 @@ class _PoolHarness {
       _decisions.add(decision);
       return _onHostKey(decision);
     },
-    onKeyboardInteractive: (_, _, _) async {
+    onKeyboardInteractive: (_) async {
       _unexpectedPrompts.add('keyboard interactive');
       fail('Key-auth fixture must not prompt for credentials.');
     },
@@ -345,6 +345,7 @@ class _PoolHarness {
     required TofuVerifier tofu,
     required HostKeyPrompter onHostKey,
     KeyboardInteractiveResponder? onKeyboardInteractive,
+    required SshJumpHostResolver? resolveJumpHost,
     required ConnectPrompting prompting,
     Duration timeout = SshTransport.defaultOpenTimeout,
     SshConnectionLog? log,
@@ -356,6 +357,7 @@ class _PoolHarness {
       tofu: tofu,
       onHostKey: onHostKey,
       onKeyboardInteractive: onKeyboardInteractive,
+      resolveJumpHost: resolveJumpHost,
       prompting: prompting,
       timeout: timeout,
       log: log,

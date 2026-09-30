@@ -724,6 +724,25 @@ void main() {
           updatedAt: 1,
         );
 
+    test('catalog publishes its assigned snapshot synchronously', () {
+      late SeanceServerCatalog catalog;
+      List<ServerConfig>? published;
+      catalog = SeanceServerCatalog(
+        onReplaced: (snapshot) {
+          published = snapshot;
+          expect(identical(snapshot, catalog.servers), isTrue);
+        },
+      );
+
+      catalog.replace([config('b', 'Zulu'), config('a', 'alpha')]);
+
+      expect(published?.map((server) => server.id), ['a', 'b']);
+      expect(
+        () => published!.add(config('c', 'Charlie')),
+        throwsUnsupportedError,
+      );
+    });
+
     test('pulled serverConfig records materialize the catalog', () async {
       final device = await _Device.create(tempDir, 'a', shared: true);
       server.seed(await RecordCrypto(RecordCodec(_key)).seal(DecryptedRecord(

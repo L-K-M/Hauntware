@@ -301,7 +301,10 @@ class RecordedOpenCall {
   final SshCredentials credentials;
   final HostKeyPrompter onHostKey;
   final KeyboardInteractiveResponder? onKeyboardInteractive;
+  final SshJumpHostResolver? resolveJumpHost;
   final ConnectPrompting prompting;
+
+  final List<ResolvedSshHost> jumpHosts = [];
 
   /// The forwarding log the pool passed for this attempt; tests append
   /// lines through it to drive transcript fan-out.
@@ -314,6 +317,7 @@ class RecordedOpenCall {
     required this.credentials,
     required this.onHostKey,
     required this.onKeyboardInteractive,
+    required this.resolveJumpHost,
     required this.prompting,
     this.transport,
   });
@@ -324,6 +328,10 @@ class RecordedOpenCall {
 /// behavior is scripted per test.
 class FakeTransportOpener {
   AuthKind authKind;
+
+  /// When set, that route member requests keyboard-interactive auth during
+  /// each prompting-enabled open.
+  final String? keyboardChallengeServerId;
 
   /// A prompting-disabled connect behaves as if the server demanded
   /// interaction: auth fails without a prompt (rule 3's growth case).
@@ -372,6 +380,7 @@ class FakeTransportOpener {
 
   FakeTransportOpener({
     this.authKind = AuthKind.key,
+    this.keyboardChallengeServerId,
     this.growthRequiresChallenge = false,
     this.presentedFingerprints = const ['SHA256:presented'],
     this.transportOpenLimit,
@@ -386,6 +395,7 @@ class FakeTransportOpener {
         required tofu,
         required onHostKey,
         onKeyboardInteractive,
+        required resolveJumpHost,
         required prompting,
         timeout = const Duration(seconds: 15),
         log,
@@ -396,12 +406,36 @@ class FakeTransportOpener {
           credentials: credentials,
           onHostKey: onHostKey,
           onKeyboardInteractive: onKeyboardInteractive,
+          resolveJumpHost: resolveJumpHost,
           prompting: prompting,
         );
         // The pool always passes its forwarding log; the recorded default
         // keeps the fake usable for suites that construct one directly.
         call.log = log ?? SshConnectionLog();
         calls.add(call);
+
+        // Mirror upstream's route-resolution boundary: every config and
+        // credential resolves before the first host-key/network step.
+        final route = <ServerConfig>[config];
+        final visited = <String>{config.id};
+        var current = config;
+        while (current.jumpHostId != null) {
+          final jumpHostId = current.jumpHostId!;
+          if (!visited.add(jumpHostId)) {
+            throw StateError('ProxyJump cycle at $jumpHostId');
+          }
+          final resolver = resolveJumpHost;
+          if (resolver == null) {
+            throw StateError('No resolver for jump host $jumpHostId');
+          }
+          final resolved = await resolver(jumpHostId);
+          if (resolved == null) {
+            throw StateError('Missing jump host $jumpHostId');
+          }
+          call.jumpHosts.add(resolved);
+          route.add(resolved.config);
+          current = resolved.config;
+        }
 
         // An empty script is a test bug; fail with a clear message instead
         // of a mid-connect RangeError.
@@ -413,30 +447,49 @@ class FakeTransportOpener {
                 ? index
                 : presentedFingerprints.length - 1];
 
-        final presented = HostKey(
-          host: config.host,
-          port: config.port,
-          type: 'ssh-ed25519',
-          fingerprintSha256: fingerprint,
-          pinnedAt: 0,
-        );
+        for (final hop in route.reversed) {
+          final presented = HostKey(
+            host: hop.host,
+            port: hop.port,
+            type: 'ssh-ed25519',
+            fingerprintSha256: fingerprint,
+            pinnedAt: 0,
+          );
 
-        final decision = await tofu.check(presented);
-        final verificationGate = growthVerificationGate;
-        if (prompting == ConnectPrompting.disabled &&
-            verificationGate != null) {
-          await verificationGate.future;
-        }
-        if (!decision.isTrusted) {
-          final approved = await onHostKey(decision);
-          if (!approved) {
-            throw SshConnectException(
-              'Host key not accepted for ${config.host}:${config.port}.',
-              StateError('host key rejected'),
-              log ?? SshConnectionLog(),
+          final decision = await tofu.check(presented);
+          final verificationGate = growthVerificationGate;
+          if (prompting == ConnectPrompting.disabled &&
+              verificationGate != null) {
+            await verificationGate.future;
+          }
+          if (!decision.isTrusted) {
+            final approved = await onHostKey(decision);
+            if (!approved) {
+              throw SshConnectException(
+                'Host key not accepted for ${hop.host}:${hop.port}.',
+                StateError('host key rejected'),
+                log ?? SshConnectionLog(),
+              );
+            }
+            await tofu.pin(presented);
+          }
+
+          if (hop.id == keyboardChallengeServerId) {
+            final responder = onKeyboardInteractive;
+            if (responder == null) {
+              throw const AuthChallengeRequiredError(
+                'The server requires interactive authentication.',
+              );
+            }
+            await responder(
+              KeyboardInteractiveChallenge(
+                server: hop,
+                prompts: const ['Code'],
+                name: '2FA',
+                instruction: '',
+              ),
             );
           }
-          await tofu.pin(presented);
         }
 
         final extraVerification = reverify;
@@ -562,6 +615,12 @@ class PoolHarness {
     Prober? prober,
     Random? random,
     IncidentStore? incidentStore,
+    ResolvedCredentials resolvedCredentials = const ResolvedCredentials(
+      credentials: SshCredentials.privateKey('TEST KEY'),
+      origin: CredentialOrigin.stored,
+    ),
+    FutureOr<ResolvedCredentials> Function(ServerConfig config)?
+    credentialsFor,
     void Function(Object error)? onIncidentStoreError,
     void Function(String, RemoteFileException, {String? paneTabId})?
         onRecoveryFailure,
@@ -570,24 +629,25 @@ class PoolHarness {
     this.incidentStore = incidentStore ?? InMemoryIncidentStore();
     manager = PooledConnectionManager(
       resolveServer: _resolve,
-      resolveCredentials: (_, scope) async {
+      resolveCredentials: (config, scope) async {
         credentialResolveCalls++;
         resolutionScopes.add(scope);
         await credentialGate?.future;
         final failure = credentialFailure;
         if (failure != null) throw failure;
-        return const ResolvedCredentials(
-          credentials: SshCredentials.privateKey('TEST KEY'),
-          origin: CredentialOrigin.stored,
-        );
+
+        if (credentialsFor != null) return await credentialsFor(config);
+
+        return resolvedCredentials;
       },
       tofu: TofuVerifier(store),
       onHostKey: (decision) => onHostKey(decision),
       // A trivial responder: interactive-auth servers still complete their
       // first connect, which is what the pool reasons about.
-      onKeyboardInteractive: (prompts, name, instruction) async {
+      onKeyboardInteractive: (challenge) async {
         keyboardCalls++;
-        return await keyboardGate?.future ?? List.filled(prompts.length, '');
+        return await keyboardGate?.future ??
+            List.filled(challenge.prompts.length, '');
       },
       policy: policy,
       openTransport: this.opener.opener,
@@ -629,6 +689,7 @@ class PoolHarness {
     String host = 'example.com',
     int port = 22,
     String username = 'test',
+    AuthMethod authMethod = AuthMethod.privateKey,
     String? jumpHostId,
   }) {
     servers[serverId] = ServerConfig(
@@ -637,7 +698,7 @@ class PoolHarness {
       host: host,
       port: port,
       username: username,
-      authMethod: AuthMethod.privateKey,
+      authMethod: authMethod,
       jumpHostId: jumpHostId,
       createdAt: 0,
       updatedAt: 0,

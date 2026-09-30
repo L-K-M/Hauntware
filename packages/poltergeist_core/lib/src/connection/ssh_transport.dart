@@ -103,6 +103,7 @@ typedef SshTransportOpener = Future<SshTransport> Function({
   required TofuVerifier tofu,
   required HostKeyPrompter onHostKey,
   KeyboardInteractiveResponder? onKeyboardInteractive,
+  required SshJumpHostResolver? resolveJumpHost,
   required ConnectPrompting prompting,
   Duration timeout,
   SshConnectionLog? log,
@@ -250,6 +251,7 @@ Future<SshTransport> openDartSshTransport({
   required TofuVerifier tofu,
   required HostKeyPrompter onHostKey,
   KeyboardInteractiveResponder? onKeyboardInteractive,
+  required SshJumpHostResolver? resolveJumpHost,
   required ConnectPrompting prompting,
   Duration timeout = SshTransport.defaultOpenTimeout,
   SshConnectionLog? log,
@@ -268,6 +270,7 @@ Future<SshTransport> openDartSshTransport({
       // caller (the pool hard-blocks on it), never be silently bypassed.
       onKeyboardInteractive:
           prompting == ConnectPrompting.enabled ? onKeyboardInteractive : null,
+      resolveJumpHost: resolveJumpHost,
       timeout: timeout,
       // The pool owns the idle-only keepalive policy (03 §3.3): disable
       // the opener's built-in timer so no second keepalive clock runs.

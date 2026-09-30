@@ -1,4 +1,4 @@
-// Ported from Séance app/seance_app/lib/ui/keyboard_interactive_dialog.dart @ a9add15; see docs/PORTS.md.
+// Ported from Séance app/seance_app/lib/ui/keyboard_interactive_dialog.dart @ 3321a1f; see docs/PORTS.md.
 // Divergence: strings localize through ARB (D20) and the payload is the
 // engine protocol's KeyboardInteractivePromptData (03 §5).
 import 'package:flutter/material.dart';
@@ -20,6 +20,20 @@ Future<List<String>> showKeyboardInteractiveDialog(
     builder: (_) => _KeyboardInteractiveDialog(key: dialogKey, data: data),
   );
   return result ?? const <String>[];
+}
+
+String _trustedTarget(
+  AppLocalizations l10n,
+  KeyboardInteractivePromptData data,
+) {
+  final rawHost = data.host;
+  final host =
+      rawHost.contains(':') &&
+          !(rawHost.startsWith('[') && rawHost.endsWith(']'))
+      ? '[$rawHost]'
+      : rawHost;
+
+  return l10n.credentialEndpoint(data.username, host, data.port);
 }
 
 class _KeyboardInteractiveDialog extends StatefulWidget {
@@ -72,15 +86,29 @@ class _KeyboardInteractiveDialogState
     return AlertDialog(
       // Long challenges must remain reachable above the software keyboard.
       scrollable: true,
-      title: Text(
-        widget.data.name.isEmpty ? l10n.keyboardAuthTitle : widget.data.name,
-      ),
+      title: Text(l10n.keyboardAuthTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.data.instruction.isNotEmpty) ...[
-            Text(widget.data.instruction),
+          Text(
+            l10n.keyboardRequestFrom,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          SelectableText(
+            _trustedTarget(l10n, widget.data),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 12),
+          if (widget.data.name.isNotEmpty ||
+              widget.data.instruction.isNotEmpty) ...[
+            Text(
+              l10n.keyboardServerMessage,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            if (widget.data.name.isNotEmpty) Text(widget.data.name),
+            if (widget.data.instruction.isNotEmpty)
+              Text(widget.data.instruction),
             const SizedBox(height: 12),
           ],
           for (var i = 0; i < widget.data.prompts.length; i++)

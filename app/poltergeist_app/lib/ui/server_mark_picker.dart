@@ -1,5 +1,5 @@
 // Ported from Séance app/seance_app/lib/ui/server_mark_picker.dart @
-// 035b0d8 (tag v0.9.1); see docs/PORTS.md.
+// d811309; see docs/PORTS.md.
 // Divergence: strings localize through ARB (D20); imports via the
 // poltergeist_core barrel.
 import 'dart:typed_data';
@@ -46,12 +46,13 @@ const List<String> kCuratedServerEmoji = [
 /// Picks what a server is marked with: a built-in glyph, an emoji, or an
 /// imported image.
 ///
-/// Returns the new mark, or null if the picker was dismissed. The server's
-/// colour is not previewed here: it is a line beside the mark in the list, not
-/// a background the mark sits on, so it cannot change how a candidate reads.
+/// Returns the new mark, or null if the picker was dismissed. [accent] is the
+/// colour currently chosen for the server, so every candidate is previewed on
+/// the fill it will actually sit on.
 Future<ServerMark?> showServerMarkPicker(
   BuildContext context, {
   required ServerMark current,
+  required ServerTint accent,
   /// Test seam: reads the bytes of an image the user chose. Defaults to the
   /// platform file picker, which a widget test cannot drive.
   @visibleForTesting Future<Uint8List?> Function()? readImage,
@@ -60,6 +61,7 @@ Future<ServerMark?> showServerMarkPicker(
     context: context,
     builder: (_) => _MarkPickerDialog(
       current: current,
+      accent: accent,
       readImage: readImage ?? _pickImageBytes,
     ),
   );
@@ -110,9 +112,14 @@ Future<Uint8List?> _pickImageBytes() async {
 
 class _MarkPickerDialog extends StatelessWidget {
   final ServerMark current;
+  final ServerTint accent;
   final Future<Uint8List?> Function() readImage;
 
-  const _MarkPickerDialog({required this.current, required this.readImage});
+  const _MarkPickerDialog({
+    required this.current,
+    required this.accent,
+    required this.readImage,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -149,9 +156,13 @@ class _MarkPickerDialog extends StatelessWidget {
               Expanded(
                 child: SelectedTabView(
                   children: [
-                    _IconsTab(current: current),
-                    _EmojiTab(current: current),
-                    _ImageTab(current: current, readImage: readImage),
+                    _IconsTab(accent: accent, current: current),
+                    _EmojiTab(accent: accent, current: current),
+                    _ImageTab(
+                      accent: accent,
+                      current: current,
+                      readImage: readImage,
+                    ),
                   ],
                 ),
               ),
@@ -172,9 +183,10 @@ class _MarkPickerDialog extends StatelessWidget {
 /// The built-in glyphs, under their headings, with a search over labels and
 /// the extra terms each glyph carries.
 class _IconsTab extends StatefulWidget {
+  final ServerTint accent;
   final ServerMark current;
 
-  const _IconsTab({required this.current});
+  const _IconsTab({required this.accent, required this.current});
 
   @override
   State<_IconsTab> createState() => _IconsTabState();
@@ -236,6 +248,7 @@ class _IconsTabState extends State<_IconsTab> {
                         _IconSection(
                           heading: l10n.serverMarkPickerDefault,
                           icons: const [null],
+                          accent: widget.accent,
                           selected: _selected,
                           selectable: _glyphInForce,
                         ),
@@ -243,6 +256,7 @@ class _IconsTabState extends State<_IconsTab> {
                         _IconSection(
                           heading: heading,
                           icons: icons,
+                          accent: widget.accent,
                           selected: _selected,
                           selectable: _glyphInForce,
                         ),
@@ -258,6 +272,7 @@ class _IconsTabState extends State<_IconsTab> {
 class _IconSection extends StatelessWidget {
   final String heading;
   final List<ServerIcon?> icons;
+  final ServerTint accent;
   final ServerIcon? selected;
 
   /// Whether [selected] should be drawn as chosen at all — false when the
@@ -267,6 +282,7 @@ class _IconSection extends StatelessWidget {
   const _IconSection({
     required this.heading,
     required this.icons,
+    required this.accent,
     required this.selected,
     required this.selectable,
   });
@@ -286,6 +302,7 @@ class _IconSection extends StatelessWidget {
           children: [
             for (final icon in icons)
               _MarkChoice(
+                accent: accent,
                 mark: ServerGlyphMark(icon),
                 label: serverIconLabel(icon),
                 selected: selectable && icon == selected,
@@ -301,9 +318,10 @@ class _IconSection extends StatelessWidget {
 /// The emoji tab: a field that takes anything the OS can produce, plus a
 /// starting grid.
 class _EmojiTab extends StatefulWidget {
+  final ServerTint accent;
   final ServerMark current;
 
-  const _EmojiTab({required this.current});
+  const _EmojiTab({required this.accent, required this.current});
 
   @override
   State<_EmojiTab> createState() => _EmojiTabState();
@@ -413,6 +431,7 @@ class _EmojiTabState extends State<_EmojiTab> {
                     children: [
                       for (final emoji in kCuratedServerEmoji)
                         _MarkChoice(
+                          accent: widget.accent,
                           mark: ServerEmojiMark(emoji, fallback: _fallback),
                           label: emoji,
                           // From the mark in force, like the Icons tab, not
@@ -438,10 +457,15 @@ class _EmojiTabState extends State<_EmojiTab> {
 
 /// The image tab: import a file, see what will be stored, or take it off.
 class _ImageTab extends StatefulWidget {
+  final ServerTint accent;
   final ServerMark current;
   final Future<Uint8List?> Function() readImage;
 
-  const _ImageTab({required this.current, required this.readImage});
+  const _ImageTab({
+    required this.accent,
+    required this.current,
+    required this.readImage,
+  });
 
   @override
   State<_ImageTab> createState() => _ImageTabState();
@@ -521,7 +545,11 @@ class _ImageTabState extends State<_ImageTab> {
         children: [
           Row(
             children: [
-              ServerBadge(tint: ServerTint.none, mark: widget.current, size: 64),
+              ServerBadge(
+                tint: widget.accent,
+                mark: widget.current,
+                size: 64,
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
@@ -596,8 +624,9 @@ class _ImageTabState extends State<_ImageTab> {
   }
 }
 
-/// One candidate mark, drawn as the list will draw it.
+/// One candidate mark, previewed on the colour the server is actually using.
 class _MarkChoice extends StatelessWidget {
+  final ServerTint accent;
   final ServerMark mark;
   final String label;
   final bool selected;
@@ -605,6 +634,7 @@ class _MarkChoice extends StatelessWidget {
   static const double _size = 36;
 
   const _MarkChoice({
+    required this.accent,
     required this.mark,
     required this.label,
     required this.selected,
@@ -631,7 +661,7 @@ class _MarkChoice extends StatelessWidget {
             label: label,
             selected: selected,
             button: true,
-            child: ServerBadge(tint: ServerTint.none, mark: mark, size: _size),
+            child: ServerBadge(tint: accent, mark: mark, size: _size),
           ),
         ),
       ),

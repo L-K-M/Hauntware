@@ -347,6 +347,24 @@ void main() {
     },
   );
 
+  test('an equivalent listener update retries a pending failure', () async {
+    final ack = bridge.holdTargets();
+    Future<void>? replay;
+    controller.addListener(() {
+      replay ??= update([_favorite()]);
+    });
+
+    final starting = update([_favorite()]);
+    final failure = StateError('target request failed');
+    ack.completeError(failure);
+    await starting;
+    await replay;
+
+    expect(errors, [failure]);
+    expect(bridge.calls.where((call) => call == 'targets:local'), hasLength(2));
+    expect(bridge.calls.last, 'running');
+  });
+
   test(
     'duplicate ids reject the snapshot before changing the engine',
     () async {

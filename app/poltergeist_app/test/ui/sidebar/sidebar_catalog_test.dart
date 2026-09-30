@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/connection_status_controller.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/sidebar_controller.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
@@ -74,6 +75,7 @@ void main() {
     SidebarDensity density = SidebarDensity.compact,
     Set<String> pinned = const {},
     PinnedServerWriter? onPinnedChanged,
+    void Function(ConnectionServer)? onReviewBlocked,
   }) async {
     tester.view.physicalSize = const Size(600, 1000);
     tester.view.devicePixelRatio = 1;
@@ -108,6 +110,7 @@ void main() {
                 catalog: withCatalog ? catalog : null,
                 catalogListenable: source,
                 workspace: workspace,
+                onReviewBlocked: onReviewBlocked,
                 onOpenCatalogServer: withOpen
                     ? (server, action) => opens.add((server, action))
                     : null,
@@ -551,6 +554,54 @@ void main() {
     await tester.pumpAndSettle();
     expect(sidebarRow().status, isNotNull);
     expect(sidebarRow().selected, isTrue);
+  });
+
+  testWidgets('a blocked catalog row offers host-key review', (tester) async {
+    final lanes = controller_test.FakePaneLanes();
+    final left = PaneController(paneTabId: 'pane.left.tab1', lanes: lanes);
+    final right = PaneController(paneTabId: 'pane.right.tab1', lanes: lanes);
+    final workspace = WorkspaceController(
+      left: testPaneStrip(left),
+      right: testPaneStrip(right),
+    );
+    addTearDown(workspace.dispose);
+    final reviewed = <ConnectionServer>[];
+    catalog.replace([_server('s1')]);
+    await pump(tester, workspace: workspace, onReviewBlocked: reviewed.add);
+
+    await tester.tap(row('s1'), buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('sidebar.catalog.menu.review.s1')),
+      findsNothing,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    final now = DateTime.utc(2026, 10, 1);
+    await left.connectRemote(
+      Bookmark(
+        id: 's1',
+        kind: BookmarkKind.remotePath,
+        label: 'label-s1',
+        server: const BookmarkServerRef(serverConfigId: 's1'),
+        sortKey: '',
+        createdAt: now,
+        updatedAt: now,
+      ),
+      resolvedConfig: catalog.byId('s1'),
+    );
+    lanes.emitState('s1', const ServerStatus(ServerConnectionState.blocked));
+    await tester.pumpAndSettle();
+
+    await tester.tap(row('s1'), buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('sidebar.catalog.menu.review.s1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(reviewed.map((server) => server.serverId), ['s1']);
   });
 
   testWidgets('a folded account group shows the live server it hides', (

@@ -244,11 +244,23 @@ abstract class AppLocalizations {
   /// **'Trust the new key'**
   String get hostKeyTrustNewKey;
 
-  /// Fallback title when the server sends no challenge name.
+  /// Title of the keyboard-interactive authentication dialog.
   ///
   /// In en, this message translates to:
   /// **'Authentication'**
   String get keyboardAuthTitle;
+
+  /// Label above the trusted endpoint in a keyboard-interactive challenge.
+  ///
+  /// In en, this message translates to:
+  /// **'Request from'**
+  String get keyboardRequestFrom;
+
+  /// Label separating untrusted server text from the trusted endpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Server message'**
+  String get keyboardServerMessage;
 
   /// Sends the keyboard-interactive answers.
   ///
@@ -475,8 +487,8 @@ abstract class AppLocalizations {
   /// Auth cell for a host without an IdentityFile.
   ///
   /// In en, this message translates to:
-  /// **'Password'**
-  String get sshImportAuthPassword;
+  /// **'ssh-agent'**
+  String get sshImportAuthAgent;
 
   /// Auth cell naming the referenced identity file (reference-style; the key itself is never read at import time).
   ///
@@ -496,7 +508,7 @@ abstract class AppLocalizations {
   /// **'Duplicate of “{alias}” in this import'**
   String sshImportDuplicateEarlier(String alias);
 
-  /// Chip for a host whose ProxyJump Poltergeist does not execute (D10).
+  /// Chip for a host whose ProxyJump route the embedded bookmark import cannot preserve.
   ///
   /// In en, this message translates to:
   /// **'Won’t behave as in ssh: ProxyJump — connects directly, not through the jump host'**
@@ -5532,12 +5544,6 @@ abstract class AppLocalizations {
   /// **'Keys are provided by your ssh-agent; nothing is stored.'**
   String get serverEditorAgentInfo;
 
-  /// Warning under the ssh-agent auth choice that the backend cannot authenticate that way yet.
-  ///
-  /// In en, this message translates to:
-  /// **'ssh-agent auth isn\'t supported yet — connecting will fail. Choose Password or Private key for now.'**
-  String get serverEditorAgentUnsupported;
-
   /// Label of the password field.
   ///
   /// In en, this message translates to:
@@ -5723,6 +5729,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Testing connection'**
   String get serverEditorTestingSemantic;
+
+  /// Connection-test failure when a ProxyJump route loops.
+  ///
+  /// In en, this message translates to:
+  /// **'The jump-host route contains a cycle at “{serverId}”.'**
+  String serverEditorJumpRouteCycle(String serverId);
+
+  /// Connection-test failure when a ProxyJump route exceeds its safety bound.
+  ///
+  /// In en, this message translates to:
+  /// **'The jump-host route exceeds {maxHops} hops.'**
+  String serverEditorJumpRouteTooLong(int maxHops);
+
+  /// Connection-test failure when a saved ProxyJump server no longer exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump host “{serverId}” is missing.'**
+  String serverEditorJumpHostMissing(String serverId);
 
   /// Closes the server editor without saving.
   ///
@@ -5973,7 +5997,7 @@ abstract class AppLocalizations {
   /// Explainer at the bottom of the image tab. {formats} is the accepted-format list; {side} is the stored edge length in pixels.
   ///
   /// In en, this message translates to:
-  /// **'{formats}. The image is cropped square, stored at {side} pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the badge’s own background through it.'**
+  /// **'{formats}. The image is cropped square, stored at {side} pixels, and travels inside this server’s own settings — so it reaches your other devices with everything else about the server, and never arrives without it. Anything larger than a badge can show would only be paid for on every sync. A transparent image shows the server’s colour through it.'**
   String serverMarkPickerImageExplanation(String formats, int side);
 
   /// Title of the custom colour picker dialog.

@@ -119,6 +119,27 @@ void main() {
       expect((await source.configFor('b2'))?.host, 'pulled.example.com');
     });
 
+    test('a raw catalog id restores its routed lease', () async {
+      const pulled = ServerConfig(
+        id: 'cfg-db',
+        label: 'database',
+        host: 'db.internal',
+        username: 'ops',
+        jumpHostId: 'bastion',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final source = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (id) => id == pulled.id ? pulled : null,
+      );
+
+      final config = await source.configFor(pulled.id);
+
+      expect(config, same(pulled));
+      expect(config?.jumpHostId, 'bastion');
+    });
+
     test('a catalog miss without an identity refuses typed', () async {
       final source = AppServerConfigSource(
         bookmarks: _Bookmarks([
@@ -134,6 +155,29 @@ void main() {
               .having((e) => e.message, 'message', contains('label-b3')),
         ),
       );
+    });
+
+    test('a jump-routed catalog server preserves the lease route', () async {
+      const pulled = ServerConfig(
+        id: 'cfg-db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'ops',
+        jumpHostId: 'bastion',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final source = AppServerConfigSource(
+        bookmarks: _Bookmarks([
+          _bookmark('b4', const BookmarkServerRef(serverConfigId: 'cfg-db')),
+        ]),
+        catalogLookup: (id) => id == 'cfg-db' ? pulled : null,
+      );
+      final endpoint = source.registerEndpoint(
+        const BookmarkServerRef(serverConfigId: 'cfg-db'),
+      );
+      expect((await source.configFor('b4'))?.jumpHostId, 'bastion');
+      expect((await source.configFor(endpoint))?.jumpHostId, 'bastion');
     });
 
     test('an unknown id (Quick Connect) answers null', () async {

@@ -1,4 +1,4 @@
-// Ported from Séance app/seance_app/test/keyboard_interactive_dialog_test.dart @ fd01515; see docs/PORTS.md.
+// Ported from Séance app/seance_app/test/keyboard_interactive_dialog_test.dart @ 3321a1f; see docs/PORTS.md.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
@@ -6,6 +6,9 @@ import 'package:poltergeist_app/ui/prompts/keyboard_interactive_dialog.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 const _data = KeyboardInteractivePromptData(
+  host: 'target.example.com',
+  port: 2222,
+  username: 'alice',
   name: 'Duo Security',
   instruction: 'Enter the code from your authenticator',
   prompts: ['Passcode', 'Second factor'],
@@ -59,11 +62,15 @@ Future<void> _open(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('renders name, instruction, and one field per prompt', (
+  testWidgets('separates the trusted endpoint from the server message', (
     tester,
   ) async {
     await _open(tester);
 
+    expect(find.text('Authentication'), findsOneWidget);
+    expect(find.text('Request from'), findsOneWidget);
+    expect(find.text('alice@target.example.com:2222'), findsOneWidget);
+    expect(find.text('Server message'), findsOneWidget);
     expect(find.text('Duo Security'), findsOneWidget);
     expect(find.text('Enter the code from your authenticator'), findsOneWidget);
     expect(find.text('Passcode'), findsOneWidget);
@@ -71,7 +78,7 @@ void main() {
     expect(find.text('Submit'), findsOneWidget);
   });
 
-  testWidgets('falls back to a localized title when the name is empty', (
+  testWidgets('brackets an IPv6 endpoint when the server message is empty', (
     tester,
   ) async {
     await tester.pumpWidget(const SizedBox.shrink());
@@ -86,6 +93,9 @@ void main() {
                 await showKeyboardInteractiveDialog(
                   context,
                   const KeyboardInteractivePromptData(
+                    host: '2001:db8::1',
+                    port: 22,
+                    username: 'alice',
                     name: '',
                     instruction: '',
                     prompts: ['Code'],
@@ -102,6 +112,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Authentication'), findsOneWidget);
+    expect(find.text('alice@[2001:db8::1]:22'), findsOneWidget);
+    expect(find.text('Server message'), findsNothing);
+
+    final endpointBottom = tester
+        .getBottomLeft(find.text('alice@[2001:db8::1]:22'))
+        .dy;
+    final promptTop = tester.getTopLeft(find.byType(TextField)).dy;
+    expect(promptTop - endpointBottom, greaterThanOrEqualTo(12));
   });
 
   testWidgets('answers one value per prompt, in order', (tester) async {

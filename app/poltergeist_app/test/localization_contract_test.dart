@@ -15,6 +15,14 @@ const _generatedDartSuffixes = {'.freezed.dart', '.g.dart', '.mocks.dart'};
 
 // Technical literals are reviewed per file so an allowlist cannot hide UI copy.
 const _allowedTechnicalLiterals = <String, Set<String>>{
+  // The trusted keyboard-interactive endpoint brackets IPv6 machine data
+  // before the localized endpoint template renders it.
+  'lib/ui/prompts/keyboard_interactive_dialog.dart': {
+    "':'",
+    "'['",
+    "']'",
+    r"'[$rawHost]'",
+  },
   // Flutter menu serialization and the AppKit checkmark channel protocol.
   'lib/services/checked_platform_menu.dart': {
     "'checked'",
@@ -118,7 +126,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'incidents.json'",
     "'identity_reads.jsonl'",
     "'review'",
-    "'review-connect serverId must equal bookmark.id'",
     r"'$supportDirectoryPath$separator$_pinStoreFileName'",
     r"'$supportDirectoryPath$separator$_incidentStoreFileName'",
     r"'$supportDirectoryPath$separator$_identityAuditLogFileName'",
@@ -1319,6 +1326,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sidebar.menu.disconnect'",
     r"'\n'",
     r"'sidebar.menu.review.$id'",
+    r"'sidebar.catalog.menu.review.${server.id}'",
     "'sidebar.menu.localEdits'",
     r"'${identity.username}@${identity.host}:${identity.port}'",
     r"'${server.username}@${server.host}:${server.port}'",
@@ -2334,11 +2342,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   'lib/ui/server_grouping.dart': {
     // Section sentinels — identity keys the view substitutes localized
     // headers for; never rendered raw in Poltergeist.
-    "''",
-    "'Ungrouped'",
     "' pinned'",
+    "' servers'",
     "'Pinned'",
-    "'Other servers'",
+    "'Servers'",
   },
   // D32 §11's platform integration: Dock progress diagnostics and the
   // file-manager reveal's process arguments (never user-facing copy).

@@ -108,7 +108,7 @@ void main() {
           unexpectedPrompts.add('host key');
           fail('A pre-seeded fixture must never prompt.');
         },
-        onKeyboardInteractive: (_, _, _) async {
+        onKeyboardInteractive: (_) async {
           unexpectedPrompts.add('keyboard interactive');
           fail('Stored credentials must not prompt.');
         },

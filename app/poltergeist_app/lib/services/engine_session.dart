@@ -65,6 +65,11 @@ abstract interface class AppEngine implements PromptBridge, ProbeBridge, PaneEng
   @override
   Future<void> disconnectServer(String serverId);
 
+  /// Replaces the engine's authoritative catalog without acquiring a channel.
+  /// Implementations enqueue the snapshot before returning the [Future]; later
+  /// connection calls rely on that FIFO ordering, not acknowledgement order.
+  Future<void> replaceServerCatalog(List<ServerConfig> configs);
+
   /// The bookmark-removal cascade (03 §6's delete path): drops the pool
   /// reference and every trust-incident record the engine holds for
   /// [serverId]. The app calls this AFTER the store delete — the engine's
@@ -254,6 +259,10 @@ final class _EngineClientAppEngine implements AppEngine {
       _client.disconnectServer(serverId);
 
   @override
+  Future<void> replaceServerCatalog(List<ServerConfig> configs) =>
+      _client.replaceServerCatalog(configs);
+
+  @override
   Future<void> removeBookmark(String serverId) =>
       _client.removeBookmark(serverId);
 
@@ -407,6 +416,11 @@ final class EngineSession {
   /// never overtake it).
   Future<void> _incidentTail = Future<void>.value();
 
+  Listenable? _serverCatalogChanges;
+  VoidCallback? _serverCatalogListener;
+  Map<String, ServerConfig> _serverCatalogById = const {};
+  bool _hasPublishedServerCatalog = false;
+
   bool _reviewInFlight = false;
   Future<void>? _shutdownFuture;
 
@@ -427,6 +441,70 @@ final class EngineSession {
   /// the pane banner cancels recovery through. Stable across rebuilds
   /// for the same reason as [connectionLanes].
   late final PaneEngineLanes paneLanes = _engine;
+
+  /// Keeps the engine's cached routes aligned with the shared server catalog.
+  ///
+  /// Updates retire stale pool references without opening the replacement
+  /// route. A live route must not recover after sync changes its hops.
+  void publishServerCatalog(List<ServerConfig> configs) {
+    if (_shutdownFuture != null) return;
+    if (_isPublishedServerCatalog(configs)) return;
+
+    final snapshot = List<ServerConfig>.unmodifiable(configs);
+    _serverCatalogById = Map.unmodifiable({
+      for (final config in snapshot) config.id: config,
+    });
+    _hasPublishedServerCatalog = true;
+
+    // EngineClient sends before returning its Future. Catalog publication
+    // therefore precedes later connection requests on the same FIFO port,
+    // even while this acknowledgement is pending.
+    _errors.observe(
+      _engine.replaceServerCatalog(snapshot),
+    );
+  }
+
+  bool _isPublishedServerCatalog(List<ServerConfig> configs) {
+    if (!_hasPublishedServerCatalog ||
+        configs.length != _serverCatalogById.length) {
+      return false;
+    }
+
+    // The publisher and notifier expose the same materialized objects.
+    // Rematerialized configs still cross so field changes are never guessed.
+    for (final config in configs) {
+      if (!identical(_serverCatalogById[config.id], config)) return false;
+    }
+    return true;
+  }
+
+  void bindServerCatalog({
+    required Listenable changes,
+    required Iterable<ServerConfig> Function() read,
+  }) {
+    if (_shutdownFuture != null) return;
+    final previousListener = _serverCatalogListener;
+    if (previousListener != null) {
+      _serverCatalogChanges?.removeListener(previousListener);
+    }
+
+    void refresh() {
+      if (_shutdownFuture != null) return;
+      final List<ServerConfig> configs;
+      try {
+        configs = List.unmodifiable(read());
+      } on Object catch (error, stackTrace) {
+        _errors.report(error, stackTrace);
+        return;
+      }
+      publishServerCatalog(configs);
+    }
+
+    _serverCatalogChanges = changes;
+    _serverCatalogListener = refresh;
+    changes.addListener(refresh);
+    refresh();
+  }
 
   /// The bridged transfer-lease seam (see [AppEngine.transferConnections]):
   /// the transfer queue session, the checkout session, and the sync
@@ -520,21 +598,30 @@ final class EngineSession {
           break;
         }
       }
-      final identity = bookmark?.server?.identity;
-      if (bookmark == null || identity == null) return;
+      final ServerConfig reviewConfig;
+      if (bookmark == null) {
+        final catalogConfig = _serverCatalogById[serverId];
+        if (catalogConfig == null) return;
+        reviewConfig = catalogConfig;
+      } else {
+        final ref = bookmark.server;
+        if (ref == null) return;
+        final catalogId = ref.serverConfigId;
+        if (catalogId != null) {
+          final catalogConfig = _serverCatalogById[catalogId];
+          // Never reconstruct a catalog route from its embedded fallback.
+          if (catalogConfig == null) return;
+          reviewConfig = catalogConfig;
+        } else {
+          if (ref.identity == null) return;
+          reviewConfig = serverConfigForBookmark(bookmark);
+        }
+      }
 
       try {
-        final reviewConfig = serverConfigForBookmark(bookmark);
-        assert(
-          reviewConfig.id == serverId,
-          'review-connect serverId must equal bookmark.id',
-        );
-        // bookmark.id is also the panes' serverId: the finally below
-        // drops the whole server reference after the review — correct,
-        // because a reviewed endpoint blocks every pane on it until the
-        // verdict (D18), so no live pane binding survives to sever.
+        // serverId is the row and pane alias; config.id may be a catalog id.
         final channel = await _engine.openBrowseChannel(
-          serverId: reviewConfig.id,
+          serverId: serverId,
           paneTabId: kHostKeyReviewPaneTabId,
           config: reviewConfig,
         );
@@ -597,6 +684,12 @@ final class EngineSession {
     final pending = _shutdownFuture;
     if (pending != null) return pending;
     return _shutdownFuture = () async {
+      final catalogListener = _serverCatalogListener;
+      if (catalogListener != null) {
+        _serverCatalogChanges?.removeListener(catalogListener);
+      }
+      _serverCatalogChanges = null;
+      _serverCatalogListener = null;
       try {
         _prompts.dispose();
       } on Object catch (error, stackTrace) {

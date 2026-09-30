@@ -19,14 +19,13 @@ dependencies:
       url: https://github.com/L-K-M/Planchette.git
       ref: ff4873947c93ac4e259338b7f80dac93947259e6
       path: packages/planchette_core
-  # D2: git-pinned to Séance, never forked or copied. Tag pin at Séance
-  # v0.9.1 — the first release containing the PR-S3 merge (Séance #62:
-  # setTimes/setOwner/opt-out transfer hashing, merge 2f99f4e) and PR-S1;
-  # the M8 S3 gate (07 §3.9) is satisfied by this rev.
+  # D2: git-pinned to Séance, never forked or copied. Temporary revision
+  # bridge to PR-S4 (Séance #131: agent auth + ProxyJump); return to a tag
+  # when the next Séance release contains merge 4c0a960.
   seance_core:
     git:
       url: https://github.com/L-K-M/Seance.git
-      ref: v0.9.1
+      ref: 4c0a960289c919379d016507fa7ebae6b14b2e7c
       path: packages/seance_core
   # Pinned exactly like seance_core pins it, and confined to
   # lib/src/connection/ by the CI import check (03 §1).

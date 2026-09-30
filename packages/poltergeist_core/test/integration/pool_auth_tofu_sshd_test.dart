@@ -448,9 +448,12 @@ class _AuthHarness {
       _decisions.add(decision);
       return _review(decision);
     },
-    onKeyboardInteractive: (prompts, name, instruction) async {
-      _challenges.add((prompts: prompts, name: name));
-      return [for (final _ in prompts) _challengeAnswer];
+    onKeyboardInteractive: (challenge) async {
+      _challenges.add((
+        prompts: challenge.prompts,
+        name: challenge.name,
+      ));
+      return [for (final _ in challenge.prompts) _challengeAnswer];
     },
     policy: _defaultPolicy,
     openTransport: _open,
@@ -481,6 +484,7 @@ class _AuthHarness {
     required TofuVerifier tofu,
     required HostKeyPrompter onHostKey,
     KeyboardInteractiveResponder? onKeyboardInteractive,
+    required SshJumpHostResolver? resolveJumpHost,
     required ConnectPrompting prompting,
     Duration timeout = SshTransport.defaultOpenTimeout,
     SshConnectionLog? log,
@@ -493,6 +497,7 @@ class _AuthHarness {
       tofu: tofu,
       onHostKey: onHostKey,
       onKeyboardInteractive: onKeyboardInteractive,
+      resolveJumpHost: resolveJumpHost,
       prompting: prompting,
       timeout: timeout,
       log: log,

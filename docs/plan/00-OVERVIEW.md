@@ -628,12 +628,13 @@ ownership
   (Séance's importer, IdentityFile included) **with a preview + dedupe
   + unsupported-directive warnings** — an imported host whose real
   behavior depends on `ProxyCommand`, `ProxyJump`, `Match`, or an
-  `Include` nested inside a `Match` block (D10 defers ProxyJump
-  *execution* to the first post-1.0 fast-follow, so at v1 it is exactly
-  as unsupported as the others) gets an
+  `Include` nested inside a `Match` block gets an
   explicit "won't behave as in ssh" badge in the preview rather than
   silently importing as a bookmark that then fails to connect the way
-  the user's actual config does — a plain, top-level `Include` is
+  the user's actual config does. D10 now executes saved catalog routes,
+  but the embedded bookmark created by this importer cannot preserve a
+  named `ProxyJump`; those rows start skipped and connect directly only
+  after an explicit opt-in. A plain, top-level `Include` is
   resolved read-only at import time instead (the same local-file trust
   already granted to `~/.ssh/config` itself and any `IdentityFile` it
   references), so the common `Include ~/.ssh/config.d/*` layout doesn't
@@ -1062,8 +1063,10 @@ ownership
 
 - **D10 — Agent auth and ProxyJump are table stakes, not "eventually".**
   Both will be implemented in `seance_core`, serving both apps — ssh-agent via
-  `$SSH_AUTH_SOCK` / Windows named pipe with a custom `SSHKeyPair` signer,
-  and ProxyJump execution behind the already-modeled `jumpHostId`.
+  `$SSH_AUTH_SOCK` / Windows named pipe with `SSHIdentity.custom` signing,
+  and ProxyJump execution behind the already-modeled `jumpHostId`: resolve
+  the full route before network I/O, dial only the outer hop, then forward
+  through each inner hop.
   Scheduled as the first fast-follow after v1.0 (07), with the transport
   seams prepared during M2.
 - **D29 — Mobile is later, but never foreclosed.** v1 architecture keeps

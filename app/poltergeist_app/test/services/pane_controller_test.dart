@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -29,6 +28,7 @@ class FakePaneLanes implements PaneEngineLanes {
   FakePaneChannel? nextRemoteChannel;
   Object? remoteOpenFailure;
   Object? localOpenFailure;
+  ServerConfig? lastRemoteConfig;
 
   /// When set, the next remote open parks on this completer before
   /// answering — the connecting-state UI is testable without races.
@@ -51,6 +51,7 @@ class FakePaneLanes implements PaneEngineLanes {
     required ServerConfig config,
   }) async {
     calls.add('openBrowse:$serverId:$paneTabId');
+    lastRemoteConfig = config;
     final failure = remoteOpenFailure;
     if (failure != null) throw failure;
     final hold = holdRemoteOpen;
@@ -127,6 +128,40 @@ Bookmark _remoteBookmark({String remotePath = '/', String id = 'srv-1'}) {
     updatedAt: now,
   );
 }
+
+Bookmark _catalogBookmark({String remotePath = '/', String id = 'db'}) {
+  final now = DateTime.utc(2026, 9, 29);
+  return Bookmark(
+    id: id,
+    kind: BookmarkKind.remotePath,
+    label: 'Database',
+    server: const BookmarkServerRef(serverConfigId: 'catalog-db'),
+    remotePath: remotePath,
+    sortKey: 'k',
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
+const _catalogRoute = ServerConfig(
+  id: 'catalog-db',
+  label: 'Database',
+  host: 'db.internal',
+  username: 'deploy',
+  jumpHostId: 'bastion',
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+const _updatedCatalogRoute = ServerConfig(
+  id: 'catalog-db',
+  label: 'Database',
+  host: 'db-new.internal',
+  username: 'deploy',
+  jumpHostId: 'new-bastion',
+  createdAt: 0,
+  updatedAt: 1,
+);
 
 void main() {
   /// The controller's opens resolve at navigation issue; the fake's
@@ -746,6 +781,81 @@ void main() {
     controller.dispose();
   });
 
+  test('a blocked first connect stays reviewable after open failure',
+      () async {
+    final lanes = FakePaneLanes();
+    final heldOpen = Completer<void>();
+    lanes.holdRemoteOpen = heldOpen;
+    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+    addTearDown(controller.dispose);
+
+    final bind = controller.connectRemote(_remoteBookmark());
+    await Future<void>.delayed(Duration.zero);
+    expect(lanes.calls.last, 'openBrowse:srv-1:pane.right');
+    expect(lanes.holdRemoteOpen, isNull, reason: 'the open consumed its hold');
+
+    lanes.emitState(
+      'srv-1',
+      const ServerStatus(ServerConnectionState.blocked),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.connectionStatus?.state, ServerConnectionState.blocked);
+
+    lanes.remoteOpenFailure = const RemoteFileException(
+      kind: RemoteFileErrorKind.disconnected,
+      operation: 'connect',
+      message: 'The server is blocked.',
+    );
+    heldOpen.complete();
+    await bind;
+    await Future<void>.delayed(Duration.zero);
+
+    expect(controller.error?.kind, RemoteFileErrorKind.disconnected);
+    expect(controller.connectionStatus?.state, ServerConnectionState.blocked);
+    expect(lanes.statesControllers['srv-1']?.hasListener, isTrue);
+
+    lanes.emitState(
+      'srv-1',
+      const ServerStatus(ServerConnectionState.disconnected),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      controller.connectionStatus?.state,
+      ServerConnectionState.disconnected,
+    );
+  });
+
+  test('a catalog-only connect retry uses the current route', () async {
+    final lanes = FakePaneLanes();
+    lanes.remoteOpenFailure = const RemoteFileException(
+      kind: RemoteFileErrorKind.disconnected,
+      operation: 'connect',
+      message: 'Authentication failed',
+    );
+    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+    var catalogRoute = _catalogRoute;
+    controller.serverConfigLookup = (id) =>
+        id == 'catalog-db' ? catalogRoute : null;
+
+    await controller.connectRemote(
+      _catalogBookmark(),
+      resolvedConfig: _catalogRoute,
+    );
+    expect(controller.error, isNotNull);
+
+    catalogRoute = _updatedCatalogRoute;
+    lanes.remoteOpenFailure = null;
+    lanes.nextRemoteChannel = FakePaneChannel('/srv/home')
+      ..listings['/srv/home'] = [_entry('ok.txt')];
+    await controller.retry();
+    await settle();
+
+    expect(controller.phase, PanePhase.browsing);
+    expect(controller.error, isNull);
+    expect(lanes.lastRemoteConfig, _updatedCatalogRoute);
+    controller.dispose();
+  });
+
   test('rebinding closes the previous channel and drops its server watch',
       () async {
     final lanes = FakePaneLanes();
@@ -1124,12 +1234,53 @@ void main() {
     await controller.connectRemote(identityless);
 
     expect(controller.phase, PanePhase.connectingRemote);
-    expect(controller.error, isNotNull);
-    expect(controller.error!.kind, RemoteFileErrorKind.other);
-    // The underlying ArgumentError was reported as a fault, and no
-    // channel open was ever attempted against an empty host.
-    expect(faults.single, isA<ArgumentError>());
+    expect(controller.error, isA<PaneFaultException>());
+    expect(
+      (controller.error! as PaneFaultException).fault,
+      PaneFault.connectionOpen,
+    );
+    expect(faults, isEmpty);
     expect(lanes.calls.where((c) => c.startsWith('openBrowse')), isEmpty);
+    controller.dispose();
+  });
+
+  test('a jump-routed catalog server reaches the engine lane', () async {
+    final lanes = FakePaneLanes();
+    final faults = <Object>[];
+    final controller = PaneController(
+      paneTabId: 'pane.right',
+      lanes: lanes,
+      onError: (error, _) => faults.add(error),
+    );
+    final now = DateTime.utc(2026, 9, 26);
+    final catalogOpen = Bookmark(
+      id: 'db',
+      kind: BookmarkKind.remotePath,
+      label: 'db',
+      server: const BookmarkServerRef(serverConfigId: 'db'),
+      sortKey: '',
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    await controller.connectRemote(
+      catalogOpen,
+      resolvedConfig: const ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'ops',
+        jumpHostId: 'bastion',
+        createdAt: 0,
+        updatedAt: 0,
+      ),
+    );
+
+    expect(lanes.calls.where((c) => c.startsWith('openBrowse')), hasLength(1));
+    expect(lanes.lastRemoteConfig?.jumpHostId, 'bastion');
+    expect(controller.phase, PanePhase.browsing);
+    expect(controller.error, isNull);
+    expect(faults, isEmpty);
     controller.dispose();
   });
 

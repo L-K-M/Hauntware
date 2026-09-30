@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -54,6 +55,37 @@ Future<PoolHarness> _harness(
       pinnedAt: 0,
     ),
   );
+  return harness;
+}
+
+Future<PoolHarness> _jumpHarness(
+  List<String> fingerprints, {
+  required IncidentStore store,
+}) async {
+  final harness =
+      PoolHarness(
+          policy: _policy,
+          opener: FakeTransportOpener(presentedFingerprints: fingerprints),
+          incidentStore: store,
+        )
+        ..addServer('s1', jumpHostId: 'bastion')
+        ..addServer('s2', jumpHostId: 'bastion')
+        ..addServer('bastion', host: 'bastion.example.com');
+  addTearDown(() async {
+    await harness.manager.disconnectServer('s1');
+    await harness.manager.disconnectServer('s2');
+  });
+  for (final config in [harness.servers['s1']!, harness.servers['bastion']!]) {
+    await harness.store.put(
+      HostKey(
+        host: config.host,
+        port: config.port,
+        type: _hostKeyType,
+        fingerprintSha256: _originalKey,
+        pinnedAt: 0,
+      ),
+    );
+  }
   return harness;
 }
 
@@ -273,6 +305,200 @@ void main() {
     await pane.close();
   });
 
+  test('a declined bastion key restores the target route block', () async {
+    final store = InMemoryIncidentStore();
+    final first = await _jumpHarness([_originalKey, _changedKey], store: store);
+    await _declineViaGrowth(first);
+    await _eventually(() => store.load(), (records) => records.length == 2);
+
+    final record = (await store.load()).first;
+    expect(
+      record.poolKey,
+      PoolKey.of(first.servers['s1']!, routeContext: record.routeContext),
+    );
+    expect(record.routeContext, isNotNull);
+    expect(record.hostKeyHost, 'bastion.example.com');
+    expect(record.hostKeyPort, 22);
+
+    final restarted = await _jumpHarness([_changedKey], store: store);
+    await expectLater(
+      restarted.manager.leaseTransferChannel('s1'),
+      throwsA(_blockedError()),
+    );
+    expect(restarted.opener.calls, isEmpty);
+  });
+
+  test(
+    'a restored bastion key lifts the block before target first use',
+    () async {
+      final store = InMemoryIncidentStore();
+      final first = await _jumpHarness([
+        _originalKey,
+        _changedKey,
+      ], store: store);
+      await _declineViaGrowth(first);
+      await _eventually(() => store.load(), (records) => records.length == 2);
+
+      final restarted = await _jumpHarness([_originalKey], store: store);
+      restarted.store.pins.remove('example.com:22');
+      final decisions = <HostKeyDecision>[];
+      restarted.onHostKey = (decision) async {
+        decisions.add(decision);
+        return true;
+      };
+
+      final pane = await restarted.manager.openBrowseChannel(
+        's1',
+        paneTabId: 'review',
+      );
+
+      expect(decisions, hasLength(1));
+      expect(decisions.single.verdict, HostKeyVerdict.firstUse);
+      expect(decisions.single.presented.host, 'example.com');
+      await _eventually(() => store.load(), (records) => records.isEmpty);
+      await pane.close();
+    },
+  );
+
+  test('a restored target block allows first use on an outer hop', () async {
+    final routeContext = jsonEncode([
+      ['bastion', 'bastion.example.com', 22, 'test', null],
+    ]);
+    final store = InMemoryIncidentStore.seeded([
+      IncidentRecord(
+        serverId: 's1',
+        host: 'example.com',
+        port: 22,
+        username: 'test',
+        jumpHostId: 'bastion',
+        routeContext: routeContext,
+        presentedFingerprintSha256: _changedKey,
+        pinnedFingerprintSha256: _originalKey,
+      ),
+    ]);
+    final harness =
+        PoolHarness(
+            opener: FakeTransportOpener(
+              presentedFingerprints: const [_originalKey],
+            ),
+            incidentStore: store,
+          )
+          ..addServer('s1', jumpHostId: 'bastion')
+          ..addServer('bastion', host: 'bastion.example.com');
+    addTearDown(() => harness.manager.disconnectServer('s1'));
+    await harness.store.put(
+      const HostKey(
+        host: 'example.com',
+        port: 22,
+        type: _hostKeyType,
+        fingerprintSha256: _originalKey,
+        pinnedAt: 0,
+      ),
+    );
+    final decisions = <HostKeyDecision>[];
+    harness.onHostKey = (decision) async {
+      decisions.add(decision);
+      return true;
+    };
+
+    final pane = await harness.manager.openBrowseChannel(
+      's1',
+      paneTabId: 'review',
+    );
+
+    expect(decisions, hasLength(1));
+    expect(decisions.single.verdict, HostKeyVerdict.firstUse);
+    expect(decisions.single.presented.host, 'bastion.example.com');
+    await _eventually(() => store.load(), (records) => records.isEmpty);
+    await pane.close();
+  });
+
+  test(
+    'trust at another route endpoint cannot lift a restored block',
+    () async {
+      final routeContext = jsonEncode([
+        ['bastion', 'bastion.example.com', 22, 'test', null],
+      ]);
+      final store = InMemoryIncidentStore.seeded([
+        IncidentRecord(
+          serverId: 's1',
+          host: 'example.com',
+          port: 22,
+          username: 'test',
+          jumpHostId: 'bastion',
+          routeContext: routeContext,
+          hostKeyEndpoint: (host: 'old-bastion.example.com', port: 22),
+          presentedFingerprintSha256: _changedKey,
+          pinnedFingerprintSha256: _originalKey,
+        ),
+      ]);
+      final harness = await _jumpHarness([_originalKey], store: store);
+      await harness.store.put(
+        const HostKey(
+          host: 'old-bastion.example.com',
+          port: 22,
+          type: _hostKeyType,
+          fingerprintSha256: _originalKey,
+          pinnedAt: 0,
+        ),
+      );
+
+      await expectLater(
+        harness.manager.openBrowseChannel('s1', paneTabId: 'review'),
+        throwsA(_blockedError()),
+      );
+
+      expect(harness.opener.calls, hasLength(1));
+      expect(await store.load(), isNotEmpty);
+    },
+  );
+
+  test('editing a hop endpoint does not inherit its old route block', () async {
+    final store = InMemoryIncidentStore();
+    final first = await _jumpHarness([_originalKey, _changedKey], store: store);
+    await _declineViaGrowth(first);
+    await _eventually(() => store.load(), (records) => records.length == 2);
+
+    final restarted =
+        PoolHarness(
+            policy: _policy,
+            opener: FakeTransportOpener(presentedFingerprints: [_originalKey]),
+            incidentStore: store,
+          )
+          ..addServer('s1', jumpHostId: 'bastion')
+          ..addServer('bastion', host: 'new-bastion.example.com');
+    addTearDown(() => restarted.manager.disconnectServer('s1'));
+    for (final config in [
+      restarted.servers['s1']!,
+      restarted.servers['bastion']!,
+    ]) {
+      await restarted.store.put(
+        HostKey(
+          host: config.host,
+          port: config.port,
+          type: _hostKeyType,
+          fingerprintSha256: _originalKey,
+          pinnedAt: 0,
+        ),
+      );
+    }
+    await restarted.store.put(
+      const HostKey(
+        host: 'bastion.example.com',
+        port: 22,
+        type: _hostKeyType,
+        fingerprintSha256: _originalKey,
+        pinnedAt: 0,
+      ),
+    );
+
+    final lease = await restarted.manager.leaseTransferChannel('s1');
+
+    expect(restarted.opener.calls, hasLength(1));
+    expect(await store.load(), hasLength(2));
+    await lease.release();
+  });
+
   test('a restored block lifts when the pinned key returns', () async {
     final store = InMemoryIncidentStore();
     await store.put(_record(serverId: 's1'));
@@ -303,40 +529,37 @@ void main() {
     await pane.close();
   });
 
-  test(
-    'a restored record with no pin is skipped but never deleted',
-    () async {
-      final store = InMemoryIncidentStore();
-      await store.put(_record(serverId: 's1'));
+  test('a restored record with no pin is skipped but never deleted', () async {
+    final store = InMemoryIncidentStore();
+    await store.put(_record(serverId: 's1'));
 
-      // Audit finding A: the record survived a restart but its pin did not.
-      // Restoring that block leaves it with no escape — every connect
-      // verifies firstUse, which a blocked pool refuses to prompt for, and
-      // 1a has no pin to match — so the load skips it and lets the endpoint
-      // re-detect. It does NOT delete it: "no pin" is also what a pin store
-      // that failed to load reads as, and erasing the user's persisted
-      // declines over a transient read is irreversible.
-      final harness = await _harness(
-        [_changedKey],
-        store: store,
-        pinnedFingerprint: null,
-      );
-      final verdicts = <HostKeyVerdict>[];
-      harness.onHostKey = (decision) async {
-        verdicts.add(decision.verdict);
-        return true;
-      };
+    // Audit finding A: the record survived a restart but its pin did not.
+    // Restoring that block leaves it with no escape — every connect
+    // verifies firstUse, which a blocked pool refuses to prompt for, and
+    // 1a has no pin to match — so the load skips it and lets the endpoint
+    // re-detect. It does NOT delete it: "no pin" is also what a pin store
+    // that failed to load reads as, and erasing the user's persisted
+    // declines over a transient read is irreversible.
+    final harness = await _harness(
+      [_changedKey],
+      store: store,
+      pinnedFingerprint: null,
+    );
+    final verdicts = <HostKeyVerdict>[];
+    harness.onHostKey = (decision) async {
+      verdicts.add(decision.verdict);
+      return true;
+    };
 
-      final pane = await harness.manager.openBrowseChannel(
-        's1',
-        paneTabId: 'review',
-      );
-      expect(verdicts, [HostKeyVerdict.firstUse]);
-      expect(harness.store.pins.values.single.fingerprintSha256, _changedKey);
-      expect(await store.load(), [_record(serverId: 's1')]);
-      await pane.close();
-    },
-  );
+    final pane = await harness.manager.openBrowseChannel(
+      's1',
+      paneTabId: 'review',
+    );
+    expect(verdicts, [HostKeyVerdict.firstUse]);
+    expect(harness.store.pins.values.single.fingerprintSha256, _changedKey);
+    expect(await store.load(), [_record(serverId: 's1')]);
+    await pane.close();
+  });
 
   test('a pin at another endpoint does not restore a record', () async {
     final store = InMemoryIncidentStore();
@@ -620,10 +843,7 @@ void main() {
     'a removal during an in-flight connect leaves no state behind',
     () async {
       final store = InMemoryIncidentStore();
-      final harness = await _harness([
-        _originalKey,
-        _changedKey,
-      ], store: store);
+      final harness = await _harness([_originalKey, _changedKey], store: store);
       harness.credentialGate = Completer<void>();
 
       // The first connect parks inside credential resolution while the
@@ -762,10 +982,9 @@ void main() {
   test(
     'a failing record delete neither fails the removal nor strands the watch',
     () async {
-      final harness = await _harness(
-        [_originalKey],
-        store: _ThrowingIncidentStore(),
-      );
+      final harness = await _harness([
+        _originalKey,
+      ], store: _ThrowingIncidentStore());
       final states = harness.manager.watchServer('s1').toList();
 
       // The delete is best-effort and reports through the observer: it must
@@ -781,19 +1000,15 @@ void main() {
   );
 
   test('removing a bookmark completes its state watch', () async {
-    final harness = await _harness(
-      [_originalKey],
-      store: InMemoryIncidentStore(),
-    );
+    final harness = await _harness([
+      _originalKey,
+    ], store: InMemoryIncidentStore());
 
     // A disconnected bookmark keeps its watch open — it may reconnect. A
     // removed one can never emit again, so its stream completes instead of
     // leaving per-id state behind in a long-lived engine (audit finding C).
     final states = harness.manager.watchServer('s1').toList();
-    final pane = await harness.manager.openBrowseChannel(
-      's1',
-      paneTabId: 'a',
-    );
+    final pane = await harness.manager.openBrowseChannel('s1', paneTabId: 'a');
     await pane.close();
     await harness.manager.removeBookmark('s1');
 

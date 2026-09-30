@@ -1,5 +1,5 @@
 // The server editor against its [ServerEditorDelegate] seam — the port of
-// Séance's server_editor_test.dart @ 035b0d8 minus its AppServices boot (the
+// Séance's server_editor_test.dart @ 5d578b9 minus its AppServices boot (the
 // delegate is the seam the real services sit behind here), plus direct
 // coverage of the pure save-planning helpers the port exposes.
 import 'package:flutter/material.dart';
@@ -16,6 +16,7 @@ ServerConfig _server(
   String label = 'web',
   String? secretRef,
   AuthMethod authMethod = AuthMethod.agent,
+  String? jumpHostId,
   bool excludeFromSync = false,
   int updatedAt = _nowMs,
 }) => ServerConfig(
@@ -26,6 +27,7 @@ ServerConfig _server(
   username: 'deploy',
   authMethod: authMethod,
   secretRef: secretRef,
+  jumpHostId: jumpHostId,
   excludeFromSync: excludeFromSync,
   createdAt: _nowMs,
   updatedAt: updatedAt,
@@ -40,6 +42,7 @@ final class _FakeDelegate extends ServerEditorDelegate {
   Secret? storedSecret;
   ConnectionTestResult? testResult;
   int testCalls = 0;
+  ServerConfig? testedConfig;
   TransferConcurrency defaultLimit = const TransferConcurrency.automatic();
   final Map<String, TransferConcurrency> limits = {};
   final List<(String, TransferConcurrency?)> limitWrites = [];
@@ -96,6 +99,7 @@ final class _FakeDelegate extends ServerEditorDelegate {
     SshConnectionLog? log,
   }) async {
     testCalls++;
+    testedConfig = config;
     log?.add('trial handshake');
     return testResult ??
         const ConnectionTestResult(
@@ -176,6 +180,7 @@ void main() {
       expect(config.host, 'box.example.com');
       expect(config.username, 'deploy');
       expect(config.port, 22);
+      expect(config.authMethod, AuthMethod.agent);
       expect(secret, isNull);
       expect(config.secretRef, isNull);
       // The dialog closed on success.
@@ -246,6 +251,26 @@ void main() {
 
       final (config, _) = delegate.saved!;
       expect(config.updatedAt, greaterThan(pulled));
+    });
+
+    testWidgets('an edit keeps the jump route the form does not show', (
+      tester,
+    ) async {
+      // A Séance server routed through a bastion: the saved record is
+      // pushed to every device, so dropping the route here would remove
+      // it from Séance too (X-02).
+      final existing = _server('db', jumpHostId: 'bastion');
+      delegate.serverList = [existing];
+      await openEditor(tester, existing: existing);
+
+      await tester.enterText(field('Label'), 'db (renamed)');
+      await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+
+      final (config, _) = delegate.saved!;
+      expect(config.label, 'db (renamed)');
+      expect(config.jumpHostId, 'bastion');
     });
   });
 
@@ -483,6 +508,21 @@ void main() {
 
       expect(delegate.testCalls, 1);
       expect(find.textContaining('Connected and authenticated'), findsWidgets);
+    });
+
+    testWidgets('a jump-routed server tests through its saved route', (
+      tester,
+    ) async {
+      final existing = _server('db', jumpHostId: 'bastion');
+      delegate.serverList = [existing];
+      await openEditor(tester, existing: existing);
+      await scrollTo(tester, find.text('Test connection'));
+      await tester.tap(find.text('Test connection'));
+      await tester.pumpAndSettle();
+
+      expect(delegate.testCalls, 1);
+      expect(delegate.testedConfig?.jumpHostId, 'bastion');
+      expect(find.textContaining('Connected.'), findsWidgets);
     });
   });
 

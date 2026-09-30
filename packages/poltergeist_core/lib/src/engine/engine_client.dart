@@ -195,6 +195,16 @@ class EngineClient implements PromptBridge, ProbeBridge {
     );
   }
 
+  /// Replaces the authoritative catalog and retires stale or removed routes
+  /// without opening a connection to any replacement route. [_call] enqueues
+  /// synchronously, before this method first awaits, preserving catalog-before-
+  /// connection ordering on the command port.
+  Future<void> replaceServerCatalog(List<ServerConfig> configs) async {
+    await _call(
+      (id) => ReplaceServerCatalogRequest(requestId: id, configs: configs),
+    );
+  }
+
   /// The server's connection status — state plus the failure one-liner —
   /// current value first (03 §3.2). Watching again re-subscribes; dropping
   /// the last listener unsubscribes.

@@ -327,7 +327,7 @@ class _SshConfigImportDialogState extends State<_SshConfigImportDialog> {
         _cell(
           Text(
             keyPath == null || keyPath.trim().isEmpty
-                ? l10n.sshImportAuthPassword
+                ? l10n.sshImportAuthAgent
                 : l10n.sshImportAuthKey(keyPath),
             style: keyPath == null || keyPath.trim().isEmpty
                 ? null

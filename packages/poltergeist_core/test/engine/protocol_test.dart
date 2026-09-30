@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
-const _expectedProtocolVersion = 13;
+const _expectedProtocolVersion = 14;
 const _probeStatuses = {
   'reachable': ProbeStatus.online,
   'refused': ProbeStatus.offline,
@@ -38,6 +38,16 @@ final _config = ServerConfig(
   authMethod: AuthMethod.privateKey,
   secretRef: 'secret-7',
   identityFilePath: '/home/user/.ssh/id_ed25519',
+  createdAt: 1700000000,
+  updatedAt: 1700000001,
+);
+
+final _jumpConfig = ServerConfig(
+  id: 'srv-jump',
+  label: 'Jump Server',
+  host: 'private.example.com',
+  username: 'user',
+  jumpHostId: 'srv-1',
   createdAt: 1700000000,
   updatedAt: 1700000001,
 );
@@ -222,6 +232,9 @@ void main() {
           promptId: 'p2',
           kind: EnginePromptKind.keyboardInteractive,
           data: KeyboardInteractivePromptData(
+            host: 'example.com',
+            port: 2222,
+            username: 'alice',
             name: 'name',
             instruction: 'instruction',
             prompts: ['Token:', 'Pass:'],
@@ -396,6 +409,14 @@ void main() {
         engine,
         SetProbeTargetsRequest(requestId: 17, targets: []),
       );
+      await _roundTrip(
+        incoming,
+        engine,
+        ReplaceServerCatalogRequest(
+          requestId: 20,
+          configs: [_config, _jumpConfig],
+        ),
+      );
       for (final activity in ProbeActivity.values) {
         await _roundTrip(
           incoming,
@@ -512,7 +533,7 @@ void main() {
   );
 
   test(
-    'v13 bridge messages round-trip through a spawned isolate',
+    'v14 bridge messages round-trip through a spawned isolate',
     () async {
       final messages = ReceivePort();
       final incoming = StreamIterator<dynamic>(messages);
@@ -923,6 +944,15 @@ Future<void> _roundTrip(
     ):
       expect(got.requestId, sent.requestId);
       expect(got.activity, sent.activity);
+    case (
+      final ReplaceServerCatalogRequest sent,
+      final ReplaceServerCatalogRequest got,
+    ):
+      expect(got.requestId, sent.requestId);
+      expect(
+        got.configs.map((config) => config.toJson()),
+        sent.configs.map((config) => config.toJson()),
+      );
     case (final ShutdownRequest sent, final ShutdownRequest got):
       expect(got.requestId, sent.requestId);
     case (final PromptReplyRequest sent, final PromptReplyRequest got):
@@ -994,6 +1024,9 @@ void _expectPromptData(EnginePromptData actual, EnginePromptData expected) {
       final KeyboardInteractivePromptData sent,
       final KeyboardInteractivePromptData got,
     ):
+      expect(got.host, sent.host);
+      expect(got.port, sent.port);
+      expect(got.username, sent.username);
       expect(got.name, sent.name);
       expect(got.instruction, sent.instruction);
       expect(got.prompts, sent.prompts);

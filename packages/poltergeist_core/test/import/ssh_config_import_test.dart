@@ -123,11 +123,11 @@ Host blankKey
 
     expect(
       preview.rows[1].toBookmark(now: now).server!.identity!.authMethod,
-      AuthMethod.password,
+      AuthMethod.agent,
     );
     expect(
       preview.rows[2].toBookmark(now: now).server!.identity!.authMethod,
-      AuthMethod.password,
+      AuthMethod.agent,
     );
     expect(
       preview.rows[2].toBookmark(now: now).server!.identity!.identityFilePath,
@@ -316,11 +316,13 @@ Host direct
       preview.rows[0].limitations,
       contains(SshConfigImportLimitation.proxyJump),
     );
+    expect(preview.rows[0].importByDefault, isFalse);
     // The global default reaches every row.
     expect(
       preview.rows[1].limitations,
       contains(SshConfigImportLimitation.proxyJump),
     );
+    expect(preview.rows[1].importByDefault, isFalse);
   });
 
   test('badges per-host and global ProxyCommand', () async {

@@ -15,6 +15,27 @@ const _firstDelay = Duration(seconds: 1);
 
 enum _StopRecovery { paneClose, disconnect }
 
+final class _CallbackProber implements Prober {
+  final Future<ProbeStatus> Function() _probe;
+
+  const _CallbackProber(this._probe);
+
+  @override
+  Future<ProbeStatus> probe(
+    String host,
+    int port, {
+    Duration timeout = const Duration(seconds: 5),
+  }) => _probe();
+}
+
+KeyboardInteractiveChallenge _challenge(ServerConfig server) =>
+    KeyboardInteractiveChallenge(
+      server: server,
+      prompts: const ['Code'],
+      name: '2FA',
+      instruction: '',
+    );
+
 void main() {
   test(
     'rejects nonpositive reconnect caps instead of spinning on an outage',
@@ -449,6 +470,57 @@ void main() {
     });
   });
 
+  test('a config edit cannot split one reconnect snapshot', () {
+    fakeAsync((time) {
+      late PoolHarness h;
+      var probes = 0;
+      final replacement = ServerConfig(
+        id: 's1',
+        label: 's1',
+        host: 'example.com',
+        port: 22,
+        username: 'test',
+        authMethod: AuthMethod.agent,
+        createdAt: 0,
+        updatedAt: 1,
+      );
+      final prober = _CallbackProber(() async {
+        probes++;
+        if (probes == 2) {
+          h.servers['s1'] = replacement;
+          h.manager.updateServerConfig('s1', replacement);
+        }
+        return ProbeStatus.online;
+      });
+      h = PoolHarness(
+        opener: FakeTransportOpener(growthRequiresChallenge: true),
+        prober: prober,
+        credentialsFor: (config) => ResolvedCredentials(
+          credentials: switch (config.authMethod) {
+            AuthMethod.password => const SshCredentials.password('old-secret'),
+            AuthMethod.agent => const SshCredentials.agent(),
+            AuthMethod.privateKey => const SshCredentials.privateKey('old-key'),
+          },
+          origin: CredentialOrigin.stored,
+        ),
+      )..addServer('s1', authMethod: AuthMethod.password);
+      final pane = browsePane(time, h, 'a');
+
+      h.opener.transports.single.die();
+      time.flushMicrotasks();
+      time.elapse(const Duration(seconds: 3));
+      time.flushMicrotasks();
+
+      expect(probes, 2);
+      final open = h.opener.calls.last;
+      expect(open.prompting, ConnectPrompting.enabled);
+      expect(open.config.authMethod, AuthMethod.password);
+      expect(open.credentials.method, AuthMethod.password);
+      completeWithoutTimers(time, pane.close());
+      expect(time.pendingTimers, isEmpty);
+    });
+  });
+
   test('backoff resets after a successful recovery', () {
     fakeAsync((time) {
       final prober = FakeReconnectProber()..status = ProbeStatus.offline;
@@ -553,7 +625,7 @@ void main() {
       completeWithoutTimers(
         time,
         expectLater(
-          responder(['Code'], '2FA', ''),
+          responder(_challenge(h.servers['s1']!)),
           throwsA(isA<RemoteFileException>()),
         ),
       );
@@ -582,9 +654,7 @@ void main() {
         time.flushMicrotasks();
         final answer = h.keyboardGate = Completer<List<String>>();
         final response = h.opener.calls.last.onKeyboardInteractive!(
-          ['Code'],
-          '2FA',
-          '',
+          _challenge(h.servers['s1']!),
         );
         final failed = expectLater(
           response,
@@ -624,7 +694,7 @@ void main() {
       completeWithoutTimers(
         time,
         expectLater(
-          responder(['Code'], '2FA', ''),
+          responder(_challenge(h.servers['s1']!)),
           throwsA(isA<RemoteFileException>()),
         ),
       );

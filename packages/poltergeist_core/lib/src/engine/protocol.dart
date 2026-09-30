@@ -32,8 +32,9 @@ import '../transfer/trash_service.dart' show TrashErrorKind, TrashException;
 /// D8 addendum): [LeaseTransferChannelRequest]/[ReleaseTransferLeaseRequest],
 /// the generic [VfsOpRequest] over a lease or a browse channel, the
 /// credit-flow-controlled download/upload streams, and the engine-side
-/// local-trash requests.
-const engineProtocolVersion = 13;
+/// local-trash requests. v14 adds [ReplaceServerCatalogRequest] and the
+/// trusted endpoint on [KeyboardInteractivePromptData].
+const engineProtocolVersion = 14;
 
 // ── Engine → UI events ──────────────────────────────────────────────────
 
@@ -297,12 +298,22 @@ final class HostKeyPromptData extends EnginePromptData {
 }
 
 /// A keyboard-interactive challenge (2FA/TOTP); one answer per prompt.
+///
+/// The endpoint is trusted local configuration. [name], [instruction], and
+/// [prompts] are untrusted server text and must render separately so a jump
+/// host cannot present itself as the destination.
 final class KeyboardInteractivePromptData extends EnginePromptData {
+  final String host;
+  final int port;
+  final String username;
   final String name;
   final String instruction;
   final List<String> prompts;
 
   const KeyboardInteractivePromptData({
+    required this.host,
+    required this.port,
+    required this.username,
     required this.name,
     required this.instruction,
     required this.prompts,
@@ -615,6 +626,19 @@ final class SetProbeActivityRequest extends EngineRequest {
     required super.requestId,
     required this.activity,
   });
+}
+
+/// Replaces the engine's authoritative shared-server catalog snapshot.
+///
+/// This updates routing only. It never acquires a channel. An empty snapshot
+/// retires aliases for every catalog record the engine knew previously.
+final class ReplaceServerCatalogRequest extends EngineRequest {
+  final List<ServerConfig> configs;
+
+  ReplaceServerCatalogRequest({
+    required super.requestId,
+    required List<ServerConfig> configs,
+  }) : configs = List.unmodifiable(configs);
 }
 
 /// Drops this serverId's pool reference (03 §3.5): closes its browse

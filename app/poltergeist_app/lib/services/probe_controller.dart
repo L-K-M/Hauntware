@@ -68,6 +68,8 @@ final class ProbeController extends ChangeNotifier {
   Future<void> _pending = Future.value();
   bool _ready = false;
   bool _configured = false;
+  bool _configuring = false;
+  bool _retryRequested = false;
   bool _failed = false;
   bool _engineClosed = false;
   bool _disposed = false;
@@ -124,6 +126,8 @@ final class ProbeController extends ChangeNotifier {
     var result = _pending;
     if (needsUpdate) {
       _configured = true;
+      _configuring = true;
+      _retryRequested = false;
       _failed = false;
       _ready = false;
       _buffered = null;
@@ -133,6 +137,9 @@ final class ProbeController extends ChangeNotifier {
         List.unmodifiable(configs),
         activity,
       );
+    } else if (_configuring) {
+      // A later explicit snapshot gets one retry if the shared request fails.
+      _retryRequested = true;
     }
 
     // Listeners may immediately opt out. Establish the request's
@@ -142,6 +149,29 @@ final class ProbeController extends ChangeNotifier {
   }
 
   Future<void> _configure(
+    Object revision,
+    List<ServerConfig> configs,
+    ProbeActivity activity,
+  ) async {
+    var attemptRevision = revision;
+    while (true) {
+      await _configureAttempt(attemptRevision, configs, activity);
+      if (!_isCurrent(attemptRevision)) return;
+      if (!_failed || !_retryRequested) {
+        _configuring = false;
+        _retryRequested = false;
+        return;
+      }
+
+      _failed = false;
+      _retryRequested = false;
+      _ready = false;
+      _buffered = null;
+      attemptRevision = _revision = Object();
+    }
+  }
+
+  Future<void> _configureAttempt(
     Object revision,
     List<ServerConfig> configs,
     ProbeActivity activity,

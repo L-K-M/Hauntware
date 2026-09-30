@@ -1352,16 +1352,18 @@ Séance's managed edits keep their conflict authority, D7). Poltergeist's
 `LocalFileSystem` implements them from day one (03 §2.2), so only remote
 callers wait on the pin bump.
 
-### 5.5 PR-S4 — agent auth + ProxyJump in `seance_core` (D10, later)
+### 5.5 PR-S4 — agent auth + ProxyJump in `seance_core` (D10)
 
 Post-v1.0 fast-follow, serving both apps. Scope: an ssh-agent client speaking
 `$SSH_AUTH_SOCK` / `\\.\pipe\openssh-ssh-agent` signing via a custom
-`SSHKeyPair`, so `SshCredentials.agent()` stops throwing; ProxyJump execution
-behind the already-modeled `jumpHostId` (recursive
-`openAuthenticatedClient` through the jump host, port-forward as the inner
-socket). Séance's STATUS #1 documents the agent options. Acceptance is
-specified when filed (07 owns the fast-follow milestone); the transport seams
-are prepared during M2 (D10).
+`SSHIdentity`, so `SshCredentials.agent()` stops throwing; ProxyJump execution
+behind the already-modeled `jumpHostId`. Resolve and validate the complete
+config/credential route before network I/O; connect only the outer hop, use
+direct-tcpip for each inner hop, and apply auth, TOFU, logging, timeout, and
+cleanup per hop. Agent framing is bounded and fail-closed, private keys never
+leave the agent, and keyboard-interactive UI receives the trusted endpoint
+separately from server-controlled text. The transport seams are prepared
+during M2 (D10).
 
 ### 5.6 The PR-S1 shim (only if it stalls)
 

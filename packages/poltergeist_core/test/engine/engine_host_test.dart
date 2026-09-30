@@ -119,14 +119,18 @@ class ScriptedFs implements RemoteFileSystem {
   );
 }
 
-ServerConfig _config() => const ServerConfig(
-  id: 'srv-1',
+ServerConfig _config({
+  String id = 'srv-1',
+  AuthMethod authMethod = AuthMethod.password,
+  String? secretRef = 'secret-7',
+}) => ServerConfig(
+  id: id,
   label: 'Test',
   host: 'example.com',
   port: 2222,
   username: 'user',
-  authMethod: AuthMethod.password,
-  secretRef: 'secret-7',
+  authMethod: authMethod,
+  secretRef: secretRef,
   createdAt: 0,
   updatedAt: 0,
 );
@@ -222,12 +226,12 @@ class HostHarness {
     return completer.future;
   }
 
-  Future<EngineResult> openBrowse() => call(
+  Future<EngineResult> openBrowse({ServerConfig? config}) => call(
     (id) => OpenBrowseChannelRequest(
       requestId: id,
       serverId: 'srv-1',
       paneTabId: 'tab-1',
-      config: _config(),
+      config: config ?? _config(),
     ),
   );
 
@@ -420,6 +424,450 @@ void main() {
     );
   });
 
+  test('a catalog refresh retires every known alias without dialing', () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+    h.watch('favorite-1');
+    await h.pumping();
+    final direct = _config(id: 'catalog-1').copyWith(updatedAt: 999);
+
+    final opened = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: 'tab-1',
+        config: direct,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+    final channel = await opened as BrowseChannelOpened;
+
+    final refreshed = await h.call(
+      (id) => ReplaceServerCatalogRequest(
+        requestId: id,
+        configs: [
+          direct.copyWith(jumpHostId: 'bastion', updatedAt: 1),
+        ],
+      ),
+    );
+    await h.pumping();
+
+    expect(refreshed, isA<EngineAck>());
+    expect(h.opener.calls, hasLength(1));
+    expect(
+      h.events.whereType<ServerStateEvent>().last.state,
+      ServerConnectionState.disconnected,
+    );
+    // Work already authenticated drains, but this id cannot reconnect there.
+    expect(
+      await h.list(channel.channelId, '/home/test'),
+      isA<DirectoryListed>(),
+    );
+  });
+
+  test('a catalog jump route resolves every hop before dialing', () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+    final target = _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion');
+    final bastion = _config(
+      id: 'bastion',
+    ).copyWith(host: 'bastion.example.com');
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [target, bastion],
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+
+    final opened = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: 'tab-1',
+        config: target,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+
+    expect(await opened, isA<BrowseChannelOpened>());
+    expect(h.opener.calls, hasLength(1));
+    expect(
+      h.opener.calls.single.jumpHosts.single.config.host,
+      'bastion.example.com',
+    );
+  });
+
+  test('a catalog hop ignores an engine alias with the same id', () async {
+    final alias = _config(
+      id: 'embedded-server',
+    ).copyWith(host: 'alias.example.com');
+    final target = _config(
+      id: 'catalog-target',
+    ).copyWith(host: 'target.example.com', jumpHostId: 'bastion');
+    final bastion = _config(
+      id: 'bastion',
+    ).copyWith(host: 'bastion.example.com');
+    final pins = [
+      for (final config in [alias, target, bastion])
+        HostKey(
+          host: config.host,
+          port: config.port,
+          type: 'ssh-ed25519',
+          fingerprintSha256: 'SHA256:presented',
+          pinnedAt: 0,
+        ),
+    ];
+    final h = HostHarness(config: EngineConfig(hostKeyPins: pins));
+    addTearDown(h.dispose);
+
+    final aliasOpen = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: bastion.id,
+        paneTabId: 'alias-tab',
+        config: alias,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    expect(await aliasOpen, isA<BrowseChannelOpened>());
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [target, bastion],
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+
+    final targetOpen = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-target',
+        paneTabId: 'target-tab',
+        config: target,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+
+    expect(await targetOpen, isA<BrowseChannelOpened>());
+    expect(h.opener.calls.last.jumpHosts.single.config.host, bastion.host);
+  });
+
+  test('a changed outer hop retires a pending catalog route', () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+    final target = _config(id: 'catalog-1').copyWith(jumpHostId: 'inner');
+    final inner = _config(
+      id: 'inner',
+    ).copyWith(host: 'inner.example.com', jumpHostId: 'outer');
+    final outer = _config(
+      id: 'outer',
+    ).copyWith(host: 'outer.example.com');
+    final catalog = [target, inner, outer];
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: catalog,
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+    final opened = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: 'tab-1',
+        config: target,
+      ),
+    );
+    await h.pumping();
+    final credential = h.takePrompt();
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [
+            target,
+            inner,
+            outer.copyWith(host: 'new-outer.example.com'),
+          ],
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+    await h.pumping();
+
+    final failure = await expectError(opened);
+    expect(failure.kind, RemoteFileErrorKind.disconnected);
+    expect(h.opener.calls, isEmpty);
+    expect(
+      h.events.whereType<PromptDismissedEvent>().single.promptId,
+      credential.promptId,
+    );
+  });
+
+  for (final lease in [false, true]) {
+    test('a changed catalog request refuses a stale snapshot '
+        'for ${lease ? 'a lease' : 'an open'}', () async {
+      final h = HostHarness();
+      addTearDown(h.dispose);
+      final current = _config(id: 'catalog-1');
+      expect(
+        await h.call(
+          (id) => ReplaceServerCatalogRequest(
+            requestId: id,
+            configs: [current],
+          ),
+        ),
+        isA<EngineAck>(),
+      );
+      final changed = current.copyWith(
+        host: 'new.example.com',
+        updatedAt: current.updatedAt + 1000,
+      );
+
+      final attempt = lease
+          ? h.call(
+              (id) => LeaseTransferChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                config: changed,
+              ),
+            )
+          : h.call(
+              (id) => OpenBrowseChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                paneTabId: 'tab-1',
+                config: changed,
+              ),
+            );
+      await h.pumping();
+
+      expect(
+        h.events.whereType<EnginePromptEvent>(),
+        isEmpty,
+        reason: 'neither side of an unordered route change is safe to dial',
+      );
+      final failure = await expectError(attempt);
+      expect(failure.kind, RemoteFileErrorKind.disconnected);
+      expect(h.opener.calls, isEmpty);
+    });
+  }
+
+  test('a removed catalog route drains work and refuses stale requests',
+      () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+    final direct = _config(id: 'catalog-1');
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [direct],
+        ),
+      ),
+      isA<EngineAck>(),
+    );
+
+    final opened = h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: 'tab-1',
+        config: direct,
+      ),
+    );
+    await h.pumping();
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+    final channel = await opened as BrowseChannelOpened;
+
+    expect(
+      await h.call(
+        (id) => ReplaceServerCatalogRequest(requestId: id, configs: const []),
+      ),
+      isA<EngineAck>(),
+    );
+    expect(
+      await h.list(channel.channelId, '/home/test'),
+      isA<DirectoryListed>(),
+    );
+
+    final staleAfterRemoval = direct.copyWith(
+      updatedAt: direct.updatedAt + 1000,
+    );
+
+    for (final attempt in [
+      h.call(
+        (id) => OpenBrowseChannelRequest(
+          requestId: id,
+          serverId: 'favorite-1',
+          paneTabId: 'stale-tab',
+          config: staleAfterRemoval,
+        ),
+      ),
+      h.call(
+        (id) => LeaseTransferChannelRequest(
+          requestId: id,
+          serverId: 'favorite-1',
+          config: staleAfterRemoval,
+        ),
+      ),
+    ]) {
+      final failure = await expectError(attempt);
+      expect(failure.kind, RemoteFileErrorKind.disconnected);
+    }
+    expect(h.events.whereType<EnginePromptEvent>(), isEmpty);
+    expect(h.opener.calls, hasLength(1));
+  });
+
+  for (final lease in [false, true]) {
+    test('a catalog refresh cancels a pending direct '
+        '${lease ? 'lease' : 'open'} before dialing', () async {
+      final h = HostHarness();
+      addTearDown(h.dispose);
+
+      final attempt = lease
+          ? h.call(
+              (id) => LeaseTransferChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                config: _config(id: 'catalog-1'),
+              ),
+            )
+          : h.call(
+              (id) => OpenBrowseChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                paneTabId: 'tab-1',
+                config: _config(id: 'catalog-1'),
+              ),
+            );
+      final refreshed = h.call(
+        (id) => ReplaceServerCatalogRequest(
+          requestId: id,
+          configs: [
+            _config(id: 'catalog-1').copyWith(jumpHostId: 'bastion'),
+            _config(id: 'bastion').copyWith(host: 'bastion.example.com'),
+          ],
+        ),
+      );
+      await h.pumping();
+
+      expect(await refreshed, isA<EngineAck>());
+      expect(
+        h.events.whereType<EnginePromptEvent>(),
+        isEmpty,
+        reason: 'the retired direct route must not request credentials',
+      );
+      final failure = await expectError(attempt);
+      expect(failure.kind, RemoteFileErrorKind.disconnected);
+      expect(h.opener.calls, isEmpty);
+    });
+  }
+
+  for (final lease in [false, true]) {
+    test('an authoritative jump route refuses a stale '
+        '${lease ? 'lease' : 'open'} before dialing', () async {
+      final h = HostHarness();
+      addTearDown(h.dispose);
+      final staleDirect = _config(
+        id: 'catalog-1',
+      ).copyWith(updatedAt: 999);
+      final jumpRoute = staleDirect.copyWith(
+        jumpHostId: 'bastion',
+        updatedAt: 1,
+      );
+
+      expect(
+        await h.call(
+          (id) => ReplaceServerCatalogRequest(
+            requestId: id,
+            configs: [
+              jumpRoute,
+              _config(id: 'bastion').copyWith(host: 'bastion.example.com'),
+            ],
+          ),
+        ),
+        isA<EngineAck>(),
+      );
+      final attempt = lease
+          ? h.call(
+              (id) => LeaseTransferChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                config: staleDirect,
+              ),
+            )
+          : h.call(
+              (id) => OpenBrowseChannelRequest(
+                requestId: id,
+                serverId: 'favorite-1',
+                paneTabId: 'tab-1',
+                config: staleDirect,
+              ),
+            );
+      await h.pumping();
+
+      expect(h.events.whereType<EnginePromptEvent>(), isEmpty);
+      final failure = await expectError(attempt);
+      expect(failure.kind, RemoteFileErrorKind.disconnected);
+      expect(h.opener.calls, isEmpty);
+    });
+  }
+
+  test('matching concurrent opens share their pending route', () async {
+    final h = HostHarness();
+    addTearDown(h.dispose);
+
+    Future<EngineResult> open(String paneTabId) => h.call(
+      (id) => OpenBrowseChannelRequest(
+        requestId: id,
+        serverId: 'favorite-1',
+        paneTabId: paneTabId,
+        config: _config(id: 'catalog-1'),
+      ),
+    );
+
+    final first = open('tab-1');
+    final second = open('tab-2');
+    await h.pumping();
+
+    expect(h.events.whereType<EnginePromptEvent>(), hasLength(1));
+    h.reply(h.takePrompt(), _credentials);
+    await h.pumping();
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+
+    expect(await first, isA<BrowseChannelOpened>());
+    expect(await second, isA<BrowseChannelOpened>());
+    expect(h.opener.calls, hasLength(1));
+  });
+
   test('a lease with an edited config dials it while the old pane keeps '
       'listing', () async {
     final h = HostHarness();
@@ -577,6 +1025,34 @@ void main() {
     );
   });
 
+  test('an empty agent reply reaches the SSH opener as agent auth', () async {
+    final h = HostHarness(opener: FakeTransportOpener(authKind: AuthKind.agent));
+    addTearDown(h.dispose);
+
+    final opened = h.openBrowse(
+      config: _config(
+        authMethod: AuthMethod.agent,
+        secretRef: 'obsolete-secret',
+      ),
+    );
+    await h.pumping();
+
+    final credential = h.takePrompt();
+    final data = credential.data as CredentialPromptData;
+    expect(data.authMethod, AuthMethod.agent);
+    h.reply(
+      credential,
+      const CredentialPromptReply(origin: CredentialOrigin.stored),
+    );
+    await h.pumping();
+
+    h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
+    expect(await opened, isA<BrowseChannelOpened>());
+    expect(h.opener.calls.single.credentials.method, AuthMethod.agent);
+    expect(h.opener.calls.single.credentials.password, isNull);
+    expect(h.opener.calls.single.credentials.privateKeyPem, isNull);
+  });
+
   test('declined first-use host key fails the open without pinning', () async {
     final h = HostHarness();
     addTearDown(h.dispose);
@@ -692,12 +1168,22 @@ void main() {
 
     // The connect is parked; the server issues a 2FA challenge.
     final responder = h.opener.calls.single.onKeyboardInteractive!;
-    final answers = responder(['Enter code'], '2FA', 'verify me');
+    final answers = responder(
+      KeyboardInteractiveChallenge(
+        server: _config(),
+        prompts: const ['Enter code'],
+        name: '2FA',
+        instruction: 'verify me',
+      ),
+    );
     await h.pumping();
 
     final challenge = h.takePrompt();
     expect(challenge.kind, EnginePromptKind.keyboardInteractive);
     final data = challenge.data as KeyboardInteractivePromptData;
+    expect(data.host, 'example.com');
+    expect(data.port, 2222);
+    expect(data.username, 'user');
     expect(data.prompts, ['Enter code']);
     expect(data.instruction, 'verify me');
 

@@ -1038,5 +1038,20 @@ class _ProbeVisibilityState extends State<_ProbeVisibility> {
   }
 
   @override
+  void didUpdateWidget(_ProbeVisibility oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.probes == widget.probes && oldWidget.id == widget.id) return;
+
+    oldWidget.probes?.noteHidden(oldWidget.id);
+    widget.probes?.noteVisible(widget.id);
+  }
+
+  @override
+  void dispose() {
+    widget.probes?.noteHidden(widget.id);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => widget.child;
 }

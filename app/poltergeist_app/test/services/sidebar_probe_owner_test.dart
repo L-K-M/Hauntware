@@ -39,6 +39,9 @@ final class _Bridge implements ProbeBridge {
   final events = StreamController<ProbeStatusesEvent>.broadcast(sync: true);
   final calls = <String>[];
   List<ServerConfig> targets = const [];
+  Completer<void>? targetsStarted;
+  Completer<void>? targetsRelease;
+  String? blockedTargetIds;
 
   /// True if every command observed a live snapshot listener.
   bool subscribedBeforeCommands = true;
@@ -48,9 +51,18 @@ final class _Bridge implements ProbeBridge {
 
   @override
   Future<void> setProbeTargets(List<ServerConfig> targets) {
-    _record('targets:${targets.map((target) => target.id).join(',')}');
+    final targetIds = targets.map((target) => target.id).join(',');
+    _record('targets:$targetIds');
     this.targets = targets;
-    return Future.value();
+    final release = targetsRelease;
+    if (release == null) return Future.value();
+    if (blockedTargetIds != null && blockedTargetIds != targetIds) {
+      return Future.value();
+    }
+    final started = targetsStarted;
+    if (started != null && !started.isCompleted) started.complete();
+    targetsRelease = null;
+    return release.future;
   }
 
   @override
@@ -69,6 +81,8 @@ final class _Settings implements ProbeSettings {
   ProbePreference global = ProbePreference.enabled;
   bool failReads = false;
   bool failWrites = false;
+  Completer<void>? serverFactsStarted;
+  Completer<void>? serverFactsRelease;
   final calls = <String>[];
   final servers = <String, ({String host, int port, bool connected})>{};
 
@@ -85,6 +99,11 @@ final class _Settings implements ProbeSettings {
     required int port,
   }) async {
     if (failReads) throw StateError('settings unreadable');
+    final started = serverFactsStarted;
+    if (started != null && !started.isCompleted) started.complete();
+    final release = serverFactsRelease;
+    if (release != null) await release.future;
+
     final facts = servers[serverId];
     // Mirrors the real store: case-insensitive host, exact port.
     if (facts == null ||
@@ -251,6 +270,422 @@ void main() {
     expect(bridge.targets.map((target) => target.id), ['b1']);
     expect(settings.calls, isNot(contains('remove:b2')));
   });
+
+  test('a jump-routed catalog server is never probed', () async {
+    ServerConfig pulled(String id, {String? jumpHostId}) => ServerConfig(
+      id: id,
+      label: id,
+      host: '$id.internal',
+      username: 'ops',
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    owner.syncCatalog([pulled('web'), pulled('db', jumpHostId: 'bastion')]);
+    owner.noteVisible('web');
+    owner.noteVisible('db');
+    await pump();
+
+    // The probe would dial db directly, around its bastion (X-05).
+    expect(settings.calls, ['write:web']);
+    expect(bridge.targets.map((target) => target.id), ['web']);
+  });
+
+  test('a route change invalidates a pending direct probe snapshot', () async {
+    ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.internal', port: 22, connected: false);
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    await pump();
+    bridge.calls.clear();
+
+    settings.serverFactsStarted = Completer<void>();
+    settings.serverFactsRelease = Completer<void>();
+    owner.syncCatalog([pulled()]);
+    await settings.serverFactsStarted!.future;
+
+    // The route changes while the direct snapshot waits on durable facts.
+    owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+    settings.serverFactsRelease!.complete();
+    await pump();
+
+    expect(bridge.calls, isNot(contains('targets:db')));
+    expect(bridge.targets, isEmpty);
+  });
+
+  test('a jump route stops a probe before pending settings finish', () async {
+    ServerConfig pulled(String id, {String? jumpHostId}) => ServerConfig(
+      id: id,
+      label: id,
+      host: '$id.internal',
+      username: 'ops',
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.internal', port: 22, connected: false);
+    settings.servers['web'] = (
+      host: 'web.internal',
+      port: 22,
+      connected: false,
+    );
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    owner.syncCatalog([pulled('db'), pulled('web')]);
+    await pump();
+    expect(bridge.targets.map((target) => target.id), ['db', 'web']);
+
+    settings.serverFactsStarted = Completer<void>();
+    final release = settings.serverFactsRelease = Completer<void>();
+    owner.syncCatalog([pulled('db'), pulled('web')]);
+    await settings.serverFactsStarted!.future;
+
+    owner.syncCatalog([pulled('db', jumpHostId: 'bastion'), pulled('web')]);
+    await pump();
+    final targetsBeforeSettings = List<ServerConfig>.of(bridge.targets);
+
+    release.complete();
+    await pump();
+
+    expect(targetsBeforeSettings.map((target) => target.id), ['web']);
+  });
+
+  test('a lifecycle pause overtakes pending settings', () async {
+    final server = ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.internal', port: 22, connected: false);
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    owner.syncCatalog([server]);
+    await pump();
+    bridge.calls.clear();
+
+    settings.serverFactsStarted = Completer<void>();
+    final release = settings.serverFactsRelease = Completer<void>();
+    owner.syncCatalog([server]);
+    await settings.serverFactsStarted!.future;
+
+    owner.forwardLifecycle(AppLifecycleState.paused);
+    await pump();
+    final callsBeforeSettings = List<String>.of(bridge.calls);
+    final targetsBeforeSettings = List<ServerConfig>.of(bridge.targets);
+
+    release.complete();
+    await pump();
+
+    expect(callsBeforeSettings, contains('paused'));
+    expect(targetsBeforeSettings.single.id, 'db');
+    expect(bridge.calls, isNot(contains('running')));
+    expect(bridge.targets.single.id, 'db');
+  });
+
+  test('a queued resume cannot leak through a catalog sync', () async {
+    final server = ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.internal', port: 22, connected: false);
+    owner.forwardLifecycle(AppLifecycleState.paused);
+    owner.syncCatalog([server]);
+    await pump();
+    bridge.calls.clear();
+
+    settings.serverFactsStarted = Completer<void>();
+    final release = settings.serverFactsRelease = Completer<void>();
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    await settings.serverFactsStarted!.future;
+
+    owner.syncCatalog([server]);
+    await pump();
+    final callsBeforeSettings = List<String>.of(bridge.calls);
+
+    release.complete();
+    await pump();
+
+    expect(callsBeforeSettings, isNot(contains('running')));
+    expect(bridge.calls, contains('running'));
+  });
+
+  test('a loaded global opt-out overtakes pending server facts', () async {
+    final server = ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.internal', port: 22, connected: false);
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    owner.syncCatalog([server]);
+    await pump();
+    bridge.calls.clear();
+
+    settings.global = ProbePreference.disabled;
+    settings.serverFactsStarted = Completer<void>();
+    final release = settings.serverFactsRelease = Completer<void>();
+    owner.syncCatalog([server]);
+    await settings.serverFactsStarted!.future;
+    await pump();
+    final callsBeforeFacts = List<String>.of(bridge.calls);
+    final targetsBeforeFacts = List<ServerConfig>.of(bridge.targets);
+
+    release.complete();
+    await pump();
+
+    expect(callsBeforeFacts, contains('paused'));
+    expect(targetsBeforeFacts, isEmpty);
+    expect(bridge.calls, isNot(contains('running')));
+  });
+
+  test('an endpoint edit stops the old probe before settings finish', () async {
+    ServerConfig pulled(String id, String host) => ServerConfig(
+      id: id,
+      label: id,
+      host: host,
+      username: 'ops',
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.old', port: 22, connected: false);
+    settings.servers['web'] = (
+      host: 'web.internal',
+      port: 22,
+      connected: false,
+    );
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    owner.syncCatalog([pulled('db', 'db.old'), pulled('web', 'web.internal')]);
+    await pump();
+
+    settings.serverFactsStarted = Completer<void>();
+    final release = settings.serverFactsRelease = Completer<void>();
+    owner.syncCatalog([pulled('db', 'db.old'), pulled('web', 'web.internal')]);
+    await settings.serverFactsStarted!.future;
+
+    owner.syncCatalog([pulled('db', 'db.new'), pulled('web', 'web.internal')]);
+    await pump();
+    final targetsBeforeSettings = List<ServerConfig>.of(bridge.targets);
+
+    release.complete();
+    await pump();
+
+    expect(targetsBeforeSettings.map((target) => target.id), ['web']);
+    expect(bridge.targets.map((target) => target.id), ['web']);
+  });
+
+  test(
+    'a jump route overtakes a pending direct target acknowledgement',
+    () async {
+      ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'ops',
+        jumpHostId: jumpHostId,
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      settings.servers['db'] = (
+        host: 'db.internal',
+        port: 22,
+        connected: false,
+      );
+      owner.forwardLifecycle(AppLifecycleState.resumed);
+      owner.noteVisible('db');
+      await pump();
+      bridge.calls.clear();
+
+      bridge.targetsStarted = Completer<void>();
+      final release = bridge.targetsRelease = Completer<void>();
+      owner.syncCatalog([pulled()]);
+      await bridge.targetsStarted!.future;
+
+      owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+      await pump();
+      final targetsBeforeAck = List<ServerConfig>.of(bridge.targets);
+
+      release.complete();
+      await pump();
+
+      expect(targetsBeforeAck, isEmpty);
+      expect(bridge.targets, isEmpty);
+      expect(bridge.calls, isNot(contains('running')));
+    },
+  );
+
+  test('a newer snapshot retries after a pending target failure', () async {
+    final server = ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.internal', port: 22, connected: false);
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    await pump();
+    bridge.calls.clear();
+
+    bridge.targetsStarted = Completer<void>();
+    final release = bridge.targetsRelease = Completer<void>();
+    owner.syncCatalog([server]);
+    await bridge.targetsStarted!.future;
+
+    owner.syncCatalog([server]);
+    await pump();
+    release.completeError(StateError('target failure'));
+    await pump();
+
+    expect(bridge.calls.where((call) => call == 'targets:db'), hasLength(2));
+    expect(bridge.targets.single.id, 'db');
+    expect(bridge.calls.last, 'running');
+  });
+
+  test('a reentrant restriction keeps its pending retry', () async {
+    ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    settings.servers['db'] = (host: 'db.internal', port: 22, connected: false);
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    await pump();
+    bridge.calls.clear();
+
+    bridge.blockedTargetIds = '';
+    bridge.targetsStarted = Completer<void>();
+    final release = bridge.targetsRelease = Completer<void>();
+    var restricted = false;
+    owner.addListener(() {
+      if (restricted) return;
+      restricted = true;
+      owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+    });
+
+    owner.syncCatalog([pulled()]);
+    await bridge.targetsStarted!.future;
+    await pump();
+    release.completeError(StateError('restriction failure'));
+    await pump();
+
+    expect(bridge.calls.where((call) => call == 'targets:'), hasLength(3));
+    expect(bridge.targets, isEmpty);
+    expect(bridge.calls, isNot(contains('running')));
+  });
+
+  test('a visible catalog server starts probing when its jump route clears',
+      () async {
+    ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    owner.forwardLifecycle(AppLifecycleState.resumed);
+    owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+    owner.noteVisible('db');
+    await pump();
+    expect(bridge.targets, isEmpty);
+
+    // The row remains mounted while sync makes the route directly usable.
+    owner.syncCatalog([pulled()]);
+    await pump();
+
+    expect(settings.calls, ['write:db']);
+    expect(bridge.targets.map((target) => target.id), ['db']);
+  });
+
+  test(
+    'a hidden catalog server waits for remount when its route clears',
+    () async {
+      ServerConfig pulled({String? jumpHostId}) => ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'ops',
+        jumpHostId: jumpHostId,
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      owner.forwardLifecycle(AppLifecycleState.resumed);
+      owner.syncCatalog([pulled(jumpHostId: 'bastion')]);
+      owner.noteVisible('db');
+      await pump();
+
+      owner.noteHidden('db');
+      owner.syncCatalog([pulled()]);
+      await pump();
+
+      expect(settings.calls, isEmpty);
+      expect(bridge.targets, isEmpty);
+
+      owner.noteVisible('db');
+      await pump();
+
+      expect(settings.calls, ['write:db']);
+      expect(bridge.targets.map((target) => target.id), ['db']);
+    },
+  );
+
+  test(
+    'visibility remains active until every copy of a row unmounts',
+    () async {
+      ServerConfig pulled({required String host}) => ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: host,
+        username: 'ops',
+        jumpHostId: 'bastion',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      owner.syncCatalog([pulled(host: 'db.internal')]);
+      owner.noteVisible('db');
+      owner.noteVisible('db');
+
+      owner.noteHidden('db');
+      owner.syncCatalog([
+        pulled(host: 'db.internal').copyWith(clearJumpHostId: true),
+      ]);
+      await pump();
+      expect(settings.calls, ['write:db']);
+
+      owner.noteHidden('db');
+      owner.syncCatalog([
+        pulled(host: 'db-new.internal').copyWith(clearJumpHostId: true),
+      ]);
+      await pump();
+      expect(settings.calls, ['write:db']);
+
+      owner.noteVisible('db');
+      await pump();
+      expect(settings.calls, ['write:db', 'write:db']);
+    },
+  );
 
   test('noteRemoved purges the record and drops the target', () async {
     owner.forwardLifecycle(AppLifecycleState.resumed);

@@ -1,5 +1,5 @@
-// Ported from Séance app/seance_app/lib/ui/server_editor.dart @ 035b0d8 (tag
-// v0.9.1); see docs/PORTS.md.
+// Ported from Séance app/seance_app/lib/ui/server_editor.dart @ 5d578b9; see
+// docs/PORTS.md.
 // Divergences: `AppState` becomes [ServerEditorDelegate] — the seven seams
 // the form actually uses, so the dialog builds in a widget test without
 // standing up the app. Strings localize through ARB (D20). The
@@ -337,10 +337,7 @@ class _ServerEditorState extends State<_ServerEditor> {
     _group = TextEditingController(text: e?.group ?? '');
     _tint = e == null ? ServerTint.none : ServerTint.of(e);
     _mark = e?.mark ?? _defaultMark;
-    // Default new servers to password: ssh-agent is offered but not yet
-    // supported by the backend, so defaulting to it would dead-end the very
-    // first "add a server and connect".
-    _auth = e?.authMethod ?? AuthMethod.password;
+    _auth = e?.authMethod ?? AuthMethod.agent;
     _keyPath.text = e?.identityFilePath ?? '';
     _referenceKeyFile = e?.identityFilePath != null;
     _loginScript.text = e?.loginScript ?? '';
@@ -665,14 +662,7 @@ class _ServerEditorState extends State<_ServerEditor> {
     final l10n = AppLocalizations.of(context);
     switch (_auth) {
       case AuthMethod.agent:
-        return [
-          Text(l10n.serverEditorAgentInfo),
-          const SizedBox(height: 8),
-          Text(
-            l10n.serverEditorAgentUnsupported,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-        ];
+        return [Text(l10n.serverEditorAgentInfo)];
       case AuthMethod.password:
         return [
           TextFormField(
@@ -926,7 +916,11 @@ class _ServerEditorState extends State<_ServerEditor> {
   }
 
   Future<void> _pickMark() async {
-    final chosen = await showServerMarkPicker(context, current: _mark);
+    final chosen = await showServerMarkPicker(
+      context,
+      current: _mark,
+      accent: _tint,
+    );
     if (chosen == null || !mounted) return;
     setState(() => _mark = chosen);
   }
@@ -1057,6 +1051,10 @@ class _ServerEditorState extends State<_ServerEditor> {
       username: _user.text.trim(),
       authMethod: _auth,
       secretRef: secretRef,
+      // ProxyJump editing is not exposed yet; preserve the saved route.
+      // Séance reads this same record, so dropping it here would take the
+      // route away on every device (Séance #131's fix, X-02).
+      jumpHostId: existing?.jumpHostId,
       // Blank reads as "no file referenced", not as a path made of nothing:
       // the validator blocks an empty path, and a caller that ever reached
       // here without it would otherwise ask the SSH layer to read `''`.

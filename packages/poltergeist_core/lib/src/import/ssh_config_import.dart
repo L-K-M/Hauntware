@@ -41,9 +41,9 @@ const String _importedRemotePath = '/';
 
 /// Why an imported host won't behave as `ssh` would (D22's badge).
 enum SshConfigImportLimitation {
-  /// A `ProxyJump` applies to this host. D10 defers jump execution to a
-  /// post-1.0 fast-follow, so the bookmark would connect directly, not
-  /// through the jump.
+  /// A `ProxyJump` applies to this host. D10 executes jump hosts through a
+  /// catalog route, which an embedded bookmark cannot preserve. The row
+  /// starts skipped because importing it would connect directly instead.
   proxyJump,
 
   /// A `ProxyCommand` applies to this host (its own block, a wildcard
@@ -143,7 +143,8 @@ class SshConfigImportRow {
   bool get importByDefault =>
       !matchesExistingBookmark &&
       !matchesEarlierImportRow &&
-      importable;
+      importable &&
+      !limitations.contains(SshConfigImportLimitation.proxyJump);
 
   /// False only for rows that can never produce a valid bookmark.
   bool get importable =>
@@ -195,7 +196,9 @@ class SshConfigImportRow {
           host: host.effectiveHost,
           port: port,
           username: username,
-          authMethod: hasKey ? AuthMethod.privateKey : AuthMethod.password,
+          // OpenSSH tries its agent when no IdentityFile is declared. Match
+          // that keyless default without manufacturing a password prompt.
+          authMethod: hasKey ? AuthMethod.privateKey : AuthMethod.agent,
           identityFilePath: hasKey ? keyPath : null,
         ),
       ),

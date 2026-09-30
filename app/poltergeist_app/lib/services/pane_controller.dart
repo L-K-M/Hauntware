@@ -350,6 +350,9 @@ typedef ExternalEditorOpen =
       String? editorId,
     );
 
+/// Resolves a shared-account server at the moment a pane binds or rebinds.
+typedef PaneServerConfigLookup = ServerConfig? Function(String id);
+
 /// A transient pane notice (02 §10's notice family): the honest
 /// "not yet" for a registered-but-deferred action — never an error,
 /// so it renders as a dismissible strip, not the error overlay. The
@@ -462,6 +465,10 @@ class PaneController extends ChangeNotifier {
   /// callback on every tab; the shell binds the store.
   void Function(PaneLocation location, {Bookmark? remoteBookmark})?
   onLocationCommitted;
+
+  /// Catalog lookup stamped by the owning tab strip. Reconnects resolve
+  /// again so a synchronized route edit cannot revive the stale route.
+  PaneServerConfigLookup? serverConfigLookup;
 
   final PaneEngineLanes? _lanes;
   final void Function(Object error, StackTrace)? _onError;
@@ -1364,10 +1371,11 @@ class PaneController extends ChangeNotifier {
         // catalog lookup — the pulled config carries the fields an
         // embedded identity cannot express (jumpHostId). Embedded
         // identities still derive theirs.
+        final config = _serverConfigForRemote(bookmark, resolvedConfig);
         final channel = await lanes.openBrowseChannel(
           serverId: bookmark.id,
           paneTabId: paneTabId,
-          config: resolvedConfig ?? serverConfigForBookmark(bookmark),
+          config: config,
         );
         if (_disposed || attempt != _bindAttempt) {
           await _closeChannel(channel);
@@ -1395,6 +1403,24 @@ class PaneController extends ChangeNotifier {
         _pendingRemotePath = null;
       },
     );
+  }
+
+  ServerConfig _serverConfigForRemote(
+    Bookmark bookmark,
+    ServerConfig? resolvedConfig,
+  ) {
+    if (resolvedConfig != null) return resolvedConfig;
+
+    final ref = bookmark.server;
+    final catalogId = ref?.serverConfigId;
+    if (catalogId != null) {
+      final catalogConfig = serverConfigLookup?.call(catalogId);
+      if (catalogConfig != null) return catalogConfig;
+    }
+    if (ref?.identity != null) return serverConfigForBookmark(bookmark);
+
+    // The view localizes this authored fault; no endpoint is invented.
+    throw PaneFaultException(PaneFault.connectionOpen, operation: 'connect');
   }
 
   /// Navigates to [path] on the live channel (path bar, entries,
@@ -3739,7 +3765,7 @@ class PaneController extends ChangeNotifier {
       // is different: the rollback stays parked so Esc can still
       // restore the prior binding out of the failed reconnect.
       if (presentation == _BindingPresentation.replace) _retireRollback();
-      _dropStatusWatch();
+      _finishFailedStatusWatch();
       if (presentation == _BindingPresentation.retainCache) {
         _recovery = _RecoveryPhase.failed;
       }
@@ -3749,7 +3775,7 @@ class PaneController extends ChangeNotifier {
       if (_disposed || attempt != _bindAttempt) return;
       if (presentation == _BindingPresentation.replace) _retireRollback();
       _report(error, stackTrace);
-      _dropStatusWatch();
+      _finishFailedStatusWatch();
       if (presentation == _BindingPresentation.retainCache) {
         _recovery = _RecoveryPhase.failed;
       }
@@ -3796,13 +3822,16 @@ class PaneController extends ChangeNotifier {
         );
   }
 
-  /// A failed bind keeps no server watch: the subscription is inert
-  /// (the attempt guard drops its events) but it pins the engine's
-  /// per-server stream open until the next bind replaces it — and the
-  /// last observed status (e.g. a `reconnecting` that will never update
-  /// again) must not keep the connection-lost banner alive over the
-  /// terminal error surface.
-  void _dropStatusWatch() {
+  /// A failed bind normally keeps no server watch: a transient status
+  /// must not pin the connection-lost banner over the terminal error.
+  /// A blocked bind is the exception. Host-key review resolves through
+  /// this stream, so its watch stays live until retry, detach, or dispose.
+  void _finishFailedStatusWatch() {
+    if (_connectionStatus?.state == ServerConnectionState.blocked) {
+      _recovery = _RecoveryPhase.none;
+      return;
+    }
+
     unawaited(_statusWatch?.cancel());
     _statusWatch = null;
     _connectionStatus = null;

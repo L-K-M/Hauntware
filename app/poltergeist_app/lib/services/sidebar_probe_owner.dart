@@ -23,7 +23,7 @@ import 'probe_settings_store.dart';
 ///   drops out of probing but keeps its device-local record (a collapsed
 ///   group or a transient reload must not erase history; only
 ///   [noteRemoved] purges).
-/// - [noteVisible] marks exposure when a row mounts — 02 §4 defers a
+/// - [noteVisible] and [noteHidden] track mounted rows — 02 §4 defers a
 ///   favorite's first probe until it is visible in the sidebar.
 /// - [noteConnected] records a successful connect from this device — the
 ///   only fact that makes a sync-origin favorite probe-eligible.
@@ -52,11 +52,18 @@ final class SidebarProbeOwner extends ChangeNotifier {
 
   AppLifecycleState? _lifecycle;
   ProbePreference _preference = ProbePreference.enabled;
+  AppLifecycleState? _appliedLifecycle;
+  ProbePreference _appliedPreference = ProbePreference.enabled;
   final Map<String, ServerConfig> _configs = {};
   final Map<String, ServerConfig> _catalogConfigs = {};
-  final Set<String> _seenMarked = {};
+  final Map<String, int> _visible = {};
+  final Set<(String, String, int)> _seenMarked = {};
   final Set<String> _connectedMarked = {};
   Future<void> _tail = Future.value();
+  Map<String, ProbeFavorite> _appliedFavorites = const {};
+  Map<String, (String, int)> _appliedEndpoints = const {};
+  int _configurationRevision = 0;
+  bool _hasAppliedSnapshot = false;
   bool _disposed = false;
 
   /// Live probe truth per favorite id; unknown for ineligible rows. Live
@@ -84,6 +91,9 @@ final class SidebarProbeOwner extends ChangeNotifier {
     _configs
       ..clear()
       ..addAll(configs);
+    _configurationRevision++;
+    _restrictToCurrentConfiguration();
+    _markVisibleConfigs();
     _enqueue(_reconfigure);
   }
 
@@ -91,23 +101,58 @@ final class SidebarProbeOwner extends ChangeNotifier {
   /// pulled `serverConfig` records carry their own endpoints, so they
   /// probe under the config's own id — the same key the catalog rows
   /// read their status by. A catalog row's facts persist under that id;
-  /// a record the account drops simply stops being probed.
+  /// a record the account drops simply stops being probed. A server
+  /// routed through a jump host is never probed: this raw endpoint probe
+  /// cannot traverse SSH forwarding and would report the wrong path.
   void syncCatalog(Iterable<ServerConfig> servers) {
     if (_disposed) return;
     _catalogConfigs
       ..clear()
-      ..addAll({for (final server in servers) server.id: server});
+      ..addAll({
+        for (final server in servers)
+          if (server.jumpHostId == null) server.id: server,
+      });
+    _configurationRevision++;
+    _restrictToCurrentConfiguration();
+    _markVisibleConfigs();
     _enqueue(_reconfigure);
   }
 
   /// The favorite's row mounted: persist exposure and re-apply policy —
   /// the first probe waits for this mark (02 §4). Idempotent per id per
-  /// owner lifetime; a re-seeded store re-reads persisted facts anyway.
+  /// endpoint; a route that becomes eligible while mounted is marked then.
   void noteVisible(String serverId) {
     if (_disposed) return;
+    _visible.update(serverId, (count) => count + 1, ifAbsent: () => 1);
+    _markSeen(serverId);
+  }
+
+  /// The favorite's row unmounted. Counts are balanced because pinned and
+  /// grouped copies of one server can briefly coexist during a rebuild.
+  void noteHidden(String serverId) {
+    if (_disposed) return;
+    final count = _visible[serverId];
+    if (count == null) return;
+    if (count > 1) {
+      _visible[serverId] = count - 1;
+      return;
+    }
+
+    _visible.remove(serverId);
+  }
+
+  /// Marks mounted rows whenever their current endpoint becomes probeable.
+  void _markVisibleConfigs() {
+    for (final serverId in _visible.keys) {
+      _markSeen(serverId);
+    }
+  }
+
+  void _markSeen(String serverId) {
     final config = _configs[serverId] ?? _catalogConfigs[serverId];
     if (config == null) return;
-    if (!_seenMarked.add(serverId)) return;
+    final key = (serverId, config.host.toLowerCase(), config.port);
+    if (!_seenMarked.add(key)) return;
     _enqueue(() async {
       if (_disposed) return;
       try {
@@ -158,7 +203,10 @@ final class SidebarProbeOwner extends ChangeNotifier {
     if (_disposed) return;
     _configs.remove(serverId);
     _catalogConfigs.remove(serverId);
-    _seenMarked.remove(serverId);
+    _visible.remove(serverId);
+    _seenMarked.removeWhere((key) => key.$1 == serverId);
+    _configurationRevision++;
+    _restrictToCurrentConfiguration();
     // The dedupe keys too: a re-added favorite with the same id/endpoint
     // must re-persist markConnected — the record was just deleted.
     _connectedMarked.removeWhere((key) => key.startsWith('$serverId@'));
@@ -181,7 +229,39 @@ final class SidebarProbeOwner extends ChangeNotifier {
   void forwardLifecycle(AppLifecycleState? state) {
     if (_disposed || _lifecycle == state) return;
     _lifecycle = state;
+    _configurationRevision++;
+    if (state != AppLifecycleState.resumed) {
+      _restrictToCurrentConfiguration();
+    }
     _enqueue(_reconfigure);
+  }
+
+  /// Applies only removals, endpoint changes, and lifecycle stops from the
+  /// last proven snapshot. Additions still wait for their persisted facts.
+  void _restrictToCurrentConfiguration() {
+    if (!_hasAppliedSnapshot) return;
+    final configs = {..._catalogConfigs, ..._configs};
+    final favorites = <String, ProbeFavorite>{};
+    final endpoints = <String, (String, int)>{};
+    for (final entry in _appliedFavorites.entries) {
+      final config = configs[entry.key];
+      final endpoint = _appliedEndpoints[entry.key];
+      if (config == null || endpoint == null) continue;
+      if (_endpoint(config) != endpoint) continue;
+
+      favorites[entry.key] = entry.value;
+      endpoints[entry.key] = endpoint;
+    }
+    _dispatchController(
+      favorites: favorites,
+      endpoints: endpoints,
+      preference: _preference == ProbePreference.disabled
+          ? ProbePreference.disabled
+          : _appliedPreference,
+      lifecycle: _lifecycle == AppLifecycleState.resumed
+          ? _appliedLifecycle
+          : _lifecycle,
+    );
   }
 
   /// Re-reads facts and re-applies the complete policy snapshot. Fails
@@ -189,13 +269,19 @@ final class SidebarProbeOwner extends ChangeNotifier {
   /// must never enable probing; an unwritable one may still read.
   Future<void> _reconfigure() async {
     if (_disposed) return;
+    final revision = _configurationRevision;
     try {
       _preference = await _settings.loadGlobalPreference();
     } on Object catch (error, stackTrace) {
       _errors.report(error, stackTrace);
       _preference = ProbePreference.disabled;
     }
-    final favorites = <ProbeFavorite>[];
+    if (_preference == ProbePreference.disabled) {
+      // A known opt-out is a restriction; do not hold it behind fact reads.
+      _restrictToCurrentConfiguration();
+    }
+    final favorites = <String, ProbeFavorite>{};
+    final endpoints = <String, (String, int)>{};
     // A syncFavorites/noteRemoved landing mid-loop mutates the config
     // maps — iterate a snapshot so an awaited read cannot throw
     // ConcurrentModificationError. One entry per id, with the same
@@ -217,33 +303,66 @@ final class SidebarProbeOwner extends ChangeNotifier {
         _errors.report(error, stackTrace);
         facts = ProbeServerFacts.unseen;
       }
-      favorites.add(
-        ProbeFavorite(
-          server: config,
-          // Every favorite listed here was created on this device or
-          // adopted at import; M6's sync pull marks its rows at apply
-          // time. Sync-origin favorites gate on the connection fact.
-          origin: FavoriteOrigin.device,
-          exposure: facts.exposure,
-          connection: facts.connected,
-          // Per-favorite probe opt-out persists with the settings slice
-          // (02 §4); nothing the store carries today expresses one.
-          preference: ProbePreference.enabled,
-        ),
+      favorites[config.id] = ProbeFavorite(
+        server: config,
+        // Every favorite listed here was created on this device or
+        // adopted at import; M6's sync pull marks its rows at apply
+        // time. Sync-origin favorites gate on the connection fact.
+        origin: FavoriteOrigin.device,
+        exposure: facts.exposure,
+        connection: facts.connected,
+        // Per-favorite probe opt-out persists with the settings slice
+        // (02 §4); nothing the store carries today expresses one.
+        preference: ProbePreference.enabled,
       );
+      endpoints[config.id] = _endpoint(config);
     }
-    // A dispose landing during the awaited reads must not touch the
-    // torn-down controller.
-    if (_disposed) return;
-    await _controller.update(
+    // State changes enqueue their own pass; never let this older snapshot
+    // briefly restore a removed endpoint or a newly jump-routed target.
+    if (_disposed || revision != _configurationRevision) return;
+    _dispatchController(
       favorites: favorites,
+      endpoints: endpoints,
       preference: _preference,
       lifecycle: _lifecycle,
     );
   }
 
-  /// Serializes store reads/writes and the controller updates they feed,
-  /// so a stale configuration can never land after a removal.
+  (String, int) _endpoint(ServerConfig config) =>
+      (config.host.toLowerCase(), config.port);
+
+  /// Keeps bridge acknowledgements outside the settings queue so newer
+  /// restrictions can reach the controller immediately.
+  void _dispatchController({
+    required Map<String, ProbeFavorite> favorites,
+    required Map<String, (String, int)> endpoints,
+    required ProbePreference preference,
+    required AppLifecycleState? lifecycle,
+  }) {
+    if (_disposed) return;
+    final favoriteSnapshot = Map<String, ProbeFavorite>.unmodifiable(favorites);
+    final endpointSnapshot = Map<String, (String, int)>.unmodifiable(endpoints);
+    _appliedFavorites = favoriteSnapshot;
+    _appliedEndpoints = endpointSnapshot;
+    _appliedPreference = preference;
+    _appliedLifecycle = lifecycle;
+    _hasAppliedSnapshot = true;
+
+    try {
+      unawaited(
+        _controller.update(
+          favorites: favoriteSnapshot.values.toList(growable: false),
+          preference: preference,
+          lifecycle: lifecycle,
+        ),
+      );
+    } on Object catch (error, stackTrace) {
+      _errors.report(error, stackTrace);
+    }
+  }
+
+  /// Serializes store reads, writes, and configuration decisions. Controller
+  /// acknowledgements stay outside the tail so restrictions may overtake.
   void _enqueue(Future<void> Function() operation) {
     final run = _tail.then((_) => operation());
     _tail = run.then<void>((_) {}, onError: (_, _) {});

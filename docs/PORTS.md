@@ -1,5 +1,54 @@
 # Séance ports and pin audits
 
+## PR-S4 exact-revision bridge and full re-diff (2026-09-29)
+
+The D10 consumption moves every live Séance declaration, lockfile and the
+benchmark identity from `v0.9.1` (`035b0d8`) to the exact Séance PR-S4 merge
+`4c0a960289c919379d016507fa7ebae6b14b2e7c`
+([Séance #131](https://github.com/L-K-M/Seance/pull/131)). The published
+`v0.9.2` tag (`6e59f99`) is an ancestor, but no tag contains PR-S4, so this is
+the temporary commit-revision bridge D2 permits. STATUS owns the next-tag
+re-pin. `dartssh2` remains exactly 3.0.2.
+
+Every recorded source was re-diffed at that revision. Dispositions for the
+changed source set are:
+
+- PR-S4's agent and ProxyJump implementation stays in the pinned packages.
+  Poltergeist consumes the high-level APIs rather than copying the SSH agent,
+  channel forwarding or transport mechanics. The keyboard-interactive,
+  editor/backend and test adaptations are recorded in their entries below.
+- `server_grouping` and its test take the filtered-live-section repair at
+  `8326f41`; `server_mark_picker` takes the in-place tab switch at `d811309`,
+  with its test re-diffed from `66411c1`; and the resulting
+  `SelectedTabView` pair is recorded below.
+- `remote_files_controller` and its test remain superseded by the
+  `CheckoutManager` rails recorded in their entries. Later
+  `server_appearance` changes affect the omitted `ServerAvatar`/session ring.
+  `terminal_pane` and `server_list_pane` changes are terminal/list chrome not
+  ported here. `server_color_picker` and the theme sources match the D38
+  dispositions below. The CSS/Ruby/Perl/Lua and Perl `$#` syntax fixes are
+  already present in the local editor syntax port.
+- The shared sidebar kit's production file re-diffs at `8ab3f77` with only
+  the documented provenance, theme import and `_chrome()` adapter different.
+  Its test re-diffs at `3a9fd8c` with those theme/import changes plus
+  Poltergeist's touch-affordance and `SidebarKitLayout.list` cases. Those
+  cases remain a port-back candidate.
+- Séance #126's Settings runners are contained by merge `86455d7`. The
+  exact-pin re-diff confirms the Open-failure and negative-monitor review
+  fixes already match locally; only the recorded product names, channels,
+  entrypoint, controller and Linux background differ. The Séance #128 theme
+  set is unchanged after merge `8f15eeb`; the existing D38 divergences stand.
+- Séance has adopted the hardened editor document I/O, including BOM,
+  dominant line-ending, conflict-digest and permission behavior. Both apps
+  normalize mixed endings to the dominant family; the earlier claim that
+  Poltergeist reconstructed each mixed ending was false, and that candidate
+  is closed. Séance's later line-number gutter and richer status row are
+  deliberately deferred as unrelated UI work (STATUS open item 36).
+
+The refreshed history adds only repository-owner and automation identities.
+The license scan still finds Séance's Unlicense and the recorded xterm.dart
+MIT fork; there are no gitlinks.
+
 ## Shared Planchette editor (2026-09-27)
 
 The owner approved replacing the copied editor implementation with the
@@ -269,19 +318,20 @@ port candidates.
 ## app/poltergeist_app/lib/ui/prompts/keyboard_interactive_dialog.dart
 
 - Source: app/seance_app/lib/ui/keyboard_interactive_dialog.dart
-- Séance commit: d1a98f1 (re-diffed unchanged at a9add15, 2026-09-07;
-  re-diffed at 5cadb18, 2026-09-09 — upstream gained the route-guard
-  port-back below, nothing else changed)
+- Séance commit: 3321a1f (PR-S4 review head; exact-pin re-diff,
+  2026-09-29)
 - Ported: 2026-09-07
 - Divergences: strings localize through ARB (D20); the payload is the
   engine protocol's `KeyboardInteractivePromptData` (03 §5);
   coordinator-owned route identity and Enter focus navigation/final
-  submission are local. Masked-by-default fields with explicit per-field
-  reveal, scrollable content, empty-name title fallback, first-field
+  submission are local. The connection's trusted `user@host:port` is
+  separated from the server-supplied name/instruction, with bare IPv6
+  bracketed; those PR-S4 security semantics are ported. Masked-by-default
+  fields with explicit per-field reveal, scrollable content, first-field
   autofocus, and the controller-dispose-in-State lifecycle (with its IME
-  use-after-dispose lesson) all exist upstream at the recorded commits —
-  they are ported behavior, not local additions. The current-route action
-  guards were ported back to Séance as
+  use-after-dispose lesson) all exist upstream at the recorded commits and
+  are ported behavior, not local additions. The current-route action guards
+  were ported back to Séance as
   [Séance #82](https://github.com/L-K-M/Seance/pull/82) (head
   `5d9da5195a3a9a4d8110d0b2425d55e5cb3fddde`, merge
   `5cadb18e823ca1ae089b9fdd940432876e93fd9c`, 2026-09-09) with the same
@@ -292,14 +342,14 @@ port candidates.
 ## app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart
 
 - Source: app/seance_app/test/keyboard_interactive_dialog_test.dart
-- Séance commit: fd01515 (re-diffed unchanged at a9add15, 2026-09-07;
-  re-diffed at 5cadb18, 2026-09-09 — upstream gained the three
-  route-guard regressions from Séance #82, nothing else changed)
+- Séance commit: 3321a1f (PR-S4 review head; exact-pin re-diff,
+  2026-09-29)
 - Ported: 2026-09-07
-- Divergences: adapted to the protocol payload; adds empty-name title
-  fallback, Enter-navigation, autofocus, and IME/regression-harness
+- Divergences: adapted to the protocol payload; carries the trusted-endpoint,
+  server-message separation, empty-message spacing and IPv6 cases from
+  PR-S4; adds Enter-navigation, autofocus, and IME/regression-harness
   coverage beyond the source's cases. Reveal-toggle and submit/cancel
-  coverage exist upstream at the recorded commit — the earlier
+  coverage exist upstream at the recorded commit; the earlier
   "adds reveal-toggle" wording was corrected against that re-diff
   (2026-09-09); the original dated port provenance stands.
 - Port-back candidates: Enter-navigation and autofocus tests (upstream has
@@ -544,12 +594,14 @@ counterpart is ported here.
 ## app/poltergeist_app/lib/ui/server_grouping.dart
 
 - Source: app/seance_app/lib/ui/server_grouping.dart
-- Séance commit: ded9228aaf8aa45fe2a5fb7df9559db8c820ec4d
+- Séance commit: 8326f41f574fabce11986ea16137917626f67958
 - Ported: 2026-09-24
 - Divergences: none — carried verbatim (imports re-pointed). The file is
   deliberately Flutter-free upstream; the catalog section renders pulled
   `ServerConfig`s through the same sectioning Séance uses, so identical
-  data produces identical placement.
+  data produces identical placement. Re-synced 2026-09-29 so a filter keeps
+  an otherwise-empty top-level section when it contains a hidden live server;
+  the header remains the place that connection's status is exposed.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
@@ -565,9 +617,10 @@ counterpart is ported here.
 ## app/poltergeist_app/test/ui/server_grouping_test.dart
 
 - Source: app/seance_app/test/server_grouping_test.dart
-- Séance commit: ded9228aaf8aa45fe2a5fb7df9559db8c820ec4d
+- Séance commit: 8326f41f574fabce11986ea16137917626f67958
 - Ported: 2026-09-24
-- Divergences: none — carried verbatim (imports re-pointed).
+- Divergences: none — carried verbatim (imports re-pointed), including the
+  kept-section and `sectionsHoldingLive` regressions re-synced 2026-09-29.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_filter_test.dart
@@ -681,6 +734,13 @@ counterpart is ported here.
   files again differ only in the header comment, the chrome import and
   `_chrome()` (checked with `diff`). Séance's docs/POLTERGEIST.md
   still says the two files differ in these functions until this lands.
+- Exact-pin re-diff, 2026-09-29: at `4c0a960`, the production kit's last
+  change is `8ab3f77` and it differs only in the provenance header, theme
+  import and `_chrome()` adapter. The upstream test's last change is
+  `3a9fd8c`; its corresponding differences are the theme/import adapter plus
+  Poltergeist-only cases for always-visible touch controls and
+  `SidebarKitLayout.list`. Those local cases are the remaining port-back
+  candidate.
 
 ## app/poltergeist_app/lib/services/badge_image.dart
 
@@ -708,15 +768,22 @@ counterpart is ported here.
 
 - Source: adapted from app/seance_app (the `AppState.testServerConnection`
   composition and the editor's credential-resolution rules)
-- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Séance commit: 5d578b9 (Séance PR-S4 implementation; re-diffed at the
+  exact `4c0a960` pin)
 - Ported: 2026-09-24
 - Divergences: this is the production implementation of the ported
   editor's `ServerEditorDelegate` seam, not a file-for-file port —
   upstream's editor reaches into `AppState` directly. Credential
   precedence (draft over vault over identity-file), trial-only host-key
-  approval, and the no-login-script test posture mirror upstream.
-- Port-back candidates: the delegate seam itself, if Séance ever wants
-  the editor testable without a full `AppState`.
+  approval, and the no-login-script test posture mirror upstream. The
+  2026-09-29 re-sync returns agent credentials without touching the vault
+  and resolves each saved jump host, with that hop's own credential, through
+  the authenticator's `resolveJumpHost` seam. Poltergeist first validates one
+  immutable catalog snapshot, so a bad route reads no credential and sync
+  cannot switch hops between asynchronous reads.
+- Port-back candidates: the route snapshot belongs upstream in
+  `testServerConnection`; the delegate seam itself, if Séance ever wants the
+  editor testable without a full `AppState`.
 
 ## app/poltergeist_app/lib/ui/connection_log_view.dart
 
@@ -756,21 +823,49 @@ counterpart is ported here.
 ## app/poltergeist_app/lib/ui/server_mark_picker.dart
 
 - Source: app/seance_app/lib/ui/server_mark_picker.dart
-- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Séance commit: d811309 (re-diffed at the exact `4c0a960` pin)
 - Ported: 2026-09-24
 - Divergences: strings moved to ARB; the curated emoji table keeps
-  upstream's `\u{...}` escapes for re-diffability. Same `ServerBadge`
-  tint adaptation as the color picker.
+  upstream's `\u{...}` escapes for re-diffability; imports use the
+  poltergeist_core barrel. The selected server accent now reaches every badge
+  preview, matching upstream's `66411c1` repair rather than remaining a local
+  tint adaptation.
 - Re-synced 2026-09-25: [Séance #130](https://github.com/L-K-M/Seance/pull/130)
   swapped the tabs' `TabBarView` for `SelectedTabView`
   (`lib/ui/selected_tab_view.dart`, byte-identical in both apps) so a
   tab switches in place; the same one-line swap here.
 - Port-back candidates: none.
 
+## app/poltergeist_app/test/ui/server_mark_picker_test.dart
+
+- Source: app/seance_app/test/server_mark_picker_test.dart
+- Séance commit: 66411c1 (accent-preview regression; re-diffed at the exact
+  `4c0a960` pin)
+- Ported: 2026-09-29
+- Divergences: adapts only the source's accent-preview regression, wrapped in
+  `AppLocalizations`; the broader upstream picker suite is not copied here.
+- Port-back candidates: none.
+
+## SelectedTabView production and test pair
+
+- Local files: `app/poltergeist_app/lib/ui/selected_tab_view.dart` and
+  `app/poltergeist_app/test/ui/selected_tab_view_test.dart`
+- Sources: `app/seance_app/lib/ui/selected_tab_view.dart` and
+  `app/seance_app/test/selected_tab_view_test.dart`
+- Séance commits: faed3b1 (production file and its final scroll-direction
+  regression); d80cf92 (final test-only hidden-focus regression)
+- Ported: 2026-09-25
+- Divergences: the production file is byte-identical. The test changes only
+  the package import. Pages switch in place, stay alive after first use, copy
+  the primary scroll direction unchanged, and a hidden page cannot retain
+  focus.
+- Port-back candidates: none; Séance owns the source.
+
 ## app/poltergeist_app/lib/ui/server_editor.dart
 
 - Source: app/seance_app/lib/ui/server_editor.dart
-- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Séance commit: 5d578b9 (Séance PR-S4 implementation; re-diffed at the
+  exact `4c0a960` pin)
 - Ported: 2026-09-24
 - Divergences: `AppState` is replaced by the narrow `ServerEditorDelegate`
   seam (servers, syncConfigured, themeSeed, pickIdentityFile, readSecret,
@@ -779,7 +874,17 @@ counterpart is ported here.
   identity bookmark becomes a plain path field (not sandboxed). Field
   set, credential planning, exclusion confirmation, monotonic
   `updatedAt`, and the vault-first save order are upstream's.
-- Port-back candidates: the delegate seam (see the backend entry).
+- Agent and jump routes (D10/X-02/X-05), re-synced 2026-09-29: new
+  connections default to `AuthMethod.agent`, the obsolete unsupported
+  warning is gone, and `_formConfig` carries `jumpHostId` over from the saved
+  config. The route-preservation fix first landed locally ahead of this pin
+  from [Séance #131](https://github.com/L-K-M/Seance/pull/131). Without it,
+  every save pushed the server without its route, which
+  wins last-write-wins on Séance's devices too. Test connection now passes
+  the preserved route to the delegate, whose backend executes it through the
+  PR-S4 resolver; the temporary fail-closed guard is retired.
+- Port-back candidates: the delegate seam (see the backend entry). The
+  agent and jump-route behavior is upstream already.
 
 ## app/poltergeist_app/test/services/server_duplication_test.dart
 
@@ -794,11 +899,14 @@ counterpart is ported here.
 ## app/poltergeist_app/test/ui/server_editor_test.dart
 
 - Source: adapted from app/seance_app/test/server_editor_test.dart
-- Séance commit: 035b0d880b47639e390af8cbbd6d316cb5edc86d (v0.9.1 pin)
+- Séance commit: 5d578b9 (Séance PR-S4 implementation; re-diffed at the
+  exact `4c0a960` pin)
 - Ported: 2026-09-24
 - Divergences: upstream boots real services around `AppState`; the port
   drives the same editor surface through a fake `ServerEditorDelegate`,
   so cases about vault plumbing collapse into delegate assertions.
+  The 2026-09-29 re-sync covers the agent default and absent warning, route
+  preservation, and Test connection forwarding that route to the delegate.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/lib/ui/top_toast.dart
@@ -960,19 +1068,19 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
 - Source: app/seance_app/lib/ui/built_in_text_editor.dart (the pure
   document-I/O layer — load, the atomic temp+rename save, and the size
   cap — extracted per 06 §2.1)
-- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379 (the live pin)
+- Séance commit: 2e6d1f138f1704e683870f75e11262bf50e37379
+  (original port; re-diffed at the exact `4c0a960` pin)
 - Ported: 2026-09-20
-- Divergences: the document carries 06 §2.1's fidelity contract Séance
-  leaves implicit — LF/no-BOM in-memory invariants with the original
-  BOM and per-line endings reconstructed exactly on save (mixed-EOL
-  files round-trip byte-identical), a `LineEnding` enum, and typed
-  `BuiltInEditorException`s. The save writes a
-  `.poltergeist-<uuid>.tmp` sibling at owner-only 0600 through
-  `restrictLocalPathPermissions` before rename (Séance's temp is
-  fixed-name, default-mode), and the `expectedSha256` guard is the
-  modified-on-disk conflict check the editor's conflict flow hangs on.
-- Port-back candidates: the BOM/EOL reconstruction contract and the
-  expected-digest save guard.
+- Divergences: the I/O layer is extracted into pure Dart and represents the
+  dominant ending as a `LineEnding` enum rather than the source's string. Its
+  LF/no-BOM memory form preserves a leading BOM and detects CRLF versus lone
+  LF by majority vote; saving rewrites the whole document to that family.
+  Uniform LF and CRLF inputs round-trip byte-identical, while mixed endings
+  normalize on first save. The local atomic siblings use the Poltergeist
+  prefix. At the exact pin Séance has adopted the same owner-only temporary,
+  mode carry-over, expected-digest guard, BOM and dominant-ending behavior.
+- Port-back candidates: none. The earlier per-line mixed-EOL claim was
+  incorrect; both implementations normalize mixed endings by majority.
 
 ## app/poltergeist_app/lib/ui/editor_syntax.dart
 
@@ -1021,6 +1129,10 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
   apply to Séance too, but require its own window ownership and checkout
   integration. This task changes Poltergeist; the shared document I/O,
   syntax, and conflict rules remain unchanged.
+- Exact-pin disposition, 2026-09-29: Séance's editor now has a line-number
+  gutter and a richer status row (caret line/column, EOL, BOM, language and
+  remote state). Poltergeist keeps its current lines/bytes/dirty row. The
+  unrelated UI adoption is deferred under STATUS open item 36.
 
 ## Editor tests and captures (M7)
 
@@ -1030,8 +1142,8 @@ could ride a future Séance PR if Séance adopts §2.5 ordering.
 - Ported: 2026-09-20
 - Divergences: the Séance suite splits along the seam —
   `packages/poltergeist_core/test/editor/built_in_text_document_test.dart`
-  takes the document half (BOM-present/BOM-less/CRLF/mixed-EOL
-  round-trips, size cap, atomic-temp window) and
+  takes the document half (BOM-present/BOM-less uniform round-trips,
+  mixed-EOL majority normalization, size cap, atomic-temp window) and
   `app/poltergeist_app/test/ui/built_in_text_editor_test.dart` keeps
   the widget half plus §2.5 production-path saves through the real
   document saver. New Poltergeist-only suites:
@@ -1159,11 +1271,9 @@ Upstream drift since the pin touches six recorded sources. Dispositions:
   candidates below still apply at HEAD.
 - `built_in_text_editor.dart` — upstream gained the `expectedSha256`
   save guard (returns the new baseline digest, same shape as the port's)
-  plus BOM tracking and dominant-ending CRLF normalization. The
-  `built_in_text_document` candidate narrows to per-line EOL
-  reconstruction for mixed-EOL files (upstream collapses to the dominant
-  ending; Poltergeist round-trips mixed endings byte-identical) — minor,
-  left open.
+  plus BOM tracking and dominant-ending CRLF normalization. A later audit
+  corrected this ledger: Poltergeist also normalizes a mixed file to the
+  dominant family. There was no per-line reconstruction divergence to port.
 - `server_list_pane.dart`, `server_appearance.dart`,
   `terminal_pane.dart`, `connection_log_view.dart` — tab/session and
   appearance churn in surface area Poltergeist does not port (list rows,
@@ -1210,9 +1320,10 @@ Port-back issues filed this sweep (all on `L-K-M/Seance`):
 Candidates left open without an issue: the M5 `sortKey`/`groupBookmarks`
 pair (conditional on Séance adopting 02 §5 ordering), the
 `local_fs_safety_test` suites (conditional on upstream exposing the
-statics — noted in #115), and the narrowed mixed-EOL reconstruction
-above. `file_stores`' serialized-flush candidate is closed: the v0.9.1
-pin already carries upstream's mutation queue.
+statics — noted in #115). The mixed-EOL candidate is closed because both
+apps normalize to the dominant family. `file_stores`' serialized-flush
+candidate is closed: the v0.9.1 pin already carries upstream's mutation
+queue.
 
 ## Pin findings
 
@@ -1421,8 +1532,8 @@ Files: `app/poltergeist_app/macos/Runner/SettingsWindow.swift`,
 
 - Source: the same paths under `app/seance_app/`, from
   [Séance #126](https://github.com/L-K-M/Seance/pull/126)
-- Séance commit: 38b7a42 (the PR's head at port time, before it
-  merged; re-diff against its merge commit at the next pin bump)
+- Séance commit: 38b7a42 (port source), contained by merge 86455d7 and
+  re-diffed at the exact `4c0a960` pin
 - Ported: 2026-09-25 (D36)
 - Divergences: channel names, the entrypoint argument, window titles
   and the view controller class (`PoltergeistFlutterViewController`)
@@ -1433,6 +1544,9 @@ Files: `app/poltergeist_app/macos/Runner/SettingsWindow.swift`,
   `EditorRegistryModel`, `GeneralSettings`, `PreviewDownloadsSettings`).
   `window_title.{h,cc}` is Poltergeist's own title code moved out of
   `my_application.cc` so both windows share it, not a copy.
+- Exact-pin disposition: Séance's post-port fixes for a window-creation
+  failure and negative monitor coordinates already match Poltergeist's
+  corresponding fixes. No unrecorded runner divergence remains.
 - Port-back candidates: none yet; the two sets were written together.
 
 ## Device themes (D38)
@@ -1440,10 +1554,11 @@ Files: `app/poltergeist_app/macos/Runner/SettingsWindow.swift`,
 Every file below comes from Séance's device themes,
 [Séance #128](https://github.com/L-K-M/Seance/pull/128) at `f4d2f71`
 (code; `d9a642d` holds its docs), not merged upstream when ported; it
-merged as `8f15eeb`, with these files as synced (`8714859`). Re-diff
-each file against it at the next pin bump. Ported 2026-09-25. In
-every file the comments are reworded without em dashes; that is prose,
-not behaviour, and is not repeated below.
+merged as `8f15eeb`, with these files as synced (`8714859`). The
+2026-09-29 exact-pin re-diff confirms the theme set did not change after that
+merge; the dispositions below stand at `4c0a960`. Ported 2026-09-25. In every
+file the comments are reworded without em dashes; that is prose, not
+behaviour, and is not repeated below.
 
 ### app/poltergeist_app/lib/theme/contrast.dart
 
@@ -1590,20 +1705,13 @@ Full, non-shallow ancestor and tree audit. Raw streams are
 content-addressed by SHA-256; line counts aid review. Use
 `--print-findings` to reproduce them without adding names to docs.
 
-- Pin: `035b0d880b47639e390af8cbbd6d316cb5edc86d` from `https://github.com/L-K-M/Seance.git`
-- Pin: `035b0d880b47639e390af8cbbd6d316cb5edc86d` from `https://github.com/L-K-M/Seance.git` (requested ref: `v0.9.1`)
-- Identity: 144 lines; `sha256:9f01616a755c8b7644945cc187439db98324a442932d5bb291bd1d0fa92a6812`
-- Companion: 974 lines; `sha256:5fe9e038a53ecbb19f67fa659b787b701a7d5ad181b42f7aaf14001ff8b67c7c`
-- Companion orphans: 0 lines; `sha256:d9aed34197440111a0f1a54dd0af36e9e664cc61374ecf38137fad1cf58c6e2b`
-- Pinpoints: 1748 lines; `sha256:6fd10bcc6e8380605b74d424850e4661d0a04a41c94bb07c64862e0bf5b2cbe2`
-- License scan: 64 lines; `sha256:9fc1950c432536a00f751294a2a795f281c94d6cf67d3eb517328d9bd48c3d56`
-- Vendored paths: 440 lines; `sha256:d9d50d9cfb5ba6eaff3ad2b74c5789e06f2fc473606747de232574a699c2fb82`
-- Gitlinks: 0 lines; `sha256:d9aed34197440111a0f1a54dd0af36e9e664cc61374ecf38137fad1cf58c6e2b`
-- Tree: 1034 lines; `sha256:d95a0743bc331ba9d4f033c47bd6050388b3709834844f7aa772dc7a70f97a2b`
+- Pin: `4c0a960289c919379d016507fa7ebae6b14b2e7c` from `https://github.com/L-K-M/Seance.git`
+- Identity: 81 lines; `sha256:699238d590dcb565524ad5cd1c3d02148857c8e19f7ac42f04f24202b6d2f4ef`
+- Companion: 580 lines; `sha256:3b8f2c1a42d816cda28bb3f75bcac7e681ce110919fad72599aacfb78efe7e5d`
+- Companion orphans: 0 lines; `sha256:018475ca8d7fddbb752fe0a62744a610ace2ead7185fb01488b9814602fe5273`
+- Pinpoints: 1010 lines; `sha256:6f6a7ad32e18fe8f39ad129447044ac84e41f3e38951ca07d51e23a127a409bd`
+- License scan: 32 lines; `sha256:b4732b0bb7b4af0614a7061ac6a07850c219c3a1365e9d647a724d71272d0950`
+- Vendored paths: 228 lines; `sha256:c3eb0bf74b9e4c1e603be69a7294a6742a7a36d51a8480ca22f06cf2583f8846`
+- Gitlinks: 0 lines; `sha256:018475ca8d7fddbb752fe0a62744a610ace2ead7185fb01488b9814602fe5273`
+- Tree: 582 lines; `sha256:33a141320ee86046c330c3005b650516ee6725d14d93305f533c6394bcdd2625`
 <!-- SEANCE_PIN_AUDIT_V1:END -->
-
-Two `Pin:` lines are correct tool output: the audit emits one line per
-distinct locked pin tuple — `seance_core` locked via `ref: v0.9.1`
-(rendered with its requested ref) and transitive `seance_protocol`
-locked via `ref: <resolved sha>` (requested ref equals the revision, so
-no suffix). Under a pure SHA pin both tuples collapse to one line.

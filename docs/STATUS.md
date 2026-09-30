@@ -322,7 +322,8 @@ and destructive-action default are preserved. Validation used Flutter 3.47.3 on 
 `TMPDIR=/private/tmp`; CI uses the repository's 3.47.2 pin. Native assistive
 technology was not exercised by this change.
 
-_Last updated: 2026-09-23. **v1.0.0 IS SHIPPED** — tagged at
+_Last updated: 2026-09-29. **v1.0.0 IS SHIPPED**, and D10's first
+fast-follow (SSH-agent authentication plus ProxyJump) is complete. v1.0.0 was tagged at
 d62f95af after the release pipeline's full first exercise
 (android `--no-pub` registrant fix #189, bash drift gate #190);
 GitHub Actions run 35926951105 green end to end, the GitHub Release publishes
@@ -404,14 +405,15 @@ patch reuses that policy and does not claim to repair it or add remote fsync.
 | Area | State |
 |---|---|
 | Repo infrastructure | CI (`ci.yml`: Dart analyze+test now; Flutter + client-matrix jobs self-activate when `app/poltergeist_app` appears), GLM PR review workflow, release workflow (`v*` tags → per-platform client assets), `scripts/build.sh` / `release.sh` / `package-linux.sh` adapted from Séance, Unlicense, analyzer config, pub workspace. |
-| `poltergeist_core` | Product identity constants plus the connection layer's first slice: the Séance git pin (upstream `v0.9.1` / `035b0d8`), `PoolPolicy` (D9's frozen numbers, test-pinned), the endpoint-keyed `PooledConnectionManager` with the 03 §3.2 growth rules (serialized first connect + single TOFU prompt, interactive-auth single-transport cap, prompting-disabled growth with auth-challenge fallback to sharing, on-demand transports, LRU browse sharing at exhaustion, refcounted shared pools, pane-lifetime teardown), the changed-key hard block with its one prompt-cleared re-pin path, and the `scripts/check-imports.sh` CI guard for the 03 §1 dartssh2 boundary. Connection suites run socket-free per 08 §3.2. This is an initial slice, not M2 completion; audit follow-ups remain in open item 5. |
+| `poltergeist_core` | Pure-Dart engine packages over the exact Séance PR-S4 bridge (`4c0a960`). The endpoint-keyed `PooledConnectionManager` implements 03 §3.2's serialized first connect, TOFU hard block, interactive-route cap, prompting-disabled growth, reconnect, refcounted teardown, and bounded ProxyJump routes. Complete secret-free routes resolve before credentials or I/O; target and hop credentials are cached only for the pool lifetime. `scripts/check-imports.sh` guards the dartssh2 boundary. |
 | The plan | Complete in [`docs/plan/`](plan/) — overview + decision log (D1–D31), product, UX spec, architecture, Séance integration, sync, editor, milestones, testing, playbook. Reviewed via the GLM PR workflow, internal consistency passes, and a final whole-plan coherence pass (2026-08-31). |
-| Séance pin | Upstream `L-K-M/Seance@v0.9.1` (`035b0d880b47639e390af8cbbd6d316cb5edc86d`) — the tag re-pin open item 2 waited for: `v0.9.1` contains the previous rev pin `2e6d1f1` (and therefore the PR-S3 merge `2f99f4e`, the PR-S1 merge `599ff936`, and #79's probe repair), so the commit-rev bridge is retired. `poltergeist_core` declares `ref: v0.9.1`; the bench harness's live-revision constant and every lockfile resolve to `035b0d8` (dartssh2 sha-identical at 3.0.2). Pin fallout at the tag was repaired red-first: `FileVaultStore.putSecretBlobs` (upstream's batched vault write) and the widened `ServerIcon` switch. Ported sources re-diffed at the tag with dated dispositions in PORTS.md; the full ancestor/tree/license/identity audit is regenerated and matches. The M0 fork bridge (`BigBoyDevBox/Seance@0a69597`) is retired; committed-bundle validation keeps binding to the pins M0 actually measured, so frozen evidence is unaffected. |
+| Séance pin | Exact upstream revision `4c0a960289c919379d016507fa7ebae6b14b2e7c`, the merge of PR-S4. No release tag contains it, so this is D2's temporary revision bridge: both declarations, four lockfiles, and the live benchmark revision match; dartssh2 remains 3.0.2. PORTS.md carries the full re-diff and regenerated ancestor/tree/license/identity audit. Re-pin the first containing tag under open item 2. Frozen M0 evidence remains bound to the revisions it measured. |
 | Séance PR-S0 | LICENSE audit and Unlicense grant merged in [Séance #57](https://github.com/L-K-M/Seance/pull/57), merge `4d8ee1e026ce4e5d939d6390d9fd98a78fabcf6e`. |
-| Séance PR-S1 | Record-kind forward compatibility merged in [Séance #58](https://github.com/L-K-M/Seance/pull/58), merge `599ff936b8222e6cd77920495dcdcc4a50643f44`. The release wait ended 2026-09-14 (`v0.9.1` contains the merge; the pin now sits on that tag — M8 dated section). |
+| Séance PR-S1 | Record-kind forward compatibility merged in [Séance #58](https://github.com/L-K-M/Seance/pull/58), merge `599ff936b8222e6cd77920495dcdcc4a50643f44`. The release wait ended 2026-09-14 when `v0.9.1` included it; D10 later advanced the pin to the exact PR-S4 merge above. |
 | Séance cancellation cleanup | dartssh2 3.0.2 and bounded asynchronous SSH teardown merged in [Séance #59](https://github.com/L-K-M/Seance/pull/59), merge `da9d45492ac7d25cbc4eefb97a6ec29254de219f`. |
 | Séance PR-S2 | `openAuthenticatedClient` split merged in [Séance #61](https://github.com/L-K-M/Seance/pull/61), merge `dad6d4f66dbfba6c170b98c204980e5801a890cb`. |
 | Séance PR-S3 | `RemoteFileSystem` additions (`setTimes`, `setOwner`, opt-out `computeHash` on transfers) merged in [Séance #62](https://github.com/L-K-M/Seance/pull/62), merge `2f99f4efb25a83340605464635bdf0f3ba95d931`. The upstream-and-pin gate is satisfied by #13 (bench) and #14 (core); remote sync, chown UI, and bulk verification remain future milestone work. |
+| Séance PR-S4 | Native SSH-agent authentication and recursive ProxyJump merged in [Séance #131](https://github.com/L-K-M/Seance/pull/131), merge `4c0a960289c919379d016507fa7ebae6b14b2e7c`. Poltergeist consumes that exact revision and wires both features through its pool, engine, prompts, editor trial, and import safety. |
 | M0 — engine fitness | Complete from workflow-dispatch run [`33563514640`](https://github.com/L-K-M/Poltergeist/actions/runs/33563514640), attempt 1, measured commit `6b8873eafdaaa3a4157e265dee838ab3b47219b3`. The 78-row canonical bundle is committed at [`docs/evidence/m0`](evidence/m0); `m0-evidence.json` SHA-256 is `b93660b9f1c06bac206096d25c6fff472bcb31d13589a4d81bd5a3df70fa7fcc`. D7 is final: managed checkouts always hash; bulk transfers and sync hashing are opt-in. D8 passed every isolate gate, so sockets, SFTP, transfers, and hashing stay in the engine isolate. D9 adopts dartssh2 3.0.2 at ladder rung 4: document the roughly 10–11× single-file LAN ceiling versus OpenSSH, compensate with bounded channels/transports, and do not adopt libssh2. `PoolPolicy` is finalized at 2 transports, 4 transfer channels per transport, 8 total channels per transport, 6 global in-flight transfers, and remote readdir depth 8. Keepalive remains 30 seconds, extra idle 60 seconds, reconnect cap 30 seconds, and retry limit 5; these are retained design defaults, not M0-tuned values. Earlier runs `33458209337`, `33481554062`, and `33504660759` were partial; `33534298280` stopped in preflight; `33535334440` diagnosed dartssh2 2.22.0's detached cancellation error. None is admissible evidence. M0 closes untagged. |
 | M1 — app scaffold implementation | Implemented in [PR #8](https://github.com/L-K-M/Poltergeist/pull/8) with Flutter 3.47.2, exact dependency pins, generated platform icons from the 1024×1024 master, and the verified platform identity contract. Flutter analysis, 108 tests, and all five client builds pass; see the [PR checks](https://github.com/L-K-M/Poltergeist/pull/8/checks). Closed by the v0.1.0 publish (next row). |
 | M1 — closed (v0.1.0) | Published 2026-09-06 as a **pre-release**; not Latest (`/releases/latest` stays 404). One-time manual publish per 00 D23's carve-out for the pre-change draft: the notes' stale `SHA256SUMS.asc` paragraph was dropped (aligned with the direct-publish template) and all seven assets re-verified against `SHA256SUMS` (bijection + strict recompute) immediately before publish; the APK signer-cert check stands from the rehearsal (assets unchanged, sums identical). §3.12 chores: STATUS sweep (this change), PORTS re-diff clean (no upstream drift on ported files, no `TODO(pin)` markers), pin bump impossible (no Séance tag contains `2f99f4e` — open item 2), the tag was already cut, and the M1 mobile invariant was re-verified (`check-imports.sh` + 92 core tests green). The merged direct-publish path's first end-to-end exercise is the v0.2.0 rehearsal. |
@@ -825,8 +827,8 @@ enforced 720-px content minimum, D29's post-v1 mobile posture), a
 Windows symlink-skip for the file-source test (app tests run only on
 Ubuntu in CI; open item 1's recorded gate), and the `_keyValueCut`
 refactor (parity is pinned by tests; behavior-neutral churn).
-Deferred: default-off checkboxes for proxy-limited rows (D22 specifies
-the badge; revisited by the wiring slice). Refuted: quoted `#` in
+Deferred then, completed in D10 review: ProxyJump-limited rows now start
+unchecked because embedded bookmarks cannot preserve their route. Refuted: quoted `#` in
 include paths and indented directives (the pin trims and cuts at the
 first `#` identically — its own `_stripComment`/`.trim()` — port-back
 candidates like the round-1 `Key = value` case), the wildcard-row
@@ -7224,10 +7226,11 @@ remain future M7 slices; this lands the pipeline they all build on.
 06's Séance-compatible editor lands as the second M7 slice, split
 across the §2.1/§2.3 seam (PORTS.md records every divergence):
 
-- **Document model** (`poltergeist_core/src/editor/`): BOM and
-  per-line-ending state are load-time facts reconstructed exactly on
-  save — BOM-present, BOM-less, CRLF, and mixed-EOL files round-trip
-  byte-identical. The atomic save writes a 0600
+- **Document model** (`poltergeist_core/src/editor/`): BOM and the
+  dominant line-ending family are load-time facts reconstructed on save.
+  BOM-present, BOM-less, LF, and CRLF files round-trip byte-identical;
+  mixed endings normalize by majority vote on first save. The atomic save
+  writes a 0600
   `.poltergeist-<uuid>.tmp` sibling before rename, the size cap refuses
   oversized reads, and the `expectedSha256` guard is the
   modified-on-disk conflict the UI surfaces (never bypasses).
@@ -7989,7 +7992,8 @@ criterion:
   tombstones — 04 §6 priority 2, now proven), #121 (UX patterns),
   #122 (small polish batch). Left open without issues, recorded in
   PORTS: the conditional M5 sortKey/grouping offer, the conditional
-  safety-test port, and the narrowed mixed-EOL editor candidate.
+  safety-test port. The mixed-EOL candidate closed after correcting the
+  ledger: both apps normalize to the dominant family.
 - **Pin check (chore 3).** `v0.9.1` is still the newest Séance tag —
   the pin does not move; upstream HEAD drift is next-window material,
   not pin fallout. `dartssh2` stays exactly 3.0.2.
@@ -8035,13 +8039,15 @@ CHANGELOG 1.0.0 heading's "(prepared; ships with the v1.0.0 tag)"
 parenthetical remain — all owner-side by design. **Remaining QA:**
 the whole OWNER MANUAL QA set in `docs/qa/RELEASE-CHECKLIST.md`.
 
-**Fast-follows (§3.13) staged as the post-tag next-steps:** agent auth
+**Historical release-prep record.** Fast-follows (§3.13) were staged as the
+post-tag next steps: agent auth
 + ProxyJump first (D10/PR-S4); OS drag-out (D14, `super_drag_and_drop`
 spike); local archives (D27); FileZilla/WinSCP/Cyberduck importers
 (D22); deep links (04 §7.1) and the text-diff view as demand dictates;
 then the v1.x backlog (named skip rules, batch rename, custom keymap,
 native icons, Compare entry point, preview warming — and Sync Browsing
-if risk 8's cut line is ever exercised). None is started here. Item
+if risk 8's cut line is ever exercised). None was started in this release-prep
+slice; D10 completed on 2026-09-29 as recorded above. Item
 23's remote-transfer wiring is the de-facto headline fast-follow even
 though §3.13 predates naming it.
 
@@ -9505,6 +9511,93 @@ group in `header_filter_test.dart`, the re-select group in
 `pane_history_test.dart`, and `pane_view_test.dart`'s "going up reveals
 the folder the user came from".
 
+## SSH-agent authentication and ProxyJump (D10, 2026-09-29)
+
+The first post-v1 fast-follow consumes Séance PR-S4 at exact merge
+`4c0a960` until a containing release tag exists.
+
+- New servers and keyless ssh_config imports use the system SSH agent.
+  Agent credentials bypass the vault and never export a private key. The
+  trusted endpoint in a keyboard-interactive prompt renders separately from
+  the server-controlled name, instructions, and questions. An imported
+  ProxyJump row remains badged and now starts skipped: its embedded bookmark
+  cannot preserve a named catalog route, so selecting it explicitly retains
+  the documented direct-connect behavior (open item 38).
+- A connection resolves and validates the complete secret-free route before
+  any credential read or network I/O. It then resolves every credential,
+  dials only the outer hop, and forwards inward. Missing or mismatched hosts,
+  cycles, and routes beyond 16 jump hosts fail before side effects. Direct
+  targets retain host-key preflight; routed targets never probe or dial the
+  destination around the bastion. Each hop applies its own TOFU decision and
+  authentication before that hop receives a credential.
+- Pool identity includes every route endpoint and edge. Growth and reconnect
+  reuse the whole cached route without vault access; a prompt or
+  keyboard-interactive challenge at any hop caps the pool to one transport.
+  A later auth challenge re-resolves the entire route. Persisted host-key
+  incidents name both the target route and the affected hop, so another hop's
+  trusted key cannot clear the block and an edited route cannot inherit it.
+- The temporary app refusal and `jump_host_guard.dart` are removed. Panes,
+  transfers, checkouts, previews, sync, and the editor's Test connection now
+  pass the saved route. The raw sidebar reachability probe still skips routed
+  servers because it cannot traverse SSH forwarding. Protocol v14's complete
+  catalog retires live and pending aliases when any transitive hop changes;
+  authenticated work may drain, but the old route cannot reconnect.
+
+The regression suite covers invalid graphs with zero credential/network side
+effects, credential ordering, cached growth/reconnect, route-wide prompt caps,
+auth-challenge re-resolution, per-hop incidents, restored-key clearance before
+later first-use hops, cold catalog resolution, and transitive retirement. The
+keyless-import preview and keyboard-dialog localization mismatches failed
+before their fixes. Review regressions also failed before route-attempt
+snapshots, atomic incident endpoints, fresh catalog rebind/review, raw catalog
+lease restoration, and blocked-status watch lifetime were fixed.
+
+Pre-merge review found further route-boundary failures. Catalog hop lookup
+now uses only the catalog namespace, so a bookmark alias cannot shadow a jump
+id. A restored incident still rejects first use at its own endpoint but allows
+first-use review on another hop. Startup binds the materialized catalog before
+checkout repair can lease a connection. Probe reconfiguration discards a
+direct-target snapshot when sync adds a jump route while settings reads are in
+flight, and a restrictive update overtakes a pending direct-target
+acknowledgement. Restrictions also bypass pending settings I/O while preserving
+unaffected targets, drop retargeted endpoints, and apply lifecycle pauses or a
+loaded global opt-out immediately. A queued resume still waits for fresh facts.
+The controller coalesces equivalent pending snapshots into one bounded retry
+after late acknowledgement failure, including synchronous listener re-entry.
+The reproduced regressions failed before their fixes; endpoint-retarget
+coverage guards the same restriction path.
+
+The first automated PR review found one important reconnect cancellation
+gap. Cancellation during the target credential read could still allow later
+jump-host credential reads. Reconnect now checks cancellation after every
+awaited route credential read; its regression failed before the fix. The same
+round removed duplicate engine catalog publication and tightened review-action
+and teardown coverage. Broader OpenSSH default-key discovery remains deferred.
+
+Independent review reproduced two more route-boundary gaps. Test Connection
+resolved the target credential before validating its saved route and could
+mix catalog generations between hop reads. It now snapshots and validates the
+whole secret-free route first; missing routes read neither the vault nor an
+identity file, and a catalog replacement during a target read cannot switch
+the hop. ProxyJump ssh_config rows also started selected despite importing as
+direct embedded bookmarks; they now start skipped. Both regressions failed
+before their fixes.
+
+Core analysis is clean; 1,761 tests pass with 27 environment skips. Sync
+analysis and all 249 tests pass with 3 skips. Flutter analysis and all 3,024
+app tests pass. The 140 root benchmark tests, import-boundary check, and
+Séance pin audit pass. One concurrent core/app run reported the real incident
+store round-trip once; its focused rerun and the exclusive full core rerun
+passed. Five inspected light-theme before/after native Linux pairs are in
+[`tasks/s4-fast-follow/screenshots/`](../tasks/s4-fast-follow/screenshots/).
+They cover the server editor, keyboard-interactive challenge, mark picker,
+ssh_config import preview, and blocked host-key menu.
+
+Remaining gaps are tracked below: the next-tag re-pin (item 2), unknown
+`ServerConfig` key preservation (item 35), upstream editor drift (item 36),
+upstream agent-error branding plus native/live-route QA (item 37), and
+ProxyJump import preservation (item 38).
+
 ## Open items
 
 1. **M3 — OS Dart client matrix: validated 2026-09-12.**
@@ -9567,6 +9660,11 @@ the folder the user came from".
    harness's live-revision constant follows, and the regenerated audit
    matches `docs/PORTS.md`. The rev-pin bridge is retired (see the M8
    dated section).
+   **Reopened 2026-09-29:** D10 needs Séance PR-S4, and no published tag
+   contains merge `4c0a960`. Both declarations, four lockfiles, and the
+   benchmark revision now use that exact SHA under D2's temporary bridge.
+   Re-pin the first containing Séance tag, re-diff every PORTS source, and
+   regenerate the pin audit.
 3. **2026-09-04 — M2 remaining slices** (implementation complete
    2026-09-10; consolidated 2026-09-11). Every implementation slice below
    landed — each bullet carries its dated Done record, and the Done
@@ -10378,6 +10476,30 @@ the folder the user came from".
     window has the same title. One accessibility edge stays: each
     view's root node is 0, so a VoiceOver action on an extra window's
     root (not on any control in it) reaches the main window's root.
+35. **2026-09-29: synced `ServerConfig` unknown keys are not preserved.**
+    X-02's known `jumpHostId` now survives editing and executes, but an older
+    client still drops fields its pinned model cannot decode and re-encode.
+    Fix this in Séance's shared model first, then re-pin; do not add a local
+    shadow record format.
+36. **2026-09-29: upstream editor gutter/status drift is deferred.** At the
+    PR-S4 pin, Séance's built-in editor has a line-number gutter and a richer
+    status row (caret line/column, EOL, BOM, language, and remote state).
+    Poltergeist retains its current lines/bytes/dirty row. This is unrelated
+    to D10 and is recorded in PORTS.md for a focused UI task.
+37. **2026-09-29: D10 native/live QA and shared error copy.** The upstream
+    Unix agent suite uses a real socket and the Windows client matrix compiles
+    named-pipe support, but Poltergeist has not exercised a user's live agent
+    or a real forwarding-enabled multi-hop sshd. Its Docker fixture disables
+    forwarding. Native UI capture is also unavailable on this host. One
+    upstream agent-rejection summary says “Séance offered”; make that shared
+    core copy product-neutral upstream, then re-pin, rather than rewriting a
+    shared error locally.
+38. **2026-09-30: ssh_config ProxyJump route preservation.** The importer
+    creates bookmarks with an `EmbeddedHostIdentity`, which has no route id;
+    importing a ProxyJump row therefore still creates a direct target. Such
+    rows are badged and now start unchecked. A later importer slice may create
+    catalog `ServerConfig` chains plus `serverConfigId` bookmarks atomically;
+    until then, direct import requires explicit selection.
 
 ## Independent audit
 

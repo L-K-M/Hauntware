@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **SSH-agent authentication.** New servers default to the system SSH agent,
+  with no private key stored by Poltergeist.
 - **The built-in editor is the one Planchette and Séance use.** It gains
   line numbers, find and replace with whole-word and regular-expression
   search, Go to Line (⌘L on a Mac, Ctrl+G elsewhere), Tab and Shift+Tab
@@ -223,6 +225,12 @@
   deleted while you leave the choice open or keep the folder, no longer
   count twice toward the deletion limits, and no longer show "changed
   since preview" after the replace.
+- **Servers behind a jump host stay behind it.** Saved ProxyJump chains
+  resolve completely before connecting, dial only the outer host, and
+  authenticate and verify every hop. Editing preserves the route, Test
+  connection exercises it, and the raw sidebar probe never bypasses it.
+  If sync changes a hop or removes a connected server, existing work may
+  finish, but the old route cannot reconnect.
 - **Copy as rsync Command is right for server pairs.** For a pair with a
   server side, the copied command backslash-escaped its exclude
   patterns, so rsync ignored them: a pasted Mirror could delete the
