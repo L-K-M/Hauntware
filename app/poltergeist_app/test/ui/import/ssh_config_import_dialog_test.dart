@@ -277,6 +277,30 @@ Host second
     );
   });
 
+  testWidgets('ProxyJump rows start skipped', (tester) async {
+    const config = '''
+Host web
+  HostName web.example.com
+  ProxyJump bastion
+''';
+    await _open(tester, _service(_FakeSource({_configPath: config})));
+
+    expect(
+      find.text(
+        'Won\u2019t behave as in ssh: ProxyJump \u2014 connects directly, '
+        'not through the jump host',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+    expect(
+      tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Import'),
+      ).onPressed,
+      isNull,
+    );
+  });
+
   testWidgets('unresolved include notices are listed', (tester) async {
     await _open(
       tester,

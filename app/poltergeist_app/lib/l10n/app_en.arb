@@ -337,7 +337,7 @@
   },
   "sshImportLimitProxyJump": "Won’t behave as in ssh: ProxyJump — connects directly, not through the jump host",
   "@sshImportLimitProxyJump": {
-    "description": "Chip for a host whose ProxyJump Poltergeist does not execute (D10)."
+    "description": "Chip for a host whose ProxyJump route the embedded bookmark import cannot preserve."
   },
   "sshImportLimitProxyCommand": "Won’t behave as in ssh: ProxyCommand — never executed",
   "@sshImportLimitProxyCommand": {
@@ -4779,6 +4779,33 @@
   "serverEditorTestingSemantic": "Testing connection",
   "@serverEditorTestingSemantic": {
     "description": "Screen-reader label of the spinner while a connection test runs."
+  },
+  "serverEditorJumpRouteCycle": "The jump-host route contains a cycle at “{serverId}”.",
+  "@serverEditorJumpRouteCycle": {
+    "description": "Connection-test failure when a ProxyJump route loops.",
+    "placeholders": {
+      "serverId": {
+        "type": "String"
+      }
+    }
+  },
+  "serverEditorJumpRouteTooLong": "The jump-host route exceeds {maxHops} hops.",
+  "@serverEditorJumpRouteTooLong": {
+    "description": "Connection-test failure when a ProxyJump route exceeds its safety bound.",
+    "placeholders": {
+      "maxHops": {
+        "type": "int"
+      }
+    }
+  },
+  "serverEditorJumpHostMissing": "Jump host “{serverId}” is missing.",
+  "@serverEditorJumpHostMissing": {
+    "description": "Connection-test failure when a saved ProxyJump server no longer exists.",
+    "placeholders": {
+      "serverId": {
+        "type": "String"
+      }
+    }
   },
   "serverEditorCancel": "Cancel",
   "@serverEditorCancel": {

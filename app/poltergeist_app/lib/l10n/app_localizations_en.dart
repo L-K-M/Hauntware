@@ -3685,6 +3685,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverEditorTestingSemantic => 'Testing connection';
 
   @override
+  String serverEditorJumpRouteCycle(String serverId) {
+    return 'The jump-host route contains a cycle at “$serverId”.';
+  }
+
+  @override
+  String serverEditorJumpRouteTooLong(int maxHops) {
+    return 'The jump-host route exceeds $maxHops hops.';
+  }
+
+  @override
+  String serverEditorJumpHostMissing(String serverId) {
+    return 'Jump host “$serverId” is missing.';
+  }
+
+  @override
   String get serverEditorCancel => 'Cancel';
 
   @override

@@ -777,10 +777,13 @@ counterpart is ported here.
   precedence (draft over vault over identity-file), trial-only host-key
   approval, and the no-login-script test posture mirror upstream. The
   2026-09-29 re-sync returns agent credentials without touching the vault
-  and resolves each saved jump host from the pulled catalog, with that hop's
-  own credential, through the authenticator's `resolveJumpHost` seam.
-- Port-back candidates: the delegate seam itself, if Séance ever wants
-  the editor testable without a full `AppState`.
+  and resolves each saved jump host, with that hop's own credential, through
+  the authenticator's `resolveJumpHost` seam. Poltergeist first validates one
+  immutable catalog snapshot, so a bad route reads no credential and sync
+  cannot switch hops between asynchronous reads.
+- Port-back candidates: the route snapshot belongs upstream in
+  `testServerConnection`; the delegate seam itself, if Séance ever wants the
+  editor testable without a full `AppState`.
 
 ## app/poltergeist_app/lib/ui/connection_log_view.dart
 

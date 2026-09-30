@@ -508,7 +508,7 @@ abstract class AppLocalizations {
   /// **'Duplicate of “{alias}” in this import'**
   String sshImportDuplicateEarlier(String alias);
 
-  /// Chip for a host whose ProxyJump Poltergeist does not execute (D10).
+  /// Chip for a host whose ProxyJump route the embedded bookmark import cannot preserve.
   ///
   /// In en, this message translates to:
   /// **'Won’t behave as in ssh: ProxyJump — connects directly, not through the jump host'**
@@ -5729,6 +5729,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Testing connection'**
   String get serverEditorTestingSemantic;
+
+  /// Connection-test failure when a ProxyJump route loops.
+  ///
+  /// In en, this message translates to:
+  /// **'The jump-host route contains a cycle at “{serverId}”.'**
+  String serverEditorJumpRouteCycle(String serverId);
+
+  /// Connection-test failure when a ProxyJump route exceeds its safety bound.
+  ///
+  /// In en, this message translates to:
+  /// **'The jump-host route exceeds {maxHops} hops.'**
+  String serverEditorJumpRouteTooLong(int maxHops);
+
+  /// Connection-test failure when a saved ProxyJump server no longer exists.
+  ///
+  /// In en, this message translates to:
+  /// **'Jump host “{serverId}” is missing.'**
+  String serverEditorJumpHostMissing(String serverId);
 
   /// Closes the server editor without saving.
   ///

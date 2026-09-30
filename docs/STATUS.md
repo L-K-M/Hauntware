@@ -413,7 +413,7 @@ patch reuses that policy and does not claim to repair it or add remote fsync.
 | Séance cancellation cleanup | dartssh2 3.0.2 and bounded asynchronous SSH teardown merged in [Séance #59](https://github.com/L-K-M/Seance/pull/59), merge `da9d45492ac7d25cbc4eefb97a6ec29254de219f`. |
 | Séance PR-S2 | `openAuthenticatedClient` split merged in [Séance #61](https://github.com/L-K-M/Seance/pull/61), merge `dad6d4f66dbfba6c170b98c204980e5801a890cb`. |
 | Séance PR-S3 | `RemoteFileSystem` additions (`setTimes`, `setOwner`, opt-out `computeHash` on transfers) merged in [Séance #62](https://github.com/L-K-M/Seance/pull/62), merge `2f99f4efb25a83340605464635bdf0f3ba95d931`. The upstream-and-pin gate is satisfied by #13 (bench) and #14 (core); remote sync, chown UI, and bulk verification remain future milestone work. |
-| Séance PR-S4 | Native SSH-agent authentication and recursive ProxyJump merged in [Séance #131](https://github.com/L-K-M/Seance/pull/131), merge `4c0a960289c919379d016507fa7ebae6b14b2e7c`. Poltergeist consumes that exact revision and wires both features through its pool, engine, prompts, editor trial, and import flow. |
+| Séance PR-S4 | Native SSH-agent authentication and recursive ProxyJump merged in [Séance #131](https://github.com/L-K-M/Seance/pull/131), merge `4c0a960289c919379d016507fa7ebae6b14b2e7c`. Poltergeist consumes that exact revision and wires both features through its pool, engine, prompts, editor trial, and import safety. |
 | M0 — engine fitness | Complete from workflow-dispatch run [`33563514640`](https://github.com/L-K-M/Poltergeist/actions/runs/33563514640), attempt 1, measured commit `6b8873eafdaaa3a4157e265dee838ab3b47219b3`. The 78-row canonical bundle is committed at [`docs/evidence/m0`](evidence/m0); `m0-evidence.json` SHA-256 is `b93660b9f1c06bac206096d25c6fff472bcb31d13589a4d81bd5a3df70fa7fcc`. D7 is final: managed checkouts always hash; bulk transfers and sync hashing are opt-in. D8 passed every isolate gate, so sockets, SFTP, transfers, and hashing stay in the engine isolate. D9 adopts dartssh2 3.0.2 at ladder rung 4: document the roughly 10–11× single-file LAN ceiling versus OpenSSH, compensate with bounded channels/transports, and do not adopt libssh2. `PoolPolicy` is finalized at 2 transports, 4 transfer channels per transport, 8 total channels per transport, 6 global in-flight transfers, and remote readdir depth 8. Keepalive remains 30 seconds, extra idle 60 seconds, reconnect cap 30 seconds, and retry limit 5; these are retained design defaults, not M0-tuned values. Earlier runs `33458209337`, `33481554062`, and `33504660759` were partial; `33534298280` stopped in preflight; `33535334440` diagnosed dartssh2 2.22.0's detached cancellation error. None is admissible evidence. M0 closes untagged. |
 | M1 — app scaffold implementation | Implemented in [PR #8](https://github.com/L-K-M/Poltergeist/pull/8) with Flutter 3.47.2, exact dependency pins, generated platform icons from the 1024×1024 master, and the verified platform identity contract. Flutter analysis, 108 tests, and all five client builds pass; see the [PR checks](https://github.com/L-K-M/Poltergeist/pull/8/checks). Closed by the v0.1.0 publish (next row). |
 | M1 — closed (v0.1.0) | Published 2026-09-06 as a **pre-release**; not Latest (`/releases/latest` stays 404). One-time manual publish per 00 D23's carve-out for the pre-change draft: the notes' stale `SHA256SUMS.asc` paragraph was dropped (aligned with the direct-publish template) and all seven assets re-verified against `SHA256SUMS` (bijection + strict recompute) immediately before publish; the APK signer-cert check stands from the rehearsal (assets unchanged, sums identical). §3.12 chores: STATUS sweep (this change), PORTS re-diff clean (no upstream drift on ported files, no `TODO(pin)` markers), pin bump impossible (no Séance tag contains `2f99f4e` — open item 2), the tag was already cut, and the M1 mobile invariant was re-verified (`check-imports.sh` + 92 core tests green). The merged direct-publish path's first end-to-end exercise is the v0.2.0 rehearsal. |
@@ -827,8 +827,8 @@ enforced 720-px content minimum, D29's post-v1 mobile posture), a
 Windows symlink-skip for the file-source test (app tests run only on
 Ubuntu in CI; open item 1's recorded gate), and the `_keyValueCut`
 refactor (parity is pinned by tests; behavior-neutral churn).
-Deferred: default-off checkboxes for proxy-limited rows (D22 specifies
-the badge; revisited by the wiring slice). Refuted: quoted `#` in
+Deferred then, completed in D10 review: ProxyJump-limited rows now start
+unchecked because embedded bookmarks cannot preserve their route. Refuted: quoted `#` in
 include paths and indented directives (the pin trims and cuts at the
 first `#` identically — its own `_stripComment`/`.trim()` — port-back
 candidates like the round-1 `Key = value` case), the wildcard-row
@@ -9519,7 +9519,10 @@ The first post-v1 fast-follow consumes Séance PR-S4 at exact merge
 - New servers and keyless ssh_config imports use the system SSH agent.
   Agent credentials bypass the vault and never export a private key. The
   trusted endpoint in a keyboard-interactive prompt renders separately from
-  the server-controlled name, instructions, and questions.
+  the server-controlled name, instructions, and questions. An imported
+  ProxyJump row remains badged and now starts skipped: its embedded bookmark
+  cannot preserve a named catalog route, so selecting it explicitly retains
+  the documented direct-connect behavior (open item 38).
 - A connection resolves and validates the complete secret-free route before
   any credential read or network I/O. It then resolves every credential,
   dials only the outer hop, and forwards inward. Missing or mismatched hosts,
@@ -9571,8 +9574,17 @@ awaited route credential read; its regression failed before the fix. The same
 round removed duplicate engine catalog publication and tightened review-action
 and teardown coverage. Broader OpenSSH default-key discovery remains deferred.
 
-Core analysis is clean; 1,752 tests pass with 27 environment skips. Sync
-analysis and all 249 tests pass with 3 skips. Flutter analysis and all 2,955
+Independent review reproduced two more route-boundary gaps. Test Connection
+resolved the target credential before validating its saved route and could
+mix catalog generations between hop reads. It now snapshots and validates the
+whole secret-free route first; missing routes read neither the vault nor an
+identity file, and a catalog replacement during a target read cannot switch
+the hop. ProxyJump ssh_config rows also started selected despite importing as
+direct embedded bookmarks; they now start skipped. Both regressions failed
+before their fixes.
+
+Core analysis is clean; 1,761 tests pass with 27 environment skips. Sync
+analysis and all 249 tests pass with 3 skips. Flutter analysis and all 3,024
 app tests pass. The 140 root benchmark tests, import-boundary check, and
 Séance pin audit pass. One concurrent core/app run reported the real incident
 store round-trip once; its focused rerun and the exclusive full core rerun
@@ -9583,7 +9595,8 @@ desktop toolchain.
 
 Remaining gaps are tracked below: the next-tag re-pin (item 2), unknown
 `ServerConfig` key preservation (item 35), upstream editor drift (item 36),
-and upstream agent-error branding plus native/live-route QA (item 37).
+upstream agent-error branding plus native/live-route QA (item 37), and
+ProxyJump import preservation (item 38).
 
 ## Open items
 
@@ -10481,6 +10494,12 @@ and upstream agent-error branding plus native/live-route QA (item 37).
     upstream agent-rejection summary says “Séance offered”; make that shared
     core copy product-neutral upstream, then re-pin, rather than rewriting a
     shared error locally.
+38. **2026-09-30: ssh_config ProxyJump route preservation.** The importer
+    creates bookmarks with an `EmbeddedHostIdentity`, which has no route id;
+    importing a ProxyJump row therefore still creates a direct target. Such
+    rows are badged and now start unchecked. A later importer slice may create
+    catalog `ServerConfig` chains plus `serverConfigId` bookmarks atomically;
+    until then, direct import requires explicit selection.
 
 ## Independent audit
 

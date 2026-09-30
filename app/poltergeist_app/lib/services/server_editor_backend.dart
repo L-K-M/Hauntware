@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
+import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
 import '../ui/prompts/host_key_dialog.dart';
 import '../ui/prompts/keyboard_interactive_dialog.dart';
@@ -13,6 +14,11 @@ import '../ui/server_editor.dart';
 import 'bookmark_backup_service.dart';
 import 'identity_file_reader.dart';
 import 'transfer_limits_controller.dart';
+
+// Keep the editor trial on the same bounded-route contract as PR-S4.
+const _maximumJumpHosts = 16;
+
+enum _JumpRouteFailure { cycle, overlong, missing }
 
 /// The application layer behind the server editor: catalog truth and sync
 /// writes through [BookmarkBackupService], credential reads through the
@@ -102,27 +108,93 @@ final class ServerEditorBackend extends ServerEditorDelegate {
     String? draftKeyPassphrase,
     SshConnectionLog? log,
   }) {
+    final transcript = log ?? SshConnectionLog();
+    late final Map<String, ServerConfig> jumpHosts;
+
     return runConnectionTest(
       config: config,
-      credentials: () => _resolveCredentials(
-        config,
-        draftPassword: draftPassword,
-        draftPrivateKey: draftPrivateKey,
-        draftKeyPassphrase: draftKeyPassphrase,
-      ),
+      credentials: () {
+        // Freeze and validate the secret-free route before the first vault
+        // or identity-file read. The authenticator then consumes this exact
+        // snapshot even if sync replaces the catalog during an async read.
+        jumpHosts = _snapshotJumpHosts(config, transcript);
+
+        return _resolveCredentials(
+          config,
+          draftPassword: draftPassword,
+          draftPrivateKey: draftPrivateKey,
+          draftKeyPassphrase: draftKeyPassphrase,
+        );
+      },
       authenticate: liveHostAuthenticator(
         hostKeys: _hostKeys,
         onHostKey: _promptForHostKey,
         onKeyboardInteractive: _promptKeyboardInteractive,
-        resolveJumpHost: _resolveJumpHost,
+        resolveJumpHost: (serverId) => _resolveJumpHost(jumpHosts, serverId),
       ),
-      log: log,
+      log: transcript,
     );
   }
 
-  /// Resolves saved hops from the same pulled snapshot the editor displays.
-  Future<ResolvedSshHost?> _resolveJumpHost(String serverId) async {
-    final config = _backups.catalog?.byId(serverId);
+  Map<String, ServerConfig> _snapshotJumpHosts(
+    ServerConfig target,
+    SshConnectionLog log,
+  ) {
+    final l10n = _localizations;
+    final available = <String, ServerConfig>{
+      for (final server in _backups.catalog?.servers ?? const <ServerConfig>[])
+        server.id: server,
+    };
+    final route = <String, ServerConfig>{};
+    final visited = <String>{target.id};
+    var current = target;
+
+    while (current.jumpHostId != null) {
+      final jumpHostId = current.jumpHostId!;
+      if (!visited.add(jumpHostId)) {
+        throw SshConnectException(
+          l10n.serverEditorJumpRouteCycle(jumpHostId),
+          _JumpRouteFailure.cycle,
+          log,
+        );
+      }
+      if (route.length >= _maximumJumpHosts) {
+        throw SshConnectException(
+          l10n.serverEditorJumpRouteTooLong(_maximumJumpHosts),
+          _JumpRouteFailure.overlong,
+          log,
+        );
+      }
+
+      final jumpHost = available[jumpHostId];
+      if (jumpHost == null) {
+        throw SshConnectException(
+          l10n.serverEditorJumpHostMissing(jumpHostId),
+          _JumpRouteFailure.missing,
+          log,
+        );
+      }
+
+      route[jumpHostId] = jumpHost;
+      current = jumpHost;
+    }
+
+    return Map.unmodifiable(route);
+  }
+
+  AppLocalizations get _localizations {
+    final context = _navigatorKey.currentContext;
+    if (context != null) return AppLocalizations.of(context);
+
+    return lookupAppLocalizations(AppLocalizations.supportedLocales.first);
+  }
+
+  /// Resolves a saved hop from the route snapshot captured before secrets.
+  Future<ResolvedSshHost?> _resolveJumpHost(
+    Map<String, ServerConfig> jumpHosts,
+    String serverId,
+  ) async {
+    final config = jumpHosts[serverId];
     if (config == null) return null;
 
     return ResolvedSshHost(config, await _resolveCredentials(config));
