@@ -75,7 +75,7 @@ class PatternFind {
     String query, {
     required bool caseSensitive,
     required bool wholeWord,
-    ({int start, int end})? scope,
+    required ({int start, int end})? scope,
   }) {
     _compile(query, caseSensitive);
     if (_pattern == null) {
@@ -113,7 +113,7 @@ class PatternFind {
     required int start,
     required int end,
     required int delta,
-    ({int start, int end})? scope,
+    required ({int start, int end})? scope,
   }) {
     final results = _results;
     if (results != null && identical(results.key.text, before)) {

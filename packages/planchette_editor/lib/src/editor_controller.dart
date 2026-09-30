@@ -1672,18 +1672,17 @@ class EditorController extends ChangeNotifier {
             // touched when whole lines were collected — not the document.
             // The scope predates the awaits, so clamp: an edit meanwhile
             // can leave it beyond the source's bounds.
-            final splice = scope == null
-                ? (start: 0, end: source.length)
-                : wholeLines
-                ? touchedLineRange(
-                    source,
-                    scope.start.clamp(0, source.length),
-                    scope.end.clamp(0, source.length),
-                  )
+            final clamped = scope == null
+                ? null
                 : (
                     start: scope.start.clamp(0, source.length),
                     end: scope.end.clamp(0, source.length),
                   );
+            final splice = clamped == null
+                ? (start: 0, end: source.length)
+                : wholeLines
+                ? touchedLineRange(source, clamped.start, clamped.end)
+                : clamped;
             // Measure bytes, not units — a template can grow the result
             // in UTF-8 while its code-unit length stays put.
             if (utf8EncodedLength(source) -

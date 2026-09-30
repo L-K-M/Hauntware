@@ -1546,6 +1546,10 @@ SearchResult searchText(
   }
   // The scope's bounds, clamped into the text. Only matches starting at
   // or after [low] and ending at or before [high] count.
+  assert(
+    scope == null || scope.start <= scope.end,
+    'a search scope must be ordered: start at or before end',
+  );
   final low = (scope?.start ?? 0).clamp(0, haystack.length);
   final high = (scope?.end ?? haystack.length).clamp(0, haystack.length);
 

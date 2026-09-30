@@ -697,6 +697,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     final theme = Theme.of(context);
     final failure = c.lineCountFailure;
     final count = c.lineActionCount;
+    final ready = !_locked && !c.isBusy && c.canEditText && count != null;
     final targets = [
       'inPlace',
       'clipboard',
@@ -715,9 +716,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           border: InputBorder.none,
         ),
         onSubmitted: (_) {
-          if (!_locked && !c.isBusy && c.canEditText && count != null) {
-            unawaited(c.applyExtract());
-          }
+          if (ready) unawaited(c.applyExtract());
         },
       ),
       controls: [
@@ -769,9 +768,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           },
         ),
         TextButton(
-          onPressed: !_locked && !c.isBusy && c.canEditText && count != null
-              ? () => unawaited(c.applyExtract())
-              : null,
+          onPressed: ready ? () => unawaited(c.applyExtract()) : null,
           child: Text(strings.extractAction),
         ),
       ],

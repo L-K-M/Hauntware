@@ -219,7 +219,9 @@ final class FindPattern {
     // only when the buffer's last line lacked a break of its own: a kept
     // line's break is that line's to keep, so a break-terminated buffer
     // ends break-terminated however its last line fared. With lines after
-    // the scope, a dropped last scoped line still needs the trim.
+    // the scope, a dropped last scoped line still needs the trim. A lone
+    // `\r` is line content in this engine — only `\n` and `\r\n` are
+    // breaks — so `endsWith('\n')` is the right terminator test.
     var prefixEnd = range.start;
     if (lastDropped && filterEnd == text.length && !text.endsWith('\n')) {
       if (contents.isNotEmpty) {
