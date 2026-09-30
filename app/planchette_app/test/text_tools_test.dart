@@ -3,12 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_core/planchette_core.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorController;
 import 'package:planchette_app/services/app_settings.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs;
 import 'services/memory_settings.dart';
+
+/// Past the undo-merge window a tool run waits out — the default
+/// quiet period plus margin, so the tests follow the constant.
+final _undoWait =
+    EditorController.defaultUndoQuiet + const Duration(milliseconds: 100);
 
 void main() {
   late MemoryDocuments store;
@@ -60,7 +66,7 @@ void main() {
 
     item(tester, 'Text', 'Remove Blank Lines').onSelected!();
     // The run waits out the undo-history merge window before it applies.
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await tester.pumpAndSettle();
 
     expect(tab.editor.toolReport?.tool.id, 'removeBlankLines');
@@ -82,7 +88,7 @@ void main() {
 
     await tester.tap(find.text('Apply'));
     // The run waits out the undo-history merge window before it applies.
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await tester.pumpAndSettle();
     expect(tab.editor.text.text, 'a\nb');
     expect(tester.takeException(), isNull);
@@ -127,7 +133,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tab.editor.toolBarOpen, isTrue);
       await tester.tap(find.text('Apply'));
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(_undoWait);
       await tester.pumpAndSettle();
 
       expect(tab.editor.text.text, 'a\nb');
@@ -235,7 +241,7 @@ void main() {
     workspace.toolHistory.record('sortLines', {'order': 'descending'});
     await tester.pump();
     item(tester, 'Text', 'Repeat Sort Lines (Z to A)').onSelected!();
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await tester.pumpAndSettle();
 
     expect(tab.editor.text.text, 'b\na');
@@ -258,7 +264,7 @@ void main() {
     expect(item(tester, 'Text', 'Sort Lines (Z to A)').onSelected, isNotNull);
 
     item(tester, 'Text', 'Sort Lines (Z to A)').onSelected!();
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await tester.pumpAndSettle();
     expect(tab.editor.text.text, 'b\na');
     expect(tester.takeException(), isNull);
@@ -274,7 +280,7 @@ void main() {
     tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
 
     final run = tab.editor.runTextTool('sortLines');
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await run;
     await tester.pumpAndSettle();
 
@@ -335,7 +341,7 @@ void main() {
       ..search.text = r'\d'
       ..setExtractTarget('newDocument');
     // Settle the undo merge window the apply waits out.
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
 
     final outcome = await tester.runAsync(tab.editor.applyExtract);
     await tester.pump();

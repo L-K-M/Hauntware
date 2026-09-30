@@ -1078,4 +1078,123 @@ void main() {
       );
     });
   });
+
+  group('catalog invariants', () {
+    test('every choice option declares its default among its choices', () {
+      for (final tool in textToolCatalog) {
+        for (final option in tool.options) {
+          if (option is! ChoiceOption) continue;
+          expect(
+            option.choices,
+            contains(option.defaultValue),
+            reason: '${tool.id}.${option.id}',
+          );
+        }
+      }
+    });
+
+    test('a missing option fails naming the option', () {
+      final run = TextToolRun(
+        text: '',
+        base: 0,
+        extent: 0,
+        caret: 0,
+        ranOn: TextToolRanOn.document,
+        options: const {},
+        context: TextToolContext(
+          fold: _lowercase,
+          indentation: const Indentation.spaces(4),
+        ),
+      );
+      expect(
+        () => run.option<bool>('order'),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            contains('"order"'),
+          ),
+        ),
+      );
+    });
+  });
+
+  group('review fixes', () {
+    test('a caret on a blank line resolves to that blank line alone', () {
+      // Between paragraphs is not inside one — without the guard the
+      // paragraph range splices the neighbors together.
+      final r = paragraphRange('one\n\ntwo', 4);
+      expect(r.start, 4);
+      expect(r.end, 4);
+      // Either line of a blank run behaves the same.
+      expect((paragraphRange('a\n\n\nb', 2)), (start: 2, end: 2));
+      expect((paragraphRange('a\n\n\nb', 3)), (start: 3, end: 3));
+    });
+
+    test('case mapping is unit-preserving: no simple mapping, no change', () {
+      // Dart uppercases with simple (1:1) mappings — ß stays ß rather
+      // than expanding to SS — so _caseChange's equal-length shortcut is
+      // also the whole truth today.
+      expect(run('uppercase', 'ß|'), 'unchanged');
+      expect(run('uppercase', '[ab]c'), '[AB]c');
+    });
+
+    test('a palindromic line block reverses to unchanged', () {
+      expect(run('reverseLines', 'a\nb\na|'), 'unchanged');
+    });
+
+    test('sorting by length measures the stripped key', () {
+      expect(
+        run(
+          'sortLines',
+          '  bb\n    a|',
+          options: {'byLength': true, 'ignoreLeadingWhitespace': true},
+        ),
+        '    a\n  bb|',
+      );
+    });
+
+    test('a natural sort compares astral characters by code point', () {
+      // U+FFFD outranks U+1F600 by code point but not by lead unit.
+      expect(
+        run('sortLines', '\u{1F600}z\nz|', options: {'numbersByValue': true}),
+        'z\n\u{1F600}z|',
+      );
+    });
+
+    test('encoding an empty selection refuses before running', () {
+      expect(run('base64Encode', '|'), 'refused:nothingSelected');
+    });
+
+    test('a UUID is reproducible through a seeded random source', () {
+      final a = run('insertUuid', '|', random: math.Random(7));
+      final b = run('insertUuid', '|', random: math.Random(7));
+      expect(a, b);
+      expect(
+        a,
+        matches(
+          RegExp(
+            '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}'
+            '-[0-9a-f]{12}\\|\$',
+          ),
+        ),
+      );
+    });
+
+    test('a shuffle is reproducible through a seeded random source', () {
+      const input = 'a\nb\nc\nd\ne\nf|';
+      expect(
+        run('shuffleLines', input, random: math.Random(3)),
+        run('shuffleLines', input, random: math.Random(3)),
+      );
+    });
+
+    test('a surrogate-pair escape decodes to one character', () {
+      // JSON encoders emit astral characters as \uXXXX pairs.
+      expect(
+        run('unescapeBackslashSequences', r'[\uD83D\uDE00]'),
+        '[\u{1F600}]',
+      );
+    });
+  });
 }

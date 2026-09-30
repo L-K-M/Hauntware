@@ -97,6 +97,7 @@ class EditorStrings {
     'convertIndentationToTabs' => 'Convert Indentation to Tabs',
     'straightenQuotes' => 'Straighten Quotes',
     'zapGremlins' => 'Zap Gremlins',
+    'removeAnsiEscapes' => 'Remove ANSI Escapes',
     'prefixSuffixLines' => 'Prefix/Suffix Lines',
     'numberLines' => 'Number Lines',
     'unwrapParagraphs' => 'Unwrap Paragraphs',
@@ -278,8 +279,10 @@ class EditorStrings {
     'unescapeBackslashSequences' =>
       r'Decodes backslash escapes such as \n and \uXXXX.',
     'insertDate' => 'Inserts the current date as YYYY-MM-DD.',
-    'insertDateTime' => 'Inserts the local date and time.',
-    'insertUtcTimestamp' => 'Inserts the UTC timestamp.',
+    'insertDateTime' =>
+      'Inserts the local date and time as YYYY-MM-DDThh:mm:ss.',
+    'insertUtcTimestamp' =>
+      'Inserts the UTC timestamp as YYYY-MM-DDThh:mm:ssZ.',
     'insertUuid' => 'Inserts a random UUID.',
     'keepLinesMatching' =>
       'Deletes every line that does not match the pattern.',
@@ -565,8 +568,11 @@ class EditorStrings {
     'collapseBlankLines' => 'will collapse ${_plural(changed, 'blank line')}',
     'trimLeadingWhitespace' => 'will trim ${_plural(changed, 'line')}',
     'normalizeSpaces' => 'will normalize ${_plural(changed, 'space')}',
+    'uppercase' => 'will uppercase ${_plural(changed, 'character')}',
+    'lowercase' => 'will lowercase ${_plural(changed, 'character')}',
     'removeAnsiEscapes' => 'will remove ${_plural(changed, 'escape sequence')}',
-    'unwrapParagraphs' => 'will join ${_plural(changed, 'line')}',
+    'unwrapParagraphs' =>
+      'will join lines at ${_plural(changed, 'line break')}',
     'zapGremlins' => 'will zap ${_plural(changed, 'gremlin')}',
     'prefixSuffixLines' => 'will change $changed of ${_lines(scope)}',
     'numberLines' => 'will renumber ${_lines(scope)}',

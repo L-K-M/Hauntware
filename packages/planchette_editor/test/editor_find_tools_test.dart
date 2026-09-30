@@ -214,7 +214,7 @@ void main() {
       expect(
         outcome,
         isA<TextToolRefused>().having(
-          (o) => (o as TextToolRefused).reason,
+          (o) => o.reason,
           'reason',
           TextToolRefusal.noPattern,
         ),
@@ -231,7 +231,7 @@ void main() {
       expect(
         outcome,
         isA<TextToolRefused>().having(
-          (o) => (o as TextToolRefused).reason,
+          (o) => o.reason,
           'reason',
           TextToolRefusal.invalidPattern,
         ),

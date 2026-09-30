@@ -60,7 +60,7 @@ class EditorController extends ChangeNotifier {
     Duration? patternSearchBudget,
     DateTime Function()? now,
     this.maximumBytes = defaultTextDocumentMaximumBytes,
-    this.undoQuiet = _defaultUndoQuiet,
+    this.undoQuiet = defaultUndoQuiet,
     TextToolHistory? toolHistory,
   }) : _displayPath = displayPath,
        _fold = caseFolder ?? _defaultCaseFolder,
@@ -118,6 +118,8 @@ class EditorController extends ChangeNotifier {
   final Duration _patternSearchBudget;
 
   /// The clock the undo-quiet window is measured on; injectable for tests.
+  /// A frozen fake clock still needs a fake timer zone driving it — the
+  /// wait itself sleeps on a real `Future.delayed`.
   final DateTime Function() _now;
 
   /// The largest buffer a text tool may write back, as UTF-8: the same
@@ -132,10 +134,13 @@ class EditorController extends ChangeNotifier {
   /// has to wait it out instead. A change during the wait restarts it.
   final Duration undoQuiet;
 
-  static const _defaultUndoQuiet = Duration(milliseconds: 500);
+  /// The default [undoQuiet]: Flutter's undo-merge window itself — a
+  /// change this old has already committed its undo step. Tests pump past
+  /// this instead of duplicating the number.
+  static const defaultUndoQuiet = Duration(milliseconds: 500);
 
   /// The clock the last field change was stamped with; the pending undo
-  /// step it belongs to commits [_undoQuiet] after this.
+  /// step it belongs to commits [undoQuiet] after this.
   DateTime _lastValueChangeAt = DateTime.fromMillisecondsSinceEpoch(0);
   TextEditingValue _seenValue = const TextEditingValue();
 
@@ -676,6 +681,14 @@ class EditorController extends ChangeNotifier {
   /// the view shows; cleared by the next change to the field's value.
   TextToolReport? get toolReport => _toolReport;
 
+  /// Dismisses the notice [toolReport] shows — the notice offers this so
+  /// the band it covers is never a dead zone.
+  void clearToolReport() {
+    if (_toolReport == null) return;
+    _toolReport = null;
+    _notify();
+  }
+
   /// Runs the catalog tool [toolId] and reports what it did.
   ///
   /// Returns null when the buffer cannot be edited at all right now —
@@ -725,10 +738,11 @@ class EditorController extends ChangeNotifier {
           context: _toolContext(),
         ),
       );
-      // Preflight the size the run would leave. A growing result must stay
-      // inside the limit; a shrinking or equal one is fine.
+      // Preflight the size the run would leave. UTF-16 length is not a
+      // safe proxy for UTF-8 size — an equal-length replacement can still
+      // grow in bytes — so every changed result is measured; removals
+      // always pass.
       if (outcome is TextToolChanged &&
-          outcome.edit.text.length > text.text.length &&
           utf8EncodedLength(outcome.edit.text) > maximumBytes) {
         outcome = const TextToolRefused(TextToolRefusal.tooLarge);
       }
@@ -1568,8 +1582,9 @@ class EditorController extends ChangeNotifier {
               detail: 'newDocument:$unit',
             );
           default:
-            if (joined.length > source.length &&
-                utf8EncodedLength(joined) > maximumBytes) {
+            // Measure bytes, not units — a template can grow the result
+            // in UTF-8 while its code-unit length stays put.
+            if (utf8EncodedLength(joined) > maximumBytes) {
               return const TextToolRefused(TextToolRefusal.tooLarge);
             }
             _requestCaretReveal(CaretReveal.nearest);

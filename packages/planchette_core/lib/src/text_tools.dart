@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:uuid/data.dart' show V4Options;
 import 'package:uuid/uuid.dart';
 
 import 'editor_syntax.dart' show FindPattern, isWordRune;
@@ -162,7 +163,9 @@ final class ToggleOption extends TextToolOption {
   const ToggleOption(String id, {bool value = false}) : super(id, value);
 }
 
-/// A single-choice option, rendered as a picker or a dropdown.
+/// A single-choice option, rendered as a picker or a dropdown. The
+/// catalog's const constructor cannot validate the default against
+/// [choices]; the catalog test asserts it instead.
 final class ChoiceOption extends TextToolOption {
   const ChoiceOption(String id, this.choices, {required String value})
     : super(id, value);
@@ -254,8 +257,19 @@ final class TextToolRun {
 
   final TextToolContext context;
 
-  /// Option [id], read as the declared type.
-  T option<T>(String id) => options[id] as T;
+  /// Option [id], read as the declared type. A missing or mistyped entry
+  /// means the caller skipped merging the declared defaults — the error
+  /// names which option.
+  T option<T>(String id) {
+    final value = options[id];
+    if (value is! T) {
+      throw ArgumentError(
+        'Option "$id" is missing or not of type $T '
+        '(got ${value?.runtimeType ?? 'null'}).',
+      );
+    }
+    return value;
+  }
 }
 
 /// A catalog entry: identity, grouping, scope and the transform itself.
@@ -737,11 +751,13 @@ resolveTextToolRange(
 
 /// The paragraph at [offset]: the run of non-blank lines around it, as a
 /// line-aligned range. A paragraph is bounded by blank lines (empty or
-/// spaces and tabs only) or the buffer's ends.
+/// spaces and tabs only) or the buffer's ends. A caret on a blank line is
+/// between paragraphs, so the range is that blank line alone.
 ({int start, int end}) paragraphRange(String text, int offset) {
   RangeError.checkValueInInterval(offset, 0, text.length, 'offset');
   var start = lineStart(text, offset);
   var end = lineContentEnd(text, offset);
+  if (_isBlankRange(text, start, end)) return (start: start, end: end);
   while (start > 0) {
     final previousEnd = start - lineSeparatorBefore(text, start).length;
     final previousStart = lineStart(text, previousEnd);
@@ -865,6 +881,13 @@ TextToolOutcome _blockEdit(
   Indentation? indentation,
   String? detail,
 }) {
+  // An identical replacement is a no-op (a palindromic Reverse Lines, a
+  // second Number Lines Add): report it rather than recording an edit
+  // that touches nothing.
+  if (replacement.length == end - start &&
+      run.text.substring(start, end) == replacement) {
+    return TextToolUnchanged(scope: scope, indentation: indentation);
+  }
   final newText = run.text.replaceRange(start, end, replacement);
   if (run.ranOn == TextToolRanOn.selection) {
     final blockEnd = start + replacement.length;
@@ -936,8 +959,13 @@ final class _Lines {
 }
 
 /// Splits the line-aligned range `[start, end)` into per-line starts and
-/// contents plus the breaks between them.
+/// contents plus the breaks between them. [end] must be the content end
+/// of the range's last line — a mid-line end would duplicate its tail.
 _Lines _linesOf(String text, int start, int end) {
+  assert(
+    end == text.length || lineSeparatorAt(text, end).isNotEmpty,
+    'end must be a line content end',
+  );
   final starts = <int>[], contents = <String>[], breaks = <String>[];
   var at = start;
   while (true) {
@@ -1167,7 +1195,9 @@ TextToolOutcome _sortLines(TextToolRun run) {
   order.sort((a, b) {
     var c = 0;
     if (byLength) {
-      c = lines[a].length.compareTo(lines[b].length);
+      // Measure the key, not the raw line, so ignoreLeadingWhitespace
+      // applies to the length comparison too.
+      c = keys[a].length.compareTo(keys[b].length);
     }
     if (c == 0) {
       c = numeric
@@ -1215,16 +1245,20 @@ TextToolOutcome _removeDuplicateLines(TextToolRun run) {
     return ignoreCase ? run.context.fold(line) : line;
   }
 
+  // Keys are trimmed and folded once — comparing is cheap, building the
+  // key for a line several times is not.
+  final keys = [for (var i = 0; i < n; i++) keyOf(i)];
+
   final remove = List<bool>.filled(n, false);
   var removed = 0;
   if (everyCopy) {
     final counts = <String, int>{};
     for (var i = 0; i < n; i++) {
       if (keepBlank && _isBlankRange(lines[i], 0, lines[i].length)) continue;
-      counts[keyOf(i)] = (counts[keyOf(i)] ?? 0) + 1;
+      counts[keys[i]] = (counts[keys[i]] ?? 0) + 1;
     }
     for (var i = 0; i < n; i++) {
-      if ((counts[keyOf(i)] ?? 0) > 1) {
+      if ((counts[keys[i]] ?? 0) > 1) {
         remove[i] = true;
         removed++;
       }
@@ -1232,7 +1266,7 @@ TextToolOutcome _removeDuplicateLines(TextToolRun run) {
   } else if (adjacent) {
     for (var i = 1; i < n; i++) {
       if (keepBlank && _isBlankRange(lines[i], 0, lines[i].length)) continue;
-      if (keyOf(i) == keyOf(i - 1)) {
+      if (keys[i] == keys[i - 1]) {
         remove[i] = true;
         removed++;
       }
@@ -1241,7 +1275,7 @@ TextToolOutcome _removeDuplicateLines(TextToolRun run) {
     final seen = <String>{};
     for (var i = 0; i < n; i++) {
       if (keepBlank && _isBlankRange(lines[i], 0, lines[i].length)) continue;
-      if (!seen.add(keyOf(i))) {
+      if (!seen.add(keys[i])) {
         remove[i] = true;
         removed++;
       }
@@ -1287,31 +1321,22 @@ String _trimIndent(String line) {
 // ── Case ──────────────────────────────────────────────────────────────
 
 /// A character-class rewrite of the resolved range, so a caret keeps its
-/// place — case mapping never changes a string's UTF-16 length.
+/// place. Case mapping can change UTF-16 length — `ß` uppercases to `SS`,
+/// `ﬁ` to `FI` — so a selection's end shifts with the delta.
 TextToolOutcome _caseChange(TextToolRun run, String Function(String) map) {
-  final slice = run.text.substring(
-    math.min(run.base, run.extent),
-    math.max(run.base, run.extent),
-  );
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
   final mapped = map(slice);
-  var changed = 0;
-  for (var i = 0; i < slice.length; i++) {
+  if (mapped == slice) return TextToolUnchanged(scope: slice.length);
+  var changed = (mapped.length - slice.length).abs();
+  final shared = math.min(slice.length, mapped.length);
+  for (var i = 0; i < shared; i++) {
     if (slice.codeUnitAt(i) != mapped.codeUnitAt(i)) changed++;
   }
-  if (changed == 0) return TextToolUnchanged(scope: slice.length);
-  final newText = run.text.replaceRange(
-    math.min(run.base, run.extent),
-    math.max(run.base, run.extent),
-    mapped,
-  );
-  final LineEdit edit;
-  if (run.ranOn == TextToolRanOn.selection) {
-    // The length never changes, so the selection still covers its result.
-    edit = LineEdit(newText, run.base, run.extent);
-  } else {
-    edit = LineEdit(newText, run.caret, run.caret);
-  }
-  return TextToolChanged(edit, changed: changed, scope: slice.length);
+  // _replaceSlice grows the selection to cover the result and shifts a
+  // caret past the slice with the length delta.
+  return _replaceSlice(run, mapped, changed: changed, scope: slice.length);
 }
 
 TextToolOutcome _toUppercase(TextToolRun run) =>
@@ -1364,6 +1389,9 @@ int _indentEnd(String line) {
 }
 
 TextToolOutcome _indentationToSpaces(TextToolRun run) {
+  // Only the to-spaces direction checks a format mandate: formats like
+  // Make and Go require tabs, and no format requires spaces, so a
+  // to-tabs run never has a mirror refusal.
   if (requiredIndentationFor(run.context.displayPath)?.style ==
       IndentStyle.tabs) {
     return const TextToolRefused(TextToolRefusal.requiresTabs);
@@ -2191,6 +2219,7 @@ TextToolOutcome _urlDecode(TextToolRun run) {
 
 TextToolOutcome _base64Encode(TextToolRun run) {
   final slice = _sliceOf(run);
+  if (slice.isEmpty) return const TextToolUnchanged(scope: 0);
   return _replaceSlice(
     run,
     base64.encode(utf8.encode(slice)),
@@ -2403,14 +2432,27 @@ TextToolOutcome _unescapeBackslashSequences(TextToolRun run) {
           for (var k = 0; k < hexCount; k++)
             _isHexDigit(slice.codeUnitAt(i + 2 + k)),
         ].every((ok) => ok)) {
-      final rune = int.parse(
-        slice.substring(i + 2, i + 2 + hexCount),
-        radix: 16,
-      );
+      var rune = int.parse(slice.substring(i + 2, i + 2 + hexCount), radix: 16);
+      var used = hexCount;
+      // A `\uD800`-`\uDBFF` lead followed by a `\uDC00`-`\uDFFF` trail is
+      // one astral character — JSON encoders emit the pair.
+      if (rune >= 0xd800 &&
+          rune <= 0xdbff &&
+          i + 12 <= slice.length &&
+          slice[i + 6] == '\\' &&
+          slice[i + 7] == 'u' &&
+          [for (var k = 0; k < 4; k++) _isHexDigit(slice.codeUnitAt(i + 8 + k))]
+              .every((ok) => ok)) {
+        final trail = int.parse(slice.substring(i + 8, i + 12), radix: 16);
+        if (trail >= 0xdc00 && trail <= 0xdfff) {
+          rune = _combine(rune, trail);
+          used += 6;
+        }
+      }
       if (rune != 0 && !(rune >= 0xd800 && rune <= 0xdfff)) {
         out.write(String.fromCharCode(rune));
         changed++;
-        i += 2 + hexCount;
+        i += 2 + used;
         continue;
       }
     }
@@ -2467,5 +2509,10 @@ TextToolOutcome _insertUtcTimestamp(TextToolRun run) {
   );
 }
 
-TextToolOutcome _insertUuid(TextToolRun run) =>
-    _insertText(run, const Uuid().v4());
+TextToolOutcome _insertUuid(TextToolRun run) {
+  // The bytes come from the context's random source — a seeded Random
+  // keeps runs reproducible — rather than the package's internal RNG.
+  final random = run.context.random;
+  final bytes = [for (var i = 0; i < 16; i++) random.nextInt(256)];
+  return _insertText(run, const Uuid().v4(config: V4Options(bytes, null)));
+}

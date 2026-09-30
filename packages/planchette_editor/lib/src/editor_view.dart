@@ -418,7 +418,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     bottom: 0,
                     child: SafeArea(
                       top: false,
-                      child: _toolNotice(context, report),
+                      // The opaque pill would otherwise swallow taps on the
+                      // document's bottom lines; a tap dismisses it.
+                      child: GestureDetector(
+                        onTap: c.clearToolReport,
+                        child: _toolNotice(context, report),
+                      ),
                     ),
                   ),
               ],
@@ -928,7 +933,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   Expanded(
                     child: Text(
                       widget.strings.textToolNotice(report),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onInverseSurface,
@@ -939,6 +944,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                       c.undoController.value.canUndo)
                     TextButton(
                       onPressed: c.undoController.undo,
+                      // inverseSurface pairs with inversePrimary — the
+                      // default primary falls below readable contrast.
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.colorScheme.inversePrimary,
+                      ),
                       child: Text(widget.strings.undo),
                     ),
                 ],
