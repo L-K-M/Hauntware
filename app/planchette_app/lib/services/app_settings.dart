@@ -17,6 +17,7 @@ final class AppSettings {
     this.fontSize = defaultFontSize,
     this.indentation = const Indentation.spaces(),
     this.fontFamily,
+    this.recentTextTools = const [],
   });
 
   /// Bounds a stored size so a bad file cannot make the editor unreadable.
@@ -40,15 +41,22 @@ final class AppSettings {
   /// hand-edited settings file. Null means the platform's face.
   final String? fontFamily;
 
+  /// The Recent text-tool runs, as [TextToolHistory.encode] wrote them.
+  /// Kept opaque: the editor package owns the shape, and entries with a
+  /// non-default text option never reach it.
+  final List<Object?> recentTextTools;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     int? fontSize,
     Indentation? indentation,
+    List<Object?>? recentTextTools,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontSize: fontSize ?? this.fontSize,
     indentation: indentation ?? this.indentation,
     fontFamily: fontFamily,
+    recentTextTools: recentTextTools ?? this.recentTextTools,
   );
 
   Map<String, Object?> toJson() => {
@@ -59,6 +67,7 @@ final class AppSettings {
       'size': indentation.width,
     },
     if (fontFamily != null) 'fontFamily': fontFamily,
+    if (recentTextTools.isNotEmpty) 'recentTextTools': recentTextTools,
   };
 
   /// Read a stored document, falling back field by field. One bad value costs
@@ -74,6 +83,9 @@ final class AppSettings {
       fontFamily: family is String && family.trim().isNotEmpty
           ? family.trim()
           : null,
+      recentTextTools: json['recentTextTools'] is List
+          ? List<Object?>.of(json['recentTextTools'] as List)
+          : const [],
     );
   }
 
@@ -108,10 +120,22 @@ final class AppSettings {
       other.themeMode == themeMode &&
       other.fontSize == fontSize &&
       other.indentation == indentation &&
-      other.fontFamily == fontFamily;
+      other.fontFamily == fontFamily &&
+      _listsEqual(other.recentTextTools, recentTextTools);
+
+  /// The list is JSON-shaped (it is what [TextToolHistory.encode] wrote),
+  /// so its canonical encoding is the deep comparison.
+  static bool _listsEqual(List<Object?> a, List<Object?> b) =>
+      jsonEncode(a) == jsonEncode(b);
 
   @override
-  int get hashCode => Object.hash(themeMode, fontSize, indentation, fontFamily);
+  int get hashCode => Object.hash(
+    themeMode,
+    fontSize,
+    indentation,
+    fontFamily,
+    Object.hashAll(recentTextTools),
+  );
 }
 
 /// Where the user's choices live. Abstract so tests can supply their own.

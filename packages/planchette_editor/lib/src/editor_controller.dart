@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,7 @@ import 'package:planchette_core/planchette_core.dart'
 
 import 'code_editing_controller.dart';
 import 'pattern_find.dart';
+import 'text_tool_history.dart';
 
 enum EditorSaveMode { local, primary }
 
@@ -58,18 +60,23 @@ class EditorController extends ChangeNotifier {
     DateTime Function()? now,
     this.maximumBytes = defaultTextDocumentMaximumBytes,
     this.undoQuiet = _defaultUndoQuiet,
+    TextToolHistory? toolHistory,
   }) : _displayPath = displayPath,
        _fold = caseFolder ?? _defaultCaseFolder,
        _patternSearchBudget = patternSearchBudget ?? core.patternSearchBudget,
+       _toolHistory = toolHistory ?? TextToolHistory(),
        _now = now ?? clock.now {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
     goToLineInput.addListener(_goToLineEdited);
-    for (final node in textFocusNodes) {
-      node.addListener(() {
-        if (node.hasFocus) _focusMemory = node;
-      });
+    for (final node in [
+      editorFocus,
+      searchFocus,
+      replacementFocus,
+      goToLineFocus,
+    ]) {
+      trackTextField(node);
     }
     if (initialText != null) {
       _installText(initialText);
@@ -134,15 +141,36 @@ class EditorController extends ChangeNotifier {
   final replacementFocus = FocusNode();
   final goToLineFocus = FocusNode();
 
-  /// Every text field this editor owns: the document, find, replace and Go to
-  /// Line. A host routing Cut, Copy, Paste or Select All from its own menus
-  /// sends them to whichever of these has focus.
-  late final List<FocusNode> textFocusNodes = List.unmodifiable([
-    editorFocus,
-    searchFocus,
-    replacementFocus,
-    goToLineFocus,
-  ]);
+  /// Every text field this editor owns: the document, find, replace, Go to
+  /// Line and any open tool-bar fields. A host routing Cut, Copy, Paste or
+  /// Select All from its own menus sends them to whichever of these has
+  /// focus.
+  List<FocusNode> get textFocusNodes => UnmodifiableListView(_textFocusNodes);
+  final List<FocusNode> _textFocusNodes = [];
+  final _fieldListeners = <FocusNode, VoidCallback>{};
+
+  /// Registers a field's node so focus memory and the host's clipboard
+  /// routing see it — the tool bar's option fields live as long as the bar
+  /// does, so they cannot be in the fixed constructor list.
+  void trackTextField(FocusNode node) {
+    if (_fieldListeners.containsKey(node)) return;
+    void listener() {
+      if (node.hasFocus) _focusMemory = node;
+    }
+
+    _fieldListeners[node] = listener;
+    node.addListener(listener);
+    _textFocusNodes.add(node);
+  }
+
+  /// Removes a node [trackTextField] registered.
+  void untrackTextField(FocusNode node) {
+    final listener = _fieldListeners.remove(node);
+    if (listener != null) node.removeListener(listener);
+    _textFocusNodes.remove(node);
+    if (_focusMemory == node) _focusMemory = null;
+  }
+
   final scroll = ScrollController();
   final undoController = UndoHistoryController();
 
@@ -215,6 +243,19 @@ class EditorController extends ChangeNotifier {
   CaretReveal _caretRevealPlacement = CaretReveal.nearest;
   ({String text, int offset, int bracket})? _lastBracketJump;
   TextToolReport? _toolReport;
+
+  /// The runs this editor feeds Repeat and Recent with; shared when the
+  /// host hands every controller the same one.
+  final TextToolHistory _toolHistory;
+
+  /// The tool the options bar is open for, plus the values its controls
+  /// hold and the dry-run outcome they produce.
+  TextTool? _barTool;
+  Map<String, Object?> _barOptions = const {};
+  bool _barWholeDocument = false;
+  TextToolReport? _barPreview;
+  bool _barOverLimit = false;
+  Timer? _barPreviewTimer;
   String _lastText = '';
   String? _lastQuery;
   String _languageProbe = '';
@@ -595,6 +636,7 @@ class EditorController extends ChangeNotifier {
   Future<TextToolOutcome?> runTextTool(
     String toolId, {
     Map<String, Object?> options = const {},
+    bool wholeDocument = false,
   }) async {
     final tool = textToolById(toolId);
     if (tool == null) {
@@ -610,8 +652,10 @@ class EditorController extends ChangeNotifier {
       text.text,
       selection.baseOffset,
       selection.extentOffset,
+      wholeDocument: wholeDocument,
     );
 
+    final runOptions = _toolOptions(tool, options);
     TextToolOutcome outcome;
     if (resolved.refusal != null) {
       outcome = TextToolRefused(resolved.refusal!);
@@ -623,7 +667,7 @@ class EditorController extends ChangeNotifier {
           extent: resolved.extent,
           caret: resolved.caret,
           ranOn: resolved.ranOn,
-          options: _toolOptions(tool, options),
+          options: runOptions,
           context: _toolContext(),
         ),
       );
@@ -651,9 +695,14 @@ class EditorController extends ChangeNotifier {
       outcome: outcome,
       ranOn: resolved.ranOn,
     );
+    _toolHistory.record(toolId, runOptions);
     _notify();
     return outcome;
   }
+
+  /// The shared run history [toolReport] feeds — Repeat and Recent read
+  /// from it.
+  TextToolHistory get toolHistory => _toolHistory;
 
   /// Declared option defaults overlaid with the caller's [overrides];
   /// unknown overrides are dropped.
@@ -672,6 +721,183 @@ class EditorController extends ChangeNotifier {
     displayPath: _displayPath,
     now: _now,
   );
+
+  // ── Text tool bar ──
+
+  /// The buffer size past which the bar stops dry-running a tool and its
+  /// count is computed on Apply instead: a sort across a large file per
+  /// keystroke is not worth a live count.
+  static const toolBarPreviewLimit = 1 << 20;
+
+  /// How long after an edit or caret move the dry run reruns — the count
+  /// settles with the selection rather than chasing every keystroke.
+  static const _previewDelay = Duration(milliseconds: 150);
+
+  /// The tool the options bar is open for, or null.
+  TextTool? get toolBarTool => _barTool;
+  bool get toolBarOpen => _barTool != null;
+
+  /// The values the bar's controls hold — defaults seeded with the tool's
+  /// last-used ones — for the controls to read back.
+  Map<String, Object?> get toolBarOptions => Map.unmodifiable(_barOptions);
+
+  /// Whether the bar's scope control sends the run to the whole document
+  /// rather than the selection. Only a document-scope tool offers the
+  /// choice; for anything else the flag stays false.
+  bool get toolBarWholeDocument => _barWholeDocument;
+
+  /// The dry-run result the bar's count line shows, or null until the
+  /// first recompute lands — and past [toolBarPreviewLimit], where the
+  /// count is computed on Apply.
+  TextToolReport? get toolBarPreview => _barPreview;
+
+  /// Whether the buffer is large enough that the bar skips the dry run:
+  /// the count is computed on Apply and reported in the notice.
+  bool get toolBarPreviewDeferred => _barOverLimit;
+
+  /// The lines the current scope radio covers: the selection's when it
+  /// applies, else the document's.
+  (int selected, int document) get toolBarScopeLines =>
+      (_barSelectedLines, _barDocumentLines);
+  int _barSelectedLines = 0;
+  int _barDocumentLines = 0;
+
+  /// Opens the options bar for [toolId] — the menu's "…" items and a host's
+  /// list call here. The bar takes the find bar's slot, so opening it
+  /// closes find and Go to Line.
+  void openTextTool(String toolId) {
+    final tool = textToolById(toolId);
+    if (tool == null) {
+      throw ArgumentError.value(toolId, 'toolId', 'No text tool');
+    }
+    if (_searchOpen) closeSearch();
+    if (_goToLineOpen) closeGoToLine();
+    _barTool = tool;
+    _barOptions = _toolHistory.lastOptionsFor(toolId);
+    _barWholeDocument = false;
+    _markBarStale();
+    _notify();
+  }
+
+  /// Closes the options bar. The bar's focus goes back to the document, so
+  /// Escape and Apply both leave the caret usable; [refocus] is off for
+  /// callers handing focus to another bar right after.
+  void closeTextTool({bool refocus = true}) {
+    if (_barTool == null) return;
+    _barTool = null;
+    _barPreview = null;
+    _barOverLimit = false;
+    _barPreviewTimer?.cancel();
+    _notify();
+    if (refocus) editorFocus.requestFocus();
+  }
+
+  /// Sets one option while the bar is open; the dry run reschedules.
+  void setToolOption(String id, Object? value) {
+    if (_barTool == null) return;
+    _barOptions = {..._barOptions, id: value};
+    _markBarStale();
+    _notify();
+  }
+
+  /// Sets the scope control; [wholeDocument] is ignored for tools that do
+  /// not offer it.
+  void setToolBarScope({required bool wholeDocument}) {
+    if (_barTool == null) return;
+    _barWholeDocument =
+        wholeDocument && _barTool!.scope == TextToolScope.document;
+    _markBarStale();
+    _notify();
+  }
+
+  /// Applies the bar's current options and closes it — the bar's Enter.
+  Future<TextToolOutcome?> applyTextTool() async {
+    final tool = _barTool;
+    if (tool == null || !canEditText) return null;
+    final options = _barOptions;
+    final wholeDocument = _barWholeDocument;
+    closeTextTool();
+    return runTextTool(tool.id, options: options, wholeDocument: wholeDocument);
+  }
+
+  /// Marks the dry run out of date and reschedules it. A stale flag rather
+  /// than an immediate recompute: option toggles and keystrokes can arrive
+  /// faster than a large sort is worth.
+  void _markBarStale() {
+    if (_barTool == null) return;
+    _barPreviewTimer?.cancel();
+    _barPreviewTimer = Timer(_previewDelay, _refreshBarPreview);
+  }
+
+  void _refreshBarPreview() {
+    final tool = _barTool;
+    if (tool == null || _disposed) return;
+    final selection = text.value.selection;
+    final source = text.text;
+    _barDocumentLines = _documentLineCount(source);
+    _barSelectedLines =
+        selection.isValid && selection.baseOffset != selection.extentOffset
+        ? _rangeLineCount(
+            source,
+            touchedLineRange(
+              source,
+              selection.baseOffset,
+              selection.extentOffset,
+            ),
+          )
+        : 0;
+    _barOverLimit = utf8EncodedLength(source) > toolBarPreviewLimit;
+    if (_barOverLimit) {
+      _barPreview = null;
+    } else {
+      final resolved = resolveTextToolRange(
+        tool,
+        source,
+        selection.baseOffset,
+        selection.extentOffset,
+        wholeDocument: _barWholeDocument,
+      );
+      _barPreview = TextToolReport(
+        tool: tool,
+        outcome: resolved.refusal != null
+            ? TextToolRefused(resolved.refusal!)
+            : tool.run(
+                TextToolRun(
+                  text: source,
+                  base: resolved.base,
+                  extent: resolved.extent,
+                  caret: resolved.caret,
+                  ranOn: resolved.ranOn,
+                  options: _barOptions,
+                  context: _toolContext(),
+                ),
+              ),
+        ranOn: resolved.ranOn,
+      );
+    }
+    _notify();
+  }
+
+  /// The lines a touched range spans. The range is line-aligned, so every
+  /// break inside it ends a real line.
+  static int _rangeLineCount(String text, ({int start, int end}) range) {
+    var count = 1;
+    for (var i = range.start; i < range.end; i++) {
+      if (text.codeUnitAt(i) == 0x0a) count++;
+    }
+    return count;
+  }
+
+  /// The lines the document holds. A break at the end of the buffer ends
+  /// the last line rather than starting an empty one — the same rule
+  /// [touchedLineRange] applies to a range.
+  static int _documentLineCount(String text) {
+    if (text.isEmpty) return 0;
+    var count = _rangeLineCount(text, (start: 0, end: text.length));
+    final last = text.codeUnitAt(text.length - 1);
+    if (last == 0x0a || last == 0x0d) count--;
+    return count;
+  }
 
   /// Waits until the last change to the text field's value is at least
   /// [undoQuiet] old. The undo history merges changes inside the window
@@ -816,6 +1042,9 @@ class EditorController extends ChangeNotifier {
     }
     _seenValue = value;
     if (_updatingSearch || _disposed) return;
+    // An open tool bar dry-runs against where the caret lands; it reruns
+    // when the selection or the text settles.
+    if (_barTool != null) _markBarStale();
     if (text.text != _lastText) {
       final before = _lastText;
       _lastText = text.text;
@@ -942,6 +1171,8 @@ class EditorController extends ChangeNotifier {
 
   void openSearch({bool replace = false}) {
     if (_loading || _error != null) return;
+    // The find bar and the tool bar share one slot.
+    if (_barTool != null) closeTextTool(refocus: false);
     final selection = text.selection;
     String? prefill;
     if (selection.isValid && !selection.isCollapsed) {
@@ -999,6 +1230,7 @@ class EditorController extends ChangeNotifier {
 
   void openGoToLine() {
     if (_loading || _error != null) return;
+    if (_barTool != null) closeTextTool(refocus: false);
     _goToLineOpen = true;
     _invalidGoToLine = null;
     final (line, _) = caretLineColumn;
@@ -1621,12 +1853,18 @@ class EditorController extends ChangeNotifier {
     search.dispose();
     replacement.dispose();
     goToLineInput.dispose();
+    for (final MapEntry(:key, :value) in _fieldListeners.entries) {
+      key.removeListener(value);
+    }
+    _fieldListeners.clear();
+    _textFocusNodes.clear();
     editorFocus.dispose();
     searchFocus.dispose();
     replacementFocus.dispose();
     goToLineFocus.dispose();
     scroll.dispose();
     undoController.dispose();
+    _barPreviewTimer?.cancel();
     super.dispose();
   }
 }

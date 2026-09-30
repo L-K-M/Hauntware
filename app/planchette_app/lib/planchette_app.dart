@@ -158,6 +158,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     super.initState();
     workspace.addListener(_changed);
     settings.addListener(_settingsChanged);
+    workspace.toolHistory.addListener(_toolHistoryChanged);
     workspace.indentationPreference = settings.value.indentation;
     FocusManager.instance.addListener(_rememberTextFocus);
   }
@@ -174,6 +175,20 @@ class _DocumentShellState extends State<_DocumentShell> {
 
   void _settingsChanged() {
     workspace.indentationPreference = settings.value.indentation;
+    if (mounted) setState(() {});
+  }
+
+  /// A recorded run changes the Repeat and Recent labels, and the
+  /// persistable part of the history is a setting — saved through the
+  /// same debounced write as the rest.
+  void _toolHistoryChanged() {
+    unawaited(
+      settings.update(
+        settings.value.copyWith(
+          recentTextTools: workspace.toolHistory.encode(),
+        ),
+      ),
+    );
     if (mounted) setState(() {});
   }
 
@@ -368,7 +383,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         switch (entry) {
           case _Submenu(:final items, :final label):
             collect(items, '$path > $label');
-          case _Command() when entry.run != _openPalette:
+          case _Command() when entry.run != _openPalette && entry.inPalette:
             final tool = textToolById(entry.commandId);
             commands.add(
               PaletteCommand(
@@ -432,6 +447,28 @@ class _DocumentShellState extends State<_DocumentShell> {
     if (!mounted) return;
     final command = _commandById(commandId);
     if (command != null && command.enabled) command.run();
+  }
+
+  /// A no-options tool runs straight away; a tool that declares options
+  /// opens the bar so the user sets them first.
+  void _runOrOpenTextTool(TextTool tool) {
+    final editor = workspace.active?.editor;
+    if (editor == null) return;
+    if (tool.options.isEmpty) {
+      unawaited(editor.runTextTool(tool.id));
+    } else {
+      editor.openTextTool(tool.id);
+    }
+  }
+
+  /// Repeat runs the last tool with the options it last used — bar and
+  /// menu runs both record, so the label's summary is what re-runs.
+  void _repeatTextTool() => _runRecentTextTool(workspace.toolHistory.last);
+
+  void _runRecentTextTool(TextToolRunRecord? record) {
+    final editor = workspace.active?.editor;
+    if (record == null || editor == null) return;
+    unawaited(editor.runTextTool(record.toolId, options: record.options));
   }
 
   void _find({bool replace = false}) {
@@ -627,23 +664,44 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: inDocument && (active?.editor.canToggleComment ?? false),
         ),
       ]),
-      // The catalog drives the menu: one submenu per group that has at
-      // least one built tool — a group not yet built is absent rather
-      // than empty. A tool that needs options runs at its defaults here.
+      // The catalog drives the menu: Repeat and Recent head it, then one
+      // submenu per group that has at least one built tool — a group not
+      // yet built is absent rather than empty. A tool that declares
+      // options opens the tool bar instead of running at its defaults.
       _ShellMenu('Text', [
+        _Command(
+          _editorStrings.repeatTextToolLabel(workspace.toolHistory.last),
+          _repeatTextTool,
+          shortcut: _shortcut(LogicalKeyboardKey.keyR, shift: true),
+          enabled: lineCommands && workspace.toolHistory.last != null,
+          id: 'repeatTextTool',
+        ),
+        _Submenu('Recent', [
+          if (workspace.toolHistory.recent.isEmpty)
+            const _Command(
+              'No Recent Runs',
+              _noop,
+              enabled: false,
+              inPalette: false,
+            )
+          else
+            for (final (index, record) in workspace.toolHistory.recent.indexed)
+              _Command(
+                _editorStrings.recentTextToolLabel(record),
+                () => _runRecentTextTool(record),
+                enabled: lineCommands,
+                id: 'recentTextTool:$index',
+              ),
+        ]),
+        const _Separator(),
         for (final group in TextToolGroup.values)
           if (textToolCatalog.any((tool) => tool.group == group))
             _Submenu(_editorStrings.textToolGroupName(group), [
               for (final tool in textToolCatalog)
                 if (tool.group == group)
                   _Command(
-                    _editorStrings.textToolName(tool.id),
-                    () {
-                      final editor = active?.editor;
-                      if (editor != null) {
-                        unawaited(editor.runTextTool(tool.id));
-                      }
-                    },
+                    _editorStrings.textToolMenuLabel(tool.id),
+                    () => _runOrOpenTextTool(tool),
                     enabled: lineCommands,
                     id: tool.id,
                   ),
@@ -1112,6 +1170,7 @@ class _DocumentShellState extends State<_DocumentShell> {
   void dispose() {
     workspace.removeListener(_changed);
     settings.removeListener(_settingsChanged);
+    workspace.toolHistory.removeListener(_toolHistoryChanged);
     FocusManager.instance.removeListener(_rememberTextFocus);
     super.dispose();
   }
@@ -1177,6 +1236,7 @@ final class _Command extends _MenuEntry {
     this.aliases = const [],
     this.enabled = true,
     this.id,
+    this.inPalette = true,
   });
 
   /// The stable identifier the palette resolves the command by, so a row
@@ -1191,5 +1251,12 @@ final class _Command extends _MenuEntry {
   final List<SingleActivator> aliases;
   final bool enabled;
 
+  /// Placeholder rows such as "No Recent Runs" fill an empty menu but are
+  /// not commands; they do not belong in the palette.
+  final bool inPalette;
+
   String get commandId => id ?? label;
 }
+
+/// The placeholder for an empty Recent submenu — it can never be chosen.
+void _noop() {}

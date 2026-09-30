@@ -152,7 +152,9 @@ final class DocumentWorkspace extends ChangeNotifier {
     required this.store,
     required this.dialogs,
     paths.Context? pathContext,
-  }) : _paths = pathContext ?? paths.context;
+    TextToolHistory? toolHistory,
+  }) : _paths = pathContext ?? paths.context,
+       toolHistory = toolHistory ?? TextToolHistory();
 
   /// Scope of a refused quit's notice. The notice describes a state, not a
   /// failure, so [_notify] retires it the moment nothing blocks a quit any
@@ -175,6 +177,10 @@ final class DocumentWorkspace extends ChangeNotifier {
   static const _closedPathLimit = 20;
   int _nextId = 1;
   int _dialogCount = 0;
+
+  /// The run history every tab's editor shares, so Repeat and Recent see
+  /// tools run in any document.
+  final TextToolHistory toolHistory;
   Indentation? _indentationPreference;
 
   /// The indentation for documents that neither use nor mandate one, from the
@@ -230,6 +236,7 @@ final class DocumentWorkspace extends ChangeNotifier {
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,
+      toolHistory: toolHistory,
       // Read the path at call time: Save As retargets the tab, and a reload
       // must follow the new location rather than the one it was opened with.
       loadDocument: path == null
