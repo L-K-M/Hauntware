@@ -37,7 +37,7 @@ turns them into tests. Ids such as B8 or E5 are entries in
 What this does not solve:
 
 - The bulk is the same as BBEdit's; it sits one hover down. The gain is that
-  no column is longer than 10.
+  no column is longer than 10 today, and never longer than 12.
 - A user who never opens the Text menu learns nothing.
 - Tools without options run with no preview, as in BBEdit. A menu click,
   Repeat or Recent with nothing selected can rewrite the whole document. The
@@ -104,19 +104,19 @@ File  Edit  Text  Find  View  Window
             Repeat Sort Lines (Z to A)      Shift+Cmd/Ctrl+R
             Recent                        >
             -----------------------------
-            Lines                         >   Sort Lines…
-            Case                          >   Reverse Lines
-            Whitespace                    >   Shuffle Lines
-            Clean Up                      >   ---------------------------
-            Wrap                          >   Remove Duplicate Lines…
-            Encode                        >   Remove Blank Lines
-            Insert                        >   Collapse Blank Lines
-                                              ---------------------------
-                                              Keep Lines Matching…
-                                              Delete Lines Matching…
-                                              ---------------------------
-                                              Prefix/Suffix Lines…
-                                              Number Lines…
+            Lines                         > --+  Sort Lines…
+            Case                          >   |  Reverse Lines
+            Whitespace                    >   |  Shuffle Lines
+            Clean Up                      >   |  ------------------------
+            Wrap                          >   |  Remove Duplicate Lines…
+            Encode                        >   |  Remove Blank Lines
+            Insert                        >   |  Collapse Blank Lines
+                                              |  ------------------------
+                                              |  Keep Lines Matching…
+                                              |  Delete Lines Matching…
+                                              |  ------------------------
+                                              |  Prefix/Suffix Lines…
+                                              +  Number Lines…
 ```
 
 | Submenu | Items (`*` = deferred, section 6) |
@@ -140,7 +140,8 @@ Rules:
 - A new behaviour of an existing tool is an option. A new item needs a new
   noun, or a direction users search by name (Encode and Decode, Keep and
   Delete).
-- A submenu that would pass 12 items splits. Depth stays 2.
+- A submenu that would pass 12 items splits; none has more than 10 today.
+  Depth stays 2.
 - Case items are written in their own result, so the menu is the preview.
 - "…" opens the tool bar. The two pattern items in Lines open the find bar.
 - Existing line commands (Duplicate, Move, Delete, Join, Toggle Comment) stay
@@ -248,7 +249,9 @@ Sort Lines".
 Line ending, BOM and the indentation setting are document properties, not
 transforms. They become clickable status segments in the app (E10, V5), as
 in VS Code. This needs a metadata setter on the controller and a dirty state
-that includes line ending and BOM; today dirty compares text only.
+that compares line ending and BOM with their values at load or last save;
+today dirty compares text only. The indentation setting is not written to
+the file and does not make a document dirty.
 
 ### Hosts
 
@@ -326,11 +329,11 @@ W = word at the caret, S = selection required, I = insert at the caret.
 
 | Tool | No selection | Options and rules |
 |---|---|---|
-| Sort Lines… | D | Order, ignore case (default on), numbers by value, by length, ignore leading whitespace, keep first line. Code-point order with an index tiebreak: `List.sort` is not stable (*checked*). Ignore case uses the controller's case folder, as find does |
+| Sort Lines… | D | Order, ignore case (default on), numbers by value, by length, ignore leading whitespace, leave the first line in place (header row). Code-point order with an index tiebreak: `List.sort` is not stable (*checked*). Ignore case uses the controller's case folder, as find does |
 | Reverse, Shuffle Lines | D | Shuffle takes an injected random source |
 | Remove Duplicate Lines… | D | Keeps the first. Options: adjacent only, ignore case, ignore surrounding whitespace, keep blank lines (default on), remove every copy |
 | Remove / Collapse Blank Lines | D | Blank is empty or spaces and tabs only |
-| Keep / Delete Lines Matching… | D, ignores the live selection | Literal or regex from the find bar. Each line tested alone. The Find in Selection range narrows it once slice 5b lands |
+| Keep / Delete Lines Matching… | D, ignores the live selection | Literal or regex from the find bar. Each line tested alone, so a pattern that contains a line break matches nothing. The Find in Selection range narrows it once slice 5b lands |
 | Prefix/Suffix Lines… | D | Insert or remove; prefix; suffix; skip blank lines (default on) |
 | Number Lines… | D | Add or remove; start; step; separator; pad with spaces or zeros |
 | Join Lines With… | S | Separator (default `, `); trim; skip blank lines |
@@ -341,7 +344,7 @@ W = word at the caret, S = selection required, I = insert at the caret.
 | Normalize Spaces | D | No-break and other Unicode spaces become U+0020 |
 | Convert Indentation | D | Leading whitespace only, so no column model is needed. Width: the document's; for a tab-indented file, the preference width. Then sets the document's indentation setting to match; undo does not restore it. To Spaces is refused where the format requires tabs (Makefile, Go) |
 | Normalize Line Endings | D, ignores the selection | CRLF and lone CR become the buffer's line ending. Needs the controller to know the normalization mode (Séance loads line breaks as they are); lone CR per B35 |
-| Zap Gremlins… | D | Classes: control characters (C0 except tab, LF, CR; DEL; C1); zero-width and invisible (U+200B, U+2060, U+FEFF, U+00AD); bidirectional controls (U+202A to U+202E, U+2066 to U+2069); invalid (U+FFFD, lone surrogates); all non-ASCII. Defaults: the first three, deleted. U+200C and U+200D are kept: emoji and several scripts need them. Other actions: replace with `\u{…}`, with a character, with an HTML entity. A pasted NUL blocks saving today |
+| Zap Gremlins… | D | Classes: control characters (C0 except tab, LF, CR; DEL; C1); zero-width and invisible (U+200B, U+2060, U+FEFF, U+00AD); bidirectional controls (U+202A to U+202E, U+2066 to U+2069); damaged (the replacement character U+FFFD, lone surrogates); all non-ASCII. Defaults: the first three, deleted. U+200C and U+200D are kept: emoji and several scripts need them. Other actions: replace with `\u{…}`, with a character, with an HTML entity. A pasted NUL blocks saving today |
 | Straighten Quotes | D | Curly single and double quotes only |
 | Remove ANSI Escape Codes | D | CSI, OSC and escape sequences with a real ESC |
 | Convert to ASCII | D | Quotes, dashes, ellipsis, ligatures, accented Latin to look-alikes; reports what has no equivalent. Shares a Latin table with Strip Diacritics |
@@ -372,9 +375,11 @@ Shared rules:
 - **Isolate.** Other tools run on the UI isolate, as every edit does. Large
   files would need P4's isolate approach extended to transforms; not planned.
 - **Undo.** One assignment is one undo entry, but Flutter pushes history
-  through a 500 ms throttle (`undo_history.dart`): a tool run within 500 ms of
-  typing or of another tool shares an undo step with it. Accepted; slice 1
-  pins it with a test.
+  through a 500 ms throttle (`undo_history.dart`) and exposes no way to flush
+  it: a change within 500 ms of another shares its undo step. `runTextTool`
+  therefore waits until the last change is 500 ms old before its assignment,
+  so Undo reverts the tool and keeps the typing before it. Typing within
+  500 ms after a tool still merges with it. Slice 1 pins both with tests.
 
 ## 5. Beyond the Text menu
 
@@ -401,9 +406,9 @@ budget, paging past 1,000 highlights, Replace, Replace All, `$1`, `${name}`.
 | Multi-file search, file filters | A15 |
 | Find Differences | Later: Compare with Saved as a unified diff in a new tab, on the existing Diff highlighter, off the UI isolate. No merge window |
 
-### Edit menu
+### Edit and File menus
 
-Caret commands, not catalog tools:
+Caret and file commands, not catalog tools. Not scheduled (slice 8):
 
 - Select Line, Select Paragraph, Select Enclosing Brackets (BBEdit's
   Balance). Selection only: no edit, allowed when locked.
@@ -413,7 +418,8 @@ Caret commands, not catalog tools:
 - Increment / Decrement Number.
 - Copy Line, Cut Line.
 - Toggle Comment's block fallback (E1).
-- Copy Path in the File menu (FU5); today it is in the tab context menu only.
+- Copy Path, added to the File menu (FU5); today it is in the tab context
+  menu only.
 
 ### Later
 
@@ -448,13 +454,13 @@ shared packages; each PR lists what hosts will see on the next pin bump.
 | 1 | Core line and range helpers, catalog entries, outcome type, `runTextTool`, result notice, flat Text menu with 10 tools run at defaults: Sort Lines, Remove Duplicate Lines, Remove Blank Lines, Trim Trailing Whitespace, Convert Indentation to Spaces and to Tabs, UPPERCASE, lowercase, Straighten Quotes, Zap Gremlins | L | Four of the owner's six named tools (sort, trim, tabs and spaces, gremlins), in the menu and the palette. Pins the undo throttle |
 | 2 | Submenu entry type, command ids, generated menu. Five places walk the menu: `_nativeItems`, `_menuBar`, the shortcut map, `_openPalette`, `_runCurrent`. Palette keywords, descriptions, path, greyed rows | M to L | The menu structure |
 | 3 | Tool bar, option declarations, `TextToolHistory`, Repeat, Recent. Options for Sort, Remove Duplicates, Zap Gremlins; Prefix/Suffix Lines, Number Lines, Join Lines With | L | Prefix/Suffix. Parameters and the short form. Option tools gain their "…" |
-| 4 | Remaining tools without options, in batches: Reverse, Shuffle, Collapse Blank Lines, Trim Leading, Normalize Spaces; case family; four codec pairs; Remove ANSI; Insert; Unwrap Paragraphs | M each batch | 26 more tools |
+| 4 | Remaining tools without options, in batches: Reverse, Shuffle, Collapse Blank Lines, Trim Leading, Normalize Spaces; case family; four codec pairs (URL, Base64, HTML entities, JSON string and backslash); Remove ANSI; Insert; Unwrap Paragraphs | M each batch | 26 more tools |
 | 5a | Find bar line actions, Extract Matches, two worker requests | M to L | Keep and Delete Lines Matching, Extract |
 | 5b | Find in Selection (E5) | L | Scope for find, replace and 5a |
 | 5c | Replacement escapes, preview line | M | If decision 5 is yes |
 | 6 | Metadata setter and dirty state; status segments for indentation, line ending, BOM (E10, V5); trim and final newline on save (E9); Normalize Line Endings | L | Document properties. 42 of 48 tools built |
 | 7 | Tool list state, `openTextTools()`; then a pin bump and one icon in each host | L, three PRs | Hosts and phones. Optional (decision 2) |
-| 8 | Not scheduled: Hard Wrap and Convert Tabs to Spaces (B8); Convert to ASCII (needs a Latin table); Strip Diacritics, Compose and Decompose Accents (decision 4); Format and Minify JSON (decision 7); regex hints and cheat sheet; Use Selection for Find; search history; Edit-menu commands; Alt mnemonics; Compare with Saved | | |
+| 8 | Not scheduled: Hard Wrap and Convert Tabs to Spaces (B8); Convert to ASCII (needs a Latin table); Strip Diacritics, Compose and Decompose Accents (decision 4); Format and Minify JSON (decision 7); regex hints and cheat sheet; Use Selection for Find; search history; Edit and File menu commands; Alt mnemonics; Compare with Saved | | |
 
 Slices 1 and 2 need no bar; the only new surface is the result notice.
 Slice 1 depends on decision 1, slice 2 on decisions 3 and 6. Until answered,
