@@ -128,13 +128,15 @@ final class AppSettings {
   static bool _listsEqual(List<Object?> a, List<Object?> b) =>
       jsonEncode(a) == jsonEncode(b);
 
+  // The same canonical encoding [_listsEqual] compares — equal lists must
+  // hash equal, and hashing the list's maps directly would not see them.
   @override
   int get hashCode => Object.hash(
     themeMode,
     fontSize,
     indentation,
     fontFamily,
-    Object.hashAll(recentTextTools),
+    jsonEncode(recentTextTools),
   );
 }
 

@@ -97,6 +97,7 @@ class EditorStrings {
     'convertIndentationToTabs' => 'Convert Indentation to Tabs',
     'straightenQuotes' => 'Straighten Quotes',
     'zapGremlins' => 'Zap Gremlins',
+    'removeAnsiEscapes' => 'Remove ANSI Escapes',
     'prefixSuffixLines' => 'Prefix/Suffix Lines',
     'numberLines' => 'Number Lines',
     'unwrapParagraphs' => 'Unwrap Paragraphs',
@@ -113,6 +114,9 @@ class EditorStrings {
     'insertDateTime' => 'Date and Time',
     'insertUtcTimestamp' => 'UTC Timestamp',
     'insertUuid' => 'UUID',
+    'keepLinesMatching' => 'Keep Lines Matching',
+    'deleteLinesMatching' => 'Delete Lines Matching',
+    'extractMatches' => 'Extract Matches',
     _ => id,
   };
 
@@ -178,12 +182,16 @@ class EditorStrings {
     'escape' => r'Escape as \u{…}',
     'replace' => 'Replace with character',
     'entity' => 'Numeric entity',
+    'inPlace' => 'In place',
+    'clipboard' => 'Clipboard',
+    'newDocument' => 'New document',
     _ => choiceId,
   };
 
-  /// A run's short option summary for Repeat and Recent rows — the choice
+  /// A run's short option summary for Repeat and Recent rows — the
   /// options that differ from their defaults, so "Repeat Sort Lines (Z to
-  /// A)" says what the re-run does. Empty when nothing distinguishes it.
+  /// A, Ignore case)" says what the re-run does. Empty when nothing
+  /// distinguishes it.
   String textToolOptionsSummary(TextToolRunRecord record) {
     final tool = textToolById(record.toolId);
     if (tool == null) return '';
@@ -192,10 +200,21 @@ class EditorStrings {
         if (option is ChoiceOption &&
             record.options[option.id] is String &&
             record.options[option.id] != option.defaultValue)
-          textToolChoiceName(record.options[option.id] as String),
+          textToolChoiceName(record.options[option.id] as String)
+        else if (option is ToggleOption &&
+            record.options[option.id] is bool &&
+            record.options[option.id] != option.defaultValue)
+          record.options[option.id] == true
+              ? textToolOptionName(tool.id, option.id)
+              : textToolDisabledToggleName(tool.id, option.id),
     ];
     return parts.join(', ');
   }
+
+  /// A toggle shown off in a summary: "no Control characters" for
+  /// zapGremlins' controls toggle, which defaults to on.
+  String textToolDisabledToggleName(String toolId, String optionId) =>
+      'no ${textToolOptionName(toolId, optionId)}';
 
   /// The Repeat row: "Repeat Sort Lines (Z to A)", or "Repeat" alone before
   /// the first run.
@@ -272,9 +291,15 @@ class EditorStrings {
     'unescapeBackslashSequences' =>
       r'Decodes backslash escapes such as \n and \uXXXX.',
     'insertDate' => 'Inserts the current date as YYYY-MM-DD.',
-    'insertDateTime' => 'Inserts the local date and time.',
-    'insertUtcTimestamp' => 'Inserts the UTC timestamp.',
+    'insertDateTime' =>
+      'Inserts the local date and time as YYYY-MM-DDThh:mm:ss.',
+    'insertUtcTimestamp' =>
+      'Inserts the UTC timestamp as YYYY-MM-DDThh:mm:ssZ.',
     'insertUuid' => 'Inserts a random UUID.',
+    'keepLinesMatching' =>
+      'Deletes every line that does not match the pattern.',
+    'deleteLinesMatching' => 'Deletes every line that matches the pattern.',
+    'extractMatches' => 'Collects every match, one per line, where it is sent.',
     _ => '',
   };
 
@@ -336,6 +361,17 @@ class EditorStrings {
       'escape sequences',
       'backslash',
     ],
+    'keepLinesMatching' => const [
+      'process lines matching',
+      'filter lines',
+      'grep lines',
+    ],
+    'deleteLinesMatching' => const [
+      'process lines matching',
+      'filter lines',
+      'delete matching',
+    ],
+    'extractMatches' => const ['collect matches', 'grep -o', 'submatches'],
     'insertDate' => const ['today', 'current date'],
     'insertDateTime' => const ['now', 'timestamp', 'current time'],
     'insertUtcTimestamp' => const ['now', 'zulu', 'gmt', 'timestamp'],
@@ -358,8 +394,8 @@ class EditorStrings {
     return switch (report.outcome) {
       TextToolRefused(:final reason) =>
         '$name: not applied, ${_refusalText(reason)}.',
-      TextToolUnchanged(:final scope) =>
-        '$name: ${_unchangedText(report.tool.id, scope, where)}',
+      TextToolUnchanged(:final scope, :final detail) =>
+        '$name: ${_unchangedText(report.tool.id, scope, where, detail)}',
       TextToolChanged(:final changed, :final scope, :final detail) =>
         '$name: ${_changedText(report.tool.id, changed, scope, where, detail)}',
     };
@@ -431,42 +467,66 @@ class EditorStrings {
     'insertDateTime' => 'inserted the date and time $where.',
     'insertUtcTimestamp' => 'inserted the UTC timestamp $where.',
     'insertUuid' => 'inserted a UUID $where.',
+    'keepLinesMatching' ||
+    'deleteLinesMatching' => 'removed $changed of ${_lines(scope)} $where.',
+    'extractMatches' => _extractText(changed, where, detail),
     _ => 'changed $scope units $where.',
   };
 
+  /// What Extract Matches did, per the 'unit:target' detail the run
+  /// reported — in place rewrites the buffer, the other destinations do
+  /// not touch it.
+  String _extractText(int count, String where, String? detail) {
+    final parts = detail?.split(':') ?? const [];
+    final unit = parts.firstOrNull == 'lines' ? 'line' : 'match';
+    return switch (parts.lastOrNull) {
+      'clipboard' => 'copied ${_plural(count, unit)} to the clipboard.',
+      'newDocument' => 'opened ${_plural(count, unit)} in a new document.',
+      _ => 'extracted ${_plural(count, unit)} $where.',
+    };
+  }
+
   /// What a run that changed nothing found, per tool.
-  String _unchangedText(String id, int scope, String where) => switch (id) {
-    'sortLines' =>
-      'nothing to change, ${_lines(scope)} $where already in order.',
-    'reverseLines' ||
-    'shuffleLines' => 'nothing to change, ${_lines(scope)} $where.',
-    'removeDuplicateLines' => 'nothing to change, no duplicate lines $where.',
-    'removeBlankLines' => 'nothing to change, no blank lines $where.',
-    'collapseBlankLines' => 'nothing to change, no blank-line runs $where.',
-    'trimTrailingWhitespace' => 'nothing to trim $where.',
-    'trimLeadingWhitespace' => 'nothing to trim $where.',
-    'normalizeSpaces' => 'no Unicode spaces $where.',
-    'convertIndentationToSpaces' ||
-    'convertIndentationToTabs' => 'nothing to convert $where.',
-    'uppercase' ||
-    'lowercase' ||
-    'titleCase' ||
-    'sentenceCase' ||
-    'camelCase' ||
-    'pascalCase' ||
-    'snakeCase' ||
-    'kebabCase' ||
-    'constantCase' => 'nothing to change $where.',
-    'straightenQuotes' => 'nothing to straighten $where.',
-    'zapGremlins' => 'nothing to zap $where.',
-    'removeAnsiEscapes' => 'no escape sequences $where.',
-    'unwrapParagraphs' => 'nothing to unwrap $where.',
-    'joinLinesWith' => 'nothing to join $where.',
-    'urlDecode' || 'base64Decode' => 'nothing to decode $where.',
-    'htmlEntityDecode' => 'no entities $where.',
-    'unescapeBackslashSequences' => 'no escapes $where.',
-    _ => 'nothing to change $where.',
-  };
+  String _unchangedText(String id, int scope, String where, String? detail) =>
+      switch (id) {
+        'extractMatches' =>
+          detail == null
+              ? 'no matches $where.'
+              : _extractText(scope, where, detail),
+        'sortLines' =>
+          'nothing to change, ${_lines(scope)} $where already in order.',
+        'reverseLines' ||
+        'shuffleLines' => 'nothing to change, ${_lines(scope)} $where.',
+        'removeDuplicateLines' =>
+          'nothing to change, no duplicate lines $where.',
+        'removeBlankLines' => 'nothing to change, no blank lines $where.',
+        'collapseBlankLines' => 'nothing to change, no blank-line runs $where.',
+        'trimTrailingWhitespace' => 'nothing to trim $where.',
+        'trimLeadingWhitespace' => 'nothing to trim $where.',
+        'normalizeSpaces' => 'no Unicode spaces $where.',
+        'convertIndentationToSpaces' ||
+        'convertIndentationToTabs' => 'nothing to convert $where.',
+        'uppercase' ||
+        'lowercase' ||
+        'titleCase' ||
+        'sentenceCase' ||
+        'camelCase' ||
+        'pascalCase' ||
+        'snakeCase' ||
+        'kebabCase' ||
+        'constantCase' => 'nothing to change $where.',
+        'straightenQuotes' => 'nothing to straighten $where.',
+        'zapGremlins' => 'nothing to zap $where.',
+        'removeAnsiEscapes' => 'no escape sequences $where.',
+        'unwrapParagraphs' => 'nothing to unwrap $where.',
+        'joinLinesWith' => 'nothing to join $where.',
+        'urlDecode' || 'base64Decode' => 'nothing to decode $where.',
+        'htmlEntityDecode' => 'no entities $where.',
+        'unescapeBackslashSequences' => 'no escapes $where.',
+        'keepLinesMatching' => 'nothing to change, every line matched $where.',
+        'deleteLinesMatching' => 'nothing matched $where.',
+        _ => 'nothing to change $where.',
+      };
 
   String _refusalText(TextToolRefusal reason) => switch (reason) {
     TextToolRefusal.nothingSelected => 'nothing selected',
@@ -474,6 +534,9 @@ class EditorStrings {
     TextToolRefusal.resultNotText => 'the result is binary, not text',
     TextToolRefusal.tooLarge => 'the result is too large to save',
     TextToolRefusal.requiresTabs => 'this format requires tab indentation',
+    TextToolRefusal.noPattern => 'no pattern to match',
+    TextToolRefusal.invalidPattern => 'the pattern does not compile',
+    TextToolRefusal.patternFailed => 'the pattern search failed',
   };
 
   // ── Tool bar ──
@@ -491,6 +554,11 @@ class EditorStrings {
   /// The scope line with no selection: only the document exists.
   String textToolNothingSelected(int count) =>
       'Nothing selected: whole document, ${_lines(count)}';
+
+  /// The scope line for caret-scoped tools when nothing is selected.
+  String get textToolParagraphAtCaret => 'the paragraph at the caret';
+  String get textToolWordAtCaret => 'the word at the caret';
+  String get textToolAtCaret => 'the caret';
 
   /// The count line under the bar, such as "9 of 12 lines will move".
   /// Past the preview limit the count is deferred to Apply.
@@ -517,16 +585,41 @@ class EditorStrings {
     'collapseBlankLines' => 'will collapse ${_plural(changed, 'blank line')}',
     'trimLeadingWhitespace' => 'will trim ${_plural(changed, 'line')}',
     'normalizeSpaces' => 'will normalize ${_plural(changed, 'space')}',
+    'uppercase' => 'will uppercase ${_plural(changed, 'character')}',
+    'lowercase' => 'will lowercase ${_plural(changed, 'character')}',
     'removeAnsiEscapes' => 'will remove ${_plural(changed, 'escape sequence')}',
-    'unwrapParagraphs' => 'will join ${_plural(changed, 'line')}',
+    'unwrapParagraphs' =>
+      'will join lines at ${_plural(changed, 'line break')}',
     'zapGremlins' => 'will zap ${_plural(changed, 'gremlin')}',
     'prefixSuffixLines' => 'will change $changed of ${_lines(scope)}',
     'numberLines' => 'will renumber ${_lines(scope)}',
     'joinLinesWith' => 'will join ${_lines(changed)}',
-    _ => 'will change $scope units',
+    _ => 'will change $changed of ${_lines(scope)}',
   };
 
   String _lines(int count) => _plural(count, 'line');
   String _plural(int count, String noun) =>
       '$count $noun${count == 1 ? '' : 's'}';
+
+  // ── Find-bar pattern tools ──
+
+  /// The find bar's control that toggles the line-action row.
+  String get lineActions => 'Line actions';
+
+  /// The line row's buttons: keep or delete the lines that match.
+  String get keepMatchingLines => 'Keep matching';
+  String get deleteMatchingLines => 'Delete matching';
+
+  /// The line row's live count, as in "3 matching lines".
+  String lineMatchCount(int count) => _plural(count, 'matching line');
+
+  /// The extraction row's Apply button, whole-lines toggle and template
+  /// field.
+  String get extractAction => 'Extract';
+  String get extractWholeLinesTooltip => 'Extract whole matching lines';
+  String get extractTemplateHint => 'Template (optional)';
+
+  /// The extraction row's live count, as in "12 matches" or "3 lines".
+  String extractCount(int count, {required bool wholeLines}) =>
+      _plural(count, wholeLines ? 'line' : 'match');
 }

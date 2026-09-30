@@ -37,6 +37,8 @@ void main() {
   test('every declared option has a bar label', () {
     const strings = EditorStrings();
     for (final tool in textToolCatalog) {
+      // Find-bar tools render their options as the bar's own controls.
+      if (tool.usesFindBar) continue;
       for (final option in tool.options) {
         expect(
           strings.textToolOptionName(tool.id, option.id),

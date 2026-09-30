@@ -2,21 +2,39 @@ import 'package:flutter/foundation.dart';
 import 'package:planchette_core/planchette_core.dart';
 
 /// One recorded run: the tool and the options it ran with, resolved —
-/// defaults included — so re-running it reproduces the run exactly.
+/// defaults included — plus the scope it ran on, so re-running it
+/// reproduces the run exactly.
 final class TextToolRunRecord {
-  const TextToolRunRecord(this.toolId, this.options);
+  const TextToolRunRecord(
+    this.toolId,
+    this.options, {
+    this.wholeDocument = false,
+  });
 
   final String toolId;
   final Map<String, Object?> options;
+
+  /// Whether the run covered the whole document rather than the
+  /// selection — only meaningful for document-scope tools.
+  final bool wholeDocument;
 
   @override
   bool operator ==(Object other) =>
       other is TextToolRunRecord &&
       other.toolId == toolId &&
+      other.wholeDocument == wholeDocument &&
       _optionsEqual(other.options, options);
 
+  // hashAllUnordered sees each element's own hash — MapEntry hashes by
+  // identity, so hash key/value pairs instead of the entries.
   @override
-  int get hashCode => Object.hash(toolId, Object.hashAll(options.entries));
+  int get hashCode => Object.hash(
+    toolId,
+    wholeDocument,
+    Object.hashAllUnordered(
+      options.entries.map((e) => Object.hash(e.key, e.value)),
+    ),
+  );
 
   static bool _optionsEqual(Map<String, Object?> a, Map<String, Object?> b) {
     if (a.length != b.length) return false;
@@ -44,15 +62,23 @@ final class TextToolHistory extends ChangeNotifier {
     }
   }
 
-  /// The record with its declared defaults filled in. Callers record the
-  /// resolved set; a hand-built or stale record still reads complete.
+  /// The record reduced to the declared set: unknown keys are dropped,
+  /// mistyped values fall back to their default, and missing declared
+  /// options are filled in, so a record always holds the resolved set.
   static TextToolRunRecord _normalized(TextToolRunRecord record) {
-    final options = <String, Object?>{...record.options};
+    final options = <String, Object?>{};
     for (final option
         in textToolById(record.toolId)?.options ?? const <TextToolOption>[]) {
-      options.putIfAbsent(option.id, () => option.defaultValue);
+      final value = record.options[option.id];
+      options[option.id] = _isEncodable(record.toolId, option.id, value)
+          ? value
+          : option.defaultValue;
     }
-    return TextToolRunRecord(record.toolId, options);
+    return TextToolRunRecord(
+      record.toolId,
+      options,
+      wholeDocument: record.wholeDocument,
+    );
   }
 
   /// How many runs Recent keeps.
@@ -82,8 +108,16 @@ final class TextToolHistory extends ChangeNotifier {
   /// Records a run of [toolId] with [options]. Missing declared options are
   /// filled with their defaults so a record always holds the resolved set,
   /// and an identical repeat moves to the front rather than duplicating.
-  void record(String toolId, Map<String, Object?> options) {
-    final record = _normalized(TextToolRunRecord(toolId, options));
+  /// [wholeDocument] remembers the scope the run covered so Repeat
+  /// replays it the same way.
+  void record(
+    String toolId,
+    Map<String, Object?> options, {
+    bool wholeDocument = false,
+  }) {
+    final record = _normalized(
+      TextToolRunRecord(toolId, options, wholeDocument: wholeDocument),
+    );
     _recent.remove(record);
     _recent.insert(0, record);
     if (_recent.length > keep) _recent.removeRange(keep, _recent.length);
@@ -116,6 +150,7 @@ final class TextToolHistory extends ChangeNotifier {
     for (final record in persistable)
       {
         'id': record.toolId,
+        if (record.wholeDocument) 'wholeDocument': true,
         'options': {
           for (final entry in record.options.entries)
             if (_isEncodable(record.toolId, entry.key, entry.value))
@@ -157,7 +192,13 @@ final class TextToolHistory extends ChangeNotifier {
             }
           }
         }
-        records.add(TextToolRunRecord(toolId, options));
+        records.add(
+          TextToolRunRecord(
+            toolId,
+            options,
+            wholeDocument: entry['wholeDocument'] == true,
+          ),
+        );
       }
     }
     return TextToolHistory(restored: records);

@@ -302,4 +302,212 @@ void main() {
       );
     });
   });
+
+  group('FindPattern line operations', () {
+    test('counts the lines that hold a match', () {
+      expect(FindPattern(r'^#').countMatchingLines('# one\ntwo\n# three'), 2);
+      expect(FindPattern('nope').countMatchingLines('a\nb'), 0);
+    });
+
+    test('matches literal text when the escape constructor builds it', () {
+      expect(FindPattern.literal('a.b').countMatchingLines('a.b\naxb'), 1);
+    });
+
+    test('a pattern with a line break never matches a line', () {
+      expect(FindPattern(r'a\nb').countMatchingLines('a\nb'), 0);
+    });
+
+    test('keeps only matching lines, separators intact', () {
+      final filtered = FindPattern(
+        'o',
+      ).filterMatchingLines('one\ntwo\nthree', keep: true);
+      expect(filtered.text, 'one\ntwo');
+      expect(filtered.matched, 2);
+      expect(filtered.total, 3);
+    });
+
+    test('delete keeps the rest and sheds the dead last break', () {
+      final filtered = FindPattern(
+        'o',
+      ).filterMatchingLines('one\ntwo\nthree', keep: false);
+      expect(filtered.text, 'three');
+      expect(filtered.matched, 2);
+    });
+
+    test('keeps the buffer\'s own trailing break', () {
+      expect(
+        FindPattern('o').filterMatchingLines('one\ntwo\n', keep: true).text,
+        'one\ntwo\n',
+      );
+      expect(
+        FindPattern(
+          'z',
+        ).filterMatchingLines('one\ntwo\nzone\n', keep: true).text,
+        'zone\n',
+      );
+    });
+
+    test('preserves mixed line endings', () {
+      expect(
+        FindPattern(
+          'o',
+        ).filterMatchingLines('one\r\ntwo\nthree', keep: true).text,
+        'one\r\ntwo',
+      );
+    });
+
+    test('deleting everything leaves an empty buffer', () {
+      final filtered = FindPattern(
+        'o',
+      ).filterMatchingLines('one\ntwo', keep: false);
+      expect(filtered.text, '');
+      expect(filtered.matched, 2);
+      expect(filtered.total, 2);
+    });
+
+    test('extracts each match', () {
+      expect(FindPattern(r'\d+').extractMatches('a1 b22\nc333'), [
+        '1',
+        '22',
+        '333',
+      ]);
+    });
+
+    test('extracts whole matching lines instead', () {
+      expect(FindPattern(r'\d+').extractMatches('a1 b\nc2', wholeLines: true), [
+        'a1 b',
+        'c2',
+      ]);
+    });
+
+    test('expands each match through a template', () {
+      expect(
+        FindPattern(
+          r'(\w+)@(\w+)',
+        ).extractMatches('a@b x c@d', template: r'$2/$1'),
+        ['b/a', 'd/c'],
+      );
+    });
+
+    test('honours whole words on lines and matches', () {
+      expect(FindPattern('cat').countMatchingLines('cat\nconcat\ncat!'), 3);
+      expect(
+        FindPattern(
+          'cat',
+        ).countMatchingLines('cat\nconcat\ncat!', wholeWord: true),
+        2,
+      );
+      expect(
+        FindPattern('cat').extractMatches('cat concat cat!', wholeWord: true),
+        ['cat', 'cat'],
+      );
+    });
+  });
+
+  group('PatternWorker line and extract requests', () {
+    test('counts matching lines off the calling isolate', () async {
+      final worker = PatternWorker();
+      try {
+        final outcome = await worker.countMatchingLines(
+          '# one\ntwo\n# three',
+          '^#',
+        );
+        expect(
+          outcome,
+          isA<PatternCompleted<int>>().having((o) => o.value, 'value', 2),
+        );
+      } finally {
+        worker.dispose();
+      }
+    });
+
+    test('filters lines, keeping or deleting matches', () async {
+      final worker = PatternWorker();
+      try {
+        final kept = await worker.filterLines(
+          'one\ntwo\nthree',
+          'o',
+          keep: true,
+        );
+        expect(kept, isA<PatternCompleted<PatternLineFilter>>());
+        expect(
+          (kept as PatternCompleted<PatternLineFilter>).value.text,
+          'one\ntwo',
+        );
+        final dropped = await worker.filterLines(
+          'one\ntwo\nthree',
+          'o',
+          keep: false,
+        );
+        expect(
+          (dropped as PatternCompleted<PatternLineFilter>).value.text,
+          'three',
+        );
+      } finally {
+        worker.dispose();
+      }
+    });
+
+    test('extracts matches and whole lines', () async {
+      final worker = PatternWorker();
+      try {
+        final matches = await worker.extractMatches('a1 b\nc2', r'\d+');
+        expect((matches as PatternCompleted<List<String>>).value, ['1', '2']);
+        final lines = await worker.extractMatches(
+          'a1 b\nc2',
+          r'\d+',
+          wholeLines: true,
+        );
+        expect((lines as PatternCompleted<List<String>>).value, ['a1 b', 'c2']);
+      } finally {
+        worker.dispose();
+      }
+    });
+
+    test('literal requests match the source as text', () async {
+      final worker = PatternWorker();
+      try {
+        final outcome = await worker.countMatchingLines(
+          'a.b\naxb',
+          'a.b',
+          literal: true,
+        );
+        expect((outcome as PatternCompleted<int>).value, 1);
+      } finally {
+        worker.dispose();
+      }
+    });
+
+    test('a bad pattern reports PatternUnusable for line requests', () async {
+      final worker = PatternWorker();
+      try {
+        final outcome = await worker.filterLines('a\nb', '(', keep: true);
+        expect(
+          outcome,
+          isA<PatternFailed<PatternLineFilter>>().having(
+            (o) => o.failure,
+            'failure',
+            isA<PatternUnusable>(),
+          ),
+        );
+      } finally {
+        worker.dispose();
+      }
+    });
+
+    test('a newer count cancels the older request', () async {
+      final worker = PatternWorker();
+      try {
+        final first = worker.countMatchingLines(
+          _catastrophicText,
+          _catastrophic,
+        );
+        final second = await worker.countMatchingLines('a\nb', 'a');
+        expect(second, isA<PatternCompleted<int>>());
+        expect(await first, isA<PatternCancelled<int>>());
+      } finally {
+        worker.dispose();
+      }
+    });
+  });
 }

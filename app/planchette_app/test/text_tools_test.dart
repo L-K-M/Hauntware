@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
+import 'package:planchette_core/planchette_core.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorController;
 import 'package:planchette_app/services/app_settings.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
 import 'services/document_workspace_test.dart'
     show MemoryDocuments, FakeDialogs;
 import 'services/memory_settings.dart';
+
+/// Past the undo-merge window a tool run waits out — the default
+/// quiet period plus margin, so the tests follow the constant.
+final _undoWait =
+    EditorController.defaultUndoQuiet + const Duration(milliseconds: 100);
 
 void main() {
   late MemoryDocuments store;
@@ -59,7 +66,7 @@ void main() {
 
     item(tester, 'Text', 'Remove Blank Lines').onSelected!();
     // The run waits out the undo-history merge window before it applies.
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await tester.pumpAndSettle();
 
     expect(tab.editor.toolReport?.tool.id, 'removeBlankLines');
@@ -81,7 +88,7 @@ void main() {
 
     await tester.tap(find.text('Apply'));
     // The run waits out the undo-history merge window before it applies.
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await tester.pumpAndSettle();
     expect(tab.editor.text.text, 'a\nb');
     expect(tester.takeException(), isNull);
@@ -126,7 +133,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(tab.editor.toolBarOpen, isTrue);
       await tester.tap(find.text('Apply'));
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(_undoWait);
       await tester.pumpAndSettle();
 
       expect(tab.editor.text.text, 'a\nb');
@@ -174,7 +181,8 @@ void main() {
         if (item case PlatformMenuItemGroup(:final members))
           for (final member in members) member.label,
     ];
-    // An option tool's label ends in an ellipsis: it opens the tool bar.
+    // An option tool's label ends in an ellipsis: it opens the tool bar —
+    // or the find bar, for the pattern tools.
     expect(leaves, [
       'Sort Lines…',
       'Reverse Lines',
@@ -182,6 +190,8 @@ void main() {
       'Remove Duplicate Lines…',
       'Remove Blank Lines',
       'Collapse Blank Lines',
+      'Keep Lines Matching…',
+      'Delete Lines Matching…',
       'Prefix/Suffix Lines…',
       'Number Lines…',
     ]);
@@ -224,17 +234,25 @@ void main() {
   testWidgets('Repeat re-runs the latest tool with its options', (
     tester,
   ) async {
-    final tab = workspace.newDocument()!..editor.text.text = 'a\nb';
+    final tab = workspace.newDocument()!..editor.text.text = 'a\nz\nb';
     await mount(tester);
-    tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
+    // A real selection — 'a\nz' — keeps wholeDocument observable:
+    // selection-scoped would sort to 'z\na\nb', the recorded whole-
+    // document scope sorts all three lines.
+    tab.editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 3,
+    );
 
-    workspace.toolHistory.record('sortLines', {'order': 'descending'});
+    workspace.toolHistory.record('sortLines', {
+      'order': 'descending',
+    }, wholeDocument: true);
     await tester.pump();
     item(tester, 'Text', 'Repeat Sort Lines (Z to A)').onSelected!();
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await tester.pumpAndSettle();
 
-    expect(tab.editor.text.text, 'b\na');
+    expect(tab.editor.text.text, 'z\nb\na');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
@@ -242,7 +260,9 @@ void main() {
   testWidgets('the Recent submenu lists stored runs and re-runs one', (
     tester,
   ) async {
-    final tab = workspace.newDocument()!..editor.text.text = 'b\na';
+    // Descending order moves 'a\nb' to 'b\na' — a visible change, so the
+    // re-run is observable rather than a no-op on already-sorted text.
+    final tab = workspace.newDocument()!..editor.text.text = 'a\nb';
     await mount(tester);
     tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
 
@@ -254,7 +274,7 @@ void main() {
     expect(item(tester, 'Text', 'Sort Lines (Z to A)').onSelected, isNotNull);
 
     item(tester, 'Text', 'Sort Lines (Z to A)').onSelected!();
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await tester.pumpAndSettle();
     expect(tab.editor.text.text, 'b\na');
     expect(tester.takeException(), isNull);
@@ -270,11 +290,76 @@ void main() {
     tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
 
     final run = tab.editor.runTextTool('sortLines');
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(_undoWait);
     await run;
     await tester.pumpAndSettle();
 
     expect(settings.value.recentTextTools, [containsPair('id', 'sortLines')]);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('Keep Lines Matching opens the find bar\'s line row', (
+    tester,
+  ) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'a\nb';
+    await mount(tester);
+
+    item(tester, 'Text', 'Keep Lines Matching…').onSelected!();
+    await tester.pump();
+
+    expect(tab.editor.searchOpen, isTrue);
+    expect(tab.editor.lineActionsOpen, isTrue);
+    expect(tab.editor.toolBarOpen, isFalse);
+    expect(tester.takeException(), isNull);
+    // The row's count debounce and its worker settle on real time.
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('Extract Matches opens the find bar\'s extraction row', (
+    tester,
+  ) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'a1';
+    await mount(tester);
+
+    item(tester, 'Find', 'Extract Matches…').onSelected!();
+    await tester.pump();
+
+    expect(tab.editor.searchOpen, isTrue);
+    expect(tab.editor.extractOpen, isTrue);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('Extract to a new document opens a tab with the matches', (
+    tester,
+  ) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'a1 b\nc2';
+    await mount(tester);
+    tab.editor
+      ..openFindTool('extractMatches')
+      ..toggleRegularExpression();
+    tab.editor
+      ..search.text = r'\d'
+      ..setExtractTarget('newDocument');
+    // Settle the undo merge window the apply waits out.
+    await tester.pump(_undoWait);
+
+    final outcome = await tester.runAsync(tab.editor.applyExtract);
+    await tester.pump();
+
+    expect(outcome, isA<TextToolUnchanged>());
+    expect(tab.editor.text.text, 'a1 b\nc2');
+    expect(workspace.documents, hasLength(2));
+    expect(workspace.active!.editor.text.text, '1\n2');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));

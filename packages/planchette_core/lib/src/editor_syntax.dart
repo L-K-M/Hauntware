@@ -13,6 +13,8 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'line_operations.dart';
+
 part 'diff_syntax.dart';
 part 'dotenv_syntax.dart';
 part 'pattern_search.dart';
@@ -1625,25 +1627,20 @@ List<TextMatch> findSearchMatches(
 /// text, whose offsets a length-preserving fold keeps.
 bool _isWholeWordMatch(String text, int start, int end) {
   if (start > 0 &&
-      _isWordRune(_runeAt(text, start)) &&
-      _isWordRune(_runeBefore(text, start))) {
+      isWordRune(_runeAt(text, start)) &&
+      isWordRune(_runeBefore(text, start))) {
     return false;
   }
   return end >= text.length ||
-      !_isWordRune(_runeBefore(text, end)) ||
-      !_isWordRune(_runeAt(text, end));
+      !isWordRune(_runeBefore(text, end)) ||
+      !isWordRune(_runeAt(text, end));
 }
-
-/// Whether [rune] is a word character, as whole-word search sees it: a
-/// letter, mark, number or connector punctuation such as `_`. Text tools
-/// use the same definition for the word at the caret.
-bool isWordRune(int rune) => _isWordRune(rune);
 
 /// A word character is a letter, mark, number or connector punctuation such
 /// as `_`, read by code point: accented and CJK letters are word content,
 /// while curly quotes, dashes, no-break spaces, full-width punctuation and
 /// emoji are boundaries.
-bool _isWordRune(int rune) {
+bool isWordRune(int rune) {
   if (rune < 0x80) {
     return (rune >= 0x30 && rune <= 0x39) ||
         (rune >= 0x41 && rune <= 0x5a) ||

@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:uuid/data.dart' show V4Options;
 import 'package:uuid/uuid.dart';
 
-import 'editor_syntax.dart' show isWordRune;
+import 'editor_syntax.dart' show FindPattern, isWordRune;
 import 'indentation.dart';
 import 'line_operations.dart';
 
@@ -63,6 +64,15 @@ enum TextToolRefusal {
 
   /// The file format mandates tab indentation (Makefile, Go).
   requiresTabs,
+
+  /// A pattern tool was run with an empty pattern.
+  noPattern,
+
+  /// A pattern tool was run with a pattern that does not compile.
+  invalidPattern,
+
+  /// A pattern tool's search failed or ran out of time in the worker.
+  patternFailed,
 }
 
 /// What a run did. Only [TextToolChanged] touches the buffer; a tool that
@@ -102,7 +112,7 @@ final class TextToolChanged extends TextToolOutcome {
 
 /// The run found nothing to change. [scope] says how much it looked at.
 final class TextToolUnchanged extends TextToolOutcome {
-  const TextToolUnchanged({this.scope = 0, this.indentation});
+  const TextToolUnchanged({this.scope = 0, this.indentation, this.detail});
 
   final int scope;
 
@@ -110,6 +120,10 @@ final class TextToolUnchanged extends TextToolOutcome {
   /// conversion commands set the document's setting whether or not any
   /// line needed it.
   final Indentation? indentation;
+
+  /// A discriminator the notice can phrase on, such as the Extract
+  /// Matches destination when the extraction left the buffer alone.
+  final String? detail;
 }
 
 /// The run did not apply; [reason] says why, in a way the notice can show.
@@ -149,7 +163,9 @@ final class ToggleOption extends TextToolOption {
   const ToggleOption(String id, {bool value = false}) : super(id, value);
 }
 
-/// A single-choice option, rendered as a picker or a dropdown.
+/// A single-choice option, rendered as a picker or a dropdown. The
+/// catalog's const constructor cannot validate the default against
+/// [choices]; the catalog test asserts it instead.
 final class ChoiceOption extends TextToolOption {
   const ChoiceOption(String id, this.choices, {required String value})
     : super(id, value);
@@ -241,8 +257,19 @@ final class TextToolRun {
 
   final TextToolContext context;
 
-  /// Option [id], read as the declared type.
-  T option<T>(String id) => options[id] as T;
+  /// Option [id], read as the declared type. A missing or mistyped entry
+  /// means the caller skipped merging the declared defaults — the error
+  /// names which option.
+  T option<T>(String id) {
+    final value = options[id];
+    if (value is! T) {
+      throw ArgumentError(
+        'Option "$id" is missing or not of type $T '
+        '(got ${value?.runtimeType ?? 'null'}).',
+      );
+    }
+    return value;
+  }
 }
 
 /// A catalog entry: identity, grouping, scope and the transform itself.
@@ -254,6 +281,9 @@ final class TextTool {
     required this.group,
     required this.scope,
     this.options = const [],
+    this.ignoresSelection = false,
+    this.usesFindBar = false,
+    this.showsInMenu = true,
     required this.run,
   });
 
@@ -270,10 +300,31 @@ final class TextTool {
   /// Declared options, in shown order.
   final List<TextToolOption> options;
 
+  /// Whether a live selection narrows the run. Pattern tools ignore it —
+  /// the selection is the active match, not a scope.
+  final bool ignoresSelection;
+
+  /// Whether the find bar collects this tool's options — its pattern
+  /// comes from the find field — rather than the options tool bar.
+  final bool usesFindBar;
+
+  /// Whether the generated Text menu lists it. A pattern tool that
+  /// another menu already exposes stays out of its submenu.
+  final bool showsInMenu;
+
   /// The transform. Returns an outcome rather than editing in place so the
   /// caller can preflight size, record the result and map the selection.
   final TextToolOutcome Function(TextToolRun run) run;
 }
+
+/// The options every pattern tool declares: the query from the find
+/// field and the bar's three toggles, so a recorded run replays exactly.
+const _linePatternOptions = <TextToolOption>[
+  TextOption('pattern'),
+  ToggleOption('regularExpression'),
+  ToggleOption('caseSensitive'),
+  ToggleOption('wholeWord'),
+];
 
 /// The catalog, in menu order. Menus, the palette and the options bar are
 /// generated from this list; nothing else decides what exists.
@@ -329,6 +380,45 @@ const textToolCatalog = <TextTool>[
     group: TextToolGroup.lines,
     scope: TextToolScope.document,
     run: _collapseBlankLines,
+  ),
+  TextTool(
+    id: 'keepLinesMatching',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    ignoresSelection: true,
+    usesFindBar: true,
+    options: _linePatternOptions,
+    run: _keepLinesMatching,
+  ),
+  TextTool(
+    id: 'deleteLinesMatching',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    ignoresSelection: true,
+    usesFindBar: true,
+    options: _linePatternOptions,
+    run: _deleteLinesMatching,
+  ),
+  TextTool(
+    id: 'extractMatches',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    ignoresSelection: true,
+    usesFindBar: true,
+    showsInMenu: false,
+    options: [
+      ..._linePatternOptions,
+      ToggleOption('wholeLines'),
+      TextOption('template'),
+      // The destination is a host action the find bar's row owns; the
+      // tool's own run() only ever applies 'inPlace'.
+      ChoiceOption('target', [
+        'inPlace',
+        'clipboard',
+        'newDocument',
+      ], value: 'inPlace'),
+    ],
+    run: _extractMatches,
   ),
   TextTool(
     id: 'prefixSuffixLines',
@@ -603,7 +693,7 @@ resolveTextToolRange(
 }) {
   RangeError.checkValueInInterval(base, 0, text.length, 'base');
   RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
-  if (base != extent && !wholeDocument) {
+  if (base != extent && !wholeDocument && !tool.ignoresSelection) {
     return (
       base: base,
       extent: extent,
@@ -661,11 +751,13 @@ resolveTextToolRange(
 
 /// The paragraph at [offset]: the run of non-blank lines around it, as a
 /// line-aligned range. A paragraph is bounded by blank lines (empty or
-/// spaces and tabs only) or the buffer's ends.
+/// spaces and tabs only) or the buffer's ends. A caret on a blank line is
+/// between paragraphs, so the range is that blank line alone.
 ({int start, int end}) paragraphRange(String text, int offset) {
   RangeError.checkValueInInterval(offset, 0, text.length, 'offset');
   var start = lineStart(text, offset);
   var end = lineContentEnd(text, offset);
+  if (_isBlankRange(text, start, end)) return (start: start, end: end);
   while (start > 0) {
     final previousEnd = start - lineSeparatorBefore(text, start).length;
     final previousStart = lineStart(text, previousEnd);
@@ -789,6 +881,13 @@ TextToolOutcome _blockEdit(
   Indentation? indentation,
   String? detail,
 }) {
+  // An identical replacement is a no-op (a palindromic Reverse Lines, a
+  // second Number Lines Add): report it rather than recording an edit
+  // that touches nothing.
+  if (replacement.length == end - start &&
+      run.text.substring(start, end) == replacement) {
+    return TextToolUnchanged(scope: scope, indentation: indentation);
+  }
   final newText = run.text.replaceRange(start, end, replacement);
   if (run.ranOn == TextToolRanOn.selection) {
     final blockEnd = start + replacement.length;
@@ -860,8 +959,13 @@ final class _Lines {
 }
 
 /// Splits the line-aligned range `[start, end)` into per-line starts and
-/// contents plus the breaks between them.
+/// contents plus the breaks between them. [end] must be the content end
+/// of the range's last line — a mid-line end would duplicate its tail.
 _Lines _linesOf(String text, int start, int end) {
+  assert(
+    end == text.length || lineSeparatorAt(text, end).isNotEmpty,
+    'end must be a line content end',
+  );
   final starts = <int>[], contents = <String>[], breaks = <String>[];
   var at = start;
   while (true) {
@@ -1091,7 +1195,9 @@ TextToolOutcome _sortLines(TextToolRun run) {
   order.sort((a, b) {
     var c = 0;
     if (byLength) {
-      c = lines[a].length.compareTo(lines[b].length);
+      // Measure the key, not the raw line, so ignoreLeadingWhitespace
+      // applies to the length comparison too.
+      c = keys[a].length.compareTo(keys[b].length);
     }
     if (c == 0) {
       c = numeric
@@ -1139,16 +1245,20 @@ TextToolOutcome _removeDuplicateLines(TextToolRun run) {
     return ignoreCase ? run.context.fold(line) : line;
   }
 
+  // Keys are trimmed and folded once — comparing is cheap, building the
+  // key for a line several times is not.
+  final keys = [for (var i = 0; i < n; i++) keyOf(i)];
+
   final remove = List<bool>.filled(n, false);
   var removed = 0;
   if (everyCopy) {
     final counts = <String, int>{};
     for (var i = 0; i < n; i++) {
       if (keepBlank && _isBlankRange(lines[i], 0, lines[i].length)) continue;
-      counts[keyOf(i)] = (counts[keyOf(i)] ?? 0) + 1;
+      counts[keys[i]] = (counts[keys[i]] ?? 0) + 1;
     }
     for (var i = 0; i < n; i++) {
-      if ((counts[keyOf(i)] ?? 0) > 1) {
+      if ((counts[keys[i]] ?? 0) > 1) {
         remove[i] = true;
         removed++;
       }
@@ -1156,7 +1266,7 @@ TextToolOutcome _removeDuplicateLines(TextToolRun run) {
   } else if (adjacent) {
     for (var i = 1; i < n; i++) {
       if (keepBlank && _isBlankRange(lines[i], 0, lines[i].length)) continue;
-      if (keyOf(i) == keyOf(i - 1)) {
+      if (keys[i] == keys[i - 1]) {
         remove[i] = true;
         removed++;
       }
@@ -1165,7 +1275,7 @@ TextToolOutcome _removeDuplicateLines(TextToolRun run) {
     final seen = <String>{};
     for (var i = 0; i < n; i++) {
       if (keepBlank && _isBlankRange(lines[i], 0, lines[i].length)) continue;
-      if (!seen.add(keyOf(i))) {
+      if (!seen.add(keys[i])) {
         remove[i] = true;
         removed++;
       }
@@ -1211,31 +1321,22 @@ String _trimIndent(String line) {
 // ── Case ──────────────────────────────────────────────────────────────
 
 /// A character-class rewrite of the resolved range, so a caret keeps its
-/// place — case mapping never changes a string's UTF-16 length.
+/// place. Case mapping can change UTF-16 length — `ß` uppercases to `SS`,
+/// `ﬁ` to `FI` — so a selection's end shifts with the delta.
 TextToolOutcome _caseChange(TextToolRun run, String Function(String) map) {
-  final slice = run.text.substring(
-    math.min(run.base, run.extent),
-    math.max(run.base, run.extent),
-  );
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
   final mapped = map(slice);
-  var changed = 0;
-  for (var i = 0; i < slice.length; i++) {
+  if (mapped == slice) return TextToolUnchanged(scope: slice.length);
+  var changed = (mapped.length - slice.length).abs();
+  final shared = math.min(slice.length, mapped.length);
+  for (var i = 0; i < shared; i++) {
     if (slice.codeUnitAt(i) != mapped.codeUnitAt(i)) changed++;
   }
-  if (changed == 0) return TextToolUnchanged(scope: slice.length);
-  final newText = run.text.replaceRange(
-    math.min(run.base, run.extent),
-    math.max(run.base, run.extent),
-    mapped,
-  );
-  final LineEdit edit;
-  if (run.ranOn == TextToolRanOn.selection) {
-    // The length never changes, so the selection still covers its result.
-    edit = LineEdit(newText, run.base, run.extent);
-  } else {
-    edit = LineEdit(newText, run.caret, run.caret);
-  }
-  return TextToolChanged(edit, changed: changed, scope: slice.length);
+  // _replaceSlice grows the selection to cover the result and shifts a
+  // caret past the slice with the length delta.
+  return _replaceSlice(run, mapped, changed: changed, scope: slice.length);
 }
 
 TextToolOutcome _toUppercase(TextToolRun run) =>
@@ -1288,6 +1389,9 @@ int _indentEnd(String line) {
 }
 
 TextToolOutcome _indentationToSpaces(TextToolRun run) {
+  // Only the to-spaces direction checks a format mandate: formats like
+  // Make and Go require tabs, and no format requires spaces, so a
+  // to-tabs run never has a mirror refusal.
   if (requiredIndentationFor(run.context.displayPath)?.style ==
       IndentStyle.tabs) {
     return const TextToolRefused(TextToolRefusal.requiresTabs);
@@ -1531,7 +1635,8 @@ TextToolOutcome _numberLines(TextToolRun run) {
 
   if (!add) {
     // Removal only strips a number that is followed by the declared
-    // separator, so prose that merely starts with digits survives.
+    // separator; with an empty separator any leading digits go, so prose
+    // that merely starts with digits survives only while it has one.
     final pattern = RegExp(
       separator.isEmpty ? '^\\s*\\d+' : '^\\s*\\d+${RegExp.escape(separator)}',
     );
@@ -1553,19 +1658,24 @@ TextToolOutcome _numberLines(TextToolRun run) {
   final start = run.option<int>('start');
   final step = run.option<int>('step');
   final last = start + (n - 1) * step;
-  final width = switch (run.option<String>('padding')) {
-    'spaces' || 'zeros' => last.toString().length,
-    _ => 0,
-  };
-  final pad = switch (run.option<String>('padding')) {
-    'zeros' => '0',
-    _ => ' ',
+  final padding = run.option<String>('padding');
+  // Width comes from the widest magnitude — an arithmetic sequence's
+  // endpoints bound it. Zero padding sits inside the sign ('-09'), as
+  // printf does; space padding takes a field that leaves it room.
+  final digits = math.max(start.abs(), last.abs()).toString().length;
+  final field =
+      digits + ((start < 0 || last < 0) && padding == 'spaces' ? 1 : 0);
+
+  String number(int value) => switch (padding) {
+    'zeros' =>
+      (value < 0 ? '-' : '') + value.abs().toString().padLeft(digits, '0'),
+    'spaces' => value.toString().padLeft(field, ' '),
+    _ => value.toString(),
   };
 
   final contents = <String>[
     for (var i = 0; i < n; i++)
-      '${(start + i * step).toString().padLeft(width, pad)}$separator'
-          '${block.contents[i]}',
+      '${number(start + i * step)}$separator${block.contents[i]}',
   ];
   return _blockEdit(
     run,
@@ -1600,6 +1710,78 @@ TextToolOutcome _joinLinesWith(TextToolRun run) {
     lines.join(separator),
     changed: lines.length,
     scope: block.contents.length,
+  );
+}
+
+// ── Pattern line tools ────────────────────────────────────────────────
+
+/// The compiled pattern a pattern tool's options describe: the query as a
+/// regular expression or — with the find bar's toggle off — literal text.
+FindPattern _patternOf(TextToolRun run) => FindPattern(
+  run.option<bool>('regularExpression')
+      ? run.option<String>('pattern')
+      : RegExp.escape(run.option<String>('pattern')),
+  caseSensitive: run.option<bool>('caseSensitive'),
+);
+
+/// The outcome a missing or broken pattern gets: refusing is quieter than
+/// deleting everything an empty pattern would match.
+TextToolOutcome? _patternRefusal(TextToolRun run) {
+  final source = run.option<String>('pattern');
+  if (source.isEmpty) {
+    return const TextToolRefused(TextToolRefusal.noPattern);
+  }
+  try {
+    _patternOf(run);
+    return null;
+  } on FormatException {
+    return const TextToolRefused(TextToolRefusal.invalidPattern);
+  }
+}
+
+TextToolOutcome _linesMatching(TextToolRun run, {required bool keep}) {
+  if (_patternRefusal(run) case final refused?) return refused;
+  final filtered = _patternOf(run).filterMatchingLines(
+    run.text,
+    keep: keep,
+    wholeWord: run.option<bool>('wholeWord'),
+  );
+  final removed = keep ? filtered.total - filtered.matched : filtered.matched;
+  if (removed == 0) return TextToolUnchanged(scope: filtered.total);
+  return _replaceSlice(
+    run,
+    filtered.text,
+    changed: removed,
+    scope: filtered.total,
+  );
+}
+
+TextToolOutcome _keepLinesMatching(TextToolRun run) =>
+    _linesMatching(run, keep: true);
+
+TextToolOutcome _deleteLinesMatching(TextToolRun run) =>
+    _linesMatching(run, keep: false);
+
+/// Replaces the range with the matches it holds, one per line — the
+/// in-place Extract destination. Clipboard and new document are host
+/// actions on the same extraction, not buffer edits.
+TextToolOutcome _extractMatches(TextToolRun run) {
+  if (_patternRefusal(run) case final refused?) return refused;
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final template = run.option<String>('template');
+  final lines = _patternOf(run).extractMatches(
+    run.text.substring(start, end),
+    wholeWord: run.option<bool>('wholeWord'),
+    wholeLines: run.option<bool>('wholeLines'),
+    template: template.isEmpty ? null : template,
+  );
+  if (lines.isEmpty) return TextToolUnchanged(scope: end - start);
+  return _replaceSlice(
+    run,
+    lines.join('\n'),
+    changed: lines.length,
+    scope: end - start,
   );
 }
 
@@ -2043,6 +2225,7 @@ TextToolOutcome _urlDecode(TextToolRun run) {
 
 TextToolOutcome _base64Encode(TextToolRun run) {
   final slice = _sliceOf(run);
+  if (slice.isEmpty) return const TextToolUnchanged(scope: 0);
   return _replaceSlice(
     run,
     base64.encode(utf8.encode(slice)),
@@ -2255,14 +2438,27 @@ TextToolOutcome _unescapeBackslashSequences(TextToolRun run) {
           for (var k = 0; k < hexCount; k++)
             _isHexDigit(slice.codeUnitAt(i + 2 + k)),
         ].every((ok) => ok)) {
-      final rune = int.parse(
-        slice.substring(i + 2, i + 2 + hexCount),
-        radix: 16,
-      );
+      var rune = int.parse(slice.substring(i + 2, i + 2 + hexCount), radix: 16);
+      var used = hexCount;
+      // A `\uD800`-`\uDBFF` lead followed by a `\uDC00`-`\uDFFF` trail is
+      // one astral character — JSON encoders emit the pair.
+      if (rune >= 0xd800 &&
+          rune <= 0xdbff &&
+          i + 12 <= slice.length &&
+          slice[i + 6] == '\\' &&
+          slice[i + 7] == 'u' &&
+          [for (var k = 0; k < 4; k++) _isHexDigit(slice.codeUnitAt(i + 8 + k))]
+              .every((ok) => ok)) {
+        final trail = int.parse(slice.substring(i + 8, i + 12), radix: 16);
+        if (trail >= 0xdc00 && trail <= 0xdfff) {
+          rune = _combine(rune, trail);
+          used += 6;
+        }
+      }
       if (rune != 0 && !(rune >= 0xd800 && rune <= 0xdfff)) {
         out.write(String.fromCharCode(rune));
         changed++;
-        i += 2 + hexCount;
+        i += 2 + used;
         continue;
       }
     }
@@ -2319,5 +2515,10 @@ TextToolOutcome _insertUtcTimestamp(TextToolRun run) {
   );
 }
 
-TextToolOutcome _insertUuid(TextToolRun run) =>
-    _insertText(run, const Uuid().v4());
+TextToolOutcome _insertUuid(TextToolRun run) {
+  // The bytes come from the context's random source — a seeded Random
+  // keeps runs reproducible — rather than the package's internal RNG.
+  final random = run.context.random;
+  final bytes = [for (var i = 0; i < 16; i++) random.nextInt(256)];
+  return _insertText(run, const Uuid().v4(config: V4Options(bytes, null)));
+}

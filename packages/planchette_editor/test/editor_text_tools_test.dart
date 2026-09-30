@@ -4,6 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
+/// Past the undo-merge window a tool run waits out — the default quiet
+/// period plus margin, so the tests follow the constant, not a copy of it.
+final _undoWait =
+    EditorController.defaultUndoQuiet + const Duration(milliseconds: 100);
+
 Widget app(EditorController c) => MaterialApp(
   home: Scaffold(body: PlanchetteEditor(controller: c)),
 );
@@ -22,7 +27,7 @@ Future<EditorController> pumpEditor(
   await tester.pumpWidget(app(editor));
   await tester.pump();
   editor.text.selection = TextSelection.collapsed(offset: caret);
-  await tester.pump(const Duration(milliseconds: 600));
+  await tester.pump(_undoWait);
   return editor;
 }
 
@@ -33,7 +38,7 @@ Future<TextToolOutcome?> runTool(
   Map<String, Object?> options = const {},
 }) async {
   final run = c.runTextTool(id, options: options);
-  await tester.pump(const Duration(milliseconds: 600));
+  await tester.pump(_undoWait);
   return run;
 }
 
@@ -129,6 +134,54 @@ void main() {
       expect(outcome, isA<TextToolUnchanged>());
     });
 
+    test('a refused run does not reach the history', () async {
+      // No selection and a tool that needs one — the refusal must not
+      // earn a Repeat/Recent slot.
+      final c = controller('a  b', caret: 2);
+
+      await c.runTextTool('uppercase');
+
+      expect(c.toolReport?.outcome, isA<TextToolRefused>());
+      expect(c.toolHistory.recent, isEmpty);
+    });
+
+    test('an unchanged run still records — it is a real run', () async {
+      final c = controller('a\nb');
+
+      await c.runTextTool('sortLines');
+
+      expect(c.toolHistory.last?.toolId, 'sortLines');
+    });
+
+    test('the record remembers a whole-document run', () async {
+      final c = controller('a\nb');
+      c.text.selection = const TextSelection(baseOffset: 0, extentOffset: 1);
+
+      await c.runTextTool('sortLines', wholeDocument: true);
+
+      expect(c.toolHistory.last?.wholeDocument, isTrue);
+      expect(c.toolHistory.last?.toolId, 'sortLines');
+    });
+
+    test('an option outside its option\'s contract drops to safe', () async {
+      final c = controller('b\na');
+      // A caller's override can name a choice the current catalog does
+      // not offer — the run falls back to the default rather than
+      // throwing.
+      final outcome = await c.runTextTool(
+        'sortLines',
+        options: {'order': 'spiral'},
+      );
+      expect(c.text.text, 'a\nb');
+      expect(outcome, isA<TextToolChanged>());
+
+      // An integer below the declared minimum clamps rather than running
+      // a degenerate run.
+      final numbered = controller('x\ny');
+      await numbered.runTextTool('numberLines', options: {'step': 0});
+      expect(numbered.text.text, '1. x\n2. y');
+    });
+
     test('a run that would grow past maximumBytes is refused', () async {
       final c = controller('a\x07b', maximumBytes: 3);
       // Escaping the gremlin grows the buffer past the byte limit.
@@ -137,6 +190,27 @@ void main() {
         options: {'action': 'escape'},
       );
       expect(c.text.text, 'a\x07b');
+      expect(
+        outcome,
+        isA<TextToolRefused>().having(
+          (r) => r.reason,
+          'reason',
+          TextToolRefusal.tooLarge,
+        ),
+      );
+    });
+
+    test('a same-length result that grows in bytes is refused', () async {
+      // \x85 is one UTF-16 unit but two UTF-8 bytes; ♥ is one unit but
+      // three bytes. The replacement keeps the buffer's code-unit length
+      // while growing it past the byte limit — the preflight measures
+      // bytes, not units.
+      final c = controller('\x85\x85', maximumBytes: 5);
+      final outcome = await c.runTextTool(
+        'zapGremlins',
+        options: {'action': 'replace', 'character': '♥'},
+      );
+      expect(c.text.text, '\x85\x85');
       expect(
         outcome,
         isA<TextToolRefused>().having(
@@ -188,7 +262,7 @@ void main() {
           text: 'c\nb\na',
           selection: TextSelection.collapsed(offset: 0),
         );
-        async.elapse(const Duration(milliseconds: 600));
+        async.elapse(_undoWait);
 
         var done = false;
         c.text.selection = const TextSelection.collapsed(offset: 4);
@@ -232,7 +306,7 @@ void main() {
 
       await runTool(tester, c, 'sortLines');
       expect(c.text.text, 'a\nb');
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(_undoWait);
       expect(find.textContaining('Sort Lines'), findsOneWidget);
       expect(find.text('Undo'), findsOneWidget);
 
@@ -242,6 +316,25 @@ void main() {
       // The undo is itself a value change, which clears the notice.
       expect(c.toolReport, isNull);
       expect(find.textContaining('Sort Lines'), findsNothing);
+    });
+
+    testWidgets('a tap on the notice dismisses it', (tester) async {
+      // The pill covers the document's bottom edge; it must not swallow
+      // taps there — it dismisses instead.
+      final c = await pumpEditor(tester, 'b\na');
+      c.editorFocus.requestFocus();
+      await tester.pump();
+
+      await runTool(tester, c, 'sortLines');
+      await tester.pump(_undoWait);
+      expect(c.toolReport, isNotNull);
+
+      await tester.tap(find.textContaining('Sort Lines'));
+      await tester.pump();
+      expect(c.toolReport, isNull);
+      expect(find.textContaining('Sort Lines'), findsNothing);
+      // The text it replaced is untouched.
+      expect(c.text.text, 'a\nb');
     });
 
     testWidgets('a refusal shows the reason and no Undo', (tester) async {
@@ -318,7 +411,7 @@ void main() {
       expect(find.text('will change 2 of 2 lines'), findsOneWidget);
 
       await tester.tap(find.text('Apply'));
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(_undoWait);
       expect(c.text.text, '> a\n> b');
       expect(c.toolBarOpen, isFalse);
     });
@@ -338,7 +431,7 @@ void main() {
       expect(c.toolBarWholeDocument, isTrue);
 
       await tester.tap(find.text('Apply'));
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(_undoWait);
       expect(c.text.text, 'a\nb\nc');
     });
 
@@ -408,6 +501,24 @@ void main() {
         find.widgetWithText(FilledButton, 'Apply'),
       );
       expect(apply.onPressed, isNull);
+    });
+
+    testWidgets('Enter in a field honours the same refused gate', (
+      tester,
+    ) async {
+      // joinLinesWith needs a selection; without one the preview refuses
+      // and a field's Enter must decline exactly like the button.
+      final c = await pumpEditor(tester, 'a\nb');
+      c.openTextTool('joinLinesWith');
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.textContaining('not applied'), findsOneWidget);
+
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump(_undoWait);
+      await tester.pump();
+
+      expect(c.toolBarOpen, isTrue);
+      expect(c.toolReport, isNull);
     });
 
     testWidgets('the first text field takes the focus', (tester) async {

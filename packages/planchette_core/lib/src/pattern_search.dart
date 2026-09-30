@@ -37,6 +37,11 @@ final class FindPattern {
         caseSensitive: caseSensitive,
       );
 
+  /// A pattern that matches [source] literally, for the find bar's line
+  /// tools when the regular-expression toggle is off.
+  FindPattern.literal(String source, {bool caseSensitive = false})
+    : this(RegExp.escape(source), caseSensitive: caseSensitive);
+
   /// The pattern as typed.
   final String source;
   final bool caseSensitive;
@@ -115,6 +120,100 @@ final class FindPattern {
       return null;
     }
     return match;
+  }
+
+  /// Whether [line] holds a match. The find bar's line tools test each
+  /// line's content alone, so a pattern containing a line break can never
+  /// match one.
+  bool matchesLine(String line, {bool wholeWord = false}) =>
+      _matchesIn(line, wholeWord: wholeWord).isNotEmpty;
+
+  /// How many lines of [text] hold a match — the live count the find
+  /// bar's line row shows.
+  int countMatchingLines(String text, {bool wholeWord = false}) {
+    var count = 0;
+    var at = 0;
+    while (at < text.length) {
+      final end = lineContentEnd(text, at);
+      if (matchesLine(text.substring(at, end), wholeWord: wholeWord)) {
+        count++;
+      }
+      at = end + lineSeparatorAt(text, end).length;
+    }
+    return count;
+  }
+
+  /// [text] filtered line-wise: [keep] keeps the lines whose content
+  /// matches and drops the rest, false drops the matching ones. A kept
+  /// line takes the break that ended it; when the buffer's last line is
+  /// dropped the last kept line sheds its break, so filtering never adds
+  /// a trailing line break the buffer did not have.
+  PatternLineFilter filterMatchingLines(
+    String text, {
+    required bool keep,
+    bool wholeWord = false,
+  }) {
+    final contents = <String>[];
+    final breaks = <String>[];
+    var matched = 0;
+    var total = 0;
+    var at = 0;
+    var lastDropped = false;
+    while (at < text.length) {
+      final end = lineContentEnd(text, at);
+      final separator = lineSeparatorAt(text, end);
+      final hit = matchesLine(text.substring(at, end), wholeWord: wholeWord);
+      total++;
+      lastDropped = hit != keep;
+      if (hit) matched++;
+      if (hit == keep) {
+        contents.add(text.substring(at, end));
+        breaks.add(separator);
+      }
+      at = end + separator.length;
+    }
+    if (contents.isNotEmpty && lastDropped) breaks[breaks.length - 1] = '';
+    final out = StringBuffer();
+    for (var i = 0; i < contents.length; i++) {
+      out
+        ..write(contents[i])
+        ..write(breaks[i]);
+    }
+    return PatternLineFilter(
+      text: out.toString(),
+      matched: matched,
+      total: total,
+    );
+  }
+
+  /// Every match's text — or with [wholeLines] the content of each line
+  /// holding one — expanded through [template] when it is given. The
+  /// empty matches [findAll] skips never extract either.
+  List<String> extractMatches(
+    String text, {
+    bool wholeWord = false,
+    bool wholeLines = false,
+    String? template,
+  }) {
+    final out = <String>[];
+    if (wholeLines) {
+      var at = 0;
+      while (at < text.length) {
+        final end = lineContentEnd(text, at);
+        final line = text.substring(at, end);
+        if (matchesLine(line, wholeWord: wholeWord)) out.add(line);
+        at = end + lineSeparatorAt(text, end).length;
+      }
+      return out;
+    }
+    for (final match in _matchesIn(text, wholeWord: wholeWord)) {
+      out.add(
+        template == null
+            ? match[0]!
+            : expandPatternReplacement(template, match),
+      );
+    }
+    return out;
   }
 
   Iterable<RegExpMatch> _matchesIn(
@@ -313,6 +412,20 @@ final class PatternReplacement {
   final int firstEnd;
 }
 
+/// The result of a line filter: the filtered [text], how many lines
+/// matched, and how many the buffer holds.
+final class PatternLineFilter {
+  const PatternLineFilter({
+    required this.text,
+    required this.matched,
+    required this.total,
+  });
+
+  final String text;
+  final int matched;
+  final int total;
+}
+
 /// Why a pattern search produced no matches it could stand behind.
 sealed class PatternFailure {
   const PatternFailure();
@@ -386,6 +499,7 @@ final class PatternWorker {
     int limit = patternMatchLimit,
   }) => _submit<PatternMatches>(
     (reply) => reply! as PatternMatches,
+    kind: _RequestKind.search,
     text: text,
     source: source,
     caseSensitive: caseSensitive,
@@ -403,10 +517,73 @@ final class PatternWorker {
     bool wholeWord = false,
   }) => _submit<PatternReplacement?>(
     (reply) => reply as PatternReplacement?,
+    kind: _RequestKind.replace,
     text: text,
     source: source,
     caseSensitive: caseSensitive,
     wholeWord: wholeWord,
+    template: template,
+  );
+
+  /// How many lines of [text] hold a match; see
+  /// [FindPattern.countMatchingLines]. [literal] treats [source] as plain
+  /// text — the find bar's regex toggle off.
+  Future<PatternOutcome<int>> countMatchingLines(
+    String text,
+    String source, {
+    bool caseSensitive = false,
+    bool wholeWord = false,
+    bool literal = false,
+  }) => _submit<int>(
+    (reply) => reply! as int,
+    kind: _RequestKind.countLines,
+    text: text,
+    source: source,
+    caseSensitive: caseSensitive,
+    wholeWord: wholeWord,
+    literal: literal,
+  );
+
+  /// [text] filtered to the lines that hold a match ([keep]) or don't;
+  /// see [FindPattern.filterMatchingLines].
+  Future<PatternOutcome<PatternLineFilter>> filterLines(
+    String text,
+    String source, {
+    required bool keep,
+    bool caseSensitive = false,
+    bool wholeWord = false,
+    bool literal = false,
+  }) => _submit<PatternLineFilter>(
+    (reply) => reply! as PatternLineFilter,
+    kind: _RequestKind.filterLines,
+    text: text,
+    source: source,
+    caseSensitive: caseSensitive,
+    wholeWord: wholeWord,
+    literal: literal,
+    keep: keep,
+  );
+
+  /// Every match of [source] — or every line holding one with
+  /// [wholeLines] — expanded through [template] when given; see
+  /// [FindPattern.extractMatches].
+  Future<PatternOutcome<List<String>>> extractMatches(
+    String text,
+    String source, {
+    bool caseSensitive = false,
+    bool wholeWord = false,
+    bool wholeLines = false,
+    String? template,
+    bool literal = false,
+  }) => _submit<List<String>>(
+    (reply) => reply! as List<String>,
+    kind: _RequestKind.extract,
+    text: text,
+    source: source,
+    caseSensitive: caseSensitive,
+    wholeWord: wholeWord,
+    literal: literal,
+    wholeLines: wholeLines,
     template: template,
   );
 
@@ -423,11 +600,15 @@ final class PatternWorker {
 
   Future<PatternOutcome<T>> _submit<T>(
     T Function(Object? reply) decode, {
+    required _RequestKind kind,
     required String text,
     required String source,
     required bool caseSensitive,
     required bool wholeWord,
     int limit = patternMatchLimit,
+    bool literal = false,
+    bool keep = true,
+    bool wholeLines = false,
     String? template,
   }) {
     if (_disposed) return Future.value(PatternCancelled<T>());
@@ -439,11 +620,15 @@ final class PatternWorker {
         pending,
         _PatternRequest(
           ticket: pending.ticket,
+          kind: kind,
           text: text,
           source: source,
           caseSensitive: caseSensitive,
           wholeWord: wholeWord,
           limit: limit,
+          literal: literal,
+          keep: keep,
+          wholeLines: wholeLines,
           template: template,
         ),
       ),
@@ -566,23 +751,41 @@ final class _PendingPattern<T> {
   void cancel() => completer.complete(PatternCancelled<T>());
 }
 
+/// What a [_PatternRequest] asks the worker to run.
+enum _RequestKind { search, replace, countLines, filterLines, extract }
+
 final class _PatternRequest {
   const _PatternRequest({
     required this.ticket,
+    required this.kind,
     required this.text,
     required this.source,
     required this.caseSensitive,
     required this.wholeWord,
     required this.limit,
+    required this.literal,
+    required this.keep,
+    required this.wholeLines,
     required this.template,
   });
 
   final int ticket;
+  final _RequestKind kind;
   final String text;
   final String source;
   final bool caseSensitive;
   final bool wholeWord;
   final int limit;
+
+  /// Whether [source] is plain text to match literally, not an
+  /// expression — the find bar's regex toggle off.
+  final bool literal;
+
+  /// The direction for a line filter: matching lines stay, or go.
+  final bool keep;
+
+  /// Whether an extract takes whole matching lines rather than matches.
+  final bool wholeLines;
 
   /// The replacement for Replace All, or null for a search.
   final String? template;
@@ -603,27 +806,45 @@ void _patternWorkerMain(SendPort replies) {
   requests.handler = (Object? message) {
     final request = message! as _PatternRequest;
     try {
+      final source = request.literal
+          ? RegExp.escape(request.source)
+          : request.source;
       var pattern = compiled;
       if (pattern == null ||
-          pattern.source != request.source ||
+          pattern.source != source ||
           pattern.caseSensitive != request.caseSensitive) {
         pattern = compiled = FindPattern(
-          request.source,
+          source,
           caseSensitive: request.caseSensitive,
         );
       }
-      final template = request.template;
-      final Object? payload = template == null
-          ? pattern.findAll(
-              request.text,
-              wholeWord: request.wholeWord,
-              limit: request.limit,
-            )
-          : pattern.replaceAll(
-              request.text,
-              template,
-              wholeWord: request.wholeWord,
-            );
+      final Object? payload = switch (request.kind) {
+        _RequestKind.search => pattern.findAll(
+          request.text,
+          wholeWord: request.wholeWord,
+          limit: request.limit,
+        ),
+        _RequestKind.replace => pattern.replaceAll(
+          request.text,
+          request.template!,
+          wholeWord: request.wholeWord,
+        ),
+        _RequestKind.countLines => pattern.countMatchingLines(
+          request.text,
+          wholeWord: request.wholeWord,
+        ),
+        _RequestKind.filterLines => pattern.filterMatchingLines(
+          request.text,
+          keep: request.keep,
+          wholeWord: request.wholeWord,
+        ),
+        _RequestKind.extract => pattern.extractMatches(
+          request.text,
+          wholeWord: request.wholeWord,
+          wholeLines: request.wholeLines,
+          template: request.template,
+        ),
+      };
       replies.send(_PatternReply(request.ticket, payload, null));
     } on FormatException catch (error) {
       replies.send(_PatternReply(request.ticket, null, error.message));

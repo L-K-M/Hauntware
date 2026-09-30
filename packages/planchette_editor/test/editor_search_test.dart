@@ -180,9 +180,9 @@ void main() {
       isSemantics(isSelected: true, isButton: true),
     );
 
-    // Traverse regular expression, previous, next, replace toggle, close,
-    // replacement, replace, all.
-    for (var step = 0; step < 8; step++) {
+    // Traverse regular expression, line actions, previous, next, replace
+    // toggle, close, replacement, replace, all.
+    for (var step = 0; step < 9; step++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     }
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -245,9 +245,9 @@ void main() {
     await tester.pumpAndSettle();
     final selection = controller.search.selection;
 
-    // Match case, whole words, regular expression, previous, next, then the
-    // replace toggle.
-    for (var step = 0; step < 6; step++) {
+    // Match case, whole words, regular expression, line actions, previous,
+    // next, then the replace toggle.
+    for (var step = 0; step < 7; step++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     }
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);

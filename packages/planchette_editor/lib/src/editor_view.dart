@@ -418,7 +418,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     bottom: 0,
                     child: SafeArea(
                       top: false,
-                      child: _toolNotice(context, report),
+                      // The opaque pill would otherwise swallow taps on the
+                      // document's bottom lines; a tap dismisses it.
+                      child: GestureDetector(
+                        onTap: c.clearToolReport,
+                        child: _toolNotice(context, report),
+                      ),
                     ),
                   ),
               ],
@@ -561,6 +566,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     ),
                   ),
                   IconButton(
+                    isSelected: c.lineActionsOpen,
+                    tooltip: strings.lineActions,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: c.toggleLineActions,
+                    icon: const Icon(Icons.filter_list),
+                  ),
+                  IconButton(
                     tooltip: strings.previousMatch,
                     visualDensity: VisualDensity.compact,
                     onPressed: c.matches.isEmpty ? null : c.previousMatch,
@@ -589,6 +601,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               ),
             ],
           ),
+          if (c.lineActionsOpen) _lineActionsRow(context),
+          if (c.extractOpen) _extractRow(context),
           if (c.replaceOpen)
             _searchRow(
               field: TextField(
@@ -620,6 +634,128 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             ),
         ],
       ),
+    );
+  }
+
+  /// The line-action row: the live matching-line count and the Keep and
+  /// Delete buttons that apply it to the document.
+  Widget _lineActionsRow(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    final failure = c.lineCountFailure;
+    final count = c.lineActionCount;
+    final label = switch (failure) {
+      PatternUnusable(:final message) => strings.patternInvalid(message),
+      PatternTimedOut() => strings.patternTooSlow,
+      _ when count != null => strings.lineMatchCount(count),
+      _ => '',
+    };
+    final ready = !_locked && !c.isBusy && count != null;
+    return _searchRow(
+      field: Text(
+        label,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: failure != null ? theme.colorScheme.error : null,
+        ),
+      ),
+      controls: [
+        TextButton(
+          onPressed: ready
+              ? () => unawaited(c.applyLineFilter(keep: true))
+              : null,
+          child: Text(strings.keepMatchingLines),
+        ),
+        TextButton(
+          onPressed: ready
+              ? () => unawaited(c.applyLineFilter(keep: false))
+              : null,
+          child: Text(strings.deleteMatchingLines),
+        ),
+      ],
+    );
+  }
+
+  /// The extraction row: the optional replacement template, the whole
+  /// lines toggle, the destination picker and the Extract button.
+  Widget _extractRow(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    final failure = c.lineCountFailure;
+    final count = c.lineActionCount;
+    final targets = [
+      'inPlace',
+      'clipboard',
+      if (c.canExtractToNewDocument) 'newDocument',
+    ];
+    return _searchRow(
+      field: TextField(
+        controller: c.extraction,
+        focusNode: c.extractionFocus,
+        autocorrect: false,
+        enableSuggestions: false,
+        style: theme.textTheme.bodyMedium,
+        decoration: InputDecoration(
+          hintText: strings.extractTemplateHint,
+          isDense: true,
+          border: InputBorder.none,
+        ),
+        onSubmitted: (_) => unawaited(c.applyExtract()),
+      ),
+      controls: [
+        if (failure != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              switch (failure) {
+                PatternUnusable(:final message) => strings.patternInvalid(
+                  message,
+                ),
+                _ => strings.patternTooSlow,
+              },
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+          )
+        else if (count != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              strings.extractCount(count, wholeLines: c.extractWholeLines),
+              style: theme.textTheme.labelSmall,
+            ),
+          ),
+        IconButton(
+          isSelected: c.extractWholeLines,
+          tooltip: strings.extractWholeLinesTooltip,
+          visualDensity: VisualDensity.compact,
+          onPressed: () => c.setExtractWholeLines(!c.extractWholeLines),
+          icon: const Icon(Icons.subject),
+        ),
+        DropdownButton<String>(
+          value: targets.contains(c.extractTarget)
+              ? c.extractTarget
+              : 'inPlace',
+          underline: const SizedBox.shrink(),
+          isDense: true,
+          items: [
+            for (final target in targets)
+              DropdownMenuItem(
+                value: target,
+                child: Text(strings.textToolChoiceName(target)),
+              ),
+          ],
+          onChanged: (value) {
+            if (value != null) c.setExtractTarget(value);
+          },
+        ),
+        TextButton(
+          onPressed: !_locked && !c.isBusy && count != null
+              ? () => unawaited(c.applyExtract())
+              : null,
+          child: Text(strings.extractAction),
+        ),
+      ],
     );
   }
 
@@ -797,7 +933,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   Expanded(
                     child: Text(
                       widget.strings.textToolNotice(report),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onInverseSurface,
@@ -808,6 +944,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                       c.undoController.value.canUndo)
                     TextButton(
                       onPressed: c.undoController.undo,
+                      // inverseSurface pairs with inversePrimary — the
+                      // default primary falls below readable contrast.
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.colorScheme.inversePrimary,
+                      ),
                       child: Text(widget.strings.undo),
                     ),
                 ],
@@ -1147,8 +1288,15 @@ class _ToolBarState extends State<_ToolBar> {
     c.setToolOption(option.id, parsed < minimum ? minimum : parsed);
   }
 
+  /// The gate both Apply paths — the button and a field's Enter — share.
+  bool get _canApply =>
+      !widget.locked &&
+      c.canEditText &&
+      c.toolBarTool != null &&
+      c.toolBarPreview?.outcome is! TextToolRefused;
+
   void _apply() {
-    unawaited(c.applyTextTool());
+    if (_canApply) unawaited(c.applyTextTool());
   }
 
   @override
@@ -1157,11 +1305,6 @@ class _ToolBarState extends State<_ToolBar> {
     final theme = Theme.of(context);
     final options = c.toolBarOptions;
     final preview = c.toolBarPreview;
-    final canApply =
-        !widget.locked &&
-        c.canEditText &&
-        c.toolBarTool != null &&
-        c.toolBarPreview?.outcome is! TextToolRefused;
 
     final controls = <Widget>[
       Text(toolBarName(strings), style: theme.textTheme.titleSmall),
@@ -1205,7 +1348,7 @@ class _ToolBarState extends State<_ToolBar> {
             children: [
               ...scope,
               FilledButton(
-                onPressed: canApply ? _apply : null,
+                onPressed: _canApply ? _apply : null,
                 child: Text(strings.textToolApply),
               ),
             ],
@@ -1245,9 +1388,9 @@ class _ToolBarState extends State<_ToolBar> {
     final text = switch (tool.scope) {
       TextToolScope.document => strings.textToolNothingSelected(document),
       TextToolScope.selection => strings.textToolSelectedLines(selected),
-      TextToolScope.paragraph => 'the paragraph at the caret',
-      TextToolScope.word => 'the word at the caret',
-      TextToolScope.insertion => 'the caret',
+      TextToolScope.paragraph => strings.textToolParagraphAtCaret,
+      TextToolScope.word => strings.textToolWordAtCaret,
+      TextToolScope.insertion => strings.textToolAtCaret,
     };
     return [label, Text(text, style: Theme.of(context).textTheme.labelSmall)];
   }
