@@ -158,7 +158,9 @@ commit SHAs and CI must never upload artifacts embedding the pinned code
 ## Repo-specific traps (each is documented; none is a suggestion)
 
 - Scaffold the app at M1 with `flutter create --org ch.lkmc` — the `--org`
-  fixes the three platform ids (07 §3.2). The packaged build reports X11
+  fixes the Apple id; Android and Linux come out as
+  `ch.lkmc.poltergeist_app` and the `_app` suffix is then removed by hand
+  (07 §3.2). The packaged build reports X11
   `WM_CLASS` as instance `ch.lkmc.poltergeist`, class
   `Ch.lkmc.poltergeist`; the desktop entry must carry the literal
   `StartupWMClass=Ch.lkmc.poltergeist`. Keep the script, test, and docs

@@ -265,7 +265,9 @@ CI, and looks like the beginning of Poltergeist, not a counter demo.
   load-bearing: it yields Android id `ch.lkmc.poltergeist_app`, Apple
   bundle id `ch.lkmc.poltergeistApp`, and Linux `APPLICATION_ID`
   `ch.lkmc.poltergeist_app`; the `_app` suffix is then removed by hand in
-  `android/app/build.gradle.kts` and `linux/CMakeLists.txt`, leaving
+  `android/app/build.gradle.kts` and `linux/CMakeLists.txt`, and
+  `MainActivity.kt` moves to `kotlin/ch/lkmc/poltergeist/` with package
+  `ch.lkmc.poltergeist`, leaving
   Android/Linux on `ch.lkmc.poltergeist`. The packaged build reports X11
   `WM_CLASS` as
   instance `ch.lkmc.poltergeist`, class `Ch.lkmc.poltergeist`, so
