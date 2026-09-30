@@ -28,11 +28,17 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
   private static let defaultSize = NSSize(width: 760, height: 640)
   private static let minimumSize = NSSize(width: 520, height: 420)
 
+  /// `kVK_ANSI_W`: where W sits on a US keyboard.
+  private static let usKeyW: UInt16 = 0x0D
+
   private weak var mainWindow: NSWindow?
   private let mainMessenger: FlutterBinaryMessenger
   private let control: FlutterMethodChannel
 
   private var window: NSWindow?
+
+  /// Closes the window on ⌘W and ⌘⇧W (see `installCloseShortcut`).
+  private var closeShortcutMonitor: Any?
 
   init(mainWindow: NSWindow, messenger: FlutterBinaryMessenger) {
     self.mainWindow = mainWindow
@@ -119,12 +125,54 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
       window.center()
     }
     self.window = window
+    installCloseShortcut()
     window.makeKeyAndOrderFront(nil)
   }
 
-  /// The close button, ⌘W and File ▸ Close: hide rather than close.
-  /// Programmatic `close()` does not ask, which is how `close()` above ends
-  /// it for good.
+  /// ⌘W and ⌘⇧W close this window, as they close any window on the Mac.
+  ///
+  /// The window has to claim them before AppKit dispatches the event. The
+  /// File menu's Close Tab (⌘W) and Close Window (⌘⇧W) belong to the app's
+  /// engine and act on the workspace windows, and the menu bar gets any
+  /// chord this window does not take: ⌘W here would close a tab behind
+  /// Settings and leave Settings open, and ⌘⇧W would close the workspace
+  /// window. A local monitor sees the event before the menu bar or any
+  /// window does.
+  private func installCloseShortcut() {
+    guard closeShortcutMonitor == nil else { return }
+    closeShortcutMonitor = NSEvent.addLocalMonitorForEvents(
+      matching: .keyDown
+    ) { [weak self] event in
+      guard let window = self?.window, event.window === window,
+        SettingsWindowHost.isCloseShortcut(event)
+      else { return event }
+      window.performClose(nil)
+      return nil
+    }
+  }
+
+  /// ⌘W or ⌘⇧W on any layout. A layout that types no Latin letter on the
+  /// key (Cyrillic, Greek) is read by the key's US position, as Flutter
+  /// reads its own shortcuts on such layouts.
+  private static func isCloseShortcut(_ event: NSEvent) -> Bool {
+    let chord = event.modifierFlags.intersection([
+      .command, .shift, .option, .control,
+    ])
+    guard chord == .command || chord == [.command, .shift] else {
+      return false
+    }
+    guard let key = event.charactersIgnoringModifiers?.lowercased(),
+      !key.isEmpty
+    else { return false }
+    if key.unicodeScalars.allSatisfy({ $0.value < 0x100 }) {
+      return key == "w"
+    }
+    return event.keyCode == usKeyW
+  }
+
+  /// The close button, ⌘W and ⌘⇧W (`installCloseShortcut`): hide rather
+  /// than close. Programmatic `close()` does not ask, which is how `close()`
+  /// above ends it for good.
   func windowShouldClose(_ sender: NSWindow) -> Bool {
     sender.orderOut(nil)
     control.invokeMethod("closed", arguments: nil)
@@ -136,6 +184,10 @@ final class SettingsWindowHost: NSObject, NSWindowDelegate {
     else { return }
     closing.delegate = nil
     window = nil
+    if let monitor = closeShortcutMonitor {
+      NSEvent.removeMonitor(monitor)
+      closeShortcutMonitor = nil
+    }
     // Released after AppKit has finished closing it rather than from inside
     // its own close: that drops the last reference to the controller, whose
     // dealloc invalidates the text fields and whose engine then shuts down.

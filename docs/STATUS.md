@@ -4,6 +4,22 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Settings window closes on ⌘W (2026-09-30)
+
+On macOS, ⌘W and ⇧⌘W close the Settings window while it is key. File ▸
+Close Tab (⌘W) and Close Window (⇧⌘W) belong to the app's engine, and the
+menu bar got the chord the Settings window did not take, so ⌘W closed a
+tab in the workspace window behind Settings and ⇧⌘W closed that window.
+`SettingsWindowHost` now claims both chords with a local key-down monitor,
+which sees the event before the menu bar or any window, and closes the
+window as its close button does. The change is written together with
+Séance's (docs/PORTS.md, Settings window runners).
+
+Not verified here: there is no macOS host in this environment, so CI's
+macOS build is the compile check. Manual check on a Mac: open Settings
+with a tab open, press ⌘W (Settings hides, the tab stays), reopen it with
+⌘, and press ⇧⌘W (Settings hides, the workspace window stays).
+
 ## Shared Planchette editor (2026-09-27)
 
 The owner approved shared editor packages and a standalone Planchette app.

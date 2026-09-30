@@ -1548,6 +1548,13 @@ Files: `app/poltergeist_app/macos/Runner/SettingsWindow.swift`,
   failure and negative monitor coordinates already match Poltergeist's
   corresponding fixes. No unrecorded runner divergence remains.
 - Port-back candidates: none yet; the two sets were written together.
+- Close shortcut (2026-09-30): both macOS hosts claim ⌘W and ⇧⌘W with a
+  local key-down monitor and close the window, written together with
+  Séance commit 7df8fa1
+  ([Séance #162](https://github.com/L-K-M/Seance/pull/162)). The code is
+  identical; only the comment differs, naming each app's route to the
+  chord (Séance's close-tab shortcut in the main window's Dart;
+  Poltergeist's File ▸ Close Tab and Close Window menu items).
 
 ## Device themes (D38)
 
