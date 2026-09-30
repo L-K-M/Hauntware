@@ -4368,7 +4368,7 @@ Reviewed at Séance `dd7e105` (main, 2026-09-26, pubspecs 0.9.2) and Poltergeist
 - **Severity / category:** P3, build/release / visual.
 - **Status / confidence:** NEW, VERIFIED.
 - **Desktop-file name:**
-  - Séance writes `seance.desktop` (`package-linux.sh:324`), while the GApplication id is `ch.lkmc.seance` (`linux/CMakeLists.txt:10`).
+  - Séance writes `seance.desktop` (`package-linux.sh:324`), while the GApplication id was `com.lkm.seance_app` at the reviewed commit (`linux/CMakeLists.txt:10`; renamed to `ch.lkmc.seance` in the namespace change).
   - Wayland shells (KDE in particular) match the window's `app_id` to the desktop-file name, so the dock can show a generic icon or a second entry.
   - Poltergeist names the file `$LINUX_APPLICATION_ID.desktop`.
 - **Copyright file:** Séance's `copyright` says "License: as published in the source repository" (`:330`). Poltergeist embeds the Unlicense text (`write_copyright`).
