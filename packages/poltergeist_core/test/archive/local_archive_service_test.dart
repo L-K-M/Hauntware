@@ -1917,6 +1917,12 @@ void main() {
     final source = File(pathOf('unlistable-source'))..writeAsStringSync('data');
     final destination = Directory(pathOf('unlistable-destination'))
       ..createSync();
+    final lockDirectory = await _archiveLockDirectory();
+    final lockName = '${sha256.convert(utf8.encode(destination.path))}.lock';
+    final lock = File(p.join(lockDirectory.path, lockName));
+    addTearDown(() async {
+      if (await lock.exists()) await lock.delete();
+    });
     final restricted = Process.runSync('chmod', ['0300', destination.path]);
     expect(restricted.exitCode, 0);
 

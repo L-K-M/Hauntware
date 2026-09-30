@@ -84,6 +84,42 @@ void main() {
     expect(fallbackCalls, 1);
   });
 
+  test('Linux raw rename fallback preserves no-replace semantics', () {
+    if (!Platform.isLinux) {
+      markTestSkipped('Linux renameat2 syscall is required');
+      return;
+    }
+
+    final root = Directory.systemTemp.createTempSync('pg-rename-syscall');
+    addTearDown(() {
+      if (root.existsSync()) root.deleteSync(recursive: true);
+    });
+    final source = File('${root.path}/source')..writeAsStringSync('new');
+    final destination = File('${root.path}/destination')
+      ..writeAsStringSync('old');
+
+    expect(
+      archive_internals.invokeLinuxRenameAt2SyscallForTesting(
+        source.path,
+        destination.path,
+      ),
+      -1,
+    );
+    expect(source.readAsStringSync(), 'new');
+    expect(destination.readAsStringSync(), 'old');
+
+    destination.deleteSync();
+    expect(
+      archive_internals.invokeLinuxRenameAt2SyscallForTesting(
+        source.path,
+        destination.path,
+      ),
+      0,
+    );
+    expect(source.existsSync(), isFalse);
+    expect(destination.readAsStringSync(), 'new');
+  });
+
   for (final truncatedIdentity in <String, String>{
     'mount': 'pos:\t0\nflags:\t0100000\nmnt_id:\t12',
     'inode': 'pos:\t0\nflags:\t0100000\nmnt_id:\t12\nino:\t34',

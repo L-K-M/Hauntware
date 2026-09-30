@@ -130,6 +130,22 @@ int invokeLinuxRenameAt2ForTesting({
   invokeSyscall: invokeSyscall,
 );
 
+/// Exercises the raw Linux fallback against the current host ABI.
+@visibleForTesting
+int invokeLinuxRenameAt2SyscallForTesting(String source, String destination) {
+  final sourcePath = source.toNativeUtf8();
+  final destinationPath = destination.toNativeUtf8();
+  try {
+    return _PosixArchiveIo.instance._renameLinuxWithSyscall(
+      sourcePath.cast(),
+      destinationPath.cast(),
+    );
+  } finally {
+    calloc.free(sourcePath);
+    calloc.free(destinationPath);
+  }
+}
+
 int _invokeLinuxRenameAt2({
   required int Function() resolveAndInvoke,
   required int Function() invokeSyscall,
@@ -934,11 +950,7 @@ typedef _RenameDarwinDart = int Function(Pointer<Uint8>, Pointer<Uint8>, int);
 typedef _SyscallRenameNative =
     IntPtr Function(
       IntPtr,
-      Int32,
-      Pointer<Uint8>,
-      Int32,
-      Pointer<Uint8>,
-      Uint32,
+      VarArgs<(Int, Pointer<Uint8>, Int, Pointer<Uint8>, UnsignedInt)>,
     );
 typedef _SyscallRenameDart =
     int Function(int, int, Pointer<Uint8>, int, Pointer<Uint8>, int);

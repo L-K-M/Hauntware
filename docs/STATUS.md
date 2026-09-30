@@ -9651,8 +9651,8 @@ back to raw `renameat2` syscalls on older Linux libc, rejects truncated
 descriptor identity data and signed-negative ZIP64 sizes, reports native seek
 paths, and treats unreadable stale-stage listings as best-effort cleanup.
 
-Verification so far: all 84 archive/native tests and all 68 local-filesystem
-safety tests pass; the full core run reports 1,851 passing tests and 27
+Verification so far: all 85 archive/native tests and all 68 local-filesystem
+safety tests pass; the full core run reports 1,852 passing tests and 27
 environment skips. The full app run reports 3,052 passing tests; the import
 guard and benchmark runs report 95 and 140 passing tests. Core and Flutter
 analysis are clean. Linux native behavior is exercised. A debug APK built,
