@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart';
@@ -281,13 +282,15 @@ class TerminalTabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final chrome = SeanceChrome.of(context);
     return Container(
       height: 38,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
+        // The header's colour, as Poltergeist's pane tab bars take theirs.
+        color: chrome.headerBackground,
         border: Border(
           bottom: BorderSide(
-            color: accent ?? scheme.outlineVariant,
+            color: accent ?? chrome.separator,
             // Thickened as well as coloured: on a dim accent against a dark
             // theme, a hairline is a hairline whatever colour it is.
             width: accent == null ? 1 : 2,
@@ -490,9 +493,12 @@ class _RenameTabDialogState extends State<_RenameTabDialog> {
   }
 }
 
-/// The visual shell both tab kinds share: a 38 px row with the selected
-/// underline, the label, and a per-kind leading indicator and trailing
-/// button.
+/// The visual shell both tab kinds share, in Poltergeist's pane-tab shape
+/// (its 10 §6, the family's tab): a flat 38 px chip with a hairline after
+/// it, the label, a per-kind leading indicator, and a close button shown
+/// on hover, on focus and on the active tab, keeping its slot while hidden
+/// so a hover never reflows the strip. The active chip takes the pane's
+/// surface and a semibold label; a hovered one takes the hover fill.
 ///
 /// Middle-click closes, matching browser/terminal tab conventions, and the
 /// context menu — right-click on a desktop, long-press on touch — carries the
@@ -510,14 +516,17 @@ class _RenameTabDialogState extends State<_RenameTabDialog> {
 /// to the menu gestures; hover is unaffected — it is handled separately from
 /// the trigger mode — so a desktop still gets the tip by pointing at the
 /// tab.
-class _ChipShell extends StatelessWidget {
+class _ChipShell extends StatefulWidget {
   final String label;
   final bool selected;
   final String tooltip;
   final Widget leading;
-  final Widget trailing;
   final VoidCallback onTap;
   final VoidCallback onClose;
+
+  /// Whether the tab has unsaved changes: its close button then shows a
+  /// dot at rest, and stays visible on an inactive tab.
+  final bool dirty;
 
   /// Show the tab's context menu at the given global position; null leaves
   /// the menu gestures unbound.
@@ -528,11 +537,21 @@ class _ChipShell extends StatelessWidget {
     required this.selected,
     required this.tooltip,
     required this.leading,
-    required this.trailing,
     required this.onTap,
     required this.onClose,
+    this.dirty = false,
     this.onMenu,
   });
+
+  @override
+  State<_ChipShell> createState() => _ChipShellState();
+}
+
+class _ChipShellState extends State<_ChipShell> {
+  bool _hovered = false;
+
+  /// True while the chip or its close button holds focus.
+  bool _focused = false;
 
   /// Where to anchor a menu opened by long-press, which — unlike a
   /// right-click — carries no position of its own.
@@ -545,50 +564,89 @@ class _ChipShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final chrome = SeanceChrome.of(context);
+    final onMenu = widget.onMenu;
+    final pointedAt = _hovered || _focused;
+    final offerClose = pointedAt || widget.selected || widget.dirty;
+    final close = Visibility(
+      visible: offerClose,
+      maintainSize: true,
+      maintainAnimation: true,
+      maintainState: true,
+      child: _tabCloseButton(
+        // The dot says "unsaved" and still closes (the confirm dialog is
+        // what follows); pointing at it turns it into the cross.
+        icon: widget.dirty && !pointedAt
+            ? const Icon(Icons.circle, size: 9)
+            : const Icon(Icons.close),
+        onClose: widget.onClose,
+      ),
+    );
     return GestureDetector(
-      onTertiaryTapUp: (_) => onClose(),
+      onTertiaryTapUp: (_) => widget.onClose(),
       onSecondaryTapUp: onMenu == null
           ? null
-          : (details) => onMenu!(context, details.globalPosition),
+          : (details) => onMenu(context, details.globalPosition),
       onLongPress: onMenu == null
           ? null
-          : () => onMenu!(context, _chipCenter(context)),
+          : () => onMenu(context, _chipCenter(context)),
       child: Tooltip(
-        // Manual mode yields the arena to the menu gestures above — but only
-        // when there is a menu to yield to. Without one, long-press must
-        // keep the default trigger or touch users get no tooltip at all.
+        // Manual mode yields the arena to the menu gestures above — but
+        // only when there is a menu to yield to. Without one, long-press
+        // must keep the default trigger or touch users get no tooltip.
         triggerMode: onMenu == null
             ? TooltipTriggerMode.longPress
             : TooltipTriggerMode.manual,
-        message: tooltip,
+        message: widget.tooltip,
         child: InkWell(
-          onTap: onTap,
-          child: Container(
-            height: 38,
-            padding: const EdgeInsets.only(left: 12, right: 4),
-            decoration: BoxDecoration(
-              color: selected ? scheme.surface : Colors.transparent,
-              border: Border(
-                bottom: BorderSide(
-                  color: selected ? scheme.primary : Colors.transparent,
-                  width: 2,
+          onTap: widget.onTap,
+          onHover: (hovered) => setState(() => _hovered = hovered),
+          // Reported for the close button too, a descendant, so moving
+          // focus onto it keeps it shown.
+          onFocusChange: (focused) => setState(() => _focused = focused),
+          // A hidden close button is out of the semantics tree, so the
+          // tab's own node, the one a screen reader focuses, carries the
+          // action; that cursor never hovers.
+          child: Semantics(
+            customSemanticsActions: offerClose
+                ? null
+                : {
+                    const CustomSemanticsAction(label: 'Close tab'):
+                        widget.onClose,
+                  },
+            child: Container(
+              height: 38,
+              padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
+              decoration: BoxDecoration(
+                color: widget.selected
+                    ? chrome.paneBackground
+                    : _hovered
+                    ? chrome.hoverFill
+                    : null,
+                border: BorderDirectional(
+                  end: BorderSide(color: chrome.separator),
                 ),
               ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                leading,
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  widget.leading,
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      color: widget.selected
+                          ? scheme.onSurface
+                          : chrome.secondaryText,
+                      fontWeight: widget.selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 2),
-                trailing,
-              ],
+                  const SizedBox(width: 2),
+                  close,
+                ],
+              ),
             ),
           ),
         ),
@@ -702,10 +760,6 @@ class _TabChip extends StatelessWidget {
       onClose: onClose,
       onMenu: onRename == null ? null : _showMenu,
       leading: _TabStatusDot(status: session.status),
-      trailing: _tabCloseButton(
-        icon: const Icon(Icons.close),
-        onClose: onClose,
-      ),
     );
   }
 }
@@ -786,14 +840,7 @@ class _EditorTabChip extends StatelessWidget {
         size: 13,
         color: dirty ? scheme.primary : scheme.onSurfaceVariant,
       ),
-      // The dot in place of the cross says "unsaved" and still closes — the
-      // confirm dialog is what follows.
-      trailing: _tabCloseButton(
-        icon: dirty
-            ? const Icon(Icons.circle, size: 9)
-            : const Icon(Icons.close),
-        onClose: onClose,
-      ),
+      dirty: dirty,
     );
   }
 }
