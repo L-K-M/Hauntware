@@ -34,7 +34,7 @@ with the QA machine's result and date, and attach the filled copy to the PR.
   queue (prevent-close flush prompt).
 - [ ] **Linux** — OWNER MANUAL QA: server-side decorations; `.deb` and
   AppImage both launch; `StartupWMClass` maps the window to the desktop
-  entry (the `StartupWMClass=Com.lkm.poltergeist_app` contract itself is
+  entry (the `StartupWMClass=Ch.lkmc.poltergeist` contract itself is
   enforced by `scripts/package-linux.sh` + its test, not manual).
 - [ ] **Android** (D35) — OWNER MANUAL QA on a phone and a tablet: the
   APK installs per `docs/INSTALL.md` and a later release's APK upgrades

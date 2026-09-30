@@ -289,7 +289,7 @@ codesign lesson), and identifiers are already fixed:
 `ch.lkmc.poltergeist` (Linux GApplication; reserved, not currently
 used, for the mobile build D29 keeps open),
 `ch.lkmc.poltergeistApp` (Apple), Linux binary `poltergeist`. The
-underscore-vs-camelCase difference between the Linux and Apple ids is
+`poltergeist`-vs-`poltergeistApp` difference between the Linux and Apple ids is
 deliberate, not an inconsistency to "clean up" — each follows that
 platform's own convention, and unifying them would break whichever side
 lost.

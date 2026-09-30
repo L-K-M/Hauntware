@@ -5,11 +5,11 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 
 const _organization = 'ch.lkmc';
-const _androidId = '$_organization.poltergeist_app';
+const _androidId = '$_organization.poltergeist';
 const _appleId = 'ch.lkmc.poltergeistApp';
 const _linuxBinaryName = 'poltergeist';
 const _linuxDesktopId = 'ch.lkmc.poltergeist';
-const _linuxStartupWmClass = 'Com.lkm.poltergeist_app';
+const _linuxStartupWmClass = 'Ch.lkmc.poltergeist';
 const _macBundleName = 'Poltergeist.app';
 const _macExecutableName = 'Poltergeist';
 const _productName = 'Poltergeist';

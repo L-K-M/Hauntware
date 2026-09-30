@@ -7060,7 +7060,7 @@ Client build (ios)	Build	2026-09-13T19:05:06.5300610Z Got dependencies!
 Client build (ios)	Build	2026-09-13T19:05:06.5402400Z 17 packages have newer versions incompatible with dependency constraints.
 Client build (ios)	Build	2026-09-13T19:05:06.5504550Z Try `flutter pub outdated` for more information.
 Client build (ios)	Build	2026-09-13T19:05:06.8040440Z Warning: Building for device with codesigning disabled. You will have to manually codesign before deploying to device.
-Client build (ios)	Build	2026-09-13T19:05:26.3731630Z Archiving ch.lkmc.poltergeistApp...
+Client build (ios)	Build	2026-09-13T19:05:26.3731630Z Archiving com.lkm.poltergeistApp...
 Client build (ios)	Build	2026-09-13T19:06:37.0013300Z Running Xcode build...                                          
 Client build (ios)	Build	2026-09-13T19:06:37.0029150Z Xcode archive done.                                         70.3s
 Client build (ios)	Build	2026-09-13T19:06:38.0017420Z ✓ Built build/ios/archive/Runner.xcarchive (179.5MB)
@@ -7070,7 +7070,7 @@ Client build (ios)	Build	2026-09-13T19:06:38.1055660Z     • Version Number: 0.
 Client build (ios)	Build	2026-09-13T19:06:38.1056510Z     • Build Number: 1.2.0
 Client build (ios)	Build	2026-09-13T19:06:38.1057410Z     • Display Name: Poltergeist
 Client build (ios)	Build	2026-09-13T19:06:38.1058110Z     • Deployment Target: 15.0
-Client build (ios)	Build	2026-09-13T19:06:38.1058700Z     • Bundle Identifier: ch.lkmc.poltergeistApp
+Client build (ios)	Build	2026-09-13T19:06:38.1058700Z     • Bundle Identifier: com.lkm.poltergeistApp
 Client build (ios)	Build	2026-09-13T19:06:38.1059200Z 
 Client build (ios)	Build	2026-09-13T19:06:38.1060410Z [!] App Icon and Launch Image Assets Validation
 Client build (ios)	Build	2026-09-13T19:06:38.1061220Z     ! Launch image is set to the default placeholder icon. Replace with unique launch image.

@@ -159,7 +159,7 @@ Environment facts that carry over from Séance's containers (same family):
   `poltergeist`, Linux GApplication id (`APPLICATION_ID` in
   `linux/CMakeLists.txt`) `ch.lkmc.poltergeist`. The packaged build
   reports X11 `WM_CLASS` as instance `ch.lkmc.poltergeist`, class
-  `Com.lkm.poltergeist_app`; the case-sensitive class must match
+  `Ch.lkmc.poltergeist`; the case-sensitive class must match
   `StartupWMClass` in `scripts/package-linux.sh` (the flutter-create default
   `com.example.poltergeist_app` would break window-to-desktop-entry mapping
   in the .deb/AppImage).
