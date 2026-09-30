@@ -320,6 +320,8 @@ void main() {
     expect(accented.width, greaterThan(plain.width));
   });
   testWidgets('tabs take Poltergeist\'s pane-tab shape', (tester) async {
+    // Disposed at the end of the body: flutter_test checks for live
+    // handles before teardowns run, so addTearDown would be too late.
     final semantics = tester.ensureSemantics();
     final config = ServerConfig(
       id: 'server',
@@ -411,6 +413,11 @@ void main() {
     }
     expect(chip('Session 1').color, chrome.paneBackground);
     expect(chip('Session 2').color, isNull);
+    // The label colours the contrast test below measures.
+    Color? labelColor(String label) =>
+        tester.widget<Text>(find.text(label)).style?.color;
+    expect(labelColor('Session 1'), theme.colorScheme.onSurface);
+    expect(labelColor('Session 2'), chrome.secondaryText);
     expect(closeShown('Session 1'), isTrue);
     expect(closeShown('Session 2'), isFalse);
     // An unsaved file keeps its dot, which is still the close button.
@@ -426,10 +433,29 @@ void main() {
     await tester.pump();
     expect(chip('Session 2').color, chrome.hoverFill);
     expect(closeShown('Session 2'), isTrue);
+    final dotted = tester.getSize(find.text('motd'));
+    final chipWidth = tester
+        .getSize(
+          find.ancestor(of: find.text('motd'), matching: find.byType(InkWell)),
+        )
+        .width;
     await mouse.moveTo(tester.getCenter(find.text('motd')));
     await tester.pump();
     expect(closeShown('Session 2'), isFalse);
     expect(inChip('motd', find.byIcon(Icons.close)), findsOneWidget);
+    // The swap keeps the button's footprint, so the strip does not reflow.
+    expect(tester.getSize(find.text('motd')), dotted);
+    expect(
+      tester
+          .getSize(
+            find.ancestor(
+              of: find.text('motd'),
+              matching: find.byType(InkWell),
+            ),
+          )
+          .width,
+      chipWidth,
+    );
 
     // So does keyboard focus, and the button stays while focus moves on
     // to it.

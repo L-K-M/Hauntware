@@ -611,7 +611,7 @@ class _ChipShellState extends State<_ChipShell> {
             customSemanticsActions: offerClose
                 ? null
                 : {
-                    const CustomSemanticsAction(label: 'Close tab'):
+                    const CustomSemanticsAction(label: _closeTabLabel):
                         widget.onClose,
                   },
             child: Container(
@@ -655,11 +655,16 @@ class _ChipShellState extends State<_ChipShell> {
   }
 }
 
+/// The close button's name, which a tab also gives its screen-reader
+/// action while the button is hidden, so both announce the same.
+const _closeTabLabel = 'Close tab';
+
 /// The strip's close affordance, shared so terminal and editor tabs can only
-/// differ in the icon it shows (the editor swaps in a dirty dot).
+/// differ in the icon it shows (the editor swaps in a dirty dot). The 28 px
+/// minimum is its footprint whichever icon it shows.
 Widget _tabCloseButton({required Widget icon, required VoidCallback onClose}) =>
     IconButton(
-      tooltip: 'Close tab',
+      tooltip: _closeTabLabel,
       iconSize: 15,
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,

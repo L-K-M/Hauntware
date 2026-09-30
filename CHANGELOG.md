@@ -4,8 +4,8 @@
 
 - Terminal and editor tabs look like Poltergeist's pane tabs and
   Planchette's document tabs. The tabs are flat on the header's colour,
-  with a hairline after each, and the open tab takes the terminal's
-  background and a bold label, without the coloured underline. Other
+  with a hairline after each, and the open tab takes the pane's colour
+  and a bold label, without the coloured underline. Other
   tabs' labels are dimmed, and a tab under the pointer is filled. A
   tab's close button shows on hover, on keyboard focus and on the open
   tab, and an unsaved file's dot stays in its place. Screen readers can
