@@ -94,7 +94,13 @@ final class QuitGuard {
     ];
 
     if (active.isNotEmpty) {
-      final choice = await _askQuitChoice(active);
+      final pauseAcrossRestart = active.every(
+        (task) => queue?.presentationFor(task.id).canPauseAcrossRestart ?? true,
+      );
+      final disposition = pauseAcrossRestart
+          ? QuitTaskDisposition.pauseOrCancel
+          : QuitTaskDisposition.cancelOnly;
+      final choice = await _askQuitChoice(active, disposition);
       // The seam may have been rebound while the dialog was open —
       // re-read so the mutations and the flush below hit the live queue.
       queue = _queueLookup?.call() ?? queue;
@@ -139,12 +145,15 @@ final class QuitGuard {
 
   Future<QuitConfirmChoice?> _askQuitChoice(
     List<TransferTask> active,
+    QuitTaskDisposition disposition,
   ) async {
     final context = _dialogContext;
     if (context == null) {
       // No surface left to warn on — the UI is already gone; proceed to
       // the flush so the journal still lands before destroy.
-      return QuitConfirmChoice.pauseAndQuit;
+      return disposition == QuitTaskDisposition.pauseOrCancel
+          ? QuitConfirmChoice.pauseAndQuit
+          : QuitConfirmChoice.cancelTransfersAndQuit;
     }
     var remaining = 0;
     for (final task in active) {
@@ -159,6 +168,7 @@ final class QuitGuard {
       context,
       activeTasks: active.length,
       remainingBytes: remaining,
+      disposition: disposition,
     );
   }
 

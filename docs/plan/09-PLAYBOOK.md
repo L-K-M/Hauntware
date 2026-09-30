@@ -235,10 +235,10 @@ listing won't match), and a component matching a Win32 **reserved device
 name** — `CON`, `PRN`, `AUX`, `NUL`, `CLOCK$`, `COM1`–`COM9` and superscript
 `COM¹`–`COM³`, `LPT1`–`LPT9` and superscript `LPT¹`–`LPT³`, with or without
 an extension, whose write "succeeds" into the device (`nul`
-discards the file's bytes) — are **all rejected in the `windowsDestination`
-branch** (the `_windowsHazard` char class plus `_isWindowsReservedName`
-below), a clean boundary error beating a confusing mid-transfer failure or
-silent loss. (Backslash is
+discards the file's bytes) — are **all rejected for a
+`PathDestination.windows` target** (the `_windowsHazard` char class plus
+`_isWindowsReservedName` below), a clean boundary error beating a confusing
+mid-transfer failure or silent loss. (Backslash is
 not in that branch — the sample's shape check rejects it for every
 destination; see its comment.) So the caller
 says where the path is headed. The helper itself absorbs trailing
@@ -263,8 +263,10 @@ destination it additionally owns the reserved-name check (above),
 because its non-mkdir callers have no other guard.
 
 ```dart
+enum PathDestination { posix, windows }
+
 void validateRelativeComponents(String relative,
-    {required bool windowsDestination}) {
+    {required PathDestination destination}) {
   // A directory entry's trailing '/' is shape, not a component; the
   // validator absorbs it (all of them) so no caller has to remember.
   // '/' itself reduces to '' and is rejected below like any root.
@@ -286,7 +288,7 @@ void validateRelativeComponents(String relative,
     // Backslash is rejected for EVERY destination on purpose: these
     // components also feed Windows-rendered previews and exports, and a
     // '\' inside one is overwhelmingly an escaping bug, not a filename —
-    // do not "simplify" this to windowsDestination-only.
+    // do not "simplify" this to a Windows-only check.
     if (part.isEmpty || part == '.' || part == '..' || part.contains('\\') ||
         // '\n'/'\r' are line-format breakers on EVERY destination — the
         // same escaping-bug class as backslash: these components feed the
@@ -314,7 +316,7 @@ void validateRelativeComponents(String relative,
     // ':' writes an alternate data stream, <>"|?* fail CreateFile, C0
     // control bytes are invalid, and Win32 strips trailing dots/spaces,
     // silently creating a different name than was validated.
-    if (windowsDestination &&
+    if (destination == PathDestination.windows &&
         (_windowsHazard.hasMatch(part) ||
             // Reserved device names checked HERE too, not only in
             // validateLocalName: export, preview, and drag-payload
@@ -351,6 +353,13 @@ final _bidiControls = // ALM/LRM/RLM, LRE..RLO+PDF, LRI..PDI — the full
         r'\u202a-\u202e'       // literal bidi char in a validator
         r'\u2066-\u2069]');    // would be its own spoof hazard)
 ```
+
+D27's local archive boundary uses the narrower exported
+`validateRelativeLocalPath(relative, maximumDepth:)`. It strips directory
+slashes, enforces the configured depth, rejects line and bidi controls, and
+runs every component through `validateLocalName`; archive output therefore
+uses the portable local-name subset on every host. The destination-aware
+helper above remains the contract for paths that may stay on POSIX remotes.
 
 Pin `_isWindowsReservedName`'s contract in its tests, since the
 export/preview/drag flows it guards never mkdir and so nothing else would

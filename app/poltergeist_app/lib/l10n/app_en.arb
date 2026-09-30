@@ -1863,6 +1863,10 @@
   "@quitConfirmTitle": {
     "description": "The quit guard's dialog title (02 §10): shown when the window close is intercepted with live transfer tasks."
   },
+  "quitConfirmOperationsTitle": "Quit while operations are running?",
+  "@quitConfirmOperationsTitle": {
+    "description": "The quit guard's cancel-only dialog title (02 §10): shown when live work includes a session-only operation."
+  },
   "quitConfirmBody": "{count, plural, =1{1 transfer is running} other{{count} transfers are running}}.",
   "@quitConfirmBody": {
     "description": "The quit dialog's warning line (02 §10) when no remaining-byte figure is known yet.",
@@ -1872,9 +1876,30 @@
       }
     }
   },
+  "quitConfirmOperationsBody": "{count, plural, =1{1 operation is running} other{{count} operations are running}}.",
+  "@quitConfirmOperationsBody": {
+    "description": "The cancel-only quit dialog's warning line (02 §10) when no remaining-byte figure is known yet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "quitConfirmBodyRemaining": "{count, plural, =1{1 transfer is running} other{{count} transfers are running}} ({remaining} remaining so far).",
   "@quitConfirmBodyRemaining": {
     "description": "The quit dialog's warning line (02 §10's example copy): the remaining figure is the discovered-total floor, so 'so far' never overstates what is left.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "remaining": {
+        "type": "String"
+      }
+    }
+  },
+  "quitConfirmOperationsBodyRemaining": "{count, plural, =1{1 operation is running} other{{count} operations are running}} ({remaining} remaining so far).",
+  "@quitConfirmOperationsBodyRemaining": {
+    "description": "The cancel-only quit dialog's warning line (02 §10): the remaining figure is the discovered-total floor.",
     "placeholders": {
       "count": {
         "type": "int"
@@ -1896,9 +1921,17 @@
   "@quitCancelTransfersAndQuit": {
     "description": "Quit verb (02 §10): cancels the live tasks so they do not restore, flushes the journal, then lets the window destroy."
   },
+  "quitCancelOperationsAndQuit": "Cancel Operations and Quit",
+  "@quitCancelOperationsAndQuit": {
+    "description": "Cancel-only quit verb (02 §10): cancels live operations that cannot pause across restart, flushes, then quits."
+  },
   "quitKeepTransferring": "Keep Transferring",
   "@quitKeepTransferring": {
     "description": "Quit verb (02 §10): cancels the close — the window stays open and transfers keep running."
+  },
+  "quitKeepWorking": "Keep Working",
+  "@quitKeepWorking": {
+    "description": "Cancel-only quit verb (02 §10): cancels the close so the live operations continue."
   },
   "quitFlushFailedTitle": "Transfer state could not be saved",
   "@quitFlushFailedTitle": {
@@ -5395,6 +5428,26 @@
   "fileDuplicateLabel": "Duplicate",
   "@fileDuplicateLabel": {
     "description": "file.duplicate (⌘D): a keep-both copy beside the selection."
+  },
+  "fileCreateArchiveLabel": "Create ZIP Archive",
+  "@fileCreateArchiveLabel": {
+    "description": "file.createArchive: creates a local ZIP from the selected items."
+  },
+  "fileExtractArchiveLabel": "Extract ZIP Archive",
+  "@fileExtractArchiveLabel": {
+    "description": "file.extractArchive: extracts one selected local ZIP beside itself."
+  },
+  "commandDisabledLocalArchive": "Archives are available for local files only.",
+  "@commandDisabledLocalArchive": {
+    "description": "Disabled archive command shown for a remote pane."
+  },
+  "commandDisabledArchivesUnavailable": "Archive support is unavailable.",
+  "@commandDisabledArchivesUnavailable": {
+    "description": "Disabled archive command when the local archive service is not composed."
+  },
+  "commandDisabledSelectOneZip": "Select one ZIP archive.",
+  "@commandDisabledSelectOneZip": {
+    "description": "Disabled Extract Archive command when the selection is not exactly one ZIP file."
   },
   "fileMoveToTrashLabel": "Move to Trash",
   "@fileMoveToTrashLabel": {

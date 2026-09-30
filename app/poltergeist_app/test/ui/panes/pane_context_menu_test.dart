@@ -154,6 +154,8 @@ void main() {
       kFileGetInfoCommandId,
       kFileRenameCommandId,
       kFileDuplicateCommandId,
+      kFileCreateArchiveCommandId,
+      kFileExtractArchiveCommandId,
       kSelectionCopyPathCommandId,
       kFileNewFolderCommandId,
       kFileNewFileCommandId,

@@ -14,6 +14,18 @@
 /// `package:seance_core/...` import.
 library;
 
+export 'src/archive/local_archive_service.dart'
+    show
+        LocalArchiveErrorKind,
+        LocalArchiveException,
+        LocalArchiveJob,
+        LocalArchiveLimits,
+        LocalArchiveOperation,
+        LocalArchivePhase,
+        LocalArchiveProgress,
+        LocalArchiveResult,
+        LocalArchiveService;
+
 export 'package:seance_core/seance_core.dart'
     show
         // D19/D23's link-only update check (07 §3.10): Séance's checker,
@@ -232,6 +244,7 @@ export 'src/fs/local_fs_safety.dart'
         restrictLocalPathPermissions,
         validateLocalName,
         validatePathComponent,
+        validateRelativeLocalPath,
         windowsReservedName;
 export 'src/checkout/managed_remote_file.dart'
     show

@@ -13,6 +13,7 @@ import 'app.dart';
 import 'settings_window_app.dart';
 import 'services/app_preferences.dart';
 import 'services/app_session_lifecycle.dart';
+import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
 import 'services/application_error_reporter.dart';
 import 'services/bookmark_backup_service.dart';
@@ -324,6 +325,9 @@ Future<void> main(List<String> args) async {
   // task rows into the same AppTransferQueue seam the panel, drop
   // delegate, and quit guard already consume.
   final syncTasks = SyncQueueTasks();
+  final archiveTasks = ArchiveQueueTasks(
+    LocalArchiveService(supportDirectoryPath: supportDirectory.path),
+  );
   final syncEnvironment = SyncEnvironment.forSupportDirectory(
     supportDirectory.path,
     deviceId: () async => syncEnrollmentState.cachedDeviceId ?? 'local',
@@ -346,7 +350,7 @@ Future<void> main(List<String> args) async {
   }
   final composedQueue = transferQueue == null
       ? null
-      : CompositeAppTransferQueue(transferQueue, syncTasks);
+      : CompositeAppTransferQueue(transferQueue, syncTasks, archiveTasks);
 
   // 06 §5.3's preview cache + produce seam (M7): an LRU store under
   // app-support `preview-cache/` seeded with the persisted cap, and a
@@ -572,6 +576,7 @@ Future<void> main(List<String> args) async {
       onPaneRatioChanged: seeds.paneRatioSink(preferences.savePaneRatio),
       onPaneRatioSaveError: errorReporter.report,
       transferQueue: composedQueue,
+      archiveTasks: archiveTasks,
       checkoutSession: checkoutSession,
       editorRegistry: editorRegistry,
       initialSidebarWidth: seeds.sidebarWidth,
@@ -665,7 +670,7 @@ Future<void> main(List<String> args) async {
       quitGuard: quitGuard,
       checkouts: checkoutSession,
       recentLocations: recentLocations,
-      exitFlushes: [windowLifecycle.saveBounds],
+      exitFlushes: [archiveTasks.dispose, windowLifecycle.saveBounds],
     );
     quitGuard.bindQueue(() => composedQueue);
     final apps = Expando<Widget>();

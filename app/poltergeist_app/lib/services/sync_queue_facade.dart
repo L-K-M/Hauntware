@@ -12,6 +12,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import 'app_transfer_queue.dart';
+import 'archive_queue_tasks.dart';
 
 /// The live per-run handle a [SyncPlanController] reports through.
 /// Created by [SyncQueueTasks.beginTask]; the controller drives events
@@ -23,6 +24,7 @@ final class SyncTaskBinding {
     required this.cancellation,
     required this.retry,
     required this._items,
+    required this._syncItems,
     required this._owner,
   });
 
@@ -47,6 +49,7 @@ final class SyncTaskBinding {
   }) {
     this.pause = pause;
     this.cancellation = cancellation;
+    _resetForRetry();
   }
 
   /// `retryTask` → the controller's `retryFailed`. Null once the run is
@@ -54,11 +57,37 @@ final class SyncTaskBinding {
   Future<void> Function()? retry;
 
   final Map<String, TransferItem> _items;
+  final Map<String, SyncItem> _syncItems;
   final SyncQueueTasks _owner;
 
   /// The panel row for [relativePath], or null when the plan item was
   /// never a task row (skip/conflict rows carry no work).
   TransferItem? itemFor(String relativePath) => _items[relativePath];
+
+  /// Clears the failed attempt while preserving rows that Retry Failed does
+  /// not execute, such as conflicts.
+  void _resetForRetry() {
+    task
+      ..error = null
+      ..failureKind = null;
+    for (final entry in _items.entries) {
+      if (_syncItems[entry.key]?.status != SyncItemStatus.failed ||
+          entry.value.state != TransferItemState.failed) {
+        continue;
+      }
+
+      final row = entry.value
+        ..state = TransferItemState.pending
+        ..error = null
+        ..transferredBytes = 0;
+      _owner._emit(
+        TransferQueueItemEvent(task.id, row.id, TransferItemState.pending),
+      );
+    }
+    task.failedItems = task.items
+        .where((item) => item.state == TransferItemState.failed)
+        .length;
+  }
 
   /// Registers one SyncRunEvent's item progress on the matching row and
   /// the task rollups, then emits the queue event the panel rebuilds
@@ -103,7 +132,7 @@ final class SyncTaskBinding {
       // pending/running never reach this edge — keep the row's state.
       SyncItemStatus.pending || SyncItemStatus.running => row.state,
     };
-    row.error = item.error;
+    row.error = row.state == TransferItemState.completed ? null : item.error;
     if (row.state == TransferItemState.completed) {
       if (row.isDirectory) {
         task.completedDirectories++;
@@ -131,7 +160,10 @@ final class SyncTaskBinding {
   void emitItemStarted(SyncItem item) {
     final row = _items[item.relativePath];
     if (row == null) return;
-    row.state = TransferItemState.active;
+    row
+      ..state = TransferItemState.active
+      ..error = null
+      ..transferredBytes = 0;
     _owner._emit(TransferQueueItemEvent(task.id, row.id, row.state));
   }
 
@@ -150,8 +182,15 @@ final class SyncTaskBinding {
       // restart semantics (transfer_queue.dart clears it the same way).
       task.finishedAt = null;
     }
-    task.error = error ?? task.error;
-    task.failureKind = failureKind ?? task.failureKind;
+    if (state == TransferTaskState.completed ||
+        state == TransferTaskState.cancelled) {
+      task
+        ..error = null
+        ..failureKind = null;
+    } else {
+      task.error = error ?? task.error;
+      task.failureKind = failureKind ?? task.failureKind;
+    }
     _owner._emit(
       TransferQueueTaskEvent(
         task.id,
@@ -168,12 +207,30 @@ final class SyncTaskBinding {
 final class SyncQueueTasks {
   final _tasks = <TransferTask>[];
   final _bindings = <String, SyncTaskBinding>{};
+  final _settlingRuns = <Future<void>>{};
   final _events = StreamController<TransferQueueEvent>.broadcast();
 
   /// Live + terminal task rows, admission order (the panel's listing).
   List<TransferTask> get tasks => List.unmodifiable(_tasks);
 
   Stream<TransferQueueEvent> get events => _events.stream;
+
+  /// Registers a controller run so the quit safe point can wait for its
+  /// executor and journal work to settle after cancellation.
+  Future<void> trackSettlingRun(Future<void> run) {
+    final observed = run.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    _settlingRuns.add(observed);
+    unawaited(observed.whenComplete(() => _settlingRuns.remove(observed)));
+    return run;
+  }
+
+  /// Waits for the runs active when the quit safe point is reached.
+  Future<void> waitForSettlingRuns() async {
+    await Future.wait(_settlingRuns.toList(growable: false));
+  }
 
   void _emit(TransferQueueEvent event) {
     if (!_events.isClosed) _events.add(event);
@@ -197,6 +254,7 @@ final class SyncQueueTasks {
       ..startedAt = DateTime.now()
       ..scanComplete = true;
     final items = <String, TransferItem>{};
+    final syncItems = <String, SyncItem>{};
     var totalBytes = 0;
     for (final item in plan.items) {
       final source = _actionableSource(item);
@@ -210,6 +268,7 @@ final class SyncQueueTasks {
         size: source.size,
       );
       items[item.relativePath] = row;
+      syncItems[item.relativePath] = item;
       task.items.add(row);
       if (isDirectory) {
         task.totalDirectories++;
@@ -225,6 +284,7 @@ final class SyncQueueTasks {
       cancellation: cancellation,
       retry: retry,
       items: items,
+      syncItems: syncItems,
       owner: this,
     );
     _tasks.add(task);
@@ -284,9 +344,8 @@ final class SyncQueueTasks {
   bool retry(String taskId) {
     final binding = _bindings[taskId];
     if (binding == null || !canRetry(taskId)) return false;
-    binding.task.state = TransferTaskState.running;
-    binding.task.finishedAt = null;
-    _emit(TransferQueueTaskEvent(taskId, TransferTaskState.running));
+    binding._resetForRetry();
+    binding.emitTaskState(TransferTaskState.running);
     unawaited(binding.retry!());
     return true;
   }
@@ -310,24 +369,37 @@ final class SyncQueueTasks {
   }
 }
 
-/// [AppTransferQueue] splicing sync tasks into the real queue's seam:
-/// reads concatenate both task lists and both event streams; verbs
-/// route on task-id ownership. The transfer queue keeps every verb it
-/// owns — nothing sync-shaped reaches it.
+/// [AppTransferQueue] splicing sync and archive tasks into the real queue's
+/// seam: reads concatenate every task list and event stream; verbs route on
+/// task-id ownership. The transfer queue keeps every verb it owns.
 final class CompositeAppTransferQueue implements AppTransferQueue {
-  CompositeAppTransferQueue(this._inner, this._syncTasks);
+  CompositeAppTransferQueue(this._inner, this._syncTasks, this._archiveTasks);
 
   final AppTransferQueue _inner;
   final SyncQueueTasks _syncTasks;
+  final ArchiveQueueTasks _archiveTasks;
 
   bool _isSyncTask(String taskId) => _syncTasks.bindingFor(taskId) != null;
+
+  bool _isArchiveTask(String taskId) => _archiveTasks.owns(taskId);
 
   @override
   TransferTask enqueue(TransferTaskSpec spec) => _inner.enqueue(spec);
 
   @override
-  List<TransferTask> get tasks =>
-      List.unmodifiable([..._inner.tasks, ..._syncTasks.tasks]);
+  List<TransferTask> get tasks => List.unmodifiable([
+    ..._inner.tasks,
+    ..._syncTasks.tasks,
+    ..._archiveTasks.tasks,
+  ]);
+
+  @override
+  AppTaskPresentation presentationFor(String taskId) {
+    final archive = _archiveTasks.presentationFor(taskId);
+    if (archive != null) return archive;
+    if (_isSyncTask(taskId)) return AppTaskPresentation.sync;
+    return _inner.presentationFor(taskId);
+  }
 
   @override
   Future<DeleteConfirmation> prepareDelete({
@@ -353,9 +425,11 @@ final class CompositeAppTransferQueue implements AppTransferQueue {
   Stream<TransferQueueEvent> get events => Stream.multi((listener) {
     final innerSub = _inner.events.listen(listener.add);
     final syncSub = _syncTasks.events.listen(listener.add);
+    final archiveSub = _archiveTasks.events.listen(listener.add);
     listener.onCancel = () async {
       await innerSub.cancel();
       await syncSub.cancel();
+      await archiveSub.cancel();
     };
   });
 
@@ -364,7 +438,9 @@ final class CompositeAppTransferQueue implements AppTransferQueue {
 
   @override
   PendingConflict? pendingConflictFor(String taskId, String itemId) =>
-      _isSyncTask(taskId) ? null : _inner.pendingConflictFor(taskId, itemId);
+      _isSyncTask(taskId) || _isArchiveTask(taskId)
+      ? null
+      : _inner.pendingConflictFor(taskId, itemId);
 
   @override
   List<TransferHistoryEntry> get history => _inner.history;
@@ -392,6 +468,10 @@ final class CompositeAppTransferQueue implements AppTransferQueue {
 
   @override
   void pauseTask(String taskId) {
+    if (_isArchiveTask(taskId)) {
+      _archiveTasks.pause(taskId);
+      return;
+    }
     if (_isSyncTask(taskId)) {
       _syncTasks.setPaused(taskId, true);
       return;
@@ -401,6 +481,10 @@ final class CompositeAppTransferQueue implements AppTransferQueue {
 
   @override
   void resumeTask(String taskId) {
+    if (_isArchiveTask(taskId)) {
+      _archiveTasks.resume(taskId);
+      return;
+    }
     if (_isSyncTask(taskId)) {
       _syncTasks.setPaused(taskId, false);
       return;
@@ -410,6 +494,10 @@ final class CompositeAppTransferQueue implements AppTransferQueue {
 
   @override
   void cancelTask(String taskId) {
+    if (_isArchiveTask(taskId)) {
+      _archiveTasks.cancel(taskId);
+      return;
+    }
     if (_isSyncTask(taskId)) {
       _syncTasks.cancel(taskId);
       return;
@@ -418,44 +506,53 @@ final class CompositeAppTransferQueue implements AppTransferQueue {
   }
 
   @override
-  bool removeTask(String taskId) =>
-      _isSyncTask(taskId)
-          ? _syncTasks.remove(taskId)
-          : _inner.removeTask(taskId);
+  bool removeTask(String taskId) {
+    if (_isArchiveTask(taskId)) return _archiveTasks.remove(taskId);
+    if (_isSyncTask(taskId)) return _syncTasks.remove(taskId);
+    return _inner.removeTask(taskId);
+  }
 
   @override
   bool moveTask(String taskId, {String? beforeTaskId}) =>
       // Sync rows are not reorderable — they are session reports, not
       // queued admissions.
-      _isSyncTask(taskId)
-          ? false
-          : _inner.moveTask(taskId, beforeTaskId: beforeTaskId);
+      _isSyncTask(taskId) || _isArchiveTask(taskId)
+      ? false
+      : _inner.moveTask(taskId, beforeTaskId: beforeTaskId);
 
   @override
   bool cancelItem(String taskId, String itemId) =>
       // The sync executor has no per-item cancel seam — the whole run
       // unwinds or nothing does; never a silent no-op read as success.
-      _isSyncTask(taskId) ? false : _inner.cancelItem(taskId, itemId);
+      _isSyncTask(taskId) || _isArchiveTask(taskId)
+      ? false
+      : _inner.cancelItem(taskId, itemId);
 
   @override
   bool canRetryItem(String taskId, String itemId) =>
-      _isSyncTask(taskId) ? false : _inner.canRetryItem(taskId, itemId);
+      _isSyncTask(taskId) || _isArchiveTask(taskId)
+      ? false
+      : _inner.canRetryItem(taskId, itemId);
 
   @override
   bool retryItem(String taskId, String itemId) =>
-      _isSyncTask(taskId) ? false : _inner.retryItem(taskId, itemId);
+      _isSyncTask(taskId) || _isArchiveTask(taskId)
+      ? false
+      : _inner.retryItem(taskId, itemId);
 
   @override
-  bool canRetryTask(String taskId) =>
-      _isSyncTask(taskId)
-          ? _syncTasks.canRetry(taskId)
-          : _inner.canRetryTask(taskId);
+  bool canRetryTask(String taskId) {
+    if (_isArchiveTask(taskId)) return _archiveTasks.canRetry(taskId);
+    if (_isSyncTask(taskId)) return _syncTasks.canRetry(taskId);
+    return _inner.canRetryTask(taskId);
+  }
 
   @override
-  bool retryTask(String taskId) =>
-      _isSyncTask(taskId)
-          ? _syncTasks.retry(taskId)
-          : _inner.retryTask(taskId);
+  bool retryTask(String taskId) {
+    if (_isArchiveTask(taskId)) return _archiveTasks.retry(taskId);
+    if (_isSyncTask(taskId)) return _syncTasks.retry(taskId);
+    return _inner.retryTask(taskId);
+  }
 
   @override
   bool resolveConflict(
@@ -466,16 +563,21 @@ final class CompositeAppTransferQueue implements AppTransferQueue {
   }) =>
       // Sync conflicts resolve in the plan view before the run — a
       // running sync task never parks an item for an answer.
-      _isSyncTask(taskId)
-          ? false
-          : _inner.resolveConflict(taskId, itemId, verb, scope: scope);
+      _isSyncTask(taskId) || _isArchiveTask(taskId)
+      ? false
+      : _inner.resolveConflict(taskId, itemId, verb, scope: scope);
 
   @override
   Future<void> clearHistory() => _inner.clearHistory();
 
-  /// The quit safe point (D16): the transfer journal's flush is the
-  /// inner queue's; sync journals fsync per appended line already, so
-  /// nothing extra drains here.
+  /// The quit safe point (D16): the inner queue flushes its transfer journal,
+  /// while session-only sync and archive jobs finish unwinding.
   @override
-  Future<void> flushJournal() => _inner.flushJournal();
+  Future<void> flushJournal() async {
+    await Future.wait([
+      _inner.flushJournal(),
+      _syncTasks.waitForSettlingRuns(),
+      _archiveTasks.waitForCancellationCleanup(),
+    ]);
+  }
 }

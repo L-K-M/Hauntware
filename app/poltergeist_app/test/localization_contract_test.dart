@@ -86,6 +86,18 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"r'^([A-Za-z]:|\\\\)'",
     r"r'^[A-Za-z]:'",
   },
+  // Archive file-kind detection; a filename suffix, never rendered copy.
+  'lib/services/pane_file_ops.dart': {"'.zip'"},
+  // Archive basenames, programmer-only diagnostics, and entry-key/path
+  // composition. They are filesystem or internal text, never UI copy.
+  'lib/services/archive_queue_tasks.dart': {
+    "'Archive.zip'",
+    "'roots'",
+    "'must not be empty'",
+    r"'${p.basename(sourcePaths.single)}.zip'",
+    "'/'",
+    r"'${binding.task.id}:$entryName'",
+  },
   // Selection-model validation diagnostics for programmer errors (unknown
   // targets, duplicate row identities); never rendered UI copy.
   'lib/services/selection_state.dart': {
@@ -1520,6 +1532,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'file.delete'",
     "'file.deletePermanently'",
     "'file.duplicate'",
+    "'file.createArchive'",
+    "'file.extractArchive'",
     "'help.keyboardShortcuts'",
     "'help.releaseNotes'",
     "'help.reportIssue'",
@@ -1671,6 +1685,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'activity.taskList'",
     r"'activity.task.${task.id}'",
     r"'activity.taskBody.${task.id}'",
+    r"'activity.taskError.${task.id}'",
     r"'activity.item.${item.id}'",
     r"'activity.cancel.${task.id}'",
     r"'activity.retry.${task.id}'",

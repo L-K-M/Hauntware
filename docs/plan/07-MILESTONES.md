@@ -812,9 +812,12 @@ overflows, the §6 cut lines apply — never quiet scope-dropping.
    Flutter; if it fights the queue or the engine, custom per-platform
    plugins, macOS `NSFilePromiseProvider` first. The produce-on-demand
    hook has existed since M4 (§3.5 scope, D14 — hook only, no drag-out).
-3. **Archives** (D27): local zip create/extract via `package:archive` in
-   `Isolate.run` workers, zip-slip-safe extraction (validate every
-   component). Remote-side extraction and browsable archives stay later.
+3. **Archives** (D27): local ZIP create/extract via exactly pinned
+   `package:archive` 4.3.0 in operation-scoped, cancellable `Isolate.spawn`
+   workers.
+   Create/Extract commands, Activity integration, hidden sibling staging, and
+   D27's complete preflight/streaming limits ship together. Remote-side
+   extraction and browsable archives stay later.
 4. **Importers** (D22): FileZilla `sitemanager.xml`, WinSCP INI, Cyberduck
    bookmarks — same preview + dedupe UI.
 5. **Deep links** (04 §7.1) and the text-diff view for sync pairs (05 →

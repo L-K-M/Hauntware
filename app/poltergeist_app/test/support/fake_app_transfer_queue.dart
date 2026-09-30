@@ -12,6 +12,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 class FakeAppTransferQueue implements AppTransferQueue {
   final _events = StreamController<TransferQueueEvent>.broadcast();
   final List<TransferTask> _tasks = [];
+  final _presentations = <String, AppTaskPresentation>{};
 
   bool _paused = false;
   final pendingConflictList = <PendingConflict>[];
@@ -81,6 +82,7 @@ class FakeAppTransferQueue implements AppTransferQueue {
     int? totalBytes,
     String? error,
     String? id,
+    AppTaskPresentation presentation = AppTaskPresentation.transfer,
   }) {
     final spec = TransferTaskSpec(
       source: source,
@@ -124,6 +126,7 @@ class FakeAppTransferQueue implements AppTransferQueue {
       ..totalBytes = totalBytes
       ..error = error;
     _tasks.add(task);
+    _presentations[task.id] = presentation;
     emit(TransferQueueTaskEvent(task.id, task.state));
     return task;
   }
@@ -253,12 +256,17 @@ class FakeAppTransferQueue implements AppTransferQueue {
     enqueuedSpecs.add(spec);
     final task = TransferTask(spec);
     _tasks.add(task);
+    _presentations[task.id] = AppTaskPresentation.transfer;
     emit(TransferQueueTaskEvent(task.id, task.state));
     return task;
   }
 
   @override
   List<TransferTask> get tasks => List.unmodifiable(_tasks);
+
+  @override
+  AppTaskPresentation presentationFor(String taskId) =>
+      _presentations[taskId] ?? AppTaskPresentation.transfer;
 
   @override
   bool get isPaused => _paused;
@@ -346,6 +354,7 @@ class FakeAppTransferQueue implements AppTransferQueue {
     final task = _task(taskId);
     if (task == null || !task.isTerminal) return false;
     _tasks.remove(task);
+    _presentations.remove(taskId);
     emitRefresh();
     return true;
   }
@@ -546,6 +555,7 @@ class FakeAppTransferQueue implements AppTransferQueue {
       ),
     );
     _tasks.add(task);
+    _presentations[task.id] = AppTaskPresentation.transfer;
     emit(TransferQueueTaskEvent(task.id, task.state));
     return task;
   }

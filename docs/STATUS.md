@@ -338,8 +338,9 @@ and destructive-action default are preserved. Validation used Flutter 3.47.3 on 
 `TMPDIR=/private/tmp`; CI uses the repository's 3.47.2 pin. Native assistive
 technology was not exercised by this change.
 
-_Last updated: 2026-09-29. **v1.0.0 IS SHIPPED**, and D10's first
-fast-follow (SSH-agent authentication plus ProxyJump) is complete. v1.0.0 was tagged at
+_Last updated: 2026-09-30. **v1.0.0 IS SHIPPED**; D10 (SSH-agent
+authentication plus ProxyJump) and D27 (local ZIP archives) are complete.
+D22's FileZilla/WinSCP/Cyberduck importers are next. v1.0.0 was tagged at
 d62f95af after the release pipeline's full first exercise
 (android `--no-pub` registrant fix #189, bash drift gate #190);
 GitHub Actions run 35926951105 green end to end, the GitHub Release publishes
@@ -8063,7 +8064,8 @@ spike); local archives (D27); FileZilla/WinSCP/Cyberduck importers
 then the v1.x backlog (named skip rules, batch rename, custom keymap,
 native icons, Compare entry point, preview warming — and Sync Browsing
 if risk 8's cut line is ever exercised). None was started in this release-prep
-slice; D10 completed on 2026-09-29 as recorded above. Item
+slice; D10 completed on 2026-09-29 and D27 completed on 2026-09-30 as recorded
+above. The D22 third-party importers are next. Item
 23's remote-transfer wiring is the de-facto headline fast-follow even
 though §3.13 predates naming it.
 
@@ -9614,6 +9616,46 @@ Remaining gaps are tracked below: the next-tag re-pin (item 2), unknown
 upstream agent-error branding plus native/live-route QA (item 37), and
 ProxyJump import preservation (item 38).
 
+## Local ZIP archives (D27, 2026-09-30)
+
+The second post-v1 fast-follow adds local-only archive work without extending
+the transfer journal or remote protocol.
+
+- **Commands and naming.** Create ZIP Archive accepts selected local roots;
+  one root becomes `<name>.zip`, while multiple roots become `Archive.zip`.
+  Extract ZIP Archive accepts one local `.zip` and proposes a sibling folder
+  named from the archive. Both operations use Keep Both naming. The commands
+  appear in the File and local context menus and remain unavailable for remote
+  panes. Archive browsing and remote archive operations remain out of scope.
+- **Activity and lifetime.** Create and extract jobs use the shared Activity
+  surface with phase-aware progress, pause/resume, cancel, retry, remove, and
+  Reveal. Final item destinations follow a Keep Both rename. Jobs are
+  session-only; quit cancels and drains them instead of serializing them into
+  the transfer journal. Cancellation uses a parent-owned native signal so the
+  worker unwinds its raw handles and buffers before the job settles.
+- **Core and safety.** `LocalArchiveService` runs each job in an
+  operation-scoped worker isolate using exact `archive` 4.3.0. Creation rejects
+  links and special files and reads accepted sources through stable no-follow
+  handles with identity checks. Extraction validates the ZIP structure and all
+  names before materialization, rejects traversal, platform aliases,
+  collisions, links, special files, encryption, multi-disk input, unsupported
+  methods, and unsupported descriptor/ZIP64 forms, and enforces entry, byte,
+  depth, component, metadata, compressed-data, and archive-size limits.
+  Output stays in an owner-only hidden stage authenticated by a durable HMAC
+  marker and protected by a lease. Cancellation removes the stage; commit uses
+  a per-destination lock, Keep Both resolution, and native atomic no-replace so
+  partial output is never published and an external writer is not replaced.
+
+Verification so far: all 68 archive/native tests and all 68 local-filesystem
+safety tests pass; the full core run reports 1,835 passing tests and 27
+environment skips. The focused app archive/menu/Activity/quit run reports 16
+passing tests. Core and Flutter analysis are clean. Linux native behavior is
+exercised. The Android APK build and real Android 28 x86_64 after capture are
+still pending after the final native changes; macOS, iOS, and Windows native
+runtime paths remain unverified. The real-app before capture is in
+[`tasks/local-archives/screenshots/`](../tasks/local-archives/screenshots/);
+the matching after capture is pending.
+
 ## Open items
 
 1. **M3 — OS Dart client matrix: validated 2026-09-12.**
@@ -10516,6 +10558,12 @@ ProxyJump import preservation (item 38).
     rows are badged and now start unchecked. A later importer slice may create
     catalog `ServerConfig` chains plus `serverConfigId` bookmarks atomically;
     until then, direct import requires explicit selection.
+39. **2026-09-30: D27 overlapping ZIP-region hardening.** The archive
+    preflight bounds every local header and payload before the central
+    directory, and decoded bytes remain subject to size and CRC checks, but it
+    does not reject two central entries whose local regions overlap. Review
+    found no containment, byte-cap, or checksum bypass; rejecting overlap is a
+    valid parser-hardening follow-up rather than a D27 blocker.
 
 ## Independent audit
 

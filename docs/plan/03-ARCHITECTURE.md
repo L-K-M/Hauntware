@@ -1594,7 +1594,16 @@ tested long before drag-out exists.
 |---|---|---|
 | UI isolate | Flutter, all controllers/notifiers (§6), platform channels, stores for settings/bookmarks | sockets, `SftpClient`s, hashing loops |
 | Engine isolate | `ConnectionManager` + pools + every SSH/SFTP socket, `LocalFileSystem` instances used by panes, `TransferQueue` execution, inline SHA-256 hashing, sync scan/diff execution (05) | widgets, plugins |
-| Short-lived `Isolate.run` workers | archive work (v1.x, D27), any future CPU burst that is not stream-shaped | shared state |
+| Operation-scoped workers (`Isolate.run` for one-shot work; retained `Isolate.spawn` channels for cancellation) | archive work (v1.x, D27), any future CPU burst that is not stream-shaped | shared state |
+
+Archive workers are the first cancellable case. The core archive job retains
+the spawned isolate's control channel and a parent-owned native cancellation
+signal. Codec input/output checks that signal at bounded chunks, then unwinds
+normally; killing an isolate that owns raw file handles would bypass cleanup
+and leak process-wide resources. The worker receives only plain-data input and
+writes only inside a service-owned hidden sibling stage. The core service owns
+worker exit, stage leases, cleanup, and commit; the application task registry
+owns Activity presentation, pause, and retry.
 
 > **As built (protocol v13, D8 addendum 2026-09-24).** The transfer queue,
 > the checkout manager, the preview producer, and the sync scanner/executor

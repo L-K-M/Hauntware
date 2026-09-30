@@ -6,6 +6,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/activity_panel_controller.dart';
+import '../../services/app_transfer_queue.dart';
 import '../../services/pane_location.dart';
 import '../../theme/family_hues.dart';
 import '../panes/kind_glyph.dart';
@@ -55,8 +56,9 @@ class _ActivityTaskListState extends State<ActivityTaskList> {
   /// The core's own reorderable gate (queued/scanning — file work has
   /// not dispatched yet). Display bands and the queue agree: only the
   /// pending band carries drag handles.
-  static bool _isReorderable(TransferTask task) =>
-      _band(task) == _RowBand.pending;
+  bool _isReorderable(TransferTask task) =>
+      _band(task) == _RowBand.pending &&
+      _controller.presentationFor(task.id).supports(AppTaskCapability.reorder);
 
   List<TransferTask> _orderedTasks() {
     final tasks = _controller.tasks;
@@ -111,10 +113,12 @@ class _ActivityTaskListState extends State<ActivityTaskList> {
           _onReorder(oldIndex, newIndex, display),
       itemBuilder: (context, index) {
         final task = display[index];
+        final presentation = _controller.presentationFor(task.id);
         return _TaskRow(
           key: ValueKey('activity.task.${task.id}'),
           index: index,
           task: task,
+          presentation: presentation,
           controller: _controller,
           expanded: _expanded.contains(task.id),
           onToggleExpanded: () => setState(() {
@@ -133,6 +137,7 @@ class _TaskRow extends StatelessWidget {
     super.key,
     required this.index,
     required this.task,
+    required this.presentation,
     required this.controller,
     required this.expanded,
     required this.onToggleExpanded,
@@ -141,6 +146,7 @@ class _TaskRow extends StatelessWidget {
 
   final int index;
   final TransferTask task;
+  final AppTaskPresentation presentation;
   final ActivityPanelController controller;
   final bool expanded;
   final VoidCallback onToggleExpanded;
@@ -151,7 +157,9 @@ class _TaskRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final platform = Theme.of(context).platform;
     final colors = Theme.of(context).colorScheme;
-    final reorderable = _ActivityTaskListState._isReorderable(task);
+    final reorderable =
+        _ActivityTaskListState._band(task) == _RowBand.pending &&
+        presentation.supports(AppTaskCapability.reorder);
 
     return Column(
       key: ValueKey('activity.taskBody.${task.id}'),
@@ -178,11 +186,12 @@ class _TaskRow extends StatelessWidget {
               Padding(
                 padding: const EdgeInsetsDirectional.only(end: 8, top: 2),
                 child: Icon(
-                  _operationIcon(task),
+                  _operationIcon(task, presentation),
                   size: 18,
                   color: task.state == TransferTaskState.failed
                       ? colors.error
-                      : FamilyPalette.of(context).glyph(_operationHue(task)),
+                      : FamilyPalette.of(context)
+                          .glyph(_operationHue(task, presentation)),
                 ),
               ),
               Expanded(
@@ -196,7 +205,7 @@ class _TaskRow extends StatelessWidget {
                     Semantics(
                       liveRegion: true,
                       label: l10n.activityRowSemantics(
-                        _taskTitle(task, l10n),
+                        _taskTitle(task, presentation, l10n),
                         _taskStateLabel(task, l10n),
                       ),
                       child: ExcludeSemantics(
@@ -204,7 +213,7 @@ class _TaskRow extends StatelessWidget {
                           children: [
                             Flexible(
                               child: Text(
-                                _taskTitle(task, l10n),
+                                _taskTitle(task, presentation, l10n),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodyMedium,
@@ -235,6 +244,16 @@ class _TaskRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
+                    if (task.error != null)
+                      Text(
+                        task.error!,
+                        key: ValueKey('activity.taskError.${task.id}'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelSmall?.copyWith(color: colors.error),
+                      ),
                     const SizedBox(height: 4),
                     _TaskProgress(
                       task: task,
@@ -243,6 +262,7 @@ class _TaskRow extends StatelessWidget {
                     ),
                     _TaskActions(
                       task: task,
+                      presentation: presentation,
                       controller: controller,
                       expanded: expanded,
                       onToggleExpanded: onToggleExpanded,
@@ -260,6 +280,7 @@ class _TaskRow extends StatelessWidget {
               key: ValueKey('activity.item.${item.id}'),
               task: task,
               item: item,
+              presentation: presentation,
               controller: controller,
             ),
         const Divider(height: 1),
@@ -269,12 +290,26 @@ class _TaskRow extends StatelessWidget {
 
   /// D34: a delete is destructive red; every other operation moves
   /// bytes, the motion cyan.
-  static FamilyHue _operationHue(TransferTask task) =>
-      task.operation == TransferOperation.delete
-      ? FamilyHue.red
-      : FamilyHue.cyan;
+  static FamilyHue _operationHue(
+    TransferTask task,
+    AppTaskPresentation presentation,
+  ) {
+    if (presentation.kind != AppTaskKind.transfer) return FamilyHue.brown;
+    return task.operation == TransferOperation.delete
+        ? FamilyHue.red
+        : FamilyHue.cyan;
+  }
 
-  static IconData _operationIcon(TransferTask task) {
+  static IconData _operationIcon(
+    TransferTask task,
+    AppTaskPresentation presentation,
+  ) {
+    if (presentation.kind == AppTaskKind.archiveCreate) {
+      return Icons.archive_outlined;
+    }
+    if (presentation.kind == AppTaskKind.archiveExtract) {
+      return Icons.unarchive_outlined;
+    }
     if (task.operation == TransferOperation.delete) {
       return Icons.delete_outline;
     }
@@ -289,8 +324,15 @@ class _TaskRow extends StatelessWidget {
     };
   }
 
-  static String _taskTitle(TransferTask task, AppLocalizations l10n) =>
-      transferTaskTitle(task, l10n);
+  static String _taskTitle(
+    TransferTask task,
+    AppTaskPresentation presentation,
+    AppLocalizations l10n,
+  ) => switch (presentation.kind) {
+    AppTaskKind.archiveCreate => l10n.fileCreateArchiveLabel,
+    AppTaskKind.archiveExtract => l10n.fileExtractArchiveLabel,
+    AppTaskKind.transfer => transferTaskTitle(task, l10n),
+  };
 
   static String _taskStateLabel(TransferTask task, AppLocalizations l10n) =>
       switch (task.state) {
@@ -374,6 +416,7 @@ class _TaskProgress extends StatelessWidget {
 class _TaskActions extends StatelessWidget {
   const _TaskActions({
     required this.task,
+    required this.presentation,
     required this.controller,
     required this.expanded,
     required this.onToggleExpanded,
@@ -381,6 +424,7 @@ class _TaskActions extends StatelessWidget {
   });
 
   final TransferTask task;
+  final AppTaskPresentation presentation;
   final ActivityPanelController controller;
   final bool expanded;
   final VoidCallback onToggleExpanded;
@@ -405,7 +449,9 @@ class _TaskActions extends StatelessWidget {
             ),
           ),
         const Spacer(),
-        if (live && task.state != TransferTaskState.queued)
+        if (live &&
+            task.state != TransferTaskState.queued &&
+            presentation.supports(AppTaskCapability.pause))
           IconButton(
             visualDensity: VisualDensity.compact,
             iconSize: 18,
@@ -421,7 +467,7 @@ class _TaskActions extends StatelessWidget {
                   : Icons.pause,
             ),
           ),
-        if (live)
+        if (live && presentation.supports(AppTaskCapability.cancel))
           IconButton(
             key: ValueKey('activity.cancel.${task.id}'),
             visualDensity: VisualDensity.compact,
@@ -430,7 +476,8 @@ class _TaskActions extends StatelessWidget {
             onPressed: () => controller.cancelTask(task.id),
             icon: const Icon(Icons.close),
           ),
-        if (controller.canRetryTask(task.id))
+        if (presentation.supports(AppTaskCapability.retry) &&
+            controller.canRetryTask(task.id))
           IconButton(
             key: ValueKey('activity.retry.${task.id}'),
             visualDensity: VisualDensity.compact,
@@ -439,7 +486,7 @@ class _TaskActions extends StatelessWidget {
             onPressed: () => controller.retryTask(task.id),
             icon: const Icon(Icons.refresh),
           ),
-        if (task.isTerminal)
+        if (task.isTerminal && presentation.supports(AppTaskCapability.remove))
           IconButton(
             key: ValueKey('activity.remove.${task.id}'),
             visualDensity: VisualDensity.compact,
@@ -459,7 +506,7 @@ class _TaskActions extends StatelessWidget {
             ),
             icon: const Icon(Icons.copy_outlined),
           ),
-        if (onReveal != null)
+        if (onReveal != null && presentation.supports(AppTaskCapability.reveal))
           IconButton(
             key: ValueKey('activity.reveal.${task.id}'),
             visualDensity: VisualDensity.compact,
@@ -481,11 +528,13 @@ class _ItemSubRow extends StatelessWidget {
     super.key,
     required this.task,
     required this.item,
+    required this.presentation,
     required this.controller,
   });
 
   final TransferTask task;
   final TransferItem item;
+  final AppTaskPresentation presentation;
   final ActivityPanelController controller;
 
   @override
@@ -587,17 +636,23 @@ class _ItemSubRow extends StatelessWidget {
 
   Widget _itemAction(BuildContext context, AppLocalizations l10n) =>
       switch (item.state) {
-        TransferItemState.pending => TextButton(
+        TransferItemState.pending
+            when presentation.supports(AppTaskCapability.cancelItem) =>
+          TextButton(
             key: ValueKey('activity.itemSkip.${item.id}'),
             onPressed: () => controller.cancelItem(task.id, item.id),
             child: Text(l10n.activitySkipItem),
           ),
-        TransferItemState.active => TextButton(
+        TransferItemState.active
+            when presentation.supports(AppTaskCapability.cancelItem) =>
+          TextButton(
             key: ValueKey('activity.itemCancel.${item.id}'),
             onPressed: () => controller.cancelItem(task.id, item.id),
             child: Text(l10n.activityCancelItem),
           ),
-        TransferItemState.conflictPending => TextButton(
+        TransferItemState.conflictPending
+            when presentation.supports(AppTaskCapability.resolveItemConflict) =>
+          TextButton(
             key: ValueKey('activity.itemResolve.${item.id}'),
             onPressed: () {
               final conflict = controller.queue?.pendingConflictFor(
@@ -616,13 +671,15 @@ class _ItemSubRow extends StatelessWidget {
             },
             child: Text(l10n.conflictResolve),
           ),
-        TransferItemState.failed => controller.canRetryItem(task.id, item.id)
-            ? TextButton(
-                key: ValueKey('activity.itemRetry.${item.id}'),
-                onPressed: () => controller.retryItem(task.id, item.id),
-                child: Text(l10n.activityRetryTask),
-              )
-            : const SizedBox.shrink(),
+        TransferItemState.failed =>
+          presentation.supports(AppTaskCapability.retryItem) &&
+                  controller.canRetryItem(task.id, item.id)
+              ? TextButton(
+                  key: ValueKey('activity.itemRetry.${item.id}'),
+                  onPressed: () => controller.retryItem(task.id, item.id),
+                  child: Text(l10n.activityRetryTask),
+                )
+              : const SizedBox.shrink(),
         _ => const SizedBox.shrink(),
       };
 }

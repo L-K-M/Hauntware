@@ -27,6 +27,7 @@ import 'package:path/path.dart' as p;
 const String _transferPrefix = '.poltergeist-';
 const String _backupSuffix = '.backup';
 const int _randomSuffixLength = 8;
+const int _archiveStageIdLength = 32;
 
 // NAME_MAX 255 is the floor across the supported platform matrix;
 // overshooting it fails the replace rather than truncating into a
@@ -45,6 +46,12 @@ final RegExp _backupNamePattern = RegExp(
   '[0-9a-f]{$_randomSuffixLength}${RegExp.escape(_backupSuffix)}\$',
 );
 
+final RegExp _archiveStageNamePattern = RegExp(
+  r'^\.poltergeist-archive-[0-9a-f]{'
+  '$_archiveStageIdLength'
+  r'}\.stage$',
+);
+
 final Random _random = Random.secure();
 
 /// Séance's forbidden class for local destination names, minus the
@@ -54,6 +61,11 @@ final RegExp _forbiddenLocalChars = RegExp(r'[:*?"<>|\x00-\x1f\x7f]');
 /// Win32 strips trailing dots and spaces from the base segment before
 /// its reserved-name match ('aux .txt' is as reserved as 'aux.txt').
 final RegExp _trailingDotOrSpace = RegExp(r'[ .]+$');
+
+/// Unicode controls that can visually reorder a materialized path.
+final RegExp _bidiControls = RegExp(
+  r'[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]',
+);
 
 /// The lexical half of the local path safety rules (03 §2.3, 09 §3.5).
 ///
@@ -104,6 +116,11 @@ void validateLocalName(String name) {
       '"$name" collides with the reserved crash-recovery backup pattern.',
     );
   }
+  if (_archiveStageNamePattern.hasMatch(name)) {
+    throw FormatException(
+      '"$name" collides with the reserved local-archive stage pattern.',
+    );
+  }
   if (_forbiddenLocalChars.hasMatch(name) ||
       name.endsWith('.') ||
       name.endsWith(' ')) {
@@ -116,6 +133,53 @@ void validateLocalName(String name) {
   if (windowsReservedName.hasMatch(base)) {
     throw FormatException('"$name" is not a safe local file name.');
   }
+}
+
+/// Validates a slash-delimited relative path before local materialization.
+///
+/// Trailing slashes are directory shape and are removed. Every remaining
+/// component then passes the same local-name boundary as an ordinary transfer.
+/// The returned components are safe to join below a trusted local root.
+List<String> validateRelativeLocalPath(
+  String relative, {
+  required int maximumDepth,
+}) {
+  if (maximumDepth < 1) {
+    throw RangeError.range(maximumDepth, 1, null, 'maximumDepth');
+  }
+
+  final original = relative;
+  var pathEnd = relative.length;
+  while (pathEnd > 0 && relative.codeUnitAt(pathEnd - 1) == 0x2f) {
+    pathEnd--;
+  }
+  relative = relative.substring(0, pathEnd);
+  if (relative.isEmpty || relative.startsWith('/')) {
+    throw FormatException('"$original" is not a safe relative local path.');
+  }
+
+  final components = relative.split('/');
+  if (components.length > maximumDepth) {
+    throw FormatException(
+      '"$original" exceeds the $maximumDepth-component path limit.',
+    );
+  }
+
+  for (final component in components) {
+    validateLocalName(component);
+    if (component.contains('\n') ||
+        component.contains('\r') ||
+        component.contains('\u0085') ||
+        component.contains('\u2028') ||
+        component.contains('\u2029') ||
+        _bidiControls.hasMatch(component)) {
+      throw FormatException(
+        '"$component" contains an unsafe text control in "$original".',
+      );
+    }
+  }
+
+  return List.unmodifiable(components);
 }
 
 /// 09 §3.5's full Windows reserved list: the DOS names plus CLOCK$,

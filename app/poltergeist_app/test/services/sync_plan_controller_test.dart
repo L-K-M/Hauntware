@@ -808,6 +808,39 @@ void main() {
       expect(controller.pairState.lastRunAt, isNull);
     });
 
+    test(
+      'the queue wait seam follows a controller run to cancellation',
+      () async {
+        File('${left.path}/a.txt').writeAsStringSync('x');
+        final gateFs = _CancelAwareGateFs();
+        final tasks = SyncQueueTasks();
+        final controller = realController(
+          const SyncRuleSet(),
+          tasks: tasks,
+          environment: testSyncEnvironment(
+            scratch,
+            localFileSystem: () => gateFs,
+          ),
+        );
+        addTearDown(controller.dispose);
+        controller.start();
+        await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+
+        gateFs.arm();
+        unawaited(controller.run());
+        await pumpUntil(() => controller.isRunning);
+
+        var settled = false;
+        final wait = tasks.waitForSettlingRuns().then((_) => settled = true);
+        await Future<void>.delayed(Duration.zero);
+        expect(settled, isFalse);
+
+        controller.cancelRun();
+        await wait;
+        expect(controller.phase, SyncPlanPhase.cancelled);
+      },
+    );
+
     test('a retry that completes stamps lastRunAt like a run',
         () async {
       File('${left.path}/a.txt').writeAsStringSync('x');

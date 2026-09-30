@@ -17,6 +17,7 @@ import '../services/alert_center.dart';
 import '../services/app_lifecycle_forwarder.dart';
 import '../services/app_transfer_queue.dart';
 import '../services/application_error_reporter.dart';
+import '../services/archive_queue_tasks.dart';
 import '../services/bookmark_backup_service.dart';
 import '../services/checkout_prompt_ledger.dart';
 import '../services/checkout_session.dart';
@@ -137,6 +138,7 @@ class WorkspaceShell extends StatefulWidget {
     this.connectionEngine,
     this.engineSession,
     this.transferQueue,
+    this.archiveTasks,
     this.checkoutSession,
     this.editorRegistry,
     this.externalOpener = const ExternalFileOpener(),
@@ -278,6 +280,10 @@ class WorkspaceShell extends StatefulWidget {
   /// transfer slice; the panel's verbs stay reachable-but-disabled, and
   /// `queue.togglePause` still registers (D21).
   final AppTransferQueue? transferQueue;
+
+  /// D27's local ZIP task registry. The composed queue renders its jobs;
+  /// pane commands use the same instance to admit create/extract work.
+  final ArchiveQueueTasks? archiveTasks;
 
   /// The managed-checkout session (06 §3, M7) — the seam the future
   /// editor surfaces (built-in editor, external-editor saves, the
@@ -853,7 +859,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         own.value = widget.initialPreviewThresholdBytes;
       }
     }
-    if (!identical(oldWidget.transferQueue, widget.transferQueue)) {
+    if (!identical(oldWidget.transferQueue, widget.transferQueue) ||
+        !identical(oldWidget.archiveTasks, widget.archiveTasks)) {
       // A later-arriving queue seam rebinds the mirror; the persisted
       // limits re-apply inside the setter.
       _activity.queue = widget.transferQueue;
@@ -2341,7 +2348,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   void _bindFileOps(AppTransferQueue? queue) {
     unawaited(_settledRefresh?.cancel());
     _settledRefresh = null;
-    _fileOps = queue == null ? null : PaneFileOps(queue);
+    _fileOps = queue == null
+        ? null
+        : PaneFileOps(queue, archives: widget.archiveTasks);
     if (queue == null) return;
     _settledRefresh = queue.events.listen((event) {
       if (event is! TransferQueueTaskEvent) return;

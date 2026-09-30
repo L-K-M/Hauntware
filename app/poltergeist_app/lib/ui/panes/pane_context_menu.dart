@@ -10,7 +10,9 @@ import '../shell/shell_commands.dart'
     show
         kFileDeleteCommandId,
         kFileDownloadToCommandId,
+        kFileCreateArchiveCommandId,
         kFileDuplicateCommandId,
+        kFileExtractArchiveCommandId,
         kFileNewFileCommandId,
         kFileNewFolderCommandId,
         kSelectionMoveToOtherPaneCommandId,
@@ -33,6 +35,8 @@ const kPaneRowContextMenu = <List<String>>[
     kFileGetInfoCommandId,
     kFileRenameCommandId,
     kFileDuplicateCommandId,
+    kFileCreateArchiveCommandId,
+    kFileExtractArchiveCommandId,
     kSelectionCopyPathCommandId,
   ],
   [kFileNewFolderCommandId, kFileNewFileCommandId],
