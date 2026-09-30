@@ -329,7 +329,7 @@ W = word at the caret, S = selection required, I = insert at the caret.
 
 | Tool | No selection | Options and rules |
 |---|---|---|
-| Sort Lines… | D | Order, ignore case (default on), numbers by value, by length, ignore leading whitespace, leave the first line in place (header row). Code-point order with an index tiebreak: `List.sort` is not stable (*checked*). Ignore case uses the controller's case folder, as find does |
+| Sort Lines… | D | Order (A to Z), ignore case (on). Off by default: numbers by value, by length, ignore leading whitespace, leave the first line of the range in place (header row). Code-point order with an index tiebreak: `List.sort` is not stable (*checked*). Ignore case uses the controller's case folder, as find does |
 | Reverse, Shuffle Lines | D | Shuffle takes an injected random source |
 | Remove Duplicate Lines… | D | Keeps the first. Options: adjacent only, ignore case, ignore surrounding whitespace, keep blank lines (default on), remove every copy |
 | Remove / Collapse Blank Lines | D | Blank is empty or spaces and tabs only |
@@ -377,9 +377,11 @@ Shared rules:
 - **Undo.** One assignment is one undo entry, but Flutter pushes history
   through a 500 ms throttle (`undo_history.dart`) and exposes no way to flush
   it: a change within 500 ms of another shares its undo step. `runTextTool`
-  therefore waits until the last change is 500 ms old before its assignment,
-  so Undo reverts the tool and keeps the typing before it. Typing within
-  500 ms after a tool still merges with it. Slice 1 pins both with tests.
+  therefore waits until the last change is 500 ms old before its assignment;
+  a change during the wait restarts it. Undo then reverts the tool and keeps
+  the typing before it. The cost is up to 500 ms of delay for a tool run
+  right after typing. Typing within 500 ms after a tool still merges with
+  it. Slice 1 pins both with tests.
 
 ## 5. Beyond the Text menu
 
@@ -454,7 +456,7 @@ shared packages; each PR lists what hosts will see on the next pin bump.
 | 1 | Core line and range helpers, catalog entries, outcome type, `runTextTool`, result notice, flat Text menu with 10 tools run at defaults: Sort Lines, Remove Duplicate Lines, Remove Blank Lines, Trim Trailing Whitespace, Convert Indentation to Spaces and to Tabs, UPPERCASE, lowercase, Straighten Quotes, Zap Gremlins | L | Four of the owner's six named tools (sort, trim, tabs and spaces, gremlins), in the menu and the palette. Pins the undo throttle |
 | 2 | Submenu entry type, command ids, generated menu. Five places walk the menu: `_nativeItems`, `_menuBar`, the shortcut map, `_openPalette`, `_runCurrent`. Palette keywords, descriptions, path, greyed rows | M to L | The menu structure |
 | 3 | Tool bar, option declarations, `TextToolHistory`, Repeat, Recent. Options for Sort, Remove Duplicates, Zap Gremlins; Prefix/Suffix Lines, Number Lines, Join Lines With | L | Prefix/Suffix. Parameters and the short form. Option tools gain their "…" |
-| 4 | Remaining tools without options, in batches: Reverse, Shuffle, Collapse Blank Lines, Trim Leading, Normalize Spaces; case family; four codec pairs (URL, Base64, HTML entities, JSON string and backslash); Remove ANSI; Insert; Unwrap Paragraphs | M each batch | 26 more tools |
+| 4 | Remaining tools without options, in batches: Reverse, Shuffle, Collapse Blank Lines, Trim Leading, Normalize Spaces; case family; four codec pairs (URL, Base64, HTML entities, string escapes); Remove ANSI; Insert; Unwrap Paragraphs | M each batch | 26 more tools |
 | 5a | Find bar line actions, Extract Matches, two worker requests | M to L | Keep and Delete Lines Matching, Extract |
 | 5b | Find in Selection (E5) | L | Scope for find, replace and 5a |
 | 5c | Replacement escapes, preview line | M | If decision 5 is yes |
