@@ -80,9 +80,9 @@ versions in step. A release is a separate explicit task.
 - The product name is **Planchette** — plain ASCII everywhere a file name or
   bundle identifier appears (Séance's codesign lesson: macOS codesign rejects
   accented file names). Identifiers follow the siblings' scheme: Apple bundle id
-  `com.lkm.planchetteApp`, Linux binary/package name `planchette`, Linux
-  GApplication id `com.lkm.planchette_app`. The packaged build reports X11
-  `WM_CLASS` class `Com.lkm.planchette_app`; the case-sensitive class must
+  `ch.lkmc.planchetteApp`, Linux binary/package name `planchette`, Linux
+  GApplication id `ch.lkmc.planchette`. The packaged build reports X11
+  `WM_CLASS` class `Ch.lkmc.planchette`; the case-sensitive class must
   match `StartupWMClass` in `scripts/package-linux.sh`.
 - Keep new code matching the surrounding style: small focused files, doc
   comments that explain *why*, `analyze` clean before committing.

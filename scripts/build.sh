@@ -67,7 +67,12 @@ case "$target" in
       rm -rf "$installed"
       cp -R "$destination" "$installed"
       cp "$root/media-sources/icon.png" "$HOME/.local/share/icons/hicolor/256x256/apps/planchette.png"
-      cat > "$HOME/.local/share/applications/com.lkm.planchette_app.desktop" <<DESKTOP
+      rm -f "$HOME/.local/share/applications/com.lkm.planchette_app.desktop"
+      # Repoint any saved default-handler association to the renamed desktop file.
+      for mf in "$HOME/.config/mimeapps.list" "$HOME/.local/share/applications/mimeapps.list"; do
+        sed -i 's/com\.lkm\.planchette_app\.desktop/ch.lkmc.planchette.desktop/g' "$mf" 2>/dev/null || true
+      done
+      cat > "$HOME/.local/share/applications/ch.lkmc.planchette.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Planchette
@@ -77,7 +82,7 @@ Icon=planchette
 Terminal=false
 Categories=Utility;TextEditor;
 MimeType=text/plain;text/x-source;
-StartupWMClass=Com.lkm.planchette_app
+StartupWMClass=Ch.lkmc.planchette
 DESKTOP
       if command -v update-desktop-database >/dev/null; then
         update-desktop-database "$HOME/.local/share/applications"
