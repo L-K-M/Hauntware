@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **⌘W closes Settings on a Mac.** With the Settings window in front, ⌘W
+  and ⇧⌘W close it. ⌘W used to close a tab in the workspace window behind
+  it, and ⇧⌘W the workspace window itself.
 - **SSH-agent authentication.** New servers default to the system SSH agent,
   with no private key stored by Poltergeist.
 - **The built-in editor is the one Planchette and Séance use.** It gains
