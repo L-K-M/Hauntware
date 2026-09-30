@@ -384,10 +384,10 @@ class _DocumentShellState extends State<_DocumentShell> {
           case _Submenu(:final items, :final label):
             collect(items, '$path > $label');
           case _Command() when entry.run != _openPalette && entry.inPalette:
-            final tool = textToolById(entry.commandId);
+            final tool = entry.id == null ? null : textToolById(entry.id!);
             commands.add(
               PaletteCommand(
-                id: entry.commandId,
+                id: _paletteId(entry, path),
                 label: entry.label,
                 path: path,
                 description: tool == null
@@ -397,7 +397,7 @@ class _DocumentShellState extends State<_DocumentShell> {
                     ? const []
                     : _editorStrings.textToolKeywords(tool.id),
                 enabled: entry.enabled,
-                run: () => _runCurrent(entry.commandId),
+                run: () => _runCurrent(_paletteId(entry, path)),
                 shortcut: entry.shortcut,
               ),
             );
@@ -417,15 +417,21 @@ class _DocumentShellState extends State<_DocumentShell> {
     }
   }
 
+  /// What identifies a command to the palette: the explicit id when the
+  /// command declares one, else its menu path — two same-named commands
+  /// in different menus would otherwise collide on their label.
+  static String _paletteId(_Command command, String path) =>
+      command.id ?? '$path > ${command.label}';
+
   /// The menu's command for [commandId], descending into submenus.
   _Command? _commandById(String commandId) {
-    _Command? find(List<_MenuEntry> items) {
+    _Command? find(List<_MenuEntry> items, String path) {
       for (final entry in items) {
         switch (entry) {
-          case _Submenu(:final items):
-            final found = find(items);
+          case _Submenu(:final items, :final label):
+            final found = find(items, '$path > $label');
             if (found != null) return found;
-          case _Command() when entry.commandId == commandId:
+          case _Command() when _paletteId(entry, path) == commandId:
             return entry;
           case _Command() || _Separator():
         }
@@ -434,7 +440,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     }
 
     for (final menu in _menus()) {
-      final found = find(menu.items);
+      final found = find(menu.items, menu.label);
       if (found != null) return found;
     }
     return null;
@@ -1241,7 +1247,7 @@ final class _Command extends _MenuEntry {
 
   /// The stable identifier the palette resolves the command by, so a row
   /// whose label changes — Repeat names its target — still resolves.
-  /// Defaults to the label, which is unique per menu today.
+  /// Commands without one are identified by their menu path.
   final String? id;
   final String label;
   final VoidCallback run;
@@ -1254,8 +1260,6 @@ final class _Command extends _MenuEntry {
   /// Placeholder rows such as "No Recent Runs" fill an empty menu but are
   /// not commands; they do not belong in the palette.
   final bool inPalette;
-
-  String get commandId => id ?? label;
 }
 
 /// The placeholder for an empty Recent submenu — it can never be chosen.

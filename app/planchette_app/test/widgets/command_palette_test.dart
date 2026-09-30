@@ -44,7 +44,7 @@ void main() {
     late List<String> ran;
     late List<PaletteCommand> commands;
     PaletteCommand command(String path, String label) => PaletteCommand(
-      id: label,
+      id: '$path/$label',
       path: path,
       label: label,
       run: () => ran.add(label),
@@ -230,6 +230,9 @@ void main() {
 
       expect(find.text('Sort Lines…'), findsOneWidget);
       expect(find.text('Orders lines alphabetically.'), findsOneWidget);
+      // The row is rendered de-emphasised, not just inert.
+      final labelText = tester.widget<Text>(find.text('Sort Lines…'));
+      expect(labelText.style?.color?.a, lessThan(1));
       await tester.tap(find.text('Sort Lines…'));
       await tester.pumpAndSettle();
       expect(ran, isEmpty);
@@ -237,6 +240,26 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
       expect(ran, isEmpty);
+    });
+
+    // A keyword phrase matches on the part typed so far: "trailing"
+    // finds "trailing spaces" by subsequence.
+    testWidgets('a partial query matches a multi-word keyword', (tester) async {
+      commands = [
+        PaletteCommand(
+          id: 'trim',
+          path: 'Text > Whitespace',
+          label: 'Detab',
+          description: 'Removes spaces and tabs from the ends of lines.',
+          keywords: const ['trailing spaces'],
+          run: () => ran.add('trim'),
+        ),
+      ];
+      await open(tester);
+      await type(tester, 'trailing sp');
+
+      expect(find.text('Detab'), findsOneWidget);
+      expect(find.textContaining('matches "trailing spaces"'), findsOneWidget);
     });
   });
 }
