@@ -48,7 +48,7 @@ void main() {
   test('recovers the real home from a macOS sandbox container', () {
     final setup = build(
       environment: const {
-        'HOME': '/Users/alice/Library/Containers/com.lkm.poltergeistApp/Data',
+        'HOME': '/Users/alice/Library/Containers/ch.lkmc.poltergeistApp/Data',
       },
       isMacOS: true,
     );

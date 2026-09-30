@@ -1,4 +1,4 @@
-package com.lkm.poltergeist_app
+package ch.lkmc.poltergeist
 
 import io.flutter.embedding.android.FlutterActivity
 

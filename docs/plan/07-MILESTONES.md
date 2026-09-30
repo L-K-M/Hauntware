@@ -261,13 +261,18 @@ CI, and looks like the beginning of Poltergeist, not a counter demo.
 
 **Scope.**
 
-- `flutter create --org com.lkm app/poltergeist_app` — the `--org` is
-  load-bearing: it yields Android id `com.lkm.poltergeist_app`, Apple
-  bundle id `com.lkm.poltergeistApp`, and Linux `APPLICATION_ID`
-  `com.lkm.poltergeist_app`; the packaged build reports X11 `WM_CLASS` as
-  instance `com.lkm.poltergeist_app`, class `Com.lkm.poltergeist_app`, so
+- `flutter create --org ch.lkmc app/poltergeist_app` — the `--org` is
+  load-bearing: it yields Android id `ch.lkmc.poltergeist_app`, Apple
+  bundle id `ch.lkmc.poltergeistApp`, and Linux `APPLICATION_ID`
+  `ch.lkmc.poltergeist_app`; the `_app` suffix is then removed by hand in
+  `android/app/build.gradle.kts` and `linux/CMakeLists.txt`, and
+  `MainActivity.kt` moves to `kotlin/ch/lkmc/poltergeist/` with package
+  `ch.lkmc.poltergeist`, leaving
+  Android/Linux on `ch.lkmc.poltergeist`. The packaged build reports X11
+  `WM_CLASS` as
+  instance `ch.lkmc.poltergeist`, class `Ch.lkmc.poltergeist`, so
   the `.desktop` entry must carry the literal
-  `StartupWMClass=Com.lkm.poltergeist_app` — kept in sync in
+  `StartupWMClass=Ch.lkmc.poltergeist` — kept in sync in
   `scripts/package-linux.sh` (AGENTS.md §3). Commit the
   platform folders. The app is NOT added to the root workspace `members`;
   it path-depends on `packages/poltergeist_core` (AGENTS.md §4).

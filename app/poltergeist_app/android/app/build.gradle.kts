@@ -52,7 +52,7 @@ check(actualCiCertificateSha256 == expectedCiCertificateSha256) {
 }
 
 android {
-    namespace = "com.lkm.poltergeist_app"
+    namespace = "ch.lkmc.poltergeist"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -62,7 +62,9 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.lkm.poltergeist_app"
+        // Frozen after the first shipped release: changing applicationId makes
+        // new builds install as a separate app instead of upgrading in place.
+        applicationId = "ch.lkmc.poltergeist"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
