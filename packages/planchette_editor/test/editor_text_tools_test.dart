@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
-Widget app(EditorController c) =>
-    MaterialApp(home: Scaffold(body: PlanchetteEditor(controller: c)));
+Widget app(EditorController c) => MaterialApp(
+  home: Scaffold(body: PlanchetteEditor(controller: c)),
+);
 
 // A tool run waits out the controller's undo-quiet window — the undo
 // history's 500 ms merge window — so tests that are not about the wait run

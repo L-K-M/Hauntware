@@ -129,12 +129,9 @@ class EditorStrings {
           '$where.',
     'convertIndentationToTabs' =>
       'converted indentation to tabs on $changed of ${_lines(scope)} $where.',
-    'uppercase' =>
-      'uppercased ${_plural(changed, 'character')} $where.',
-    'lowercase' =>
-      'lowercased ${_plural(changed, 'character')} $where.',
-    'straightenQuotes' =>
-      'straightened ${_plural(changed, 'quote')} $where.',
+    'uppercase' => 'uppercased ${_plural(changed, 'character')} $where.',
+    'lowercase' => 'lowercased ${_plural(changed, 'character')} $where.',
+    'straightenQuotes' => 'straightened ${_plural(changed, 'quote')} $where.',
     'zapGremlins' => switch (detail) {
       'escape' => 'escaped ${_plural(changed, 'gremlin')} $where.',
       'replace' => 'replaced ${_plural(changed, 'gremlin')} $where.',
@@ -149,8 +146,7 @@ class EditorStrings {
   String _unchangedText(String id, int scope, String where) => switch (id) {
     'sortLines' =>
       'nothing to change, ${_lines(scope)} $where already in order.',
-    'removeDuplicateLines' =>
-      'nothing to change, no duplicate lines $where.',
+    'removeDuplicateLines' => 'nothing to change, no duplicate lines $where.',
     'removeBlankLines' => 'nothing to change, no blank lines $where.',
     'trimTrailingWhitespace' => 'nothing to trim $where.',
     'convertIndentationToSpaces' ||

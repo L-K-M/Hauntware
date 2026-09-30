@@ -593,14 +593,10 @@ class _DocumentShellState extends State<_DocumentShell> {
       // pattern runs at its defaults here.
       _ShellMenu('Text', [
         for (final tool in textToolCatalog)
-          _Command(
-            _editorStrings.textToolName(tool.id),
-            () {
-              final editor = active?.editor;
-              if (editor != null) unawaited(editor.runTextTool(tool.id));
-            },
-            enabled: lineCommands,
-          ),
+          _Command(_editorStrings.textToolName(tool.id), () {
+            final editor = active?.editor;
+            if (editor != null) unawaited(editor.runTextTool(tool.id));
+          }, enabled: lineCommands),
       ]),
       _ShellMenu('Find', [
         _Command(

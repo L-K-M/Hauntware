@@ -147,11 +147,7 @@ void main() {
 
     test('ignores leading whitespace when asked', () {
       expect(
-        run(
-          'sortLines',
-          '  b\na|',
-          options: {'ignoreLeadingWhitespace': true},
-        ),
+        run('sortLines', '  b\na|', options: {'ignoreLeadingWhitespace': true}),
         'a\n  b|',
       );
       // Equal keys keep the original order — the indent stays.
@@ -256,10 +252,13 @@ void main() {
       expect(run('removeBlankLines', 'a\n  \t\nb|'), 'a\nb|');
     });
 
-    test('a trailing newline ends the file rather than starting a blank line', () {
-      expect(run('removeBlankLines', 'a\nb\n|'), 'unchanged');
-      expect(run('removeBlankLines', 'a\nb\n\n|'), 'a\nb\n|');
-    });
+    test(
+      'a trailing newline ends the file rather than starting a blank line',
+      () {
+        expect(run('removeBlankLines', 'a\nb\n|'), 'unchanged');
+        expect(run('removeBlankLines', 'a\nb\n\n|'), 'a\nb\n|');
+      },
+    );
 
     test('leading blank lines come off whole', () {
       expect(run('removeBlankLines', '\n\na|'), 'a|');
@@ -337,7 +336,11 @@ void main() {
 
     test('converts only the selected lines', () {
       expect(
-        run('convertIndentationToSpaces', '[\ta]\n\tb', indentation: const Indentation.tabs()),
+        run(
+          'convertIndentationToSpaces',
+          '[\ta]\n\tb',
+          indentation: const Indentation.tabs(),
+        ),
         '[    a]\n\tb <spaces(4)>',
       );
     });
@@ -409,7 +412,10 @@ void main() {
     });
 
     test('touches only a selection when there is one', () {
-      expect(run('straightenQuotes', '[\u201ca\u201d] \u201cb'), '["a"] \u201cb');
+      expect(
+        run('straightenQuotes', '[\u201ca\u201d] \u201cb'),
+        '["a"] \u201cb',
+      );
     });
 
     test('reports nothing without curly quotes', () {
@@ -427,10 +433,7 @@ void main() {
     });
 
     test('deletes invisible characters but keeps joiners', () {
-      expect(
-        run('zapGremlins', 'a\xadb\u200bc\u2060d\ufeffe|'),
-        'abcde|',
-      );
+      expect(run('zapGremlins', 'a\xadb\u200bc\u2060d\ufeffe|'), 'abcde|');
       expect(run('zapGremlins', 'a\u200cb\u200dc|'), 'unchanged');
     });
 
@@ -487,10 +490,7 @@ void main() {
 
     test('leaves astral characters alone unless non-ASCII', () {
       expect(run('zapGremlins', 'a😀b|'), 'unchanged');
-      expect(
-        run('zapGremlins', 'a😀b|', options: {'nonAscii': true}),
-        'ab|',
-      );
+      expect(run('zapGremlins', 'a😀b|', options: {'nonAscii': true}), 'ab|');
     });
   });
 }

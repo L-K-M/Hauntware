@@ -30,7 +30,15 @@ enum TextToolScope {
 }
 
 /// The submenu a tool lives under, in menu order.
-enum TextToolGroup { lines, changeCase, whitespace, cleanUp, wrap, encode, insert }
+enum TextToolGroup {
+  lines,
+  changeCase,
+  whitespace,
+  cleanUp,
+  wrap,
+  encode,
+  insert,
+}
 
 /// What a run's range was resolved from. The result notice phrases scope
 /// from it, and tools use it to keep a caret rather than reselect.
@@ -273,11 +281,7 @@ const textToolCatalog = <TextTool>[
     group: TextToolGroup.lines,
     scope: TextToolScope.document,
     options: [
-      ChoiceOption(
-        'order',
-        ['ascending', 'descending'],
-        value: 'ascending',
-      ),
+      ChoiceOption('order', ['ascending', 'descending'], value: 'ascending'),
       ToggleOption('ignoreCase', value: true),
       ToggleOption('numbersByValue'),
       ToggleOption('byLength'),
@@ -357,11 +361,12 @@ const textToolCatalog = <TextTool>[
       ToggleOption('bidi', value: true),
       ToggleOption('damaged'),
       ToggleOption('nonAscii'),
-      ChoiceOption(
-        'action',
-        ['delete', 'escape', 'replace', 'entity'],
-        value: 'delete',
-      ),
+      ChoiceOption('action', [
+        'delete',
+        'escape',
+        'replace',
+        'entity',
+      ], value: 'delete'),
       TextOption('character', value: '?'),
     ],
     run: _zapGremlins,
@@ -381,12 +386,24 @@ TextTool? textToolById(String id) {
 /// [TextToolScope]. When that scope's target does not exist — no word at
 /// the caret, nothing selected — [refusal] is set and the other fields
 /// point at the caret.
-({int base, int extent, int caret, TextToolRanOn ranOn, TextToolRefusal? refusal})
+({
+  int base,
+  int extent,
+  int caret,
+  TextToolRanOn ranOn,
+  TextToolRefusal? refusal,
+})
 resolveTextToolRange(TextTool tool, String text, int base, int extent) {
   RangeError.checkValueInInterval(base, 0, text.length, 'base');
   RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
   if (base != extent) {
-    return (base: base, extent: extent, caret: extent, ranOn: TextToolRanOn.selection, refusal: null);
+    return (
+      base: base,
+      extent: extent,
+      caret: extent,
+      ranOn: TextToolRanOn.selection,
+      refusal: null,
+    );
   }
   return switch (tool.scope) {
     TextToolScope.document => (
@@ -588,8 +605,8 @@ TextToolOutcome _blockEdit(
     mapped = run.caret + delta;
   } else {
     final inside = run.caret - start;
-    mapped = start +
-        (inside > replacement.length ? replacement.length : inside);
+    mapped =
+        start + (inside > replacement.length ? replacement.length : inside);
   }
   var caret = mapped;
   if (caret > 0 &&
@@ -610,7 +627,13 @@ TextToolOutcome _blockEdit(
 
 /// A line-aligned slice of the buffer, split into contents and breaks.
 final class _Lines {
-  const _Lines._(this.starts, this.contents, this.breaks, this.end, this.breakAfter);
+  const _Lines._(
+    this.starts,
+    this.contents,
+    this.breaks,
+    this.end,
+    this.breakAfter,
+  );
 
   /// The offset where each line starts.
   final List<int> starts;
@@ -828,9 +851,7 @@ List<String> _sortKeys(TextToolRun run, List<String> lines) {
   return [
     for (final line in lines)
       ignoreCase
-          ? run.context.fold(
-              ignoreLeading ? _withoutIndent(line) : line,
-            )
+          ? run.context.fold(ignoreLeading ? _withoutIndent(line) : line)
           : ignoreLeading
           ? _withoutIndent(line)
           : line,
@@ -881,10 +902,9 @@ TextToolOutcome _sortLines(TextToolRun run) {
   }
   if (moved == 0) return TextToolUnchanged(scope: n);
 
-  final replacement = _joinLines(
-    [for (final index in sorted) lines[index]],
-    block.breaks,
-  );
+  final replacement = _joinLines([
+    for (final index in sorted) lines[index],
+  ], block.breaks);
   return _blockEdit(
     run,
     range.start,
@@ -1106,8 +1126,7 @@ TextToolOutcome _indentationToTabs(TextToolRun run) {
     final end = _indentColumn(content, width);
     if (end == 0) continue;
     final column = _indentColumnsTo(content, end, width);
-    final replacement =
-        '\t' * (column ~/ width) + ' ' * (column % width);
+    final replacement = '\t' * (column ~/ width) + ' ' * (column % width);
     if (content.substring(0, end) != replacement) {
       edits.add((
         start: block.starts[i],
@@ -1173,12 +1192,7 @@ TextToolOutcome _straightenQuotes(TextToolRun run) {
     }
     i++;
   }
-  return _spanEdit(
-    run,
-    edits,
-    changed: edits.length,
-    scope: end - start,
-  );
+  return _spanEdit(run, edits, changed: edits.length, scope: end - start);
 }
 
 /// The gremlin classes Zap Gremlins covers, as documented in
@@ -1197,10 +1211,7 @@ _GremlinClass? _gremlinClass(int rune) {
   if (rune == 0x7f || (rune >= 0x80 && rune <= 0x9f)) {
     return _GremlinClass.controls;
   }
-  if (rune == 0x00ad ||
-      rune == 0x200b ||
-      rune == 0x2060 ||
-      rune == 0xfeff) {
+  if (rune == 0x00ad || rune == 0x200b || rune == 0x2060 || rune == 0xfeff) {
     return _GremlinClass.invisible;
   }
   if ((rune >= 0x202a && rune <= 0x202e) ||

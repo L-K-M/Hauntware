@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 
-import 'services/document_workspace_test.dart' show MemoryDocuments, FakeDialogs;
+import 'services/document_workspace_test.dart'
+    show MemoryDocuments, FakeDialogs;
 import 'services/memory_settings.dart';
 
 void main() {
@@ -67,32 +68,39 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
-  testWidgets('the palette offers text tools', (tester) async {
-    final tab = workspace.newDocument()!..editor.text.text = 'b\na';
-    await mount(tester);
-    tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
+  testWidgets(
+    'the palette offers text tools',
+    (tester) async {
+      final tab = workspace.newDocument()!..editor.text.text = 'b\na';
+      await mount(tester);
+      tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
 
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('planchette.palette.query')),
-      findsOneWidget,
-    );
-    await tester.enterText(
-      find.byKey(const ValueKey('planchette.palette.query')),
-      'sort lines',
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    // The run waits out the undo-history merge window before it applies.
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.pumpAndSettle();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('planchette.palette.query')),
+        'sort lines',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      // The run waits out the undo-history merge window before it applies.
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
 
-    expect(tab.editor.text.text, 'a\nb');
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-  }, variant: const TargetPlatformVariant({TargetPlatform.linux, TargetPlatform.windows}));
+      expect(tab.editor.text.text, 'a\nb');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
 }
