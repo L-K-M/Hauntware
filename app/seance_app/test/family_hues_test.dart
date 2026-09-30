@@ -33,9 +33,8 @@ void main() {
         final surfaces = <(String, Color)>[
           ('pane', chrome.paneBackground),
           ('sidebar', chrome.sidebarBackground),
-          ('header', chrome.headerBackground),
+          ('header and tab strip', chrome.headerBackground),
           ('capsule', chrome.capsuleFill),
-          ('tab strip', scheme.surfaceContainerHighest),
           ('menu', scheme.surfaceContainer),
         ];
         for (final hue in FamilyHue.values) {

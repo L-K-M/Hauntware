@@ -345,6 +345,20 @@ over the rail, and a header across the terminal and the side panel
   buttons. Its header and capsule are `Material`s, so the buttons' hover
   ink paints above the fill; Poltergeist's header paints its fills in
   boxes above the ink, which may be worth porting back.
+- **The tab strip** (`TerminalTabStrip`) draws Poltergeist's pane tabs
+  (its 10 §6), and Planchette's document tabs match them. The strip sits
+  on the header's colour over a separator rule. Each flat chip has a
+  hairline after it. The open chip takes the pane's surface and a
+  semibold label, other chips' labels are in the secondary colour, and
+  a hovered chip is filled. The ✕ shows on hover, on focus and on the
+  open tab, and keeps its slot while hidden. The tab carries a close
+  action for screen readers while the ✕ is hidden. The accent never
+  underlines a tab: Poltergeist's owner moved its accent line above
+  the tabs (2026-09-26). Divergences: the strip is 38 px, not 30, like
+  Séance's other chrome rows. A chip leads with the session's status
+  dot or the editor's file glyph, not a server badge. A coloured server
+  colours the rule. There is no active-pane line, because Séance has
+  one strip.
 
 ## The colour vocabulary
 
