@@ -478,13 +478,22 @@ class _DocumentShellState extends State<_DocumentShell> {
     final editor = workspace.active?.editor;
     if (record == null || editor == null) return;
     final tool = textToolById(record.toolId);
+    // A record can outlive its tool — the catalog is checked on the way
+    // in, but a host-built record may still name one that is gone.
+    if (tool == null) return;
     // A pattern tool replays by reopening its find-bar row seeded with the
     // recorded query, so a catastrophic expression never runs on the UI
     // isolate and the destination is chosen where it lives.
-    if (tool != null && tool.usesFindBar) {
+    if (tool.usesFindBar) {
       editor.openFindTool(record.toolId, options: record.options);
     } else {
-      unawaited(editor.runTextTool(record.toolId, options: record.options));
+      unawaited(
+        editor.runTextTool(
+          record.toolId,
+          options: record.options,
+          wholeDocument: record.wholeDocument,
+        ),
+      );
     }
   }
 

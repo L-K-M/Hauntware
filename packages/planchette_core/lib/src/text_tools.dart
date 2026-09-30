@@ -1635,7 +1635,8 @@ TextToolOutcome _numberLines(TextToolRun run) {
 
   if (!add) {
     // Removal only strips a number that is followed by the declared
-    // separator, so prose that merely starts with digits survives.
+    // separator; with an empty separator any leading digits go, so prose
+    // that merely starts with digits survives only while it has one.
     final pattern = RegExp(
       separator.isEmpty ? '^\\s*\\d+' : '^\\s*\\d+${RegExp.escape(separator)}',
     );
@@ -1657,19 +1658,24 @@ TextToolOutcome _numberLines(TextToolRun run) {
   final start = run.option<int>('start');
   final step = run.option<int>('step');
   final last = start + (n - 1) * step;
-  final width = switch (run.option<String>('padding')) {
-    'spaces' || 'zeros' => last.toString().length,
-    _ => 0,
-  };
-  final pad = switch (run.option<String>('padding')) {
-    'zeros' => '0',
-    _ => ' ',
+  final padding = run.option<String>('padding');
+  // Width comes from the widest magnitude — an arithmetic sequence's
+  // endpoints bound it. Zero padding sits inside the sign ('-09'), as
+  // printf does; space padding takes a field that leaves it room.
+  final digits = math.max(start.abs(), last.abs()).toString().length;
+  final field =
+      digits + ((start < 0 || last < 0) && padding == 'spaces' ? 1 : 0);
+
+  String number(int value) => switch (padding) {
+    'zeros' =>
+      (value < 0 ? '-' : '') + value.abs().toString().padLeft(digits, '0'),
+    'spaces' => value.toString().padLeft(field, ' '),
+    _ => value.toString(),
   };
 
   final contents = <String>[
     for (var i = 0; i < n; i++)
-      '${(start + i * step).toString().padLeft(width, pad)}$separator'
-          '${block.contents[i]}',
+      '${number(start + i * step)}$separator${block.contents[i]}',
   ];
   return _blockEdit(
     run,

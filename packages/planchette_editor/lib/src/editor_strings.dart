@@ -188,9 +188,10 @@ class EditorStrings {
     _ => choiceId,
   };
 
-  /// A run's short option summary for Repeat and Recent rows — the choice
+  /// A run's short option summary for Repeat and Recent rows — the
   /// options that differ from their defaults, so "Repeat Sort Lines (Z to
-  /// A)" says what the re-run does. Empty when nothing distinguishes it.
+  /// A, Ignore case)" says what the re-run does. Empty when nothing
+  /// distinguishes it.
   String textToolOptionsSummary(TextToolRunRecord record) {
     final tool = textToolById(record.toolId);
     if (tool == null) return '';
@@ -199,10 +200,21 @@ class EditorStrings {
         if (option is ChoiceOption &&
             record.options[option.id] is String &&
             record.options[option.id] != option.defaultValue)
-          textToolChoiceName(record.options[option.id] as String),
+          textToolChoiceName(record.options[option.id] as String)
+        else if (option is ToggleOption &&
+            record.options[option.id] is bool &&
+            record.options[option.id] != option.defaultValue)
+          record.options[option.id] == true
+              ? textToolOptionName(tool.id, option.id)
+              : textToolDisabledToggleName(tool.id, option.id),
     ];
     return parts.join(', ');
   }
+
+  /// A toggle shown off in a summary: "no Control characters" for
+  /// zapGremlins' controls toggle, which defaults to on.
+  String textToolDisabledToggleName(String toolId, String optionId) =>
+      'no ${textToolOptionName(toolId, optionId)}';
 
   /// The Repeat row: "Repeat Sort Lines (Z to A)", or "Repeat" alone before
   /// the first run.
@@ -543,6 +555,11 @@ class EditorStrings {
   String textToolNothingSelected(int count) =>
       'Nothing selected: whole document, ${_lines(count)}';
 
+  /// The scope line for caret-scoped tools when nothing is selected.
+  String get textToolParagraphAtCaret => 'the paragraph at the caret';
+  String get textToolWordAtCaret => 'the word at the caret';
+  String get textToolAtCaret => 'the caret';
+
   /// The count line under the bar, such as "9 of 12 lines will move".
   /// Past the preview limit the count is deferred to Apply.
   String textToolPreview(TextToolReport report) {
@@ -577,7 +594,7 @@ class EditorStrings {
     'prefixSuffixLines' => 'will change $changed of ${_lines(scope)}',
     'numberLines' => 'will renumber ${_lines(scope)}',
     'joinLinesWith' => 'will join ${_lines(changed)}',
-    _ => 'will change $scope units',
+    _ => 'will change $changed of ${_lines(scope)}',
   };
 
   String _lines(int count) => _plural(count, 'line');

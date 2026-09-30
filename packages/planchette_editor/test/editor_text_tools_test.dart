@@ -134,6 +134,54 @@ void main() {
       expect(outcome, isA<TextToolUnchanged>());
     });
 
+    test('a refused run does not reach the history', () async {
+      // No selection and a tool that needs one — the refusal must not
+      // earn a Repeat/Recent slot.
+      final c = controller('a  b', caret: 2);
+
+      await c.runTextTool('uppercase');
+
+      expect(c.toolReport?.outcome, isA<TextToolRefused>());
+      expect(c.toolHistory.recent, isEmpty);
+    });
+
+    test('an unchanged run still records — it is a real run', () async {
+      final c = controller('a\nb');
+
+      await c.runTextTool('sortLines');
+
+      expect(c.toolHistory.last?.toolId, 'sortLines');
+    });
+
+    test('the record remembers a whole-document run', () async {
+      final c = controller('a\nb');
+      c.text.selection = const TextSelection(baseOffset: 0, extentOffset: 1);
+
+      await c.runTextTool('sortLines', wholeDocument: true);
+
+      expect(c.toolHistory.last?.wholeDocument, isTrue);
+      expect(c.toolHistory.last?.toolId, 'sortLines');
+    });
+
+    test('an option outside its option\'s contract drops to safe', () async {
+      final c = controller('b\na');
+      // A caller's override can name a choice the current catalog does
+      // not offer — the run falls back to the default rather than
+      // throwing.
+      final outcome = await c.runTextTool(
+        'sortLines',
+        options: {'order': 'spiral'},
+      );
+      expect(c.text.text, 'a\nb');
+      expect(outcome, isA<TextToolChanged>());
+
+      // An integer below the declared minimum clamps rather than running
+      // a degenerate run.
+      final numbered = controller('x\ny');
+      await numbered.runTextTool('numberLines', options: {'step': 0});
+      expect(numbered.text.text, '1. x\n2. y');
+    });
+
     test('a run that would grow past maximumBytes is refused', () async {
       final c = controller('a\x07b', maximumBytes: 3);
       // Escaping the gremlin grows the buffer past the byte limit.
@@ -453,6 +501,24 @@ void main() {
         find.widgetWithText(FilledButton, 'Apply'),
       );
       expect(apply.onPressed, isNull);
+    });
+
+    testWidgets('Enter in a field honours the same refused gate', (
+      tester,
+    ) async {
+      // joinLinesWith needs a selection; without one the preview refuses
+      // and a field's Enter must decline exactly like the button.
+      final c = await pumpEditor(tester, 'a\nb');
+      c.openTextTool('joinLinesWith');
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.textContaining('not applied'), findsOneWidget);
+
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump(_undoWait);
+      await tester.pump();
+
+      expect(c.toolBarOpen, isTrue);
+      expect(c.toolReport, isNull);
     });
 
     testWidgets('the first text field takes the focus', (tester) async {

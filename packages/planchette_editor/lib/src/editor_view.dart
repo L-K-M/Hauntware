@@ -1288,8 +1288,15 @@ class _ToolBarState extends State<_ToolBar> {
     c.setToolOption(option.id, parsed < minimum ? minimum : parsed);
   }
 
+  /// The gate both Apply paths — the button and a field's Enter — share.
+  bool get _canApply =>
+      !widget.locked &&
+      c.canEditText &&
+      c.toolBarTool != null &&
+      c.toolBarPreview?.outcome is! TextToolRefused;
+
   void _apply() {
-    unawaited(c.applyTextTool());
+    if (_canApply) unawaited(c.applyTextTool());
   }
 
   @override
@@ -1298,11 +1305,6 @@ class _ToolBarState extends State<_ToolBar> {
     final theme = Theme.of(context);
     final options = c.toolBarOptions;
     final preview = c.toolBarPreview;
-    final canApply =
-        !widget.locked &&
-        c.canEditText &&
-        c.toolBarTool != null &&
-        c.toolBarPreview?.outcome is! TextToolRefused;
 
     final controls = <Widget>[
       Text(toolBarName(strings), style: theme.textTheme.titleSmall),
@@ -1346,7 +1348,7 @@ class _ToolBarState extends State<_ToolBar> {
             children: [
               ...scope,
               FilledButton(
-                onPressed: canApply ? _apply : null,
+                onPressed: _canApply ? _apply : null,
                 child: Text(strings.textToolApply),
               ),
             ],
@@ -1386,9 +1388,9 @@ class _ToolBarState extends State<_ToolBar> {
     final text = switch (tool.scope) {
       TextToolScope.document => strings.textToolNothingSelected(document),
       TextToolScope.selection => strings.textToolSelectedLines(selected),
-      TextToolScope.paragraph => 'the paragraph at the caret',
-      TextToolScope.word => 'the word at the caret',
-      TextToolScope.insertion => 'the caret',
+      TextToolScope.paragraph => strings.textToolParagraphAtCaret,
+      TextToolScope.word => strings.textToolWordAtCaret,
+      TextToolScope.insertion => strings.textToolAtCaret,
     };
     return [label, Text(text, style: Theme.of(context).textTheme.labelSmall)];
   }

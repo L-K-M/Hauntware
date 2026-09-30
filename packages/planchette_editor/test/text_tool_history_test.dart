@@ -84,14 +84,17 @@ void main() {
       expect(history.recent, hasLength(1));
     });
 
-    test('encode drops unknown option keys and mistyped values', () {
+    test('records drop unknown keys and normalize mistyped values', () {
       final history = TextToolHistory()
         ..record('sortLines', {
           'order': 'descending',
           'ignoreCase': 'yes', // not a bool
           'madeUp': 42,
         });
-      // The resolved set persists minus the invalid entries.
+      // The record holds the resolved set: the mistyped value falls back
+      // to its default and the made-up key never lands.
+      expect(history.last!.options['ignoreCase'], isTrue);
+      expect(history.last!.options.containsKey('madeUp'), isFalse);
       expect(history.encode(), [
         {
           'id': 'sortLines',
@@ -101,9 +104,47 @@ void main() {
             'byLength': false,
             'ignoreLeadingWhitespace': false,
             'keepFirstLine': false,
+            'ignoreCase': true,
           },
         },
       ]);
+    });
+
+    test('a choice outside the current choices decodes to the default', () {
+      final history = TextToolHistory.decode([
+        {
+          'id': 'sortLines',
+          'options': {'order': 'spiral'},
+        },
+      ]);
+      expect(history.last!.options['order'], 'ascending');
+    });
+
+    test('records compare and hash regardless of option order', () {
+      const a = TextToolRunRecord('sortLines', {'order': 'descending'});
+      const b = TextToolRunRecord('sortLines', {'order': 'descending'});
+      final shuffled = TextToolRunRecord('x', {'b': 1, 'a': 2});
+      final reordered = TextToolRunRecord('x', {'a': 2, 'b': 1});
+      expect(a, b);
+      expect(shuffled, reordered);
+      expect(shuffled.hashCode, reordered.hashCode);
+      // A different scope is a different run.
+      expect(
+        const TextToolRunRecord('sortLines', {}, wholeDocument: true),
+        isNot(const TextToolRunRecord('sortLines', {})),
+      );
+    });
+
+    test('wholeDocument survives the disk round-trip', () {
+      final history = TextToolHistory()
+        ..record('sortLines', {'order': 'descending'}, wholeDocument: true);
+      expect(history.encode().first, {
+        'id': 'sortLines',
+        'wholeDocument': true,
+        'options': isA<Map>(),
+      });
+      final restored = TextToolHistory.decode(history.encode());
+      expect(restored.last!.wholeDocument, isTrue);
     });
 
     test('decode restores records and skips unreadable entries', () {

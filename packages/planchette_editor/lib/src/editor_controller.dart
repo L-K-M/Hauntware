@@ -165,7 +165,9 @@ class EditorController extends ChangeNotifier {
 
   /// Registers a field's node so focus memory and the host's clipboard
   /// routing see it — the tool bar's option fields live as long as the bar
-  /// does, so they cannot be in the fixed constructor list.
+  /// does, so they cannot be in the fixed constructor list. The owner must
+  /// [untrackTextField] before disposing the node: removing a listener
+  /// from a disposed node asserts in debug builds.
   void trackTextField(FocusNode node) {
     if (_fieldListeners.containsKey(node)) return;
     void listener() {
@@ -763,7 +765,11 @@ class EditorController extends ChangeNotifier {
       outcome: outcome,
       ranOn: resolved.ranOn,
     );
-    _toolHistory.record(toolId, runOptions);
+    // A refused run never touched the document, so it does not earn a
+    // Repeat/Recent slot — rerunning it would refuse again.
+    if (outcome is! TextToolRefused) {
+      _toolHistory.record(toolId, runOptions, wholeDocument: wholeDocument);
+    }
     _notify();
     return outcome;
   }
@@ -773,14 +779,27 @@ class EditorController extends ChangeNotifier {
   TextToolHistory get toolHistory => _toolHistory;
 
   /// Declared option defaults overlaid with the caller's [overrides];
-  /// unknown overrides are dropped.
+  /// unknown overrides and values that no longer fit their option — a
+  /// restored choice outside the current choices — drop to the default.
   Map<String, Object?> _toolOptions(
     TextTool tool,
     Map<String, Object?> overrides,
   ) => {
     for (final option in tool.options)
-      option.id: overrides[option.id] ?? option.defaultValue,
+      option.id: _resolvedOption(option, overrides[option.id]),
   };
+
+  static Object? _resolvedOption(TextToolOption option, Object? value) {
+    if (option is ChoiceOption &&
+        value != null &&
+        !option.choices.contains(value)) {
+      return option.defaultValue;
+    }
+    if (option is IntegerOption && value is int && value < option.min) {
+      return option.min;
+    }
+    return value ?? option.defaultValue;
+  }
 
   TextToolContext _toolContext() => TextToolContext(
     fold: _fold,
@@ -838,6 +857,7 @@ class EditorController extends ChangeNotifier {
     if (tool == null) {
       throw ArgumentError.value(toolId, 'toolId', 'No text tool');
     }
+    if (_loading || _error != null) return;
     // A pattern tool's options live in the find bar, not here.
     if (tool.usesFindBar) return openFindTool(toolId);
     if (_searchOpen) closeSearch();
@@ -938,7 +958,7 @@ class EditorController extends ChangeNotifier {
                   extent: resolved.extent,
                   caret: resolved.caret,
                   ranOn: resolved.ranOn,
-                  options: _barOptions,
+                  options: _toolOptions(tool, _barOptions),
                   context: _toolContext(),
                 ),
               ),
@@ -964,8 +984,7 @@ class EditorController extends ChangeNotifier {
   static int _documentLineCount(String text) {
     if (text.isEmpty) return 0;
     var count = _rangeLineCount(text, (start: 0, end: text.length));
-    final last = text.codeUnitAt(text.length - 1);
-    if (last == 0x0a || last == 0x0d) count--;
+    if (text.codeUnitAt(text.length - 1) == 0x0a) count--;
     return count;
   }
 
@@ -1334,6 +1353,7 @@ class EditorController extends ChangeNotifier {
     if (!tool.usesFindBar) {
       throw ArgumentError.value(toolId, 'toolId', 'Not a find-bar tool');
     }
+    if (_loading || _error != null) return;
     final saved = options ?? _toolHistory.lastOptionsFor(toolId);
     // Set the toggles through their methods so regex-mode cleanup runs.
     if ((saved['regularExpression'] == true) != _useRegularExpression) {
@@ -1532,7 +1552,9 @@ class EditorController extends ChangeNotifier {
       outcome: outcome,
       ranOn: TextToolRanOn.document,
     );
-    _toolHistory.record(tool.id, options);
+    if (outcome is! TextToolRefused) {
+      _toolHistory.record(tool.id, options);
+    }
     _notify();
     return outcome;
   }
@@ -1607,7 +1629,9 @@ class EditorController extends ChangeNotifier {
       outcome: outcome,
       ranOn: TextToolRanOn.document,
     );
-    _toolHistory.record(tool.id, options);
+    if (outcome is! TextToolRefused) {
+      _toolHistory.record(tool.id, options);
+    }
     _notify();
     return outcome;
   }

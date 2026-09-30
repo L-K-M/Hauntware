@@ -234,17 +234,25 @@ void main() {
   testWidgets('Repeat re-runs the latest tool with its options', (
     tester,
   ) async {
-    final tab = workspace.newDocument()!..editor.text.text = 'a\nb';
+    final tab = workspace.newDocument()!..editor.text.text = 'a\nz\nb';
     await mount(tester);
-    tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
+    // A real selection — 'a\nz' — keeps wholeDocument observable:
+    // selection-scoped would sort to 'z\na\nb', the recorded whole-
+    // document scope sorts all three lines.
+    tab.editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 3,
+    );
 
-    workspace.toolHistory.record('sortLines', {'order': 'descending'});
+    workspace.toolHistory.record('sortLines', {
+      'order': 'descending',
+    }, wholeDocument: true);
     await tester.pump();
     item(tester, 'Text', 'Repeat Sort Lines (Z to A)').onSelected!();
     await tester.pump(_undoWait);
     await tester.pumpAndSettle();
 
-    expect(tab.editor.text.text, 'b\na');
+    expect(tab.editor.text.text, 'z\nb\na');
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
@@ -252,7 +260,9 @@ void main() {
   testWidgets('the Recent submenu lists stored runs and re-runs one', (
     tester,
   ) async {
-    final tab = workspace.newDocument()!..editor.text.text = 'b\na';
+    // Descending order moves 'a\nb' to 'b\na' — a visible change, so the
+    // re-run is observable rather than a no-op on already-sorted text.
+    final tab = workspace.newDocument()!..editor.text.text = 'a\nb';
     await mount(tester);
     tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
 

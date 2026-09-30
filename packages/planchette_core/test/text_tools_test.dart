@@ -583,6 +583,27 @@ void main() {
       );
     });
 
+    test('pads a negative start without wedging the sign', () {
+      // start's declared minimum keeps negatives out of the UI; a direct
+      // call still gets sane output.
+      expect(
+        run(
+          'numberLines',
+          '|a\nb\nc',
+          options: {'start': -10, 'padding': 'zeros'},
+        ),
+        '|-10. a\n-09. b\n-08. c',
+      );
+      expect(
+        run(
+          'numberLines',
+          '|a\nb\nc',
+          options: {'start': -1, 'padding': 'spaces'},
+        ),
+        '|-1. a\n 0. b\n 1. c',
+      );
+    });
+
     test('removes numbers followed by the separator', () {
       expect(
         run('numberLines', '|1. a\n2. b\n3x', options: {'mode': 'remove'}),
