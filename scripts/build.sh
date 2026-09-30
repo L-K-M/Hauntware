@@ -67,6 +67,7 @@ case "$target" in
       rm -rf "$installed"
       cp -R "$destination" "$installed"
       cp "$root/media-sources/icon.png" "$HOME/.local/share/icons/hicolor/256x256/apps/planchette.png"
+      rm -f "$HOME/.local/share/applications/com.lkm.planchette_app.desktop"
       cat > "$HOME/.local/share/applications/ch.lkmc.planchette.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
@@ -77,7 +78,7 @@ Icon=planchette
 Terminal=false
 Categories=Utility;TextEditor;
 MimeType=text/plain;text/x-source;
-StartupWMClass=Com.lkm.planchette_app
+StartupWMClass=Ch.lkmc.planchette
 DESKTOP
       if command -v update-desktop-database >/dev/null; then
         update-desktop-database "$HOME/.local/share/applications"
