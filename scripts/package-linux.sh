@@ -48,7 +48,7 @@ OUT_DIR="$ROOT/dist"
 APPIMAGE_MODE="required"   # required | best-effort | skip
 PRINT_DEPS=false
 BUNDLE_EXECUTABLE="planchette"
-LINUX_APPLICATION_ID="com.lkm.planchette_app"
+LINUX_APPLICATION_ID="ch.lkmc.planchette"
 LINUX_STARTUP_WM_CLASS="${LINUX_APPLICATION_ID^}"
 LINUX_DESKTOP_FILE="$LINUX_APPLICATION_ID.desktop"
 

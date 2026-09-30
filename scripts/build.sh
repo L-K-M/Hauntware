@@ -67,7 +67,7 @@ case "$target" in
       rm -rf "$installed"
       cp -R "$destination" "$installed"
       cp "$root/media-sources/icon.png" "$HOME/.local/share/icons/hicolor/256x256/apps/planchette.png"
-      cat > "$HOME/.local/share/applications/com.lkm.planchette_app.desktop" <<DESKTOP
+      cat > "$HOME/.local/share/applications/ch.lkmc.planchette.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
 Name=Planchette
