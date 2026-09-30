@@ -234,6 +234,11 @@ class EditorController extends ChangeNotifier {
   bool _wholeWord = false;
   bool _useRegularExpression = false;
 
+  /// The stored find-in-selection range, or null while search covers the
+  /// document. It lives on [text] too, where it is painted as a wash so it
+  /// survives the selection returning to match-stepping.
+  TextRange? _searchScope;
+
   /// The line-action row (Keep/Delete Lines Matching) and the extraction
   /// row (Extract Matches) the find bar can carry, mutually exclusive.
   bool _lineActionsOpen = false;
@@ -335,6 +340,13 @@ class EditorController extends ChangeNotifier {
   bool get canPublish => onPublish != null;
   bool get searchOpen => _searchOpen;
   bool get goToLineOpen => _goToLineOpen;
+
+  /// Whether the selection covers text — what Find in Selection needs.
+  bool get hasSelection =>
+      text.selection.isValid && !text.selection.isCollapsed;
+
+  /// The stored find-in-selection range searches are bounded to, or null.
+  TextRange? get searchScope => _searchScope;
 
   /// Whether the find bar shows its line-action row — Keep and Delete
   /// Lines Matching on the find field's pattern.
@@ -1267,7 +1279,9 @@ class EditorController extends ChangeNotifier {
     _closeFindRows();
     final selection = text.selection;
     String? prefill;
-    if (selection.isValid && !selection.isCollapsed) {
+    // A stored scope came from this very selection — it is the range to
+    // search, not text to offer as the query.
+    if (selection.isValid && !selection.isCollapsed && _searchScope == null) {
       final selected = selection.textInside(text.text);
       if (selected.isNotEmpty &&
           !selected.contains('\n') &&
@@ -1288,6 +1302,7 @@ class EditorController extends ChangeNotifier {
     }
     _searchOpen = true;
     _replaceOpen = replace || _replaceOpen;
+    text.setSearchScope(_searchScope);
     _updateMatches(resetActive: true);
     search.selection = TextSelection(
       baseOffset: 0,
@@ -1298,11 +1313,36 @@ class EditorController extends ChangeNotifier {
     _notify();
   }
 
+  /// Stores the selection as the search scope — the range the find bar's
+  /// matches, Replace All and its pattern rows stay inside — and opens the
+  /// bar. Edits map the scope through; it ends with the bar or with
+  /// [clearSearchScope].
+  void findInSelection() {
+    if (_loading || _error != null || !hasSelection) return;
+    final selection = text.selection;
+    _searchScope = TextRange(
+      start: selection.start.clamp(0, text.text.length),
+      end: selection.end.clamp(0, text.text.length),
+    );
+    openSearch();
+  }
+
+  /// Drops the stored find-in-selection range; the find bar stays open and
+  /// searches the whole document again.
+  void clearSearchScope() {
+    if (_searchScope == null) return;
+    _searchScope = null;
+    text.setSearchScope(null);
+    _updateMatches(resetActive: false);
+    _notify();
+  }
+
   void closeSearch() {
     if (!_searchOpen) return;
     _searchOpen = false;
     _replaceOpen = false;
     _closeFindRows();
+    _searchScope = null;
     if (_focusMemory == searchFocus ||
         _focusMemory == replacementFocus ||
         _focusMemory == extractionFocus) {
@@ -1318,6 +1358,7 @@ class EditorController extends ChangeNotifier {
     _revealPatternResults = false;
     _afterPatternSearch.clear();
     text.setSearchMatches(const [], -1);
+    text.setSearchScope(null);
     // Go to Line may stay open with the user typing in it.
     if (!goToLineFocus.hasFocus) editorFocus.requestFocus();
     _notify();
@@ -1391,6 +1432,12 @@ class EditorController extends ChangeNotifier {
     }
     _scheduleLineCount();
     _notify();
+  }
+
+  /// The stored scope as the core's bounds record, for the worker calls.
+  ({int start, int end})? get _scopeAsRecord {
+    final scope = _searchScope;
+    return scope == null ? null : (start: scope.start, end: scope.end);
   }
 
   /// The find bar's Lines control: shows or hides the line-action row.
@@ -1470,6 +1517,7 @@ class EditorController extends ChangeNotifier {
             wholeLines: _extractWholeLines,
             template: extraction.text.isEmpty ? null : extraction.text,
             literal: !_useRegularExpression,
+            scope: _scopeAsRecord,
           )
         : await worker.countMatchingLines(
             source,
@@ -1477,6 +1525,7 @@ class EditorController extends ChangeNotifier {
             caseSensitive: _caseSensitive,
             wholeWord: _wholeWord,
             literal: !_useRegularExpression,
+            scope: _scopeAsRecord,
           );
     // A newer count, a closed row or an edit makes this answer stale.
     if (_disposed ||
@@ -1512,6 +1561,8 @@ class EditorController extends ChangeNotifier {
     if (!canEditText) return null;
     final options = _findToolOptions(tool);
     final query = search.text;
+    // closeSearch drops the scope; the run keeps the stored bounds.
+    final scope = _scopeAsRecord;
     closeSearch();
     await _waitForUndoQuiet();
     if (_disposed || !canEditText) return null;
@@ -1525,6 +1576,7 @@ class EditorController extends ChangeNotifier {
         caseSensitive: _caseSensitive,
         wholeWord: _wholeWord,
         literal: !_useRegularExpression,
+        scope: scope,
       ),
       (value, source) {
         final filtered = value! as PatternLineFilter;
@@ -1550,7 +1602,7 @@ class EditorController extends ChangeNotifier {
     _toolReport = TextToolReport(
       tool: tool,
       outcome: outcome,
-      ranOn: TextToolRanOn.document,
+      ranOn: scope == null ? TextToolRanOn.document : TextToolRanOn.selection,
     );
     if (outcome is! TextToolRefused) {
       _toolHistory.record(tool.id, options);
@@ -1560,8 +1612,8 @@ class EditorController extends ChangeNotifier {
   }
 
   /// Applies Extract Matches to the row's destination. 'inPlace' rewrites
-  /// the document to the extraction; 'clipboard' and 'newDocument' leave
-  /// it alone — the latter asks [onNewDocument].
+  /// the document — or the scoped region — to the extraction; 'clipboard'
+  /// and 'newDocument' leave it alone — the latter asks [onNewDocument].
   Future<TextToolOutcome?> applyExtract() async {
     final tool = textToolById('extractMatches')!;
     if (!canEditText) return null;
@@ -1570,6 +1622,8 @@ class EditorController extends ChangeNotifier {
     final target = _extractTarget;
     final wholeLines = _extractWholeLines;
     final template = extraction.text.isEmpty ? null : extraction.text;
+    // closeSearch drops the scope; the run keeps the stored bounds.
+    final scope = _scopeAsRecord;
     closeSearch();
     await _waitForUndoQuiet();
     if (_disposed || !canEditText) return null;
@@ -1584,6 +1638,7 @@ class EditorController extends ChangeNotifier {
         wholeLines: wholeLines,
         template: template,
         literal: !_useRegularExpression,
+        scope: scope,
       ),
       (value, source) {
         final lines = value! as List<String>;
@@ -1604,18 +1659,38 @@ class EditorController extends ChangeNotifier {
               detail: 'newDocument:$unit',
             );
           default:
+            // A scoped extraction replaces the region — the lines it
+            // touched when whole lines were collected — not the document.
+            final splice = scope == null
+                ? (start: 0, end: source.length)
+                : wholeLines
+                ? touchedLineRange(
+                    source,
+                    scope.start.clamp(0, source.length),
+                    scope.end.clamp(0, source.length),
+                  )
+                : scope;
             // Measure bytes, not units — a template can grow the result
             // in UTF-8 while its code-unit length stays put.
-            if (utf8EncodedLength(joined) > maximumBytes) {
+            if (utf8EncodedLength(source) -
+                    utf8EncodedLength(
+                      source.substring(splice.start, splice.end),
+                    ) +
+                    utf8EncodedLength(joined) >
+                maximumBytes) {
               return const TextToolRefused(TextToolRefusal.tooLarge);
             }
+            final caret = splice.start + joined.length;
             _requestCaretReveal(CaretReveal.nearest);
             text.value = TextEditingValue(
-              text: joined,
-              selection: TextSelection.collapsed(offset: joined.length),
+              text:
+                  source.substring(0, splice.start) +
+                  joined +
+                  source.substring(splice.end),
+              selection: TextSelection.collapsed(offset: caret),
             );
             return TextToolChanged(
-              LineEdit(joined, joined.length, joined.length),
+              LineEdit(text.text, caret, caret),
               changed: lines.length,
               scope: lines.length,
               detail: 'inPlace:$unit',
@@ -1627,7 +1702,7 @@ class EditorController extends ChangeNotifier {
     _toolReport = TextToolReport(
       tool: tool,
       outcome: outcome,
-      ranOn: TextToolRanOn.document,
+      ranOn: scope == null ? TextToolRanOn.document : TextToolRanOn.selection,
     );
     if (outcome is! TextToolRefused) {
       _toolHistory.record(tool.id, options);
@@ -1867,17 +1942,27 @@ class EditorController extends ChangeNotifier {
     _Edit? edit;
     _scheduleLineCount();
     final find = _useRegularExpression ? _patternFind : null;
-    if (find != null) {
+    if (find != null || _searchScope != null) {
       // Carried through the edit first, so the pages below come from the
-      // edited text while it is searched again.
+      // edited text while it is searched again — and the stored scope is
+      // mapped through, or dropped when the edit consumed it.
       edit = _Edit.between(before, text.text);
-      find.followEdit(
-        before,
-        text.text,
-        start: edit._start,
-        end: edit._end,
-        delta: edit._delta,
-      );
+      if (find != null) {
+        find.followEdit(
+          before,
+          text.text,
+          start: edit._start,
+          end: edit._end,
+          delta: edit._delta,
+        );
+      }
+      final scope = _searchScope;
+      if (scope != null) {
+        final start = edit.map(scope.start);
+        final end = edit.map(scope.end);
+        _searchScope = start < end ? TextRange(start: start, end: end) : null;
+        text.setSearchScope(_searchScope);
+      }
     }
     if (_matches.isEmpty ||
         _activeMatch < 0 ||
@@ -2141,6 +2226,7 @@ class EditorController extends ChangeNotifier {
       return _patternFind?.page(
             text.text,
             start: start,
+            scope: _scopeAsRecord,
             reverse: reverse,
             limit: limit,
           ) ??
@@ -2158,6 +2244,7 @@ class EditorController extends ChangeNotifier {
       fold: _fold,
       limit: limit,
       start: start,
+      scope: _searchScope,
       reverse: reverse,
     );
     // Reported, not hidden: a case-insensitive search that could not fold
@@ -2221,6 +2308,7 @@ class EditorController extends ChangeNotifier {
       wholeWord: _wholeWord,
       limit: source.length + 1,
       fold: _fold,
+      scope: _searchScope,
     );
     if (matches.isEmpty) return false;
     final buffer = StringBuffer();
@@ -2259,6 +2347,7 @@ class EditorController extends ChangeNotifier {
       replacement.text,
       caseSensitive: _caseSensitive,
       wholeWord: _wholeWord,
+      scope: _scopeAsRecord,
     );
     if (_disposed) return false;
     // By content: an input method may send the same text back as a new

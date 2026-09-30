@@ -520,6 +520,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     // A composing input method or a host lock refuses line edits too.
     final inDocument = ready && _documentInUse;
     final lineCommands = inDocument && (active?.editor.canEditText ?? false);
+    final hasSelection = inDocument && (active?.editor.hasSelection ?? false);
     return [
       _ShellMenu('File', [
         _Command(
@@ -765,6 +766,11 @@ class _DocumentShellState extends State<_DocumentShell> {
               ? _shortcut(LogicalKeyboardKey.keyG, shift: true)
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
           enabled: ready,
+        ),
+        _Command(
+          'Find in Selection',
+          () => active?.editor.findInSelection(),
+          enabled: hasSelection,
         ),
         _Command(
           _editorStrings.textToolMenuLabel('extractMatches'),

@@ -365,6 +365,65 @@ void main() {
       expect(filtered.total, 2);
     });
 
+    group('scoped', () {
+      const text = 'cat one\ncat two\ncat three';
+      //                    0123456789012345678901234
+      // 'cat' lines at 0-6, 8-14 and 16-24.
+
+      test('only the touched lines are filtered', () {
+        // Keep's in-scope filter leaves the pass-through lines alone.
+        final kept = FindPattern(
+          'cat',
+        ).filterMatchingLines(text, keep: true, scope: (start: 8, end: 15));
+        expect(kept.text, text);
+        expect(kept.matched, 1);
+        expect(kept.total, 1);
+        // The in-scope delete drops the line and its break together.
+        final dropped = FindPattern(
+          'cat',
+        ).filterMatchingLines(text, keep: false, scope: (start: 8, end: 15));
+        expect(dropped.text, 'cat one\ncat three');
+        expect(dropped.matched, 1);
+        expect(dropped.total, 1);
+      });
+
+      test('a partial selection still covers whole lines', () {
+        // From inside 'one' to inside 'two': both lines are covered.
+        final kept = FindPattern(
+          'cat',
+        ).filterMatchingLines(text, keep: true, scope: (start: 2, end: 12));
+        expect(kept.text, 'cat one\ncat two\ncat three');
+        expect(kept.matched, 2);
+        expect(kept.total, 2);
+      });
+
+      test('a scope reaching the buffer end sheds the dead last break', () {
+        final dropped = FindPattern('cat').filterMatchingLines(
+          'cat one\ncat two',
+          keep: false,
+          scope: (start: 8, end: 15),
+        );
+        expect(dropped.text, 'cat one');
+      });
+
+      test('counting and extraction honour the scope', () {
+        expect(
+          FindPattern(
+            'cat',
+          ).countMatchingLines(text, scope: (start: 8, end: 15)),
+          1,
+        );
+        // wholeLines takes the lines the scope touches; a single match
+        // inside keeps the line.
+        expect(
+          FindPattern(
+            'two',
+          ).extractMatches(text, scope: (start: 8, end: 15), wholeLines: true),
+          ['cat two'],
+        );
+      });
+    });
+
     test('extracts each match', () {
       expect(FindPattern(r'\d+').extractMatches('a1 b22\nc333'), [
         '1',
@@ -505,6 +564,53 @@ void main() {
         final second = await worker.countMatchingLines('a\nb', 'a');
         expect(second, isA<PatternCompleted<int>>());
         expect(await first, isA<PatternCancelled<int>>());
+      } finally {
+        worker.dispose();
+      }
+    });
+
+    test('requests honour a stored scope', () async {
+      final worker = PatternWorker();
+      try {
+        //                                012345678901234567890123
+        const text = 'cat one\ncat two\ncat three';
+        const scope = (start: 8, end: 15); // the 'cat two' line
+        final counted = await worker.countMatchingLines(
+          text,
+          'cat',
+          scope: scope,
+        );
+        expect((counted as PatternCompleted<int>).value, 1);
+
+        final filtered = await worker.filterLines(
+          text,
+          'cat',
+          keep: false,
+          scope: scope,
+        );
+        expect(
+          (filtered as PatternCompleted<PatternLineFilter>).value.text,
+          'cat one\ncat three',
+        );
+
+        final extracted = await worker.extractMatches(
+          'cat one cat two cat',
+          'cat',
+          scope: (start: 4, end: 17),
+        );
+        // 8-11 is in; 16-19 straddles the scope's end and stays out.
+        expect((extracted as PatternCompleted<List<String>>).value, ['cat']);
+
+        final replaced = await worker.replaceAll(
+          'cat one cat two cat',
+          'cat',
+          'dog',
+          scope: (start: 4, end: 19),
+        );
+        expect(
+          (replaced as PatternCompleted<PatternReplacement?>).value?.text,
+          'cat one dog two dog',
+        );
       } finally {
         worker.dispose();
       }

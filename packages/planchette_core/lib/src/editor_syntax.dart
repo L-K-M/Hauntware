@@ -1490,6 +1490,10 @@ typedef CaseFolder = String Function(String value);
 /// Null, the default, means the whole haystack. A find bar that only highlights
 /// its first page of matches needs both directions, and both must describe the
 /// same occurrences or stepping back offers matches stepping forward never did.
+///
+/// [scope], when given, is a stored find-in-selection range: only matches
+/// lying wholly inside it count — one straddling either edge is skipped —
+/// and counts such as [SearchResult.precedingCount] are scope-relative.
 SearchResult searchText(
   String text,
   String query, {
@@ -1498,6 +1502,7 @@ SearchResult searchText(
   int limit = searchMatchLimit,
   CaseFolder fold = _lowercase,
   int? start,
+  ({int start, int end})? scope,
   bool reverse = false,
 }) {
   if (query.isEmpty) {
@@ -1539,10 +1544,15 @@ SearchResult searchText(
       precedingCount: reverse ? null : counted,
     );
   }
+  // The scope's bounds, clamped into the text. Only matches starting at
+  // or after [low] and ending at or before [high] count.
+  final low = (scope?.start ?? 0).clamp(0, haystack.length);
+  final high = (scope?.end ?? haystack.length).clamp(0, haystack.length);
+
   // One enumeration serves both directions and every option, so Find
   // Previous can never offer an occurrence Find Next would not.
   int next(int from) {
-    var at = haystack.indexOf(needle, from);
+    var at = haystack.indexOf(needle, from < low ? low : from);
     while (at >= 0 &&
         wholeWord &&
         !_isWholeWordMatch(text, at, at + needle.length)) {
@@ -1563,7 +1573,7 @@ SearchResult searchText(
     var count = 0;
     for (
       var at = next(0);
-      at >= 0 && at < bound;
+      at >= 0 && at < bound && at + needle.length <= high;
       at = next(at + needle.length)
     ) {
       ring[count % limit] = at;
@@ -1586,7 +1596,7 @@ SearchResult searchText(
   var from = (start ?? 0).clamp(0, haystack.length);
   while (matches.length < limit) {
     final at = next(from);
-    if (at < 0) break;
+    if (at < 0 || at + needle.length > high) break;
     matches.add(TextMatch(start: at, end: at + needle.length));
     from = at + needle.length;
   }
@@ -1609,6 +1619,7 @@ List<TextMatch> findSearchMatches(
   bool wholeWord = false,
   int limit = searchMatchLimit,
   int? start,
+  ({int start, int end})? scope,
   bool reverse = false,
 }) => searchText(
   text,
@@ -1617,6 +1628,7 @@ List<TextMatch> findSearchMatches(
   wholeWord: wholeWord,
   limit: limit,
   start: start,
+  scope: scope,
   reverse: reverse,
 ).matches;
 

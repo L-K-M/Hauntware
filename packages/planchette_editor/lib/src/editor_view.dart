@@ -490,6 +490,21 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               },
             ),
             controls: [
+              if (c.searchScope != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Tooltip(
+                    message: strings.searchScopeHint,
+                    child: InputChip(
+                      label: Text(strings.searchInSelection),
+                      labelStyle: theme.textTheme.labelSmall,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: EdgeInsets.zero,
+                      onDeleted: c.clearSearchScope,
+                    ),
+                  ),
+                ),
               if (counter.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),

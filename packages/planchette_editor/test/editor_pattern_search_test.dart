@@ -405,5 +405,26 @@ void main() {
       editor.dispose();
       await Future<void>.delayed(const Duration(milliseconds: 100));
     });
+
+    test('a stored scope bounds pattern matches and Replace All', () async {
+      final editor = _editor('cat one cat two cat');
+      editor.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      editor.findInSelection();
+      editor
+        ..toggleRegularExpression()
+        ..search.text = 'c.t';
+      await _settled(editor);
+
+      // Only the matches lying wholly inside the scope are served.
+      expect(_found(editor), ['cat', 'cat']);
+      expect(_counter(editor), (1, 2, false));
+
+      editor.replacement.text = 'dog';
+      expect(await editor.replaceAll(), isTrue);
+      expect(editor.text.text, 'cat one dog two dog');
+    });
   });
 }

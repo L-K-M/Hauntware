@@ -20,6 +20,9 @@ class EditorStrings {
   String get previousMatch => 'Previous match';
   String get nextMatch => 'Next match';
   String get closeSearch => 'Close search';
+  String get searchInSelection => 'in selection';
+  String get searchScopeHint =>
+      'Only the stored selection is searched — remove to search the file.';
   String get noMatches => 'No matches';
   String get caseFoldLimited =>
       'This text cannot be compared without case, so matching was exact.';

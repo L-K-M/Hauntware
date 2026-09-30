@@ -34,14 +34,17 @@ void main() {
       baseOffset: 0,
       extentOffset: 2,
     );
-    expect(
-      notifications,
-      2,
-      reason: 'still dirty; the shell draws nothing new',
+    expect(notifications, 3, reason: 'the selection enables Find in Selection');
+    // The boundary is collapsed-or-not: shrinking a selection keeps the
+    // shell's shown state identical, so a caret move inside it stays silent.
+    tab.editor.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 1,
     );
+    expect(notifications, 3);
 
     tab.editor.text.text = '';
-    expect(notifications, 3, reason: 'clean again');
+    expect(notifications, 4, reason: 'clean again');
   });
 
   test('a language that gains a comment marker enables Toggle Comment', () {

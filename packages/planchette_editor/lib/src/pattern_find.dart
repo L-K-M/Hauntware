@@ -121,10 +121,14 @@ class PatternFind {
 
   /// One page of the held matches of [text], in the shape literal search
   /// returns, with [SearchResult.precedingCount] always counted. [start] and
-  /// [reverse] mean what they mean to `searchText`.
+  /// [reverse] mean what they mean to `searchText`. With [scope] — a stored
+  /// find-in-selection range — the page is a window of the matches lying
+  /// wholly inside it, so counts stay scope-relative and stepping never
+  /// leaves the range.
   SearchResult page(
     String text, {
     int? start,
+    ({int start, int end})? scope,
     bool reverse = false,
     int limit = searchMatchLimit,
   }) {
@@ -137,14 +141,31 @@ class PatternFind {
       );
     }
     final matches = results.matches;
+    // The held list spans the document; the page is its in-scope window.
+    // One match can still straddle the scope's far edge — a start inside
+    // with an end outside — and matches never overlap, so it is the last
+    // one in the window and simply drops.
+    var low = 0;
+    var high = matches.length;
+    if (scope != null) {
+      low = matches.indexAtOrAfter(scope.start);
+      high = matches.indexAtOrAfter(scope.end);
+      if (high > low && matches.endOf(high - 1) > scope.end) high--;
+    }
     final int first;
     final int end;
     if (reverse) {
-      end = start == null ? matches.length : matches.indexAtOrAfter(start);
-      first = math.max(0, end - limit);
+      end = math.min(
+        high,
+        start == null ? high : matches.indexAtOrAfter(start),
+      );
+      first = math.max(low, end - limit);
     } else {
-      first = start == null ? 0 : matches.indexAtOrAfter(start);
-      end = math.min(matches.length, first + limit);
+      first = math.max(
+        low,
+        start == null ? low : matches.indexAtOrAfter(start),
+      );
+      end = math.min(high, first + limit);
     }
     return SearchResult(
       matches: [
@@ -152,19 +173,21 @@ class PatternFind {
           TextRange(start: matches.startOf(i), end: matches.endOf(i)),
       ],
       caseFolding: CaseFolding.exact,
-      precedingCount: first,
+      precedingCount: first - low,
     );
   }
 
   /// Replace All in a worker of its own, under the same budget, so it
   /// neither waits behind a search nor cancels one. Null when [query] is not
-  /// a usable pattern, which [failure] then explains.
+  /// a usable pattern, which [failure] then explains. With [scope], only
+  /// the matches lying wholly inside it are replaced.
   Future<PatternOutcome<PatternReplacement?>?> replaceAll(
     String text,
     String query,
     String template, {
     required bool caseSensitive,
     required bool wholeWord,
+    ({int start, int end})? scope,
   }) async {
     _compile(query, caseSensitive);
     if (_pattern == null) return null;
@@ -177,6 +200,7 @@ class PatternFind {
         template,
         caseSensitive: caseSensitive,
         wholeWord: wholeWord,
+        scope: scope,
       );
       if (!_disposed && outcome is PatternFailed<PatternReplacement?>) {
         _replaceFailure = outcome.failure;

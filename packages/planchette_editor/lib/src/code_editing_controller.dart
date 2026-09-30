@@ -17,6 +17,10 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
   final Color activeMatchBackground;
   final Color activeMatchForeground;
 
+  /// The wash under a find-in-selection range — fainter than
+  /// [matchBackground] so matches still stand out inside it.
+  final Color searchScopeBackground;
+
   const EditorSyntaxTheme({
     required this.comment,
     required this.string,
@@ -27,6 +31,7 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     required this.matchForeground,
     required this.activeMatchBackground,
     required this.activeMatchForeground,
+    required this.searchScopeBackground,
   });
 
   static const dark = EditorSyntaxTheme(
@@ -39,6 +44,7 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     matchForeground: Color(0xFFF2F6F5),
     activeMatchBackground: Color(0xFF8AD8C8),
     activeMatchForeground: Color(0xFF10181A),
+    searchScopeBackground: Color(0x22E6C177),
   );
 
   static const light = EditorSyntaxTheme(
@@ -53,6 +59,7 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     // readable pair in either theme. 0xFF377A69 clears AA at 5.06:1.
     activeMatchBackground: Color(0xFF377A69),
     activeMatchForeground: Color(0xFFFFFFFF),
+    searchScopeBackground: Color(0x33F5D89B),
   );
 
   static EditorSyntaxTheme of(Brightness brightness) =>
@@ -69,6 +76,7 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     Color? matchForeground,
     Color? activeMatchBackground,
     Color? activeMatchForeground,
+    Color? searchScopeBackground,
   }) => EditorSyntaxTheme(
     comment: comment ?? this.comment,
     string: string ?? this.string,
@@ -79,6 +87,7 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     matchForeground: matchForeground ?? this.matchForeground,
     activeMatchBackground: activeMatchBackground ?? this.activeMatchBackground,
     activeMatchForeground: activeMatchForeground ?? this.activeMatchForeground,
+    searchScopeBackground: searchScopeBackground ?? this.searchScopeBackground,
   );
 
   @override
@@ -101,6 +110,10 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
         activeMatchForeground,
         other.activeMatchForeground,
       ),
+      searchScopeBackground: mix(
+        searchScopeBackground,
+        other.searchScopeBackground,
+      ),
     );
   }
 
@@ -117,7 +130,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
       other.matchBackground == matchBackground &&
       other.matchForeground == matchForeground &&
       other.activeMatchBackground == activeMatchBackground &&
-      other.activeMatchForeground == activeMatchForeground;
+      other.activeMatchForeground == activeMatchForeground &&
+      other.searchScopeBackground == searchScopeBackground;
 
   @override
   int get hashCode => Object.hash(
@@ -130,6 +144,7 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
     matchForeground,
     activeMatchBackground,
     activeMatchForeground,
+    searchScopeBackground,
   );
 
   Color colorFor(SyntaxTokenType type) => switch (type) {
@@ -143,16 +158,21 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
 
 /// Flatten syntax [tokens] and search [matches] into styled spans. Both
 /// inputs are ordered and internally non-overlapping; a search hit overlaying
-/// a token keeps the token's color and adds the hit background.
+/// a token keeps the token's color and adds the hit background. [scope],
+/// a stored find-in-selection range, washes the text inside it — under any
+/// match, whose own background stays on top.
 List<InlineSpan> buildHighlightedSpans({
   required String text,
   required List<SyntaxToken> tokens,
   required List<TextRange> matches,
   required int activeMatchIndex,
   required EditorSyntaxTheme theme,
+  TextRange? scope,
 }) {
   final spans = <InlineSpan>[];
   final n = text.length;
+  final scopeStart = scope?.start.clamp(0, n) ?? 0;
+  final scopeEnd = scope?.end.clamp(0, n) ?? 0;
   var position = 0;
   var tokenIndex = 0;
   var matchIndex = 0;
@@ -167,9 +187,15 @@ List<InlineSpan> buildHighlightedSpans({
     final match = matchIndex < matches.length ? matches[matchIndex] : null;
     final inToken = token != null && token.start <= position;
     final inMatch = match != null && match.start <= position;
+    final inScope = position >= scopeStart && position < scopeEnd;
     var end = n;
     if (token != null) end = end.clamp(0, inToken ? token.end : token.start);
     if (match != null) end = end.clamp(0, inMatch ? match.end : match.start);
+    if (inScope) {
+      end = end.clamp(0, scopeEnd);
+    } else if (position < scopeStart) {
+      end = end.clamp(0, scopeStart);
+    }
     TextStyle? style;
     if (inToken) style = TextStyle(color: theme.colorFor(token.type));
     if (inMatch) {
@@ -179,6 +205,10 @@ List<InlineSpan> buildHighlightedSpans({
         backgroundColor: active
             ? theme.activeMatchBackground
             : theme.matchBackground,
+      );
+    } else if (inScope) {
+      style = (style ?? const TextStyle()).copyWith(
+        backgroundColor: theme.searchScopeBackground,
       );
     }
     spans.add(TextSpan(text: text.substring(position, end), style: style));
@@ -199,6 +229,7 @@ class CodeEditingController extends TextEditingController {
 
   List<TextRange> _matches = const [];
   int _activeMatchIndex = -1;
+  TextRange? _scope;
 
   String? _tokenizedText;
   SyntaxLanguage? _tokenizedLanguage;
@@ -208,6 +239,17 @@ class CodeEditingController extends TextEditingController {
 
   List<TextRange> get searchMatches => _matches;
   int get activeMatchIndex => _activeMatchIndex;
+
+  /// The stored find-in-selection range, or null when search covers the
+  /// whole document. Painted as a wash so the scope survives the selection
+  /// returning to match-stepping.
+  TextRange? get searchScope => _scope;
+
+  void setSearchScope(TextRange? scope) {
+    if (_scope == scope) return;
+    _scope = scope;
+    notifyListeners();
+  }
 
   void setSearchMatches(List<TextRange> matches, int activeIndex) {
     if (identical(_matches, matches) && _activeMatchIndex == activeIndex) {
@@ -254,7 +296,8 @@ class CodeEditingController extends TextEditingController {
       );
     }
     final tokens = _tokensFor(text);
-    if (tokens.isEmpty && _matches.isEmpty) {
+    final scope = _scope;
+    if (tokens.isEmpty && _matches.isEmpty && scope == null) {
       return TextSpan(style: style, text: text);
     }
     return TextSpan(
@@ -265,6 +308,7 @@ class CodeEditingController extends TextEditingController {
         matches: _matches,
         activeMatchIndex: _activeMatchIndex,
         theme: theme,
+        scope: scope,
       ),
     );
   }
@@ -279,6 +323,7 @@ List<TextRange> findSearchMatches(
   int limit = searchMatchLimit,
   CaseFolder fold = _defaultCaseFolder,
   int? start,
+  TextRange? scope,
   bool reverse = false,
 }) => core
     .searchText(
@@ -289,6 +334,7 @@ List<TextRange> findSearchMatches(
       limit: limit,
       fold: fold,
       start: start,
+      scope: scope == null ? null : (start: scope.start, end: scope.end),
       reverse: reverse,
     )
     .matches
@@ -325,6 +371,7 @@ SearchResult searchText(
   int limit = searchMatchLimit,
   CaseFolder fold = _defaultCaseFolder,
   int? start,
+  TextRange? scope,
   bool reverse = false,
 }) {
   final result = core.searchText(
@@ -335,6 +382,7 @@ SearchResult searchText(
     limit: limit,
     fold: fold,
     start: start,
+    scope: scope == null ? null : (start: scope.start, end: scope.end),
     reverse: reverse,
   );
   return SearchResult(
