@@ -116,6 +116,9 @@ final class ActivityPanelController extends ChangeNotifier {
 
   List<TransferTask> get tasks => _queue?.tasks ?? const [];
 
+  AppTaskPresentation presentationFor(String taskId) =>
+      _queue?.presentationFor(taskId) ?? AppTaskPresentation.transfer;
+
   bool get queuePaused => _queue?.isPaused ?? false;
 
   List<PendingConflict> get pendingConflicts =>

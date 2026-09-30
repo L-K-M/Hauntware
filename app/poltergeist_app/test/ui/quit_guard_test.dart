@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/app_preferences.dart';
+import 'package:poltergeist_app/services/app_transfer_queue.dart';
 import 'package:poltergeist_app/services/desktop_window_lifecycle.dart';
 import 'package:poltergeist_app/services/quit_guard.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
@@ -300,6 +301,64 @@ void main() {
       expect(h.queue.pauseTaskCalls, isEmpty);
       expect(h.queue.flushJournalCalls, 1);
       expect(h.window.events.last, 'destroy');
+      expect(await closing, isTrue);
+    });
+  });
+
+  testWidgets('session-only work offers cancel and quit, never pause', (
+    tester,
+  ) async {
+    final h = await pumpApp(tester);
+    final archive = h.queue.addTask(
+      state: TransferTaskState.running,
+      presentation: AppTaskPresentation.archiveCreate,
+    );
+    final sync = h.queue.addTask(
+      state: TransferTaskState.running,
+      presentation: AppTaskPresentation.sync,
+    );
+
+    await tester.runAsync(() async {
+      final firstClosing = h.lifecycle.close();
+      await waitForQuitDialog(tester);
+
+      expect(find.byKey(const ValueKey('quit.pauseAndQuit')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('quit.cancelTransfers')),
+        findsOneWidget,
+      );
+      expect(find.text('Quit while operations are running?'), findsOneWidget);
+      expect(find.text('2 operations are running.'), findsOneWidget);
+      expect(find.text('Cancel Operations and Quit'), findsOneWidget);
+      expect(find.text('Keep Working'), findsOneWidget);
+      expect(find.text('Quit while transfers are running?'), findsNothing);
+      expect(find.text('Cancel Transfers and Quit'), findsNothing);
+      expect(find.text('Keep Transferring'), findsNothing);
+      expect(
+        find.text('Files in progress restart from the beginning next launch.'),
+        findsNothing,
+      );
+
+      await tester.tap(find.text('Keep Working'));
+      await waitForDialogDismissed(tester);
+      expect(await firstClosing, isFalse);
+
+      archive
+        ..totalBytes = 2 * 1000 * 1000
+        ..transferredBytes = 800 * 1000;
+      final closing = h.lifecycle.close();
+      await waitForQuitDialog(tester);
+      expect(
+        find.text('2 operations are running (1.2 MB remaining so far).'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('quit.cancelTransfers')));
+      await waitForDestroy(tester, h.window);
+
+      expect(h.queue.cancelTaskCalls, [archive.id, sync.id]);
+      expect(h.queue.pauseTaskCalls, isEmpty);
+      expect(h.queue.flushJournalCalls, 1);
       expect(await closing, isTrue);
     });
   });

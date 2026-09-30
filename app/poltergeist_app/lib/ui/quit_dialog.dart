@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import 'panes/pane_format.dart';
 
-/// The quit-with-transfers warning (02 §10): quitting while the queue
-/// holds live tasks interrupts the close and offers the §10 verbs —
-/// `Pause and Quit` (default), `Cancel Transfers and Quit`, and `Keep
-/// Transferring`, which cancels the close. A dismissed dialog answers
-/// nothing and counts as Keep Transferring: the quit is vetoed.
+/// The quit-with-transfers warning (02 §10): quitting while the queue holds
+/// live tasks interrupts the close. Restartable tasks offer Pause and Quit;
+/// a set containing session-only work uses operation-neutral copy and offers
+/// Cancel and Quit instead. Keeping work active or dismissing vetoes the close.
 enum QuitConfirmChoice { pauseAndQuit, cancelTransfersAndQuit }
+
+/// Which safe close choices the active task set supports. A session-only job
+/// cannot be represented honestly by Pause and Quit because no restart can
+/// resume it.
+enum QuitTaskDisposition { pauseOrCancel, cancelOnly }
 
 /// Shows the §10 quit confirmation. [activeTasks] is the count of
 /// non-terminal tasks (paused counts); [remainingBytes] is the
@@ -19,6 +23,7 @@ Future<QuitConfirmChoice?> showQuitConfirmDialog(
   BuildContext context, {
   required int activeTasks,
   required int remainingBytes,
+  required QuitTaskDisposition disposition,
 }) {
   assert(
     activeTasks > 0,
@@ -32,48 +37,76 @@ Future<QuitConfirmChoice?> showQuitConfirmDialog(
     builder: (dialogContext) {
       final l10n = AppLocalizations.of(dialogContext);
       final platform = Theme.of(dialogContext).platform;
+      final title = switch (disposition) {
+        QuitTaskDisposition.pauseOrCancel => l10n.quitConfirmTitle,
+        QuitTaskDisposition.cancelOnly => l10n.quitConfirmOperationsTitle,
+      };
+      final body = switch (disposition) {
+        QuitTaskDisposition.pauseOrCancel =>
+          remainingBytes > 0
+              ? l10n.quitConfirmBodyRemaining(
+                  activeTasks,
+                  formatPaneSize(remainingBytes, platform: platform),
+                )
+              : l10n.quitConfirmBody(activeTasks),
+        QuitTaskDisposition.cancelOnly =>
+          remainingBytes > 0
+              ? l10n.quitConfirmOperationsBodyRemaining(
+                  activeTasks,
+                  formatPaneSize(remainingBytes, platform: platform),
+                )
+              : l10n.quitConfirmOperationsBody(activeTasks),
+      };
       return AlertDialog(
         key: const ValueKey('quit.dialog'),
         // The body plus the restart note must survive long
         // localizations inside short windows.
         scrollable: true,
-        title: Text(l10n.quitConfirmTitle),
+        title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              remainingBytes > 0
-                  ? l10n.quitConfirmBodyRemaining(
-                      activeTasks,
-                      formatPaneSize(remainingBytes, platform: platform),
-                    )
-                  : l10n.quitConfirmBody(activeTasks),
-            ),
-            const SizedBox(height: 8),
-            Text(l10n.quitConfirmRestartNote),
+            Text(body),
+            if (disposition == QuitTaskDisposition.pauseOrCancel) ...[
+              const SizedBox(height: 8),
+              Text(l10n.quitConfirmRestartNote),
+            ],
           ],
         ),
         actions: [
           TextButton(
             key: const ValueKey('quit.keepTransferring'),
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.quitKeepTransferring),
+            child: Text(switch (disposition) {
+              QuitTaskDisposition.pauseOrCancel => l10n.quitKeepTransferring,
+              QuitTaskDisposition.cancelOnly => l10n.quitKeepWorking,
+            }),
           ),
-          TextButton(
-            key: const ValueKey('quit.cancelTransfers'),
-            onPressed: () => Navigator.of(dialogContext).pop(
-              QuitConfirmChoice.cancelTransfersAndQuit,
+          switch (disposition) {
+            QuitTaskDisposition.pauseOrCancel => TextButton(
+              key: const ValueKey('quit.cancelTransfers'),
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(QuitConfirmChoice.cancelTransfersAndQuit),
+              child: Text(l10n.quitCancelTransfersAndQuit),
             ),
-            child: Text(l10n.quitCancelTransfersAndQuit),
-          ),
-          FilledButton(
-            key: const ValueKey('quit.pauseAndQuit'),
-            onPressed: () => Navigator.of(dialogContext).pop(
-              QuitConfirmChoice.pauseAndQuit,
+            QuitTaskDisposition.cancelOnly => FilledButton(
+              key: const ValueKey('quit.cancelTransfers'),
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(QuitConfirmChoice.cancelTransfersAndQuit),
+              child: Text(l10n.quitCancelOperationsAndQuit),
             ),
-            child: Text(l10n.quitPauseAndQuit),
-          ),
+          },
+          if (disposition == QuitTaskDisposition.pauseOrCancel)
+            FilledButton(
+              key: const ValueKey('quit.pauseAndQuit'),
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(QuitConfirmChoice.pauseAndQuit),
+              child: Text(l10n.quitPauseAndQuit),
+            ),
         ],
       );
     },

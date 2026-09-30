@@ -1070,7 +1070,10 @@ final class SyncPlanController extends ChangeNotifier {
   /// when [needsTypedConfirmation] the view collects `DELETE` first and
   /// calls [run] with [deleteConfirmed]; a call without it re-surfaces
   /// the gate rather than executing.
-  Future<void> run({bool deleteConfirmed = false}) async {
+  Future<void> run({bool deleteConfirmed = false}) =>
+      syncTasks.trackSettlingRun(_run(deleteConfirmed: deleteConfirmed));
+
+  Future<void> _run({required bool deleteConfirmed}) async {
     final plan = _plan;
     if (plan == null || isRunning || _disposed) return;
     _reassess();
@@ -1154,7 +1157,9 @@ final class SyncPlanController extends ChangeNotifier {
 
   /// §8's Retry Failed — same run id's next attempt through
   /// `SyncExecutor.retryFailed`; the panel's retry verb lands here too.
-  Future<void> retryFailed() async {
+  Future<void> retryFailed() => syncTasks.trackSettlingRun(_retryFailed());
+
+  Future<void> _retryFailed() async {
     final executor = _executor;
     final lastRun = _lastRun;
     if (executor == null || lastRun == null || isRunning || _disposed) {

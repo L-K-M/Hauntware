@@ -371,8 +371,12 @@ ownership
 
 - **D8 — Isolate architecture, confirmed by M0.** The engine isolate owns
   the connection pool, every SSH/SFTP socket, transfer execution, inline
-  hashing, and sync scan/diff; short-lived `Isolate.run` workers own archive
-  work and later non-stream-shaped CPU bursts. The UI isolate holds only view
+  hashing, and sync scan/diff; operation-scoped workers own archive work and
+  later non-stream-shaped CPU bursts. One-shot work uses `Isolate.run`;
+  cancellable work uses `Isolate.spawn` so its owner retains an interruption
+  channel. A helper that owns native resources must unwind through a
+  parent-owned cancellation signal; killing it would skip `finally` and leak
+  process-wide handles. The UI isolate holds only view
   state and talks to the engine through the typed message-port API. M0 measured
   0.997 throughput parity, 40.938 ms cancellation, 22.83 progress flushes/s,
   and a 4.401 ms maximum UI-isolate timer stall, all inside D8's gates, so the
@@ -642,15 +646,56 @@ ownership
   actually need it; FileZilla `sitemanager.xml`, WinSCP
   INI, and Cyberduck bookmarks
   follow in v1.x behind the same preview UI.
-- **D27 — Archives.** v1.x, not v1: local zip create/extract via
-  `package:archive` with zip-slip-safe extraction (validate every component
-  — Séance's path-validation tradition), per-entry and total
-  decompressed-size caps (a zip bomb is a distinct hazard from path
-  traversal), and symlink-entry rejection (an extracted symlink can
-  redirect a later entry's write outside the target directory) —
-  traversal is not the only extraction hazard; pin an audited
-  `package:archive` version at implementation time. Remote-side extraction and
-  browsable archives are later, consciously scheduled in 07.
+- **D27 — Archives.** v1.x, not v1: local ZIP create/extract through the
+  exactly pinned and audited `package:archive` 4.3.0. `file.createArchive`
+  archives one or more selected local roots into `<name>.zip` (one root) or
+  `Archive.zip` (many) in the shown folder; `file.extractArchive` accepts one
+  regular `.zip` and extracts it into a sibling folder named from the archive.
+  Both outputs use Keep Both numbering and a hidden sibling stage, so neither
+  overwrites an existing path nor exposes partial output. Remote-side
+  extraction and browsable archives remain later.
+
+  Extraction accepts single-disk stored/deflate ZIP and the supported ZIP64
+  forms. It preflights the complete central directory before writing: validate
+  every component (Séance's path-validation tradition), reject absolute or
+  traversing paths, line/bidi controls, symlinks, special files, encryption,
+  unsupported compression, multi-disk layout, ZIP64 data descriptors,
+  duplicate or destination-aliased paths, and file/child collisions. It caps
+  an entry at 16 GiB, the archive total at 64 GiB, entry count at 100,000,
+  path depth at 128, aggregate path components at 1,000,000, metadata at
+  256 MiB, and compressed/archive bytes at derived ceilings, then enforces
+  output bytes and CRC again while streaming. Creation rejects observed links
+  and special files and applies the same structural and metadata bounds, so an
+  archive Poltergeist creates is one it can extract. It deflates each source
+  into an operation-owned bounded scratch file, then asks the audited ZIP
+  encoder to frame and stream that already-compressed content. This avoids the
+  encoder's whole-compressed-entry memory buffer without weakening compression
+  for large files.
+
+  **Local-source trust clarification (2026-09-30).** Creation opens each final
+  regular file without following a link and rechecks its handle identity, type,
+  size, and modification time. Like 03 §2.3's other local checks, directory
+  walking is advisory against a hostile same-user process replacing an ancestor
+  or mutating the same object while it is read. Such a process already has the
+  user's direct read access; D27 does not add a cross-process local namespace
+  sandbox. Untrusted ZIP paths still materialize only inside the
+  owner-restricted stage.
+
+  Each task appears in Activity with archive-specific presentation, progress,
+  pause-between-entries, cancel until atomic commit begins, and
+  retry-from-scratch. An operation-scoped `Isolate.spawn` worker, not
+  `Isolate.run`, is required: `package:archive` compresses/decompresses an
+  entry synchronously, while `Isolate.run` exposes no retained cancellation
+  channel. A parent-owned native cancellation flag interrupts bounded codec
+  reads and writes, then the worker unwinds normally so raw file handles and
+  buffers close before settlement. `Isolate.kill` is deliberately not used:
+  it skips worker `finally` blocks and leaks those process-wide resources.
+  Archive transforms are session-only like sync side tasks, so the quit guard
+  offers cancel-and-quit, not pause-and-quit, while one is live. A crash can
+  leave only an owner-restricted reserved stage. A held lease and authenticated
+  marker backed by a durable app-support key let a later operation sweep only
+  authenticated, unlocked, Poltergeist-owned stages. This amendment keeps D8's
+  isolation boundary while making D16's cancellation promise real.
 
 - **D32 — The inspector workspace (2026-09-24, owner-directed redesign).**
   The v1.0 chrome is replaced by a ForkLift/Transmit-grade layout

@@ -2,6 +2,89 @@ import 'dart:async';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
 
+/// Activity-row semantics that are not representable by
+/// [TransferOperation]. Archives deliberately remain app-side jobs, so the
+/// transfer protocol does not gain fake create/extract operations.
+enum AppTaskKind { transfer, archiveCreate, archiveExtract }
+
+/// Optional task verbs. The row asks the queue that owns the task instead of
+/// inferring support from a transfer-shaped compatibility record.
+enum AppTaskCapability {
+  pause,
+  cancel,
+  retry,
+  remove,
+  reorder,
+  reveal,
+  pauseAcrossRestart,
+  cancelItem,
+  retryItem,
+  resolveItemConflict,
+}
+
+/// Presentation and capability metadata for one activity task.
+final class AppTaskPresentation {
+  const AppTaskPresentation({required this.kind, required this.capabilities});
+
+  static const transfer = AppTaskPresentation(
+    kind: AppTaskKind.transfer,
+    capabilities: {
+      AppTaskCapability.pause,
+      AppTaskCapability.cancel,
+      AppTaskCapability.retry,
+      AppTaskCapability.remove,
+      AppTaskCapability.reveal,
+      AppTaskCapability.reorder,
+      AppTaskCapability.pauseAcrossRestart,
+      AppTaskCapability.cancelItem,
+      AppTaskCapability.retryItem,
+      AppTaskCapability.resolveItemConflict,
+    },
+  );
+
+  static const sync = AppTaskPresentation(
+    kind: AppTaskKind.transfer,
+    capabilities: {
+      AppTaskCapability.pause,
+      AppTaskCapability.cancel,
+      AppTaskCapability.retry,
+      AppTaskCapability.remove,
+      AppTaskCapability.reveal,
+    },
+  );
+
+  static const archiveCreate = AppTaskPresentation(
+    kind: AppTaskKind.archiveCreate,
+    capabilities: {
+      AppTaskCapability.pause,
+      AppTaskCapability.cancel,
+      AppTaskCapability.retry,
+      AppTaskCapability.remove,
+      AppTaskCapability.reveal,
+    },
+  );
+
+  static const archiveExtract = AppTaskPresentation(
+    kind: AppTaskKind.archiveExtract,
+    capabilities: {
+      AppTaskCapability.pause,
+      AppTaskCapability.cancel,
+      AppTaskCapability.retry,
+      AppTaskCapability.remove,
+      AppTaskCapability.reveal,
+    },
+  );
+
+  final AppTaskKind kind;
+  final Set<AppTaskCapability> capabilities;
+
+  bool supports(AppTaskCapability capability) =>
+      capabilities.contains(capability);
+
+  bool get canPauseAcrossRestart =>
+      supports(AppTaskCapability.pauseAcrossRestart);
+}
+
 /// The activity panel's queue seam (02 §6, D16): the UI-facing half of
 /// the transfer queue. The app composition names this interface, never
 /// the concrete [TransferQueue] — the same posture as [AppEngine], so a
@@ -25,6 +108,10 @@ abstract interface class AppTransferQueue {
   /// Implementations return a detached copy, so callers may iterate
   /// while the verbs below mutate the queue (clearCompleted does).
   List<TransferTask> get tasks;
+
+  /// Row semantics for [taskId]. Unknown ids use ordinary transfer behavior
+  /// so an event/task race never strips controls from a real queue row.
+  AppTaskPresentation presentationFor(String taskId);
 
   /// The queue-level pause gate (02 §6's header toggle): paused stops
   /// new dispatch; in-flight items finish.
@@ -143,6 +230,10 @@ final class TransferQueueAdapter implements AppTransferQueue {
 
   @override
   List<TransferTask> get tasks => _queue.tasks;
+
+  @override
+  AppTaskPresentation presentationFor(String taskId) =>
+      AppTaskPresentation.transfer;
 
   @override
   bool get isPaused => _queue.isPaused;

@@ -2276,17 +2276,35 @@ abstract class AppLocalizations {
   /// **'Quit while transfers are running?'**
   String get quitConfirmTitle;
 
+  /// The quit guard's cancel-only dialog title (02 §10): shown when live work includes a session-only operation.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit while operations are running?'**
+  String get quitConfirmOperationsTitle;
+
   /// The quit dialog's warning line (02 §10) when no remaining-byte figure is known yet.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 transfer is running} other{{count} transfers are running}}.'**
   String quitConfirmBody(int count);
 
+  /// The cancel-only quit dialog's warning line (02 §10) when no remaining-byte figure is known yet.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 operation is running} other{{count} operations are running}}.'**
+  String quitConfirmOperationsBody(int count);
+
   /// The quit dialog's warning line (02 §10's example copy): the remaining figure is the discovered-total floor, so 'so far' never overstates what is left.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, =1{1 transfer is running} other{{count} transfers are running}} ({remaining} remaining so far).'**
   String quitConfirmBodyRemaining(int count, String remaining);
+
+  /// The cancel-only quit dialog's warning line (02 §10): the remaining figure is the discovered-total floor.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 operation is running} other{{count} operations are running}} ({remaining} remaining so far).'**
+  String quitConfirmOperationsBodyRemaining(int count, String remaining);
 
   /// The quit dialog's honesty note (02 §10): until resumable transfers ship, a paused in-flight file restarts from byte zero on relaunch.
   ///
@@ -2306,11 +2324,23 @@ abstract class AppLocalizations {
   /// **'Cancel Transfers and Quit'**
   String get quitCancelTransfersAndQuit;
 
+  /// Cancel-only quit verb (02 §10): cancels live operations that cannot pause across restart, flushes, then quits.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel Operations and Quit'**
+  String get quitCancelOperationsAndQuit;
+
   /// Quit verb (02 §10): cancels the close — the window stays open and transfers keep running.
   ///
   /// In en, this message translates to:
   /// **'Keep Transferring'**
   String get quitKeepTransferring;
+
+  /// Cancel-only quit verb (02 §10): cancels the close so the live operations continue.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep Working'**
+  String get quitKeepWorking;
 
   /// The journal-flush failure dialog's title (07 §3.5): shown when the close-path journal write fails or times out.
   ///
@@ -6449,6 +6479,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Duplicate'**
   String get fileDuplicateLabel;
+
+  /// file.createArchive: creates a local ZIP from the selected items.
+  ///
+  /// In en, this message translates to:
+  /// **'Create ZIP Archive'**
+  String get fileCreateArchiveLabel;
+
+  /// file.extractArchive: extracts one selected local ZIP beside itself.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract ZIP Archive'**
+  String get fileExtractArchiveLabel;
+
+  /// Disabled archive command shown for a remote pane.
+  ///
+  /// In en, this message translates to:
+  /// **'Archives are available for local files only.'**
+  String get commandDisabledLocalArchive;
+
+  /// Disabled archive command when the local archive service is not composed.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive support is unavailable.'**
+  String get commandDisabledArchivesUnavailable;
+
+  /// Disabled Extract Archive command when the selection is not exactly one ZIP file.
+  ///
+  /// In en, this message translates to:
+  /// **'Select one ZIP archive.'**
+  String get commandDisabledSelectOneZip;
 
   /// file.delete on local items (macOS/Linux).
   ///

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'app_transfer_queue.dart';
+import 'archive_queue_tasks.dart';
 import 'pane_controller.dart';
 import 'pane_drop.dart' show fsLocationForLocation;
 import 'pane_location.dart';
@@ -30,9 +31,68 @@ import 'pane_location.dart';
 /// [refreshWhenSettled] is the same hook for any other task a caller
 /// enqueues against a pane, such as a drop.
 final class PaneFileOps {
-  PaneFileOps(this._queue);
+  PaneFileOps(AppTransferQueue queue, {ArchiveQueueTasks? archives})
+    : _queue = queue,
+      // Keep the public named seam free of a private identifier.
+      // ignore: prefer_initializing_formals
+      _archives = archives;
 
   final AppTransferQueue _queue;
+  final ArchiveQueueTasks? _archives;
+
+  bool get archivesAvailable => _archives != null;
+
+  /// Whether `file.createArchive` can act on the pane's selected local
+  /// roots. Archive work is local-only in D27's first slice.
+  bool canCreateArchive(PaneController pane) {
+    if (_archives == null || pane.location is! LocalPaneLocation) return false;
+    return _selectionOf(pane) != null;
+  }
+
+  /// Whether `file.extractArchive` has exactly one selected local ZIP.
+  bool canExtractArchive(PaneController pane) {
+    if (_archives == null || pane.location is! LocalPaneLocation) return false;
+    final roots = pane.selectedRoots;
+    if (!pane.verbsEnabled || roots.length != 1) return false;
+    final archive = roots.single;
+    return archive.type == RemoteFileType.file &&
+        archive.name.toLowerCase().endsWith('.zip');
+  }
+
+  /// Enqueues one ZIP creation beside the selected roots. Null means the
+  /// command became inapplicable between enablement and invocation.
+  Future<TransferTask?> createArchive(PaneController pane) async {
+    final archives = _archives;
+    final location = pane.location;
+    final target = _selectionOf(pane);
+    if (archives == null || location is! LocalPaneLocation || target == null) {
+      return null;
+    }
+    final task = await archives.createZip(
+      roots: target.paths,
+      destinationDirectory: location.path,
+    );
+    refreshWhenSettled(pane, task);
+    return task;
+  }
+
+  /// Enqueues extraction of the selected ZIP into its pane directory.
+  /// Null means the command became inapplicable before invocation.
+  Future<TransferTask?> extractArchive(PaneController pane) async {
+    final archives = _archives;
+    final location = pane.location;
+    if (archives == null ||
+        location is! LocalPaneLocation ||
+        !canExtractArchive(pane)) {
+      return null;
+    }
+    final task = await archives.extractZip(
+      archivePath: pane.selectedRoots.single.path,
+      destinationDirectory: paneParentPath(pane.selectedRoots.single.path),
+    );
+    refreshWhenSettled(pane, task);
+    return task;
+  }
 
   /// Step 1 of `file.delete` (⌘⌫ / Delete) and `file.deletePermanently`
   /// (⌥⌘⌫ / Shift+Delete): the confirmation model for [pane]'s current

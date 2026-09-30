@@ -1,0 +1,2 @@
+d3cfad8af4326d8a4645c8a9bf1d3547217dc90c2c11cb98b94008042a6b86c2  screenshots/before/menu-file.png
+50d6524f06af4e9016ac54ba337299add61628bf9eaff2fe2ce4cb774be9417e  screenshots/after/menu-file.png

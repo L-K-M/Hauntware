@@ -145,6 +145,17 @@ void main() {
       );
     });
 
+    test('rejects the reserved local-archive stage shape', () {
+      expect(
+        () => validateLocalName('.poltergeist-archive-${'a' * 32}.stage'),
+        throwsFormatException,
+      );
+      expect(
+        () => validateLocalName('.poltergeist-archive-${'g' * 32}.stage'),
+        returnsNormally,
+      );
+    });
+
     for (final (name, why) in <(String, String)>[
       ('CON', 'reserved device name'),
       ('con', 'reserved, case-insensitive'),
@@ -176,6 +187,66 @@ void main() {
     test('rejects the component hazards too', () {
       expect(() => validateLocalName('..'), throwsFormatException);
       expect(() => validateLocalName('a/b'), throwsFormatException);
+    });
+  });
+
+  group('validateRelativeLocalPath', () {
+    test('returns validated components and accepts a directory slash', () {
+      expect(validateRelativeLocalPath('folder/notes.txt', maximumDepth: 2), [
+        'folder',
+        'notes.txt',
+      ]);
+      expect(validateRelativeLocalPath('empty/', maximumDepth: 1), ['empty']);
+    });
+
+    test('rejects absolute, traversal, separator, and depth hazards', () {
+      for (final path in <String>[
+        '/absolute',
+        '../escape',
+        'a/../escape',
+        r'a\b',
+        'a//b',
+        'a/b/c',
+      ]) {
+        expect(
+          () => validateRelativeLocalPath(path, maximumDepth: 2),
+          throwsFormatException,
+          reason: path,
+        );
+      }
+    });
+
+    test('rejects display controls and unsafe local names', () {
+      for (final path in <String>[
+        'line\nbreak',
+        'line\u0085break',
+        'line\u2028break',
+        'right\u202eleft',
+        'folder/CON.txt',
+      ]) {
+        expect(
+          () => validateRelativeLocalPath(path, maximumDepth: 2),
+          throwsFormatException,
+          reason: path,
+        );
+      }
+    });
+
+    test('rejects a non-positive depth limit', () {
+      expect(
+        () => validateRelativeLocalPath('name', maximumDepth: 0),
+        throwsRangeError,
+      );
+    });
+
+    test('trims an excessive trailing slash run in bounded time', () {
+      final stopwatch = Stopwatch()..start();
+
+      expect(validateRelativeLocalPath('name${'/' * 65535}', maximumDepth: 2), [
+        'name',
+      ]);
+
+      expect(stopwatch.elapsed, lessThan(const Duration(milliseconds: 100)));
     });
   });
 

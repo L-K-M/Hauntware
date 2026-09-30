@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/app.dart';
+import 'package:poltergeist_app/services/archive_queue_tasks.dart';
 import 'package:poltergeist_app/ui/adaptive_shell.dart';
+import 'package:poltergeist_app/ui/workspace_shell.dart';
 
 void main() {
   testWidgets('renders localized two-pane workspace with quiet chrome', (
@@ -42,5 +44,22 @@ void main() {
     await tester.pump();
 
     expect(sizes, [const Size(1180, 760)]);
+  });
+
+  testWidgets('passes the archive registry into the workspace shell', (
+    tester,
+  ) async {
+    final archives = ArchiveQueueTasks.forTesting(
+      createZip: ({required sourcePaths, required destinationPath}) =>
+          throw StateError('unexpected ZIP creation'),
+      extractZip: ({required archivePath, required destinationPath}) =>
+          throw StateError('unexpected ZIP extraction'),
+    );
+    addTearDown(archives.dispose);
+
+    await tester.pumpWidget(PoltergeistApp(archiveTasks: archives));
+
+    final shell = tester.widget<WorkspaceShell>(find.byType(WorkspaceShell));
+    expect(shell.archiveTasks, same(archives));
   });
 }

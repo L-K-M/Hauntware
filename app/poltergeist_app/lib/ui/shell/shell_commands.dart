@@ -34,9 +34,13 @@ const kFileNewFileCommandId = 'file.newFile';
 const kFileDeleteCommandId = 'file.delete';
 const kFileDeletePermanentlyCommandId = 'file.deletePermanently';
 const kFileDuplicateCommandId = 'file.duplicate';
+const kFileCreateArchiveCommandId = 'file.createArchive';
+const kFileExtractArchiveCommandId = 'file.extractArchive';
 const kHelpKeyboardShortcutsCommandId = 'help.keyboardShortcuts';
 const kHelpReleaseNotesCommandId = 'help.releaseNotes';
 const kHelpReportIssueCommandId = 'help.reportIssue';
+
+enum _ArchiveCommand { create, extract }
 
 /// The project pages the Help menu links to (D19: links only — the app
 /// never downloads or phones home).
@@ -211,6 +215,52 @@ List<RegisteredCommand> buildShellCommands({
         pane.selectedEntries.isNotEmpty;
   }
 
+  bool canCreateArchive() {
+    final pane = workspace.activeTabController;
+    final ops = fileOps();
+    return pane != null && ops?.canCreateArchive(pane) == true;
+  }
+
+  bool canExtractArchive() {
+    final pane = workspace.activeTabController;
+    final ops = fileOps();
+    return pane != null && ops?.canExtractArchive(pane) == true;
+  }
+
+  String archiveDisabledReason(
+    AppLocalizations l10n, {
+    required _ArchiveCommand command,
+  }) {
+    final pane = workspace.activeTabController;
+    if (pane == null || !pane.verbsEnabled) {
+      return l10n.commandDisabledNoListing;
+    }
+    if (pane.location is! LocalPaneLocation) {
+      return l10n.commandDisabledLocalArchive;
+    }
+    final ops = fileOps();
+    if (ops == null || !ops.archivesAvailable) {
+      return l10n.commandDisabledArchivesUnavailable;
+    }
+    return switch (command) {
+      _ArchiveCommand.create => l10n.commandDisabledNoSelection,
+      _ArchiveCommand.extract => l10n.commandDisabledSelectOneZip,
+    };
+  }
+
+  Future<void> archive(
+    Future<TransferTask?> Function(PaneFileOps ops, PaneController pane) verb,
+  ) async {
+    final pane = workspace.activeTabController;
+    final ops = fileOps();
+    if (pane == null || ops == null) return;
+    try {
+      await verb(ops, pane);
+    } on Object catch (error) {
+      reportFailure(error);
+    }
+  }
+
   Future<void> create(Future<String?> Function(PaneController) verb) async {
     final pane = workspace.activeTabController;
     if (pane == null) return;
@@ -344,6 +394,38 @@ List<RegisteredCommand> buildShellCommands({
       menuPlacement: const CommandMenuPlacement(
         menu: AppMenuId.file,
         order: 72,
+        group: 2,
+      ),
+    ),
+    RegisteredCommand(
+      id: kFileCreateArchiveCommandId,
+      scope: CommandScope.selection,
+      label: (l10n) => l10n.fileCreateArchiveLabel,
+      icon: Icons.archive_outlined,
+      hue: FamilyHue.brown,
+      enabled: canCreateArchive,
+      disabledReason: (l10n) =>
+          archiveDisabledReason(l10n, command: _ArchiveCommand.create),
+      run: (_) => archive((ops, pane) => ops.createArchive(pane)),
+      menuPlacement: const CommandMenuPlacement(
+        menu: AppMenuId.file,
+        order: 74,
+        group: 2,
+      ),
+    ),
+    RegisteredCommand(
+      id: kFileExtractArchiveCommandId,
+      scope: CommandScope.selection,
+      label: (l10n) => l10n.fileExtractArchiveLabel,
+      icon: Icons.unarchive_outlined,
+      hue: FamilyHue.brown,
+      enabled: canExtractArchive,
+      disabledReason: (l10n) =>
+          archiveDisabledReason(l10n, command: _ArchiveCommand.extract),
+      run: (_) => archive((ops, pane) => ops.extractArchive(pane)),
+      menuPlacement: const CommandMenuPlacement(
+        menu: AppMenuId.file,
+        order: 76,
         group: 2,
       ),
     ),

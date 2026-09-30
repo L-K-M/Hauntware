@@ -1,5 +1,18 @@
 # Séance ports and pin audits
 
+## Local ZIP archives (2026-09-30)
+
+Original Poltergeist implementation; no Séance source was copied and no
+Séance pin changed. The core owns a retained, cancellable archive worker,
+bounded ZIP preflight and decoding, hidden sibling staging, and Keep Both
+commit. The app projects those jobs into Activity without adding archive
+operations to the shared transfer protocol. `package:archive` is pinned
+exactly at 4.3.0 because the driver audits and uses its low-level ZIP framing
+and streaming APIs.
+
+Séance has no archive feature to receive. Its reusable local relative-path
+validator remains a possible shared safety port recorded below.
+
 ## PR-S4 exact-revision bridge and full re-diff (2026-09-29)
 
 The D10 consumption moves every live Séance declaration, lockfile and the
@@ -506,7 +519,10 @@ port candidates.
   swapped-in symlink without following it), and `validateLocalName`
   refuses names matching the reserved
   `<name>.poltergeist-<8 hex>.backup` shape (Séance has no sweep to
-  collide with, so no reservation exists there).
+  collide with, so no reservation exists there). D27 (2026-09-30) adds
+  `validateRelativeLocalPath`: the archive boundary strips directory-entry
+  slashes, enforces a caller-supplied depth cap, rejects line/bidi controls,
+  and applies `validateLocalName` to every materialized component.
 - Port-back candidates: the raw-string reserved-name fix, the NAME_MAX
   guard (and its validator-side twin), the orphaned-backup sweep, backslash
   rejection in the component validator, the extended reserved list
@@ -539,7 +555,9 @@ counterpart is ported here.
   NAME_MAX, and the sweep — Séance tests none of these directly).
   2026-09-12: native Windows execution replaces the library-wide skip;
   only POSIX-mode and unavailable-link fixtures skip. Cleanup precedes
-  setup writes; device-name assertions inspect directory entries.
+  setup writes; device-name assertions inspect directory entries. D27 adds
+  relative-path shape, depth, local-name, line-control, and bidi-control
+  regressions for archive materialization.
 - Port-back candidates: the validator and sweep suites, once Séance
   exposes the statics for testing.
 

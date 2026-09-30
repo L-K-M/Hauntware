@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/activity_panel_controller.dart';
+import 'package:poltergeist_app/services/app_transfer_queue.dart';
 import 'package:poltergeist_app/services/transfer_limits_controller.dart';
 import 'package:poltergeist_app/ui/activity/activity_panel.dart';
 import 'package:poltergeist_app/ui/inspector/inspector_view.dart';
@@ -102,6 +103,82 @@ void main() {
     expect(find.text('Running'), findsOneWidget);
     expect(find.text('Queued'), findsOneWidget);
     expect(find.byKey(const ValueKey('activity.taskList')), findsOneWidget);
+  });
+
+  testWidgets('archive rows use archive presentation and hide item verbs', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+    final create = queue.addTask(
+      state: TransferTaskState.scanning,
+      presentation: AppTaskPresentation.archiveCreate,
+    );
+    final first = queue.addItem(create, name: 'a.txt');
+    final second = queue.addItem(create, name: 'b.txt');
+    final extract = queue.addTask(
+      state: TransferTaskState.running,
+      presentation: AppTaskPresentation.archiveExtract,
+    );
+    await settle(tester);
+
+    expect(find.text('Create ZIP Archive'), findsOneWidget);
+    expect(find.text('Extract ZIP Archive'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('activity.task.${create.id}')),
+        matching: find.byIcon(Icons.archive_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('activity.task.${extract.id}')),
+        matching: find.byIcon(Icons.unarchive_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('activity.task.${create.id}')),
+        matching: find.byIcon(Icons.drag_indicator),
+      ),
+      findsNothing,
+    );
+
+    final createRow = find.byKey(ValueKey('activity.task.${create.id}'));
+    final expander = find.descendant(
+      of: createRow,
+      matching: find.byTooltip('Show files'),
+    );
+    expect(expander, findsOneWidget);
+
+    await tester.tap(expander);
+    await settle(tester);
+    expect(find.byKey(ValueKey('activity.item.${first.id}')), findsOneWidget);
+    expect(find.byKey(ValueKey('activity.itemSkip.${first.id}')), findsNothing);
+    expect(
+      find.byKey(ValueKey('activity.itemSkip.${second.id}')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(ValueKey('activity.cancel.${create.id}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('rowless archive failure renders its actionable error', (
+    tester,
+  ) async {
+    await pumpPanel(tester);
+    const error = 'Archive entry escapes the destination.';
+    queue.addTask(
+      state: TransferTaskState.failed,
+      presentation: AppTaskPresentation.archiveExtract,
+      error: error,
+    );
+    await settle(tester);
+
+    expect(find.text(error), findsOneWidget);
   });
 
   testWidgets('the footer totals grow with a + while a scan runs', (

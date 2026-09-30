@@ -14,6 +14,7 @@ import 'package:poltergeist_core/poltergeist_core.dart'
 import 'l10n/app_localizations.dart';
 import 'services/app_session_lifecycle.dart';
 import 'services/app_transfer_queue.dart';
+import 'services/archive_queue_tasks.dart';
 import 'services/bookmark_backup_service.dart';
 import 'services/checkout_prompt_ledger.dart';
 import 'services/checkout_session.dart';
@@ -74,6 +75,7 @@ class PoltergeistApp extends StatefulWidget {
     this.connectionEngine,
     this.engineSession,
     this.transferQueue,
+    this.archiveTasks,
     this.checkoutSession,
     this.editorRegistry,
     this.quitGuard,
@@ -195,6 +197,10 @@ class PoltergeistApp extends StatefulWidget {
   /// until the engine-host transfer slice binds one — the panel mounts
   /// empty chrome rather than simulating activity.
   final AppTransferQueue? transferQueue;
+
+  /// D27's local ZIP registry, shared with the queue composition and every
+  /// workspace window so commands and activity rows name the same jobs.
+  final ArchiveQueueTasks? archiveTasks;
 
   /// The managed-checkout session (06 §3, M7): the future editor UI's
   /// service seam — durable store, watch/reconcile, and the explicit
@@ -373,7 +379,8 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
         !identical(
           oldWidget.sessionPersistence,
           widget.sessionPersistence,
-        )) {
+        ) ||
+        !identical(oldWidget.archiveTasks, widget.archiveTasks)) {
       // The outgoing session's engine must not outlive its replacement
       // unnoticed — forward the exit state before re-attaching, but only
       // when the engine itself is swapped; a guard/persistence rebind
@@ -397,6 +404,9 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       quitGuard: widget.quitGuard,
       checkouts: widget.checkoutSession,
       recentLocations: widget.recentLocations,
+      exitFlushes: [
+        if (widget.archiveTasks != null) widget.archiveTasks!.dispose,
+      ],
     );
   }
 
@@ -486,6 +496,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       connectionEngine: widget.connectionEngine,
       engineSession: widget.engineSession,
       transferQueue: widget.transferQueue,
+      archiveTasks: widget.archiveTasks,
       checkoutSession: widget.checkoutSession,
       editorRegistry: widget.editorRegistry,
       quitGuard: widget.quitGuard,

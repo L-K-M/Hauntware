@@ -10,6 +10,9 @@ environment:
   sdk: ^3.12.0
 
 dependencies:
+  # D27: audited local ZIP framing/deflate. Exact because the driver depends
+  # on low-level central-directory behavior, not the convenience extractors.
+  archive: 4.3.0
   # Shared editor document layer (bounded load, BOM and line endings,
   # guarded saves): git-pinned to Planchette, never forked or copied, at the
   # same reviewed revision as planchette_editor in the app and as Séance's

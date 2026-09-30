@@ -1437,12 +1437,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quitConfirmTitle => 'Quit while transfers are running?';
 
   @override
+  String get quitConfirmOperationsTitle => 'Quit while operations are running?';
+
+  @override
   String quitConfirmBody(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
       other: '$count transfers are running',
       one: '1 transfer is running',
+    );
+    return '$_temp0.';
+  }
+
+  @override
+  String quitConfirmOperationsBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operations are running',
+      one: '1 operation is running',
     );
     return '$_temp0.';
   }
@@ -1459,6 +1473,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String quitConfirmOperationsBodyRemaining(int count, String remaining) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count operations are running',
+      one: '1 operation is running',
+    );
+    return '$_temp0 ($remaining remaining so far).';
+  }
+
+  @override
   String get quitConfirmRestartNote =>
       'Files in progress restart from the beginning next launch.';
 
@@ -1469,7 +1494,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quitCancelTransfersAndQuit => 'Cancel Transfers and Quit';
 
   @override
+  String get quitCancelOperationsAndQuit => 'Cancel Operations and Quit';
+
+  @override
   String get quitKeepTransferring => 'Keep Transferring';
+
+  @override
+  String get quitKeepWorking => 'Keep Working';
 
   @override
   String get quitFlushFailedTitle => 'Transfer state could not be saved';
@@ -4120,6 +4151,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get fileDuplicateLabel => 'Duplicate';
+
+  @override
+  String get fileCreateArchiveLabel => 'Create ZIP Archive';
+
+  @override
+  String get fileExtractArchiveLabel => 'Extract ZIP Archive';
+
+  @override
+  String get commandDisabledLocalArchive =>
+      'Archives are available for local files only.';
+
+  @override
+  String get commandDisabledArchivesUnavailable =>
+      'Archive support is unavailable.';
+
+  @override
+  String get commandDisabledSelectOneZip => 'Select one ZIP archive.';
 
   @override
   String get fileMoveToTrashLabel => 'Move to Trash';
