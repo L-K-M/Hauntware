@@ -398,6 +398,7 @@ void main() {
       expect(border.bottom, BorderSide.none);
     }
     expect(open.color, scheme.surface);
+    expect(other.color, Colors.transparent);
     final rule = tester
         .widget<Container>(
           find.descendant(of: strip, matching: find.byType(Container)).first,

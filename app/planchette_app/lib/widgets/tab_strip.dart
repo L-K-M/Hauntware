@@ -23,9 +23,9 @@ typedef TabStripItem = ({
 /// terminal tabs share: flat chips from the leading edge, divided by
 /// hairlines, over a rule; the active one filled with the editor's
 /// surface, with no accent line. A dirty tab shows a dot where its close
-/// button appears on hover. Middle-click closes a tab, a right click asks the host for its
-/// tab menu, a mouse wheel scrolls the strip, and a newly active tab
-/// scrolls into view.
+/// button appears on hover. Middle-click closes a tab, a right click asks
+/// the host for its tab menu, a mouse wheel scrolls the strip, and a newly
+/// active tab scrolls into view.
 class TabStrip extends StatefulWidget {
   const TabStrip({
     super.key,
