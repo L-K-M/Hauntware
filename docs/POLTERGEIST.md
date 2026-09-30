@@ -370,8 +370,9 @@ become too bland to tell apart.
   glyphs, so a folder, a photo or a script reads the same in both
   Files views.
 - **Here it colours** the side panel's tabs (the Assistant purple,
-  Snippets teal, Files blue, Git orange, each glyph over its label, the
-  underline in the open tab's hue), the Files listing's kinds and its
+  Snippets teal, Files blue, Git orange, glyphs named by their tooltips,
+  the open one filled on a wash of its hue as in Poltergeist's
+  inspector), the Files listing's kinds and its
   Home, download, upload and finished-transfer glyphs, the Git pane's
   glyphs and its Stage (green) and Discard (red) verbs, the assistant's
   sparkle and the command generator's wand, the snippets' glyph and

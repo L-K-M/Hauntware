@@ -21,7 +21,7 @@ const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
 /// Real-font captures of the side panel for the colour vocabulary the
 /// sibling apps share (Poltergeist's D34): the tabs in their hues with
-/// the underline in the open one's, the Files listing's kind glyphs, and
+/// the open one filled on its wash, the Files listing's kind glyphs, and
 /// the Git tab's glyphs and verbs, in both themes. The scenes are pumped
 /// and checked on every run; PNGs are written only with SEANCE_CAPTURE=1,
 /// to SEANCE_CAPTURE_DIR (default `build/colour-captures`), each name
@@ -278,7 +278,7 @@ void main() {
     String label, {
     required Finder loaded,
   }) async {
-    await tester.tap(find.text(label));
+    await tester.tap(find.byTooltip(label));
     for (var i = 0; i < 50 && loaded.evaluate().isEmpty; i++) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
@@ -327,29 +327,71 @@ void main() {
     });
   }
 
-  testWidgets('each tab wears its hue; the underline takes the open one\'s', (
+  testWidgets('each tab wears its hue; the open one is filled on its wash', (
     tester,
   ) async {
     await boot(tester);
     await pumpPanel(tester, Brightness.dark);
     const palette = FamilyPalette.dark;
-    Color? glyph(String label) => tester
-        .widget<Icon>(
-          find.descendant(
-            of: find.ancestor(of: find.text(label), matching: find.byType(Tab)),
-            matching: find.byType(Icon),
-          ),
-        )
-        .color;
-    expect(glyph('Assistant'), palette.glyph(FamilyHue.purple));
-    expect(glyph('Snippets'), palette.glyph(FamilyHue.teal));
-    expect(glyph('Files'), palette.glyph(FamilyHue.blue));
-    expect(glyph('Git'), palette.glyph(FamilyHue.orange));
+    Icon glyph(String label) => tester.widget<Icon>(
+      find.descendant(of: find.byTooltip(label), matching: find.byType(Icon)),
+    );
+    Color? wash(String label) {
+      final decoration = tester
+          .widget<Container>(
+            find.descendant(
+              of: find.byTooltip(label),
+              matching: find.byType(Container),
+            ),
+          )
+          .decoration;
+      return (decoration as BoxDecoration?)?.color;
+    }
 
-    Color? underline() => tester.widget<TabBar>(find.byType(TabBar)).indicatorColor;
-    expect(underline(), palette.glyph(FamilyHue.teal)); // Snippets opens
+    final hues = {
+      'Assistant': FamilyHue.purple,
+      'Snippets': FamilyHue.teal,
+      'Files': FamilyHue.blue,
+      'Git': FamilyHue.orange,
+    };
+    for (final MapEntry(key: label, value: hue) in hues.entries) {
+      expect(glyph(label).color, palette.glyph(hue), reason: label);
+    }
+
+    // Snippets opens (no provider is configured); only it is washed.
+    expect(glyph('Snippets').icon, Icons.bookmarks);
+    expect(glyph('Git').icon, Icons.account_tree_outlined);
+    expect(
+      wash('Snippets'),
+      palette.glyph(FamilyHue.teal).withValues(alpha: panelTabWashAlpha),
+    );
+    expect(wash('Git'), isNull);
+
     await openTab(tester, 'Git', loaded: find.text('README.md'));
     await tester.pumpAndSettle();
-    expect(underline(), palette.glyph(FamilyHue.orange));
+    expect(glyph('Git').icon, Icons.account_tree);
+    expect(glyph('Snippets').icon, Icons.bookmarks_outlined);
+    expect(
+      wash('Git'),
+      palette.glyph(FamilyHue.orange).withValues(alpha: panelTabWashAlpha),
+    );
+    expect(wash('Snippets'), isNull);
+    expect(
+      tester.getSemantics(
+        find.descendant(
+          of: find.byTooltip('Git'),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Semantics && widget.properties.label == 'Git',
+          ),
+        ),
+      ),
+      matchesSemantics(
+        label: 'Git',
+        isButton: true,
+        isSelected: true,
+        hasSelectedState: true,
+        hasTapAction: true,
+      ),
+    );
   });
 }

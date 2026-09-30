@@ -19,6 +19,9 @@ class SidebarPanel extends StatefulWidget {
 
   const SidebarPanel({super.key, this.includeFiles = true});
 
+  /// The row of tabs at the panel's top.
+  static const tabStripKey = ValueKey('sidebar-panel-tabs');
+
   @override
   State<SidebarPanel> createState() => _SidebarPanelState();
 }
@@ -52,11 +55,31 @@ class _SidebarPanelState extends State<SidebarPanel>
   /// Snippets the saved-recipe teal, Files the places blue, Git the code
   /// orange.
   List<_PanelTab> get _panelTabs => [
-    const _PanelTab('Assistant', Icons.auto_awesome, FamilyHue.purple),
-    const _PanelTab('Snippets', Icons.bookmarks, FamilyHue.teal),
+    const _PanelTab(
+      'Assistant',
+      Icons.auto_awesome_outlined,
+      Icons.auto_awesome,
+      FamilyHue.purple,
+    ),
+    const _PanelTab(
+      'Snippets',
+      Icons.bookmarks_outlined,
+      Icons.bookmarks,
+      FamilyHue.teal,
+    ),
     if (widget.includeFiles)
-      const _PanelTab('Files', Icons.folder, FamilyHue.blue),
-    const _PanelTab('Git', Icons.account_tree, FamilyHue.orange),
+      const _PanelTab(
+        'Files',
+        Icons.folder_outlined,
+        Icons.folder,
+        FamilyHue.blue,
+      ),
+    const _PanelTab(
+      'Git',
+      Icons.account_tree_outlined,
+      Icons.account_tree,
+      FamilyHue.orange,
+    ),
   ];
 
   @override
@@ -70,29 +93,8 @@ class _SidebarPanelState extends State<SidebarPanel>
         return SafeArea(
           child: Column(
             children: [
-              // The underline takes the open tab's hue, blending from one
-              // tab's colour to the next as it slides.
-              AnimatedBuilder(
-                animation: controller.animation!,
-                builder: (context, _) => TabBar(
-                  controller: controller,
-                  labelPadding: const EdgeInsets.symmetric(
-                    horizontal: _tabLabelPadding,
-                  ),
-                  labelColor: Theme.of(context).colorScheme.onSurface,
-                  unselectedLabelColor: SeanceChrome.of(context).secondaryText,
-                  labelStyle: _tabLabelStyle(
-                    context,
-                  )?.copyWith(fontWeight: FontWeight.w600),
-                  unselectedLabelStyle: _tabLabelStyle(context),
-                  indicatorColor: _indicatorColor(
-                    context,
-                    tabs,
-                    controller.animation!.value,
-                  ),
-                  tabs: [for (final tab in tabs) _PanelTabLabel(tab)],
-                ),
-              ),
+              _PanelTabStrip(controller: controller, tabs: tabs),
+              Divider(height: 1, color: SeanceChrome.of(context).separator),
               Expanded(
                 // A tab's page is built when it is first opened, so Files and
                 // Git initialize their session's controller only then.
@@ -116,92 +118,95 @@ class _SidebarPanelState extends State<SidebarPanel>
   }
 }
 
-/// A panel tab's horizontal inset: tighter than Material's 16 so four
-/// tabs keep their words at the panel's narrower widths.
-const double _tabLabelPadding = 4;
-
-/// The label under a tab's glyph: the small toolbar size the old
-/// source-list apps set under their icons.
-TextStyle? _tabLabelStyle(BuildContext context) =>
-    Theme.of(context).textTheme.labelMedium;
-
-/// The underline's colour at [position] (the tab controller's animation
-/// value): the hue of the tab it rests on, or a blend of the two it is
-/// sliding between.
-Color _indicatorColor(
-  BuildContext context,
-  List<_PanelTab> tabs,
-  double position,
-) {
-  final palette = FamilyPalette.of(context);
-  final last = tabs.length - 1;
-  final from = position.floor().clamp(0, last);
-  final to = position.ceil().clamp(0, last);
-  return Color.lerp(
-    palette.glyph(tabs[from].hue),
-    palette.glyph(tabs[to].hue),
-    position - from,
-  )!;
-}
+/// The open tab's wash: its own hue at this opacity over the panel,
+/// light enough that the glyph keeps 3:1 on it (family_hues_test.dart).
+/// Poltergeist's inspector tabs use the same value.
+const panelTabWashAlpha = 0.16;
 
 class _PanelTab {
-  const _PanelTab(this.label, this.glyph, this.hue);
+  const _PanelTab(this.label, this.glyph, this.openGlyph, this.hue);
 
   final String label;
+
+  /// The glyph at rest, and the filled one the open tab shows.
   final IconData glyph;
+  final IconData openGlyph;
   final FamilyHue hue;
 }
 
-/// A tab's glyph in its hue over its label, as Postbox's and iTunes'
-/// toolbars set theirs: four words fit the panel's usual width this
-/// way, where a glyph beside each would crowd them into ellipses. The
-/// label ellipsizes only on a very narrow panel and gives way to the
-/// glyph alone (with the label as its tooltip) once no word fits.
-class _PanelTabLabel extends StatelessWidget {
-  const _PanelTabLabel(this.tab);
+/// The panel's tabs as Poltergeist's inspector header sets its own: a
+/// centred row of glyphs in their hues, each named by its tooltip, the
+/// open one filled on a wash of its colour.
+class _PanelTabStrip extends StatelessWidget {
+  const _PanelTabStrip({required this.controller, required this.tabs});
 
-  /// Below this width only the glyph is drawn.
-  static const double _glyphOnlyWidth = 40;
+  static const double _height = 40;
+  static const double _tabWidth = 40;
+  static const double _tabHeight = 28;
+  static const double _gap = 6;
   static const double _glyphSize = 18;
+  static const double _cornerRadius = 6;
 
-  /// Glyph, gap and label, with Material's text tab's breathing room.
-  static const double _height = 52;
-
-  final _PanelTab tab;
+  final TabController controller;
+  final List<_PanelTab> tabs;
 
   @override
   Widget build(BuildContext context) {
-    final glyph = Icon(
-      tab.glyph,
-      size: _glyphSize,
-      color: FamilyPalette.of(context).glyph(tab.hue),
-    );
-    return Tab(
-      height: _height,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < _glyphOnlyWidth) {
-            // The label speaks once: the tooltip is for the pointer.
-            return Tooltip(
-              message: tab.label,
-              excludeFromSemantics: true,
-              child: Semantics(label: tab.label, child: glyph),
-            );
-          }
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              glyph,
-              const SizedBox(height: 3),
-              Text(
-                tab.label,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.ellipsis,
-              ),
+    final palette = FamilyPalette.of(context);
+    final corner = BorderRadius.circular(_cornerRadius);
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => SizedBox(
+        key: SidebarPanel.tabStripKey,
+        height: _height,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (final (index, tab) in tabs.indexed) ...[
+              if (index > 0) const SizedBox(width: _gap),
+              _tab(tab, index, palette.glyph(tab.hue), corner),
             ],
-          );
-        },
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tab(_PanelTab tab, int index, Color tint, BorderRadius corner) {
+    final isOpen = controller.index == index;
+    void open() => controller.index = index;
+    // The label speaks once, through the Semantics below: the tooltip is
+    // for the pointer.
+    return Tooltip(
+      message: tab.label,
+      excludeFromSemantics: true,
+      child: Semantics(
+        selected: isOpen,
+        button: true,
+        label: tab.label,
+        excludeSemantics: true,
+        // The excluded InkWell's tap, kept for screen readers.
+        onTap: open,
+        child: InkWell(
+          borderRadius: corner,
+          onTap: open,
+          child: Container(
+            width: _tabWidth,
+            height: _tabHeight,
+            alignment: Alignment.center,
+            decoration: isOpen
+                ? BoxDecoration(
+                    color: tint.withValues(alpha: panelTabWashAlpha),
+                    borderRadius: corner,
+                  )
+                : null,
+            child: Icon(
+              isOpen ? tab.openGlyph : tab.glyph,
+              size: _glyphSize,
+              color: tint,
+            ),
+          ),
+        ),
       ),
     );
   }

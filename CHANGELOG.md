@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- The side panel's tabs look like Poltergeist's inspector tabs: a
+  centred row of icons in their colours, each named by its tooltip,
+  with the open tab's icon filled on a tint of its colour. They replace
+  the icons over labels and the coloured underline.
 - Command inbox: a bot or script can propose commands for your servers,
   and you decide whether to run them. Connect it under Settings > Inbox;
   it gets a pairing string to use with your sync server, which lets it
