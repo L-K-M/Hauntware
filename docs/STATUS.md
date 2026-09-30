@@ -9648,13 +9648,14 @@ the transfer journal or remote protocol.
 
 Verification so far: all 68 archive/native tests and all 68 local-filesystem
 safety tests pass; the full core run reports 1,835 passing tests and 27
-environment skips. The focused app archive/menu/Activity/quit run reports 16
-passing tests. Core and Flutter analysis are clean. Linux native behavior is
-exercised. The Android APK build and real Android 28 x86_64 after capture are
-still pending after the final native changes; macOS, iOS, and Windows native
-runtime paths remain unverified. The real-app before capture is in
-[`tasks/local-archives/screenshots/`](../tasks/local-archives/screenshots/);
-the matching after capture is pending.
+environment skips. The full app run reports 3,051 passing tests; the import
+guard and benchmark runs report 95 and 140 passing tests. Core and Flutter
+analysis are clean. Linux native behavior is exercised. A debug APK built,
+installed, and launched on a real Android 28 x86_64 emulator; matching File-menu
+captures are in
+[`tasks/local-archives/screenshots/`](../tasks/local-archives/screenshots/).
+Android archive I/O and macOS, iOS, and Windows native runtime paths remain
+unverified.
 
 ## Open items
 
