@@ -383,9 +383,23 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             const Divider(height: 1),
           ],
           Expanded(
-            child: _decorated(
-              context,
-              _lineCommands(context, _bracketCommands(context, _body())),
+            child: Stack(
+              children: [
+                _decorated(
+                  context,
+                  _lineCommands(context, _bracketCommands(context, _body())),
+                ),
+                if (c.toolReport case final report?)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: SafeArea(
+                      top: false,
+                      child: _toolNotice(context, report),
+                    ),
+                  ),
+              ],
             ),
           ),
           if (widget.showStatus && !c.isLoading && c.error == null) ...[
@@ -725,6 +739,51 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// The one-line notice a text-tool run leaves over the document's bottom
+  /// edge, until the next edit replaces it. It never takes focus — the
+  /// document keeps it — so the Undo it offers is a button, while the
+  /// keyboard's undo stays the usual shortcut.
+  Widget _toolNotice(BuildContext context, TextToolReport report) {
+    final theme = Theme.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: ExcludeFocus(
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Material(
+            elevation: 2,
+            color: theme.colorScheme.inverseSurface,
+            borderRadius: BorderRadius.circular(8),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 16, right: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.strings.textToolNotice(report),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onInverseSurface,
+                      ),
+                    ),
+                  ),
+                  if (report.outcome is TextToolChanged &&
+                      c.undoController.value.canUndo)
+                    TextButton(
+                      onPressed: c.undoController.undo,
+                      child: Text(widget.strings.undo),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

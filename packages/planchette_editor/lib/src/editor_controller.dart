@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
@@ -54,9 +55,13 @@ class EditorController extends ChangeNotifier {
     this.onPublish,
     CaseFolder? caseFolder,
     Duration? patternSearchBudget,
+    DateTime Function()? now,
+    this.maximumBytes = defaultTextDocumentMaximumBytes,
+    this.undoQuiet = _defaultUndoQuiet,
   }) : _displayPath = displayPath,
        _fold = caseFolder ?? _defaultCaseFolder,
-       _patternSearchBudget = patternSearchBudget ?? core.patternSearchBudget {
+       _patternSearchBudget = patternSearchBudget ?? core.patternSearchBudget,
+       _now = now ?? clock.now {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
@@ -97,6 +102,28 @@ class EditorController extends ChangeNotifier {
   /// is stopped and the find bar reports [PatternTimedOut]. Defaults to
   /// [core.patternSearchBudget].
   final Duration _patternSearchBudget;
+
+  /// The clock the undo-quiet window is measured on; injectable for tests.
+  final DateTime Function() _now;
+
+  /// The largest buffer a text tool may write back, as UTF-8: the same
+  /// limit loading enforces. Tools that only remove text can always run;
+  /// a tool whose result outgrows this is refused before it applies.
+  final int maximumBytes;
+
+  /// How old the last value change must be before a tool run applies, so
+  /// the run lands in its own undo step. Flutter's undo history merges
+  /// value changes that arrive inside this window — currently 500 ms in
+  /// the framework — and offers no way to flush a pending step, so a run
+  /// has to wait it out instead. A change during the wait restarts it.
+  final Duration undoQuiet;
+
+  static const _defaultUndoQuiet = Duration(milliseconds: 500);
+
+  /// The clock the last field change was stamped with; the pending undo
+  /// step it belongs to commits [_undoQuiet] after this.
+  DateTime _lastValueChangeAt = DateTime.fromMillisecondsSinceEpoch(0);
+  TextEditingValue _seenValue = const TextEditingValue();
 
   late final CodeEditingController text;
   final search = TextEditingController();
@@ -187,6 +214,7 @@ class EditorController extends ChangeNotifier {
   int _caretRevealRequest = 0;
   CaretReveal _caretRevealPlacement = CaretReveal.nearest;
   ({String text, int offset, int bracket})? _lastBracketJump;
+  TextToolReport? _toolReport;
   String _lastText = '';
   String? _lastQuery;
   String _languageProbe = '';
@@ -547,6 +575,118 @@ class EditorController extends ChangeNotifier {
     return true;
   }
 
+  // ── Text tools ──
+
+  /// The report of the most recent text-tool run, for the result notice
+  /// the view shows; cleared by the next change to the field's value.
+  TextToolReport? get toolReport => _toolReport;
+
+  /// Runs the catalog tool [toolId] and reports what it did.
+  ///
+  /// Returns null when the buffer cannot be edited at all right now —
+  /// loading, locked or composing — the same gate the line commands use.
+  /// Otherwise the report of the run lands in [toolReport]: the buffer
+  /// changed, nothing needed changing, or the tool refused with a reason.
+  ///
+  /// The run waits out [undoQuiet] first: Flutter's undo history merges
+  /// changes that close together into one step, and a tool result must be
+  /// a step of its own so Undo returns the buffer to what it was before
+  /// the run rather than before the last typing pause.
+  Future<TextToolOutcome?> runTextTool(
+    String toolId, {
+    Map<String, Object?> options = const {},
+  }) async {
+    final tool = textToolById(toolId);
+    if (tool == null) {
+      throw ArgumentError.value(toolId, 'toolId', 'No text tool');
+    }
+    if (!canEditText) return null;
+    await _waitForUndoQuiet();
+    if (_disposed || !canEditText) return null;
+
+    final selection = text.value.selection;
+    final resolved = resolveTextToolRange(
+      tool,
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+
+    TextToolOutcome outcome;
+    if (resolved.refusal != null) {
+      outcome = TextToolRefused(resolved.refusal!);
+    } else {
+      outcome = tool.run(
+        TextToolRun(
+          text: text.text,
+          base: resolved.base,
+          extent: resolved.extent,
+          caret: resolved.caret,
+          ranOn: resolved.ranOn,
+          options: _toolOptions(tool, options),
+          context: _toolContext(),
+        ),
+      );
+      // Preflight the size the run would leave. A growing result must stay
+      // inside the limit; a shrinking or equal one is fine.
+      if (outcome is TextToolChanged &&
+          outcome.edit.text.length > text.text.length &&
+          utf8EncodedLength(outcome.edit.text) > maximumBytes) {
+        outcome = const TextToolRefused(TextToolRefusal.tooLarge);
+      }
+      if (outcome case TextToolChanged(:final edit, :final indentation)) {
+        _requestCaretReveal(CaretReveal.nearest);
+        text.value = TextEditingValue(
+          text: edit.text,
+          selection: TextSelection(
+            baseOffset: edit.selectionBase,
+            extentOffset: edit.selectionExtent,
+          ),
+        );
+        if (indentation != null) this.indentation = indentation;
+      }
+    }
+    _toolReport = TextToolReport(
+      tool: tool,
+      outcome: outcome,
+      ranOn: resolved.ranOn,
+    );
+    _notify();
+    return outcome;
+  }
+
+  /// Declared option defaults overlaid with the caller's [overrides];
+  /// unknown overrides are dropped.
+  Map<String, Object?> _toolOptions(
+    TextTool tool,
+    Map<String, Object?> overrides,
+  ) => {
+    for (final option in tool.options)
+      option.id: overrides[option.id] ?? option.defaultValue,
+  };
+
+  TextToolContext _toolContext() => TextToolContext(
+    fold: _fold,
+    indentation: indentation,
+    indentationPreference: _preferredIndentation,
+    displayPath: _displayPath,
+    now: _now,
+  );
+
+  /// Waits until the last change to the text field's value is at least
+  /// [undoQuiet] old. The undo history merges changes inside the window
+  /// into one step and offers no flush, so a tool run waits it out — the
+  /// pending step commits, the tool's lands after it, and Undo returns to
+  /// the state before the run. A change during the wait restarts it, so a
+  /// run mid-typing keeps waiting rather than cutting in.
+  Future<void> _waitForUndoQuiet() async {
+    while (!_disposed) {
+      final wait = undoQuiet - _now().difference(_lastValueChangeAt);
+      if (wait <= Duration.zero) return;
+      await Future<void>.delayed(wait);
+    }
+  }
+
   /// Moves the caret to the partner of the bracket beside it, on the same
   /// side, so a second jump returns; away from a bracket, to the closing
   /// bracket around it. With [extend] the other end of the selection stays.
@@ -664,6 +804,17 @@ class EditorController extends ChangeNotifier {
   }
 
   void _textChanged() {
+    // A tool run waits out this stamp so its result is a step of its own.
+    // EditableText's shouldChangeUndoStack pushes only text and composing
+    // changes — a caret move never opens a throttle window — so the stamp
+    // tracks exactly those.
+    final value = text.value;
+    if (value.text != _seenValue.text ||
+        value.composing != _seenValue.composing) {
+      _lastValueChangeAt = _now();
+      _toolReport = null;
+    }
+    _seenValue = value;
     if (_updatingSearch || _disposed) return;
     if (text.text != _lastText) {
       final before = _lastText;

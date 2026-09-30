@@ -1634,6 +1634,11 @@ bool _isWholeWordMatch(String text, int start, int end) {
       !_isWordRune(_runeAt(text, end));
 }
 
+/// Whether [rune] is a word character, as whole-word search sees it: a
+/// letter, mark, number or connector punctuation such as `_`. Text tools
+/// use the same definition for the word at the caret.
+bool isWordRune(int rune) => _isWordRune(rune);
+
 /// A word character is a letter, mark, number or connector punctuation such
 /// as `_`, read by code point: accented and CJK letters are word content,
 /// while curly quotes, dashes, no-break spaces, full-width punctuation and

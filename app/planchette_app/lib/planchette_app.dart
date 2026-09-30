@@ -354,6 +354,9 @@ class _DocumentShellState extends State<_DocumentShell> {
 
   bool _paletteOpen = false;
 
+  /// The editor's display strings, for Text-menu tool names.
+  static const _editorStrings = EditorStrings();
+
   /// Lists every command the menus enable right now. The native macOS menu
   /// stays live under the palette, so a second request is ignored.
   Future<void> _openPalette() async {
@@ -585,6 +588,19 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.slash),
           enabled: inDocument && (active?.editor.canToggleComment ?? false),
         ),
+      ]),
+      // The catalog drives the list; a tool that needs options or a
+      // pattern runs at its defaults here.
+      _ShellMenu('Text', [
+        for (final tool in textToolCatalog)
+          _Command(
+            _editorStrings.textToolName(tool.id),
+            () {
+              final editor = active?.editor;
+              if (editor != null) unawaited(editor.runTextTool(tool.id));
+            },
+            enabled: lineCommands,
+          ),
       ]),
       _ShellMenu('Find', [
         _Command(
