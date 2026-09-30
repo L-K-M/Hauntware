@@ -1,0 +1,1 @@
+flutter test --reporter expanded test/services/pane_cancel_regressions_test.dart test/services/pane_controller_test.dart test/ui/connections/open_inpane_pop_test.dart test/ui/connections/connections_view_test.dart test/ui/panes/pane_session_lifetime_test.dart test/ui/panes/pane_view_test.dart test/ui/panes/workspace_panes_test.dart 

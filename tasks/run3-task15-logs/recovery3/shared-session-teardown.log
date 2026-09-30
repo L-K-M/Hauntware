@@ -1,0 +1,67 @@
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+00:00 +0: both pane connects share FIFO prompts and independent teardown
+lifetime: session started
+lifetime: prompts answered 2
+lifetime: connected
+lifetime: detaching
+lifetime: detached
+lifetime: shutting down
+lifetime: shut down
+lifetime: test body finished
+lifetime: teardown shutdown
+unhandled error during finalization of test:
+/home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+TestDeviceException(Shell subprocess crashed with SIGTERM (-15).)
+#0      FlutterTesterTestDevice.finished (package:flutter_tools/src/test/flutter_tester_device.dart:256:5)
+<asynchronous suspension>
+#1      FlutterTesterTestDevice.kill (package:flutter_tools/src/test/flutter_tester_device.dart:238:5)
+<asynchronous suspension>
+#2      FlutterPlatform._startTest.<anonymous closure> (package:flutter_tools/src/test/flutter_platform.dart:689:9)
+<asynchronous suspension>
+#3      FlutterPlatform._startTest.finalize (package:flutter_tools/src/test/flutter_platform.dart:591:11)
+<asynchronous suspension>
+#4      asyncGuard.<anonymous closure> (package:flutter_tools/src/base/async_guard.dart:108:24)
+<asynchronous suspension>
+
+unhandled error during finalization of test:
+/home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+PathNotFoundException: Deletion failed, path = '/tmp/flutter_tools.CCSMIY/flutter_test_listener.QKYTKC' (OS Error: No such file or directory, errno = 2)
+#0      _Directory._deleteSync (dart:io/directory_impl.dart:216:7)
+#1      FileSystemEntity.deleteSync (dart:io/file_system_entity.dart:425:7)
+#2      ForwardingFileSystemEntity.deleteSync (package:file/src/forwarding/forwarding_file_system_entity.dart:70:16)
+#3      ErrorHandlingDirectory.deleteSync.<anonymous closure> (package:flutter_tools/src/base/error_handling_io.dart:717:22)
+#4      _runSync (package:flutter_tools/src/base/error_handling_io.dart:1118:16)
+#5      ErrorHandlingDirectory.deleteSync (package:flutter_tools/src/base/error_handling_io.dart:716:12)
+#6      FlutterPlatform._createListenerDart.<anonymous closure> (package:flutter_tools/src/test/flutter_platform.dart:786:15)
+#7      FlutterPlatform._startTest.finalize (package:flutter_tools/src/test/flutter_platform.dart:591:26)
+<asynchronous suspension>
+#8      asyncGuard.<anonymous closure> (package:flutter_tools/src/base/async_guard.dart:108:24)
+<asynchronous suspension>
+
+00:26 +0: both pane connects share FIFO prompts and independent teardown - did not complete [E]
+00:26 +0: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown (did not complete)

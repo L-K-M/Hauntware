@@ -11,6 +11,8 @@
 #            (.deb + AppImage) via
 #            scripts/package-linux.sh → dist/
 #   apk    — Android APK (needs flutter + an Android SDK)
+#   flatpak — repack the app's .deb as a Flatpak bundle (Linux; runs the
+#            app target first when no dist/ .deb exists yet)
 #
 # Usage:
 #   scripts/build.sh                 # every target this host can build
@@ -55,8 +57,8 @@ while [[ $# -gt 0 ]]; do
     -h|--help) usage 0 ;;
     --debug) PROFILE="debug"; shift ;;
     --install) INSTALL=true; shift ;;
-    app|apk) REQUESTED+=("$1"); EXPLICIT=1; shift ;;
-    all) REQUESTED=(app apk); EXPLICIT=1; shift ;;
+    app|apk|flatpak) REQUESTED+=("$1"); EXPLICIT=1; shift ;;
+    all) REQUESTED=(app apk flatpak); EXPLICIT=1; shift ;;
     *) echo "unknown argument: $1" >&2; usage 1 ;;
   esac
 done
@@ -170,6 +172,35 @@ package_linux() {
   else
     echo "!! packages: package-linux.sh failed" >&2
     record "packages: FAILED"
+    return 1
+  fi
+}
+
+build_flatpak() {
+  if [[ "$HOST" != "linux" ]]; then
+    record "flatpak: skipped (Linux only)"
+    return 0
+  fi
+  if ! have flatpak-builder; then
+    skip_or_fail flatpak "flatpak-builder not found"; return
+  fi
+  # Reuse the .deb the app target just packaged; rebuild when absent or
+  # stale. (SECONDS is this script's runtime, so `start` is its launch time.)
+  local deb start
+  start=$(( $(date +%s) - SECONDS ))
+  deb="$(ls -t dist/poltergeist_*.deb 2>/dev/null | head -1 || true)"
+  if [[ -z "$deb" || "$(stat -c %Y "$deb" 2>/dev/null || echo 0)" -lt "$start" ]]; then
+    build_app || { record "flatpak: FAILED (app build)"; return 1; }
+    deb="$(ls -t dist/poltergeist_*.deb 2>/dev/null | head -1 || true)"
+    if [[ -z "$deb" || "$(stat -c %Y "$deb" 2>/dev/null || echo 0)" -lt "$start" ]]; then
+      record "flatpak: FAILED (no fresh .deb produced; a release 'app' build is required)"
+      return 1
+    fi
+  fi
+  if scripts/build-flatpak.sh "$deb"; then
+    record "flatpak: built -> dist/"
+  else
+    record "flatpak: FAILED (repack)"
     return 1
   fi
 }
@@ -328,6 +359,7 @@ for target in "${REQUESTED[@]}"; do
   case "$target" in
     app)    build_app    || FAILED=1 ;;
     apk)    build_apk    || FAILED=1 ;;
+    flatpak) build_flatpak || FAILED=1 ;;
   esac
   echo
 done

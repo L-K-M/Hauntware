@@ -1,0 +1,43 @@
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  archive 4.2.0 (4.3.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+18 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart
+../../tasks/run3-task15-logs/recovery4/readable_capture_test.dart:42:7: Error: No named parameter with the name 'modified'.
+      modified: DateTime.utc(2026, 9, 12, 10, 30));
+      ^^^^^^^^
+../../../../.pub-cache/git/Seance-2e6d1f138f1704e683870f75e11262bf50e37379/packages/seance_core/lib/src/ssh/remote_file_system.dart:53:9: Context: Found this candidate, but the arguments don't match.
+  const RemoteFileEntry({
+        ^^^^^^^^^^^^^^^
+00:00 +0 -1: loading /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart [E]
+  Failed to load "/home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart":
+  Compilation failed for testPath=/home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart: ../../tasks/run3-task15-logs/recovery4/readable_capture_test.dart:42:7: Error: No named parameter with the name 'modified'.
+        modified: DateTime.utc(2026, 9, 12, 10, 30));
+        ^^^^^^^^
+  ../../../../.pub-cache/git/Seance-2e6d1f138f1704e683870f75e11262bf50e37379/packages/seance_core/lib/src/ssh/remote_file_system.dart:53:9: Context: Found this candidate, but the arguments don't match.
+    const RemoteFileEntry({
+          ^^^^^^^^^^^^^^^
+  .
+00:00 +0 -1: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart: loading /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart
