@@ -43,6 +43,7 @@ Future<void> _holdLease(String stagePath, String markerContents) async {
   ).open(mode: FileMode.append);
   await lease.lock(FileLock.exclusive);
   stdout.writeln('ready');
+  await stdout.flush();
   await stdin.first;
   await lease.unlock();
   await lease.close();
@@ -64,6 +65,7 @@ Future<void> _commit(String sourcePath, String destinationPath) async {
     job.pause();
     ready.complete();
     stdout.writeln('ready');
+    await stdout.flush();
     await release.future;
     job.resume();
   });

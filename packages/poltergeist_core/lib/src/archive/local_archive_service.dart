@@ -61,6 +61,8 @@ const int _ownerDirectoryModeBits = 0x1c0;
 const int _ownerFileModeBits = 0x180;
 const Duration _archiveCommitLockRetryDelay = Duration(milliseconds: 25);
 const Duration _archiveCommitLockTimeout = Duration(seconds: 30);
+const Duration _archiveOwnershipKeyLockRetryDelay = Duration(milliseconds: 25);
+const Duration _archiveOwnershipKeyLockTimeout = Duration(seconds: 30);
 
 final RegExp _archiveStagePattern = RegExp(
   '^${RegExp.escape(_archiveStagePrefix)}'
@@ -249,8 +251,8 @@ final class LocalArchiveResult {
 
 /// A running local archive operation.
 ///
-/// Pause takes effect at the next entry boundary. Cancel kills the retained
-/// worker isolate and never claims success for a partially written stage.
+/// Pause takes effect at the next entry boundary. Cancel signals the retained
+/// worker, waits for cleanup, and never claims success for a partial stage.
 abstract interface class LocalArchiveJob {
   String get id;
 
@@ -285,7 +287,7 @@ final class LocalArchiveService {
   final LocalArchiveLimits _limits;
   final String? _supportDirectoryPath;
   final Set<_LocalArchiveJob> _jobs = <_LocalArchiveJob>{};
-  Future<Uint8List>? _ownershipKey;
+  Uint8List? _ownershipKey;
   bool _closed = false;
 
   LocalArchiveJob createZip({
@@ -380,7 +382,7 @@ final class LocalArchiveService {
       await _sweepOldStages(destination.parent, job);
       _throwIfCancelled(job);
 
-      final ownershipKey = await _archiveOwnershipKey();
+      final ownershipKey = await _archiveOwnershipKey(job);
       stage = await _createStage(destination.parent, ownershipKey);
 
       events = ReceivePort();
@@ -532,13 +534,16 @@ final class LocalArchiveService {
         try {
           await _deleteOwnedStage(stage);
         } on FileSystemException catch (error, stack) {
-          result = null;
-          terminalError = LocalArchiveException(
-            LocalArchiveErrorKind.io,
-            'Could not clean the archive stage: ${error.message}',
-            path: error.path ?? stage.path,
-          );
-          terminalStack = stack;
+          // Keep the operation failure that caused this cleanup attempt.
+          if (terminalError == null) {
+            result = null;
+            terminalError = LocalArchiveException(
+              LocalArchiveErrorKind.io,
+              'Could not clean the archive stage: ${error.message}',
+              path: error.path ?? stage.path,
+            );
+            terminalStack = stack;
+          }
         }
       }
       job._closeProgress();
@@ -652,7 +657,7 @@ final class LocalArchiveService {
 
   Future<void> _sweepOldStages(Directory parent, _LocalArchiveJob job) async {
     if (!await parent.exists()) return;
-    final ownershipKey = await _archiveOwnershipKey();
+    final ownershipKey = await _archiveOwnershipKey(job);
 
     await for (final entity in parent.list(followLinks: false)) {
       _throwIfCancelled(job);
@@ -947,10 +952,18 @@ final class LocalArchiveService {
     return support;
   }
 
-  Future<Uint8List> _archiveOwnershipKey() =>
-      _ownershipKey ??= _loadArchiveOwnershipKey();
+  Future<Uint8List> _archiveOwnershipKey(_LocalArchiveJob job) async {
+    _throwIfCancelled(job);
+    final cached = _ownershipKey;
+    if (cached != null) return cached;
 
-  Future<Uint8List> _loadArchiveOwnershipKey() async {
+    final loaded = await _loadArchiveOwnershipKey(job);
+    _ownershipKey ??= loaded;
+    _throwIfCancelled(job);
+    return _ownershipKey!;
+  }
+
+  Future<Uint8List> _loadArchiveOwnershipKey(_LocalArchiveJob job) async {
     final state = await _archiveStateDirectory();
     final keyPath = p.join(state.path, _archiveOwnershipKeyName);
     final type = await FileSystemEntity.type(keyPath, followLinks: false);
@@ -971,8 +984,19 @@ final class LocalArchiveService {
         modeBits: _ownerFileModeBits,
         type: FileSystemEntityType.file,
       );
-      await file.lock(FileLock.blockingExclusive);
-      locked = true;
+      final deadline = DateTime.now().add(_archiveOwnershipKeyLockTimeout);
+      while (!locked) {
+        _throwIfCancelled(job);
+        try {
+          await file.lock(FileLock.exclusive);
+          locked = true;
+        } on FileSystemException {
+          if (DateTime.now().isAfter(deadline)) rethrow;
+          await Future<void>.delayed(_archiveOwnershipKeyLockRetryDelay);
+        }
+      }
+      _throwIfCancelled(job);
+
       final length = await file.length();
       if (length == 0) {
         final key = Uint8List.fromList(

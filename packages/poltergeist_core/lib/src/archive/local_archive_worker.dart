@@ -289,11 +289,6 @@ Future<(int, int)> _createZipInWorker(
             path: entry.sourcePath,
           );
         }
-        final scratch = _BoundedCompressedOutput(
-          scratchPath,
-          entry.sourcePath,
-          compressedBudget,
-        );
         var entryProcessedBytes = 0;
         final input = _ProgressInputFileStream(entry, (count) {
           processedBytes += count;
@@ -327,15 +322,23 @@ Future<(int, int)> _createZipInWorker(
         });
         late final Deflate deflate;
         try {
-          deflate = Deflate.stream(
-            input,
-            level: DeflateLevel.defaultCompression,
-            output: scratch,
+          final scratch = _BoundedCompressedOutput(
+            scratchPath,
+            entry.sourcePath,
+            compressedBudget,
           );
-          scratch.flush();
+          try {
+            deflate = Deflate.stream(
+              input,
+              level: DeflateLevel.defaultCompression,
+              output: scratch,
+            );
+            scratch.flush();
+          } finally {
+            scratch.closeSync();
+          }
         } finally {
           input.closeSync();
-          scratch.closeSync();
         }
 
         final finalStat = _verifyCreationFile(entry);
@@ -709,57 +712,55 @@ Future<(int, int)> _extractZipInWorker(
   final input = InputFileStream.withFileHandle(
     _openArchiveInput(archivePath, archiveStat),
   );
-  final ZipDirectory directory;
-  final List<_ExtractionEntry> entries;
   try {
-    final envelope = _preflightZipEnvelope(input, request.limits);
-    _scanZipStructure(input, envelope, request.limits);
-    input.setPosition(0);
-    directory = ZipDirectory()..read(input);
-    if (directory.filePosition != envelope.eocdOffset) {
-      throw const _WorkerAbort(
+    final ZipDirectory directory;
+    final List<_ExtractionEntry> entries;
+    try {
+      final envelope = _preflightZipEnvelope(input, request.limits);
+      _scanZipStructure(input, envelope, request.limits);
+      input.setPosition(0);
+      directory = ZipDirectory()..read(input);
+      if (directory.filePosition != envelope.eocdOffset) {
+        throw const _WorkerAbort(
+          LocalArchiveErrorKind.invalidArchive,
+          'ZIP end-of-directory records are ambiguous.',
+        );
+      }
+      entries = _preflightZip(directory, input, request.limits);
+    } on _WorkerAbort {
+      rethrow;
+    } on Object catch (error) {
+      throw _WorkerAbort(
         LocalArchiveErrorKind.invalidArchive,
-        'ZIP end-of-directory records are ambiguous.',
+        'Could not read the ZIP directory: $error',
+        path: archivePath,
       );
     }
-    entries = _preflightZip(directory, input, request.limits);
-  } on _WorkerAbort {
-    input.closeSync();
-    rethrow;
-  } on Object catch (error) {
-    input.closeSync();
-    throw _WorkerAbort(
-      LocalArchiveErrorKind.invalidArchive,
-      'Could not read the ZIP directory: $error',
-      path: archivePath,
-    );
-  }
 
-  final totalBytes = entries.fold<int>(0, (sum, entry) => sum + entry.size);
-  request.events.send(
-    _WorkerProgressEvent(
-      LocalArchiveProgress(
-        operation: request.operation,
-        phase: LocalArchivePhase.preparing,
-        completedEntries: 0,
-        totalEntries: entries.length,
-        processedBytes: 0,
-        totalBytes: totalBytes,
+    final totalBytes = entries.fold<int>(0, (sum, entry) => sum + entry.size);
+    request.events.send(
+      _WorkerProgressEvent(
+        LocalArchiveProgress(
+          operation: request.operation,
+          phase: LocalArchivePhase.preparing,
+          completedEntries: 0,
+          totalEntries: entries.length,
+          processedBytes: 0,
+          totalBytes: totalBytes,
+        ),
       ),
-    ),
-  );
-  request.events.send(const _WorkerBoundary());
-  await _waitForWorkerCommand(commands, _workerProceed);
+    );
+    request.events.send(const _WorkerBoundary());
+    await _waitForWorkerCommand(commands, _workerProceed);
 
-  final outputRoot = Directory(
-    p.join(request.stagePath, _workerPayloadDirectory),
-  );
-  outputRoot.createSync();
-  final budget = _ActualOutputBudget(request.limits.maximumTotalBytes);
-  var processedBytes = 0;
-  var completedEntries = 0;
+    final outputRoot = Directory(
+      p.join(request.stagePath, _workerPayloadDirectory),
+    );
+    outputRoot.createSync();
+    final budget = _ActualOutputBudget(request.limits.maximumTotalBytes);
+    var processedBytes = 0;
+    var completedEntries = 0;
 
-  try {
     for (var index = 0; index < entries.length; index++) {
       _throwIfWorkerCancelled();
       final entry = entries[index];
@@ -836,11 +837,11 @@ Future<(int, int)> _extractZipInWorker(
         await _waitForWorkerCommand(commands, _workerProceed);
       }
     }
+
+    return (entries.length, totalBytes);
   } finally {
     input.closeSync();
   }
-
-  return (entries.length, totalBytes);
 }
 
 _ZipEnvelope _preflightZipEnvelope(

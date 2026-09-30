@@ -1,3 +1,6 @@
+@Timeout(Duration(minutes: 2))
+library;
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -16,6 +19,7 @@ const String _stageMarkerContents = 'poltergeist-archive-stage-v1\n';
 const String _stageMarkerPrefix = 'poltergeist-archive-stage-v2:';
 const String _archiveStateDirectoryName = 'local-archive-state-v1';
 const String _ownershipKeyName = 'archive-owner.key';
+const Duration _archiveHelperReadyTimeout = Duration(seconds: 30);
 
 void main() {
   late Directory root;
@@ -337,7 +341,7 @@ void main() {
     await Future.wait([
       one.$2.firstWhere((line) => line == 'ready'),
       two.$2.firstWhere((line) => line == 'ready'),
-    ]).timeout(const Duration(seconds: 10));
+    ]).timeout(_archiveHelperReadyTimeout);
     final oneResult = one.$2.firstWhere((line) => line.startsWith('result:'));
     final twoResult = two.$2.firstWhere((line) => line.startsWith('result:'));
     one.$1.stdin.writeln('go');
@@ -1022,7 +1026,7 @@ void main() {
     addTearDown(() => _stopHelper(helper.$1));
     await helper.$2
         .firstWhere((line) => line == 'ready')
-        .timeout(const Duration(seconds: 10));
+        .timeout(_archiveHelperReadyTimeout);
     File(p.join(source.path, 'user')).writeAsStringSync('keep');
 
     final result = await service
@@ -1057,7 +1061,7 @@ void main() {
     addTearDown(() => _stopHelper(helper.$1));
     await helper.$2
         .firstWhere((line) => line == 'ready')
-        .timeout(const Duration(seconds: 10));
+        .timeout(_archiveHelperReadyTimeout);
 
     await _expectArchiveError(
       service.createZip(
@@ -1180,6 +1184,7 @@ void main() {
     await _expectArchiveError(job, LocalArchiveErrorKind.conflict);
     await subscription.cancel();
     expect(File(pathOf('replaced.zip')).existsSync(), isFalse);
+    expect(_stageNames(root), isEmpty);
   });
 
   test('caps creation metadata including directory suffixes', () async {
@@ -1554,6 +1559,109 @@ void main() {
     },
   );
 
+  test('cancel at extraction preparation releases its descriptor', () async {
+    if (!Platform.isLinux) {
+      markTestSkipped('Linux exposes process descriptors through procfs');
+      return;
+    }
+    final archive = File(pathOf('cancel-preparing-extraction.zip'));
+    _writeZip(archive, [ArchiveFile.string('data.txt', 'data')]);
+    final baseline = Directory('/proc/self/fd').listSync().length;
+
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final preparing = Completer<void>();
+      late final LocalArchiveJob job;
+      job = service.extractZip(
+        archivePath: archive.path,
+        destinationPath: pathOf('cancel-preparing-extraction-$attempt'),
+      );
+      final progress = job.progress.listen((event) {
+        if (event.phase != LocalArchivePhase.preparing ||
+            preparing.isCompleted) {
+          return;
+        }
+        job.pause();
+        preparing.complete();
+      });
+      await preparing.future.timeout(const Duration(seconds: 10));
+
+      job.cancel();
+      await _expectArchiveError(job, LocalArchiveErrorKind.cancelled);
+      await progress.cancel();
+    }
+
+    expect(Directory('/proc/self/fd').listSync().length, baseline);
+  });
+
+  test('cancel interrupts a blocked ownership key lock', () async {
+    await service.close();
+    final support = Directory(pathOf('ownership-lock-support'))..createSync();
+    service = LocalArchiveService(supportDirectoryPath: support.path);
+    final source = File(pathOf('ownership-lock-source'))
+      ..writeAsStringSync('data');
+    await service
+        .createZip(
+          sourcePaths: [source.path],
+          destinationPath: pathOf('ownership-lock-seed.zip'),
+        )
+        .done;
+    await service.close();
+
+    final keyPath = p.join(
+      support.path,
+      _archiveStateDirectoryName,
+      _ownershipKeyName,
+    );
+    final helper = await _startArchiveHelper(['hold-file-lock', keyPath]);
+    addTearDown(() => _stopHelper(helper.$1));
+    await helper.$2
+        .firstWhere((line) => line == 'ready')
+        .timeout(_archiveHelperReadyTimeout);
+    service = LocalArchiveService(supportDirectoryPath: support.path);
+    final job = service.createZip(
+      sourcePaths: [source.path],
+      destinationPath: pathOf('ownership-lock-cancelled.zip'),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final stopwatch = Stopwatch()..start();
+    job.cancel();
+
+    try {
+      await _expectArchiveError(
+        job,
+        LocalArchiveErrorKind.cancelled,
+      ).timeout(const Duration(seconds: 2));
+    } finally {
+      helper.$1.stdin.writeln('release');
+      expect(await helper.$1.exitCode, 0);
+    }
+    expect(stopwatch.elapsed, lessThan(const Duration(seconds: 1)));
+    expect(File(pathOf('ownership-lock-cancelled.zip')).existsSync(), isFalse);
+  });
+
+  test('stage cleanup failure preserves the primary cancellation', () async {
+    if (!Platform.isLinux && !Platform.isMacOS) {
+      markTestSkipped('This regression uses POSIX directory permissions');
+      return;
+    }
+    final source = File(pathOf('cleanup-failure-source'))
+      ..writeAsStringSync('data');
+    final job = service.createZip(
+      sourcePaths: [source.path],
+      destinationPath: pathOf('cleanup-failure.zip'),
+    );
+    job.pause();
+    await _waitForStage(root);
+    expect(Process.runSync('chmod', ['0500', root.path]).exitCode, 0);
+
+    try {
+      job.cancel();
+      await _expectArchiveError(job, LocalArchiveErrorKind.cancelled);
+    } finally {
+      expect(Process.runSync('chmod', ['0700', root.path]).exitCode, 0);
+    }
+  });
+
   test('cancel interrupts a blocked interprocess commit lock', () async {
     final source = File(pathOf('commit-lock-source'))
       ..writeAsStringSync('data');
@@ -1573,7 +1681,7 @@ void main() {
     addTearDown(() => _stopHelper(helper.$1));
     await helper.$2
         .firstWhere((line) => line == 'ready')
-        .timeout(const Duration(seconds: 10));
+        .timeout(_archiveHelperReadyTimeout);
 
     final job = service.createZip(
       sourcePaths: [source.path],
@@ -1618,7 +1726,7 @@ void main() {
     addTearDown(() => _stopHelper(helper.$1));
     await helper.$2
         .firstWhere((line) => line == 'ready')
-        .timeout(const Duration(seconds: 10));
+        .timeout(_archiveHelperReadyTimeout);
 
     final first = service.createZip(
       sourcePaths: [source.path],
@@ -1726,7 +1834,7 @@ void main() {
     addTearDown(() => _stopHelper(helper.$1));
     await helper.$2
         .firstWhere((line) => line == 'ready')
-        .timeout(const Duration(seconds: 10));
+        .timeout(_archiveHelperReadyTimeout);
     await service
         .createZip(
           sourcePaths: [source.path],
@@ -1965,9 +2073,18 @@ List<String> _stageNames(Directory root) => root
 
 Future<void> _waitForStage(Directory root) async {
   final deadline = DateTime.now().add(const Duration(seconds: 5));
-  while (_stageNames(root).isEmpty) {
+  while (true) {
+    final names = _stageNames(root);
+    if (names.length == 1 &&
+        FileSystemEntity.typeSync(
+              p.join(root.path, names.single, _stageMarkerName),
+              followLinks: false,
+            ) ==
+            FileSystemEntityType.file) {
+      return;
+    }
     if (DateTime.now().isAfter(deadline)) {
-      fail('archive stage was not created');
+      fail('archive stage was not initialized');
     }
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
