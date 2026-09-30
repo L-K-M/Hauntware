@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:planchette_core/planchette_core.dart';
 import 'package:test/test.dart';
 
@@ -37,6 +39,8 @@ String run(
   Indentation indentation = const Indentation.spaces(4),
   Indentation? preference,
   String Function(String) fold = _lowercase,
+  DateTime? now,
+  math.Random? random,
 }) {
   final caretMark = input.indexOf('|');
   final int base;
@@ -75,6 +79,8 @@ String run(
           indentation: indentation,
           indentationPreference: preference,
           displayPath: path,
+          now: now == null ? null : () => now,
+          random: random,
         ),
       ),
     ),
@@ -616,6 +622,333 @@ void main() {
 
     test('one line is nothing to join', () {
       expect(run('joinLinesWith', '[a]b'), 'unchanged');
+    });
+  });
+
+  group('reverseLines', () {
+    test('reverses the caret document', () {
+      expect(run('reverseLines', 'c\nb\na|'), 'a\nb\nc|');
+    });
+
+    test('keeps each line ending in its slot', () {
+      expect(run('reverseLines', 'a\r\nb\nc|'), 'c\r\nb\na|');
+    });
+
+    test('reverses only the touched lines', () {
+      expect(run('reverseLines', 'x[c\na\nb]y\nz'), '[by\na\nxc]\nz');
+    });
+
+    test('a single line is unchanged', () {
+      expect(run('reverseLines', 'a|'), 'unchanged');
+    });
+  });
+
+  group('shuffleLines', () {
+    test('permutes the lines deterministically for a given seed', () {
+      const input = 'a\nb\nc\nd\ne\nf\ng\nh|';
+      final first = run('shuffleLines', input, random: math.Random(7));
+      final second = run('shuffleLines', input, random: math.Random(7));
+      expect(first, second);
+      expect(first, isNot(input));
+      // A permutation: the sorted lines are untouched.
+      final lines = first.replaceAll('|', '').split('\n')..sort();
+      expect(lines.join('\n'), 'a\nb\nc\nd\ne\nf\ng\nh');
+    });
+
+    test('a single line is unchanged', () {
+      expect(run('shuffleLines', 'a|', random: math.Random(1)), 'unchanged');
+    });
+  });
+
+  group('collapseBlankLines', () {
+    test('collapses a run to one blank line', () {
+      expect(run('collapseBlankLines', 'a\n\n\n\nb|'), 'a\n\nb|');
+    });
+
+    test('leaves single blank lines alone', () {
+      expect(run('collapseBlankLines', 'a\n\nb\nc|'), 'unchanged');
+    });
+
+    test('collapses whitespace-only lines too', () {
+      expect(run('collapseBlankLines', 'a\n\n  \n\t\nb|'), 'a\n\nb|');
+    });
+
+    test('collapses runs at the buffer edges', () {
+      expect(run('collapseBlankLines', '|\n\na\n\n\n'), '|\na\n\n');
+    });
+  });
+
+  group('titleCase', () {
+    test('capitalizes each whitespace word', () {
+      expect(run('titleCase', 'x[the quick BROWN]y'), 'x[The Quick Brown]y');
+    });
+
+    test('title-cases the word at the caret', () {
+      expect(run('titleCase', 'a hELLO| b'), 'a Hello| b');
+    });
+  });
+
+  group('sentenceCase', () {
+    test('capitalizes the first letter of each sentence', () {
+      expect(
+        run('sentenceCase', '[tHE qUICK. bROWN FOX! jUMPS]'),
+        '[The quick. Brown fox! Jumps]',
+      );
+    });
+  });
+
+  group('identifier cases', () {
+    test('camelCase splits separators and humps', () {
+      expect(run('camelCase', '[HELLO_WORLD foo-bar]'), '[helloWorldFooBar]');
+    });
+
+    test('pascalCase capitalizes every word', () {
+      expect(run('pascalCase', '[helloWorld foo]'), '[HelloWorldFoo]');
+    });
+
+    test('snakeCase splits camel humps and acronyms', () {
+      expect(run('snakeCase', '[XMLHttpRequest]'), '[xml_http_request]');
+      expect(run('snakeCase', '[hello-world foo]'), '[hello_world_foo]');
+    });
+
+    test('kebabCase joins with dashes', () {
+      expect(run('kebabCase', '[XMLHttpRequest]'), '[xml-http-request]');
+    });
+
+    test('constantCase shouts', () {
+      expect(run('constantCase', '[fooBar2 baz]'), '[FOO_BAR2_BAZ]');
+    });
+
+    test('converts the word at the caret', () {
+      expect(run('snakeCase', 'x sortLines| y'), 'x sort_lines| y');
+    });
+
+    test('already-cased text is unchanged', () {
+      expect(run('camelCase', '[fooBar]'), 'unchanged');
+    });
+  });
+
+  group('trimLeadingWhitespace', () {
+    test('strips spaces and tabs at line starts', () {
+      expect(run('trimLeadingWhitespace', '  a\n\tb\nc|'), 'a\nb\nc|');
+    });
+
+    test('a whitespace-only line becomes empty', () {
+      expect(run('trimLeadingWhitespace', 'a\n   \nb|'), 'a\n\nb|');
+    });
+
+    test('nothing to trim is unchanged', () {
+      expect(run('trimLeadingWhitespace', 'a\nb|'), 'unchanged');
+    });
+  });
+
+  group('normalizeSpaces', () {
+    test('folds Unicode spaces to plain spaces', () {
+      expect(run('normalizeSpaces', 'a b c d|'), 'a b c d|');
+    });
+
+    test('leaves tabs, newlines and ordinary spaces alone', () {
+      expect(run('normalizeSpaces', 'a\tb\nc|'), 'unchanged');
+    });
+
+    test('leaves line separators alone', () {
+      expect(run('normalizeSpaces', 'a b|c'), 'unchanged');
+    });
+  });
+
+  group('removeAnsiEscapes', () {
+    test('strips CSI color sequences', () {
+      expect(run('removeAnsiEscapes', 'a\x1B[31mb\x1B[0mc|'), 'abc|');
+    });
+
+    test('strips OSC hyperlinks', () {
+      expect(
+        run('removeAnsiEscapes', '\x1B]8;;https://x\x07link\x1B]8;;\x07|'),
+        'link|',
+      );
+    });
+
+    test('strips other escapes and keeps plain text', () {
+      expect(run('removeAnsiEscapes', 'a\x1B(B\x1Bcb|'), 'ab|');
+    });
+
+    test('no escapes is unchanged', () {
+      expect(run('removeAnsiEscapes', 'plain|'), 'unchanged');
+    });
+  });
+
+  group('unwrapParagraphs', () {
+    test('joins the paragraph at the caret', () {
+      expect(
+        run('unwrapParagraphs', 'one\ntwo| words\n\nthree\nfour'),
+        'one two| words\n\nthree\nfour',
+      );
+    });
+
+    test('a selection unwraps every touched paragraph', () {
+      expect(
+        run('unwrapParagraphs', '[one\ntwo\n\nthree\nfour]'),
+        '[one two\n\nthree four]',
+      );
+    });
+
+    test('trims each line when joining', () {
+      expect(run('unwrapParagraphs', 'one  |\n   two'), 'one t|wo');
+    });
+
+    test('a single-line paragraph is unchanged', () {
+      expect(run('unwrapParagraphs', 'one|\n\ntwo'), 'unchanged');
+    });
+  });
+
+  group('urlEncode', () {
+    test('percent-encodes reserved and non-ASCII characters', () {
+      expect(run('urlEncode', '[a b&c=é]'), '[a%20b%26c%3D%C3%A9]');
+    });
+
+    test('leaves unreserved characters', () {
+      expect(run('urlEncode', '[abc-_.~]'), 'unchanged');
+    });
+  });
+
+  group('urlDecode', () {
+    test('decodes percent escapes including UTF-8', () {
+      expect(run('urlDecode', '[a%20b%26c%3D%C3%A9]'), '[a b&c=é]');
+    });
+
+    test('leaves malformed escapes literal', () {
+      expect(run('urlDecode', '[a%zb%]'), 'unchanged');
+      expect(run('urlDecode', '[a%20%zzb]'), '[a %zzb]');
+    });
+
+    test('leaves escapes that are not UTF-8 literal', () {
+      expect(run('urlDecode', '[%FF]'), 'unchanged');
+    });
+
+    test('keeps + literal', () {
+      expect(run('urlDecode', '[a+b]'), 'unchanged');
+    });
+  });
+
+  group('base64Encode', () {
+    test('encodes the selection', () {
+      expect(run('base64Encode', '[Hi]'), '[SGk=]');
+      expect(run('base64Encode', '[é]'), '[w6k=]');
+    });
+  });
+
+  group('base64Decode', () {
+    test('decodes the selection', () {
+      expect(run('base64Decode', '[SGVsbG8=]'), '[Hello]');
+    });
+
+    test('ignores whitespace inside the selection', () {
+      expect(run('base64Decode', '[SGVs\nbG8=]'), '[Hello]');
+    });
+
+    test('invalid input is unchanged', () {
+      expect(run('base64Decode', '[not base64!]'), 'unchanged');
+    });
+
+    test('binary output is refused', () {
+      expect(run('base64Decode', '[AAE=]'), 'refused:resultNotText');
+      expect(run('base64Decode', '[gA==]'), 'refused:resultNotText');
+    });
+  });
+
+  group('htmlEntityEncode', () {
+    test('escapes specials and non-ASCII', () {
+      expect(
+        run('htmlEntityEncode', '[a<b>"é"]'),
+        '[a&lt;b&gt;&quot;&#233;&quot;]',
+      );
+    });
+
+    test('plain ASCII is unchanged', () {
+      expect(run('htmlEntityEncode', '[abc]'), 'unchanged');
+    });
+  });
+
+  group('htmlEntityDecode', () {
+    test('decodes named and numeric entities', () {
+      expect(
+        run('htmlEntityDecode', '[a&lt;b&gt;&quot;&#233;&#x41;]'),
+        '[a<b>"éA]',
+      );
+    });
+
+    test('leaves unknown and unusable entities literal', () {
+      expect(run('htmlEntityDecode', '[&nosuch;]'), 'unchanged');
+      expect(run('htmlEntityDecode', '[&#0;]'), 'unchanged');
+      expect(run('htmlEntityDecode', '[&amp; + &nosuch;]'), '[& + &nosuch;]');
+    });
+  });
+
+  group('escapeJsonString', () {
+    test('escapes quotes, backslashes and controls', () {
+      expect(
+        run('escapeJsonString', '[a"b\\c\nd\x01]'),
+        '[a\\"b\\\\c\\nd\\u0001]',
+      );
+    });
+
+    test('plain text is unchanged', () {
+      expect(run('escapeJsonString', '[abc]'), 'unchanged');
+    });
+  });
+
+  group('unescapeBackslashSequences', () {
+    test('decodes common escapes', () {
+      expect(
+        run('unescapeBackslashSequences', r'[a\nb\tc\\d]'),
+        '[a\nb\tc\\d]',
+      );
+      expect(run('unescapeBackslashSequences', r'[A\x42]'), '[AB]');
+    });
+
+    test('leaves unknown and NUL escapes literal', () {
+      expect(run('unescapeBackslashSequences', r'[a\qb\0]'), 'unchanged');
+      expect(run('unescapeBackslashSequences', r'[x\ny\0z]'), '[x\ny\\0z]');
+    });
+
+    test('no escapes is unchanged', () {
+      expect(run('unescapeBackslashSequences', '[abc]'), 'unchanged');
+    });
+  });
+
+  group('insert', () {
+    final now = DateTime.utc(2026, 1, 15, 14, 30, 5);
+
+    test('Date inserts YYYY-MM-DD', () {
+      expect(run('insertDate', 'abc|', now: now), 'abc2026-01-15|');
+    });
+
+    test('Date and Time inserts an ISO timestamp', () {
+      expect(
+        run('insertDateTime', 'abc|', now: now),
+        'abc2026-01-15T14:30:05|',
+      );
+    });
+
+    test('UTC Timestamp ends in Z', () {
+      expect(
+        run('insertUtcTimestamp', 'abc|', now: now),
+        'abc2026-01-15T14:30:05Z|',
+      );
+    });
+
+    test('UUID inserts a version-4 uuid', () {
+      final result = run('insertUuid', 'abc|');
+      expect(
+        RegExp(
+          r'^abc[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\|$',
+        ).hasMatch(result),
+        isTrue,
+      );
+    });
+
+    test('an insert replaces the selection', () {
+      expect(run('insertDate', 'a[bc]d', now: now), 'a2026-01-15|d');
     });
   });
 }

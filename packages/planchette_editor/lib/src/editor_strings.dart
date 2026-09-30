@@ -76,18 +76,43 @@ class EditorStrings {
   /// The text tool's display name, for its menu and palette entries.
   String textToolName(String id) => switch (id) {
     'sortLines' => 'Sort Lines',
+    'reverseLines' => 'Reverse Lines',
+    'shuffleLines' => 'Shuffle Lines',
     'removeDuplicateLines' => 'Remove Duplicate Lines',
     'removeBlankLines' => 'Remove Blank Lines',
+    'collapseBlankLines' => 'Collapse Blank Lines',
     'uppercase' => 'UPPERCASE',
     'lowercase' => 'lowercase',
+    'titleCase' => 'Title Case',
+    'sentenceCase' => 'Sentence case',
+    'camelCase' => 'camelCase',
+    'pascalCase' => 'PascalCase',
+    'snakeCase' => 'snake_case',
+    'kebabCase' => 'kebab-case',
+    'constantCase' => 'CONSTANT_CASE',
     'trimTrailingWhitespace' => 'Trim Trailing Whitespace',
+    'trimLeadingWhitespace' => 'Trim Leading Whitespace',
+    'normalizeSpaces' => 'Normalize Spaces',
     'convertIndentationToSpaces' => 'Convert Indentation to Spaces',
     'convertIndentationToTabs' => 'Convert Indentation to Tabs',
     'straightenQuotes' => 'Straighten Quotes',
     'zapGremlins' => 'Zap Gremlins',
     'prefixSuffixLines' => 'Prefix/Suffix Lines',
     'numberLines' => 'Number Lines',
+    'unwrapParagraphs' => 'Unwrap Paragraphs',
     'joinLinesWith' => 'Join Lines With',
+    'urlEncode' => 'URL Encode',
+    'urlDecode' => 'URL Decode',
+    'base64Encode' => 'Base64 Encode',
+    'base64Decode' => 'Base64 Decode',
+    'htmlEntityEncode' => 'Encode HTML Entities',
+    'htmlEntityDecode' => 'Decode HTML Entities',
+    'escapeJsonString' => 'Escape as JSON String',
+    'unescapeBackslashSequences' => 'Unescape Backslash Sequences',
+    'insertDate' => 'Date',
+    'insertDateTime' => 'Date and Time',
+    'insertUtcTimestamp' => 'UTC Timestamp',
+    'insertUuid' => 'UUID',
     _ => id,
   };
 
@@ -202,13 +227,28 @@ class EditorStrings {
   /// The one-line description the palette shows under a tool's name.
   String textToolDescription(String id) => switch (id) {
     'sortLines' => 'Orders lines alphabetically.',
+    'reverseLines' => 'Reverses the order of lines.',
+    'shuffleLines' => 'Puts lines in a random order.',
     'removeDuplicateLines' =>
       'Deletes repeated lines, keeping the first of each.',
     'removeBlankLines' => 'Deletes empty and whitespace-only lines.',
+    'collapseBlankLines' =>
+      'Collapses runs of blank lines to a single blank line.',
     'uppercase' => 'Changes the word or selection to UPPERCASE.',
     'lowercase' => 'Changes the word or selection to lowercase.',
+    'titleCase' => 'Changes the word or selection to Title Case.',
+    'sentenceCase' => 'Changes the word or selection to Sentence case.',
+    'camelCase' => 'Changes the word or selection to camelCase.',
+    'pascalCase' => 'Changes the word or selection to PascalCase.',
+    'snakeCase' => 'Changes the word or selection to snake_case.',
+    'kebabCase' => 'Changes the word or selection to kebab-case.',
+    'constantCase' => 'Changes the word or selection to CONSTANT_CASE.',
     'trimTrailingWhitespace' =>
       'Removes spaces and tabs from the ends of lines.',
+    'trimLeadingWhitespace' =>
+      'Removes spaces and tabs from the starts of lines.',
+    'normalizeSpaces' =>
+      'Replaces no-break and other Unicode spaces with plain spaces.',
     'convertIndentationToSpaces' =>
       'Replaces leading tabs with spaces, then indents with spaces.',
     'convertIndentationToTabs' =>
@@ -219,7 +259,22 @@ class EditorStrings {
     'prefixSuffixLines' =>
       'Adds or removes the same text at the start or end of each line.',
     'numberLines' => 'Adds or removes line numbers.',
+    'removeAnsiEscapes' => 'Strips terminal colors and escape sequences.',
+    'unwrapParagraphs' => 'Joins each paragraph into a single line.',
     'joinLinesWith' => 'Joins the selected lines with a separator.',
+    'urlEncode' => 'Percent-encodes the selection for a URL.',
+    'urlDecode' => 'Decodes percent-encoded text.',
+    'base64Encode' => 'Encodes the selection as Base64.',
+    'base64Decode' => 'Decodes Base64 text.',
+    'htmlEntityEncode' => 'Escapes HTML specials and non-ASCII as entities.',
+    'htmlEntityDecode' => 'Decodes named and numeric HTML entities.',
+    'escapeJsonString' => 'Escapes the selection as a JSON string body.',
+    'unescapeBackslashSequences' =>
+      r'Decodes backslash escapes such as \n and \uXXXX.',
+    'insertDate' => 'Inserts the current date as YYYY-MM-DD.',
+    'insertDateTime' => 'Inserts the local date and time.',
+    'insertUtcTimestamp' => 'Inserts the UTC timestamp.',
+    'insertUuid' => 'Inserts a random UUID.',
     _ => '',
   };
 
@@ -227,22 +282,64 @@ class EditorStrings {
   /// Duplicate Lines.
   List<String> textToolKeywords(String id) => switch (id) {
     'sortLines' => const ['order', 'alphabetize', 'arrange'],
+    'reverseLines' => const ['flip', 'invert order'],
+    'shuffleLines' => const ['randomize', 'mix lines'],
     'removeDuplicateLines' => const ['dedupe', 'uniq', 'unique'],
     'removeBlankLines' => const ['empty lines', 'delete blanks'],
+    'collapseBlankLines' => const [
+      'squeeze blank lines',
+      'single blank',
+      'collapse empty',
+    ],
     'uppercase' => const ['all caps', 'capitalize', 'upcase'],
     'lowercase' => const ['downcase', 'small letters'],
+    'titleCase' => const ['capitalize words', 'headline'],
+    'sentenceCase' => const ['capitalize sentences'],
+    'camelCase' => const ['lower camel', 'identifier'],
+    'pascalCase' => const ['upper camel', 'identifier'],
+    'snakeCase' => const ['underscore', 'identifier'],
+    'kebabCase' => const ['hyphen', 'dash case', 'identifier'],
+    'constantCase' => const ['screaming snake', 'macro', 'identifier'],
     'trimTrailingWhitespace' => const [
       'trailing spaces',
       'rstrip',
       'strip whitespace',
     ],
+    'trimLeadingWhitespace' => const [
+      'leading spaces',
+      'lstrip',
+      'unindent all',
+    ],
+    'normalizeSpaces' => const ['non-breaking space', 'unicode spaces', 'nbsp'],
     'convertIndentationToSpaces' => const ['tabs to spaces', 'detab'],
     'convertIndentationToTabs' => const ['spaces to tabs', 'entab'],
     'straightenQuotes' => const ['smart quotes', 'typographic quotes'],
     'zapGremlins' => const ['control characters', 'invisible characters'],
     'prefixSuffixLines' => const ['quote level', 'comment out', 'affix'],
     'numberLines' => const ['line numbers', 'enumerate'],
+    'removeAnsiEscapes' => const ['terminal colors', 'ansi codes', 'vt100'],
+    'unwrapParagraphs' => const [
+      'unwrap lines',
+      'reflow',
+      'remove line breaks',
+    ],
     'joinLinesWith' => const ['join', 'unlines', 'flatten'],
+    'urlEncode' => const ['percent encode', 'uri encode'],
+    'urlDecode' => const ['percent decode', 'uri decode'],
+    'base64Encode' => const ['b64', 'encode base64'],
+    'base64Decode' => const ['b64', 'decode base64'],
+    'htmlEntityEncode' => const ['html escape', 'entities', 'escape html'],
+    'htmlEntityDecode' => const ['html unescape', 'entities', 'unescape html'],
+    'escapeJsonString' => const ['json escape', 'escape string'],
+    'unescapeBackslashSequences' => const [
+      'unescape',
+      'escape sequences',
+      'backslash',
+    ],
+    'insertDate' => const ['today', 'current date'],
+    'insertDateTime' => const ['now', 'timestamp', 'current time'],
+    'insertUtcTimestamp' => const ['now', 'zulu', 'gmt', 'timestamp'],
+    'insertUuid' => const ['guid', 'random id'],
     _ => const [],
   };
 
@@ -279,9 +376,24 @@ class EditorStrings {
     String? detail,
   ) => switch (id) {
     'sortLines' => 'moved $changed of ${_lines(scope)} $where.',
+    'reverseLines' => 'reversed ${_lines(scope)} $where.',
+    'shuffleLines' => 'shuffled ${_lines(scope)} $where.',
     'removeDuplicateLines' => 'removed $changed of ${_lines(scope)} $where.',
     'removeBlankLines' =>
       'removed $changed blank ${_plural(changed, 'line')} $where.',
+    'collapseBlankLines' =>
+      'collapsed $changed blank ${_plural(changed, 'line')} $where.',
+    'trimLeadingWhitespace' =>
+      'trimmed whitespace on $changed of ${_lines(scope)} $where.',
+    'normalizeSpaces' => 'normalized ${_plural(changed, 'space')} $where.',
+    'titleCase' ||
+    'sentenceCase' ||
+    'camelCase' ||
+    'pascalCase' ||
+    'snakeCase' ||
+    'kebabCase' ||
+    'constantCase' =>
+      'changed the case of ${_plural(changed, 'character')} $where.',
     'trimTrailingWhitespace' =>
       'trimmed whitespace on $changed of ${_lines(scope)} $where.',
     'convertIndentationToSpaces' =>
@@ -299,6 +411,26 @@ class EditorStrings {
         'replaced ${_plural(changed, 'gremlin')} with entities $where.',
       _ => 'removed ${_plural(changed, 'gremlin')} $where.',
     },
+    'removeAnsiEscapes' =>
+      'removed ${_plural(changed, 'escape sequence')} $where.',
+    'unwrapParagraphs' => 'unwrapped ${_plural(changed, 'line break')} $where.',
+    'prefixSuffixLines' ||
+    'numberLines' => 'changed $changed of ${_lines(scope)} $where.',
+    'joinLinesWith' => 'joined ${_lines(changed)} $where.',
+    'urlEncode' => 'encoded ${_plural(changed, 'character')} $where.',
+    'urlDecode' => 'decoded ${_plural(changed, 'character')} $where.',
+    'base64Encode' => 'encoded ${_plural(changed, 'character')} $where.',
+    'base64Decode' => 'decoded ${_plural(changed, 'character')} $where.',
+    'htmlEntityEncode' =>
+      'encoded ${_plural(changed, 'character')} as entities $where.',
+    'htmlEntityDecode' => 'decoded ${_plural(changed, 'entity')} $where.',
+    'escapeJsonString' => 'escaped ${_plural(changed, 'character')} $where.',
+    'unescapeBackslashSequences' =>
+      'decoded ${_plural(changed, 'escape')} $where.',
+    'insertDate' => 'inserted the current date $where.',
+    'insertDateTime' => 'inserted the date and time $where.',
+    'insertUtcTimestamp' => 'inserted the UTC timestamp $where.',
+    'insertUuid' => 'inserted a UUID $where.',
     _ => 'changed $scope units $where.',
   };
 
@@ -306,14 +438,33 @@ class EditorStrings {
   String _unchangedText(String id, int scope, String where) => switch (id) {
     'sortLines' =>
       'nothing to change, ${_lines(scope)} $where already in order.',
+    'reverseLines' ||
+    'shuffleLines' => 'nothing to change, ${_lines(scope)} $where.',
     'removeDuplicateLines' => 'nothing to change, no duplicate lines $where.',
     'removeBlankLines' => 'nothing to change, no blank lines $where.',
+    'collapseBlankLines' => 'nothing to change, no blank-line runs $where.',
     'trimTrailingWhitespace' => 'nothing to trim $where.',
+    'trimLeadingWhitespace' => 'nothing to trim $where.',
+    'normalizeSpaces' => 'no Unicode spaces $where.',
     'convertIndentationToSpaces' ||
     'convertIndentationToTabs' => 'nothing to convert $where.',
-    'uppercase' || 'lowercase' => 'nothing to change $where.',
+    'uppercase' ||
+    'lowercase' ||
+    'titleCase' ||
+    'sentenceCase' ||
+    'camelCase' ||
+    'pascalCase' ||
+    'snakeCase' ||
+    'kebabCase' ||
+    'constantCase' => 'nothing to change $where.',
     'straightenQuotes' => 'nothing to straighten $where.',
     'zapGremlins' => 'nothing to zap $where.',
+    'removeAnsiEscapes' => 'no escape sequences $where.',
+    'unwrapParagraphs' => 'nothing to unwrap $where.',
+    'joinLinesWith' => 'nothing to join $where.',
+    'urlDecode' || 'base64Decode' => 'nothing to decode $where.',
+    'htmlEntityDecode' => 'no entities $where.',
+    'unescapeBackslashSequences' => 'no escapes $where.',
     _ => 'nothing to change $where.',
   };
 
@@ -359,7 +510,15 @@ class EditorStrings {
 
   String _previewText(String id, int changed, int scope) => switch (id) {
     'sortLines' => '$changed of ${_lines(scope)} will move',
+    'reverseLines' => 'will reverse ${_lines(scope)}',
+    'shuffleLines' => 'will shuffle ${_lines(scope)}',
     'removeDuplicateLines' => 'will remove $changed of ${_lines(scope)}',
+    'removeBlankLines' => 'will remove ${_plural(changed, 'line')}',
+    'collapseBlankLines' => 'will collapse ${_plural(changed, 'blank line')}',
+    'trimLeadingWhitespace' => 'will trim ${_plural(changed, 'line')}',
+    'normalizeSpaces' => 'will normalize ${_plural(changed, 'space')}',
+    'removeAnsiEscapes' => 'will remove ${_plural(changed, 'escape sequence')}',
+    'unwrapParagraphs' => 'will join ${_plural(changed, 'line')}',
     'zapGremlins' => 'will zap ${_plural(changed, 'gremlin')}',
     'prefixSuffixLines' => 'will change $changed of ${_lines(scope)}',
     'numberLines' => 'will renumber ${_lines(scope)}',
