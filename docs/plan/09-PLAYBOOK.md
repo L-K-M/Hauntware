@@ -91,8 +91,8 @@ rules — AGENTS.md remains the authority on toolchain setup (§1 there).
   files so it unit-tests without pumping widgets (the Séance
   `server_grouping.dart` pattern, 02 §2.5's pure sort/filter functions).
 - **ASCII product name** in every file name and identifier — a tested
-  invariant in `poltergeist_core`. Identifiers: `com.lkm.poltergeist_app`
-  (Android + Linux GApplication), `com.lkm.poltergeistApp` (Apple), Linux
+  invariant in `poltergeist_core`. Identifiers: `ch.lkmc.poltergeist`
+  (Android + Linux GApplication), `ch.lkmc.poltergeistApp` (Apple), Linux
   binary `poltergeist` (AGENTS.md §3).
 - **The Flutter app stays out of the root `workspace:` list** and
   path-depends on the members (03 §9). CI's `ci.yml` and `release.yml`

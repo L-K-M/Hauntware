@@ -154,12 +154,12 @@ Environment facts that carry over from Séance's containers (same family):
 - The product name is **Poltergeist** — plain ASCII everywhere a file name or
   bundle identifier appears (Séance's codesign lesson: macOS codesign rejects
   accented file names; Poltergeist dodges the whole issue by being ASCII).
-  Planned identifiers: Android application id `com.lkm.poltergeist_app`,
-  Apple bundle id `com.lkm.poltergeistApp`, Linux binary/package name
+  Planned identifiers: Android application id `ch.lkmc.poltergeist`,
+  Apple bundle id `ch.lkmc.poltergeistApp`, Linux binary/package name
   `poltergeist`, Linux GApplication id (`APPLICATION_ID` in
-  `linux/CMakeLists.txt`) `com.lkm.poltergeist_app`. The packaged build
-  reports X11 `WM_CLASS` as instance `com.lkm.poltergeist_app`, class
-  `Com.lkm.poltergeist_app`; the case-sensitive class must match
+  `linux/CMakeLists.txt`) `ch.lkmc.poltergeist`. The packaged build
+  reports X11 `WM_CLASS` as instance `ch.lkmc.poltergeist`, class
+  `Ch.lkmc.poltergeist`; the case-sensitive class must match
   `StartupWMClass` in `scripts/package-linux.sh` (the flutter-create default
   `com.example.poltergeist_app` would break window-to-desktop-entry mapping
   in the .deb/AppImage).

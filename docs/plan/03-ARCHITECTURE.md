@@ -2284,7 +2284,7 @@ during M1–M3:
   like Séance (D23 ships unsigned/ad-hoc macOS bundles).
 - **ASCII product name** everywhere a file name or identifier appears —
   already a tested invariant in `poltergeist_core`; identifiers are
-  `com.lkm.poltergeist_app` / `com.lkm.poltergeistApp` / Linux binary
+  `ch.lkmc.poltergeist` / `ch.lkmc.poltergeistApp` / Linux binary
   `poltergeist` (AGENTS.md §3).
 
 ## Definition of done

@@ -97,7 +97,7 @@ final class DragOutChannel: NSObject {
   /// complete as a user cancel, which AppKit apps do not report.
   private static let quietFailures: Set<String> = ["cancelled", "ownDrop"]
 
-  private static let errorDomain = "com.lkm.poltergeist.dragout"
+  private static let errorDomain = "ch.lkmc.poltergeist.dragout"
 
   private let channel: FlutterMethodChannel
   private weak var flutterViewController: FlutterViewController?
@@ -121,7 +121,7 @@ final class DragOutChannel: NSObject {
   /// main queue, so it never holds a thread for the length of a write.
   private let promiseQueue: OperationQueue = {
     let queue = OperationQueue()
-    queue.name = "com.lkm.poltergeist.dragout.promises"
+    queue.name = "ch.lkmc.poltergeist.dragout.promises"
     queue.qualityOfService = .userInitiated
     return queue
   }()

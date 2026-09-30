@@ -1,7 +1,7 @@
 # Flatpak manifest. scripts/build-flatpak.sh extracts the release .deb into
 # dist/flatpak/stage and builds from that — the bundle ships the same files
 # the .deb installs, relaid under flatpak's /app prefix.
-id: com.lkm.poltergeist_app
+id: ch.lkmc.poltergeist
 runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk

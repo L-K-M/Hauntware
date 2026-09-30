@@ -358,7 +358,7 @@ void main() {
     // container, and `~` still means the user's own home.
     expect(
       home('macos', const {
-        'HOME': '/Users/me/Library/Containers/com.lkm.poltergeistApp/Data',
+        'HOME': '/Users/me/Library/Containers/ch.lkmc.poltergeistApp/Data',
       }),
       '/Users/me',
     );
