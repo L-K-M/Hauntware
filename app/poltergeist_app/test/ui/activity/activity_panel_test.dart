@@ -145,8 +145,16 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.byTooltip('Show files').first);
+    final createRow = find.byKey(ValueKey('activity.task.${create.id}'));
+    final expander = find.descendant(
+      of: createRow,
+      matching: find.byTooltip('Show files'),
+    );
+    expect(expander, findsOneWidget);
+
+    await tester.tap(expander);
     await settle(tester);
+    expect(find.byKey(ValueKey('activity.item.${first.id}')), findsOneWidget);
     expect(find.byKey(ValueKey('activity.itemSkip.${first.id}')), findsNothing);
     expect(
       find.byKey(ValueKey('activity.itemSkip.${second.id}')),

@@ -661,39 +661,43 @@ final class LocalArchiveService {
     if (!await parent.exists()) return;
     final ownershipKey = await _archiveOwnershipKey(job);
 
-    await for (final entity in parent.list(followLinks: false)) {
-      _throwIfCancelled(job);
-      if (!_archiveStagePattern.hasMatch(p.basename(entity.path))) continue;
-      if (_activeArchiveStages.contains(entity.path)) continue;
-      if (entity is! Directory) continue;
+    try {
+      await for (final entity in parent.list(followLinks: false)) {
+        _throwIfCancelled(job);
+        if (!_archiveStagePattern.hasMatch(p.basename(entity.path))) continue;
+        if (_activeArchiveStages.contains(entity.path)) continue;
+        if (entity is! Directory) continue;
 
-      try {
-        final marker = File(p.join(entity.path, _archiveStageMarkerName));
-        if (await FileSystemEntity.type(marker.path, followLinks: false) !=
-            FileSystemEntityType.file) {
-          continue;
-        }
-        if (!await _hasArchiveStageMarker(
-          marker,
-          _archiveStageMarker(entity.path, ownershipKey),
-        )) {
-          continue;
-        }
-        final lease = await File(
-          p.join(entity.path, _archiveStageLeaseName),
-        ).open(mode: FileMode.append);
         try {
-          await lease.lock(FileLock.exclusive);
-          await lease.unlock();
-        } on FileSystemException {
+          final marker = File(p.join(entity.path, _archiveStageMarkerName));
+          if (await FileSystemEntity.type(marker.path, followLinks: false) !=
+              FileSystemEntityType.file) {
+            continue;
+          }
+          if (!await _hasArchiveStageMarker(
+            marker,
+            _archiveStageMarker(entity.path, ownershipKey),
+          )) {
+            continue;
+          }
+          final lease = await File(
+            p.join(entity.path, _archiveStageLeaseName),
+          ).open(mode: FileMode.append);
+          try {
+            await lease.lock(FileLock.exclusive);
+            await lease.unlock();
+          } on FileSystemException {
+            await lease.close();
+            continue;
+          }
           await lease.close();
-          continue;
+          await entity.delete(recursive: true);
+        } on FileSystemException {
+          // A live owner or permissions may win this best-effort cleanup.
         }
-        await lease.close();
-        await entity.delete(recursive: true);
-      } on FileSystemException {
-        // A startup sweep is best-effort; a live owner or permissions may win.
       }
+    } on FileSystemException {
+      // A locked or removed parent cannot block a best-effort startup sweep.
     }
   }
 

@@ -355,11 +355,13 @@ final _bidiControls = // ALM/LRM/RLM, LRE..RLO+PDF, LRI..PDI — the full
 ```
 
 D27's local archive boundary uses the narrower exported
-`validateRelativeLocalPath(relative, maximumDepth:)`. It strips directory
-slashes, enforces the configured depth, rejects line and bidi controls, and
-runs every component through `validateLocalName`; archive output therefore
-uses the portable local-name subset on every host. The destination-aware
-helper above remains the contract for paths that may stay on POSIX remotes.
+`validateRelativeLocalPath(relative, maximumDepth:)`. It absorbs trailing
+directory slashes, enforces the configured depth, rejects line and bidi
+controls, and runs every component through `validateLocalName`; archive output
+therefore uses the portable local-name subset on every host. Together with
+§3.5's root-containment rule, this is D27's zip-slip contract. The
+destination-aware helper above remains the contract for paths that may stay on
+POSIX remotes.
 
 Pin `_isWindowsReservedName`'s contract in its tests, since the
 export/preview/drag flows it guards never mkdir and so nothing else would

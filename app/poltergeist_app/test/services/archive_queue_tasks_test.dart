@@ -97,6 +97,16 @@ void main() {
     },
   );
 
+  test('rejects empty roots before starting a job', () async {
+    await expectLater(
+      tasks.createZip(roots: const [], destinationDirectory: '/exports'),
+      throwsArgumentError,
+    );
+
+    expect(createCalls, isEmpty);
+    expect(jobs, isEmpty);
+  });
+
   test('multiple roots use the default Archive.zip name', () async {
     await tasks.createZip(
       roots: const ['/work/a', '/work/b'],

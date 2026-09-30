@@ -57,8 +57,14 @@ class _ActivityTaskListState extends State<ActivityTaskList> {
   /// not dispatched yet). Display bands and the queue agree: only the
   /// pending band carries drag handles.
   bool _isReorderable(TransferTask task) =>
+      _isReorderableWith(task, _controller.presentationFor(task.id));
+
+  static bool _isReorderableWith(
+    TransferTask task,
+    AppTaskPresentation presentation,
+  ) =>
       _band(task) == _RowBand.pending &&
-      _controller.presentationFor(task.id).supports(AppTaskCapability.reorder);
+      presentation.supports(AppTaskCapability.reorder);
 
   List<TransferTask> _orderedTasks() {
     final tasks = _controller.tasks;
@@ -157,9 +163,10 @@ class _TaskRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final platform = Theme.of(context).platform;
     final colors = Theme.of(context).colorScheme;
-    final reorderable =
-        _ActivityTaskListState._band(task) == _RowBand.pending &&
-        presentation.supports(AppTaskCapability.reorder);
+    final reorderable = _ActivityTaskListState._isReorderableWith(
+      task,
+      presentation,
+    );
 
     return Column(
       key: ValueKey('activity.taskBody.${task.id}'),

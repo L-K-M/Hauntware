@@ -12,6 +12,11 @@ const int _maximumFdInfoBytes = 4096;
 const int _posixInterrupted = 4;
 const int _darwinRenameExclusive = 4;
 const int _posixAlreadyExists = 17;
+const int _armRenameAt2SystemCall = 382;
+const int _arm64RenameAt2SystemCall = 276;
+const int _ia32RenameAt2SystemCall = 353;
+const int _x64RenameAt2SystemCall = 316;
+const int _riscvRenameAt2SystemCall = 276;
 const int _windowsAlreadyExists = 183;
 const int _windowsFileExists = 80;
 const int _windowsGenericRead = 0x80000000;
@@ -29,6 +34,15 @@ const int _windowsFileBasicInfo = 0;
 const int _windowsFileBasicInfoBytes = 40;
 const int _windowsFileInformationBytes = 52;
 const int _windowsFileTimeEpochMicroseconds = 11644473600000000;
+
+final RegExp _linuxFdInfoInodePattern = RegExp(
+  r'^ino:[ \t]*(\d+)[ \t]*\r?\n',
+  multiLine: true,
+);
+final RegExp _linuxFdInfoMountPattern = RegExp(
+  r'^mnt_id:[ \t]*(\d+)[ \t]*\r?\n',
+  multiLine: true,
+);
 
 AbstractFileHandle _openCreationInput(_CreationEntry entry) {
   if (Platform.isWindows) return _WindowsReadHandle(entry);
@@ -84,6 +98,89 @@ bool _renameArchivePayloadNoReplace(String source, String destination) {
     return _WindowsArchiveIo.instance.renameNoReplace(source, destination);
   }
   return _PosixArchiveIo.instance.renameNoReplace(source, destination);
+}
+
+/// Exercises buffer growth with an injected allocator.
+///
+/// Public only so allocation failure ordering can be regression-tested.
+@visibleForTesting
+void resizeNativeReadBufferForTesting(
+  Allocator allocator, {
+  required int initialCapacity,
+  required int replacementCapacity,
+}) {
+  final buffer = _NativeReadBuffer(allocator);
+  try {
+    buffer.acquire(initialCapacity);
+    buffer.acquire(replacementCapacity);
+  } finally {
+    buffer.close();
+  }
+}
+
+/// Invokes Linux `renameat2`, falling back when symbol resolution fails.
+///
+/// Public only so both injected resolution outcomes can be tested.
+@visibleForTesting
+int invokeLinuxRenameAt2ForTesting({
+  required int Function() resolveAndInvoke,
+  required int Function() invokeSyscall,
+}) => _invokeLinuxRenameAt2(
+  resolveAndInvoke: resolveAndInvoke,
+  invokeSyscall: invokeSyscall,
+);
+
+int _invokeLinuxRenameAt2({
+  required int Function() resolveAndInvoke,
+  required int Function() invokeSyscall,
+}) {
+  try {
+    return resolveAndInvoke();
+  } on ArgumentError {
+    return invokeSyscall();
+  }
+}
+
+/// Parses a complete Linux descriptor identity from fdinfo text.
+///
+/// Identity lines require terminators so a partial number is never accepted.
+@visibleForTesting
+({int mountId, int inode}) parseLinuxFdInfoIdentity(String text, String path) {
+  final inode = _linuxFdInfoInodePattern.firstMatch(text);
+  final mount = _linuxFdInfoMountPattern.firstMatch(text);
+  if (inode == null || mount == null) {
+    throw FileSystemException(
+      'Could not identify the opened archive source.',
+      path,
+    );
+  }
+
+  return (
+    mountId: int.parse(mount.group(1)!),
+    inode: int.parse(inode.group(1)!),
+  );
+}
+
+/// Rejects the sentinel returned when descriptor stat lookup fails.
+@visibleForTesting
+void validateArchiveDescriptorStat(FileStat stat, String path) {
+  if (stat.type != FileSystemEntityType.notFound) return;
+
+  throw FileSystemException(
+    'Could not identify the opened archive source.',
+    path,
+  );
+}
+
+/// Triggers the platform seek error path using an invalid native handle.
+@visibleForTesting
+void failNativeArchiveSeekForTesting(String path) {
+  if (Platform.isWindows) {
+    _WindowsArchiveIo.instance.seek(0, 0, path);
+    return;
+  }
+
+  _PosixArchiveIo.instance.seek(-1, 0, path);
 }
 
 String _windowsExtendedPath(String path) {
@@ -150,8 +247,8 @@ final class _PosixReadHandle extends AbstractFileHandle {
   @override
   set position(int value) {
     if (!isOpen) throw StateError('Archive source is closed.');
-    if (_PosixArchiveIo.instance.seek(_fileDescriptor, value) != value) {
-      throw FileSystemException('Could not seek the archive source.');
+    if (_PosixArchiveIo.instance.seek(_fileDescriptor, value, _path) != value) {
+      throw FileSystemException('Could not seek the archive source.', _path);
     }
     _position = value;
   }
@@ -246,13 +343,6 @@ final class _WindowsReadHandle extends AbstractFileHandle {
     try {
       final details = _WindowsArchiveIo.instance.details(_handle);
       _validateCreationFileDetails(path, expected, details);
-      if (details.isReparsePoint) {
-        throw _WorkerAbort(
-          LocalArchiveErrorKind.conflict,
-          'The ZIP source changed while it was being opened.',
-          path: path,
-        );
-      }
       _length = details.length;
     } on Object {
       _WindowsArchiveIo.instance.close(_handle);
@@ -273,7 +363,7 @@ final class _WindowsReadHandle extends AbstractFileHandle {
   @override
   set position(int value) {
     if (!isOpen) throw StateError('Archive source is closed.');
-    _WindowsArchiveIo.instance.seek(_handle, value);
+    _WindowsArchiveIo.instance.seek(_handle, value, _path);
     _position = value;
   }
 
@@ -369,20 +459,27 @@ final class _CreationFileDetails {
 }
 
 final class _NativeReadBuffer {
+  _NativeReadBuffer([this._allocator = calloc]);
+
+  final Allocator _allocator;
   Pointer<Uint8> _pointer = nullptr;
   int _capacity = 0;
 
   Pointer<Uint8> acquire(int capacity) {
     if (capacity <= _capacity) return _pointer;
-    if (_pointer != nullptr) calloc.free(_pointer);
-    _pointer = calloc<Uint8>(capacity);
+
+    final replacement = _allocator.allocate<Uint8>(capacity);
+    final previous = _pointer;
+    _pointer = replacement;
     _capacity = capacity;
+    if (previous != nullptr) _allocator.free(previous);
+
     return _pointer;
   }
 
   void close() {
     if (_pointer == nullptr) return;
-    calloc.free(_pointer);
+    _allocator.free(_pointer);
     _pointer = nullptr;
     _capacity = 0;
   }
@@ -468,6 +565,7 @@ final class _PosixArchiveIo {
         ? '/proc/self/fd'
         : '/dev/fd';
     final stat = FileStat.statSync('$descriptorRoot/$descriptor');
+    validateArchiveDescriptorStat(stat, path);
     final identity = Platform.isLinux || Platform.isAndroid
         ? _linuxIdentity(descriptor, path)
         : _darwinIdentity(descriptor, path);
@@ -485,21 +583,8 @@ final class _PosixArchiveIo {
     try {
       final bytes = info.readSync(_maximumFdInfoBytes);
       final text = utf8.decode(bytes, allowMalformed: false);
-      final inode = RegExp(r'^ino:\s*(\d+)$', multiLine: true).firstMatch(text);
-      final mount = RegExp(
-        r'^mnt_id:\s*(\d+)$',
-        multiLine: true,
-      ).firstMatch(text);
-      if (inode == null || mount == null) {
-        throw FileSystemException(
-          'Could not identify the opened archive source.',
-          path,
-        );
-      }
-      return _CreationFileIdentity(
-        int.parse(mount.group(1)!),
-        int.parse(inode.group(1)!),
-      );
+      final identity = parseLinuxFdInfoIdentity(text, path);
+      return _CreationFileIdentity(identity.mountId, identity.inode);
     } finally {
       info.closeSync();
     }
@@ -550,7 +635,7 @@ final class _PosixArchiveIo {
     return result;
   }
 
-  int seek(int descriptor, int position) {
+  int seek(int descriptor, int position, String path) {
     var result = _seek(descriptor, position, 0);
     while (result < 0 && _errno().value == _posixInterrupted) {
       result = _seek(descriptor, position, 0);
@@ -558,6 +643,7 @@ final class _PosixArchiveIo {
     if (result >= 0) return result;
     throw FileSystemException(
       'Could not seek the archive source (errno ${_errno().value}).',
+      path,
     );
   }
 
@@ -596,20 +682,33 @@ final class _PosixArchiveIo {
 
   int _renameLinux(Pointer<Uint8> source, Pointer<Uint8> destination) {
     if (Platform.isAndroid) {
-      final syscall = DynamicLibrary.process()
-          .lookupFunction<_SyscallRenameNative, _SyscallRenameDart>('syscall');
-      return syscall(
-        _androidRenameAt2SystemCall(),
-        _posixCurrentDirectory,
-        source,
-        _posixCurrentDirectory,
-        destination,
-        _posixRenameNoReplace,
-      );
+      return _renameLinuxWithSyscall(source, destination);
     }
-    final rename = DynamicLibrary.process()
-        .lookupFunction<_RenameAt2Native, _RenameAt2Dart>('renameat2');
-    return rename(
+
+    return _invokeLinuxRenameAt2(
+      resolveAndInvoke: () {
+        final rename = DynamicLibrary.process()
+            .lookupFunction<_RenameAt2Native, _RenameAt2Dart>('renameat2');
+        return rename(
+          _posixCurrentDirectory,
+          source,
+          _posixCurrentDirectory,
+          destination,
+          _posixRenameNoReplace,
+        );
+      },
+      invokeSyscall: () => _renameLinuxWithSyscall(source, destination),
+    );
+  }
+
+  int _renameLinuxWithSyscall(
+    Pointer<Uint8> source,
+    Pointer<Uint8> destination,
+  ) {
+    final syscall = DynamicLibrary.process()
+        .lookupFunction<_SyscallRenameNative, _SyscallRenameDart>('syscall');
+    return syscall(
+      _linuxRenameAt2SystemCall(),
       _posixCurrentDirectory,
       source,
       _posixCurrentDirectory,
@@ -618,13 +717,15 @@ final class _PosixArchiveIo {
     );
   }
 
-  int _androidRenameAt2SystemCall() => switch (Abi.current()) {
-    Abi.androidArm => 382,
-    Abi.androidArm64 => 276,
-    Abi.androidIA32 => 353,
-    Abi.androidX64 => 316,
-    Abi.androidRiscv64 => 276,
-    _ => throw UnsupportedError('Unsupported Android archive ABI.'),
+  int _linuxRenameAt2SystemCall() => switch (Abi.current()) {
+    Abi.androidArm || Abi.linuxArm => _armRenameAt2SystemCall,
+    Abi.androidArm64 || Abi.linuxArm64 => _arm64RenameAt2SystemCall,
+    Abi.androidIA32 || Abi.linuxIA32 => _ia32RenameAt2SystemCall,
+    Abi.androidX64 || Abi.linuxX64 => _x64RenameAt2SystemCall,
+    Abi.androidRiscv64 ||
+    Abi.linuxRiscv32 ||
+    Abi.linuxRiscv64 => _riscvRenameAt2SystemCall,
+    _ => throw UnsupportedError('Unsupported Linux archive ABI.'),
   };
 
   int _renameDarwin(Pointer<Uint8> source, Pointer<Uint8> destination) {
@@ -773,10 +874,11 @@ final class _WindowsArchiveIo {
     }
   }
 
-  void seek(int handle, int position) {
+  void seek(int handle, int position, String path) {
     if (_seek(handle, position, nullptr, 0) != 0) return;
     throw FileSystemException(
       'Could not seek the archive source (Windows error ${_lastError()}).',
+      path,
     );
   }
 

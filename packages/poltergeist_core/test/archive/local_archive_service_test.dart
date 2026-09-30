@@ -21,6 +21,11 @@ const String _archiveStateDirectoryName = 'local-archive-state-v1';
 const String _ownershipKeyName = 'archive-owner.key';
 const int _ownershipKeyBytes = 32;
 const Duration _archiveHelperReadyTimeout = Duration(seconds: 30);
+const List<int> _zip64HighBitSizeBytes = <int>[0, 0, 0, 0, 0, 0, 0, 0x80];
+
+final bool _linuxPermissionChecksApply =
+    Platform.isLinux &&
+    Process.runSync('id', const ['-u']).stdout.toString().trim() != '0';
 
 void main() {
   late Directory root;
@@ -34,6 +39,15 @@ void main() {
 
   tearDown(() async {
     await service.close();
+    final lockDirectory = await _archiveLockDirectory();
+    final rootLock = File(
+      p.join(
+        lockDirectory.path,
+        '${sha256.convert(utf8.encode(root.path))}.lock',
+      ),
+    );
+    if (await rootLock.exists()) await rootLock.delete();
+
     if (root.existsSync()) root.deleteSync(recursive: true);
   });
 
@@ -119,8 +133,8 @@ void main() {
   });
 
   test('creates from a file below an execute-only ancestor', () async {
-    if (!Platform.isLinux) {
-      markTestSkipped('Linux permission traversal is required');
+    if (!_linuxPermissionChecksApply) {
+      markTestSkipped('Linux non-root permission traversal is required');
       return;
     }
     final ancestor = Directory(pathOf('execute-only'))..createSync();
@@ -629,6 +643,24 @@ void main() {
       4,
     ]);
   });
+
+  for (final sizeField in _Zip64SizeField.values) {
+    test(
+      'rejects a high-bit ZIP64 ${sizeField.name} size as over-limit',
+      () async {
+        final archive = File(pathOf('high-bit-${sizeField.name}.zip'));
+        _writeZipWithHighBitZip64Size(archive, sizeField);
+
+        await _expectArchiveError(
+          service.extractZip(
+            archivePath: archive.path,
+            destinationPath: pathOf('high-bit-${sizeField.name}'),
+          ),
+          LocalArchiveErrorKind.limitExceeded,
+        );
+      },
+    );
+  }
 
   test('enforces injectable entry and byte limits', () async {
     await service.close();
@@ -1378,6 +1410,7 @@ void main() {
 
     await job.done;
     await subscription.cancel();
+    expect(resumedDuringFirst, isTrue);
   });
 
   test('escapes control and bidi text in displayed archive errors', () {
@@ -1875,6 +1908,34 @@ void main() {
     expect(File(third.destinationPath).existsSync(), isTrue);
   });
 
+  test('best-effort sweep tolerates an unlistable destination', () async {
+    if (!_linuxPermissionChecksApply) {
+      markTestSkipped('Linux non-root permission enforcement is required');
+      return;
+    }
+
+    final source = File(pathOf('unlistable-source'))..writeAsStringSync('data');
+    final destination = Directory(pathOf('unlistable-destination'))
+      ..createSync();
+    final restricted = Process.runSync('chmod', ['0300', destination.path]);
+    expect(restricted.exitCode, 0);
+
+    late final LocalArchiveResult result;
+    try {
+      result = await service
+          .createZip(
+            sourcePaths: [source.path],
+            destinationPath: p.join(destination.path, 'archive.zip'),
+          )
+          .done;
+    } finally {
+      final restored = Process.runSync('chmod', ['0700', destination.path]);
+      expect(restored.exitCode, 0);
+    }
+
+    expect(File(result.destinationPath).existsSync(), isTrue);
+  });
+
   test(
     'sweeps signed abandoned stages but preserves forged user folders',
     () async {
@@ -2017,6 +2078,37 @@ void _writePrecompressedZip(File file, List<List<int>> compressedEntries) {
     );
   }
   _writeZip(file, entries);
+}
+
+enum _Zip64SizeField { compressed, uncompressed }
+
+void _writeZipWithHighBitZip64Size(File file, _Zip64SizeField sizeField) {
+  _writeZip(file, [ArchiveFile.string('data', 'value')]);
+  final bytes = file.readAsBytesSync().toList();
+  final central = _findSignature(bytes, const [0x50, 0x4b, 0x01, 0x02]);
+  final nameLength = _readUint16(bytes, central + 28);
+  final extraLength = _readUint16(bytes, central + 30);
+  final extraOffset = central + 46 + nameLength;
+
+  _writeUint16(bytes, central + 6, 45);
+  switch (sizeField) {
+    case _Zip64SizeField.compressed:
+      _writeUint32(bytes, central + 20, 0xffffffff);
+    case _Zip64SizeField.uncompressed:
+      _writeUint32(bytes, central + 24, 0xffffffff);
+  }
+  _writeUint16(bytes, central + 30, extraLength + 12);
+  bytes.insertAll(extraOffset, const <int>[
+    1,
+    0,
+    8,
+    0,
+    ..._zip64HighBitSizeBytes,
+  ]);
+
+  final end = _findSignature(bytes, const [0x50, 0x4b, 0x05, 0x06]);
+  _writeUint32(bytes, end + 12, _readUint32(bytes, end + 12) + 12);
+  file.writeAsBytesSync(bytes);
 }
 
 List<int> _emptyDeflateBlocks(int count) {

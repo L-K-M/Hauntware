@@ -268,9 +268,9 @@ Future<(int, int)> _createZipInWorker(
   var processedBytes = 0;
   var completedEntries = 0;
   final compressedBudget = _CompressedCreationBudget(request.limits);
-  encoder.startEncode(output, level: DeflateLevel.defaultCompression);
 
   try {
+    encoder.startEncode(output, level: DeflateLevel.defaultCompression);
     for (var index = 0; index < entries.length; index++) {
       _throwIfWorkerCancelled();
       final entry = entries[index];
@@ -1329,6 +1329,20 @@ List<_ExtractionEntry> _preflightZip(
       throw _WorkerAbort(
         LocalArchiveErrorKind.unsupported,
         'ZIP compression method ${header.compressionMethod} is not supported.',
+        path: header.filename,
+      );
+    }
+    if (header.uncompressedSize < 0) {
+      throw _WorkerAbort(
+        LocalArchiveErrorKind.limitExceeded,
+        'ZIP entry exceeds the per-entry extraction limit.',
+        path: header.filename,
+      );
+    }
+    if (header.compressedSize < 0) {
+      throw _WorkerAbort(
+        LocalArchiveErrorKind.limitExceeded,
+        'ZIP entry exceeds the compressed-size limit.',
         path: header.filename,
       );
     }
