@@ -611,9 +611,70 @@ void main() {
           (replaced as PatternCompleted<PatternReplacement?>).value?.text,
           'cat one dog two dog',
         );
+
+        final found = await worker.findAll(
+          'cat one cat two cat',
+          'cat',
+          scope: (start: 4, end: 17),
+        );
+        final matches = (found as PatternCompleted<PatternMatches>).value;
+        expect(matches.length, 1);
+        expect(matches.startOf(0), 8);
       } finally {
         worker.dispose();
       }
+    });
+  });
+
+  group('FindPattern.findAll scope', () {
+    test('the limit bounds the scope, not the document', () {
+      final pattern = FindPattern('x');
+      // More matches precede the scope than the page limit would hold.
+      const limit = 4;
+      final text = '${'x' * (limit + 1)} tail x';
+      final unscoped = pattern.findAll(text, limit: limit);
+      expect(unscoped.length, limit);
+      expect(unscoped.capped, isTrue);
+
+      final scoped = pattern.findAll(
+        text,
+        limit: limit,
+        scope: (start: text.length - 1, end: text.length),
+      );
+      expect(scoped.length, 1);
+      expect(scoped.startOf(0), text.length - 1);
+      expect(scoped.capped, isFalse);
+    });
+  });
+
+  group('filterMatchingLines trailing break', () {
+    test('a dropped last line keeps a break the buffer ended with', () {
+      final pattern = FindPattern('c');
+      expect(
+        pattern.filterMatchingLines('a\nb\nc\n', keep: false).text,
+        'a\nb\n',
+      );
+      expect(
+        pattern.filterMatchingLines('a\r\nb\r\nc\r\n', keep: false).text,
+        'a\r\nb\r\n',
+      );
+    });
+
+    test('a dropped last line sheds its break when the buffer had none', () {
+      final pattern = FindPattern('c');
+      expect(pattern.filterMatchingLines('a\nb\nc', keep: false).text, 'a\nb');
+      // Scoped to a break-terminated end, the dropped range leaves the
+      // prefix's own trailing break alone.
+      expect(
+        pattern
+            .filterMatchingLines(
+              'a\nb\nc\n',
+              keep: false,
+              scope: (start: 4, end: 6),
+            )
+            .text,
+        'a\nb\n',
+      );
     });
   });
 }

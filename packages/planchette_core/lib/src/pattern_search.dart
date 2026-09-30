@@ -55,14 +55,24 @@ final class FindPattern {
   /// that runs on into a word is skipped the way literal search skips one,
   /// and the scan resumes just after its start, since a whole word may begin
   /// inside it.
+  /// With [scope] — a stored find-in-selection range — only the matches
+  /// lying wholly inside it are enumerated, so [limit] bounds the scope,
+  /// not the document: a selection past the cap's first page still
+  /// reports its matches.
   PatternMatches findAll(
     String text, {
     bool wholeWord = false,
     int limit = patternMatchLimit,
+    ({int start, int end})? scope,
   }) {
     final bounds = <int>[];
     var capped = false;
-    for (final match in _matchesIn(text, wholeWord: wholeWord)) {
+    for (final match in _matchesIn(
+      text,
+      wholeWord: wholeWord,
+      from: scope?.start ?? 0,
+      end: scope?.end,
+    )) {
       if (bounds.length >> 1 >= limit) {
         capped = true;
         break;
@@ -205,10 +215,13 @@ final class FindPattern {
       }
       at = end + separator.length;
     }
-    // The trailing-break trim belongs to a drop at the buffer's end; with
-    // lines after the scope, a dropped last scoped line still needs it.
+    // The trailing-break trim belongs to a drop at the buffer's end — and
+    // only when the buffer's last line lacked a break of its own: a kept
+    // line's break is that line's to keep, so a break-terminated buffer
+    // ends break-terminated however its last line fared. With lines after
+    // the scope, a dropped last scoped line still needs the trim.
     var prefixEnd = range.start;
-    if (lastDropped && filterEnd == text.length) {
+    if (lastDropped && filterEnd == text.length && !text.endsWith('\n')) {
       if (contents.isNotEmpty) {
         breaks[breaks.length - 1] = '';
       } else if (range.start > 0) {
@@ -563,6 +576,7 @@ final class PatternWorker {
     bool caseSensitive = false,
     bool wholeWord = false,
     int limit = patternMatchLimit,
+    ({int start, int end})? scope,
   }) => _submit<PatternMatches>(
     (reply) => reply! as PatternMatches,
     kind: _RequestKind.search,
@@ -571,6 +585,8 @@ final class PatternWorker {
     caseSensitive: caseSensitive,
     wholeWord: wholeWord,
     limit: limit,
+    scopeStart: scope?.start,
+    scopeEnd: scope?.end,
   );
 
   /// [text] with every match of [source] replaced; see
@@ -908,14 +924,21 @@ void _patternWorkerMain(SendPort replies) {
           caseSensitive: request.caseSensitive,
         );
       }
-      final scope = request.scopeStart == null
+      final scope = request.scopeStart == null && request.scopeEnd == null
           ? null
-          : (start: request.scopeStart!, end: request.scopeEnd!);
+          : (
+              start: ArgumentError.checkNotNull(
+                request.scopeStart,
+                'scopeStart',
+              ),
+              end: ArgumentError.checkNotNull(request.scopeEnd, 'scopeEnd'),
+            );
       final Object? payload = switch (request.kind) {
         _RequestKind.search => pattern.findAll(
           request.text,
           wholeWord: request.wholeWord,
           limit: request.limit,
+          scope: scope,
         ),
         _RequestKind.replace => pattern.replaceAll(
           request.text,

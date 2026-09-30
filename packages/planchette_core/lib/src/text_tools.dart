@@ -73,6 +73,10 @@ enum TextToolRefusal {
 
   /// A pattern tool's search failed or ran out of time in the worker.
   patternFailed,
+
+  /// The host did not wire what the run needs — an action whose callback
+  /// is null. Falling back silently would act on the wrong target.
+  unavailable,
 }
 
 /// What a run did. Only [TextToolChanged] touches the buffer; a tool that
@@ -693,6 +697,10 @@ resolveTextToolRange(
 }) {
   RangeError.checkValueInInterval(base, 0, text.length, 'base');
   RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
+  // base is the selection's anchor and extent its caret — a backward drag
+  // reports base > extent, and runs keep that direction when they reselect
+  // the result, so the pair passes through un-ordered on purpose. Callers
+  // slicing text must order it themselves (math.min/max), as the runs do.
   if (base != extent && !wholeDocument && !tool.ignoresSelection) {
     return (
       base: base,
@@ -1741,6 +1749,12 @@ TextToolOutcome? _patternRefusal(TextToolRun run) {
 
 TextToolOutcome _linesMatching(TextToolRun run, {required bool keep}) {
   if (_patternRefusal(run) case final refused?) return refused;
+  // These tools are ignoresSelection, so the resolved range is the whole
+  // document — filtering run.text and replacing [base, extent) agree.
+  assert(
+    run.base == 0 && run.extent == run.text.length,
+    'a line filter runs on the whole document',
+  );
   final filtered = _patternOf(run).filterMatchingLines(
     run.text,
     keep: keep,

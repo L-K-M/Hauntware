@@ -118,6 +118,20 @@ void main() {
       expect(c.lineActionsOpen, isFalse);
       expect(c.extractOpen, isFalse);
     });
+
+    test('restoring one row retires the other', () {
+      // The rows are exclusive — the count row answers for whichever is
+      // visible, so a restore must not leave both armed.
+      final c = _controller('one\ntwo');
+      c.openFindTool('keepLinesMatching');
+      expect(c.lineActionsOpen, isTrue);
+      c.openFindTool('extractMatches');
+      expect(c.extractOpen, isTrue);
+      expect(c.lineActionsOpen, isFalse);
+      c.openFindTool('deleteLinesMatching');
+      expect(c.lineActionsOpen, isTrue);
+      expect(c.extractOpen, isFalse);
+    });
   });
 
   group('line count', () {
@@ -303,6 +317,21 @@ void main() {
       expect(extracted, '1\n2');
       expect(c.text.text, 'a1 b\nc2');
       expect(outcome, isA<TextToolUnchanged>());
+    });
+
+    test('a new-document target without the callback refuses to run', () async {
+      // The host never wired onNewDocument — the switch's guarded case
+      // must not fall through to the in-place rewrite below it.
+      final c = _controller('a1 b\nc2');
+      c.openFindTool('extractMatches');
+      c.toggleRegularExpression();
+      c.search.text = r'\d';
+      c.setExtractTarget('newDocument');
+      final outcome = await c.applyExtract();
+
+      expect(outcome, isA<TextToolRefused>());
+      expect((outcome as TextToolRefused).reason, TextToolRefusal.unavailable);
+      expect(c.text.text, 'a1 b\nc2');
     });
 
     test('copies the extraction to the clipboard', () async {

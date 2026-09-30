@@ -807,8 +807,9 @@ class EditorController extends ChangeNotifier {
         !option.choices.contains(value)) {
       return option.defaultValue;
     }
-    if (option is IntegerOption && value is int && value < option.min) {
-      return option.min;
+    if (option is IntegerOption) {
+      if (value is! int) return option.defaultValue;
+      if (value < option.min) return option.min;
     }
     return value ?? option.defaultValue;
   }
@@ -1425,10 +1426,14 @@ class EditorController extends ChangeNotifier {
     extraction.value = TextEditingValue(
       text: template is String ? template : '',
     );
+    // The rows are mutually exclusive — the count row answers for the
+    // visible one, so restoring one retires the other.
     if (toolId == 'extractMatches') {
       _extractOpen = true;
+      _lineActionsOpen = false;
     } else {
       _lineActionsOpen = true;
+      _extractOpen = false;
     }
     _scheduleLineCount();
     _notify();
@@ -1658,9 +1663,15 @@ class EditorController extends ChangeNotifier {
               scope: lines.length,
               detail: 'newDocument:$unit',
             );
+          case 'newDocument':
+            // The callback is not wired — refuse rather than fall through
+            // to the in-place rewrite the user did not choose.
+            return const TextToolRefused(TextToolRefusal.unavailable);
           default:
             // A scoped extraction replaces the region — the lines it
             // touched when whole lines were collected — not the document.
+            // The scope predates the awaits, so clamp: an edit meanwhile
+            // can leave it beyond the source's bounds.
             final splice = scope == null
                 ? (start: 0, end: source.length)
                 : wholeLines
@@ -1669,7 +1680,10 @@ class EditorController extends ChangeNotifier {
                     scope.start.clamp(0, source.length),
                     scope.end.clamp(0, source.length),
                   )
-                : scope;
+                : (
+                    start: scope.start.clamp(0, source.length),
+                    end: scope.end.clamp(0, source.length),
+                  );
             // Measure bytes, not units — a template can grow the result
             // in UTF-8 while its code-unit length stays put.
             if (utf8EncodedLength(source) -
@@ -1902,6 +1916,7 @@ class EditorController extends ChangeNotifier {
         search.text,
         caseSensitive: _caseSensitive,
         wholeWord: _wholeWord,
+        scope: _scopeAsRecord,
       );
       // Every caller that resets the active match then reveals it, which
       // for a pattern has to wait for its matches.
@@ -1947,6 +1962,16 @@ class EditorController extends ChangeNotifier {
       // edited text while it is searched again — and the stored scope is
       // mapped through, or dropped when the edit consumed it.
       edit = _Edit.between(before, text.text);
+      // The stored scope maps through first — dropped when the edit
+      // consumed it — so the pattern search it reschedules runs under the
+      // mapped bounds, not the stale ones.
+      final scope = _searchScope;
+      if (scope != null) {
+        final start = edit.map(scope.start).clamp(0, text.text.length);
+        final end = edit.map(scope.end).clamp(start, text.text.length);
+        _searchScope = start < end ? TextRange(start: start, end: end) : null;
+        text.setSearchScope(_searchScope);
+      }
       if (find != null) {
         find.followEdit(
           before,
@@ -1954,14 +1979,8 @@ class EditorController extends ChangeNotifier {
           start: edit._start,
           end: edit._end,
           delta: edit._delta,
+          scope: _scopeAsRecord,
         );
-      }
-      final scope = _searchScope;
-      if (scope != null) {
-        final start = edit.map(scope.start);
-        final end = edit.map(scope.end);
-        _searchScope = start < end ? TextRange(start: start, end: end) : null;
-        text.setSearchScope(_searchScope);
       }
     }
     if (_matches.isEmpty ||

@@ -23,6 +23,9 @@ class EditorStrings {
   String get searchInSelection => 'in selection';
   String get searchScopeHint =>
       'Only the stored selection is searched — remove to search the file.';
+
+  /// The Find menu row that captures the selection as the search scope.
+  String get findInSelection => 'Find in Selection';
   String get noMatches => 'No matches';
   String get caseFoldLimited =>
       'This text cannot be compared without case, so matching was exact.';
@@ -191,10 +194,11 @@ class EditorStrings {
     _ => choiceId,
   };
 
-  /// A run's short option summary for Repeat and Recent rows — the
-  /// options that differ from their defaults, so "Repeat Sort Lines (Z to
-  /// A, Ignore case)" says what the re-run does. Empty when nothing
-  /// distinguishes it.
+  /// A run's short option summary for Repeat and Recent rows — the choice
+  /// and toggle options that differ from their defaults, so "Repeat Sort
+  /// Lines (Z to A, Ignore case)" says what the re-run does. Text and
+  /// number options (a custom separator, a start value) are not included.
+  /// Empty when nothing distinguishes it.
   String textToolOptionsSummary(TextToolRunRecord record) {
     final tool = textToolById(record.toolId);
     if (tool == null) return '';
@@ -540,6 +544,7 @@ class EditorStrings {
     TextToolRefusal.noPattern => 'no pattern to match',
     TextToolRefusal.invalidPattern => 'the pattern does not compile',
     TextToolRefusal.patternFailed => 'the pattern search failed',
+    TextToolRefusal.unavailable => 'this destination is not available',
   };
 
   // ── Tool bar ──
@@ -565,16 +570,15 @@ class EditorStrings {
 
   /// The count line under the bar, such as "9 of 12 lines will move".
   /// Past the preview limit the count is deferred to Apply.
-  String textToolPreview(TextToolReport report) {
-    if (report.outcome case TextToolChanged(:final changed, :final scope)) {
-      return _previewText(report.tool.id, changed, scope);
-    }
-    return switch (report.outcome) {
-      TextToolRefused(:final reason) => 'not applied, ${_refusalText(reason)}',
-      TextToolUnchanged() => 'nothing to change',
-      _ => '',
-    };
-  }
+  String textToolPreview(TextToolReport report) => switch (report.outcome) {
+    TextToolChanged(:final changed, :final scope) => _previewText(
+      report.tool.id,
+      changed,
+      scope,
+    ),
+    TextToolRefused(:final reason) => 'not applied, ${_refusalText(reason)}',
+    TextToolUnchanged() => 'nothing to change',
+  };
 
   /// Shown instead of a count on a buffer too large to dry-run.
   String get textToolPreviewDeferred => 'count is computed on Apply';

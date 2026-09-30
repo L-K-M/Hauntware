@@ -446,9 +446,9 @@ void main() {
         const TextRange(start: 8, end: 11),
         const TextRange(start: 16, end: 19),
       ]);
-      // The caret sits on the selection's start, so the first in-scope
-      // match is active; stepping moves on to the second, then wraps —
-      // the match before the scope never appears.
+      // The search anchors at the selection's start, so the first
+      // in-scope match is active; stepping moves on to the second, then
+      // wraps — the match before the scope never appears.
       controller.nextMatch();
       expect(
         controller.text.selection,
@@ -572,6 +572,46 @@ void main() {
       expect(controller.text.text, 'cat one dog two dog');
       // The scope follows the replaced region: same bounds, new text.
       expect(controller.searchScope, const TextRange(start: 4, end: 19));
+    });
+
+    testWidgets('a length-changing Replace All remaps the scope', (
+      tester,
+    ) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      controller.text.selection = const TextSelection(
+        baseOffset: 4,
+        extentOffset: 19,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      controller.replacement.text = 'cats';
+      await tester.pump();
+      // Same-length results cannot tell a remapped scope from a stale
+      // one — a longer replacement moves the end bound.
+      expect(await controller.replaceAll(), isTrue);
+      expect(controller.text.text, 'cat one cats two cats');
+      expect(controller.searchScope, const TextRange(start: 4, end: 21));
+    });
+
+    testWidgets('a backwards selection scopes the search the same', (
+      tester,
+    ) async {
+      final controller = _editor(text);
+      await tester.pumpWidget(_app(controller));
+      // Dragged backwards: the anchor sits at 19 and the caret at 4.
+      controller.text.selection = const TextSelection(
+        baseOffset: 19,
+        extentOffset: 4,
+      );
+      controller.findInSelection();
+      controller.search.text = 'cat';
+      await tester.pump();
+      expect(controller.searchScope, const TextRange(start: 4, end: 19));
+      expect(controller.matches, [
+        const TextRange(start: 8, end: 11),
+        const TextRange(start: 16, end: 19),
+      ]);
     });
 
     testWidgets('a collapsed caret cannot scope the search', (tester) async {

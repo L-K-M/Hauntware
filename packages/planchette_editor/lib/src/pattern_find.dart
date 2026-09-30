@@ -64,15 +64,18 @@ class PatternFind {
   /// Whether the held matches stop at [patternMatchLimit] with more to come.
   bool get capped => _results?.matches.capped ?? false;
 
-  /// Brings the search up to date with [text], [query] and the flags. When
-  /// the held matches are not for exactly these, it schedules a search, and
-  /// [page] serves nothing (or the matches carried through an edit) until it
-  /// settles.
+  /// Brings the search up to date with [text], [query] and the flags. With
+  /// [scope] — a stored find-in-selection range — the worker enumerates
+  /// only matches lying wholly inside it, so its limit bounds the scope,
+  /// not the document. When the held matches are not for exactly these, it
+  /// schedules a search, and [page] serves nothing (or the matches carried
+  /// through an edit) until it settles.
   void update(
     String text,
     String query, {
     required bool caseSensitive,
     required bool wholeWord,
+    ({int start, int end})? scope,
   }) {
     _compile(query, caseSensitive);
     if (_pattern == null) {
@@ -81,7 +84,14 @@ class PatternFind {
       _replaceFailure = null;
       return;
     }
-    final key = _Key(text, query, caseSensitive, wholeWord);
+    final key = _Key(
+      text,
+      query,
+      caseSensitive,
+      wholeWord,
+      scope?.start,
+      scope?.end,
+    );
     final results = _results;
     if (results != null && results.key.sameAs(key) && !results.provisional) {
       return;
@@ -93,19 +103,22 @@ class PatternFind {
   }
 
   /// Carries the held matches from [before] into [after], an edit that
-  /// replaced `[start, end)` with text [delta] code units longer, and searches
-  /// the edited text again.
+  /// replaced `[start, end)` with text [delta] code units longer, and
+  /// searches the edited text again. [scope] is the stored search scope
+  /// as the edit left it — the controller maps it first, so a scope the
+  /// edit consumed has already become null here.
   void followEdit(
     String before,
     String after, {
     required int start,
     required int end,
     required int delta,
+    ({int start, int end})? scope,
   }) {
     final results = _results;
     if (results != null && identical(results.key.text, before)) {
       _results = _Results(
-        results.key.withText(after),
+        results.key.withText(after).withScope(scope),
         results.matches.afterEdit(start: start, end: end, delta: delta),
         failure: results.failure,
         provisional: true,
@@ -116,7 +129,7 @@ class PatternFind {
     _replaceFailure = null;
     final search = _wanted ?? results?.key;
     if (_pattern == null || search == null) return;
-    _schedule(search.withText(after));
+    _schedule(search.withText(after).withScope(scope));
   }
 
   /// One page of the held matches of [text], in the shape literal search
@@ -253,6 +266,7 @@ class PatternFind {
       key.query,
       caseSensitive: key.caseSensitive,
       wholeWord: key.wholeWord,
+      scope: key.scope,
     );
     // A newer search, a closed find bar or disposal makes this answer
     // stale: the text or query it describes may be gone.
@@ -284,20 +298,39 @@ class PatternFind {
 /// What a search was for: the text by identity, since a full comparison of
 /// a large document per keystroke is what the cache is there to avoid.
 final class _Key {
-  const _Key(this.text, this.query, this.caseSensitive, this.wholeWord);
+  const _Key(
+    this.text,
+    this.query,
+    this.caseSensitive,
+    this.wholeWord, [
+    this.scopeStart,
+    this.scopeEnd,
+  ]);
 
   final String text;
   final String query;
   final bool caseSensitive;
   final bool wholeWord;
+  final int? scopeStart;
+  final int? scopeEnd;
+
+  /// The stored find-in-selection range as the core's bounds record.
+  ({int start, int end})? get scope =>
+      scopeStart == null ? null : (start: scopeStart!, end: scopeEnd!);
 
   bool sameAs(_Key other) =>
       identical(text, other.text) &&
       query == other.query &&
       caseSensitive == other.caseSensitive &&
-      wholeWord == other.wholeWord;
+      wholeWord == other.wholeWord &&
+      scopeStart == other.scopeStart &&
+      scopeEnd == other.scopeEnd;
 
-  _Key withText(String value) => _Key(value, query, caseSensitive, wholeWord);
+  _Key withText(String value) =>
+      _Key(value, query, caseSensitive, wholeWord, scopeStart, scopeEnd);
+
+  _Key withScope(({int start, int end})? scope) =>
+      _Key(text, query, caseSensitive, wholeWord, scope?.start, scope?.end);
 }
 
 final class _Results {

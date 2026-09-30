@@ -665,7 +665,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       _ when count != null => strings.lineMatchCount(count),
       _ => '',
     };
-    final ready = !_locked && !c.isBusy && count != null;
+    final ready = !_locked && !c.isBusy && c.canEditText && count != null;
     return _searchRow(
       field: Text(
         label,
@@ -714,7 +714,11 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           isDense: true,
           border: InputBorder.none,
         ),
-        onSubmitted: (_) => unawaited(c.applyExtract()),
+        onSubmitted: (_) {
+          if (!_locked && !c.isBusy && c.canEditText && count != null) {
+            unawaited(c.applyExtract());
+          }
+        },
       ),
       controls: [
         if (failure != null)
@@ -765,7 +769,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           },
         ),
         TextButton(
-          onPressed: !_locked && !c.isBusy && count != null
+          onPressed: !_locked && !c.isBusy && c.canEditText && count != null
               ? () => unawaited(c.applyExtract())
               : null,
           child: Text(strings.extractAction),
