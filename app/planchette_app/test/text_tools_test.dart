@@ -160,6 +160,8 @@ void main() {
       'Whitespace',
       'Clean Up',
       'Wrap',
+      'Encode',
+      'Insert',
     ]);
 
     final lines = text.menus
@@ -175,8 +177,11 @@ void main() {
     // An option tool's label ends in an ellipsis: it opens the tool bar.
     expect(leaves, [
       'Sort Lines…',
+      'Reverse Lines',
+      'Shuffle Lines',
       'Remove Duplicate Lines…',
       'Remove Blank Lines',
+      'Collapse Blank Lines',
       'Prefix/Suffix Lines…',
       'Number Lines…',
     ]);

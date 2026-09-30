@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:math' as math;
+
+import 'package:uuid/uuid.dart';
 
 import 'editor_syntax.dart' show isWordRune;
 import 'indentation.dart';
@@ -291,6 +294,18 @@ const textToolCatalog = <TextTool>[
     run: _sortLines,
   ),
   TextTool(
+    id: 'reverseLines',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    run: _reverseLines,
+  ),
+  TextTool(
+    id: 'shuffleLines',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    run: _shuffleLines,
+  ),
+  TextTool(
     id: 'removeDuplicateLines',
     group: TextToolGroup.lines,
     scope: TextToolScope.document,
@@ -308,6 +323,12 @@ const textToolCatalog = <TextTool>[
     group: TextToolGroup.lines,
     scope: TextToolScope.document,
     run: _removeBlankLines,
+  ),
+  TextTool(
+    id: 'collapseBlankLines',
+    group: TextToolGroup.lines,
+    scope: TextToolScope.document,
+    run: _collapseBlankLines,
   ),
   TextTool(
     id: 'prefixSuffixLines',
@@ -348,6 +369,48 @@ const textToolCatalog = <TextTool>[
     scope: TextToolScope.word,
     run: _toLowercase,
   ),
+  TextTool(
+    id: 'titleCase',
+    group: TextToolGroup.changeCase,
+    scope: TextToolScope.word,
+    run: _toTitleCase,
+  ),
+  TextTool(
+    id: 'sentenceCase',
+    group: TextToolGroup.changeCase,
+    scope: TextToolScope.word,
+    run: _toSentenceCase,
+  ),
+  TextTool(
+    id: 'camelCase',
+    group: TextToolGroup.changeCase,
+    scope: TextToolScope.word,
+    run: _toCamelCase,
+  ),
+  TextTool(
+    id: 'pascalCase',
+    group: TextToolGroup.changeCase,
+    scope: TextToolScope.word,
+    run: _toPascalCase,
+  ),
+  TextTool(
+    id: 'snakeCase',
+    group: TextToolGroup.changeCase,
+    scope: TextToolScope.word,
+    run: _toSnakeCase,
+  ),
+  TextTool(
+    id: 'kebabCase',
+    group: TextToolGroup.changeCase,
+    scope: TextToolScope.word,
+    run: _toKebabCase,
+  ),
+  TextTool(
+    id: 'constantCase',
+    group: TextToolGroup.changeCase,
+    scope: TextToolScope.word,
+    run: _toConstantCase,
+  ),
 
   // Whitespace
   TextTool(
@@ -355,6 +418,18 @@ const textToolCatalog = <TextTool>[
     group: TextToolGroup.whitespace,
     scope: TextToolScope.document,
     run: _trimTrailingWhitespace,
+  ),
+  TextTool(
+    id: 'trimLeadingWhitespace',
+    group: TextToolGroup.whitespace,
+    scope: TextToolScope.document,
+    run: _trimLeadingWhitespace,
+  ),
+  TextTool(
+    id: 'normalizeSpaces',
+    group: TextToolGroup.whitespace,
+    scope: TextToolScope.document,
+    run: _normalizeSpaces,
   ),
   TextTool(
     id: 'convertIndentationToSpaces',
@@ -370,12 +445,6 @@ const textToolCatalog = <TextTool>[
   ),
 
   // Clean Up
-  TextTool(
-    id: 'straightenQuotes',
-    group: TextToolGroup.cleanUp,
-    scope: TextToolScope.document,
-    run: _straightenQuotes,
-  ),
   TextTool(
     id: 'zapGremlins',
     group: TextToolGroup.cleanUp,
@@ -396,8 +465,26 @@ const textToolCatalog = <TextTool>[
     ],
     run: _zapGremlins,
   ),
+  TextTool(
+    id: 'straightenQuotes',
+    group: TextToolGroup.cleanUp,
+    scope: TextToolScope.document,
+    run: _straightenQuotes,
+  ),
+  TextTool(
+    id: 'removeAnsiEscapes',
+    group: TextToolGroup.cleanUp,
+    scope: TextToolScope.document,
+    run: _removeAnsiEscapes,
+  ),
 
   // Wrap
+  TextTool(
+    id: 'unwrapParagraphs',
+    group: TextToolGroup.wrap,
+    scope: TextToolScope.paragraph,
+    run: _unwrapParagraphs,
+  ),
   TextTool(
     id: 'joinLinesWith',
     group: TextToolGroup.wrap,
@@ -408,6 +495,82 @@ const textToolCatalog = <TextTool>[
       ToggleOption('skipBlankLines', value: true),
     ],
     run: _joinLinesWith,
+  ),
+
+  // Encode
+  TextTool(
+    id: 'urlEncode',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.selection,
+    run: _urlEncode,
+  ),
+  TextTool(
+    id: 'urlDecode',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.selection,
+    run: _urlDecode,
+  ),
+  TextTool(
+    id: 'base64Encode',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.selection,
+    run: _base64Encode,
+  ),
+  TextTool(
+    id: 'base64Decode',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.selection,
+    run: _base64Decode,
+  ),
+  TextTool(
+    id: 'htmlEntityEncode',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.selection,
+    run: _htmlEntityEncode,
+  ),
+  TextTool(
+    id: 'htmlEntityDecode',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.selection,
+    run: _htmlEntityDecode,
+  ),
+  TextTool(
+    id: 'escapeJsonString',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.selection,
+    run: _escapeJsonString,
+  ),
+  TextTool(
+    id: 'unescapeBackslashSequences',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.selection,
+    run: _unescapeBackslashSequences,
+  ),
+
+  // Insert
+  TextTool(
+    id: 'insertDate',
+    group: TextToolGroup.insert,
+    scope: TextToolScope.insertion,
+    run: _insertDate,
+  ),
+  TextTool(
+    id: 'insertDateTime',
+    group: TextToolGroup.insert,
+    scope: TextToolScope.insertion,
+    run: _insertDateTime,
+  ),
+  TextTool(
+    id: 'insertUtcTimestamp',
+    group: TextToolGroup.insert,
+    scope: TextToolScope.insertion,
+    run: _insertUtcTimestamp,
+  ),
+  TextTool(
+    id: 'insertUuid',
+    group: TextToolGroup.insert,
+    scope: TextToolScope.insertion,
+    run: _insertUuid,
   ),
 ];
 
@@ -1439,3 +1602,722 @@ TextToolOutcome _joinLinesWith(TextToolRun run) {
     scope: block.contents.length,
   );
 }
+
+// ── Slice replacement ─────────────────────────────────────────────────
+
+/// The outcome for replacing `[base, extent)` with [mapped]: a selection
+/// keeps covering its result, direction kept; a caret before the slice is
+/// untouched, a caret after it shifts with the length delta, and a caret
+/// inside lands at the result's end.
+TextToolOutcome _replaceSlice(
+  TextToolRun run,
+  String mapped, {
+  required int changed,
+  required int scope,
+}) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final newText = run.text.replaceRange(start, end, mapped);
+  final LineEdit edit;
+  if (run.ranOn == TextToolRanOn.selection) {
+    final blockEnd = start + mapped.length;
+    edit = LineEdit(
+      newText,
+      run.base < run.extent ? start : blockEnd,
+      run.base < run.extent ? blockEnd : start,
+    );
+  } else {
+    final int caret;
+    if (run.caret <= start) {
+      caret = run.caret;
+    } else if (run.caret >= end) {
+      caret = run.caret + mapped.length - (end - start);
+    } else {
+      // Inside the slice: keep the offset when the length holds, land at
+      // the result's end when it shrank or grew.
+      final inside = run.caret - start;
+      caret = start + (inside > mapped.length ? mapped.length : inside);
+    }
+    edit = LineEdit(newText, caret, caret);
+  }
+  return TextToolChanged(edit, changed: changed, scope: scope);
+}
+
+/// Runs [map] over the resolved slice — a word or a selection — and
+/// replaces it when it changed. Returns null when it did not, letting
+/// tools compose `?? unchanged` fallbacks.
+TextToolOutcome? _mapSlice(TextToolRun run, String Function(String) map) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
+  final mapped = map(slice);
+  if (mapped == slice) return null;
+  return _replaceSlice(run, mapped, changed: slice.length, scope: slice.length);
+}
+
+// ── Line ordering ─────────────────────────────────────────────────────
+
+TextToolOutcome _reverseLines(TextToolRun run) {
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+  final n = block.contents.length;
+  if (n < 2) return TextToolUnchanged(scope: n);
+  return _blockEdit(
+    run,
+    range.start,
+    range.end,
+    _joinLines(block.contents.reversed.toList(), block.breaks),
+    changed: n,
+    scope: n,
+  );
+}
+
+TextToolOutcome _shuffleLines(TextToolRun run) {
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+  final n = block.contents.length;
+  if (n < 2) return TextToolUnchanged(scope: n);
+  final shuffled = [...block.contents]..shuffle(run.context.random);
+  var moved = 0;
+  for (var i = 0; i < n; i++) {
+    if (shuffled[i] != block.contents[i]) moved++;
+  }
+  if (moved == 0) return TextToolUnchanged(scope: n);
+  return _blockEdit(
+    run,
+    range.start,
+    range.end,
+    _joinLines(shuffled, block.breaks),
+    changed: moved,
+    scope: n,
+  );
+}
+
+/// Collapses every run of blank lines to a single blank line.
+TextToolOutcome _collapseBlankLines(TextToolRun run) {
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+  final n = block.contents.length;
+  final remove = List.filled(n, false);
+  var collapsed = 0;
+  var inRun = false;
+  for (var i = 0; i < n; i++) {
+    final line = block.contents[i];
+    if (!_isBlankRange(line, 0, line.length)) {
+      inRun = false;
+      continue;
+    }
+    if (inRun) {
+      remove[i] = true;
+      collapsed++;
+    } else {
+      inRun = true;
+    }
+  }
+  return _spanEdit(
+    run,
+    _lineDeletions(block, remove),
+    changed: collapsed,
+    scope: n,
+  );
+}
+
+// ── Case ──────────────────────────────────────────────────────────────
+
+/// Whether [ch] is a cased letter in the given direction.
+bool _isLowerLetter(String ch) =>
+    ch.toLowerCase() == ch && ch.toUpperCase() != ch;
+bool _isUpperLetter(String ch) =>
+    ch.toUpperCase() == ch && ch.toLowerCase() != ch;
+
+/// The first rune of [word] uppercased, the rest as given.
+String _capitalize(String word) {
+  if (word.isEmpty) return word;
+  final first = _runeLength(word.codeUnitAt(0));
+  return word.substring(0, first).toUpperCase() + word.substring(first);
+}
+
+/// Splits [text] into identifier words: boundaries at non-alphanumerics,
+/// a lower-case-to-upper camel hump, and an acronym tail — 'XMLHttp'
+/// splits into 'XML' and 'Http'. Digits stay with their word.
+List<String> _identifierWords(String text) {
+  final runes = text.runes.toList();
+  final words = <String>[];
+  final current = StringBuffer();
+  var prevWasUpper = false;
+  var prevWasAlnum = false;
+
+  void flush() {
+    if (current.isNotEmpty) {
+      words.add(current.toString());
+      current.clear();
+    }
+  }
+
+  for (var i = 0; i < runes.length; i++) {
+    final ch = String.fromCharCode(runes[i]);
+    final upper = _isUpperLetter(ch);
+    final alnum = upper || _isLowerLetter(ch) || _isDigit(runes[i]);
+    if (!alnum) {
+      flush();
+      prevWasUpper = false;
+      prevWasAlnum = false;
+      continue;
+    }
+    if (upper &&
+        prevWasAlnum &&
+        (!prevWasUpper ||
+            (i + 1 < runes.length &&
+                _isLowerLetter(String.fromCharCode(runes[i + 1]))))) {
+      flush();
+    }
+    current.write(ch);
+    prevWasUpper = upper;
+    prevWasAlnum = true;
+  }
+  flush();
+  return words;
+}
+
+/// Uppercases the first letter of each whitespace-separated word and
+/// lowercases the rest.
+TextToolOutcome _toTitleCase(TextToolRun run) =>
+    _mapSlice(
+      run,
+      (slice) => slice.splitMapJoin(
+        RegExp(r'\s+'),
+        onNonMatch: (word) => _capitalize(word.toLowerCase()),
+      ),
+    ) ??
+    TextToolUnchanged(scope: (run.extent - run.base).abs());
+
+/// Lowercases the slice, then uppercases the first letter after the start
+/// and after each '.', '!', '?' or line break.
+TextToolOutcome _toSentenceCase(TextToolRun run) =>
+    _mapSlice(run, (slice) {
+      final out = StringBuffer();
+      var capitalizeNext = true;
+      for (final r in slice.toLowerCase().runes) {
+        final ch = String.fromCharCode(r);
+        if (capitalizeNext && _isLowerLetter(ch)) {
+          out.write(ch.toUpperCase());
+          capitalizeNext = false;
+        } else {
+          out.write(ch);
+          if (ch == '.' || ch == '!' || ch == '?' || ch == '\n' || ch == '\r') {
+            capitalizeNext = true;
+          }
+        }
+      }
+      return out.toString();
+    }) ??
+    TextToolUnchanged(scope: (run.extent - run.base).abs());
+
+TextToolOutcome _identifierCase(
+  TextToolRun run,
+  String Function(List<String>) combine,
+) =>
+    _mapSlice(run, (slice) {
+      final words = _identifierWords(slice);
+      return words.isEmpty ? slice : combine(words);
+    }) ??
+    TextToolUnchanged(scope: (run.extent - run.base).abs());
+
+TextToolOutcome _toCamelCase(TextToolRun run) => _identifierCase(run, (words) {
+  final lower = [for (final w in words) w.toLowerCase()];
+  return lower.first + lower.skip(1).map(_capitalize).join();
+});
+
+TextToolOutcome _toPascalCase(TextToolRun run) => _identifierCase(
+  run,
+  (words) => [for (final w in words) _capitalize(w.toLowerCase())].join(),
+);
+
+TextToolOutcome _toSnakeCase(TextToolRun run) => _identifierCase(
+  run,
+  (words) => [for (final w in words) w.toLowerCase()].join('_'),
+);
+
+TextToolOutcome _toKebabCase(TextToolRun run) => _identifierCase(
+  run,
+  (words) => [for (final w in words) w.toLowerCase()].join('-'),
+);
+
+TextToolOutcome _toConstantCase(TextToolRun run) => _identifierCase(
+  run,
+  (words) => [for (final w in words) w.toUpperCase()].join('_'),
+);
+
+// ── Whitespace ────────────────────────────────────────────────────────
+
+TextToolOutcome _trimLeadingWhitespace(TextToolRun run) {
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+  final edits = <_Edit>[];
+  for (var i = 0; i < block.contents.length; i++) {
+    final end = _indentEnd(block.contents[i]);
+    if (end > 0) {
+      edits.add((
+        start: block.starts[i],
+        end: block.starts[i] + end,
+        insert: '',
+      ));
+    }
+  }
+  return _spanEdit(
+    run,
+    edits,
+    changed: edits.length,
+    scope: block.contents.length,
+  );
+}
+
+/// Unicode space characters that [normalizeSpaces] folds to U+0020:
+/// no-break, ogham, the U+2000 block, narrow/medium/ideographic. Line
+/// separators (NEL, U+2028, U+2029) are line structure, not spaces.
+bool _isUnicodeSpace(int unit) =>
+    unit == 0x00a0 ||
+    unit == 0x1680 ||
+    (unit >= 0x2000 && unit <= 0x200a) ||
+    unit == 0x202f ||
+    unit == 0x205f ||
+    unit == 0x3000;
+
+TextToolOutcome _normalizeSpaces(TextToolRun run) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
+  var changed = 0;
+  final out = StringBuffer();
+  for (var i = 0; i < slice.length; i++) {
+    if (_isUnicodeSpace(slice.codeUnitAt(i))) {
+      out.write(' ');
+      changed++;
+    } else {
+      out.write(slice[i]);
+    }
+  }
+  if (changed == 0) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    out.toString(),
+    changed: changed,
+    scope: slice.length,
+  );
+}
+
+// ── Clean Up ──────────────────────────────────────────────────────────
+
+/// ANSI escape sequences: OSC (ESC ] … BEL or ST), string sequences
+/// (DCS, SOS, PM, APC — ESC P/X/^/_ … ST), CSI (ESC [ params final) and
+/// the remaining two-or-more-byte escape forms.
+final _ansiPattern = RegExp(
+  '\x1B\\][^\x07\x1B]*(?:\x07|\x1B\\\\)'
+  '|\x1B[PX^_][^\x1B]*\x1B\\\\'
+  '|\x1B\\[[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]'
+  '|\x1B[\\x20-\\x2F]*[\\x30-\\x7E]',
+);
+
+TextToolOutcome _removeAnsiEscapes(TextToolRun run) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
+  final removed = _ansiPattern.allMatches(slice).length;
+  if (removed == 0) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    slice.replaceAll(_ansiPattern, ''),
+    changed: removed,
+    scope: slice.length,
+  );
+}
+
+// ── Wrap ──────────────────────────────────────────────────────────────
+
+/// Joins each run of non-blank lines into one line; blank lines stay as
+/// separators between paragraphs.
+TextToolOutcome _unwrapParagraphs(TextToolRun run) {
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+  final n = block.contents.length;
+  final contents = <String>[];
+  final breaks = <String>[];
+  var joins = 0;
+  var i = 0;
+  while (i < n) {
+    final line = block.contents[i];
+    if (_isBlankRange(line, 0, line.length)) {
+      contents.add(line);
+      if (i < n - 1) breaks.add(block.breaks[i]);
+      i++;
+      continue;
+    }
+    var j = i;
+    while (j + 1 < n) {
+      final next = block.contents[j + 1];
+      if (_isBlankRange(next, 0, next.length)) break;
+      j++;
+    }
+    joins += j - i;
+    contents.add(
+      [for (var k = i; k <= j; k++) block.contents[k].trim()].join(' '),
+    );
+    if (j < n - 1) breaks.add(block.breaks[j]);
+    i = j + 1;
+  }
+  if (joins == 0) return TextToolUnchanged(scope: n);
+  return _blockEdit(
+    run,
+    range.start,
+    range.end,
+    _joinLines(contents, breaks),
+    changed: joins,
+    scope: n,
+  );
+}
+
+// ── Encode ────────────────────────────────────────────────────────────
+
+/// The resolved slice — encoders all require a selection.
+String _sliceOf(TextToolRun run) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  return run.text.substring(start, end);
+}
+
+TextToolOutcome _urlEncode(TextToolRun run) =>
+    _mapSlice(run, Uri.encodeComponent) ??
+    TextToolUnchanged(scope: _sliceOf(run).length);
+
+bool _isHexDigit(int unit) =>
+    _isDigit(unit) ||
+    (unit >= 0x61 && unit <= 0x66) ||
+    (unit >= 0x41 && unit <= 0x46);
+
+/// Percent-decodes valid '%XX' runs and leaves the rest literal — a
+/// malformed '%' or bytes that do not form UTF-8 stay as they were.
+TextToolOutcome _urlDecode(TextToolRun run) {
+  final slice = _sliceOf(run);
+  final out = StringBuffer();
+  final bytes = <int>[];
+  var decoded = 0;
+
+  void flushBytes() {
+    if (bytes.isEmpty) return;
+    try {
+      out.write(utf8.decode(bytes));
+      decoded += bytes.length;
+    } catch (_) {
+      // Not valid UTF-8 — write the escapes back literally.
+      for (final b in bytes) {
+        out.write('%');
+        out.write(b.toRadixString(16).toUpperCase().padLeft(2, '0'));
+      }
+    }
+    bytes.clear();
+  }
+
+  var i = 0;
+  while (i < slice.length) {
+    if (slice.codeUnitAt(i) == 0x25 &&
+        i + 2 < slice.length &&
+        _isHexDigit(slice.codeUnitAt(i + 1)) &&
+        _isHexDigit(slice.codeUnitAt(i + 2))) {
+      bytes.add(int.parse(slice.substring(i + 1, i + 3), radix: 16));
+      i += 3;
+      continue;
+    }
+    flushBytes();
+    out.write(slice[i]);
+    i++;
+  }
+  flushBytes();
+  if (decoded == 0) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    out.toString(),
+    changed: decoded,
+    scope: slice.length,
+  );
+}
+
+TextToolOutcome _base64Encode(TextToolRun run) {
+  final slice = _sliceOf(run);
+  return _replaceSlice(
+    run,
+    base64.encode(utf8.encode(slice)),
+    changed: slice.length,
+    scope: slice.length,
+  );
+}
+
+TextToolOutcome _base64Decode(TextToolRun run) {
+  final slice = _sliceOf(run);
+  final cleaned = slice.replaceAll(RegExp(r'\s+'), '');
+  if (cleaned.isEmpty) return TextToolUnchanged(scope: slice.length);
+  final List<int> bytes;
+  try {
+    bytes = base64.decode(cleaned);
+  } on FormatException {
+    return TextToolUnchanged(scope: slice.length);
+  }
+  final String decoded;
+  try {
+    decoded = utf8.decode(bytes);
+  } on FormatException {
+    // Decodes to bytes that are not text — leave the buffer alone.
+    return TextToolRefused(TextToolRefusal.resultNotText);
+  }
+  if (decoded.contains('\x00')) {
+    return TextToolRefused(TextToolRefusal.resultNotText);
+  }
+  return _replaceSlice(
+    run,
+    decoded,
+    changed: cleaned.length,
+    scope: slice.length,
+  );
+}
+
+/// The named HTML entities a decode recognizes; encode writes &amp;, &lt;,
+/// &gt;, &quot; and numeric references only.
+const _namedEntities = {
+  'amp': 0x26,
+  'lt': 0x3c,
+  'gt': 0x3e,
+  'quot': 0x22,
+  'apos': 0x27,
+  'nbsp': 0xa0,
+  'copy': 0xa9,
+  'reg': 0xae,
+  'trade': 0x2122,
+  'hellip': 0x2026,
+  'mdash': 0x2014,
+  'ndash': 0x2013,
+  'lsquo': 0x2018,
+  'rsquo': 0x2019,
+  'ldquo': 0x201c,
+  'rdquo': 0x201d,
+  'laquo': 0xab,
+  'raquo': 0xbb,
+  'deg': 0xb0,
+  'plusmn': 0xb1,
+  'middot': 0xb7,
+  'para': 0xb6,
+  'sect': 0xa7,
+  'cent': 0xa2,
+  'pound': 0xa3,
+  'yen': 0xa5,
+  'euro': 0x20ac,
+  'times': 0xd7,
+  'divide': 0xf7,
+  'bull': 0x2022,
+  'dagger': 0x2020,
+  'Dagger': 0x2021,
+};
+
+final _entityPattern = RegExp(r'&(#x?[0-9a-zA-Z]+|\w+);');
+
+TextToolOutcome _htmlEntityEncode(TextToolRun run) {
+  final slice = _sliceOf(run);
+  var changed = 0;
+  final out = StringBuffer();
+  for (final r in slice.runes) {
+    final escaped = switch (r) {
+      0x26 => '&amp;',
+      0x3c => '&lt;',
+      0x3e => '&gt;',
+      0x22 => '&quot;',
+      0x27 => '&#39;',
+      _ => null,
+    };
+    if (escaped != null) {
+      out.write(escaped);
+      changed++;
+    } else if (r > 0x7f) {
+      out.write('&#$r;');
+      changed++;
+    } else {
+      out.writeCharCode(r);
+    }
+  }
+  if (changed == 0) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    out.toString(),
+    changed: changed,
+    scope: slice.length,
+  );
+}
+
+/// Decodes numeric and named entities; an entity that does not resolve —
+/// or resolves to NUL or a surrogate half — stays literal.
+TextToolOutcome _htmlEntityDecode(TextToolRun run) {
+  final slice = _sliceOf(run);
+  var changed = 0;
+  final decoded = slice.replaceAllMapped(_entityPattern, (m) {
+    final body = m.group(1)!;
+    int? rune;
+    if (body.startsWith('#x') || body.startsWith('#X')) {
+      rune = int.tryParse(body.substring(2), radix: 16);
+    } else if (body.startsWith('#')) {
+      rune = int.tryParse(body.substring(1));
+    } else {
+      rune = _namedEntities[body];
+    }
+    if (rune == null ||
+        rune == 0 ||
+        rune > 0x10ffff ||
+        (rune >= 0xd800 && rune <= 0xdfff)) {
+      return m.group(0)!;
+    }
+    changed++;
+    return String.fromCharCode(rune);
+  });
+  if (changed == 0) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(run, decoded, changed: changed, scope: slice.length);
+}
+
+/// Escapes the slice as the body of a JSON string: quotes, backslashes
+/// and control characters, no surrounding quotes.
+TextToolOutcome _escapeJsonString(TextToolRun run) {
+  final slice = _sliceOf(run);
+  var changed = 0;
+  final out = StringBuffer();
+  for (final r in slice.runes) {
+    final escaped = switch (r) {
+      0x22 => '\\"',
+      0x5c => '\\\\',
+      0x0a => '\\n',
+      0x09 => '\\t',
+      0x0d => '\\r',
+      0x08 => '\\b',
+      0x0c => '\\f',
+      _ => null,
+    };
+    if (escaped != null) {
+      out.write(escaped);
+      changed++;
+    } else if (r < 0x20) {
+      out.write('\\u${r.toRadixString(16).padLeft(4, '0')}');
+      changed++;
+    } else {
+      out.writeCharCode(r);
+    }
+  }
+  if (changed == 0) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    out.toString(),
+    changed: changed,
+    scope: slice.length,
+  );
+}
+
+/// Decodes backslash escapes — \n \t \r \b \f \v \a \\ \" \' \xNN \uXXXX
+/// — and leaves anything else, including a NUL-producing \0 or \x00,
+/// literal.
+TextToolOutcome _unescapeBackslashSequences(TextToolRun run) {
+  final slice = _sliceOf(run);
+  var changed = 0;
+  final out = StringBuffer();
+  var i = 0;
+  while (i < slice.length) {
+    if (slice[i] != '\\' || i + 1 >= slice.length) {
+      out.write(slice[i]);
+      i++;
+      continue;
+    }
+    final next = slice[i + 1];
+    final simple = switch (next) {
+      'n' => '\n',
+      't' => '\t',
+      'r' => '\r',
+      'b' => '\b',
+      'f' => '\f',
+      'v' => '\x0b',
+      'a' => '\x07',
+      '\\' => '\\',
+      '"' => '"',
+      "'" => "'",
+      _ => null,
+    };
+    if (simple != null) {
+      out.write(simple);
+      changed++;
+      i += 2;
+      continue;
+    }
+    final hexCount = next == 'x' ? 2 : (next == 'u' ? 4 : 0);
+    if (hexCount > 0 &&
+        i + 1 + hexCount < slice.length &&
+        [
+          for (var k = 0; k < hexCount; k++)
+            _isHexDigit(slice.codeUnitAt(i + 2 + k)),
+        ].every((ok) => ok)) {
+      final rune = int.parse(
+        slice.substring(i + 2, i + 2 + hexCount),
+        radix: 16,
+      );
+      if (rune != 0 && !(rune >= 0xd800 && rune <= 0xdfff)) {
+        out.write(String.fromCharCode(rune));
+        changed++;
+        i += 2 + hexCount;
+        continue;
+      }
+    }
+    // Not a recognized escape — keep it literal.
+    out.write(slice[i]);
+    i++;
+  }
+  if (changed == 0) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    out.toString(),
+    changed: changed,
+    scope: slice.length,
+  );
+}
+
+// ── Insert ────────────────────────────────────────────────────────────
+
+/// Inserts [text] at the caret, or over the selection when there is one,
+/// and leaves the caret after it.
+TextToolOutcome _insertText(TextToolRun run, String text) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final caret = start + text.length;
+  return TextToolChanged(
+    LineEdit(run.text.replaceRange(start, end, text), caret, caret),
+    changed: text.length,
+    scope: 1,
+  );
+}
+
+String _two(int value) => value.toString().padLeft(2, '0');
+
+TextToolOutcome _insertDate(TextToolRun run) {
+  final now = run.context.now();
+  return _insertText(run, '${now.year}-${_two(now.month)}-${_two(now.day)}');
+}
+
+TextToolOutcome _insertDateTime(TextToolRun run) {
+  final now = run.context.now();
+  return _insertText(
+    run,
+    '${now.year}-${_two(now.month)}-${_two(now.day)}'
+    'T${_two(now.hour)}:${_two(now.minute)}:${_two(now.second)}',
+  );
+}
+
+TextToolOutcome _insertUtcTimestamp(TextToolRun run) {
+  final utc = run.context.now().toUtc();
+  return _insertText(
+    run,
+    '${utc.year}-${_two(utc.month)}-${_two(utc.day)}'
+    'T${_two(utc.hour)}:${_two(utc.minute)}:${_two(utc.second)}Z',
+  );
+}
+
+TextToolOutcome _insertUuid(TextToolRun run) =>
+    _insertText(run, const Uuid().v4());
