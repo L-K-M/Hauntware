@@ -68,6 +68,8 @@ case "$target" in
       cp -R "$destination" "$installed"
       cp "$root/media-sources/icon.png" "$HOME/.local/share/icons/hicolor/256x256/apps/planchette.png"
       rm -f "$HOME/.local/share/applications/com.lkm.planchette_app.desktop"
+      # Repoint any saved default-handler association to the renamed desktop file.
+      sed -i 's/com\.lkm\.planchette_app\.desktop/ch.lkmc.planchette.desktop/g' "$HOME/.config/mimeapps.list" 2>/dev/null || true
       cat > "$HOME/.local/share/applications/ch.lkmc.planchette.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
