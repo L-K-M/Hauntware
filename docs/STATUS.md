@@ -9646,9 +9646,14 @@ the transfer journal or remote protocol.
   a per-destination lock, Keep Both resolution, and native atomic no-replace so
   partial output is never published and an external writer is not replaced.
 
-Verification so far: all 68 archive/native tests and all 68 local-filesystem
-safety tests pass; the full core run reports 1,835 passing tests and 27
-environment skips. The full app run reports 3,051 passing tests; the import
+Review hardening preserves native buffers when growth allocation fails, falls
+back to raw `renameat2` syscalls on older Linux libc, rejects truncated
+descriptor identity data and signed-negative ZIP64 sizes, reports native seek
+paths, and treats unreadable stale-stage listings as best-effort cleanup.
+
+Verification so far: all 84 archive/native tests and all 68 local-filesystem
+safety tests pass; the full core run reports 1,851 passing tests and 27
+environment skips. The full app run reports 3,052 passing tests; the import
 guard and benchmark runs report 95 and 140 passing tests. Core and Flutter
 analysis are clean. Linux native behavior is exercised. A debug APK built,
 installed, and launched on a real Android 28 x86_64 emulator; matching File-menu
