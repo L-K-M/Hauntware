@@ -357,21 +357,43 @@ class _DocumentShellState extends State<_DocumentShell> {
   /// The editor's display strings, for Text-menu tool names.
   static const _editorStrings = EditorStrings();
 
-  /// Lists every command the menus enable right now. The native macOS menu
-  /// stays live under the palette, so a second request is ignored.
+  /// Lists every command the menus define, enabled or not — a greyed row
+  /// still answers "where does that live". The native macOS menu stays
+  /// live under the palette, so a second request is ignored.
   Future<void> _openPalette() async {
     if (_paletteOpen || workspace.interactionLocked) return;
-    final commands = [
-      for (final menu in _menus())
-        for (final entry in menu.items)
-          if (entry is _Command && entry.enabled && entry.run != _openPalette)
-            PaletteCommand(
-              group: menu.label,
-              label: entry.label,
-              run: () => _runCurrent(menu.label, entry.label),
-              shortcut: entry.shortcut,
-            ),
-    ];
+    final commands = <PaletteCommand>[];
+    void collect(List<_MenuEntry> items, String path) {
+      for (final entry in items) {
+        switch (entry) {
+          case _Submenu(:final items, :final label):
+            collect(items, '$path > $label');
+          case _Command() when entry.run != _openPalette:
+            final tool = textToolById(entry.commandId);
+            commands.add(
+              PaletteCommand(
+                id: entry.commandId,
+                label: entry.label,
+                path: path,
+                description: tool == null
+                    ? ''
+                    : _editorStrings.textToolDescription(tool.id),
+                keywords: tool == null
+                    ? const []
+                    : _editorStrings.textToolKeywords(tool.id),
+                enabled: entry.enabled,
+                run: () => _runCurrent(entry.commandId),
+                shortcut: entry.shortcut,
+              ),
+            );
+          case _Command() || _Separator():
+        }
+      }
+    }
+
+    for (final menu in _menus()) {
+      collect(menu.items, menu.label);
+    }
     _paletteOpen = true;
     try {
       await showCommandPalette(context, commands);
@@ -380,20 +402,36 @@ class _DocumentShellState extends State<_DocumentShell> {
     }
   }
 
+  /// The menu's command for [commandId], descending into submenus.
+  _Command? _commandById(String commandId) {
+    _Command? find(List<_MenuEntry> items) {
+      for (final entry in items) {
+        switch (entry) {
+          case _Submenu(:final items):
+            final found = find(items);
+            if (found != null) return found;
+          case _Command() when entry.commandId == commandId:
+            return entry;
+          case _Command() || _Separator():
+        }
+      }
+      return null;
+    }
+
+    for (final menu in _menus()) {
+      final found = find(menu.items);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
   /// Runs a command the palette offered as the menus define it now: the
   /// native menu stays live under the palette, so the active tab, or whether
   /// the command still applies, may have changed since it opened.
-  void _runCurrent(String menuLabel, String label) {
+  void _runCurrent(String commandId) {
     if (!mounted) return;
-    for (final menu in _menus()) {
-      if (menu.label != menuLabel) continue;
-      for (final entry in menu.items) {
-        if (entry is _Command && entry.label == label) {
-          if (entry.enabled) entry.run();
-          return;
-        }
-      }
-    }
+    final command = _commandById(commandId);
+    if (command != null && command.enabled) command.run();
   }
 
   void _find({bool replace = false}) {
@@ -589,14 +627,27 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: inDocument && (active?.editor.canToggleComment ?? false),
         ),
       ]),
-      // The catalog drives the list; a tool that needs options or a
-      // pattern runs at its defaults here.
+      // The catalog drives the menu: one submenu per group that has at
+      // least one built tool — a group not yet built is absent rather
+      // than empty. A tool that needs options runs at its defaults here.
       _ShellMenu('Text', [
-        for (final tool in textToolCatalog)
-          _Command(_editorStrings.textToolName(tool.id), () {
-            final editor = active?.editor;
-            if (editor != null) unawaited(editor.runTextTool(tool.id));
-          }, enabled: lineCommands),
+        for (final group in TextToolGroup.values)
+          if (textToolCatalog.any((tool) => tool.group == group))
+            _Submenu(_editorStrings.textToolGroupName(group), [
+              for (final tool in textToolCatalog)
+                if (tool.group == group)
+                  _Command(
+                    _editorStrings.textToolName(tool.id),
+                    () {
+                      final editor = active?.editor;
+                      if (editor != null) {
+                        unawaited(editor.runTextTool(tool.id));
+                      }
+                    },
+                    enabled: lineCommands,
+                    id: tool.id,
+                  ),
+            ]),
       ]),
       _ShellMenu('Find', [
         _Command(
@@ -722,18 +773,24 @@ class _DocumentShellState extends State<_DocumentShell> {
     }
 
     for (final entry in entries) {
-      if (entry is _Separator) {
-        flush();
-        continue;
+      switch (entry) {
+        case _Separator():
+          flush();
+        case _Submenu():
+          // A submenu is one item to its parent; it shares the current
+          // group so adjacent submenus are not separated by dividers.
+          group.add(
+            PlatformMenu(label: entry.label, menus: _nativeItems(entry.items)),
+          );
+        case _Command():
+          group.add(
+            PlatformMenuItem(
+              label: entry.label,
+              shortcut: entry.shortcut,
+              onSelected: entry.enabled ? entry.run : null,
+            ),
+          );
       }
-      final command = entry as _Command;
-      group.add(
-        PlatformMenuItem(
-          label: command.label,
-          shortcut: command.shortcut,
-          onSelected: command.enabled ? command.run : null,
-        ),
-      );
     }
     flush();
     return groups;
@@ -806,6 +863,22 @@ class _DocumentShellState extends State<_DocumentShell> {
     child: child,
   );
 
+  List<Widget> _menuBarItems(List<_MenuEntry> entries) => [
+    for (final entry in entries)
+      switch (entry) {
+        _Separator() => const Divider(height: 8),
+        _Submenu() => SubmenuButton(
+          menuChildren: _menuBarItems(entry.items),
+          child: Text(entry.label),
+        ),
+        _Command() => MenuItemButton(
+          onPressed: entry.enabled ? entry.run : null,
+          shortcut: entry.shortcut,
+          child: Text(entry.label),
+        ),
+      },
+  ];
+
   Widget _menuBar(List<_ShellMenu> menus) => MenuBar(
     style: MenuStyle(
       elevation: const WidgetStatePropertyAll(0),
@@ -816,17 +889,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     children: [
       for (final menu in menus)
         SubmenuButton(
-          menuChildren: [
-            for (final entry in menu.items)
-              if (entry is _Separator)
-                const Divider(height: 8)
-              else if (entry is _Command)
-                MenuItemButton(
-                  onPressed: entry.enabled ? entry.run : null,
-                  shortcut: entry.shortcut,
-                  child: Text(entry.label),
-                ),
-          ],
+          menuChildren: _menuBarItems(menu.items),
           child: Text(menu.label),
         ),
     ],
@@ -838,19 +901,30 @@ class _DocumentShellState extends State<_DocumentShell> {
     final tabs = workspace.documents;
     final active = workspace.active;
     final scheme = Theme.of(context).colorScheme;
-    final shortcuts = <ShortcutActivator, VoidCallback>{
-      for (final menu in menus)
-        for (final entry in menu.items)
-          if (entry is _Command &&
-              entry.shortcut != null &&
-              menu.label != 'Edit')
-            for (final shortcut in [entry.shortcut!, ...entry.aliases])
-              shortcut: () {
+    final shortcuts = <ShortcutActivator, VoidCallback>{};
+    void bindShortcuts(List<_MenuEntry> items) {
+      for (final entry in items) {
+        switch (entry) {
+          case _Submenu(:final items):
+            bindShortcuts(items);
+          case _Command() when entry.shortcut != null:
+            for (final shortcut in [entry.shortcut!, ...entry.aliases]) {
+              shortcuts[shortcut] = () {
                 if (entry.enabled) entry.run();
-              },
-      for (var number = 1; number <= 9; number++)
-        _shortcut(_digits[number]): () => _selectNumbered(number),
-    };
+              };
+            }
+          case _Command() || _Separator():
+        }
+      }
+    }
+
+    for (final menu in menus) {
+      // The field owns Edit's chords, so they are not bound here.
+      if (menu.label != 'Edit') bindShortcuts(menu.items);
+    }
+    for (var number = 1; number <= 9; number++) {
+      shortcuts[_shortcut(_digits[number])] = () => _selectNumbered(number);
+    }
     Widget body = CallbackShortcuts(
       bindings: shortcuts,
       // Keep focus below the shortcuts when the final editor is disposed.
@@ -1086,6 +1160,15 @@ final class _Separator extends _MenuEntry {
   const _Separator();
 }
 
+/// A labelled group of entries nested one level under its menu. Menus
+/// never go deeper: Apple's and Windows' guidance both stop at one level
+/// of submenus.
+final class _Submenu extends _MenuEntry {
+  const _Submenu(this.label, this.items);
+  final String label;
+  final List<_MenuEntry> items;
+}
+
 final class _Command extends _MenuEntry {
   const _Command(
     this.label,
@@ -1093,7 +1176,13 @@ final class _Command extends _MenuEntry {
     this.shortcut,
     this.aliases = const [],
     this.enabled = true,
+    this.id,
   });
+
+  /// The stable identifier the palette resolves the command by, so a row
+  /// whose label changes — Repeat names its target — still resolves.
+  /// Defaults to the label, which is unique per menu today.
+  final String? id;
   final String label;
   final VoidCallback run;
   final SingleActivator? shortcut;
@@ -1101,4 +1190,6 @@ final class _Command extends _MenuEntry {
   /// More key combinations for the same command, not shown in menus.
   final List<SingleActivator> aliases;
   final bool enabled;
+
+  String get commandId => id ?? label;
 }

@@ -3,19 +3,40 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// One command the palette can run: a menu item, named with its menu.
+/// One command the palette can run: a menu item, named with its path.
 final class PaletteCommand {
   const PaletteCommand({
-    required this.group,
+    required this.id,
     required this.label,
+    required this.path,
     required this.run,
+    this.description = '',
+    this.keywords = const [],
     this.shortcut,
+    this.enabled = true,
   });
 
-  final String group;
+  /// The menu's stable identifier for the command, so a label that
+  /// changes still resolves.
+  final String id;
   final String label;
+
+  /// Where the command lives in the menus, shown on the row so a palette
+  /// search teaches where the item is: "Text > Lines".
+  final String path;
+
+  /// What the command does, on the row's second line.
+  final String description;
+
+  /// More words the command matches by — "dedupe" finds Remove
+  /// Duplicate Lines.
+  final List<String> keywords;
   final VoidCallback run;
   final SingleActivator? shortcut;
+
+  /// Whether the command applies right now; a greyed row stays listed so
+  /// the palette still answers "where is that command".
+  final bool enabled;
 }
 
 /// Shows the palette over [context]'s navigator and runs the command the
@@ -144,10 +165,12 @@ class CommandPalette extends StatefulWidget {
   State<CommandPalette> createState() => _CommandPaletteState();
 }
 
-typedef _Row = ({PaletteCommand command, List<int> positions});
+/// A listed command plus how it matched: label characters to bold, and
+/// the keyword it matched when the label did not.
+typedef _Row = ({PaletteCommand command, List<int> positions, String? keyword});
 
 class _CommandPaletteState extends State<CommandPalette> {
-  static const _rowHeight = 36.0;
+  static const _rowHeight = 48.0;
   static const _visibleRows = 10;
 
   final _query = TextEditingController();
@@ -175,25 +198,44 @@ class _CommandPaletteState extends State<CommandPalette> {
 
   void _filter() {
     _filtered = _query.text;
-    final scored = <({_Row row, bool byMenu, int score, int order})>[];
+    // Tiers: a label match, then a keyword match, then a path match.
+    // "dedupe" matches Remove Duplicate Lines by keyword; typing "text"
+    // lists the menu by path.
+    final scored = <({_Row row, int tier, int score, int order})>[];
     for (var i = 0; i < widget.commands.length; i++) {
       final command = widget.commands[i];
       final match = fuzzyMatch(_query.text, command.label);
       if (match != null) {
         scored.add((
-          row: (command: command, positions: match.positions),
-          byMenu: false,
+          row: (command: command, positions: match.positions, keyword: null),
+          tier: 0,
           score: match.score,
           order: i,
         ));
-      } else if (fuzzyMatch(_query.text, command.group) != null) {
+        continue;
+      }
+      var keywordMatched = false;
+      for (final keyword in command.keywords) {
+        if (fuzzyMatch(_query.text, keyword) != null) {
+          scored.add((
+            row: (command: command, positions: const [], keyword: keyword),
+            tier: 1,
+            score: 0,
+            order: i,
+          ));
+          keywordMatched = true;
+          break;
+        }
+      }
+      if (keywordMatched) continue;
+      if (fuzzyMatch(_query.text, command.path) != null) {
         // Typing a menu's name lists that menu, after every label match and
         // with nothing highlighted, since the name is not in the label. A
         // flag, not a low score: a scattered label match can score below
         // zero too.
         scored.add((
-          row: (command: command, positions: const []),
-          byMenu: true,
+          row: (command: command, positions: const [], keyword: null),
+          tier: 2,
           score: 0,
           order: i,
         ));
@@ -202,9 +244,9 @@ class _CommandPaletteState extends State<CommandPalette> {
     // A shorter label is the closer match on a tie; then menu order, so an
     // empty query lists the menus as they are.
     scored.sort((a, b) {
-      if (a.byMenu != b.byMenu) return a.byMenu ? 1 : -1;
+      if (a.tier != b.tier) return a.tier.compareTo(b.tier);
       if (a.score != b.score) return b.score.compareTo(a.score);
-      if (_query.text.isNotEmpty && !a.byMenu) {
+      if (_query.text.isNotEmpty && a.tier == 0) {
         final shorter = a.row.command.label.length.compareTo(
           b.row.command.label.length,
         );
@@ -234,7 +276,10 @@ class _CommandPaletteState extends State<CommandPalette> {
 
   void _run(int index) {
     if (index < 0 || index >= _rows.length) return;
-    Navigator.pop(context, _rows[index].command);
+    final command = _rows[index].command;
+    // A greyed row answers "where is it" but cannot run right now.
+    if (!command.enabled) return;
+    Navigator.pop(context, command);
   }
 
   @override
@@ -311,43 +356,69 @@ class _CommandPaletteState extends State<CommandPalette> {
       _ => false,
     };
     final highlighted = index == _highlighted;
-    final dim = TextStyle(color: scheme.onSurfaceVariant, fontSize: 12);
-    final label = row.command.label;
+    final command = row.command;
+    final dim = TextStyle(
+      color: command.enabled
+          ? scheme.onSurfaceVariant
+          : scheme.onSurfaceVariant.withValues(alpha: 0.5),
+      fontSize: 12,
+    );
+    // Line two says what the command does, and when a keyword rather than
+    // the label matched, which word found it.
+    final detail = switch ((row.keyword, command.description)) {
+      (final keyword?, '') => 'matches "$keyword"',
+      (final keyword?, final description) =>
+        'matches "$keyword" — $description',
+      (null, final description) => description,
+    };
+    final label = command.label;
     final matched = row.positions.toSet();
     return Material(
       color: highlighted ? scheme.secondaryContainer : Colors.transparent,
       child: InkWell(
+        // Always tappable so a tap cannot fall through to the barrier;
+        // _run declines a disabled command.
         onTap: () => _run(index),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    children: [
-                      for (var i = 0; i < label.length; i++)
-                        TextSpan(
-                          text: label[i],
-                          style: matched.contains(i)
-                              ? const TextStyle(fontWeight: FontWeight.w700)
-                              : null,
-                        ),
-                    ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          for (var i = 0; i < label.length; i++)
+                            TextSpan(
+                              text: label[i],
+                              style: matched.contains(i)
+                                  ? const TextStyle(fontWeight: FontWeight.w700)
+                                  : null,
+                            ),
+                        ],
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: !command.enabled
+                            ? scheme.onSurface.withValues(alpha: 0.4)
+                            : highlighted
+                            ? scheme.onSecondaryContainer
+                            : scheme.onSurface,
+                      ),
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: highlighted
-                        ? scheme.onSecondaryContainer
-                        : scheme.onSurface,
-                  ),
-                ),
+                  Text(command.path, style: dim),
+                  if (command.shortcut case final shortcut?) ...[
+                    const SizedBox(width: 12),
+                    Text(shortcutLabel(shortcut, apple: apple), style: dim),
+                  ],
+                ],
               ),
-              Text(row.command.group, style: dim),
-              if (row.command.shortcut case final shortcut?) ...[
-                const SizedBox(width: 12),
-                Text(shortcutLabel(shortcut, apple: apple), style: dim),
-              ],
+              if (detail.isNotEmpty)
+                Text(detail, style: dim, overflow: TextOverflow.ellipsis),
             ],
           ),
         ),

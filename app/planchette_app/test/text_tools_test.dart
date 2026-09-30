@@ -33,11 +33,17 @@ void main() {
     final menu = bar.menus.whereType<PlatformMenu>().firstWhere(
       (menu) => menu.label == menuLabel,
     );
-    return menu.menus
-        .whereType<PlatformMenuItemGroup>()
-        .expand((group) => group.members)
-        .whereType<PlatformMenuItem>()
-        .firstWhere((item) => item.label == label);
+    // Item labels live one level down inside PlatformMenuItemGroups and,
+    // for a submenu, inside a nested PlatformMenu.
+    Iterable<PlatformMenuItem> leaves(Iterable<PlatformMenuItem> items) =>
+        items.expand(
+          (item) => switch (item) {
+            PlatformMenuItemGroup(:final members) => leaves(members),
+            PlatformMenu(:final menus) => leaves(menus),
+            _ => [item],
+          },
+        );
+    return leaves(menu.menus).firstWhere((item) => item.label == label);
   }
 
   testWidgets('the Text menu runs a tool on the active document', (
@@ -103,4 +109,71 @@ void main() {
       TargetPlatform.windows,
     }),
   );
+
+  // The generated Text menu groups the ten built tools into four
+  // submenus, one per populated catalog group, in catalog order.
+  testWidgets('the Text menu groups tools into submenus', (tester) async {
+    await mount(tester);
+    final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+    final text = bar.menus.whereType<PlatformMenu>().firstWhere(
+      (menu) => menu.label == 'Text',
+    );
+    final submenus = [
+      for (final item in text.menus)
+        if (item case PlatformMenuItemGroup(:final members))
+          for (final member in members)
+            if (member case PlatformMenu(:final label)) label,
+    ];
+    expect(submenus, ['Lines', 'Case', 'Whitespace', 'Clean Up']);
+
+    final lines = text.menus
+        .whereType<PlatformMenuItemGroup>()
+        .expand((group) => group.members)
+        .whereType<PlatformMenu>()
+        .first;
+    final leaves = [
+      for (final item in lines.menus)
+        if (item case PlatformMenuItemGroup(:final members))
+          for (final member in members) member.label,
+    ];
+    expect(leaves, [
+      'Sort Lines',
+      'Remove Duplicate Lines',
+      'Remove Blank Lines',
+    ]);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  // The palette runs a command by id against the menu that is current
+  // when the user picks it — a document closed while the palette was
+  // open leaves the command disabled.
+  testWidgets('a palette entry re-checks whether the command is enabled', (
+    tester,
+  ) async {
+    await mount(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('planchette.palette.query')),
+      'sort lines',
+    );
+    await tester.pump();
+
+    // 'Sort Lines' is greyed: no document is open.
+    expect(find.textContaining('Sort Lines'), findsOneWidget);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    // Enter on a disabled row is declined and the palette stays open.
+    expect(
+      find.byKey(const ValueKey('planchette.palette.query')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 }

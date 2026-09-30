@@ -86,6 +86,57 @@ class EditorStrings {
     _ => id,
   };
 
+  /// The submenu a [TextToolGroup] becomes in the Text menu.
+  String textToolGroupName(TextToolGroup group) => switch (group) {
+    TextToolGroup.lines => 'Lines',
+    TextToolGroup.changeCase => 'Case',
+    TextToolGroup.whitespace => 'Whitespace',
+    TextToolGroup.cleanUp => 'Clean Up',
+    TextToolGroup.wrap => 'Wrap',
+    TextToolGroup.encode => 'Encode',
+    TextToolGroup.insert => 'Insert',
+  };
+
+  /// The one-line description the palette shows under a tool's name.
+  String textToolDescription(String id) => switch (id) {
+    'sortLines' => 'Orders lines alphabetically.',
+    'removeDuplicateLines' =>
+      'Deletes repeated lines, keeping the first of each.',
+    'removeBlankLines' => 'Deletes empty and whitespace-only lines.',
+    'uppercase' => 'Changes the word or selection to UPPERCASE.',
+    'lowercase' => 'Changes the word or selection to lowercase.',
+    'trimTrailingWhitespace' =>
+      'Removes spaces and tabs from the ends of lines.',
+    'convertIndentationToSpaces' =>
+      'Replaces leading tabs with spaces, then indents with spaces.',
+    'convertIndentationToTabs' =>
+      'Replaces leading space runs with tabs, then indents with tabs.',
+    'straightenQuotes' => 'Replaces curly quotes with straight ASCII quotes.',
+    'zapGremlins' =>
+      'Removes or replaces characters that do not belong in text.',
+    _ => '',
+  };
+
+  /// Other words the palette matches a tool by, so "dedupe" finds Remove
+  /// Duplicate Lines.
+  List<String> textToolKeywords(String id) => switch (id) {
+    'sortLines' => const ['order', 'alphabetize', 'arrange'],
+    'removeDuplicateLines' => const ['dedupe', 'uniq', 'unique'],
+    'removeBlankLines' => const ['empty lines', 'delete blanks'],
+    'uppercase' => const ['all caps', 'capitalize', 'upcase'],
+    'lowercase' => const ['downcase', 'small letters'],
+    'trimTrailingWhitespace' => const [
+      'trailing spaces',
+      'rstrip',
+      'strip whitespace',
+    ],
+    'convertIndentationToSpaces' => const ['tabs to spaces', 'detab'],
+    'convertIndentationToTabs' => const ['spaces to tabs', 'entab'],
+    'straightenQuotes' => const ['smart quotes', 'typographic quotes'],
+    'zapGremlins' => const ['control characters', 'invisible characters'],
+    _ => const [],
+  };
+
   /// The one-line notice the document shows after a tool run, such as
   /// "Remove Duplicate Lines: removed 25 of 310 lines in the whole
   /// document."
