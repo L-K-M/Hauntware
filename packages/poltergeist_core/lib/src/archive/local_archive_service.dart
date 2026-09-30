@@ -71,6 +71,8 @@ final RegExp _archiveStagePattern = RegExp(
 );
 final Random _archiveRandom = Random.secure();
 final Set<String> _activeArchiveStages = <String>{};
+final Map<String, Future<void>> _archiveOwnershipKeyTails =
+    <String, Future<void>>{};
 Future<void> _archiveCommitTail = Future<void>.value();
 
 /// Completes a native read request across legal short reads.
@@ -957,15 +959,59 @@ final class LocalArchiveService {
     final cached = _ownershipKey;
     if (cached != null) return cached;
 
-    final loaded = await _loadArchiveOwnershipKey(job);
-    _ownershipKey ??= loaded;
-    _throwIfCancelled(job);
-    return _ownershipKey!;
-  }
-
-  Future<Uint8List> _loadArchiveOwnershipKey(_LocalArchiveJob job) async {
     final state = await _archiveStateDirectory();
     final keyPath = p.join(state.path, _archiveOwnershipKeyName);
+    return _serializeOwnershipKeyLoad(keyPath, job);
+  }
+
+  Future<Uint8List> _serializeOwnershipKeyLoad(
+    String keyPath,
+    _LocalArchiveJob job,
+  ) async {
+    final previous = _archiveOwnershipKeyTails[keyPath] ?? Future<void>.value();
+    final release = Completer<void>();
+    final tail = release.future;
+    _archiveOwnershipKeyTails[keyPath] = tail;
+    var reachedPredecessor = false;
+    try {
+      var previousCompleted = false;
+      unawaited(previous.then<void>((_) => previousCompleted = true));
+      while (!previousCompleted) {
+        _throwIfCancelled(job);
+        await Future.any<void>([
+          previous,
+          Future<void>.delayed(_archiveOwnershipKeyLockRetryDelay),
+        ]);
+      }
+      reachedPredecessor = true;
+      _throwIfCancelled(job);
+
+      final cached = _ownershipKey;
+      if (cached != null) return cached;
+      final loaded = await _loadArchiveOwnershipKey(keyPath, job);
+      _ownershipKey = loaded;
+      _throwIfCancelled(job);
+      return loaded;
+    } finally {
+      void releaseTurn() {
+        release.complete();
+        if (identical(_archiveOwnershipKeyTails[keyPath], tail)) {
+          _archiveOwnershipKeyTails.remove(keyPath);
+        }
+      }
+
+      if (reachedPredecessor) {
+        releaseTurn();
+      } else {
+        unawaited(previous.then<void>((_) => releaseTurn()));
+      }
+    }
+  }
+
+  Future<Uint8List> _loadArchiveOwnershipKey(
+    String keyPath,
+    _LocalArchiveJob job,
+  ) async {
     final type = await FileSystemEntity.type(keyPath, followLinks: false);
     if (type != FileSystemEntityType.notFound &&
         type != FileSystemEntityType.file) {

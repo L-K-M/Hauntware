@@ -19,6 +19,7 @@ const String _stageMarkerContents = 'poltergeist-archive-stage-v1\n';
 const String _stageMarkerPrefix = 'poltergeist-archive-stage-v2:';
 const String _archiveStateDirectoryName = 'local-archive-state-v1';
 const String _ownershipKeyName = 'archive-owner.key';
+const int _ownershipKeyBytes = 32;
 const Duration _archiveHelperReadyTimeout = Duration(seconds: 30);
 
 void main() {
@@ -1499,7 +1500,6 @@ void main() {
     }
     final source = File(pathOf('cancel-descriptors.bin'))
       ..writeAsBytesSync(bytes);
-    final baseline = Directory('/proc/self/fd').listSync().length;
 
     for (var attempt = 0; attempt < 3; attempt++) {
       final job = service.createZip(
@@ -1513,12 +1513,12 @@ void main() {
                 progress.entryProcessedBytes > 0,
           )
           .timeout(const Duration(seconds: 10));
+      expect(_linuxDescriptorsFor(source.path), isNotEmpty);
 
       job.cancel();
       await _expectArchiveError(job, LocalArchiveErrorKind.cancelled);
+      expect(_linuxDescriptorsFor(source.path), isEmpty);
     }
-
-    expect(Directory('/proc/self/fd').listSync().length, baseline);
   });
 
   test(
@@ -1538,7 +1538,6 @@ void main() {
       _writeZip(archive, [
         ArchiveFile.noCompress('large.bin', bytes.length, bytes),
       ]);
-      final baseline = Directory('/proc/self/fd').listSync().length;
       final job = service.extractZip(
         archivePath: archive.path,
         destinationPath: pathOf('cancel-extraction'),
@@ -1550,11 +1549,12 @@ void main() {
                 progress.entryProcessedBytes > 0,
           )
           .timeout(const Duration(seconds: 10));
+      expect(_linuxDescriptorsFor(archive.path), isNotEmpty);
 
       job.cancel();
       await _expectArchiveError(job, LocalArchiveErrorKind.cancelled);
 
-      expect(Directory('/proc/self/fd').listSync().length, baseline);
+      expect(_linuxDescriptorsFor(archive.path), isEmpty);
       expect(Directory(pathOf('cancel-extraction')).existsSync(), isFalse);
     },
   );
@@ -1566,7 +1566,6 @@ void main() {
     }
     final archive = File(pathOf('cancel-preparing-extraction.zip'));
     _writeZip(archive, [ArchiveFile.string('data.txt', 'data')]);
-    final baseline = Directory('/proc/self/fd').listSync().length;
 
     for (var attempt = 0; attempt < 3; attempt++) {
       final preparing = Completer<void>();
@@ -1584,13 +1583,13 @@ void main() {
         preparing.complete();
       });
       await preparing.future.timeout(const Duration(seconds: 10));
+      expect(_linuxDescriptorsFor(archive.path), isNotEmpty);
 
       job.cancel();
       await _expectArchiveError(job, LocalArchiveErrorKind.cancelled);
       await progress.cancel();
+      expect(_linuxDescriptorsFor(archive.path), isEmpty);
     }
-
-    expect(Directory('/proc/self/fd').listSync().length, baseline);
   });
 
   test('cancel interrupts a blocked ownership key lock', () async {
@@ -1631,12 +1630,123 @@ void main() {
         job,
         LocalArchiveErrorKind.cancelled,
       ).timeout(const Duration(seconds: 2));
+      stopwatch.stop();
     } finally {
       helper.$1.stdin.writeln('release');
       expect(await helper.$1.exitCode, 0);
     }
     expect(stopwatch.elapsed, lessThan(const Duration(seconds: 1)));
     expect(File(pathOf('ownership-lock-cancelled.zip')).existsSync(), isFalse);
+  });
+
+  test('serializes same-process ownership key lock waiters', () async {
+    if (!Platform.isLinux) {
+      markTestSkipped('Linux exposes process descriptors through procfs');
+      return;
+    }
+    await service.close();
+    final support = Directory(pathOf('ownership-waiter-support'))..createSync();
+    service = LocalArchiveService(supportDirectoryPath: support.path);
+    final source = File(pathOf('ownership-waiter-source'))
+      ..writeAsStringSync('data');
+    await service
+        .createZip(
+          sourcePaths: [source.path],
+          destinationPath: pathOf('ownership-waiter-seed.zip'),
+        )
+        .done;
+    await service.close();
+
+    final keyPath = p.join(
+      support.path,
+      _archiveStateDirectoryName,
+      _ownershipKeyName,
+    );
+    final helper = await _startArchiveHelper(['hold-file-lock', keyPath]);
+    addTearDown(() => _stopHelper(helper.$1));
+    await helper.$2
+        .firstWhere((line) => line == 'ready')
+        .timeout(_archiveHelperReadyTimeout);
+    final services = List<LocalArchiveService>.generate(
+      8,
+      (_) => LocalArchiveService(supportDirectoryPath: support.path),
+    );
+    service = services.first;
+    addTearDown(() async {
+      for (final candidate in services.skip(1)) {
+        await candidate.close();
+      }
+    });
+    final jobs = <LocalArchiveJob>[];
+    for (var index = 0; index < services.length; index++) {
+      jobs.add(
+        services[index].createZip(
+          sourcePaths: [source.path],
+          destinationPath: pathOf('ownership-waiter-$index.zip'),
+        ),
+      );
+    }
+
+    try {
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (_linuxDescriptorsFor(keyPath).isEmpty) {
+        if (DateTime.now().isAfter(deadline)) {
+          fail('ownership key waiter did not open the key');
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      expect(_linuxDescriptorsFor(keyPath), hasLength(1));
+    } finally {
+      for (final job in jobs) {
+        job.cancel();
+      }
+      try {
+        await Future.wait(
+          jobs.map(
+            (job) => _expectArchiveError(
+              job,
+              LocalArchiveErrorKind.cancelled,
+            ).timeout(const Duration(seconds: 2)),
+          ),
+        );
+        expect(_linuxDescriptorsFor(keyPath), isEmpty);
+      } finally {
+        helper.$1.stdin.writeln('release');
+        expect(await helper.$1.exitCode, 0);
+      }
+    }
+  });
+
+  test('serializes concurrent ownership key initialization', () async {
+    await service.close();
+    final support = Directory(pathOf('ownership-race-support'))..createSync();
+    final source = File(pathOf('ownership-race-source'))
+      ..writeAsStringSync('data');
+    final services = List<LocalArchiveService>.generate(
+      12,
+      (_) => LocalArchiveService(supportDirectoryPath: support.path),
+    );
+    service = services.first;
+    addTearDown(() async {
+      for (final candidate in services.skip(1)) {
+        await candidate.close();
+      }
+    });
+
+    final jobs = <LocalArchiveJob>[];
+    for (var index = 0; index < services.length; index++) {
+      jobs.add(
+        services[index].createZip(
+          sourcePaths: [source.path],
+          destinationPath: pathOf('ownership-race-$index.zip'),
+        ),
+      );
+    }
+    await Future.wait(jobs.map((job) => job.done));
+
+    expect(_readOwnershipKey(support), hasLength(_ownershipKeyBytes));
   });
 
   test('stage cleanup failure preserves the primary cancellation', () async {
@@ -1652,11 +1762,13 @@ void main() {
     );
     job.pause();
     await _waitForStage(root);
+    final stage = Directory(p.join(root.path, _stageNames(root).single));
     expect(Process.runSync('chmod', ['0500', root.path]).exitCode, 0);
 
     try {
       job.cancel();
       await _expectArchiveError(job, LocalArchiveErrorKind.cancelled);
+      expect(stage.existsSync(), isTrue);
     } finally {
       expect(Process.runSync('chmod', ['0700', root.path]).exitCode, 0);
     }
@@ -2070,6 +2182,22 @@ List<String> _stageNames(Directory root) => root
           RegExp(r'^\.poltergeist-archive-[0-9a-f]{32}\.stage$').hasMatch(name),
     )
     .toList();
+
+List<String> _linuxDescriptorsFor(String path) {
+  final expected = File(path).resolveSymbolicLinksSync();
+  final descriptors = <String>[];
+
+  // Other test isolates share this process, so match targets instead of counts.
+  for (final entry in Directory('/proc/self/fd').listSync(followLinks: false)) {
+    try {
+      if (Link(entry.path).targetSync() != expected) continue;
+      descriptors.add(p.basename(entry.path));
+    } on FileSystemException {
+      // A concurrent close can remove a descriptor after the directory scan.
+    }
+  }
+  return descriptors;
+}
 
 Future<void> _waitForStage(Directory root) async {
   final deadline = DateTime.now().add(const Duration(seconds: 5));
