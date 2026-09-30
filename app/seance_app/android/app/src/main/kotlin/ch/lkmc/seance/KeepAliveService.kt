@@ -1,4 +1,4 @@
-package com.lkm.seance_app
+package ch.lkmc.seance
 
 import android.app.Notification
 import android.app.NotificationChannel

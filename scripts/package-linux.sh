@@ -278,9 +278,9 @@ Icon=seance
 Terminal=false
 Categories=Network;System;Utility;
 # The GApplication id is also the prgname GTK reports to the session (seen
-# in its warnings: "(com.lkm.seance_app:pid): …"), hence StartupWMClass —
+# in its warnings: "(ch.lkmc.seance:pid): …"), hence StartupWMClass —
 # that's what lets desktops map windows onto this entry.
-StartupWMClass=com.lkm.seance_app
+StartupWMClass=ch.lkmc.seance
 EOF
 }
 
@@ -321,7 +321,7 @@ exec /usr/lib/seance/seance_app "$@"
 EOF
 chmod 755 "$DEBROOT/usr/bin/seance"
 
-write_desktop_file "$DEBROOT/usr/share/applications/seance.desktop" "seance"
+write_desktop_file "$DEBROOT/usr/share/applications/ch.lkmc.seance.desktop" "seance"
 install_icons "$DEBROOT/usr"
 
 cat > "$DEBROOT/usr/share/doc/seance/copyright" <<EOF
@@ -414,7 +414,7 @@ build_appimage() {
   rm -rf "${appdir:?}/usr/bin"   # the deb's wrapper hardcodes /usr/lib — dead
                                # weight here; AppRun is the entry point
 
-  write_desktop_file "$appdir/seance.desktop" "AppRun"
+  write_desktop_file "$appdir/ch.lkmc.seance.desktop" "AppRun"
   # appimagetool wants the icon named after Icon= at the AppDir root, plus
   # .DirIcon for file managers.
   make_icon "$MASTER_ICON" "$appdir/seance.png" 512 \

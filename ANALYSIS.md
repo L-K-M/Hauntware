@@ -2233,9 +2233,7 @@ build.
 
 **Problem.** The `.deb` libstdc++6 floor compares a GLIBCXX ABI tag with
 package versions (`package-linux.sh:204-219`), so it never rejects.
-`seance.desktop` (`:324`) does not match the GApplication id
-`com.lkm.seance_app`, so Wayland docks may show a generic icon or a second
-entry. `copyright` says "as published in the source repository" (`:330`).
+`copyright` says "as published in the source repository" (`:330`).
 `scripts/build.sh:264` ignores `package_linux` failure (exit 0 after "packages:
 FAILED"). The GTK view background `#000000` flashes black on resize
 (`linux/runner/my_application.cc:48`). No AppStream metainfo

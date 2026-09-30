@@ -1,4 +1,4 @@
-package com.lkm.seance_app
+package ch.lkmc.seance
 
 import android.Manifest
 import android.app.Activity

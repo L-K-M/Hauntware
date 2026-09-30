@@ -14,7 +14,9 @@ PRODUCT_NAME = Seance
 SWIFT_OBJC_BRIDGING_HEADER = Runner/Runner-Bridging-Header.h
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.lkm.seanceApp
+// Renamed from com.lkm.seanceApp in the 2026 namespace normalization;
+// the id change is an accepted reset — no container/keychain migration.
+PRODUCT_BUNDLE_IDENTIFIER = ch.lkmc.seanceApp
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.lkm.
+PRODUCT_COPYRIGHT = Copyright © 2026 ch.lkmc.
