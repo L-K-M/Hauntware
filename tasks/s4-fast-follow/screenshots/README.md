@@ -1,24 +1,25 @@
 # S4 UI captures
 
-Light-theme, real-font widget renders captured with Flutter 3.47.2 on
-2026-09-29. `before-*` is `origin/main` at `75bc19a5`; `after-*` is this
-PR's worktree. Each pair uses the same 1000×900 Linux-target harness.
+Light-theme native Linux runs captured with Flutter 3.47.2 on 2026-09-30.
+`before-*` is commit `75bc19a5`; `after-*` is this PR. Both builds ran in the
+production GTK runner at 1280×900 under Weston with Mesa llvmpipe.
 
 | Surface | Before | After |
 |---|---|---|
-| New server authentication | `before-server-editor-light.png` | `after-server-editor-light.png` |
-| Keyboard-interactive challenge | `before-keyboard-interactive-light.png` | `after-keyboard-interactive-light.png` |
-| Server mark picker | `before-mark-picker-light.png` | `after-mark-picker-light.png` |
+| New server authentication | [`before-server-editor-light.png`](before-server-editor-light.png) | [`after-server-editor-light.png`](after-server-editor-light.png) |
+| Keyboard-interactive challenge | [`before-keyboard-interactive-light.png`](before-keyboard-interactive-light.png) | [`after-keyboard-interactive-light.png`](after-keyboard-interactive-light.png) |
+| Server mark picker | [`before-mark-picker-light.png`](before-mark-picker-light.png) | [`after-mark-picker-light.png`](after-mark-picker-light.png) |
+| ssh_config import preview | [`before-ssh-config-import-light.png`](before-ssh-config-import-light.png) | [`after-ssh-config-import-light.png`](after-ssh-config-import-light.png) |
+| Blocked host-key menu | [`before-blocked-host-key-menu-light.png`](before-blocked-host-key-menu-light.png) | [`after-blocked-host-key-menu-light.png`](after-blocked-host-key-menu-light.png) |
 
-The capture command in each worktree was:
+Each worktree used the same temporary entrypoint and production widgets:
 
 ```bash
-FLUTTER_ROOT=<flutter-sdk> \
-POLTERGEIST_CAPTURE_DIR=<pr-worktree>/tasks/s4-fast-follow/screenshots \
-flutter test test/_tmp_s4_capture_test.dart
+flutter run -d linux --debug --no-pub \
+  -t lib/s4_capture_harness.dart \
+  --dart-define=S4_SURFACE=<surface>
+weston-screenshooter
 ```
 
-The temporary capture harness was removed after both three-test runs passed.
-Native `flutter run` capture was unavailable: this container has no display,
-`Xvfb`, `xvfb-run`, CMake, Ninja, or GTK `pkg-config` toolchain. These are
-widget renders, not native-window captures.
+The temporary entrypoints were removed after all ten native captures were
+inspected.

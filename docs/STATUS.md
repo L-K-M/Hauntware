@@ -9588,10 +9588,10 @@ analysis and all 249 tests pass with 3 skips. Flutter analysis and all 3,024
 app tests pass. The 140 root benchmark tests, import-boundary check, and
 Séance pin audit pass. One concurrent core/app run reported the real incident
 store round-trip once; its focused rerun and the exclusive full core rerun
-passed. Three inspected light-theme before/after widget pairs are in
-[`tasks/s4-fast-follow/screenshots/`](../tasks/s4-fast-follow/screenshots/);
-native capture is unavailable on this host because it has no display or Linux
-desktop toolchain.
+passed. Five inspected light-theme before/after native Linux pairs are in
+[`tasks/s4-fast-follow/screenshots/`](../tasks/s4-fast-follow/screenshots/).
+They cover the server editor, keyboard-interactive challenge, mark picker,
+ssh_config import preview, and blocked host-key menu.
 
 Remaining gaps are tracked below: the next-tag re-pin (item 2), unknown
 `ServerConfig` key preservation (item 35), upstream editor drift (item 36),
