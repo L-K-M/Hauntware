@@ -40,17 +40,17 @@ enum LineDirection { up, down }
 /// Copies the touched lines below themselves and moves the selection onto
 /// the copy, so repeating the command keeps stacking copies downwards.
 LineEdit duplicateLines(String text, int base, int extent) {
-  final lines = _touchedLines(text, base, extent);
+  final lines = touchedLineRange(text, base, extent);
   final block = text.substring(lines.start, lines.end);
   // The copy takes the break that ends the block, or on the last line the
   // one before it, or for a whole-buffer block one of its own, so a CRLF
   // buffer stays CRLF.
-  final after = _separatorAt(text, lines.end);
+  final after = lineSeparatorAt(text, lines.end);
   final inside = block.indexOf('\n');
   final separator = after.isNotEmpty
       ? after
       : lines.start > 0
-      ? _separatorBefore(text, lines.start)
+      ? lineSeparatorBefore(text, lines.start)
       : inside > 0 && block.codeUnitAt(inside - 1) == _return
       ? '\r\n'
       : '\n';
@@ -70,16 +70,16 @@ LineEdit? moveLines(
   int extent,
   LineDirection direction,
 ) {
-  final lines = _touchedLines(text, base, extent);
+  final lines = touchedLineRange(text, base, extent);
   final block = text.substring(lines.start, lines.end);
   final String result;
   final int shift;
   switch (direction) {
     case LineDirection.up:
       if (lines.start == 0) return null;
-      final separator = _separatorBefore(text, lines.start);
+      final separator = lineSeparatorBefore(text, lines.start);
       final neighbourEnd = lines.start - separator.length;
-      final above = _lineStart(text, neighbourEnd);
+      final above = lineStart(text, neighbourEnd);
       final neighbour = text.substring(above, neighbourEnd);
       result = text.replaceRange(
         above,
@@ -89,9 +89,9 @@ LineEdit? moveLines(
       shift = -(neighbour.length + separator.length);
     case LineDirection.down:
       if (lines.end == text.length) return null;
-      final separator = _separatorAt(text, lines.end);
+      final separator = lineSeparatorAt(text, lines.end);
       final belowStart = lines.end + separator.length;
-      final below = _contentEnd(text, belowStart);
+      final below = lineContentEnd(text, belowStart);
       final neighbour = text.substring(belowStart, below);
       result = text.replaceRange(
         lines.start,
@@ -111,27 +111,27 @@ LineEdit? moveLines(
 /// Returns null for an empty buffer.
 LineEdit? deleteLines(String text, int base, int extent) {
   if (text.isEmpty) return null;
-  final lines = _touchedLines(text, base, extent);
-  final column = extent - _lineStart(text, extent);
+  final lines = touchedLineRange(text, base, extent);
+  final column = extent - lineStart(text, extent);
   final int from;
   final int to;
   if (lines.end < text.length) {
     (from, to) = (
       lines.start,
-      lines.end + _separatorAt(text, lines.end).length,
+      lines.end + lineSeparatorAt(text, lines.end).length,
     );
   } else if (lines.start > 0) {
     // The last line has no break of its own; take the one before it.
     (from, to) = (
-      lines.start - _separatorBefore(text, lines.start).length,
+      lines.start - lineSeparatorBefore(text, lines.start).length,
       lines.end,
     );
   } else {
     (from, to) = (0, text.length);
   }
   final result = text.replaceRange(from, to, '');
-  final start = _lineStart(result, from);
-  var caret = math.min(start + column, _contentEnd(result, start));
+  final start = lineStart(result, from);
+  var caret = math.min(start + column, lineContentEnd(result, start));
   // The column came from another line and may fall inside a character
   // there; never leave the caret between the halves of a surrogate pair.
   if (caret > start &&
@@ -148,12 +148,12 @@ LineEdit? deleteLines(String text, int base, int extent) {
 /// is blank. A caret lands where the first break was; a selection keeps
 /// covering the same text. Returns null on the last line.
 LineEdit? joinLines(String text, int base, int extent) {
-  final lines = _touchedLines(text, base, extent);
+  final lines = touchedLineRange(text, base, extent);
   var end = lines.end;
   final firstBreak = text.indexOf('\n', lines.start);
   if (firstBreak < 0 || firstBreak >= end) {
     if (end == text.length) return null;
-    end = _contentEnd(text, end + _separatorAt(text, end).length);
+    end = lineContentEnd(text, end + lineSeparatorAt(text, end).length);
   }
 
   final joined = StringBuffer();
@@ -228,7 +228,7 @@ LineEdit? toggleLineComments(
   List<String> markers,
 ) {
   if (markers.isEmpty) return null;
-  final lines = _touchedLines(text, base, extent);
+  final lines = touchedLineRange(text, base, extent);
   final collapsed = base == extent;
   // Longest first, so a marker that begins with another one is removed whole.
   final byLength = [...markers]..sort((a, b) => b.length - a.length);
@@ -242,14 +242,14 @@ LineEdit? toggleLineComments(
   // The text start (after indentation) and content end of each touched line.
   final touched = <({int text, int end})>[];
   for (var start = lines.start; ;) {
-    final end = _contentEnd(text, start);
+    final end = lineContentEnd(text, start);
     var at = start;
     while (at < end && _isIndent(text.codeUnitAt(at))) {
       at++;
     }
     touched.add((text: at, end: end));
     if (end >= lines.end) break;
-    start = end + _separatorAt(text, end).length;
+    start = end + lineSeparatorAt(text, end).length;
   }
   final written = [
     for (final line in touched)
@@ -319,22 +319,24 @@ bool _isIndent(int unit) => unit == _space || unit == _tab;
 bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
 
 /// The touched lines as one range: from the first line's start to the last
-/// line's end, excluding its line break.
-({int start, int end}) _touchedLines(String text, int base, int extent) {
+/// line's end, excluding its line break. A selection that ends at column 0
+/// does not touch that last line.
+({int start, int end}) touchedLineRange(String text, int base, int extent) {
   RangeError.checkValueInInterval(base, 0, text.length, 'base');
   RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
   final from = math.min(base, extent);
   var to = math.max(base, extent);
   if (to > from && text.codeUnitAt(to - 1) == _newline) to--;
-  return (start: _lineStart(text, from), end: _contentEnd(text, to));
+  return (start: lineStart(text, from), end: lineContentEnd(text, to));
 }
 
-int _lineStart(String text, int offset) =>
+/// The start of the line holding [offset].
+int lineStart(String text, int offset) =>
     offset == 0 ? 0 : text.lastIndexOf('\n', offset - 1) + 1;
 
 /// The end of the line holding [offset], before its break: its `\n`, or the
 /// `\r` in front of that `\n`.
-int _contentEnd(String text, int offset) {
+int lineContentEnd(String text, int offset) {
   final newline = text.indexOf('\n', offset);
   if (newline < 0) return text.length;
   // A `\r` right before a `\n` always belongs to that break, even when
@@ -346,11 +348,11 @@ int _contentEnd(String text, int offset) {
 
 /// The line break starting at [end], a line's content end: `\r\n`, `\n`,
 /// or nothing on the last line.
-String _separatorAt(String text, int end) {
+String lineSeparatorAt(String text, int end) {
   if (end >= text.length) return '';
   return text.codeUnitAt(end) == _return ? '\r\n' : '\n';
 }
 
 /// The line break that ends just before [start], a line's start.
-String _separatorBefore(String text, int start) =>
+String lineSeparatorBefore(String text, int start) =>
     start >= 2 && text.codeUnitAt(start - 2) == _return ? '\r\n' : '\n';
