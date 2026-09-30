@@ -383,9 +383,7 @@ void main() {
       expect(c.editorFocus.hasFocus, isTrue);
     });
 
-    testWidgets('Escape from a bar field still closes the bar', (
-      tester,
-    ) async {
+    testWidgets('Escape from a bar field still closes the bar', (tester) async {
       final c = await pumpEditor(tester, 'a\nb');
       c.openTextTool('numberLines');
       await tester.pump();
