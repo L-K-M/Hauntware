@@ -48,6 +48,20 @@ const _unknownFileZillaProtocolExport = '''
 </Server></Servers></FileZilla3>
 ''';
 
+const _endpointFileZillaExport = '''
+<FileZilla3><Servers>
+  <Server>
+    <Host>2001:db8::1</Host><Protocol>1</Protocol><Name>IPv6</Name>
+  </Server>
+  <Server>
+    <Host>invalid.example.com</Host><Port>70000</Port>
+    <Protocol>1</Protocol><Name>Invalid port</Name>
+  </Server>
+</Servers></FileZilla3>
+''';
+
+const _emptyFileZillaExport = '<FileZilla3><Servers /></FileZilla3>';
+
 const _winScpPpkExport = r'''
 [Sessions\PuTTY]
 HostName=putty.example.com
@@ -120,6 +134,14 @@ Bookmark _existing() => Bookmark(
   updatedAt: _fixedNow,
 );
 
+RegisteredCommand _sourceItem(
+  RegisteredCommand command,
+  AppLocalizations l10n,
+  ThirdPartyBookmarkFormat format,
+) => command.submenuItems!(l10n).singleWhere(
+  (item) => item.id == '$kThirdPartyBookmarkImportCommandId:${format.name}',
+);
+
 void main() {
   late _FakeBookmarkStore store;
   late List<ThirdPartyBookmarkFormat> picks;
@@ -155,11 +177,14 @@ void main() {
                   ThirdPartyBookmarkFormat.winScp => 'WinSCP.ini',
                   ThirdPartyBookmarkFormat.cyberduck => 'site.duck',
                 },
-                utf8.encode(
-                  format == ThirdPartyBookmarkFormat.fileZilla
-                      ? _fileZillaExport
-                      : _winScpExport,
-                ),
+                utf8.encode(switch (format) {
+                  ThirdPartyBookmarkFormat.fileZilla => _fileZillaExport,
+                  ThirdPartyBookmarkFormat.winScp => _winScpExport,
+                  ThirdPartyBookmarkFormat.cyberduck => _cyberduckExport(
+                    'prod.example.com',
+                    '/srv/app',
+                  ),
+                }),
               ),
             ];
           },
@@ -251,6 +276,28 @@ void main() {
     expect(find.text('Imported 1 favorite'), findsOneWidget);
   });
 
+  testWidgets('default Cyberduck picker yields a preview', (tester) async {
+    await pumpApp(tester, wiring: setup());
+
+    final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
+    final context = tester.element(find.byType(WorkspaceShell));
+    final l10n = AppLocalizations.of(context);
+    unawaited(
+      _sourceItem(
+        command,
+        l10n,
+        ThirdPartyBookmarkFormat.cyberduck,
+      ).run(context),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('prod.example.com:22'), findsOneWidget);
+    expect(find.text('Start folder: /srv/app'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('persisted endpoint duplicates start skipped', (tester) async {
     store = _FakeBookmarkStore([_existing()]);
     await pumpApp(tester, wiring: setup());
@@ -301,11 +348,11 @@ void main() {
     final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
     final context = tester.element(find.byType(WorkspaceShell));
     unawaited(
-      command
-          .submenuItems!(
-            AppLocalizations.of(context),
-          )[ThirdPartyBookmarkFormat.winScp.index]
-          .run(context),
+      _sourceItem(
+        command,
+        AppLocalizations.of(context),
+        ThirdPartyBookmarkFormat.winScp,
+      ).run(context),
     );
     await tester.pumpAndSettle();
 
@@ -335,12 +382,90 @@ void main() {
     final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
     final context = tester.element(find.byType(WorkspaceShell));
     unawaited(
-      command.submenuItems!(AppLocalizations.of(context)).first.run(context),
+      _sourceItem(
+        command,
+        AppLocalizations.of(context),
+        ThirdPartyBookmarkFormat.fileZilla,
+      ).run(context),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Cannot import: protocol is unknown'), findsOneWidget);
     expect(tester.widget<Checkbox>(find.byType(Checkbox)).onChanged, isNull);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('preview uses canonical endpoint labels', (tester) async {
+    await pumpApp(
+      tester,
+      wiring: setup(
+        pickFiles: (_) async => [
+          ThirdPartyBookmarkImportFile(
+            'sitemanager.xml',
+            utf8.encode(_endpointFileZillaExport),
+          ),
+        ],
+      ),
+    );
+
+    final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
+    final context = tester.element(find.byType(WorkspaceShell));
+    unawaited(
+      _sourceItem(
+        command,
+        AppLocalizations.of(context),
+        ThirdPartyBookmarkFormat.fileZilla,
+      ).run(context),
+    );
+    await tester.pumpAndSettle();
+
+    Finder selectableText(String value) => find.byWidgetPredicate(
+      (widget) => widget is SelectableText && widget.data == value,
+    );
+
+    expect(selectableText('[2001:db8::1]:22'), findsOneWidget);
+    expect(selectableText('invalid.example.com'), findsOneWidget);
+    expect(selectableText('invalid.example.com:0'), findsNothing);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('multi-file empty copy is selection-neutral', (tester) async {
+    await pumpApp(
+      tester,
+      wiring: setup(
+        pickFiles: (_) async => [
+          ThirdPartyBookmarkImportFile(
+            'first.xml',
+            utf8.encode(_emptyFileZillaExport),
+          ),
+          ThirdPartyBookmarkImportFile(
+            'second.xml',
+            utf8.encode(_emptyFileZillaExport),
+          ),
+        ],
+      ),
+    );
+
+    final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
+    final context = tester.element(find.byType(WorkspaceShell));
+    unawaited(
+      _sourceItem(
+        command,
+        AppLocalizations.of(context),
+        ThirdPartyBookmarkFormat.fileZilla,
+      ).run(context),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('FileZilla · 2 files'), findsOneWidget);
+    expect(
+      find.text('No servers were found in the selection.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
@@ -355,9 +480,11 @@ void main() {
     );
     final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
     final context = tester.element(find.byType(WorkspaceShell));
-    await command.submenuItems!(AppLocalizations.of(context)).first.run(
-      context,
-    );
+    await _sourceItem(
+      command,
+      AppLocalizations.of(context),
+      ThirdPartyBookmarkFormat.fileZilla,
+    ).run(context);
     await tester.pumpAndSettle();
     expect(find.text('Could not read the selected file.'), findsOneWidget);
     expect(tester.takeException(), isA<FileSystemException>());
@@ -393,7 +520,11 @@ void main() {
     final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
     final context = tester.element(find.byType(WorkspaceShell));
     unawaited(
-      command.submenuItems!(AppLocalizations.of(context)).first.run(context),
+      _sourceItem(
+        command,
+        AppLocalizations.of(context),
+        ThirdPartyBookmarkFormat.fileZilla,
+      ).run(context),
     );
     await tester.pumpAndSettle();
 
@@ -426,7 +557,11 @@ void main() {
     final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
     final context = tester.element(find.byType(WorkspaceShell));
     unawaited(
-      command.submenuItems!(AppLocalizations.of(context)).last.run(context),
+      _sourceItem(
+        command,
+        AppLocalizations.of(context),
+        ThirdPartyBookmarkFormat.cyberduck,
+      ).run(context),
     );
     await tester.pumpAndSettle();
 
@@ -448,10 +583,11 @@ void main() {
       kThirdPartyBookmarkImportCommandId,
     );
     final failingContext = tester.element(find.byType(WorkspaceShell));
-    await failingCommand
-        .submenuItems!(AppLocalizations.of(failingContext))
-        .first
-        .run(failingContext);
+    await _sourceItem(
+      failingCommand,
+      AppLocalizations.of(failingContext),
+      ThirdPartyBookmarkFormat.fileZilla,
+    ).run(failingContext);
     await tester.pumpAndSettle();
     expect(find.text('Could not read the favorites file.'), findsOneWidget);
     expect(tester.takeException(), isA<FileSystemException>());
@@ -463,7 +599,11 @@ void main() {
     final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
     final context = tester.element(find.byType(WorkspaceShell));
     unawaited(
-      command.submenuItems!(AppLocalizations.of(context)).first.run(context),
+      _sourceItem(
+        command,
+        AppLocalizations.of(context),
+        ThirdPartyBookmarkFormat.fileZilla,
+      ).run(context),
     );
     await tester.pumpAndSettle();
 
@@ -484,7 +624,11 @@ void main() {
     final command = shellCommand(tester, kThirdPartyBookmarkImportCommandId);
     final context = tester.element(find.byType(WorkspaceShell));
     unawaited(
-      command.submenuItems!(AppLocalizations.of(context)).first.run(context),
+      _sourceItem(
+        command,
+        AppLocalizations.of(context),
+        ThirdPartyBookmarkFormat.fileZilla,
+      ).run(context),
     );
     await tester.pump();
 

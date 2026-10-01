@@ -23,7 +23,9 @@ visible but disabled; unsupported protocols, invalid endpoints, unsafe start
 paths, and proxy/tunnel routes remain visible with explicit warnings.
 Proxy/tunnel rows start skipped. Third-party dedupe includes the remote path,
 so distinct FileZilla child bookmarks remain selected; ssh_config retains its
-host/port/username endpoint rule.
+host/port/username endpoint rule. Import hardening rejects ambiguous FileZilla
+path framing, signed escapes, and non-decimal ports; IPv6 and invalid-port
+endpoints render without ambiguity.
 
 The shared preview now virtualizes large row sets and switches to a compact
 layout on narrow screens. It shows each start folder and, for multi-file
@@ -33,8 +35,8 @@ explain the cause and offer file reselection. Cancel kills an active parser
 isolate and ignores late results. Captures and provenance are in
 `tasks/d22-third-party-importers/`.
 
-Core analysis is clean; all 1,898 core tests pass with 27 environment-gated
-skips. Flutter analysis is clean; all 3,077 app tests pass. All 140 root
+Core analysis is clean; all 1,907 core tests pass with 27 environment-gated
+skips. Flutter analysis is clean; all 3,083 app tests pass. All 140 root
 benchmark tests and the import-boundary guard pass. No Séance source was
 copied or changed, so no upstream port is required. Numbered fast-follow items
 1–4 are complete; deep links and the text-diff view remain demand-dependent

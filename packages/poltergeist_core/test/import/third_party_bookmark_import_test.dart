@@ -172,6 +172,38 @@ void main() {
       }
     });
 
+    test('unnamed nested servers and children include the host in labels', () {
+      final preview = _load(ThirdPartyBookmarkFormat.fileZilla, [
+        _textFile('unnamed.xml', '''
+<FileZilla3><Servers><Folder>Production
+  <Server>
+    <Host>files.example.com</Host><Protocol>1</Protocol>
+    <Bookmark><Name>Logs</Name><RemoteDir>/logs</RemoteDir></Bookmark>
+  </Server>
+</Folder></Servers></FileZilla3>
+'''),
+      ]);
+
+      expect(preview.rows.map((row) => row.label), [
+        'Production/files.example.com',
+        'Production/files.example.com/Logs',
+      ]);
+    });
+
+    test('preserves escaped entities in folder and legacy site names', () {
+      final preview = _load(ThirdPartyBookmarkFormat.fileZilla, [
+        _textFile('entities.xml', '''
+<FileZilla3><Servers><Folder>Research &amp; Development
+  <Server>Tom &amp; Jerry
+    <Host>files.example.com</Host><Protocol>1</Protocol>
+  </Server>
+</Folder></Servers></FileZilla3>
+'''),
+      ]);
+
+      expect(preview.rows.single.label, 'Research & Development/Tom & Jerry');
+    });
+
     test('child without a path inherits the server path issue', () {
       final preview = _load(ThirdPartyBookmarkFormat.fileZilla, [
         _textFile('sitemanager.xml', '''
@@ -240,6 +272,36 @@ void main() {
         '/😀/docs',
         '/😀/docs',
       ]);
+    });
+
+    test('auto path units reject ambiguity without losing valid framing', () {
+      final preview = _load(ThirdPartyBookmarkFormat.fileZilla, [
+        _textFile('auto.xml', '''
+<FileZilla3><Servers>
+  <Server><Host>scalar.example.com</Host><Protocol>1</Protocol>
+    <Name>Scalar</Name><RemoteDir>1 0 3 ab😀</RemoteDir></Server>
+  <Server><Host>utf16.example.com</Host><Protocol>1</Protocol>
+    <Name>UTF-16</Name><RemoteDir>1 0 4 ab😀</RemoteDir></Server>
+  <Server><Host>ascii.example.com</Host><Protocol>1</Protocol>
+    <Name>ASCII</Name><RemoteDir>1 0 3 abc</RemoteDir></Server>
+  <Server><Host>ambiguous.example.com</Host><Protocol>1</Protocol>
+    <Name>Ambiguous</Name>
+    <RemoteDir>1 0 8 😀😀😀😀 1 x</RemoteDir></Server>
+</Servers></FileZilla3>
+'''),
+      ]);
+
+      expect(preview.rows.take(3).map((row) => row.remotePath), [
+        '/ab😀',
+        '/ab😀',
+        '/abc',
+      ]);
+      final ambiguous = preview.rows.last;
+      expect(ambiguous.remotePath, '/');
+      expect(
+        ambiguous.issues,
+        contains(ThirdPartyBookmarkImportIssue.invalidRemotePath),
+      );
     });
 
     test('preserves trailing spaces in server and child safe paths', () {
@@ -339,24 +401,131 @@ void main() {
       expect(preview.rows[1].importable, isFalse);
     });
 
-    test('returns technical protocol tokens without UI copy', () {
-      final fileZilla = _load(ThirdPartyBookmarkFormat.fileZilla, [
-        _textFile('unknown.xml', '''
-<FileZilla3><Servers><Server><Host>files.example.com</Host>
-  <Protocol>99</Protocol></Server></Servers></FileZilla3>
+    test('formats IPv6 endpoints and hides rejected ports', () {
+      final preview = _load(ThirdPartyBookmarkFormat.fileZilla, [
+        _textFile('endpoints.xml', '''
+<FileZilla3><Servers>
+  <Server><Host>2001:db8::1</Host><Port>2222</Port><Protocol>1</Protocol>
+    <Name>IPv6</Name></Server>
+  <Server><Host>invalid.example.com</Host><Port>oops</Port><Protocol>1</Protocol>
+    <Name>Invalid port</Name></Server>
+</Servers></FileZilla3>
 '''),
       ]);
+
+      expect(preview.rows[0].endpoint, '[2001:db8::1]:2222');
+      expect(preview.rows[1].endpoint, 'invalid.example.com');
+      expect(
+        preview.rows[1].issues,
+        contains(ThirdPartyBookmarkImportIssue.invalidPort),
+      );
+    });
+
+    test('accepts only unsigned decimal port text', () {
+      const values = ['22', '0x16', '+22', '-22', '٢٢', 'twenty-two'];
+      final servers = values.indexed
+          .map(
+            (entry) =>
+                '<Server><Host>port-${entry.$1}.example.com</Host>'
+                '<Port>${entry.$2}</Port><Protocol>1</Protocol>'
+                '<Name>${entry.$2}</Name></Server>',
+          )
+          .join();
+      final preview = _load(ThirdPartyBookmarkFormat.fileZilla, [
+        _textFile(
+          'ports.xml',
+          '<FileZilla3><Servers>$servers</Servers></FileZilla3>',
+        ),
+      ]);
+
+      expect(preview.rows.first.port, 22);
+      expect(
+        preview.rows.first.issues,
+        isNot(contains(ThirdPartyBookmarkImportIssue.invalidPort)),
+      );
+      for (final row in preview.rows.skip(1)) {
+        expect(row.port, 0, reason: row.label);
+        expect(
+          row.issues,
+          contains(ThirdPartyBookmarkImportIssue.invalidPort),
+          reason: row.label,
+        );
+      }
+    });
+
+    test('uses the persisted FileZilla protocol table', () {
+      const expected = [
+        (code: '0', identifier: 'FTP'),
+        (code: '1', identifier: 'SFTP'),
+        (code: '2', identifier: 'HTTP'),
+        (code: '3', identifier: 'FTPS'),
+        (code: '4', identifier: 'FTPES'),
+        (code: '5', identifier: 'HTTPS'),
+        (code: '6', identifier: 'INSECURE_FTP'),
+        (code: '7', identifier: 'S3'),
+        (code: '8', identifier: 'STORJ'),
+        (code: '9', identifier: 'WEBDAV'),
+        (code: '10', identifier: 'AZURE_FILE'),
+        (code: '11', identifier: 'AZURE_BLOB'),
+        (code: '12', identifier: 'SWIFT'),
+        (code: '13', identifier: 'GOOGLE_CLOUD'),
+        (code: '14', identifier: 'GOOGLE_DRIVE'),
+        (code: '15', identifier: 'DROPBOX'),
+        (code: '16', identifier: 'ONEDRIVE'),
+        (code: '17', identifier: 'B2'),
+        (code: '18', identifier: 'BOX'),
+        (code: '19', identifier: 'INSECURE_WEBDAV'),
+        (code: '20', identifier: 'RACKSPACE'),
+        (code: '21', identifier: 'STORJ_GRANT'),
+        (code: '22', identifier: 'S3_SSO'),
+        (code: '23', identifier: 'GOOGLE_CLOUD_SVC_ACC'),
+        (code: '24', identifier: 'CLOUDFLARE_R2'),
+        (code: '99', identifier: '99'),
+      ];
+      final servers = expected
+          .map(
+            (entry) =>
+                '<Server><Host>code-${entry.code}.example.com</Host>'
+                '<Protocol>${entry.code}</Protocol></Server>',
+          )
+          .join();
+      final preview = _load(ThirdPartyBookmarkFormat.fileZilla, [
+        _textFile(
+          'protocols.xml',
+          '<FileZilla3><Servers>$servers</Servers></FileZilla3>',
+        ),
+      ]);
+
+      expect(
+        preview.rows.map((row) => row.protocol),
+        expected.map((entry) => entry.identifier),
+      );
+      expect(
+        preview.rows.take(25).map((row) => row.protocolVerdict),
+        everyElement(ThirdPartyBookmarkProtocolVerdict.known),
+      );
+      expect(
+        preview.rows.last.protocolVerdict,
+        ThirdPartyBookmarkProtocolVerdict.unknown,
+      );
+      for (var index = 0; index < preview.rows.length; index++) {
+        expect(
+          preview.rows[index].issues.contains(
+            ThirdPartyBookmarkImportIssue.unsupportedProtocol,
+          ),
+          index != 1,
+          reason: 'FileZilla protocol ${expected[index].code}',
+        );
+      }
+    });
+
+    test('returns missing Cyberduck protocol tokens without UI copy', () {
       final cyberduck = _load(ThirdPartyBookmarkFormat.cyberduck, [
         _textFile('missing.duck', '''
 <plist><dict><key>Hostname</key><string>files.example.com</string></dict></plist>
 '''),
       ]);
 
-      expect(fileZilla.rows.single.protocol, '99');
-      expect(
-        fileZilla.rows.single.protocolVerdict,
-        ThirdPartyBookmarkProtocolVerdict.unknown,
-      );
       expect(cyberduck.rows.single.protocol, isEmpty);
       expect(
         cyberduck.rows.single.protocolVerdict,
@@ -392,6 +561,77 @@ PasswordPlain=never-import
       expect(row.authMethod, AuthMethod.privateKey);
       expect(row.remotePath, '/data/team');
       expect(row.issues, isEmpty);
+    });
+
+    test('uses the persisted WinSCP protocol table', () {
+      const expected = [
+        (code: '0', identifier: 'SCP'),
+        (code: '1', identifier: 'SFTP'),
+        (code: '2', identifier: 'SFTP'),
+        (code: '5', identifier: 'FTP'),
+        (code: '6', identifier: 'WebDAV'),
+        (code: '7', identifier: 'S3'),
+        (code: '99', identifier: '99'),
+      ];
+      final sessions = expected
+          .map(
+            (entry) =>
+                '[Sessions\\Code ${entry.code}]\n'
+                'HostName=code-${entry.code}.example.com\n'
+                'FSProtocol=${entry.code}\n',
+          )
+          .join('\n');
+      final preview = _load(ThirdPartyBookmarkFormat.winScp, [
+        _textFile('protocols.ini', sessions),
+      ]);
+
+      expect(
+        preview.rows.map((row) => row.protocol),
+        expected.map((entry) => entry.identifier),
+      );
+      expect(
+        preview.rows.take(6).map((row) => row.protocolVerdict),
+        everyElement(ThirdPartyBookmarkProtocolVerdict.known),
+      );
+      expect(
+        preview.rows.last.protocolVerdict,
+        ThirdPartyBookmarkProtocolVerdict.unknown,
+      );
+      for (var index = 0; index < preview.rows.length; index++) {
+        expect(
+          preview.rows[index].issues.contains(
+            ThirdPartyBookmarkImportIssue.unsupportedProtocol,
+          ),
+          index != 1 && index != 2,
+          reason: 'WinSCP protocol ${expected[index].code}',
+        );
+      }
+    });
+
+    test('only unmunges two unsigned hexadecimal digits', () {
+      final preview = _load(ThirdPartyBookmarkFormat.winScp, [
+        _textFile('escapes.ini', '''
+[Sessions\\%41]
+HostName=a.example.com
+FSProtocol=1
+
+[Sessions\\%+1]
+HostName=plus.example.com
+FSProtocol=1
+
+[Sessions\\%-F]
+HostName=minus.example.com
+FSProtocol=1
+'''),
+      ]);
+
+      expect(preview.rows.map((row) => row.label), ['A', '%+1', '%-F']);
+      for (final row in preview.rows) {
+        expect(
+          row.issues,
+          isNot(contains(ThirdPartyBookmarkImportIssue.invalidFieldValue)),
+        );
+      }
     });
 
     test('reads UTF-16 BOM and keeps password credentials out', () {
@@ -1004,8 +1244,7 @@ HostName=files.example.com
       );
     });
 
-    test('budgets defaults before amplified duplicate rows', () {
-      const jsonListSeparatorBytes = 1;
+    test('budgets defaults before amplified duplicate rows', () async {
       const projectionDeviceId = '00000000-0000-4000-8000-000000000000';
       final keyPath = '/${'k' * 4095}';
       const duplicate = '<Bookmark><Name>copy</Name></Bookmark>';
@@ -1044,32 +1283,23 @@ HostName=files.example.com
       expect(uniqueRow.importByDefault, isTrue);
 
       final projectionTime = DateTime.utc(9999, 12, 31, 23, 59, 59, 999, 999);
-      final envelopeBytes = utf8
-          .encode(jsonEncode({'syncTuples': const <String, Object?>{}}))
-          .length;
-      final projectedBytes = preview.rows
-          .where((row) => row.importable)
-          .map((row) {
-            final bookmarkBytes = utf8
-                .encode(
-                  jsonEncode(row.toBookmark(now: projectionTime).toJson()),
-                )
-                .length;
-            final tupleBytes = utf8
-                .encode(
-                  jsonEncode({
-                    row.id: {
-                      'updatedAt': projectionTime.millisecondsSinceEpoch,
-                      'deviceId': projectionDeviceId,
-                    },
-                  }),
-                )
-                .length;
-            return bookmarkBytes + jsonListSeparatorBytes + tupleBytes;
-          })
-          .fold(envelopeBytes, (total, bytes) => total + bytes);
+      final directory = await Directory.systemTemp.createTemp(
+        'poltergeist-import-budget-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final path = '${directory.path}${Platform.pathSeparator}bookmarks.json';
+      final store = FileBookmarkStore(
+        path: path,
+        now: () => projectionTime,
+        syncDeviceId: () => projectionDeviceId,
+      );
+      await store.upsertAll([
+        for (final row in preview.rows.where((row) => row.importable))
+          row.toBookmark(now: projectionTime),
+      ]);
+
       expect(
-        projectedBytes,
+        await File(path).length(),
         lessThanOrEqualTo(thirdPartyBookmarkImportMaxProjectedPersistedBytes),
       );
     });
@@ -1086,9 +1316,17 @@ HostName=files.example.com
         'small-replacement',
       ];
       var nextId = 0;
-      final service = ThirdPartyBookmarkImportService(
-        mintId: () => ids[nextId++],
-      );
+      String mintId() {
+        if (nextId >= ids.length) {
+          throw StateError(
+            'mintId called ${nextId + 1} times; expected ${ids.length}',
+          );
+        }
+
+        return ids[nextId++];
+      }
+
+      final service = ThirdPartyBookmarkImportService(mintId: mintId);
       final keyPath = '/${'k' * 4095}';
       final preview = service.loadPreview(
         format: ThirdPartyBookmarkFormat.cyberduck,
@@ -1120,6 +1358,7 @@ HostName=files.example.com
       expect(preview.rows[2].matchesEarlierImportRow, isFalse);
       expect(preview.rows[2].importable, isTrue);
       expect(preview.rows[2].importByDefault, isTrue);
+      expect(nextId, ids.length);
     });
 
     test('imported sort keys allow reordering between adjacent rows', () async {

@@ -86,7 +86,11 @@ void main() {
     final setup = buildThirdPartyBookmarkImportSetup(
       bookmarks: FakeBookmarkStore(),
     );
-    final padding = ' '.padRight(thirdPartyBookmarkImportMaxFileBytes - 31);
+    const wrapper = '<FileZilla3></FileZilla3>';
+    final wrapperBytes = utf8.encode(wrapper).length;
+    final padding = ' '.padRight(
+      thirdPartyBookmarkImportMaxFileBytes - wrapperBytes - 1,
+    );
     final task = await setup.startPreview(
       format: ThirdPartyBookmarkFormat.fileZilla,
       files: [

@@ -149,10 +149,12 @@ String _winScpUnmunge(String input) {
   var hasRawUnicode = false;
   for (var index = 0; index < input.length;) {
     if (input[index] == '%' && index + 2 < input.length) {
-      final escaped = int.tryParse(
-        input.substring(index + 1, index + 3),
-        radix: 16,
-      );
+      final firstDigit = input.codeUnitAt(index + 1);
+      final secondDigit = input.codeUnitAt(index + 2);
+      final escaped =
+          _isAsciiHexDigit(firstDigit) && _isAsciiHexDigit(secondDigit)
+          ? int.parse(input.substring(index + 1, index + 3), radix: 16)
+          : null;
       if (escaped != null) {
         bytes.add(escaped);
         index += 3;
@@ -180,6 +182,11 @@ String _winScpUnmunge(String input) {
   if (hasRawUnicode) return utf8.decode(bytes, allowMalformed: true);
   return latin1.decode(bytes, allowInvalid: true);
 }
+
+bool _isAsciiHexDigit(int codeUnit) =>
+    codeUnit >= 0x30 && codeUnit <= 0x39 ||
+    codeUnit >= 0x41 && codeUnit <= 0x46 ||
+    codeUnit >= 0x61 && codeUnit <= 0x66;
 
 ({String host, String username}) _winScpEndpoint(String host, String username) {
   final separator = host.lastIndexOf('@');

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../theme/app_theme.dart' show poltergeistMonoTextStyle;
 
 typedef BookmarkImportText = String Function(AppLocalizations l10n);
 typedef BookmarkImportFailureText =
@@ -144,6 +145,9 @@ const _cellHorizontalPadding = 8.0;
 const _compactCheckboxGap = 4.0;
 const _compactContentInset = _importColumnWidth + _compactCheckboxGap;
 const _bookmarkMaterializationBatchSize = 128;
+final _bookmarkImportMonoTextStyle = poltergeistMonoTextStyle.copyWith(
+  fontSize: 12,
+);
 
 class _BookmarkImportDialogState extends State<_BookmarkImportDialog> {
   _LoadPhase _phase = _LoadPhase.loading;
@@ -201,7 +205,9 @@ class _BookmarkImportDialogState extends State<_BookmarkImportDialog> {
       _selectedRowIds
         ..clear()
         ..addAll(
-          preview.rows.where((row) => row.importByDefault).map((row) => row.id),
+          preview.rows
+              .where((row) => row.importable && row.importByDefault)
+              .map((row) => row.id),
         );
     });
   }
@@ -294,7 +300,7 @@ class _BookmarkImportDialogState extends State<_BookmarkImportDialog> {
           onPressed: _committing ? null : _cancel,
           child: Text(l10n.sshImportCancel),
         ),
-        if (_phase == _LoadPhase.ready)
+        if (_phase == _LoadPhase.ready && _preview!.rows.isNotEmpty)
           FilledButton(
             onPressed: _committing || _selectedRowIds.isEmpty ? null : _import,
             child: Text(
@@ -418,7 +424,7 @@ class _BookmarkImportDialogState extends State<_BookmarkImportDialog> {
 
   Widget _sourceLabel(AppLocalizations l10n) => SelectableText(
     widget.spec.sourceLabel(l10n),
-    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+    style: _bookmarkImportMonoTextStyle,
   );
 
   Widget _header(AppLocalizations l10n) => Row(
@@ -546,10 +552,7 @@ class _BookmarkImportDialogState extends State<_BookmarkImportDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SelectableText(
-          row.endpoint,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-        ),
+        SelectableText(row.endpoint, style: _bookmarkImportMonoTextStyle),
         for (final detail in row.details)
           Text(
             detail(l10n),
@@ -564,7 +567,7 @@ class _BookmarkImportDialogState extends State<_BookmarkImportDialog> {
     return Text(
       row.authentication(l10n),
       style: row.authenticationStyle == BookmarkImportTextStyle.monospace
-          ? const TextStyle(fontFamily: 'monospace', fontSize: 12)
+          ? _bookmarkImportMonoTextStyle
           : null,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,

@@ -38,9 +38,9 @@ import 'services/sidebar_controller.dart'
     show CollapsedSectionWriter, PinnedServerWriter, SidebarDensity;
 import 'services/sidebar_probe_owner.dart';
 import 'services/ssh_config_import_setup.dart';
-import 'services/third_party_bookmark_import_setup.dart';
 import 'services/sync_environment.dart';
 import 'services/sync_queue_facade.dart';
+import 'services/third_party_bookmark_import_setup.dart';
 import 'services/transfer_limits_controller.dart';
 import 'services/update_check_controller.dart';
 import 'services/workspace_library.dart';

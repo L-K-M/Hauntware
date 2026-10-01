@@ -7,6 +7,35 @@ const String _fileZillaFolder = 'Folder';
 const String _fileZillaBookmark = 'Bookmark';
 const String _fileZillaSftpProtocol = '1';
 const String _fileZillaKeyLogonType = '5';
+// FileZilla appends this persisted enum; changing an existing value corrupts
+// saved sites. Keep unsupported entries recognizable in the preview.
+const Map<String, String> _fileZillaProtocolIdentifiers = {
+  '0': 'FTP',
+  '1': 'SFTP',
+  '2': 'HTTP',
+  '3': 'FTPS',
+  '4': 'FTPES',
+  '5': 'HTTPS',
+  '6': 'INSECURE_FTP',
+  '7': 'S3',
+  '8': 'STORJ',
+  '9': 'WEBDAV',
+  '10': 'AZURE_FILE',
+  '11': 'AZURE_BLOB',
+  '12': 'SWIFT',
+  '13': 'GOOGLE_CLOUD',
+  '14': 'GOOGLE_DRIVE',
+  '15': 'DROPBOX',
+  '16': 'ONEDRIVE',
+  '17': 'B2',
+  '18': 'BOX',
+  '19': 'INSECURE_WEBDAV',
+  '20': 'RACKSPACE',
+  '21': 'STORJ_GRANT',
+  '22': 'S3_SSO',
+  '23': 'GOOGLE_CLOUD_SVC_ACC',
+  '24': 'CLOUDFLARE_R2',
+};
 const int _fileZillaDefaultPathType = 0;
 const int _fileZillaUnixPathType = 1;
 const int _fileZillaMaximumSafePathLength = 32767;
@@ -151,7 +180,12 @@ _BoundedImportText _fileZillaLabel(
       .map((node) => node.value)
       .join()
       .trim();
-  final siteName = namedSite.isEmpty ? legacySite : namedSite;
+  final host = _fileZillaChildText(server, 'Host') ?? '';
+  final siteName = namedSite.isNotEmpty
+      ? namedSite
+      : legacySite.isNotEmpty
+      ? legacySite
+      : host;
   return _appendImportLabelSegment(folders, siteName);
 }
 
@@ -220,33 +254,18 @@ String? _fileZillaChildRawText(XmlElement parent, String name) {
 
 ({String identifier, ThirdPartyBookmarkProtocolVerdict verdict})
 _fileZillaProtocol(String code) {
-  switch (code) {
-    case '0':
-      return (
-        identifier: 'FTP',
-        verdict: ThirdPartyBookmarkProtocolVerdict.known,
-      );
-    case _fileZillaSftpProtocol:
-      return (
-        identifier: 'SFTP',
-        verdict: ThirdPartyBookmarkProtocolVerdict.known,
-      );
-    case '3':
-      return (
-        identifier: 'FTPS',
-        verdict: ThirdPartyBookmarkProtocolVerdict.known,
-      );
-    case '4':
-      return (
-        identifier: 'FTPES',
-        verdict: ThirdPartyBookmarkProtocolVerdict.known,
-      );
-    default:
-      return (
-        identifier: code,
-        verdict: ThirdPartyBookmarkProtocolVerdict.unknown,
-      );
+  final identifier = _fileZillaProtocolIdentifiers[code];
+  if (identifier == null) {
+    return (
+      identifier: code,
+      verdict: ThirdPartyBookmarkProtocolVerdict.unknown,
+    );
   }
+
+  return (
+    identifier: identifier,
+    verdict: ThirdPartyBookmarkProtocolVerdict.known,
+  );
 }
 
 enum _FileZillaLengthUnit { utf16CodeUnits, unicodeScalars, auto }
@@ -301,14 +320,19 @@ String? _decodeFileZillaSafePath(
         _FileZillaLengthUnit.unicodeScalars,
       );
     case _FileZillaLengthUnit.auto:
-      return _decodeFileZillaSafePathWithUnit(
-            encoded,
-            _FileZillaLengthUnit.utf16CodeUnits,
-          ) ??
-          _decodeFileZillaSafePathWithUnit(
-            encoded,
-            _FileZillaLengthUnit.unicodeScalars,
-          );
+      final utf16 = _decodeFileZillaSafePathWithUnit(
+        encoded,
+        _FileZillaLengthUnit.utf16CodeUnits,
+      );
+      final scalars = _decodeFileZillaSafePathWithUnit(
+        encoded,
+        _FileZillaLengthUnit.unicodeScalars,
+      );
+      if (utf16 == null) return scalars;
+      if (scalars == null || scalars == utf16) return utf16;
+
+      // Without a platform marker, two valid interpretations are unsafe.
+      return null;
   }
 }
 

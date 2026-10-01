@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/theme/app_theme.dart'
+    show poltergeistMonoTextStyle;
 import 'package:poltergeist_app/ui/import/bookmark_import_dialog.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -42,6 +44,29 @@ BookmarkImportDialogRow _row(int index, {VoidCallback? onMaterialized}) =>
       },
     );
 
+BookmarkImportDialogRow _configuredRow(
+  int index, {
+  bool importable = true,
+  bool importByDefault = true,
+  BookmarkImportTextStyle authenticationStyle = BookmarkImportTextStyle.plain,
+}) {
+  final row = _row(index);
+
+  return BookmarkImportDialogRow(
+    id: row.id,
+    label: row.label,
+    endpoint: row.endpoint,
+    username: row.username,
+    authentication: row.authentication,
+    authenticationStyle: authenticationStyle,
+    details: row.details,
+    notes: row.notes,
+    importable: importable,
+    importByDefault: importByDefault,
+    toBookmark: row.toBookmark,
+  );
+}
+
 BookmarkImportDialogSpec _spec({
   required Future<BookmarkImportDialogPreview> Function() load,
   VoidCallback? cancelLoad,
@@ -79,8 +104,12 @@ Widget _harness(
   );
 }
 
-Future<void> _open(WidgetTester tester, BookmarkImportDialogSpec spec) async {
-  await tester.pumpWidget(_harness(spec));
+Future<void> _open(
+  WidgetTester tester,
+  BookmarkImportDialogSpec spec, {
+  ValueChanged<BookmarkImportDialogResult>? onResult,
+}) async {
+  await tester.pumpWidget(_harness(spec, onResult: onResult));
   await tester.tap(find.text('open'));
   await tester.pump();
   await tester.pumpAndSettle();
@@ -112,6 +141,81 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('default selection excludes non-importable rows', (tester) async {
+    BookmarkImportDialogResult? result;
+    final spec = _spec(
+      load: () async => BookmarkImportDialogPreview(
+        rows: [
+          _row(0),
+          _configuredRow(1, importByDefault: false),
+          _configuredRow(2, importable: false),
+        ],
+      ),
+    );
+
+    await _open(tester, spec, onResult: (value) => result = value);
+
+    final checkboxes = find.byType(Checkbox);
+    expect(tester.widget<Checkbox>(checkboxes.at(0)).value, isTrue);
+    expect(tester.widget<Checkbox>(checkboxes.at(1)).value, isFalse);
+    expect(tester.widget<Checkbox>(checkboxes.at(2)).value, isFalse);
+    expect(find.widgetWithText(FilledButton, 'Import 1'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Import 1'));
+    await tester.pumpAndSettle();
+
+    expect(result?.bookmarks.map((bookmark) => bookmark.id), ['bookmark-0']);
+  });
+
+  testWidgets('empty preview has no import action', (tester) async {
+    await _open(
+      tester,
+      _spec(load: () async => const BookmarkImportDialogPreview(rows: [])),
+    );
+
+    expect(find.text('No bookmarks'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Import'), findsNothing);
+  });
+
+  testWidgets('machine-readable fields use the app monospace stack', (
+    tester,
+  ) async {
+    await _open(
+      tester,
+      _spec(
+        load: () async => BookmarkImportDialogPreview(
+          rows: [
+            _configuredRow(
+              0,
+              authenticationStyle: BookmarkImportTextStyle.monospace,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    Finder selectableText(String value) => find.byWidgetPredicate(
+      (widget) => widget is SelectableText && widget.data == value,
+    );
+
+    final source = tester.widget<SelectableText>(
+      selectableText('bookmarks.xml'),
+    );
+    final endpoint = tester.widget<SelectableText>(
+      selectableText('host-0.example.com:22'),
+    );
+    final authentication = tester.widget<Text>(find.text('ssh-agent'));
+
+    for (final style in [source.style, endpoint.style, authentication.style]) {
+      expect(style?.fontFamily, poltergeistMonoTextStyle.fontFamily);
+      expect(
+        style?.fontFamilyFallback,
+        poltergeistMonoTextStyle.fontFamilyFallback,
+      );
+      expect(style?.fontFeatures, poltergeistMonoTextStyle.fontFeatures);
+    }
+  });
+
   testWidgets('materializes 10,000 selected rows across UI turns', (
     tester,
   ) async {
@@ -126,11 +230,7 @@ void main() {
       load: () async => BookmarkImportDialogPreview(rows: rows),
     );
 
-    await tester.pumpWidget(
-      _harness(spec, onResult: (value) => result = value),
-    );
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
+    await _open(tester, spec, onResult: (value) => result = value);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Import 10000'));
 

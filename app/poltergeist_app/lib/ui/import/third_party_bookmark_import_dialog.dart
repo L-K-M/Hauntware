@@ -109,7 +109,7 @@ BookmarkImportDialogRow _dialogRow(
   return BookmarkImportDialogRow(
     id: row.id,
     label: row.label,
-    endpoint: '${row.host}:${row.port}',
+    endpoint: row.endpoint,
     username: row.username,
     authentication: (l10n) => switch (row.authMethod) {
       AuthMethod.agent => l10n.sshImportAuthAgent,

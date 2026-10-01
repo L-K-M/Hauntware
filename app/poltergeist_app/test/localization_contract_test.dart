@@ -655,13 +655,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
     r"'${row.host.effectiveHost}:${row.port}'",
   },
-  // D22 importer machine data, widget keys, file extensions, and the picker
+  // D22 importer null-fallbacks, widget keys, file extensions, and the picker
   // diagnostic reported behind localized copy. None is authored UI copy.
-  'lib/ui/import/bookmark_import_dialog.dart': {"'monospace'"},
-  'lib/ui/import/third_party_bookmark_import_dialog.dart': {
-    "''",
-    r"'${row.host}:${row.port}'",
-  },
+  'lib/ui/import/third_party_bookmark_import_dialog.dart': {"''"},
   'lib/ui/import/third_party_bookmark_import_command.dart': {
     "'favorite.importThirdParty'",
     r"'$kThirdPartyBookmarkImportCommandId:${format.name}'",

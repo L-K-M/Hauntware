@@ -53,6 +53,7 @@ const String _persistedOutputProjectionDeviceId =
     '00000000-0000-4000-8000-000000000000';
 const Set<String> _unsupportedIdentityFileExtensions = {'.ppk', '.pub'};
 final RegExp _importHostWhitespace = RegExp(r'\s', unicode: true);
+final RegExp _asciiDecimalPort = RegExp(r'^[0-9]+$');
 final RegExp _unsafeImportControl = RegExp(
   r'[\u0000-\u001F\u007F-\u009F\u061C\u200E\u200F\u2028-\u202E\u2066-\u2069]',
 );
@@ -186,7 +187,17 @@ final class ThirdPartyBookmarkImportRow {
   }) : _sortKey = importSortKey;
 
   /// Host and port as rendered by the common import table.
-  String get endpoint => '$host:$port';
+  String get endpoint {
+    final displayHost =
+        host.contains(':') && !(host.startsWith('[') && host.endsWith(']'))
+        ? '[$host]'
+        : host;
+    if (issues.contains(ThirdPartyBookmarkImportIssue.invalidPort)) {
+      return displayHost;
+    }
+
+    return '$displayHost:$port';
+  }
 
   bool get importable =>
       !issues.contains(ThirdPartyBookmarkImportIssue.unsupportedProtocol) &&
@@ -831,7 +842,12 @@ enum _RouteSupport { direct, notImported }
     return (port: _defaultSshPort, valid: true);
   }
 
-  final port = int.tryParse(rawPort.trim());
+  final normalized = rawPort.trim();
+  if (!_asciiDecimalPort.hasMatch(normalized)) {
+    return (port: 0, valid: false);
+  }
+
+  final port = int.tryParse(normalized, radix: 10);
   if (port == null || port < _minimumPort || port > _maximumPort) {
     return (port: 0, valid: false);
   }

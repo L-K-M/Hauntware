@@ -349,8 +349,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get bookmarkImportEmpty =>
-      'No servers were found in the selected file.';
+  String get bookmarkImportEmpty => 'No servers were found in the selection.';
 
   @override
   String get bookmarkImportReadFailed =>

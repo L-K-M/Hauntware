@@ -478,9 +478,9 @@
       }
     }
   },
-  "bookmarkImportEmpty": "No servers were found in the selected file.",
+  "bookmarkImportEmpty": "No servers were found in the selection.",
   "@bookmarkImportEmpty": {
-    "description": "Empty state for a third-party bookmark import preview."
+    "description": "Empty state for one or more selected third-party bookmark files."
   },
   "bookmarkImportReadFailed": "Could not read the selected bookmark file.",
   "@bookmarkImportReadFailed": {
@@ -597,7 +597,7 @@
   },
   "bookmarkImportMissingHost": "Cannot import: host is missing or invalid",
   "@bookmarkImportMissingHost": {
-    "description": "Chip for a third-party bookmark without a hostname."
+    "description": "Chip for a third-party bookmark with a missing or invalid hostname."
   },
   "bookmarkImportCredentialsNotImported": "Saved password is not imported; Poltergeist will ask",
   "@bookmarkImportCredentialsNotImported": {

@@ -27,12 +27,14 @@ Map<String, String> existingBookmarkImportEndpoints(
       final identity = reference.identity;
       if (identity == null) continue;
 
-      endpoints[bookmarkImportEndpointKey(
-            identity.host,
-            identity.port,
-            identity.username,
-          )] =
-          bookmark.label;
+      endpoints.putIfAbsent(
+        bookmarkImportEndpointKey(
+          identity.host,
+          identity.port,
+          identity.username,
+        ),
+        () => bookmark.label,
+      );
     }
   }
 
@@ -50,13 +52,15 @@ Map<String, String> existingBookmarkImportDestinations(
       final identity = destination.reference.identity;
       if (identity == null) continue;
 
-      destinations[bookmarkImportDestinationKey(
-            identity.host,
-            identity.port,
-            identity.username,
-            destination.path,
-          )] =
-          bookmark.label;
+      destinations.putIfAbsent(
+        bookmarkImportDestinationKey(
+          identity.host,
+          identity.port,
+          identity.username,
+          destination.path,
+        ),
+        () => bookmark.label,
+      );
     }
   }
 

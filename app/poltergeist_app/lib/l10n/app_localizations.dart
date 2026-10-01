@@ -658,10 +658,10 @@ abstract class AppLocalizations {
   /// **'{source} · {count, plural, =1{1 file} other{{count} files}}'**
   String bookmarkImportFilesSelected(String source, int count);
 
-  /// Empty state for a third-party bookmark import preview.
+  /// Empty state for one or more selected third-party bookmark files.
   ///
   /// In en, this message translates to:
-  /// **'No servers were found in the selected file.'**
+  /// **'No servers were found in the selection.'**
   String get bookmarkImportEmpty;
 
   /// Failure shown when a selected third-party bookmark file cannot be parsed.
@@ -754,7 +754,7 @@ abstract class AppLocalizations {
   /// **'Cannot import: protocol is unknown'**
   String get bookmarkImportUnknownProtocol;
 
-  /// Chip for a third-party bookmark without a hostname.
+  /// Chip for a third-party bookmark with a missing or invalid hostname.
   ///
   /// In en, this message translates to:
   /// **'Cannot import: host is missing or invalid'**

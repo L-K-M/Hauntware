@@ -46,16 +46,17 @@ Future<List<Bookmark>?> showSshConfigImportDialog(
 
 BookmarkImportDialogRow _dialogRow(SshConfigImportRow row) {
   final keyPath = row.host.identityFile;
+  final hasKeyPath = keyPath != null && keyPath.trim().isNotEmpty;
 
   return BookmarkImportDialogRow(
     id: row.id,
     label: row.host.alias,
     endpoint: '${row.host.effectiveHost}:${row.port}',
     username: row.username,
-    authentication: keyPath == null || keyPath.trim().isEmpty
-        ? (l10n) => l10n.sshImportAuthAgent
-        : (l10n) => l10n.sshImportAuthKey(keyPath),
-    authenticationStyle: keyPath != null && keyPath.trim().isNotEmpty
+    authentication: hasKeyPath
+        ? (l10n) => l10n.sshImportAuthKey(keyPath)
+        : (l10n) => l10n.sshImportAuthAgent,
+    authenticationStyle: hasKeyPath
         ? BookmarkImportTextStyle.monospace
         : BookmarkImportTextStyle.plain,
     notes: _notes(row),

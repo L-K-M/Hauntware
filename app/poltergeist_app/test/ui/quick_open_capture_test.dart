@@ -259,7 +259,13 @@ void main() {
     );
     final captureOn = Platform.environment['POLTERGEIST_CAPTURE'] == '1';
     Future<void> capture(String? directory, String name) async {
-      if (!captureOn || directory == null) return;
+      if (!captureOn) return;
+      if (directory == null) {
+        // ignore: avoid_print
+        print('skipped $name.png: set POLTERGEIST_CAPTURE_DIR for M9');
+        return;
+      }
+
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
