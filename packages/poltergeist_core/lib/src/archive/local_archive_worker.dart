@@ -1294,6 +1294,7 @@ List<_ExtractionEntry> _preflightZip(
   final entries = <_ExtractionEntry>[];
   final paths = _ArchivePathRegistry();
   final localHeaderOffsets = <int>{};
+  final localRegions = <_ZipLocalRegion>[];
   var totalBytes = 0;
   var totalCompressedBytes = 0;
   var pathComponents = 0;
@@ -1349,7 +1350,7 @@ List<_ExtractionEntry> _preflightZip(
     final expectedCompression = header.compressionMethod == _zipDeflateMethod
         ? CompressionType.deflate
         : CompressionType.none;
-    _validateLocalZipBounds(input, directory, header);
+    localRegions.add(_validateLocalZipBounds(input, directory, header));
 
     // archive 4.3.0 treats a matching CRC as the optional descriptor
     // signature. Restore the independently validated central values.
@@ -1471,10 +1472,31 @@ List<_ExtractionEntry> _preflightZip(
       ),
     );
   }
+  _validateDisjointLocalZipRegions(localRegions);
+
   return entries;
 }
 
-void _validateLocalZipBounds(
+typedef _ZipLocalRegion = ({int start, int end, String path});
+
+void _validateDisjointLocalZipRegions(List<_ZipLocalRegion> regions) {
+  // Central records need not follow local-record order. Sort their half-open
+  // ranges so two entries cannot claim any of the same archive bytes.
+  regions.sort((left, right) => left.start.compareTo(right.start));
+  for (var index = 1; index < regions.length; index++) {
+    final previous = regions[index - 1];
+    final current = regions[index];
+    if (current.start >= previous.end) continue;
+
+    throw _WorkerAbort(
+      LocalArchiveErrorKind.invalidArchive,
+      'ZIP local entry regions overlap.',
+      path: current.path,
+    );
+  }
+}
+
+_ZipLocalRegion _validateLocalZipBounds(
   InputFileStream input,
   ZipDirectory directory,
   ZipFileHeader header,
@@ -1527,13 +1549,13 @@ void _validateLocalZipBounds(
   }
 
   if ((flags & _zipDataDescriptorFlag) != 0) {
-    _validateZipDataDescriptor(
+    final descriptorEnd = _validateZipDataDescriptor(
       input,
       header,
       dataEnd,
       directory.centralDirectoryOffset,
     );
-    return;
+    return (start: offset, end: descriptorEnd, path: header.filename);
   }
   final expectedCompressedSize = header.compressedSize > _maximumZip32Value
       ? _maximumZip32Value
@@ -1550,9 +1572,10 @@ void _validateLocalZipBounds(
       path: header.filename,
     );
   }
+  return (start: offset, end: dataEnd, path: header.filename);
 }
 
-void _validateZipDataDescriptor(
+int _validateZipDataDescriptor(
   InputFileStream input,
   ZipFileHeader header,
   int descriptorOffset,
@@ -1580,7 +1603,9 @@ void _validateZipDataDescriptor(
       first == header.crc32 &&
       second == header.compressedSize &&
       third == header.uncompressedSize;
-  if (unsignedMatches) return;
+  if (unsignedMatches) {
+    return descriptorOffset + descriptorWithoutSignatureLength;
+  }
 
   if (first != _zipDataDescriptorSignature) {
     throw _WorkerAbort(
@@ -1609,6 +1634,7 @@ void _validateZipDataDescriptor(
       path: header.filename,
     );
   }
+  return descriptorOffset + descriptorWithSignatureLength;
 }
 
 List<String> _validatedWorkerPath(String value, int maximumDepth) {

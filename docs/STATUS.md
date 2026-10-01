@@ -4,6 +4,19 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D27 ZIP local-region ownership (2026-10-01)
+
+ZIP extraction preflight now treats each local record as one half-open byte
+region: header, name, extra data, compressed payload, and any validated
+12- or 16-byte data descriptor. Central-directory entries are sorted by local
+offset and rejected as an invalid archive when their regions overlap; adjacent
+records remain valid. A regression archive whose first stored payload claims
+one byte of the next local header failed before the repair and now rejects
+before output is materialized.
+
+Core analysis is clean. All 86 archive tests and all 1,908 core tests pass;
+the full run has 27 environment-gated skips. No Séance source or pin changed.
+
 ## D12 runner-image baseline refresh (2026-10-01)
 
 Main run 36850276493 exposed `ubuntu-latest` rotating from
@@ -10624,6 +10637,10 @@ unverified.
     does not reject two central entries whose local regions overlap. Review
     found no containment, byte-cap, or checksum bypass; rejecting overlap is a
     valid parser-hardening follow-up rather than a D27 blocker.
+    **Closed 2026-10-01:** preflight now includes headers, payloads, and
+    optional data descriptors in sorted local byte regions, rejects any
+    intersection, and retains valid adjacency. The one-byte-overlap regression
+    fails before the repair and passes with it.
 
 ## Independent audit
 

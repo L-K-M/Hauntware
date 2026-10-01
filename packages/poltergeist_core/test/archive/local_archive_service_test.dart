@@ -445,6 +445,78 @@ void main() {
     expect(_stageNames(root), isEmpty);
   });
 
+  test('rejects overlapping local entry regions', () async {
+    const fixedLocalHeaderLength = 30;
+    const localCrc32Offset = 14;
+    const localCompressedSizeOffset = 18;
+    const localUncompressedSizeOffset = 22;
+    const localNameLengthOffset = 26;
+    const localExtraLengthOffset = 28;
+    const centralCrc32Offset = 16;
+    const centralCompressedSizeOffset = 20;
+    const centralUncompressedSizeOffset = 24;
+    final archive = File(pathOf('overlapping-regions.zip'));
+    _writeZip(archive, [
+      ArchiveFile.noCompress('outer.bin', 1, [0]),
+      ArchiveFile.noCompress('inner.txt', 4, [1, 2, 3, 4]),
+    ]);
+    final bytes = archive.readAsBytesSync().toList();
+    const localSignature = [0x50, 0x4b, 0x03, 0x04];
+    const centralSignature = [0x50, 0x4b, 0x01, 0x02];
+    final outerLocal = _findSignature(bytes, localSignature);
+    final innerLocal = _findSignature(
+      bytes,
+      localSignature,
+      startOffset: outerLocal + localSignature.length,
+    );
+    final outerCentral = _findSignature(bytes, centralSignature);
+    final outerDataStart =
+        outerLocal +
+        fixedLocalHeaderLength +
+        _readUint16(bytes, outerLocal + localNameLengthOffset) +
+        _readUint16(bytes, outerLocal + localExtraLengthOffset);
+
+    // Keep both entries valid while the outer payload claims one byte of the
+    // inner header. Each per-entry bounds check therefore succeeds alone.
+    final overlappingPayload = bytes.sublist(outerDataStart, innerLocal + 1);
+    final overlappingCrc32 = getCrc32(overlappingPayload);
+
+    expect(innerLocal, greaterThan(outerDataStart));
+    _writeUint32(bytes, outerLocal + localCrc32Offset, overlappingCrc32);
+    _writeUint32(
+      bytes,
+      outerLocal + localCompressedSizeOffset,
+      overlappingPayload.length,
+    );
+    _writeUint32(
+      bytes,
+      outerLocal + localUncompressedSizeOffset,
+      overlappingPayload.length,
+    );
+    _writeUint32(bytes, outerCentral + centralCrc32Offset, overlappingCrc32);
+    _writeUint32(
+      bytes,
+      outerCentral + centralCompressedSizeOffset,
+      overlappingPayload.length,
+    );
+    _writeUint32(
+      bytes,
+      outerCentral + centralUncompressedSizeOffset,
+      overlappingPayload.length,
+    );
+    archive.writeAsBytesSync(bytes);
+
+    await _expectArchiveError(
+      service.extractZip(
+        archivePath: archive.path,
+        destinationPath: pathOf('output'),
+      ),
+      LocalArchiveErrorKind.invalidArchive,
+    );
+    expect(Directory(pathOf('output')).existsSync(), isFalse);
+    expect(_stageNames(root), isEmpty);
+  });
+
   for (final (label, entry) in <(String, ArchiveFile)>[
     ('symbolic link', ArchiveFile.noCompress('link', 0, [])..mode = 0xa1ff),
     ('special entry', ArchiveFile.noCompress('pipe', 0, [])..mode = 0x11ff),
@@ -2324,8 +2396,16 @@ Future<void> _waitForStage(Directory root) async {
   }
 }
 
-int _findSignature(List<int> bytes, List<int> signature) {
-  for (var offset = 0; offset <= bytes.length - signature.length; offset++) {
+int _findSignature(
+  List<int> bytes,
+  List<int> signature, {
+  int startOffset = 0,
+}) {
+  for (
+    var offset = startOffset;
+    offset <= bytes.length - signature.length;
+    offset++
+  ) {
     var matches = true;
     for (var index = 0; index < signature.length; index++) {
       if (bytes[offset + index] != signature[index]) {
