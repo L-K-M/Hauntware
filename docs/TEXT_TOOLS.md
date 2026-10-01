@@ -53,7 +53,7 @@ Convert to ASCII, Strip Diacritics, Compose Accents and Decompose Accents.
 | 8: Unicode/ASCII | Compose/Decompose/Strip Diacritics need decision 4 on `unorm_dart`; Convert to ASCII separately needs a reviewed Latin transliteration table |
 | 8: JSON | Format/Minify JSON need decision 7 on scope |
 | 8: search | Regex hints/cheat sheet, Use Selection for Find, session search history and Compare with Saved are unstarted. Find in Selection and Extract are already shipped |
-| 8: Edit/File | Selection commands, Insert Line Above/Below, Paste and Match Indentation, number increment/decrement, Copy/Cut Line, block-comment fallback and File-menu Copy Path are unstarted. Go to Matching Bracket and tab-menu Copy Full Path already exist |
+| 8: Edit/File | Shipped: Select Line, Select Paragraph, Select Enclosing Brackets, Insert Line Above/Below, Paste and Match Indentation, Increment/Decrement Number, Copy/Cut Line, Toggle Comment block fallback and File-menu Copy Path. Go to Matching Bracket and tab-menu Copy Full Path already existed |
 | 8: menu keyboard access | Alt mnemonics remain unbuilt; validate AltGr and desktop/input-method conflicts before assigning them |
 
 No host pins were changed for slice 6. On a later pin bump the shared API
@@ -460,7 +460,7 @@ budget, paging past 1,000 highlights, Replace, Replace All, `$1`, `${name}`.
 
 ### Edit and File menus
 
-Caret and file commands, not catalog tools. Not scheduled (slice 8):
+Caret and file commands, not catalog tools. Shipped (slice 8):
 
 - Select Line, Select Paragraph, Select Enclosing Brackets (BBEdit's
   Balance). Selection only: no edit, allowed when locked.
@@ -470,8 +470,8 @@ Caret and file commands, not catalog tools. Not scheduled (slice 8):
 - Increment / Decrement Number.
 - Copy Line, Cut Line.
 - Toggle Comment's block fallback (E1).
-- Copy Path, added to the File menu (FU5); today it is in the tab context
-  menu only.
+- Copy Path, added to the File menu (FU5); the tab context menu keeps
+  its Copy Full Path, and both share one copy routine.
 
 ### Later
 
