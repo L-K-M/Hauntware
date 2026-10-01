@@ -139,6 +139,42 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
+              const SizedBox(height: 16),
+              _section(theme, 'Saving'),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Trim trailing whitespace on save'),
+                value:
+                    _value.saveOptions.trailingWhitespace ==
+                    TrailingWhitespacePolicy.trim,
+                onChanged: (enabled) => _apply(
+                  _value.copyWith(
+                    saveOptions: TextSaveOptions(
+                      trailingWhitespace: enabled
+                          ? TrailingWhitespacePolicy.trim
+                          : TrailingWhitespacePolicy.preserve,
+                      finalNewline: _value.saveOptions.finalNewline,
+                    ),
+                  ),
+                ),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ensure final newline on save'),
+                value:
+                    _value.saveOptions.finalNewline ==
+                    FinalNewlinePolicy.ensure,
+                onChanged: (enabled) => _apply(
+                  _value.copyWith(
+                    saveOptions: TextSaveOptions(
+                      trailingWhitespace: _value.saveOptions.trailingWhitespace,
+                      finalNewline: enabled
+                          ? FinalNewlinePolicy.ensure
+                          : FinalNewlinePolicy.preserve,
+                    ),
+                  ),
+                ),
+              ),
               if (widget.settings.error case final error?)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),

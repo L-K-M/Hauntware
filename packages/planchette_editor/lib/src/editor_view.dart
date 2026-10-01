@@ -873,15 +873,14 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
 
   Widget _statusBar(BuildContext context) {
     final (line, column) = c.caretLineColumn;
-    final document = c.document;
     final selected = c.selectionStats;
     final status = [
       if (selected.characters > 0)
         widget.strings.selectionSummary(selected.characters, selected.lines),
       if (c.isSaving) widget.strings.saving,
       if (c.isDirty) widget.strings.unsaved,
-      document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
-      document?.hasUtf8Bom == true ? 'UTF-8 BOM' : 'UTF-8',
+      c.metadata.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
+      c.metadata.utf8Bom == Utf8Bom.present ? 'UTF-8 BOM' : 'UTF-8',
       widget.strings.indentation(c.indentation),
       widget.strings.languageName(c.text.language),
       if (!c.highlightingEnabled) widget.strings.largeFile,

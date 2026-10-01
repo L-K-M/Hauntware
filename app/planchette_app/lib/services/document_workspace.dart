@@ -187,6 +187,16 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// tools run in any document.
   final TextToolHistory toolHistory;
   Indentation? _indentationPreference;
+  TextSaveOptions _saveOptions = const TextSaveOptions();
+
+  TextSaveOptions get saveOptions => _saveOptions;
+  set saveOptions(TextSaveOptions value) {
+    if (_saveOptions == value) return;
+    _saveOptions = value;
+    for (final tab in _documents) {
+      tab.editor.saveOptions = value;
+    }
+  }
 
   /// The indentation for documents that neither use nor mandate one, from the
   /// user's settings: every open editor takes it now, and every editor made
@@ -272,6 +282,7 @@ final class DocumentWorkspace extends ChangeNotifier {
           text: text,
           source: tab.baseline,
           expectedSha256: target.digest,
+          metadata: tab.editor.metadata,
         );
         tab.baseline = document;
         tab.path = document.file.path;
@@ -282,6 +293,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       },
     );
     tab.editor.indentationPreference = _indentationPreference;
+    tab.editor.saveOptions = _saveOptions;
     // Extract Matches can send its result to a fresh tab.
     tab.editor.onNewDocument = _extractedDocument;
     tab._editorListener = () => _editorChanged(tab);

@@ -18,6 +18,7 @@ final class AppSettings {
     this.indentation = const Indentation.spaces(),
     this.fontFamily,
     this.recentTextTools = const [],
+    this.saveOptions = const TextSaveOptions(),
   });
 
   /// Bounds a stored size so a bad file cannot make the editor unreadable.
@@ -46,17 +47,22 @@ final class AppSettings {
   /// non-default text option never reach it.
   final List<Object?> recentTextTools;
 
+  /// Opt-in whitespace cleanup. Both choices default off.
+  final TextSaveOptions saveOptions;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     int? fontSize,
     Indentation? indentation,
     List<Object?>? recentTextTools,
+    TextSaveOptions? saveOptions,
   }) => AppSettings(
     themeMode: themeMode ?? this.themeMode,
     fontSize: fontSize ?? this.fontSize,
     indentation: indentation ?? this.indentation,
     fontFamily: fontFamily,
     recentTextTools: recentTextTools ?? this.recentTextTools,
+    saveOptions: saveOptions ?? this.saveOptions,
   );
 
   Map<String, Object?> toJson() => {
@@ -66,6 +72,9 @@ final class AppSettings {
       'usesTabs': indentation.style == IndentStyle.tabs,
       'size': indentation.width,
     },
+    'trimTrailingWhitespaceOnSave':
+        saveOptions.trailingWhitespace == TrailingWhitespacePolicy.trim,
+    'ensureFinalNewline': saveOptions.finalNewline == FinalNewlinePolicy.ensure,
     if (fontFamily != null) 'fontFamily': fontFamily,
     if (recentTextTools.isNotEmpty) 'recentTextTools': recentTextTools,
   };
@@ -86,6 +95,7 @@ final class AppSettings {
       recentTextTools: json['recentTextTools'] is List
           ? List<Object?>.of(json['recentTextTools'] as List)
           : const [],
+      saveOptions: _saveOptions(json),
     );
   }
 
@@ -114,6 +124,21 @@ final class AppSettings {
     return usesTabs ? Indentation.tabs(width: size) : Indentation.spaces(size);
   }
 
+  /// Both flags default off. A missing key, or one that is not a bool,
+  /// keeps that flag off rather than failing the whole file.
+  static TextSaveOptions _saveOptions(Map<String, Object?> json) {
+    final trim = json['trimTrailingWhitespaceOnSave'];
+    final newline = json['ensureFinalNewline'];
+    return TextSaveOptions(
+      trailingWhitespace: trim == true
+          ? TrailingWhitespacePolicy.trim
+          : TrailingWhitespacePolicy.preserve,
+      finalNewline: newline == true
+          ? FinalNewlinePolicy.ensure
+          : FinalNewlinePolicy.preserve,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       other is AppSettings &&
@@ -121,6 +146,7 @@ final class AppSettings {
       other.fontSize == fontSize &&
       other.indentation == indentation &&
       other.fontFamily == fontFamily &&
+      other.saveOptions == saveOptions &&
       _listsEqual(other.recentTextTools, recentTextTools);
 
   /// The list is JSON-shaped (it is what [TextToolHistory.encode] wrote),
@@ -136,6 +162,7 @@ final class AppSettings {
     fontSize,
     indentation,
     fontFamily,
+    saveOptions,
     jsonEncode(recentTextTools),
   );
 }

@@ -7,5 +7,6 @@ export 'src/html_export.dart';
 export 'src/indentation.dart';
 export 'src/line_operations.dart';
 export 'src/text_document.dart';
+export 'src/text_save_options.dart';
 export 'src/text_metrics.dart';
 export 'src/text_tools.dart';

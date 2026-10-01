@@ -99,6 +99,7 @@ class EditorStrings {
     'trimTrailingWhitespace' => 'Trim Trailing Whitespace',
     'trimLeadingWhitespace' => 'Trim Leading Whitespace',
     'normalizeSpaces' => 'Normalize Spaces',
+    'normalizeLineEndings' => 'Normalize Line Endings',
     'convertIndentationToSpaces' => 'Convert Indentation to Spaces',
     'convertIndentationToTabs' => 'Convert Indentation to Tabs',
     'straightenQuotes' => 'Straighten Quotes',
@@ -252,6 +253,8 @@ class EditorStrings {
 
   /// The one-line description the palette shows under a tool's name.
   String textToolDescription(String id) => switch (id) {
+    'normalizeLineEndings' =>
+      'Makes all line breaks follow the buffer convention.',
     'sortLines' => 'Orders lines alphabetically.',
     'reverseLines' => 'Reverses the order of lines.',
     'shuffleLines' => 'Puts lines in a random order.',
@@ -313,6 +316,7 @@ class EditorStrings {
   /// Other words the palette matches a tool by, so "dedupe" finds Remove
   /// Duplicate Lines.
   List<String> textToolKeywords(String id) => switch (id) {
+    'normalizeLineEndings' => const ['eol', 'crlf', 'lf', 'carriage return'],
     'sortLines' => const ['order', 'alphabetize', 'arrange'],
     'reverseLines' => const ['flip', 'invert order'],
     'shuffleLines' => const ['randomize', 'mix lines'],
@@ -429,6 +433,8 @@ class EditorStrings {
     'trimLeadingWhitespace' =>
       'trimmed whitespace on $changed of ${_lines(scope)} $where.',
     'normalizeSpaces' => 'normalized ${_plural(changed, 'space')} $where.',
+    'normalizeLineEndings' =>
+      'normalized $changed of ${_plural(scope, 'line break')} $where.',
     'titleCase' ||
     'sentenceCase' ||
     'camelCase' ||
@@ -511,6 +517,7 @@ class EditorStrings {
         'trimTrailingWhitespace' => 'nothing to trim $where.',
         'trimLeadingWhitespace' => 'nothing to trim $where.',
         'normalizeSpaces' => 'no Unicode spaces $where.',
+        'normalizeLineEndings' => 'line endings already consistent $where.',
         'convertIndentationToSpaces' ||
         'convertIndentationToTabs' => 'nothing to convert $where.',
         'uppercase' ||
@@ -584,6 +591,8 @@ class EditorStrings {
   String get textToolPreviewDeferred => 'count is computed on Apply';
 
   String _previewText(String id, int changed, int scope) => switch (id) {
+    'normalizeLineEndings' =>
+      'will normalize ${_plural(changed, 'line break')}',
     'sortLines' => '$changed of ${_lines(scope)} will move',
     'reverseLines' => 'will reverse ${_lines(scope)}',
     'shuffleLines' => 'will shuffle ${_lines(scope)}',

@@ -28,6 +28,7 @@ abstract interface class DocumentStore {
     required String text,
     required TextDocument? source,
     required String? expectedSha256,
+    TextDocumentMetadata? metadata,
   });
 }
 
@@ -96,10 +97,12 @@ final class LocalDocumentStore implements DocumentStore {
     required String text,
     required TextDocument? source,
     required String? expectedSha256,
+    TextDocumentMetadata? metadata,
   }) async {
     final file = File(path);
-    final bom = source?.hasUtf8Bom ?? false;
-    final ending = source?.lineEnding ?? LineEnding.lf;
+    final format = metadata ?? source?.metadata ?? const TextDocumentMetadata();
+    final bom = format.utf8Bom == Utf8Bom.present;
+    final ending = format.lineEnding;
     final digest = expectedSha256 == null
         ? await createTextDocument(
             file,
