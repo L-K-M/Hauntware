@@ -62,20 +62,23 @@ push/PR. Its client matrix compiles all five platform projects.
 
 ## Releasing
 
-`scripts/release.sh` (a stub over the shared
-[release-tool](https://github.com/L-K-M/release-tool) engine) bumps the
-`version:` in every pubspec in lockstep, keeps the README version line in
-step, commits, and tags `v<version>` — pushing that tag triggers
-`.github/workflows/release.yml`, which tests, then builds and publishes the
-app for every client platform as the GitHub Release (Android APK, Linux
-`.deb` + AppImage + bundle for x64, macOS/Windows desktop bundles, unsigned
-iOS IPA — the same asset shape as Séance). Poltergeist has **no server
-component**: bookmark backup rides Séance's sync server (see the plan), so
-there are no server binaries or Docker images to publish.
+`scripts/release.sh` uses
+[release-tool](https://github.com/L-K-M/release-tool) 1.1.0+ to synchronize
+versions, commit, and create a maintainer-signed `v<version>` tag. Pushing the
+tag makes `.github/workflows/release.yml` test and build every client into one
+hidden draft. The maintainer then verifies, signs, and publishes it locally;
+the OpenPGP key never enters CI. See [docs/RELEASING.md](docs/RELEASING.md).
+Poltergeist has **no server component**: bookmark backup rides Séance's sync
+server, so there are no server binaries or Docker images to publish.
 
 ```bash
+export POLTERGEIST_RELEASE_FINGERPRINT=40_HEX
 scripts/release.sh 0.2.0          # bump + commit, tag v0.2.0
-scripts/release.sh 0.2.0 --push   # …also push branch + tag (CI then publishes)
+scripts/release.sh 0.2.0 --push   # also push; CI creates the hidden draft
+scripts/finalize-release.sh \
+  --repository L-K-M/Poltergeist \
+  --tag v0.2.0 \
+  --fingerprint 40_HEX            # local verification, signing, publication
 ```
 
 ---

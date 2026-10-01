@@ -48,6 +48,12 @@ void main() {
     expect(errors.single, contains('invalid release version'));
   });
 
+  test('debian-version prints the ordered package version', () {
+    expect(run(['debian-version', '--version', '0.2.0-beta1']), 0);
+    expect(output, ['0.2.0~beta1-1']);
+    expect(errors, isEmpty);
+  });
+
   test('missing command arguments return usage failure', () {
     expect(run(['sync', '--version', '0.1.0']), 64);
     expect(errors.single, startsWith('usage:'));
@@ -74,6 +80,16 @@ void main() {
   test('check verifies repository synchronization', () {
     expect(run(['check', '--version', '0.1.0']), 0);
     expect(output.single, contains('3 pubspecs'));
+  });
+
+  test('check-transition accepts an upgrade', () {
+    expect(run(['check-transition', '--version', '0.2.0']), 0);
+    expect(output.single, contains('0.1.0 -> 0.2.0'));
+  });
+
+  test('check-transition rejects a downgrade', () {
+    expect(run(['check-transition', '--version', '0.0.99']), 1);
+    expect(errors.single, contains('older than 0.1.0'));
   });
 
   test('check-tag verifies tag grammar and repository synchronization', () {

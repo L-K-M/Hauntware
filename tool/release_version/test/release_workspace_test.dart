@@ -73,6 +73,42 @@ void main() {
     expect(report.version.semantic, expected.semantic);
   });
 
+  test('transition accepts the current untagged version', () {
+    final report = ReleaseVersionWorkspace(
+      root,
+    ).checkTransition(ReleaseVersion.parse('0.1.0'));
+
+    expect(report.version.semantic, '0.1.0');
+  });
+
+  test('transition accepts beta, RC, final, and next patch upgrades', () {
+    const targets = ['0.1.1-beta1', '0.1.1-rc1', '0.1.1', '0.1.2-beta1'];
+
+    for (final target in targets) {
+      expect(
+        ReleaseVersionWorkspace(
+          root,
+        ).checkTransition(ReleaseVersion.parse(target)).version.semantic,
+        '0.1.0',
+      );
+    }
+  });
+
+  test('transition rejects an Android version-code downgrade', () {
+    expect(
+      () => ReleaseVersionWorkspace(
+        root,
+      ).checkTransition(ReleaseVersion.parse('0.0.99')),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (error) => error.message,
+          'message',
+          allOf(contains('0.0.99'), contains('older than 0.1.0')),
+        ),
+      ),
+    );
+  });
+
   for (final drift in _Drift.values) {
     test('check rejects ${drift.name} drift', () {
       drift.apply(root);

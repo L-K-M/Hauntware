@@ -3,11 +3,11 @@
 # Turn a built Flutter Linux bundle (app/poltergeist_app/build/linux/<arch>/
 # release/bundle) into installable Linux artifacts:
 #
-#   poltergeist_<version>-1_<arch>.deb — Debian/Ubuntu package (dpkg-deb; no
-#                                    fakeroot needed, --root-owner-group is
-#                                    used). Skipped, with a notice, on hosts
-#                                    without dpkg-deb (Arch/Fedora/…) — the
-#                                    AppImage below is what covers those.
+#   poltergeist_<debian-version>_<arch>.deb — Debian/Ubuntu package
+#                                    (dpkg-deb; no fakeroot needed,
+#                                    --root-owner-group is used). Skipped, with
+#                                    a notice, on hosts without dpkg-deb
+#                                    (Arch/Fedora/…) — AppImage covers those.
 #   poltergeist-linux-<x64|arm64>.AppImage — distro-independent portable image
 #                                    (needs appimagetool; fetched once and
 #                                    cached unless APPIMAGETOOL points at one)
@@ -42,6 +42,8 @@ set -euo pipefail
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT/app/poltergeist_app"
+VERSION_TOOL="$ROOT/tool/release_version/bin/release_version.dart"
+DART_BIN="${DART_BIN:-dart}"
 BUNDLE=""
 PROFILE="release"
 OUT_DIR="$ROOT/dist"
@@ -107,10 +109,15 @@ case "$FLUTTER_ARCH" in
   arm64) DEB_ARCH="arm64";  APPIMAGE_ARCH="aarch64" ;;
 esac
 
-VERSION="$(sed -n 's/^version:[[:space:]]*//p' "$APP_DIR/pubspec.yaml" | head -1)"
-VERSION="${VERSION%%+*}"   # strip the Flutter build number, if any
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "bad/missing version in $APP_DIR/pubspec.yaml (got '${VERSION:-nothing}')"
-DEB_VERSION="$VERSION-1"
+APP_VERSION="$(sed -n 's/^version:[[:space:]]*//p' "$APP_DIR/pubspec.yaml" | head -1)"
+VERSION="${APP_VERSION%%+*}"
+command -v "$DART_BIN" >/dev/null 2>&1 || die "Dart SDK not found"
+VALIDATED_APP_VERSION="$("$DART_BIN" run "$VERSION_TOOL" validate --version "$VERSION")" \
+  || die "bad/missing version in $APP_DIR/pubspec.yaml (got '${VERSION:-nothing}')"
+[[ "$APP_VERSION" == "$VALIDATED_APP_VERSION" ]] \
+  || die "app version must include the derived Android code (expected $VALIDATED_APP_VERSION)"
+DEB_VERSION="$("$DART_BIN" run "$VERSION_TOOL" debian-version --version "$VERSION")" \
+  || die "cannot derive Debian version from $VERSION"
 
 echo "Packaging Poltergeist $DEB_VERSION ($FLUTTER_ARCH → deb:$DEB_ARCH appimage:$APPIMAGE_ARCH)"
 echo "  bundle: $BUNDLE"

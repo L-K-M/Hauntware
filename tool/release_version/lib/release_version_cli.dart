@@ -8,7 +8,8 @@ const int _successExitCode = 0;
 const int _failureExitCode = 1;
 const int _usageExitCode = 64;
 const String _usage =
-    'usage: release_version <validate|sync|check|check-tag> '
+    'usage: release_version '
+    '<validate|debian-version|sync|check|check-transition|check-tag> '
     '[--version VERSION] [--pubspec PATH] [--tag TAG] [--root PATH]';
 
 typedef ReleaseVersionLineWriter = void Function(String line);
@@ -36,6 +37,9 @@ int runReleaseVersionCommand(
       case _ReleaseVersionCommand.validate:
         final version = ReleaseVersion.parse(parsed.version!);
         output(version.appVersion);
+      case _ReleaseVersionCommand.debianVersion:
+        final version = ReleaseVersion.parse(parsed.version!);
+        output(version.debianPackageVersion);
       case _ReleaseVersionCommand.sync:
         final version = ReleaseVersion.parse(parsed.version!);
         ReleaseVersionWorkspace(
@@ -48,6 +52,10 @@ int runReleaseVersionCommand(
             : ReleaseVersion.parse(parsed.version!);
         final report = ReleaseVersionWorkspace(root).check(expected: expected);
         output(_renderReport(report));
+      case _ReleaseVersionCommand.checkTransition:
+        final target = ReleaseVersion.parse(parsed.version!);
+        final current = ReleaseVersionWorkspace(root).checkTransition(target);
+        output('${current.version.semantic} -> ${target.semantic}');
       case _ReleaseVersionCommand.checkTag:
         final report = ReleaseVersionWorkspace(root).checkTag(parsed.tag!);
         output('${parsed.tag}: ${_renderReport(report)}');
@@ -78,7 +86,14 @@ Directory _resolveDirectory(Directory base, String path) {
   return Directory(p.normalize(p.join(base.path, path)));
 }
 
-enum _ReleaseVersionCommand { validate, sync, check, checkTag }
+enum _ReleaseVersionCommand {
+  validate,
+  debianVersion,
+  sync,
+  check,
+  checkTransition,
+  checkTag,
+}
 
 final class _CommandArguments {
   final _ReleaseVersionCommand command;
@@ -100,8 +115,10 @@ final class _CommandArguments {
 
     final command = switch (arguments.first) {
       'validate' => _ReleaseVersionCommand.validate,
+      'debian-version' => _ReleaseVersionCommand.debianVersion,
       'sync' => _ReleaseVersionCommand.sync,
       'check' => _ReleaseVersionCommand.check,
+      'check-transition' => _ReleaseVersionCommand.checkTransition,
       'check-tag' => _ReleaseVersionCommand.checkTag,
       _ => null,
     };
@@ -145,6 +162,8 @@ final class _CommandArguments {
 
     return switch (command) {
       _ReleaseVersionCommand.validate => version != null && present.length == 1,
+      _ReleaseVersionCommand.debianVersion =>
+        version != null && present.length == 1,
       _ReleaseVersionCommand.sync =>
         version != null &&
             pubspec != null &&
@@ -157,6 +176,9 @@ final class _CommandArguments {
         '--version',
         '--root',
       }).isEmpty,
+      _ReleaseVersionCommand.checkTransition =>
+        version != null &&
+            present.difference(const {'--version', '--root'}).isEmpty,
       _ReleaseVersionCommand.checkTag =>
         tag != null && present.difference(const {'--tag', '--root'}).isEmpty,
     };

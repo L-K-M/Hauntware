@@ -9,11 +9,10 @@ plugins {
 }
 
 val ciSigningPropertiesPath = "key.properties"
+val ciSigningCertificatePath = "ci-signing-certificate.sha256"
 val ciSigningConfigName = "ciRelease"
 val ciKeyStoreType = "JKS"
 val ciCertificateDigest = "SHA-256"
-val expectedCiCertificateSha256 =
-    "55ED092009200CDD86F7C0CDD782BE380349431054438341CFB8FD2AB434264E"
 
 val ciSigningPropertiesFile = rootProject.file(ciSigningPropertiesPath)
 check(ciSigningPropertiesFile.isFile) {
@@ -24,6 +23,16 @@ val ciSigningProperties =
     Properties().apply {
         ciSigningPropertiesFile.inputStream().use(::load)
     }
+
+val ciSigningCertificateFile = rootProject.file(ciSigningCertificatePath)
+check(ciSigningCertificateFile.isFile) {
+    "Missing committed CI signing fingerprint: $ciSigningCertificatePath"
+}
+val expectedCiCertificateSha256 =
+    ciSigningCertificateFile.readText().trim().uppercase()
+check(expectedCiCertificateSha256.matches(Regex("[0-9A-F]{64}"))) {
+    "Malformed CI signing fingerprint: $ciSigningCertificatePath"
+}
 
 fun ciSigningProperty(name: String): String =
     ciSigningProperties.getProperty(name)?.trim()?.takeIf(String::isNotEmpty)

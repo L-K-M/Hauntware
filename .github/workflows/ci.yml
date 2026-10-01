@@ -47,6 +47,12 @@ jobs:
         run: dart analyze tool/license_gate
       - name: Analyze release version tool
         run: dart analyze tool/release_version
+      - name: Analyze release finalizer
+        run: dart analyze tool/release_finalize
+      - name: Analyze release publisher
+        run: dart analyze tool/release_publish
+      - name: Analyze release artifact support
+        run: dart analyze tool/release_support
       - name: Analyze Séance pin audit
         run: dart analyze tool/seance_pin_audit
       - name: Analyze M0 benchmark harness
@@ -68,6 +74,12 @@ jobs:
         run: dart test tool/license_gate/test
       - name: Test release version tool
         run: dart test tool/release_version/test
+      - name: Test release finalizer
+        run: dart test tool/release_finalize/test
+      - name: Test release publisher
+        run: dart test tool/release_publish/test
+      - name: Test release artifact support
+        run: dart test tool/release_support/test
       - name: Verify release versions
         run: dart run tool/release_version/bin/release_version.dart check
       - name: Test Séance pin audit
@@ -376,6 +388,24 @@ jobs:
       - name: Build
         working-directory: app/poltergeist_app
         run: flutter build ${{ matrix.build }}
+      - name: Verify Android release identity
+        if: matrix.target == 'android'
+        shell: bash
+        run: |
+          readonly app_version="$(
+            sed -n 's/^version:[[:space:]]*//p' \
+              app/poltergeist_app/pubspec.yaml
+          )"
+          readonly expected_version="${app_version%%+*}"
+          readonly build_tools="$(
+            find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 \
+              -type d -printf '%f\n' | sort -V | tail -1
+          )"
+          AAPT_BIN="$ANDROID_HOME/build-tools/$build_tools/aapt" \
+          APKSIGNER_BIN="$ANDROID_HOME/build-tools/$build_tools/apksigner" \
+            scripts/assert-android-release.sh \
+              app/poltergeist_app/build/app/outputs/flutter-apk/app-release.apk \
+              "$expected_version"
       # Exercise the same packaging the release workflow ships. Do not upload
       # binaries from ordinary CI: before PR-S0, a build may embed a permitted
       # development-only Séance pin whose tree grants recipients no rights.

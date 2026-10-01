@@ -1,7 +1,7 @@
 name: Release
 
-# Tag a version (scripts/release.sh X.Y.Z --push) to test, build, and publish
-# Poltergeist's release artifacts: the app client for every platform folder
+# Tag a version (scripts/release.sh X.Y.Z --push) to test, build, and assemble
+# Poltergeist's hidden release draft: the app client for every platform folder
 # the repo carries — Android APK, Linux packages (.deb + AppImage, x64 —
 # Flutter publishes no linux-arm64 host artifacts), macOS/Windows desktop
 # bundles, and an unsigned iOS IPA. Poltergeist has no server component
@@ -12,30 +12,24 @@ name: Release
 # the iOS IPA must be re-signed to install (AltStore / Sideloadly / Xcode
 # with a free Apple ID). Tagging before app/poltergeist_app exists fails the
 # client jobs by design — there is nothing to release yet.
-# No tag handy? The workflow_dispatch trigger below cuts the same release from
-# a chosen commit and creates the tag for you (see its comment).
+# Manual dispatch accepts only an existing signed tag.
 
 on:
   push:
     tags: ['v*']        # e.g. v0.2.0
-  # Cut a release without pushing a tag — for environments whose credential
-  # can push branches but not tag refs (e.g. remote agent sessions). The tag
-  # is created at the dispatched commit by the first gh-release step; the
-  # input must match the pubspec `version:` (the scripts/release.sh lockstep
-  # contract), since the APK/bundles bake that version in.
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag, e.g. v0.3.1 (created here if it doesn't exist)"
+        description: "Existing signed release tag, e.g. v0.3.1"
         required: true
         type: string
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
-  contents: write       # create the GitHub Release
+  contents: read
 
 jobs:
   # Gate the release on the pure-Dart suite. A tag on a broken commit must
@@ -47,25 +41,52 @@ jobs:
     name: Test (release gate)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      source_commit: ${{ steps.source.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
       - name: Resolve workspace
-        run: dart pub get
+        run: dart pub get --enforce-lockfile
+      - name: Resolve M0 benchmark harness
+        if: hashFiles('tool/bench/pubspec.yaml') != ''
+        working-directory: tool/bench
+        run: dart pub get --enforce-lockfile
+      - name: Verify dependency resolution preserves tagged source
+        shell: bash
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Resolve tagged source
+        id: source
+        shell: bash
+        run: |
+          commit="$(git rev-parse HEAD)"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+      - name: Verify signed remote release source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          dart run tool/release_publish/bin/publish_draft.dart
+          verify-source
+          --repository "$GITHUB_REPOSITORY"
+          --tag "${{ inputs.tag || github.ref_name }}"
+          --commit "${{ steps.source.outputs.commit }}"
       - name: Verify release tag and versions
         run: >-
           dart run tool/release_version/bin/release_version.dart
           check-tag --tag "${{ inputs.tag || github.ref_name }}"
-      - name: Resolve M0 benchmark harness
-        if: hashFiles('tool/bench/pubspec.yaml') != ''
-        working-directory: tool/bench
-        run: dart pub get
       - name: Analyze
         run: dart analyze $(ls -d packages/*)
       - name: Analyze release gate
         run: dart analyze tool/license_gate
+      - name: Analyze release publisher
+        run: dart analyze tool/release_publish
       - name: Analyze M0 benchmark harness
         working-directory: tool/bench
         run: dart analyze
@@ -81,6 +102,8 @@ jobs:
           dart test $dirs
       - name: Test release gate
         run: dart test tool/license_gate/test
+      - name: Test release publisher
+        run: dart test tool/release_publish/test
       - name: Test M0 benchmark harness
         working-directory: tool/bench
         run: dart test test
@@ -88,8 +111,8 @@ jobs:
   # The app, once per client platform. `flutter build` is host-locked
   # (linux/windows only build on their own OS, macos/ios only on a Mac) —
   # hence a matrix over runners. fail-fast stays off so one platform's
-  # breakage doesn't cancel the others: each job attaches its own asset to
-  # the release independently. CI compiles the same matrix on main/PRs
+  # breakage doesn't cancel the others: completed jobs still preserve their
+  # diagnostic artifacts. CI compiles the same matrix on main/PRs
   # (ci.yml `client` job — keep the two in step), so a tag should never be
   # the first time a client platform builds.
   client:
@@ -130,7 +153,7 @@ jobs:
           # shipped as an IPA for users who re-sign and sideload.
           - os: macos-latest
             target: ios
-            build: ios --release --no-codesign
+            build: ipa --release --no-codesign
             files: poltergeist-ios-unsigned.ipa
           - os: windows-latest
             target: windows
@@ -138,6 +161,8 @@ jobs:
             files: poltergeist-windows-x64.zip
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.test.outputs.source_commit }}
       # Pin the JDK so the Gradle build is deterministic rather than tracking
       # the runner's default; keep in step with the app's compileOptions.
       - uses: actions/setup-java@v4
@@ -158,6 +183,19 @@ jobs:
         with:
           flutter-version: '3.47.2'
           cache: true
+      - name: Resolve workspace
+        run: dart pub get --enforce-lockfile
+      - name: Resolve M0 benchmark harness
+        working-directory: tool/bench
+        run: dart pub get --enforce-lockfile
+      - name: Resolve app dependencies
+        working-directory: app/poltergeist_app
+        run: flutter pub get --enforce-lockfile
+      - name: Verify dependency resolution preserves tagged source
+        shell: bash
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
       # If the committed project signs Release with a developer identity the
       # runner doesn't have (the scripts/build.sh local path), switch the
       # build to ad-hoc signing — the signing class the app is designed to
@@ -172,14 +210,6 @@ jobs:
             -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
             -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
             app/poltergeist_app/macos/Runner.xcodeproj/project.pbxproj
-      - name: Resolve workspace
-        run: dart pub get
-      - name: Resolve M0 benchmark harness
-        working-directory: tool/bench
-        run: dart pub get
-      - name: Resolve app dependencies
-        working-directory: app/poltergeist_app
-        run: flutter pub get
       - name: Verify pinned Séance licenses
         run: dart run tool/license_gate/bin/check.dart # SEANCE_LICENSE_GATE_V1
       - name: Build
@@ -215,10 +245,13 @@ jobs:
                 "$GITHUB_WORKSPACE/poltergeist-macos-universal.zip"
               ;;
             ios)
-              # An IPA is Payload/<app>.app zipped. Unsigned — installing it
-              # means re-signing (AltStore / Sideloadly / Xcode free account).
+              # Flutter stops after the unsigned archive. Zip its app under
+              # Payload/ so the promised IPA exists for external re-signing.
+              readonly ios_archive="app/poltergeist_app/build/ios/archive/Runner.xcarchive"
+              readonly ios_app="$ios_archive/Products/Applications/Runner.app"
+              test -d "$ios_app"
               mkdir Payload
-              mv app/poltergeist_app/build/ios/iphoneos/Runner.app Payload/
+              cp -R "$ios_app" Payload/
               zip -qry poltergeist-ios-unsigned.ipa Payload
               ;;
             windows)
@@ -226,11 +259,65 @@ jobs:
               7z a -bd poltergeist-windows-x64.zip poltergeist-windows-x64
               ;;
           esac
-      - uses: softprops/action-gh-release@v2
+      - name: Verify Android release package
+        if: matrix.target == 'android'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          readonly expected_version="${RELEASE_TAG#v}"
+          readonly build_tools="$(
+            find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 \
+              -type d -printf '%f\n' | sort -V | tail -1
+          )"
+          AAPT_BIN="$ANDROID_HOME/build-tools/$build_tools/aapt" \
+          APKSIGNER_BIN="$ANDROID_HOME/build-tools/$build_tools/apksigner" \
+            scripts/assert-android-release.sh \
+              poltergeist-android.apk "$expected_version"
+      - name: Transport packaged assets
+        uses: actions/upload-artifact@v4
         with:
-          # On a tag push these two resolve to the pushed tag (and the
-          # commitish is ignored); on workflow_dispatch they make the first
-          # job to get here create the tag at the dispatched commit.
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          target_commitish: ${{ github.sha }}
-          files: ${{ matrix.files }}
+          name: release-${{ matrix.target }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+          compression-level: 0
+
+  # One writer closes the full asset set before creating a hidden release.
+  publish:
+    name: Assemble draft release
+    needs: [test, client]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.test.outputs.source_commit }}
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve publisher dependencies
+        run: dart pub get --enforce-lockfile
+      - name: Verify dependency resolution preserves tagged source
+        shell: bash
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+      - name: Download packaged assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-artifacts
+          merge-multiple: false
+      - name: Create closed draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          dart run tool/release_publish/bin/publish_draft.dart
+          publish
+          --repository "$GITHUB_REPOSITORY"
+          --tag "${{ inputs.tag || github.ref_name }}"
+          --commit "${{ needs.test.outputs.source_commit }}"
+          --artifacts release-artifacts
+          --output "$RUNNER_TEMP/release-publish"

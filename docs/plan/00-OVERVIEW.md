@@ -579,24 +579,18 @@ permissions · D29 mobile hooks · D30 Séance license · D31 no mounting
     confirmed clean does the step publish the
     draft — and because verify-then-publish is two operations, not one
     atomic one, the step re-verifies the now-live release immediately
-    after publishing too, deleting it only on that same
-    retry-confirmed, definitive mismatch; a merely inconclusive
-    verification here pages the maintainer and leaves the release
-    standing for a human decision, both because an automated delete
-    fired by a flaky check destroys a healthy, correctly signed release
-    — a self-inflicted availability outage baked into the release
-    procedure — and because deletion cannot recall an asset already
-    downloaded, mirrored, or fetched in-flight, so "never left standing"
-    holds only for the release entry itself, not for copies already in
-    the wild, and the tag remains regardless (an emergency
-    response, not a routine path: a published release with a valid
-    signature over sums that no longer match its assets is worse than
-    an unsigned one) — so a race with the local signing step or a
-    workflow re-run on the tag can publish a stale signature alongside
-    changed assets only in the width of that final re-verify, never
-    silently and never left standing unattended: a definitive mismatch
-    is auto-deleted, an inconclusive one pages a human and is resolved
-    by decision rather than ignored. All of this exists because a
+    after publishing too. Any live failure pages the maintainer and
+    leaves the release standing for a human decision; a definitive
+    mismatch is distinguished from an inconclusive transport or API
+    result, but neither authorizes automatic deletion. GitHub's REST API
+    does not support conditional `DELETE` for this endpoint, so a final
+    `GET` followed by deletion can still remove a release repaired in
+    between. Deletion also cannot recall an asset already downloaded,
+    mirrored, or fetched in-flight. Automatic removal would therefore
+    add a destructive race without restoring provenance; the finalizer
+    instead fails closed, emits the exact mismatch, and requires the
+    maintainer to inspect and remove the release manually. All of this
+    exists because a
     CI-resident key would reduce the whole provenance claim to "trust
     GitHub/the CI runner" — exactly the release-channel compromise the
     independent-fingerprint requirement below exists to survive.

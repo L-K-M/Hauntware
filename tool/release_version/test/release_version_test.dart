@@ -1,6 +1,8 @@
 // Release tooling stays outside the shipped application.
 // ignore_for_file: avoid_relative_lib_imports
 
+import 'dart:io';
+
 import 'package:test/test.dart';
 
 import '../lib/release_version.dart';
@@ -85,5 +87,41 @@ void main() {
 
       expect(codes, orderedEquals(codes.toList()..sort()));
     });
+
+    test('maps prereleases below the final Debian version', () {
+      final beta = ReleaseVersion.parse('0.2.0-beta1');
+      final candidate = ReleaseVersion.parse('0.2.0-rc2');
+      final stable = ReleaseVersion.parse('0.2.0');
+
+      expect(beta.debianPackageVersion, '0.2.0~beta1-1');
+      expect(candidate.debianPackageVersion, '0.2.0~rc2-1');
+      expect(stable.debianPackageVersion, '0.2.0-1');
+    });
+
+    test(
+      'dpkg orders beta and RC before the final',
+      () {
+        final beta = ReleaseVersion.parse('0.2.0-beta1');
+        final candidate = ReleaseVersion.parse('0.2.0-rc2');
+        final stable = ReleaseVersion.parse('0.2.0');
+
+        expect(_dpkgLessThan(beta, candidate), isTrue);
+        expect(_dpkgLessThan(candidate, stable), isTrue);
+      },
+      skip: !File(_dpkgPath).existsSync() ? 'dpkg is unavailable' : false,
+    );
   });
+}
+
+const String _dpkgPath = '/usr/bin/dpkg';
+
+bool _dpkgLessThan(ReleaseVersion left, ReleaseVersion right) {
+  final result = Process.runSync(_dpkgPath, [
+    '--compare-versions',
+    left.debianPackageVersion,
+    'lt',
+    right.debianPackageVersion,
+  ]);
+
+  return result.exitCode == 0;
 }

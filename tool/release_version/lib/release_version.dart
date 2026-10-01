@@ -11,6 +11,7 @@ const int _majorMultiplier = 1_000_000;
 const int _minorMultiplier = 10_000;
 const int _patchMultiplier = 100;
 const int _androidVersionCodeLimit = 2_100_000_000;
+const int _debianRevision = 1;
 const String _appPubspecPath = 'app/poltergeist_app/pubspec.yaml';
 const String _appLockPath = 'app/poltergeist_app/pubspec.lock';
 const String _readmePath = 'README.md';
@@ -128,6 +129,18 @@ final class ReleaseVersion {
   }
 
   String get appVersion => '$semantic+$androidVersionCode';
+
+  /// Debian's tilde sorts prereleases before the otherwise equal final.
+  String get debianPackageVersion {
+    final base = '$_major.$_minor.$_patch';
+    final upstream = switch (_stage) {
+      _ReleaseStage.beta => '$base~beta$_qualifier',
+      _ReleaseStage.releaseCandidate => '$base~rc$_qualifier',
+      _ReleaseStage.finalRelease => base,
+    };
+
+    return '$upstream-$_debianRevision';
+  }
 
   int get _stageOrdinal {
     return switch (_stage) {
@@ -296,6 +309,20 @@ final class ReleaseVersionWorkspace {
       version: version,
       pubspecCount: declarations.length,
       lockedPackageCount: lockedPackageCount,
+    );
+  }
+
+  /// Rejects any release that would lower Android's upgrade ordering.
+  ReleaseVersionReport checkTransition(ReleaseVersion target) {
+    final current = check();
+    if (target.semantic == current.version.semantic) return current;
+    if (target.androidVersionCode > current.version.androidVersionCode) {
+      return current;
+    }
+
+    throw ReleaseVersionStateException(
+      'release ${target.semantic} is older than ${current.version.semantic} '
+      'in Android version-code order',
     );
   }
 

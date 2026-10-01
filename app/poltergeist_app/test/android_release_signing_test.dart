@@ -4,10 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 const _ciKeyStorePath = 'android/app/ci-release.jks';
 const _ciPropertiesPath = 'android/key.properties';
+const _ciCertificatePath = 'android/ci-signing-certificate.sha256';
 const _publicKeyWarning =
     '# Public debug-grade CI key; never place a production secret in this file.';
-const _ciCertificateSha256 =
-    '55ED092009200CDD86F7C0CDD782BE380349431054438341CFB8FD2AB434264E';
 const _jksMagic = <int>[0xfe, 0xed, 0xfe, 0xed];
 const _propertyNames = <String>{
   'storeFile',
@@ -20,9 +19,11 @@ void main() {
   test('release APK uses the committed public CI identity', () {
     final propertiesFile = File(_ciPropertiesPath);
     final keyStore = File(_ciKeyStorePath);
+    final certificate = File(_ciCertificatePath);
 
     expect(propertiesFile.existsSync(), isTrue);
     expect(keyStore.existsSync(), isTrue);
+    expect(certificate.existsSync(), isTrue);
 
     final propertiesText = propertiesFile.readAsStringSync();
     expect(propertiesText.split('\n').first, _publicKeyWarning);
@@ -38,20 +39,24 @@ void main() {
     expect(keyStoreBytes, hasLength(greaterThan(_jksMagic.length)));
     expect(keyStoreBytes.take(_jksMagic.length), _jksMagic);
 
+    final certificateSha256 = certificate.readAsStringSync().trim();
+    expect(certificateSha256, matches(RegExp(r'^[0-9A-F]{64}$')));
+
     final gradle = _read('android/app/build.gradle.kts');
     expect(
       gradle,
-      allOf(
+      allOf(<Matcher>[
         contains('rootProject.file(ciSigningPropertiesPath)'),
         contains('check(ciSigningPropertiesFile.isFile)'),
-        contains(_ciCertificateSha256),
+        contains('rootProject.file(ciSigningCertificatePath)'),
+        contains('ciSigningCertificateFile.readText().trim().uppercase()'),
         contains('check(actualCiCertificateSha256 == '),
         contains('create(ciSigningConfigName)'),
         contains(
           'signingConfig = signingConfigs.getByName(ciSigningConfigName)',
         ),
         isNot(contains('signingConfigs.getByName("debug")')),
-      ),
+      ]),
     );
   });
 
