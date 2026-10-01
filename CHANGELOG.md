@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Import server bookmarks from other apps.** The Server menu now imports
+  FileZilla, WinSCP and Cyberduck bookmarks through a bounded review screen.
+  Saved passwords stay behind; unsafe or unsupported entries remain visible
+  but cannot be selected.
 - **⌘W closes Settings on a Mac.** With the Settings window in front, ⌘W
   and ⇧⌘W close it. ⌘W used to close a tab in the workspace window behind
   it, and ⇧⌘W the workspace window itself.

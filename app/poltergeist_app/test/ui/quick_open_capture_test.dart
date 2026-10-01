@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -12,25 +13,29 @@ import 'package:poltergeist_app/services/pane_location.dart';
 import 'package:poltergeist_app/services/recent_locations.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
 import 'package:poltergeist_app/services/ssh_config_import_setup.dart';
+import 'package:poltergeist_app/services/third_party_bookmark_import_setup.dart';
 import 'package:poltergeist_app/services/uuid.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
+import 'package:poltergeist_app/ui/import/third_party_bookmark_import_command.dart';
 import 'package:poltergeist_app/ui/workspace_shell.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../services/engine_session_test.dart' as session_test;
 import '../support/fake_bookmark_store.dart';
 import '../support/fake_ssh_config_source.dart';
+import '../support/shell_commands.dart';
 import '../support/shell_menus.dart';
 
 /// Real-font captures of the M9 surfaces (02 §8.4 / D22): the Quick
 /// Open palette over the live registry — all three sections, shortcut
-/// gutter, disabled reason — and the ssh_config import preview reached
-/// through the launcher's adoption offer. The PNGs land in
-/// tasks/run3-task93/ at the repo root (or POLTERGEIST_CAPTURE_DIR),
+/// gutter and disabled reason. Historical M9 captures stay in
+/// tasks/run3-task93/ and regenerate only when POLTERGEIST_CAPTURE_DIR is
+/// explicit; current shared-import captures use the D22 folder. Both are
 /// gated on POLTERGEIST_CAPTURE=1 like the menu captures.
-final _captureDir =
-    Platform.environment['POLTERGEIST_CAPTURE_DIR'] ??
-    '../../tasks/run3-task93';
+final _m9CaptureDir = Platform.environment['POLTERGEIST_CAPTURE_DIR'];
+final _d22CaptureDir =
+    Platform.environment['POLTERGEIST_D22_CAPTURE_DIR'] ??
+    '../../tasks/d22-third-party-importers';
 
 // The same real-font loader the menu captures use (private there).
 Future<ByteData> _fontBytes(String path) async {
@@ -85,6 +90,24 @@ Host web
 Host other
   HostName other.example.com
   User root
+''';
+
+const _fileZillaExport = '''
+<?xml version="1.0" encoding="UTF-8"?>
+<FileZilla3>
+  <Servers>
+    <Server>
+      <Host>archive.example.com</Host>
+      <Port>22</Port>
+      <Protocol>1</Protocol>
+      <User>curator</User>
+      <Logontype>5</Logontype>
+      <Keyfile>~/.ssh/archive_ed25519</Keyfile>
+      <RemoteDir>1 0 3 srv 7 archive</RemoteDir>
+      <Name>Archive</Name>
+    </Server>
+  </Servers>
+</FileZilla3>
 ''';
 
 Bookmark _favorite(String id, String label) => Bookmark(
@@ -200,6 +223,31 @@ void main() {
               bookmarks: bookmarks,
               configPath: _configPath,
             ),
+            thirdPartyBookmarkImport: ThirdPartyBookmarkImportSetup(
+              bookmarks: bookmarks,
+              pickFiles: (_) async => [
+                ThirdPartyBookmarkImportFile(
+                  'sitemanager.xml',
+                  utf8.encode(_fileZillaExport),
+                ),
+              ],
+              startPreview:
+                  ({
+                    required format,
+                    required files,
+                    required existingBookmarks,
+                  }) async => ThirdPartyBookmarkPreviewTask.fromFuture(
+                    Future.value(
+                      ThirdPartyBookmarkImportService(
+                        mintId: uuidV4,
+                      ).loadPreview(
+                        format: format,
+                        files: files,
+                        existingBookmarks: existingBookmarks,
+                      ),
+                    ),
+                  ),
+            ),
           ),
         ),
       ),
@@ -210,10 +258,8 @@ void main() {
       find.byKey(const ValueKey('capture.shell')),
     );
     final captureOn = Platform.environment['POLTERGEIST_CAPTURE'] == '1';
-    final outDir = Directory(_captureDir);
-
-    Future<void> capture(String name) async {
-      if (!captureOn) return;
+    Future<void> capture(String? directory, String name) async {
+      if (!captureOn || directory == null) return;
       final bytes = (await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
@@ -225,6 +271,7 @@ void main() {
           image.dispose();
         }
       }))!;
+      final outDir = Directory(directory);
       outDir.createSync(recursive: true);
       final file = File('${outDir.path}/$name.png');
       // ignore: avoid_print
@@ -246,7 +293,7 @@ void main() {
       find.byKey(const ValueKey('quickOpen.field')),
       findsOneWidget,
     );
-    await capture('quick-open');
+    await capture(_m9CaptureDir, 'quick-open');
 
     // A filtered view: one query over commands + favorites + recents.
     await tester.enterText(
@@ -254,7 +301,7 @@ void main() {
       'web',
     );
     await tester.pumpAndSettle();
-    await capture('quick-open-filtered');
+    await capture(_m9CaptureDir, 'quick-open-filtered');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -278,6 +325,23 @@ void main() {
       find.text('Import servers from ssh config'),
       findsOneWidget,
     );
-    await capture('ssh-import-preview');
+    await capture(_d22CaptureDir, 'ssh-import-preview');
+
+    await tester.tap(find.text(l10n.sshImportCancel));
+    await tester.pumpAndSettle();
+
+    // The palette route uses the parent command's source chooser; choosing
+    // FileZilla reaches the same preview widget as ssh_config.
+    await runShellCommand(
+      tester,
+      kThirdPartyBookmarkImportCommandId,
+      settle: false,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.bookmarkImportFileZilla));
+    await tester.pumpAndSettle();
+    expect(find.text('Import from FileZilla'), findsOneWidget);
+    expect(find.text('archive.example.com:22'), findsOneWidget);
+    await capture(_d22CaptureDir, 'filezilla-import-preview');
   });
 }

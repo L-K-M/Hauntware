@@ -20,6 +20,8 @@ library;
 
 import 'package:seance_core/seance_core.dart';
 
+import '_bookmark_import_dedupe.dart';
+
 const int _defaultSshPort = 22;
 const int _minimumSshPort = 1;
 const int _maximumSshPort = 65535;
@@ -262,17 +264,11 @@ class SshConfigImportService {
       ancestors: {rootPath},
     );
 
-    return _buildPreview(resolver, _existingEndpoints(existingBookmarks));
+    return _buildPreview(
+      resolver,
+      existingBookmarkImportEndpoints(existingBookmarks),
+    );
   }
-
-  /// Canonical dedupe key (D22): host \0 port \0 username, built the
-  /// same way for preview rows and existing bookmarks so the two sides
-  /// can never drift apart. NUL can't appear in an ssh config token.
-  /// The host lowercases — ssh hostnames resolve case-insensitively —
-  /// while the username stays verbatim (its case sensitivity is
-  /// platform-dependent).
-  static String _endpointKey(String host, int port, String username) =>
-      '${host.toLowerCase()}\u0000$port\u0000$username';
 
   SshConfigImportPreview _buildPreview(
     _Resolver resolver,
@@ -296,7 +292,7 @@ class SshConfigImportService {
 
       // Host+port+username — the host lowercased because DNS/ssh
       // resolution is case-insensitive; the username stays verbatim.
-      final endpoint = _endpointKey(
+      final endpoint = bookmarkImportEndpointKey(
         parsed.host.effectiveHost,
         parsed.host.port ?? _defaultSshPort,
         parsed.host.user ?? '',
@@ -323,41 +319,6 @@ class SshConfigImportService {
       rows: List.unmodifiable(rows),
       notices: List.unmodifiable(resolver.notices),
     );
-  }
-
-  /// Existing endpoints keyed by host+port+username. Only embedded
-  /// identities are comparable: a `serverConfigId` reference resolves its
-  /// host/port/username from Séance's catalog at connect time (04 §2.2),
-  /// so Poltergeist holds no endpoint to dedupe against.
-  static Map<String, String> _existingEndpoints(Iterable<Bookmark> bookmarks) {
-    final endpoints = <String, String>{};
-    for (final bookmark in bookmarks) {
-      for (final ref in _serverRefs(bookmark)) {
-        final identity = ref.identity;
-        if (identity == null) continue;
-        endpoints[_endpointKey(
-          identity.host,
-          identity.port,
-          identity.username,
-        )] = bookmark.label;
-      }
-    }
-    return endpoints;
-  }
-
-  /// Every server reference a bookmark carries — its own plus each
-  /// workspace/sync endpoint — so dedupe sees all stored endpoints.
-  static Iterable<BookmarkServerRef> _serverRefs(Bookmark bookmark) sync* {
-    final server = bookmark.server;
-    if (server != null) yield server;
-    final left = bookmark.left?.server;
-    if (left != null) yield left;
-    final right = bookmark.right?.server;
-    if (right != null) yield right;
-    final source = bookmark.sync?.source.server;
-    if (source != null) yield source;
-    final destination = bookmark.sync?.destination.server;
-    if (destination != null) yield destination;
   }
 }
 

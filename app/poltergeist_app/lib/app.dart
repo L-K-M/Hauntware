@@ -38,6 +38,7 @@ import 'services/sidebar_controller.dart'
     show CollapsedSectionWriter, PinnedServerWriter, SidebarDensity;
 import 'services/sidebar_probe_owner.dart';
 import 'services/ssh_config_import_setup.dart';
+import 'services/third_party_bookmark_import_setup.dart';
 import 'services/sync_environment.dart';
 import 'services/sync_queue_facade.dart';
 import 'services/transfer_limits_controller.dart';
@@ -67,6 +68,7 @@ class PoltergeistApp extends StatefulWidget {
     this.navigatorKey,
     this.scaffoldMessengerKey,
     this.sshConfigImport,
+    this.thirdPartyBookmarkImport,
     this.bookmarkBackup,
     this.serverEditor,
     this.bookmarks,
@@ -153,6 +155,9 @@ class PoltergeistApp extends StatefulWidget {
   /// path). Null leaves the import command unregistered; `main.dart`
   /// supplies it from the app-support directory.
   final SshConfigImportSetup? sshConfigImport;
+
+  /// The D22 importer wiring for FileZilla, WinSCP, and Cyberduck.
+  final ThirdPartyBookmarkImportSetup? thirdPartyBookmarkImport;
 
   /// The 04 §3.3 backup service behind Settings → Backup (M6). Null
   /// leaves `open-settings-backup` unregistered; `main.dart` supplies
@@ -488,6 +493,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       onPaneRatioChanged: widget.onPaneRatioChanged,
       onPaneRatioSaveError: widget.onPaneRatioSaveError,
       sshConfigImport: widget.sshConfigImport,
+      thirdPartyBookmarkImport: widget.thirdPartyBookmarkImport,
       bookmarkBackup: widget.bookmarkBackup,
       serverEditor: widget.serverEditor,
       bookmarks: widget.bookmarks,
