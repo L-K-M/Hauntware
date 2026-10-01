@@ -1,7 +1,7 @@
 {
   "schema": "poltergeist-d12-budgets-2",
   "calibratedFingerprint": {
-    "runnerImage": "ubuntu-latest@20260920.314.1",
+    "runnerImage": "ubuntu-latest@20260927.320.1",
     "arch": "linux_x64",
     "dartVersion": "3.13.4 (stable) (Tue Sep 15 01:01:15 2026 -0700) on \"linux_x64\"",
     "flutterVersion": null,

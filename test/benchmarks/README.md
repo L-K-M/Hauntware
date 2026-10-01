@@ -252,9 +252,11 @@ human opens a **dedicated baseline-refresh PR** that re-measures on the
 current fingerprint and updates `tier-b-baseline.json` in one commit.
 The refresh is measurement, not authoring:
 
-1. Download the `bench-results` artifact of the last few successful
-   **main-branch** `ci.yml` runs (the tier-B leg runs only on main
-   pushes and manual dispatch — PR artifacts never carry it):
+1. Download the `bench-results` artifact of the last few **main-branch**
+   `ci.yml` runs whose collectors completed (the tier-B leg runs only on
+   main pushes and manual dispatch; PR artifacts never carry it). During
+   enforced controlled-axis drift, the expected stale-baseline failure does
+   not invalidate an otherwise complete artifact:
    `gh run list --repo L-K-M/Poltergeist --workflow ci.yml --branch main`
    then `gh run download <run-id> --repo L-K-M/Poltergeist --name
    bench-results`. Use at least three runs that include the tier-B leg
@@ -291,8 +293,11 @@ The refresh is measurement, not authoring:
 4. Run the checker against one of the real artifacts and confirm the
    drift notice is gone; run `dart test test/benchmarks` (the committed
    file's contract is pinned by tests) and `dart analyze
-   test/benchmarks`, then open the refresh PR. Nothing else rides along
-   — no `landed` flips, no `BENCH_ENFORCE_*`, no budget edits.
+   test/benchmarks`, then open the refresh PR. Nothing else rides along:
+   no `landed` flips, no `BENCH_ENFORCE_*`, no budget-threshold edits.
+   A shared controlled-axis change, such as the runner image, also updates
+   tier A's calibration metadata so its existing thresholds become active
+   on the new fingerprint.
 
 ## First committed baseline (2026-09-15)
 
@@ -349,6 +354,25 @@ The tier-A `calibratedFingerprint` moved to the same image and P5's
 (`first-file` is now `entry-02814.txt`); the tier-A budgets themselves
 are unchanged — P3/P5/P7 all still pass on the new image
 (4498.053/4818.734 ms, 2248.033 entries/s).
+
+## Baseline refresh: runner image rotation (2026-10-01)
+
+Main run 36850276493 exposed the controlled `ubuntu-latest` rotation from
+`20260920.314.1` to `20260927.320.1`. The refresh pools raw rows from that
+run and main dispatches 36864425925 and 36865790902. All three share the
+complete recorded fingerprint, including `AMD EPYC 7763 64-Core Processor`,
+and the scenario configs are unchanged. Pooled medians: P1 1100.721 ms
+(n=9), P2 11008.042 ms (n=9), and P4 47.532 ms (n=15). P6 still has no
+entry: all nine rows errored at 794–813 captured frames against the required
+minimum of 1800.
+
+Runs 36860150853 and 36863209872 carried the old image plus an AMD EPYC
+9V74; 36860394341 carried the new image plus that CPU; 36861373252 carried
+the old image plus the target AMD EPYC 7763. All were excluded. The pooled
+tier-A medians are P3 4454.823 ms, P5 4775.724 ms, and P7 2278.172
+entries/s; all pass the unchanged budgets. Only the shared runner-image
+calibration moves. Budget thresholds, landed flags, enforcement, and
+per-scenario configs are unchanged.
 
 ## First fixture-backed observations (2026-09-14)
 

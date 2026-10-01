@@ -4,6 +4,21 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D12 runner-image baseline refresh (2026-10-01)
+
+Main run 36850276493 exposed `ubuntu-latest` rotating from
+`20260920.314.1` to `20260927.320.1`: enforced tier B failed on the
+controlled fingerprint and tier A drift-skipped. Exact-fingerprint artifacts
+from runs 36850276493, 36864425925, and 36865790902 on
+`AMD EPYC 7763 64-Core Processor` yield P1 1100.721 ms (n=9), P2
+11008.042 ms (n=9), and P4 47.532 ms (n=15). P6 remains absent because all
+nine rows errored below its frame-capture floor.
+
+The tier-A calibrated runner image moves with no threshold, scenario-config,
+landed-state, or enforcement change. The enforced `ab` checker passes against
+run 36865790902; all 140 benchmark tests pass and benchmark analysis is clean.
+No Séance source or port changed.
+
 ## D22 third-party bookmark importers (2026-10-01)
 
 FileZilla `sitemanager.xml`, WinSCP INI exports, and Cyberduck `.duck`
