@@ -522,8 +522,8 @@ int _firstNulIndex(String text) => text.indexOf('\u0000');
 String _foldToLf(String text) =>
     text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 
-/// The saved size, including line-ending conversion and the optional BOM.
-/// Tool preflight uses the same encoding policy as guarded file writes.
+/// The encoded size of [text], including EOL conversion and the optional BOM.
+/// Save cleanup is separate; guarded writes recheck the cleaned buffer's size.
 int textDocumentByteCount(
   String text,
   TextDocumentMetadata metadata, {

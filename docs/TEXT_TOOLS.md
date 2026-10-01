@@ -43,7 +43,7 @@ Convert to ASCII, Strip Diacritics, Compose Accents and Decompose Accents.
 - Tool size preflight includes the selected EOL and BOM. Removing text can
   still run on a buffer that already exceeds the limit.
 
-### Remaining work: slices 7/8
+### Remaining work: slices 5c, 7 and 8
 
 | Slice | Status and next step |
 |---|---|

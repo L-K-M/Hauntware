@@ -1411,20 +1411,24 @@ LineEdit? prepareTextForSave(
   final edits = options.trailingWhitespace == TrailingWhitespacePolicy.trim
       ? _trailingWhitespaceEdits(_linesOf(text, 0, text.length))
       : <_Edit>[];
-  if (options.finalNewline == FinalNewlinePolicy.ensure &&
-      text.isNotEmpty &&
-      !text.endsWith('\n') &&
-      !text.endsWith('\r')) {
-    edits.add((
-      start: text.length,
-      end: text.length,
-      insert: lineEnding == LineEnding.crlf ? '\r\n' : '\n',
-    ));
-  }
-  if (edits.isEmpty) return null;
+  final (cleaned, map) = edits.isEmpty
+      ? (text, (int offset) => offset)
+      : _applyEdits(text, edits);
+  // Trimming can expose an existing final break or empty the document.
+  final appendBreak =
+      options.finalNewline == FinalNewlinePolicy.ensure &&
+      cleaned.isNotEmpty &&
+      !cleaned.endsWith('\n') &&
+      !cleaned.endsWith('\r');
+  if (edits.isEmpty && !appendBreak) return null;
 
-  final (cleaned, map) = _applyEdits(text, edits);
-  return LineEdit(cleaned, map(base), map(extent));
+  final ending = lineEnding == LineEnding.crlf ? '\r\n' : '\n';
+  // An appended break leaves the caret at the original content end.
+  return LineEdit(
+    appendBreak ? cleaned + ending : cleaned,
+    map(base),
+    map(extent),
+  );
 }
 
 TextToolOutcome _normalizeLineEndings(TextToolRun run) {

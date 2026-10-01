@@ -36,7 +36,7 @@ ownership boundaries and compatibility policies are documented in
 - Clickable app status segments for indentation, LF/CRLF and UTF-8 BOM, with
   metadata-aware dirty state. Opt-in trim/final-newline save settings and
   Normalize Line Endings. Remaining host/deferred work is recorded in
-  [TEXT_TOOLS.md](TEXT_TOOLS.md#remaining-work-slices-78).
+  [TEXT_TOOLS.md](TEXT_TOOLS.md#remaining-work-slices-5c-7-and-8).
 
 ## Verification
 
@@ -44,7 +44,7 @@ ownership boundaries and compatibility policies are documented in
 
 Local Linux checks with Flutter 3.47.2 / Dart 3.13.2:
 
-- Core: analysis clean, 443 tests passed.
+- Core: analysis clean, 446 tests passed.
 - Shared editor: analysis clean, 321 tests passed.
 - App: analysis clean, 402 tests passed; two case-insensitive-volume tests
   skipped on this case-sensitive host.

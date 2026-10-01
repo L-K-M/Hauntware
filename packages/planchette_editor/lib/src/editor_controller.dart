@@ -90,6 +90,10 @@ class EditorController extends ChangeNotifier {
   }
 
   final Future<TextDocument> Function()? loadDocument;
+
+  /// Writes a snapshot using the document's metadata and conflict digest.
+  /// For a first save the document is null: read [metadata] synchronously
+  /// in the callback, as the app's store adapter does, until it adopts a file.
   final Future<String> Function(String text, TextDocument? baseline)?
   saveDocument;
   Future<void> Function()? onSaved;
@@ -1266,6 +1270,8 @@ class EditorController extends ChangeNotifier {
     );
   }
 
+  /// Cleanup cannot rewrite text owned by an input method. A save needing
+  /// cleanup returns null during composition; retry after committing input.
   Future<EditorSaveResult?> save({
     EditorSaveMode mode = EditorSaveMode.primary,
     EditorSaveAccess access = EditorSaveAccess.normal,

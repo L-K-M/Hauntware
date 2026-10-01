@@ -141,7 +141,7 @@ void main() {
     expect(itemFor('Convert to Tabs').enabled, isTrue);
   });
 
-  testWidgets('metadata controls lock while busy or locked', (tester) async {
+  testWidgets('metadata controls lock while editing is locked', (tester) async {
     final editor = controller();
     editor.setEditingLocked(true);
     await mount(tester, editor);

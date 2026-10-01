@@ -37,6 +37,24 @@ void main() {
     expect(edit.text, '  a\u00a0\nb\n');
   });
 
+  test('trimming a final blank line does not add another newline', () {
+    for (final ending in ['\n', '\r\n']) {
+      final source = 'a$ending \t';
+      final edit = prepareTextForSave(source, source.length, 1, cleanup)!;
+      expect(edit.text, 'a$ending');
+      expect(edit.selectionBase, 1 + ending.length);
+      expect(edit.selectionExtent, 1);
+    }
+  });
+
+  test('whitespace-only documents clean to empty without an added newline', () {
+    expect(prepareTextForSave(' \t ', 3, 0, cleanup)!.text, '');
+  });
+
+  test('trimming preserves existing consecutive final breaks', () {
+    expect(prepareTextForSave('a\n  \n', 0, 0, cleanup)!.text, 'a\n\n');
+  });
+
   test(
     'metadata byte count follows guarded saves for Unicode and mixed EOL',
     () {
