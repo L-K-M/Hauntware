@@ -857,6 +857,7 @@ class _EditorTabChip extends StatelessWidget {
 /// the only clue to *which host you are typing into* was the highlighted row
 /// in the server list.
 class SessionStatusBar extends StatelessWidget {
+  static const double _desktopFooterExtent = 30;
   static const double _locationGap = 12;
   static const double _maximumTargetShare = 0.5;
 
@@ -865,16 +866,26 @@ class SessionStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final config = session.config;
     final target = '${config.username}@${config.host}:${config.port}';
-    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+    final style = theme.textTheme.labelSmall?.copyWith(
       color: scheme.onSurfaceVariant,
       fontFamily: 'monospace',
     );
+    // Match SidebarBottomBar's desktop extent and accessibility scaling so
+    // their top borders stay aligned across the workspace.
+    final minimumHeight = switch (theme.platform) {
+      TargetPlatform.macOS || TargetPlatform.linux || TargetPlatform.windows =>
+        MediaQuery.textScalerOf(context)
+            .scale(_desktopFooterExtent)
+            .clamp(_desktopFooterExtent, 4 * _desktopFooterExtent),
+      _ => 24.0,
+    };
     return Container(
       // Grow with accessibility text size instead of clipping the host identity.
-      constraints: const BoxConstraints(minHeight: 24),
+      constraints: BoxConstraints(minHeight: minimumHeight),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,

@@ -3,6 +3,12 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+The desktop terminal footer now matches the sidebar's 30 px height and text
+scaling, keeping their top borders aligned. Touch sizing is unchanged. The
+alignment regression failed before the fix and passes on macOS, Linux and
+Windows at 1x, 2x and 4x text size. Flutter analysis and all 77 focused footer,
+sidebar and terminal-tab tests pass locally.
+
 The owner-approved Planchette extraction moves syntax, document I/O, editing
 state, and the editor surface into shared `planchette_core` and
 `planchette_editor` packages. Séance retains its session tabs, gutter/status,
