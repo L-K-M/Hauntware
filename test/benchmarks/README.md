@@ -291,9 +291,10 @@ The refresh is measurement, not authoring:
    reports a landed scenario without an entry loudly (and fails it once
    enforced).
 4. Run the checker against one of the real artifacts and confirm the
-   drift notice is gone; run `dart test test/benchmarks` (the committed
-   file's contract is pinned by tests) and `dart analyze
-   test/benchmarks`, then open the refresh PR. Nothing else rides along:
+   drift notice is gone; update the fingerprint, median, and pooled-row
+   repetition expectations in `test/benchmarks/check_test.dart`, then run
+   `dart test test/benchmarks` and `dart analyze test/benchmarks`, and open
+   the refresh PR. Nothing else rides along:
    no `landed` flips, no `BENCH_ENFORCE_*`, no budget-threshold edits.
    A shared controlled-axis change, such as the runner image, also updates
    tier A's calibration metadata so its existing thresholds become active
