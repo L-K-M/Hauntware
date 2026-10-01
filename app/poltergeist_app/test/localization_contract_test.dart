@@ -653,8 +653,27 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // null-fallbacks for optional labels — no authored copy.
   'lib/ui/import/ssh_config_import_dialog.dart': {
     "''",
-    "'monospace'",
     r"'${row.host.effectiveHost}:${row.port}'",
+  },
+  // D22 importer null-fallbacks, widget keys, file extensions, and the picker
+  // diagnostic reported behind localized copy. None is authored UI copy.
+  'lib/ui/import/third_party_bookmark_import_dialog.dart': {"''"},
+  'lib/ui/import/third_party_bookmark_import_command.dart': {
+    "'favorite.importThirdParty'",
+    r"'$kThirdPartyBookmarkImportCommandId:${format.name}'",
+    r"'bookmarkImport.source.${format.name}'",
+  },
+  'lib/services/third_party_bookmark_import_setup.dart': {
+    "'xml'",
+    "'ini'",
+    "'duck'",
+    "'the bookmark import worker returned an invalid result'",
+    "'the bookmark import worker failed'",
+    r"'${parts.first}'",
+    r"'${parts[1]}'",
+    "'third-party-bookmark-import'",
+    r"'$stackTrace'",
+    r"'the file picker returned no content for $sourceName'",
   },
   'lib/ui/prompts/host_key_dialog.dart': {"'monospace'", "'\$type\\n\$value'"},
   'lib/ui/adaptive_shell.dart': {

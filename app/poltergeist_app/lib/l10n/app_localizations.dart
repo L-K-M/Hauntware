@@ -616,6 +616,192 @@ abstract class AppLocalizations {
   /// **'Could not save the imported favorites.'**
   String get sshImportFavoritesSaveFailed;
 
+  /// Server menu and Quick Open command for importing bookmarks from another file transfer app (D22).
+  ///
+  /// In en, this message translates to:
+  /// **'Import from another app…'**
+  String get bookmarkImportCommandLabel;
+
+  /// Title of the source-app chooser shown when the import command is run outside its menu submenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Import from another app'**
+  String get bookmarkImportChooserTitle;
+
+  /// Source choice for a FileZilla sitemanager.xml file.
+  ///
+  /// In en, this message translates to:
+  /// **'FileZilla'**
+  String get bookmarkImportFileZilla;
+
+  /// Source choice for a WinSCP INI export.
+  ///
+  /// In en, this message translates to:
+  /// **'WinSCP'**
+  String get bookmarkImportWinScp;
+
+  /// Source choice for one or more Cyberduck .duck bookmark files.
+  ///
+  /// In en, this message translates to:
+  /// **'Cyberduck'**
+  String get bookmarkImportCyberduck;
+
+  /// Title of a third-party bookmark import preview.
+  ///
+  /// In en, this message translates to:
+  /// **'Import from {source}'**
+  String bookmarkImportTitle(String source);
+
+  /// Source summary above a multi-file third-party import preview.
+  ///
+  /// In en, this message translates to:
+  /// **'{source} · {count, plural, =1{1 file} other{{count} files}}'**
+  String bookmarkImportFilesSelected(String source, int count);
+
+  /// Empty state for one or more selected third-party bookmark files.
+  ///
+  /// In en, this message translates to:
+  /// **'No servers were found in the selection.'**
+  String get bookmarkImportEmpty;
+
+  /// Failure shown when a selected third-party bookmark file cannot be parsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the selected bookmark file.'**
+  String get bookmarkImportReadFailed;
+
+  /// Transient notice when the platform picker returns an unreadable file.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the selected file.'**
+  String get bookmarkImportPickFailed;
+
+  /// Action after a deterministic import failure; closes the preview and reopens the file picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose another file…'**
+  String get bookmarkImportChooseAnother;
+
+  /// Imported server's initial remote directory.
+  ///
+  /// In en, this message translates to:
+  /// **'Start folder: {path}'**
+  String bookmarkImportStartFolder(String path);
+
+  /// Source filename for a row when multiple bookmark files were selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Source: {name}'**
+  String bookmarkImportSourceFile(String name);
+
+  /// Failure when a bookmark import exceeds its file-count limit.
+  ///
+  /// In en, this message translates to:
+  /// **'Select no more than {max} files.'**
+  String bookmarkImportTooManyFiles(int max);
+
+  /// Failure when one bookmark export exceeds its byte limit.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is larger than {maxMiB} MiB.'**
+  String bookmarkImportFileTooLarge(String name, int maxMiB);
+
+  /// Failure when all selected bookmark exports exceed their combined byte limit.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected files exceed {maxMiB} MiB in total.'**
+  String bookmarkImportTotalSizeExceeded(int maxMiB);
+
+  /// Failure when a bookmark export has an unsupported text encoding.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is not valid UTF-8 or UTF-16 text.'**
+  String bookmarkImportInvalidEncoding(String name);
+
+  /// Failure when an XML bookmark export declares an entity.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} contains unsafe XML declarations.'**
+  String bookmarkImportUnsafeXml(String name);
+
+  /// Failure when a bookmark export is structurally invalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not parse {name}.'**
+  String bookmarkImportMalformedSource(String name);
+
+  /// Failure when a bookmark export exceeds the preview row limit.
+  ///
+  /// In en, this message translates to:
+  /// **'The export contains more than {max} bookmarks.'**
+  String bookmarkImportTooManyRows(int max);
+
+  /// Auth cell for an imported server whose password must be entered on connect.
+  ///
+  /// In en, this message translates to:
+  /// **'Password prompt'**
+  String get bookmarkImportAuthPassword;
+
+  /// Chip for a third-party bookmark using a protocol Poltergeist does not support.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot import: {protocol} is not SFTP'**
+  String bookmarkImportUnsupportedProtocol(String protocol);
+
+  /// Chip for a third-party bookmark whose source protocol is missing or unrecognized.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot import: protocol is unknown'**
+  String get bookmarkImportUnknownProtocol;
+
+  /// Chip for a third-party bookmark with a missing or invalid hostname.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot import: host is missing or invalid'**
+  String get bookmarkImportMissingHost;
+
+  /// Chip explaining that third-party saved passwords never cross into Poltergeist.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved password is not imported; Poltergeist will ask'**
+  String get bookmarkImportCredentialsNotImported;
+
+  /// Chip for a PuTTY private-key reference unsupported by the SSH client.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot import: choose an OpenSSH private key instead'**
+  String get bookmarkImportUnsupportedKeyFormat;
+
+  /// Chip for a source bookmark whose proxy or tunnel route cannot be preserved.
+  ///
+  /// In en, this message translates to:
+  /// **'Proxy or tunnel is not imported; connects directly'**
+  String get bookmarkImportRouteNotImported;
+
+  /// Chip for a source bookmark whose relative start path cannot be stored.
+  ///
+  /// In en, this message translates to:
+  /// **'Start folder is invalid; opens the server home instead'**
+  String get bookmarkImportInvalidRemotePath;
+
+  /// Chip for a bookmark containing a field beyond the import length limit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot import: one or more fields are too long'**
+  String get bookmarkImportFieldTooLong;
+
+  /// Chip for a bookmark containing control characters in a persisted field.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot import: a field contains control characters'**
+  String get bookmarkImportInvalidFieldValue;
+
+  /// Chip for a row excluded because selectable bookmark payloads reached their aggregate byte limit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot import: saved data limit reached'**
+  String get bookmarkImportPersistedOutputLimitExceeded;
+
   /// Tooltip and semantics label of the grey status dot: the server has not been probed yet or probing is disabled.
   ///
   /// In en, this message translates to:

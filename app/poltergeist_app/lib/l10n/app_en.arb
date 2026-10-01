@@ -437,6 +437,196 @@
   "@sshImportFavoritesSaveFailed": {
     "description": "Notice when persisting the imported bookmarks fails."
   },
+  "bookmarkImportCommandLabel": "Import from another app…",
+  "@bookmarkImportCommandLabel": {
+    "description": "Server menu and Quick Open command for importing bookmarks from another file transfer app (D22)."
+  },
+  "bookmarkImportChooserTitle": "Import from another app",
+  "@bookmarkImportChooserTitle": {
+    "description": "Title of the source-app chooser shown when the import command is run outside its menu submenu."
+  },
+  "bookmarkImportFileZilla": "FileZilla",
+  "@bookmarkImportFileZilla": {
+    "description": "Source choice for a FileZilla sitemanager.xml file."
+  },
+  "bookmarkImportWinScp": "WinSCP",
+  "@bookmarkImportWinScp": {
+    "description": "Source choice for a WinSCP INI export."
+  },
+  "bookmarkImportCyberduck": "Cyberduck",
+  "@bookmarkImportCyberduck": {
+    "description": "Source choice for one or more Cyberduck .duck bookmark files."
+  },
+  "bookmarkImportTitle": "Import from {source}",
+  "@bookmarkImportTitle": {
+    "description": "Title of a third-party bookmark import preview.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "bookmarkImportFilesSelected": "{source} · {count, plural, =1{1 file} other{{count} files}}",
+  "@bookmarkImportFilesSelected": {
+    "description": "Source summary above a multi-file third-party import preview.",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bookmarkImportEmpty": "No servers were found in the selection.",
+  "@bookmarkImportEmpty": {
+    "description": "Empty state for one or more selected third-party bookmark files."
+  },
+  "bookmarkImportReadFailed": "Could not read the selected bookmark file.",
+  "@bookmarkImportReadFailed": {
+    "description": "Failure shown when a selected third-party bookmark file cannot be parsed."
+  },
+  "bookmarkImportPickFailed": "Could not read the selected file.",
+  "@bookmarkImportPickFailed": {
+    "description": "Transient notice when the platform picker returns an unreadable file."
+  },
+  "bookmarkImportChooseAnother": "Choose another file…",
+  "@bookmarkImportChooseAnother": {
+    "description": "Action after a deterministic import failure; closes the preview and reopens the file picker."
+  },
+  "bookmarkImportStartFolder": "Start folder: {path}",
+  "@bookmarkImportStartFolder": {
+    "description": "Imported server's initial remote directory.",
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "bookmarkImportSourceFile": "Source: {name}",
+  "@bookmarkImportSourceFile": {
+    "description": "Source filename for a row when multiple bookmark files were selected.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookmarkImportTooManyFiles": "Select no more than {max} files.",
+  "@bookmarkImportTooManyFiles": {
+    "description": "Failure when a bookmark import exceeds its file-count limit.",
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "bookmarkImportFileTooLarge": "{name} is larger than {maxMiB} MiB.",
+  "@bookmarkImportFileTooLarge": {
+    "description": "Failure when one bookmark export exceeds its byte limit.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "maxMiB": {
+        "type": "int"
+      }
+    }
+  },
+  "bookmarkImportTotalSizeExceeded": "Selected files exceed {maxMiB} MiB in total.",
+  "@bookmarkImportTotalSizeExceeded": {
+    "description": "Failure when all selected bookmark exports exceed their combined byte limit.",
+    "placeholders": {
+      "maxMiB": {
+        "type": "int"
+      }
+    }
+  },
+  "bookmarkImportInvalidEncoding": "{name} is not valid UTF-8 or UTF-16 text.",
+  "@bookmarkImportInvalidEncoding": {
+    "description": "Failure when a bookmark export has an unsupported text encoding.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookmarkImportUnsafeXml": "{name} contains unsafe XML declarations.",
+  "@bookmarkImportUnsafeXml": {
+    "description": "Failure when an XML bookmark export declares an entity.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookmarkImportMalformedSource": "Could not parse {name}.",
+  "@bookmarkImportMalformedSource": {
+    "description": "Failure when a bookmark export is structurally invalid.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bookmarkImportTooManyRows": "The export contains more than {max} bookmarks.",
+  "@bookmarkImportTooManyRows": {
+    "description": "Failure when a bookmark export exceeds the preview row limit.",
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "bookmarkImportAuthPassword": "Password prompt",
+  "@bookmarkImportAuthPassword": {
+    "description": "Auth cell for an imported server whose password must be entered on connect."
+  },
+  "bookmarkImportUnsupportedProtocol": "Cannot import: {protocol} is not SFTP",
+  "@bookmarkImportUnsupportedProtocol": {
+    "description": "Chip for a third-party bookmark using a protocol Poltergeist does not support.",
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      }
+    }
+  },
+  "bookmarkImportUnknownProtocol": "Cannot import: protocol is unknown",
+  "@bookmarkImportUnknownProtocol": {
+    "description": "Chip for a third-party bookmark whose source protocol is missing or unrecognized."
+  },
+  "bookmarkImportMissingHost": "Cannot import: host is missing or invalid",
+  "@bookmarkImportMissingHost": {
+    "description": "Chip for a third-party bookmark with a missing or invalid hostname."
+  },
+  "bookmarkImportCredentialsNotImported": "Saved password is not imported; Poltergeist will ask",
+  "@bookmarkImportCredentialsNotImported": {
+    "description": "Chip explaining that third-party saved passwords never cross into Poltergeist."
+  },
+  "bookmarkImportUnsupportedKeyFormat": "Cannot import: choose an OpenSSH private key instead",
+  "@bookmarkImportUnsupportedKeyFormat": {
+    "description": "Chip for a PuTTY private-key reference unsupported by the SSH client."
+  },
+  "bookmarkImportRouteNotImported": "Proxy or tunnel is not imported; connects directly",
+  "@bookmarkImportRouteNotImported": {
+    "description": "Chip for a source bookmark whose proxy or tunnel route cannot be preserved."
+  },
+  "bookmarkImportInvalidRemotePath": "Start folder is invalid; opens the server home instead",
+  "@bookmarkImportInvalidRemotePath": {
+    "description": "Chip for a source bookmark whose relative start path cannot be stored."
+  },
+  "bookmarkImportFieldTooLong": "Cannot import: one or more fields are too long",
+  "@bookmarkImportFieldTooLong": {
+    "description": "Chip for a bookmark containing a field beyond the import length limit."
+  },
+  "bookmarkImportInvalidFieldValue": "Cannot import: a field contains control characters",
+  "@bookmarkImportInvalidFieldValue": {
+    "description": "Chip for a bookmark containing control characters in a persisted field."
+  },
+  "bookmarkImportPersistedOutputLimitExceeded": "Cannot import: saved data limit reached",
+  "@bookmarkImportPersistedOutputLimitExceeded": {
+    "description": "Chip for a row excluded because selectable bookmark payloads reached their aggregate byte limit."
+  },
   "probeStatusUnknown": "Reachability unknown",
   "@probeStatusUnknown": {
     "description": "Tooltip and semantics label of the grey status dot: the server has not been probed yet or probing is disabled."

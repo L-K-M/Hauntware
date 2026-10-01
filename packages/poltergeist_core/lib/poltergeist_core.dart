@@ -442,6 +442,22 @@ export 'src/import/ssh_config_import.dart'
         SshConfigUnresolvedInclude,
         SshConfigIncludeNote,
         SshConfigUnreadableException;
+export 'src/import/third_party_bookmark_import.dart'
+    show
+        ThirdPartyBookmarkFormat,
+        ThirdPartyBookmarkImportException,
+        ThirdPartyBookmarkImportFailure,
+        ThirdPartyBookmarkImportFile,
+        ThirdPartyBookmarkImportIssue,
+        ThirdPartyBookmarkImportPreview,
+        ThirdPartyBookmarkImportRow,
+        ThirdPartyBookmarkImportService,
+        ThirdPartyBookmarkProtocolVerdict,
+        thirdPartyBookmarkImportMaxFileBytes,
+        thirdPartyBookmarkImportMaxFiles,
+        thirdPartyBookmarkImportMaxProjectedPersistedBytes,
+        thirdPartyBookmarkImportMaxRows,
+        thirdPartyBookmarkImportMaxTotalBytes;
 export 'src/engine/engine_client.dart'
     show
         EngineBrowseChannel,

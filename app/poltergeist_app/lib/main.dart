@@ -50,6 +50,7 @@ import 'services/transfer_limits_controller.dart';
 import 'services/sync_queue_facade.dart';
 import 'services/sync_transport.dart';
 import 'services/sync_verdict_stores.dart';
+import 'services/third_party_bookmark_import_setup.dart';
 import 'services/transfer_queue_session.dart';
 import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
@@ -539,6 +540,9 @@ Future<void> main(List<String> args) async {
     isWindows: Platform.isWindows,
     bookmarks: bookmarks,
   );
+  final thirdPartyBookmarkImport = buildThirdPartyBookmarkImportSetup(
+    bookmarks: bookmarks,
+  );
   final dragOutBackend = platformDragOutBackend();
   // Every window's shell has a drag-out controller of its own over the
   // one native channel (00 D39).
@@ -573,6 +577,7 @@ Future<void> main(List<String> args) async {
       // With several windows the root binds the guard once, below.
       quitGuard: window == null ? quitGuard : null,
       sshConfigImport: sshConfigImport,
+      thirdPartyBookmarkImport: thirdPartyBookmarkImport,
       onPaneRatioChanged: seeds.paneRatioSink(preferences.savePaneRatio),
       onPaneRatioSaveError: errorReporter.report,
       transferQueue: composedQueue,

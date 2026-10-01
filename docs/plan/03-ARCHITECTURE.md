@@ -44,7 +44,7 @@ check is mechanical) and re-checked in review:
 
 | Package | May depend on | Must never depend on |
 |---|---|---|
-| `poltergeist_core` | `seance_core` (git pin, §8.1), `seance_protocol` (via `seance_core`'s barrel re-export), `dartssh2` (connection module only), `crypto`, `meta`, `path` | Flutter, any plugin |
+| `poltergeist_core` | `seance_core` (git pin, §8.1), `seance_protocol` (via `seance_core`'s barrel re-export), `dartssh2` (connection module only), `crypto`, `meta`, `path`, `xml` (bounded D22 import parsing only) | Flutter, any plugin |
 | `poltergeist_sync` | `poltergeist_core`, `seance_core` | Flutter, `dartssh2` directly |
 | `app/poltergeist_app` | both local packages, `seance_core` neutral exports, Flutter plugins | `dartssh2` — **ever** |
 

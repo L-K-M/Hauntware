@@ -56,6 +56,7 @@ import '../services/ssh_config_import_setup.dart';
 import '../services/sync_environment.dart';
 import '../services/sync_plan_controller.dart';
 import '../services/sync_queue_facade.dart';
+import '../services/third_party_bookmark_import_setup.dart';
 import '../services/update_check_controller.dart';
 import '../services/transfer_limits_controller.dart';
 import '../services/uuid.dart';
@@ -76,6 +77,7 @@ import 'compact/compact_browser.dart' show CompactPaneSeams;
 import 'compact/compact_posture.dart';
 import 'compact/compact_workspace.dart';
 import 'import/ssh_config_import_command.dart';
+import 'import/third_party_bookmark_import_command.dart';
 import 'layout/pane_allocation.dart';
 import 'local_edits_review.dart';
 import 'menus/app_menu_commands.dart';
@@ -130,6 +132,7 @@ class WorkspaceShell extends StatefulWidget {
     this.onPaneRatioChanged,
     this.onPaneRatioSaveError,
     this.sshConfigImport,
+    this.thirdPartyBookmarkImport,
     this.bookmarkBackup,
     this.serverEditor,
     this.bookmarks,
@@ -226,6 +229,9 @@ class WorkspaceShell extends StatefulWidget {
   /// The D22 ssh_config import wiring; null leaves the command
   /// unregistered (tests and alternate boot paths stay opted out).
   final SshConfigImportSetup? sshConfigImport;
+
+  /// D22's cross-platform FileZilla, WinSCP, and Cyberduck wiring.
+  final ThirdPartyBookmarkImportSetup? thirdPartyBookmarkImport;
 
   /// The 04 §3.3 backup service behind `open-settings-backup` (M6).
   /// Null leaves the command unregistered — tests and engine-less boots
@@ -1614,6 +1620,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   @override
   Widget build(BuildContext context) {
     final sshConfigImport = widget.sshConfigImport;
+    final thirdPartyBookmarkImport = widget.thirdPartyBookmarkImport;
     final workspace = _workspace;
     final sidebar = _sidebar;
     final leftFocus = _leftFocus;
@@ -1627,6 +1634,12 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         ? null
         : buildSshConfigImportCommand(
             setup: sshConfigImport,
+            enabled: () => !_commandSessionActive,
+          );
+    final thirdPartyImportCommand = thirdPartyBookmarkImport == null
+        ? null
+        : buildThirdPartyBookmarkImportCommand(
+            setup: thirdPartyBookmarkImport,
             enabled: () => !_commandSessionActive,
           );
     // The drop enqueue seam (02 §5.1, D14): exists only while a queue
@@ -1643,6 +1656,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     final commands = <RegisteredCommand>[
       if (workspace != null) buildQuickOpenCommand(open: _openQuickOpen),
       ?sshImportCommand,
+      ?thirdPartyImportCommand,
       if (widget.bookmarkBackup != null)
         buildOpenSettingsBackupCommand(
           service: widget.bookmarkBackup!,

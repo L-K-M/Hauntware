@@ -1,5 +1,17 @@
 # Séance ports and pin audits
 
+## D22 third-party bookmark importers (2026-10-01)
+
+Original Poltergeist implementation; no Séance source was copied and no
+Séance pin changed. FileZilla, WinSCP, and Cyberduck parsing remains in
+`poltergeist_core`; the app adds bounded file streaming, cancellable isolate
+ownership, and the shared preview used by the existing ssh_config importer.
+The only shared local change is one dedupe helper for both Poltergeist import
+paths.
+
+Séance has no corresponding third-party bookmark-import surface.
+Port-back candidates: none.
+
 ## Local ZIP archives (2026-09-30)
 
 Original Poltergeist implementation; no Séance source was copied and no

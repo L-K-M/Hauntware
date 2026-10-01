@@ -45,6 +45,9 @@ dependencies:
   # (dart:ffi has no allocator; 03 §7.5). Version matches the lockfile.
   ffi: ^2.2.0
   clock: ^1.1.3
+  # D22's XML bookmark formats. Exact because import accepts untrusted files
+  # and depends on this parser's no-DTD-resolution behavior.
+  xml: 7.0.1
 
 dev_dependencies:
   # Exercise the vault's locked primitives without changing runtime deps.

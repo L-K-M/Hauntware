@@ -318,6 +318,139 @@ class AppLocalizationsEn extends AppLocalizations {
       'Could not save the imported favorites.';
 
   @override
+  String get bookmarkImportCommandLabel => 'Import from another app…';
+
+  @override
+  String get bookmarkImportChooserTitle => 'Import from another app';
+
+  @override
+  String get bookmarkImportFileZilla => 'FileZilla';
+
+  @override
+  String get bookmarkImportWinScp => 'WinSCP';
+
+  @override
+  String get bookmarkImportCyberduck => 'Cyberduck';
+
+  @override
+  String bookmarkImportTitle(String source) {
+    return 'Import from $source';
+  }
+
+  @override
+  String bookmarkImportFilesSelected(String source, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count files',
+      one: '1 file',
+    );
+    return '$source · $_temp0';
+  }
+
+  @override
+  String get bookmarkImportEmpty => 'No servers were found in the selection.';
+
+  @override
+  String get bookmarkImportReadFailed =>
+      'Could not read the selected bookmark file.';
+
+  @override
+  String get bookmarkImportPickFailed => 'Could not read the selected file.';
+
+  @override
+  String get bookmarkImportChooseAnother => 'Choose another file…';
+
+  @override
+  String bookmarkImportStartFolder(String path) {
+    return 'Start folder: $path';
+  }
+
+  @override
+  String bookmarkImportSourceFile(String name) {
+    return 'Source: $name';
+  }
+
+  @override
+  String bookmarkImportTooManyFiles(int max) {
+    return 'Select no more than $max files.';
+  }
+
+  @override
+  String bookmarkImportFileTooLarge(String name, int maxMiB) {
+    return '$name is larger than $maxMiB MiB.';
+  }
+
+  @override
+  String bookmarkImportTotalSizeExceeded(int maxMiB) {
+    return 'Selected files exceed $maxMiB MiB in total.';
+  }
+
+  @override
+  String bookmarkImportInvalidEncoding(String name) {
+    return '$name is not valid UTF-8 or UTF-16 text.';
+  }
+
+  @override
+  String bookmarkImportUnsafeXml(String name) {
+    return '$name contains unsafe XML declarations.';
+  }
+
+  @override
+  String bookmarkImportMalformedSource(String name) {
+    return 'Could not parse $name.';
+  }
+
+  @override
+  String bookmarkImportTooManyRows(int max) {
+    return 'The export contains more than $max bookmarks.';
+  }
+
+  @override
+  String get bookmarkImportAuthPassword => 'Password prompt';
+
+  @override
+  String bookmarkImportUnsupportedProtocol(String protocol) {
+    return 'Cannot import: $protocol is not SFTP';
+  }
+
+  @override
+  String get bookmarkImportUnknownProtocol =>
+      'Cannot import: protocol is unknown';
+
+  @override
+  String get bookmarkImportMissingHost =>
+      'Cannot import: host is missing or invalid';
+
+  @override
+  String get bookmarkImportCredentialsNotImported =>
+      'Saved password is not imported; Poltergeist will ask';
+
+  @override
+  String get bookmarkImportUnsupportedKeyFormat =>
+      'Cannot import: choose an OpenSSH private key instead';
+
+  @override
+  String get bookmarkImportRouteNotImported =>
+      'Proxy or tunnel is not imported; connects directly';
+
+  @override
+  String get bookmarkImportInvalidRemotePath =>
+      'Start folder is invalid; opens the server home instead';
+
+  @override
+  String get bookmarkImportFieldTooLong =>
+      'Cannot import: one or more fields are too long';
+
+  @override
+  String get bookmarkImportInvalidFieldValue =>
+      'Cannot import: a field contains control characters';
+
+  @override
+  String get bookmarkImportPersistedOutputLimitExceeded =>
+      'Cannot import: saved data limit reached';
+
+  @override
   String get probeStatusUnknown => 'Reachability unknown';
 
   @override

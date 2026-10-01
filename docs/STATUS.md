@@ -4,6 +4,44 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## D22 third-party bookmark importers (2026-10-01)
+
+FileZilla `sitemanager.xml`, WinSCP INI exports, and Cyberduck `.duck`
+bookmarks now import through one registered Server-menu command and the D22
+preview flow. The parsers live in `poltergeist_core`; the app only picks and
+streams files, starts a cancellable worker isolate, presents the preview, and
+persists confirmed bookmarks through `BookmarkRepository`.
+
+The import is bounded to 4,096 files, 8 MiB per file, 32 MiB total, 10,000
+rows, and 8 MiB of projected persisted output. Default-selected rows
+receive that output budget before optional duplicates and routes. File
+metadata is checked before reading, stream bytes are checked while reading,
+fields are length- and display-control-bounded, and XML entity declarations
+are rejected before parsing. Stored passwords are never deobfuscated,
+surfaced, returned, or persisted. PuTTY and public-key-only references remain
+visible but disabled; unsupported protocols, invalid endpoints, unsafe start
+paths, and proxy/tunnel routes remain visible with explicit warnings.
+Proxy/tunnel rows start skipped. Third-party dedupe includes the remote path,
+so distinct FileZilla child bookmarks remain selected; ssh_config retains its
+host/port/username endpoint rule. Import hardening rejects ambiguous FileZilla
+path framing, signed escapes, and non-decimal ports; IPv6 and invalid-port
+endpoints render without ambiguity.
+
+The shared preview now virtualizes large row sets and switches to a compact
+layout on narrow screens. It shows each start folder and, for multi-file
+imports, each source file. Ten-thousand-row commits materialize in bounded
+batches so the UI can paint between them. Deterministic format failures
+explain the cause and offer file reselection. Cancel kills an active parser
+isolate and ignores late results. Captures and provenance are in
+`tasks/d22-third-party-importers/`.
+
+Core analysis is clean; all 1,907 core tests pass with 27 environment-gated
+skips. Flutter analysis is clean; all 3,083 app tests pass. All 140 root
+benchmark tests and the import-boundary guard pass. No Séance source was
+copied or changed, so no upstream port is required. Numbered fast-follow items
+1–4 are complete; deep links and the text-diff view remain demand-dependent
+per 07 §3.13.
+
 ## Settings window closes on ⌘W (2026-09-30)
 
 On macOS, ⌘W and ⇧⌘W close the Settings window while it is key. File ▸
@@ -338,9 +376,9 @@ and destructive-action default are preserved. Validation used Flutter 3.47.3 on 
 `TMPDIR=/private/tmp`; CI uses the repository's 3.47.2 pin. Native assistive
 technology was not exercised by this change.
 
-_Last updated: 2026-09-30. **v1.0.0 IS SHIPPED**; D10 (SSH-agent
-authentication plus ProxyJump) and D27 (local ZIP archives) are complete.
-D22's FileZilla/WinSCP/Cyberduck importers are next. v1.0.0 was tagged at
+_Last updated: 2026-10-01. **v1.0.0 IS SHIPPED**; D10 (SSH-agent
+authentication plus ProxyJump), D27 (local ZIP archives), and D22's
+FileZilla/WinSCP/Cyberduck importers are complete. v1.0.0 was tagged at
 d62f95af after the release pipeline's full first exercise
 (android `--no-pub` registrant fix #189, bash drift gate #190);
 GitHub Actions run 35926951105 green end to end, the GitHub Release publishes
@@ -8065,7 +8103,8 @@ then the v1.x backlog (named skip rules, batch rename, custom keymap,
 native icons, Compare entry point, preview warming — and Sync Browsing
 if risk 8's cut line is ever exercised). None was started in this release-prep
 slice; D10 completed on 2026-09-29 and D27 completed on 2026-09-30 as recorded
-above. The D22 third-party importers are next. Item
+above. Numbered fast-follow items 1–4 are complete; deep links and the text-diff
+view remain demand-dependent. Item
 23's remote-transfer wiring is the de-facto headline fast-follow even
 though §3.13 predates naming it.
 
