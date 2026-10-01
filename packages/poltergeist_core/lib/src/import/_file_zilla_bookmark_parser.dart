@@ -331,6 +331,7 @@ String? _decodeFileZillaSafePath(
       if (utf16 == null) return scalars;
       if (scalars == null || scalars == utf16) return utf16;
 
+      // Windows stores UTF-16 lengths; other platforms store scalar lengths.
       // Without a platform marker, two valid interpretations are unsafe.
       return null;
   }

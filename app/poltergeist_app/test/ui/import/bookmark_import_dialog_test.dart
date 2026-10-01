@@ -177,6 +177,20 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Import'), findsNothing);
   });
 
+  testWidgets('non-importable preview has no import action', (tester) async {
+    await _open(
+      tester,
+      _spec(
+        load: () async => BookmarkImportDialogPreview(
+          rows: [_configuredRow(0, importable: false)],
+        ),
+      ),
+    );
+
+    expect(find.text('Host 0'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Import'), findsNothing);
+  });
+
   testWidgets('machine-readable fields use the app monospace stack', (
     tester,
   ) async {

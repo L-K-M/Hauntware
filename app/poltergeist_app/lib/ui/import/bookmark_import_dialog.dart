@@ -300,7 +300,8 @@ class _BookmarkImportDialogState extends State<_BookmarkImportDialog> {
           onPressed: _committing ? null : _cancel,
           child: Text(l10n.sshImportCancel),
         ),
-        if (_phase == _LoadPhase.ready && _preview!.rows.isNotEmpty)
+        if (_phase == _LoadPhase.ready &&
+            _preview!.rows.any((row) => row.importable))
           FilledButton(
             onPressed: _committing || _selectedRowIds.isEmpty ? null : _import,
             child: Text(

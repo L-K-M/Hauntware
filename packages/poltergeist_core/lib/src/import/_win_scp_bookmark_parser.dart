@@ -184,9 +184,9 @@ String _winScpUnmunge(String input) {
 }
 
 bool _isAsciiHexDigit(int codeUnit) =>
-    codeUnit >= 0x30 && codeUnit <= 0x39 ||
-    codeUnit >= 0x41 && codeUnit <= 0x46 ||
-    codeUnit >= 0x61 && codeUnit <= 0x66;
+    (codeUnit >= 0x30 && codeUnit <= 0x39) ||
+    (codeUnit >= 0x41 && codeUnit <= 0x46) ||
+    (codeUnit >= 0x61 && codeUnit <= 0x66);
 
 ({String host, String username}) _winScpEndpoint(String host, String username) {
   final separator = host.lastIndexOf('@');
