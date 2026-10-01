@@ -563,4 +563,55 @@ void main() {
       expect(history.last?.toolId, 'uppercase');
     });
   });
+
+  group('unicode and JSON tools', () {
+    EditorController jsonController(String text, {int? maximumBytes}) {
+      final c = EditorController(
+        displayPath: 'a.txt',
+        initialText: text,
+        maximumBytes: maximumBytes ?? defaultTextDocumentMaximumBytes,
+        undoQuiet: Duration.zero,
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    test(
+      'a JSON format that would grow past maximumBytes is refused',
+      () async {
+        final c = jsonController('{"a":1}', maximumBytes: 8);
+        final outcome = await c.runTextTool('formatJson');
+        expect(c.text.text, '{"a":1}');
+        expect(
+          outcome,
+          isA<TextToolRefused>().having(
+            (r) => r.reason,
+            'reason',
+            TextToolRefusal.tooLarge,
+          ),
+        );
+      },
+    );
+
+    test('invalid JSON refuses with its line and column', () async {
+      final c = jsonController('{"a":1,}');
+      final outcome = await c.runTextTool('formatJson');
+      expect(c.text.text, '{"a":1,}');
+      expect(
+        outcome,
+        isA<TextToolRefused>()
+            .having((r) => r.reason, 'reason', TextToolRefusal.invalidJson)
+            .having((r) => r.detail, 'detail', contains('line 1')),
+      );
+      expect(c.toolReport?.ranOn, TextToolRanOn.document);
+    });
+
+    test('a unicode run applies and reports its scope', () async {
+      final c = jsonController('é');
+      final outcome = await c.runTextTool('composeAccents');
+      expect(c.text.text, 'é');
+      expect(outcome, isA<TextToolChanged>());
+      expect(c.toolReport?.ranOn, TextToolRanOn.document);
+    });
+  });
 }
