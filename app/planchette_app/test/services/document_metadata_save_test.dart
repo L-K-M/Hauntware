@@ -56,7 +56,7 @@ void main() {
     expect(await workspace.save(tab, saveAs: true), isTrue);
     expect(await second.readAsBytes(), await first.readAsBytes());
     expect(tab.editor.isDirty, isFalse);
-    expect(tab.path, second.path);
+    expect(tab.path, await second.resolveSymbolicLinks());
   });
 
   test(
