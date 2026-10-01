@@ -6,12 +6,40 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:uuid/uuid.dart';
 
 import 'native_file_operations.dart';
+import 'text_metrics.dart';
 
 const int textDocumentMaximumBytes = 4 * 1024 * 1024;
 const int defaultTextDocumentMaximumBytes = textDocumentMaximumBytes;
 
 /// The dominant on-disk line ending. Ties and single-line files use LF.
 enum LineEnding { lf, crlf }
+
+enum Utf8Bom {
+  absent,
+  present;
+
+  int get byteLength => this == present ? _utf8Bom.length : 0;
+}
+
+/// File-format choices, including for a buffer without a save destination yet.
+final class TextDocumentMetadata {
+  const TextDocumentMetadata({
+    this.lineEnding = LineEnding.lf,
+    this.utf8Bom = Utf8Bom.absent,
+  });
+
+  final LineEnding lineEnding;
+  final Utf8Bom utf8Bom;
+
+  @override
+  bool operator ==(Object other) =>
+      other is TextDocumentMetadata &&
+      other.lineEnding == lineEnding &&
+      other.utf8Bom == utf8Bom;
+
+  @override
+  int get hashCode => Object.hash(lineEnding, utf8Bom);
+}
 
 /// Hosts may preserve raw line endings for compatibility with existing APIs.
 /// Normalized editing buffers use LF; normalized saves use [LineEnding].
@@ -35,6 +63,11 @@ final class TextDocument {
   final bool hasUtf8Bom;
   final LineEnding lineEnding;
   final String sha256;
+
+  TextDocumentMetadata get metadata => TextDocumentMetadata(
+    lineEnding: lineEnding,
+    utf8Bom: hasUtf8Bom ? Utf8Bom.present : Utf8Bom.absent,
+  );
 
   TextDocument copyWith({
     File? file,
@@ -488,6 +521,20 @@ int _firstNulIndex(String text) => text.indexOf('\u0000');
 
 String _foldToLf(String text) =>
     text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
+/// The encoded size of [text], including EOL conversion and the optional BOM.
+/// Save cleanup is separate; guarded writes recheck the cleaned buffer's size.
+int textDocumentByteCount(
+  String text,
+  TextDocumentMetadata metadata, {
+  TextNormalization normalization = TextNormalization.normalize,
+}) =>
+    utf8EncodedLength(
+      normalization == TextNormalization.preserve
+          ? text
+          : _normalizeLineEndings(text, metadata.lineEnding),
+    ) +
+    metadata.utf8Bom.byteLength;
 
 String _normalizeLineEndings(String text, LineEnding lineEnding) {
   final folded = _foldToLf(text);

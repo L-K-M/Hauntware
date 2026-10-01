@@ -11,6 +11,7 @@ import 'services/settings_dialog.dart';
 import 'theme/planchette_theme.dart';
 import 'widgets/command_palette.dart';
 import 'widgets/disk_notice.dart';
+import 'widgets/document_status_bar.dart';
 import 'widgets/tab_strip.dart';
 
 /// The color the native window shows before the first Flutter frame. Must be
@@ -159,7 +160,7 @@ class _DocumentShellState extends State<_DocumentShell> {
     workspace.addListener(_changed);
     settings.addListener(_settingsChanged);
     workspace.toolHistory.addListener(_toolHistoryChanged);
-    workspace.indentationPreference = settings.value.indentation;
+    _applySettings();
     FocusManager.instance.addListener(_rememberTextFocus);
   }
 
@@ -173,8 +174,16 @@ class _DocumentShellState extends State<_DocumentShell> {
     }
   }
 
+  /// Push user choices into the workspace: indentation for new documents
+  /// and save normalization for current and later editors.
+  void _applySettings() {
+    final value = settings.value;
+    workspace.indentationPreference = value.indentation;
+    workspace.saveOptions = value.saveOptions;
+  }
+
   void _settingsChanged() {
-    workspace.indentationPreference = settings.value.indentation;
+    _applySettings();
     if (mounted) setState(() {});
   }
 
@@ -1136,6 +1145,10 @@ class _DocumentShellState extends State<_DocumentShell> {
                               controller: tab.editor,
                               isActive: tab == active,
                               banner: _diskNotice(tab),
+                              // App-only clickable status; the shared
+                              // editor keeps its passive default.
+                              statusBuilder: (context, controller) =>
+                                  DocumentStatusBar(controller: controller),
                               // No editingLocked here: the workspace locks
                               // each controller the moment a dialog opens
                               // and unlocks it the moment it closes. A view

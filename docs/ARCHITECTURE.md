@@ -69,6 +69,19 @@ failed save does not change a document's identity or erase its dirty state.
 The save baseline advances only for the text revision actually written;
 later edits remain unsaved.
 
+The controller owns pending `TextDocumentMetadata` independently of a file
+path, so untitled buffers can choose an ending and BOM. Dirty state compares
+both text and metadata with the load/last-save baseline. File-format choices
+do not rewrite the buffer or join text undo; indentation is a view/editing
+preference and is not dirty state.
+
+Save cleanup is opt-in through `TextSaveOptions`. It uses core span edits,
+maps the selection and changes the live buffer before the guarded write, so
+the cleanup is undoable and cannot leave hidden disk-only changes. A failed
+write keeps the cleanup visible and unsaved. Hosts preserving raw EOLs pass
+`TextNormalization.preserve` to the controller as well as their file APIs;
+this determines Normalize Line Endings and final-newline insertion.
+
 ## Distribution and development
 
 Planchette keeps both packages and its app in one repository. Local app

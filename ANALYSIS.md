@@ -1513,6 +1513,9 @@ Verify that separately from rendering existing literal tabs before another fix.
 Settings: "Trim trailing whitespace on save" and "Ensure final newline".
 Honor `.editorconfig` if present (see A1).
 
+Slice 6 implements both opt-in settings with undoable save cleanup.
+`.editorconfig` support still depends on A1.
+
 ### E10a. Validate assigned auto-indent — after #14/#21/#34
 #34 reports `indentForNewLine`, `leadingWhitespace` and `indentRange` in core,
 with a language-gated block-opener rule. Its colon policy includes YAML, INI,
@@ -1529,6 +1532,9 @@ byte count with "N selected" is a presentation choice, not proof that encoded
 size is useless; retain discoverability of both where space permits.
 
 ### E10. Change line endings, indentation and language from the status bar — M
+Slice 6 implements the app's indentation, EOL and BOM menus, metadata dirty
+state and Save As/reload coverage. Language selection remains open.
+
 Make the status segments into menus:
 - LF / CRLF converts the document on the next save.
 - Spaces / Tabs sets `indentation`, with "Convert indentation".
@@ -1563,6 +1569,10 @@ Also applies to extensionless *files* (`script` with a `#!/bin/sh` first
 line), not only untitled buffers — the original entry missed that.
 
 ### E13. Text tools: BBEdit-style transforms — L, risk: low (idea, 2026-09-30)
+Slices 1 to 6 implement 42 menu tools plus Extract Matches. Six menu tools
+remain deferred; optional host exposure is slice 7. See the plan's status
+section for blockers and outstanding owner decisions.
+
 Sort, dedupe, filter, prefix, number, case, whitespace, gremlin, encode and
 insert tools as one const catalog of pure functions in core. Each returns an
 outcome: changed (the existing `LineEdit`, E2's single edit type, plus a
@@ -1781,6 +1791,9 @@ shell rewrites and one geometry owner land, so the panel is built once;
 do not grow a second search engine beside E5.
 
 ### A16. Text menu, tool bar, Repeat and Recent — L, risk: medium (idea, 2026-09-30)
+The standalone menu, bar, history and palette exposure are implemented in
+slices 1 to 6. The optional host list/sheet and adoption work remain slice 7.
+
 Exposure for E13, designed in [docs/TEXT_TOOLS.md](docs/TEXT_TOOLS.md): a
 Text menu generated from the catalog (nine rows, seven submenus, every
 catalog tool a real item), an inline options bar in the find bar's slot with

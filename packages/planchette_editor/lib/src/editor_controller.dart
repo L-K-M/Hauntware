@@ -61,6 +61,7 @@ class EditorController extends ChangeNotifier {
     DateTime Function()? now,
     this.maximumBytes = defaultTextDocumentMaximumBytes,
     this.undoQuiet = defaultUndoQuiet,
+    this.normalization = TextNormalization.normalize,
     TextToolHistory? toolHistory,
   }) : _displayPath = displayPath,
        _fold = caseFolder ?? _defaultCaseFolder,
@@ -89,6 +90,10 @@ class EditorController extends ChangeNotifier {
   }
 
   final Future<TextDocument> Function()? loadDocument;
+
+  /// Writes a snapshot using the document's metadata and conflict digest.
+  /// For a first save the document is null: read [metadata] synchronously
+  /// in the callback, as the app's store adapter does, until it adopts a file.
   final Future<String> Function(String text, TextDocument? baseline)?
   saveDocument;
   Future<void> Function()? onSaved;
@@ -126,6 +131,12 @@ class EditorController extends ChangeNotifier {
   /// limit loading enforces. Tools that only remove text can always run;
   /// a tool whose result outgrows this is refused before it applies.
   final int maximumBytes;
+
+  /// Match the host's load/save policy. Normalized buffers use LF; hosts
+  /// preserving raw line endings normalize to the chosen file convention.
+  final TextNormalization normalization;
+
+  TextSaveOptions saveOptions = const TextSaveOptions();
 
   /// How old the last value change must be before a tool run applies, so
   /// the run lands in its own undo step. Flutter's undo history merges
@@ -214,6 +225,8 @@ class EditorController extends ChangeNotifier {
   TextDocument? _document;
   String _displayPath;
   String _savedText = '';
+  TextDocumentMetadata _metadata = const TextDocumentMetadata();
+  TextDocumentMetadata _savedMetadata = const TextDocumentMetadata();
   // A full-buffer comparison per call is O(document); the shell and status
   // bar ask several times per frame, so remember the answer per text pair.
   // Strings are immutable, so an identical pair always has the same answer.
@@ -319,6 +332,30 @@ class EditorController extends ChangeNotifier {
   }
 
   TextDocument? get document => _document;
+
+  TextDocumentMetadata get metadata => _metadata;
+
+  bool get canChangeMetadata =>
+      !_disposed && !isBusy && !editingLocked && _error == null;
+
+  /// Change what the next save writes, without rewriting the editing buffer
+  /// or its undo history. Returning to the saved choices clears their dirt.
+  bool setMetadata(TextDocumentMetadata value) {
+    if (!canChangeMetadata || value == _metadata) return false;
+    _metadata = value;
+    _document = _document?.copyWith(
+      lineEnding: value.lineEnding,
+      hasUtf8Bom: value.utf8Bom == Utf8Bom.present,
+    );
+    _revision++;
+    _notify();
+    return true;
+  }
+
+  LineEnding get bufferLineEnding =>
+      normalization == TextNormalization.normalize
+      ? LineEnding.lf
+      : _metadata.lineEnding;
   String? get error => _error;
 
   bool get isLoading => _loading;
@@ -333,7 +370,7 @@ class EditorController extends ChangeNotifier {
       _dirtySavedText = _savedText;
       _dirty = current != _savedText;
     }
-    return _dirty;
+    return _dirty || _metadata != _savedMetadata;
   }
 
   bool get canSave => !isBusy && !editingLocked && _error == null;
@@ -525,18 +562,21 @@ class EditorController extends ChangeNotifier {
   /// mark, and saving writes each line break as the document's own ending,
   /// as `saveTextDocument` does by default. The buffer may hold LF breaks
   /// (loaded normalized), CRLF breaks (loaded as they were, or pasted), or
-  /// a lone CR; each counts once. An untitled buffer counts as a new file is
-  /// saved, with LF breaks and no mark. A host that saves raw line endings
-  /// writes exactly [byteCount] bytes plus any byte-order mark instead.
+  /// a lone CR; each counts once. Untitled buffers use their pending
+  /// [metadata], defaulting to LF without a mark. With preserve normalization,
+  /// the size is [byteCount] plus the selected byte-order mark instead.
   int get fileByteCount {
-    final document = _document;
     _updateMetrics();
+    final bomBytes = _metadata.utf8Bom.byteLength;
+    if (normalization == TextNormalization.preserve) {
+      return byteCount + bomBytes;
+    }
     // Folding to LF drops the CR of each CRLF and turns a lone CR into LF.
     final breaks = lineStarts.length - 1 + _returns - _returnNewlines;
     return byteCount -
         _returnNewlines +
-        (document?.lineEnding == LineEnding.crlf ? breaks : 0) +
-        (document?.hasUtf8Bom ?? false ? 3 : 0);
+        (_metadata.lineEnding == LineEnding.crlf ? breaks : 0) +
+        bomBytes;
   }
 
   (int, int) get caretLineColumn {
@@ -613,6 +653,8 @@ class EditorController extends ChangeNotifier {
   /// Replacing text is reserved for an explicitly confirmed reload.
   void adoptDocument(TextDocument document, {bool replaceText = false}) {
     _document = document;
+    _metadata = document.metadata;
+    _savedMetadata = document.metadata;
     if (replaceText) _installText(document.text);
     _notify();
   }
@@ -757,7 +799,7 @@ class EditorController extends ChangeNotifier {
       // grow in bytes — so every changed result is measured; removals
       // always pass.
       if (outcome is TextToolChanged &&
-          utf8EncodedLength(outcome.edit.text) > maximumBytes) {
+          _exceedsToolSize(text.text, outcome.edit.text)) {
         outcome = const TextToolRefused(TextToolRefusal.tooLarge);
       }
       if (outcome case TextToolChanged(:final edit, :final indentation)) {
@@ -770,6 +812,11 @@ class EditorController extends ChangeNotifier {
           ),
         );
         if (indentation != null) this.indentation = indentation;
+      }
+      // Conversion still chooses the editing convention on an empty or
+      // already-converted buffer; there is simply no text edit to undo.
+      if (outcome case TextToolUnchanged(indentation: final chosen?)) {
+        indentation = chosen;
       }
     }
     _toolReport = TextToolReport(
@@ -819,8 +866,24 @@ class EditorController extends ChangeNotifier {
     indentation: indentation,
     indentationPreference: _preferredIndentation,
     displayPath: _displayPath,
+    lineEnding: bufferLineEnding,
     now: _now,
   );
+
+  bool _exceedsToolSize(String before, String after) {
+    final size = textDocumentByteCount(
+      after,
+      _metadata,
+      normalization: normalization,
+    );
+    return size > maximumBytes &&
+        size >
+            textDocumentByteCount(
+              before,
+              _metadata,
+              normalization: normalization,
+            );
+  }
 
   // ── Text tool bar ──
 
@@ -1207,6 +1270,8 @@ class EditorController extends ChangeNotifier {
     );
   }
 
+  /// Cleanup cannot rewrite text owned by an input method. A save needing
+  /// cleanup returns null during composition; retry after committing input.
   Future<EditorSaveResult?> save({
     EditorSaveMode mode = EditorSaveMode.primary,
     EditorSaveAccess access = EditorSaveAccess.normal,
@@ -1219,15 +1284,40 @@ class EditorController extends ChangeNotifier {
         (editingLocked && access != EditorSaveAccess.confirmedClose)) {
       return null;
     }
+    if (text.value.composing.isValid && _saveCleanup() != null) return null;
     _saving = true;
     _notify();
-    final snapshot = text.text;
     final publishAction = onPublish;
     final afterSave = onSaved;
     final publish = mode == EditorSaveMode.primary && publishAction != null;
     try {
+      // Save cleanup is visible and undoable, not a hidden disk-only rewrite.
+      // Wait only when cleanup is needed; ordinary saves keep their timing.
+      var cleanup = _saveCleanup();
+      if (cleanup != null) {
+        await _waitForUndoQuiet();
+        if (_disposed ||
+            text.value.composing.isValid ||
+            (editingLocked && access != EditorSaveAccess.confirmedClose)) {
+          return null;
+        }
+        cleanup = _saveCleanup();
+        if (cleanup != null) {
+          text.value = TextEditingValue(
+            text: cleanup.text,
+            selection: TextSelection(
+              baseOffset: cleanup.selectionBase,
+              extentOffset: cleanup.selectionExtent,
+            ),
+          );
+          _requestCaretReveal(CaretReveal.nearest);
+        }
+      }
+      final snapshot = text.text;
+      final metadataSnapshot = _metadata;
       final digest = await saver(snapshot, _document);
       _savedText = snapshot;
+      _savedMetadata = metadataSnapshot;
       final previous = _document;
       if (previous != null) {
         _document = previous.copyWith(text: snapshot, sha256: digest);
@@ -1253,6 +1343,18 @@ class EditorController extends ChangeNotifier {
       _saving = false;
       _notify();
     }
+  }
+
+  LineEdit? _saveCleanup() {
+    final selection = text.selection;
+    final source = text.text;
+    return prepareTextForSave(
+      source,
+      selection.isValid ? selection.baseOffset : 0,
+      selection.isValid ? selection.extentOffset : 0,
+      saveOptions,
+      lineEnding: bufferLineEnding,
+    );
   }
 
   Future<bool> confirmClose(
@@ -1685,21 +1787,17 @@ class EditorController extends ChangeNotifier {
                 : clamped;
             // Measure bytes, not units — a template can grow the result
             // in UTF-8 while its code-unit length stays put.
-            if (utf8EncodedLength(source) -
-                    utf8EncodedLength(
-                      source.substring(splice.start, splice.end),
-                    ) +
-                    utf8EncodedLength(joined) >
-                maximumBytes) {
+            final extracted =
+                source.substring(0, splice.start) +
+                joined +
+                source.substring(splice.end);
+            if (_exceedsToolSize(source, extracted)) {
               return const TextToolRefused(TextToolRefusal.tooLarge);
             }
             final caret = splice.start + joined.length;
             _requestCaretReveal(CaretReveal.nearest);
             text.value = TextEditingValue(
-              text:
-                  source.substring(0, splice.start) +
-                  joined +
-                  source.substring(splice.end),
+              text: extracted,
               selection: TextSelection.collapsed(offset: caret),
             );
             return TextToolChanged(

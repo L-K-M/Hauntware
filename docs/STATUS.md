@@ -29,8 +29,32 @@ ownership boundaries and compatibility policies are documented in
 - macOS Finder file-open events and Linux/Windows command-line file intake.
   Linux desktop entries pass selected files; Windows builds are portable.
 - Desktop CI builds and a release pipeline for macOS, Linux and Windows.
+- Text menu groups, palette keywords/paths, an inline options bar, Repeat and
+  Recent, and a result notice with Undo. The catalog contains 42 menu tools
+  plus Extract Matches. The find bar supports Keep/Delete Lines Matching,
+  Extract and a stored Find in Selection scope.
+- Clickable app status segments for indentation, LF/CRLF and UTF-8 BOM, with
+  metadata-aware dirty state. Opt-in trim/final-newline save settings and
+  Normalize Line Endings. Remaining host/deferred work is recorded in
+  [TEXT_TOOLS.md](TEXT_TOOLS.md#remaining-work-slices-5c-7-and-8).
 
 ## Verification
+
+### Text tools through slice 6, 2026-10-01
+
+Local Linux checks with Flutter 3.47.2 / Dart 3.13.2:
+
+- Core: analysis clean, 446 tests passed.
+- Shared editor: analysis clean, 321 tests passed.
+- App: analysis clean, 402 tests passed; two case-insensitive-volume tests
+  skipped on this case-sensitive host.
+- `dart format` and `git diff --check` clean.
+- New checks cover exact EOL/BOM bytes, untitled Save As, reload, conflict
+  rejection, undo/redo cleanup, concurrent typing, composition refusal and
+  narrow status controls at doubled text scale. Independent save-path review
+  found no important defects. Cross-platform CI is recorded on the PR.
+
+### Integration baseline, 2026-09-28
 
 After the 2026-09-28 integration (ANALYSIS.md section 13), on Linux with
 Flutter 3.47.2 / Dart 3.13.2, the versions CI uses:

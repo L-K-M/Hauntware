@@ -104,6 +104,7 @@ class MemoryDocuments implements DocumentStore {
     required String text,
     required TextDocument? source,
     required String? expectedSha256,
+    TextDocumentMetadata? metadata,
   }) async {
     writes.add((path: path, text: text, digest: expectedSha256));
     _activeWrites++;
@@ -118,8 +119,10 @@ class MemoryDocuments implements DocumentStore {
       final saved = TextDocument(
         file: File(path),
         text: text,
-        hasUtf8Bom: source?.hasUtf8Bom ?? false,
-        lineEnding: source?.lineEnding ?? LineEnding.lf,
+        hasUtf8Bom: metadata == null
+            ? source?.hasUtf8Bom ?? false
+            : metadata.utf8Bom == Utf8Bom.present,
+        lineEnding: metadata?.lineEnding ?? source?.lineEnding ?? LineEnding.lf,
         sha256: 'saved-${++version}',
       );
       files[path] = saved;

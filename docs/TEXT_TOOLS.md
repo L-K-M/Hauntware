@@ -1,6 +1,6 @@
 # Text tools plan
 
-Proposal, 2026-09-30. Nothing here is implemented. Two questions: which
+Original proposal, 2026-09-30. Implementation status is below. Two questions: which
 BBEdit text features belong in Planchette, and how to expose them without a
 40-row menu or a palette nobody browses.
 
@@ -12,6 +12,56 @@ marked *checked* (sort stability, case-mapping length, `^` and `$` at a lone
 CR) were run as a throwaway probe on Flutter 3.47.2 / Dart 3.13.2; slice 1
 turns them into tests. Ids such as B8 or E5 are entries in
 [ANALYSIS.md](../ANALYSIS.md); this plan is E13 and A16 there.
+
+## Implementation status, 2026-10-01
+
+Slices 1 to 5b are merged (#108 to #112 and #114). Slice 6 adds file-format
+choices, save cleanup and Normalize Line Endings. The catalog now contains
+42 of the menu table's 48 tools, plus Extract Matches in Find: 43 catalog
+entries. The six deferred menu tools are Hard Wrap, Convert Tabs to Spaces,
+Convert to ASCII, Strip Diacritics, Compose Accents and Decompose Accents.
+
+### Slice 6 contracts
+
+- The app's status menus choose indentation, LF/CRLF and UTF-8 with/without
+  BOM. File-format changes apply on the next save and make the document dirty,
+  including empty untitled buffers. Choosing the saved format again clears
+  that part of dirty state. Indentation settings neither rewrite nor dirty
+  text; the status menu also offers explicit conversion commands.
+- Save and Save As preserve the chosen format. Failed writes retain dirty
+  state and the old conflict digest; reload restores the file's format.
+  Format changes are blocked while loading, saving or locked.
+- Trim trailing whitespace and ensure final newline are independent,
+  persisted settings, both off by default. Cleanup changes the live buffer
+  in one undo step before writing. A failed write keeps that visible edit;
+  undo restores it. Empty files stay empty; existing final breaks stay.
+- Normalize Line Endings ignores the selection and fixes CRLF/lone CR across
+  the document. It uses LF for normalized buffers. Raw-preserving hosts must
+  pass `normalization: TextNormalization.preserve` to the controller; the
+  tool then uses the selected file ending. The host's loader and saver must
+  use the same policy. The default remains normalized.
+- Tool size preflight includes the selected EOL and BOM. Removing text can
+  still run on a buffer that already exceeds the limit.
+
+### Remaining work: slices 5c, 7 and 8
+
+| Slice | Status and next step |
+|---|---|
+| 5c | Unbuilt. Replacement backslash escapes require decision 5 because they change existing host templates. The active-match replacement preview also remains unbuilt |
+| 7 | Optional, unbuilt. Decide whether both hosts should expose the full catalog (decision 2), then build `openTextTools()` with a list/sheet, followed by one adoption PR per host at the same reviewed revision. Poltergeist needs ARB keys or a recorded exception. Verify narrow layouts and phone access before claiming them |
+| 8: wrap and interior tabs | Deferred until B8 defines display columns and tab stops |
+| 8: Unicode/ASCII | Compose/Decompose/Strip Diacritics need decision 4 on `unorm_dart`; Convert to ASCII separately needs a reviewed Latin transliteration table |
+| 8: JSON | Format/Minify JSON need decision 7 on scope |
+| 8: search | Regex hints/cheat sheet, Use Selection for Find, session search history and Compare with Saved are unstarted. Find in Selection and Extract are already shipped |
+| 8: Edit/File | Selection commands, Insert Line Above/Below, Paste and Match Indentation, number increment/decrement, Copy/Cut Line, block-comment fallback and File-menu Copy Path are unstarted. Go to Matching Bracket and tab-menu Copy Full Path already exist |
+| 8: menu keyboard access | Alt mnemonics remain unbuilt; validate AltGr and desktop/input-method conflicts before assigning them |
+
+No host pins were changed for slice 6. On a later pin bump the shared API
+gains format/save options and normalization; clickable status menus and the
+save-settings UI belong to the standalone app. Hosts still gain the shared
+find-bar actions from slice 5. A pin bump alone does not expose the full
+catalog. Broader E10 language selection and `.editorconfig` support (A1)
+remain separate work.
 
 ## 1. Recommendation
 

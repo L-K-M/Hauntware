@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 import 'editor_syntax.dart' show FindPattern, isWordRune;
 import 'indentation.dart';
 import 'line_operations.dart';
+import 'text_document.dart' show LineEnding;
+import 'text_save_options.dart';
 
 // Text-transform tools, the BBEdit-style "Text" menu: a catalog of pure
 // functions over the buffer, generated into menu, palette and options-bar
@@ -199,6 +201,7 @@ final class TextToolContext {
     required this.indentation,
     this.indentationPreference,
     this.displayPath = '',
+    this.lineEnding = LineEnding.lf,
     DateTime Function()? now,
     math.Random? random,
   }) : now = now ?? DateTime.now,
@@ -217,6 +220,9 @@ final class TextToolContext {
 
   /// The document's display path, for formats that mandate indentation.
   final String displayPath;
+
+  /// The buffer's convention, which can differ from the next save's ending.
+  final LineEnding lineEnding;
 
   /// The clock insertions read; injectable for tests.
   final DateTime Function() now;
@@ -536,6 +542,13 @@ const textToolCatalog = <TextTool>[
     group: TextToolGroup.whitespace,
     scope: TextToolScope.document,
     run: _indentationToTabs,
+  ),
+  TextTool(
+    id: 'normalizeLineEndings',
+    group: TextToolGroup.whitespace,
+    scope: TextToolScope.document,
+    ignoresSelection: true,
+    run: _normalizeLineEndings,
   ),
 
   // Clean Up
@@ -1358,8 +1371,17 @@ TextToolOutcome _toLowercase(TextToolRun run) =>
 TextToolOutcome _trimTrailingWhitespace(TextToolRun run) {
   final range = touchedLineRange(run.text, run.base, run.extent);
   final block = _linesOf(run.text, range.start, range.end);
+  final edits = _trailingWhitespaceEdits(block);
+  return _spanEdit(
+    run,
+    edits,
+    changed: edits.length,
+    scope: block.contents.length,
+  );
+}
+
+List<_Edit> _trailingWhitespaceEdits(_Lines block) {
   final edits = <_Edit>[];
-  var changed = 0;
   for (var i = 0; i < block.contents.length; i++) {
     final content = block.contents[i];
     var end = content.length;
@@ -1372,10 +1394,53 @@ TextToolOutcome _trimTrailingWhitespace(TextToolRun run) {
         end: block.starts[i] + content.length,
         insert: '',
       ));
-      changed++;
     }
   }
-  return _spanEdit(run, edits, changed: changed, scope: block.contents.length);
+  return edits;
+}
+
+/// One undoable save cleanup, with offsets mapped by the same span edits as
+/// Trim Trailing Whitespace. Empty files stay empty; existing breaks stay.
+LineEdit? prepareTextForSave(
+  String text,
+  int base,
+  int extent,
+  TextSaveOptions options, {
+  LineEnding lineEnding = LineEnding.lf,
+}) {
+  final edits = options.trailingWhitespace == TrailingWhitespacePolicy.trim
+      ? _trailingWhitespaceEdits(_linesOf(text, 0, text.length))
+      : <_Edit>[];
+  final (cleaned, map) = edits.isEmpty
+      ? (text, (int offset) => offset)
+      : _applyEdits(text, edits);
+  // Trimming can expose an existing final break or empty the document.
+  final appendBreak =
+      options.finalNewline == FinalNewlinePolicy.ensure &&
+      cleaned.isNotEmpty &&
+      !cleaned.endsWith('\n') &&
+      !cleaned.endsWith('\r');
+  if (edits.isEmpty && !appendBreak) return null;
+
+  final ending = lineEnding == LineEnding.crlf ? '\r\n' : '\n';
+  // An appended break leaves the caret at the original content end.
+  return LineEdit(
+    appendBreak ? cleaned + ending : cleaned,
+    map(base),
+    map(extent),
+  );
+}
+
+TextToolOutcome _normalizeLineEndings(TextToolRun run) {
+  final ending = run.context.lineEnding == LineEnding.crlf ? '\r\n' : '\n';
+  final edits = <_Edit>[];
+  var breaks = 0;
+  for (final match in RegExp(r'\r\n|\r|\n').allMatches(run.text)) {
+    breaks++;
+    if (match.group(0) == ending) continue;
+    edits.add((start: match.start, end: match.end, insert: ending));
+  }
+  return _spanEdit(run, edits, changed: edits.length, scope: breaks);
 }
 
 /// The tab stop a conversion uses: the document's own width, or for a
