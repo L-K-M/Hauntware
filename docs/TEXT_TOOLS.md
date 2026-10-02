@@ -57,7 +57,7 @@ revision, still to do. Poltergeist needs ARB keys or a recorded exception |
 | 8: Unicode/ASCII | Built. `unorm_dart` in core (decision 4); Convert to ASCII uses a reviewed Latin table, keeps unmapped non-ASCII literal with a count |
 | 8: JSON | Built. Whitespace-only strict-JSON reformat (decision 7), values verbatim, invalid input refused with line/column, size capped by the runner |
 | 8: search | Regex hints/cheat sheet, Use Selection for Find, session search history and Compare with Saved are unstarted. Find in Selection and Extract are already shipped |
-| 8: Edit/File | Selection commands, Insert Line Above/Below, Paste and Match Indentation, number increment/decrement, Copy/Cut Line, block-comment fallback and File-menu Copy Path are unstarted. Go to Matching Bracket and tab-menu Copy Full Path already exist |
+| 8: Edit/File | Shipped: Select Line, Select Paragraph, Select Enclosing Brackets, Insert Line Above/Below, Paste and Match Indentation, Increment/Decrement Number, Copy/Cut Line, Toggle Comment block fallback and File-menu Copy Path. Go to Matching Bracket and tab-menu Copy Full Path already existed |
 | 8: menu keyboard access | Alt mnemonics remain unbuilt; validate AltGr and desktop/input-method conflicts before assigning them |
 
 No host pins were changed for slice 6. On a later pin bump the shared API
@@ -464,7 +464,7 @@ budget, paging past 1,000 highlights, Replace, Replace All, `$1`, `${name}`.
 
 ### Edit and File menus
 
-Caret and file commands, not catalog tools. Not scheduled (slice 8):
+Caret and file commands, not catalog tools. Shipped (slice 8):
 
 - Select Line, Select Paragraph, Select Enclosing Brackets (BBEdit's
   Balance). Selection only: no edit, allowed when locked.
@@ -474,8 +474,8 @@ Caret and file commands, not catalog tools. Not scheduled (slice 8):
 - Increment / Decrement Number.
 - Copy Line, Cut Line.
 - Toggle Comment's block fallback (E1).
-- Copy Path, added to the File menu (FU5); today it is in the tab context
-  menu only.
+- Copy Path, added to the File menu (FU5); the tab context menu keeps
+  its Copy Full Path, and both share one copy routine.
 
 ### Later
 

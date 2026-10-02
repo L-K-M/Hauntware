@@ -9,12 +9,22 @@ import 'package:planchette_core/planchette_core.dart'
 import 'package:planchette_core/planchette_core.dart'
     as core
     show
+        copyLineText,
+        decrementNumber,
         deleteIndentBackward,
         deleteLines,
         duplicateLines,
+        incrementNumber,
+        insertLineAbove,
+        insertLineBelow,
         joinLines,
         moveLines,
-        patternSearchBudget;
+        pasteWithIndentation,
+        patternSearchBudget,
+        selectEnclosingBracketsRange,
+        selectLineRange,
+        selectParagraphRange,
+        toggleBlockComments;
 
 import 'code_editing_controller.dart';
 import 'pattern_find.dart';
@@ -694,19 +704,215 @@ class EditorController extends ChangeNotifier {
   bool joinLines() => _applyLineEdit(core.joinLines);
 
   /// Whether [toggleComment] can act: the buffer is editable and its
-  /// language has a line-comment marker. Plain text, Markdown, JSON, XML and
-  /// CSS have none.
-  bool get canToggleComment =>
-      canEditText && (text.language?.lineComments.isNotEmpty ?? false);
+  /// language has a line-comment marker, or a block pair for the fallback.
+  /// Plain text, Markdown and JSON have neither.
+  bool get canToggleComment {
+    if (!canEditText) return false;
+    final language = text.language;
+    return language != null &&
+        (language.lineComments.isNotEmpty || language.blockComments.isNotEmpty);
+  }
 
   /// Comments the touched lines with the language's line-comment marker, or
-  /// uncomments them when all already carry one. See [toggleLineComments].
+  /// uncomments them when all already carry one. Languages without a line
+  /// marker but with a block pair (XML, CSS) wrap with that pair instead.
+  /// See [toggleLineComments] and [toggleBlockComments].
   bool toggleComment() {
-    final markers = text.language?.lineComments;
-    if (markers == null) return false;
-    return _applyLineEdit(
-      (text, base, extent) => toggleLineComments(text, base, extent, markers),
+    final language = text.language;
+    if (language == null) return false;
+    if (language.lineComments.isNotEmpty) {
+      final markers = language.lineComments;
+      return _applyLineEdit(
+        (text, base, extent) => toggleLineComments(text, base, extent, markers),
+      );
+    }
+    if (language.blockComments.isNotEmpty) {
+      final pair = language.blockComments.first;
+      return _applyLineEdit(
+        (text, base, extent) =>
+            core.toggleBlockComments(text, base, extent, pair[0], pair[1]),
+      );
+    }
+    return false;
+  }
+
+  /// Selects the caret's line, or every line the selection touches.
+  /// Selection only, so a locked document allows it.
+  bool selectLine() {
+    if (!canMoveCaret) return false;
+    final selection = text.selection;
+    final range = core.selectLineRange(
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
     );
+    _requestCaretReveal(CaretReveal.nearest);
+    text.selection = TextSelection(
+      baseOffset: range.base,
+      extentOffset: range.extent,
+    );
+    return true;
+  }
+
+  /// Selects the paragraph at the caret: a run of non-blank lines.
+  /// Selection only, so a locked document allows it.
+  bool selectParagraph() {
+    if (!canMoveCaret) return false;
+    final selection = text.selection;
+    final range = core.selectParagraphRange(
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    _requestCaretReveal(CaretReveal.nearest);
+    text.selection = TextSelection(
+      baseOffset: range.base,
+      extentOffset: range.extent,
+    );
+    return true;
+  }
+
+  /// Selects the innermost bracket pair around the selection, expanding
+  /// outwards on repeat. Selection only, so a locked document allows it.
+  /// Returns false with no enclosing pair.
+  bool selectEnclosingBrackets() {
+    if (!canMoveCaret) return false;
+    final selection = text.selection;
+    final range = core.selectEnclosingBracketsRange(
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
+      text.syntaxTokens,
+    );
+    if (range == null) return false;
+    _requestCaretReveal(CaretReveal.nearest);
+    text.selection = TextSelection(
+      baseOffset: range.base,
+      extentOffset: range.extent,
+    );
+    return true;
+  }
+
+  /// Inserts an empty indented line above the caret's line.
+  bool insertLineAbove() => _applyLineEdit(
+    (text, base, extent) => core.insertLineAbove(text, base, extent),
+  );
+
+  /// Inserts an empty indented line below the caret's line.
+  bool insertLineBelow() => _applyLineEdit(
+    (text, base, extent) => core.insertLineBelow(text, base, extent),
+  );
+
+  /// Adds one to the number at the caret or selection, keeping its width,
+  /// decimal places and hex shape. Returns false with no number there.
+  bool incrementNumber() => _applyLineEdit(
+    (text, base, extent) => core.incrementNumber(text, base, extent),
+  );
+
+  /// Subtracts one from the number at the caret or selection. See
+  /// [incrementNumber].
+  bool decrementNumber() => _applyLineEdit(
+    (text, base, extent) => core.decrementNumber(text, base, extent),
+  );
+
+  /// Copies the touched lines to the clipboard. No edit, so a locked
+  /// document allows it. Returns false when the buffer changed mid-copy
+  /// or the clipboard refused it.
+  Future<bool> copyLine() async {
+    if (!canMoveCaret) return false;
+    final source = text.text;
+    final selection = text.selection;
+    if (!selection.isValid) return false;
+    final copyText = core.copyLineText(
+      source,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    if (copyText.isEmpty) return false;
+    try {
+      await Clipboard.setData(ClipboardData(text: copyText));
+    } catch (_) {
+      return false;
+    }
+    if (_disposed || text.text != source) return false;
+    return true;
+  }
+
+  /// Copies the touched lines and removes them. The clipboard write lands
+  /// first; a buffer that changed meanwhile keeps its text. The deletion
+  /// stays anchored to the copied lines, so clipboard and buffer agree
+  /// even when the caret moved during the write.
+  Future<bool> cutLine() async {
+    if (!canEditText) return false;
+    final source = text.text;
+    final selection = text.selection;
+    if (!selection.isValid) return false;
+    final copyText = core.copyLineText(
+      source,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    if (copyText.isEmpty) return false;
+    // Delete exactly the lines that were copied; a caret move during the
+    // clipboard write must not re-target the deletion away from them.
+    final removed = core.deleteLines(
+      source,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    if (removed == null) return false;
+    try {
+      await Clipboard.setData(ClipboardData(text: copyText));
+    } catch (_) {
+      return false;
+    }
+    if (_disposed || !canEditText || text.text != source) return false;
+    _requestCaretReveal(CaretReveal.nearest);
+    text.value = TextEditingValue(
+      text: removed.text,
+      selection: TextSelection(
+        baseOffset: removed.selectionBase,
+        extentOffset: removed.selectionExtent,
+      ),
+    );
+    return true;
+  }
+
+  /// Pastes the clipboard with later lines reindented to the caret line.
+  /// Default paste is untouched. Reads the clipboard first, then waits out
+  /// the undo throttle so the insert is one undo step; the caret is reread
+  /// afterwards, so a move during the waits pastes where it now stands.
+  /// A buffer that changed meanwhile is left alone.
+  Future<bool> pasteAndMatchIndentation() async {
+    if (!canEditText) return false;
+    final source = text.text;
+    if (!text.selection.isValid) return false;
+    final ClipboardData? data;
+    try {
+      data = await Clipboard.getData('text/plain');
+    } catch (_) {
+      return false;
+    }
+    final pasted = data?.text;
+    if (pasted == null || pasted.isEmpty) return false;
+    if (_disposed || !canEditText || text.text != source) return false;
+    await _waitForUndoQuiet();
+    if (_disposed || !canEditText || text.text != source) return false;
+    final current = text.selection;
+    if (!current.isValid) return false;
+    final edit = core.pasteWithIndentation(
+      source,
+      current.baseOffset,
+      current.extentOffset,
+      pasted,
+      separator: bufferLineEnding == LineEnding.crlf ? '\r\n' : '\n',
+    );
+    _requestCaretReveal(CaretReveal.nearest);
+    text.value = TextEditingValue(
+      text: edit.text,
+      selection: TextSelection.collapsed(offset: edit.selectionBase),
+    );
+    return true;
   }
 
   bool _applyLineEdit(
