@@ -650,6 +650,60 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('one-sided rows keep assistive selection activation', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final pair = testSyncPair();
+    final first = testItem(
+      'a.txt',
+      left: testFile(),
+      suggested: SyncActionType.copyLeftToRight,
+      reason: SyncReason.onlyOnLeft,
+    );
+    final second = testItem(
+      'b.txt',
+      left: testFile(),
+      suggested: SyncActionType.copyLeftToRight,
+      reason: SyncReason.onlyOnLeft,
+    );
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, [first, second]),
+    );
+    addTearDown(controller.dispose);
+    final ran = <String>[];
+
+    await pumpSyncPlanView(
+      tester,
+      controller,
+      onRunCommand: (command) async => ran.add(command.id),
+    );
+    await pumpToReady(tester, controller);
+    final row = find.byKey(const ValueKey('sync.row.b.txt'));
+    final node = tester.getSemantics(row);
+
+    expect(node.getSemanticsData().hasAction(ui.SemanticsAction.tap), isTrue);
+    node.owner!.performAction(node.id, ui.SemanticsAction.tap);
+    await tester.pump();
+
+    expect(
+      tester
+          .getSemantics(row)
+          .getSemanticsData()
+          .flagsCollection
+          .isSelected,
+      ui.Tristate.isTrue,
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(ran, isEmpty);
+    semantics.dispose();
+  });
+
   testWidgets('double-clicking row controls does not open compare', (
     tester,
   ) async {

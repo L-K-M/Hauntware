@@ -482,14 +482,20 @@ final class SyncPlanController extends ChangeNotifier {
 
   /// Whether [item] has regular files on both reviewed sides.
   bool comparisonAvailableFor(SyncItem item) {
-    final plan = _plan;
-    return plan != null &&
+    final stablePlan = switch (_phase) {
+      SyncPlanPhase.ready ||
+      SyncPlanPhase.completed ||
+      SyncPlanPhase.failed ||
+      SyncPlanPhase.cancelled => true,
+      SyncPlanPhase.scanning ||
+      SyncPlanPhase.running ||
+      SyncPlanPhase.error => false,
+    };
+    return stablePlan &&
+        _plan != null &&
         _leftRoot != null &&
         _rightRoot != null &&
-        !isRunning &&
-        plan.items.any((candidate) => identical(candidate, item)) &&
-        item.left?.kind == EntryKind.file &&
-        item.right?.kind == EntryKind.file;
+        _comparisonPaths.containsKey(item);
   }
 
   /// Builds the focused row's comparison at command invocation time.

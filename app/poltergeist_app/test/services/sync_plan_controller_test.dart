@@ -167,6 +167,8 @@ void main() {
 
       final rescan = controller.rescan();
       expect(controller.canCompareSelection, isFalse);
+      expect(controller.comparisonAvailableFor(comparable), isFalse);
+      expect(controller.comparisonFor(comparable), isNull);
       await rescan;
     });
 

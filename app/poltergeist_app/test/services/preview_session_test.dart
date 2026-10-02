@@ -706,6 +706,37 @@ void main() {
       expect(h.producer.specs, isEmpty);
     });
 
+    test('a cancelled prepare accepts an immediate retry', () async {
+      final prepareStarted = Completer<void>();
+      final releasePrepare = Completer<void>();
+      addTearDown(() {
+        if (!releasePrepare.isCompleted) releasePrepare.complete();
+      });
+      final h = await PreviewHarness.create(
+        platform: TargetPlatform.android,
+        afterCacheTempPrepared: () async {
+          if (!prepareStarted.isCompleted) prepareStarted.complete();
+          await releasePrepare.future;
+        },
+      );
+      await h.connectRemote([previewEntry('a.txt', size: 2)]);
+      h.session.previewFocused();
+      await untilPhase(h.session, PreviewPhase.prompt);
+      h.session.previewFocused();
+      await prepareStarted.future;
+      expect(h.session.escape(), isTrue);
+
+      h.session.previewFocused();
+      releasePrepare.complete();
+      await untilTrue(() => h.producer.specs.isNotEmpty);
+      expect(h.producer.specs, isNotEmpty);
+      await h.producer.complete(0, utf8.encode('hi'));
+      await untilPhase(h.session, PreviewPhase.rendered);
+
+      expect(h.session.text?.text, 'hi');
+      expect(h.producer.specs, hasLength(1));
+    });
+
     test('Esc on producing cancels the task, keeping the panel', () async {
       final h = await PreviewHarness.create();
       await h.connectRemote([previewEntry('a.txt', size: 2)]);
@@ -1359,6 +1390,35 @@ void main() {
       expect(h.session.phase, PreviewPhase.prompt);
       expect(h.session.refusal, PreviewRefusal.cancelled);
       expect(h.producer.specs, isEmpty);
+    });
+
+    test('Quick Look accepts an immediate retry of a cancelled start',
+        () async {
+      final h = await PreviewHarness.create(
+        platform: TargetPlatform.macOS,
+        quickLookAvailable: true,
+      );
+      final entry = previewEntry('a.txt', size: 2);
+      await h.connectRemote([entry]);
+      final key = previewCacheKey('srv-1', entry.path, null, 2);
+      final owner = await h.cache.reserveProduction(key);
+      addTearDown(() => owner?.release());
+
+      h.session.previewFocused();
+      await untilTrue(
+        () => h.session.quickLookCard == QuickLookCardKind.producing,
+      );
+      expect(h.session.escape(), isTrue);
+
+      h.session.previewFocused();
+      owner!.release();
+      await untilTrue(() => h.producer.specs.isNotEmpty);
+      expect(h.producer.specs, isNotEmpty);
+      await h.producer.complete(0, utf8.encode('hi'));
+      await untilTrue(() => h.session.quickLookActive);
+
+      expect(h.quickLook.shows, hasLength(1));
+      expect(h.producer.specs, hasLength(1));
     });
 
     test('a direct cache lookup failure leaves Quick Look retryable', () async {

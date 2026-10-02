@@ -976,6 +976,12 @@ final class PreviewSession extends ChangeNotifier {
 
   // -- Production --------------------------------------------------------
 
+  void _removePendingStart(String key, _PendingStart pending) {
+    if (!identical(_pendingStarts[key], pending)) return;
+
+    _pendingStarts.remove(key);
+  }
+
   /// Starts (or attaches to) the focused item's remote production —
   /// the §5.3 prompt card's Space/button and the §8 threshold confirm's
   /// Download share this. Over-threshold known sizes land on the
@@ -1013,16 +1019,20 @@ final class PreviewSession extends ChangeNotifier {
     }
     final existingPending = _pendingStarts[key];
     if (existingPending != null) {
-      if (existingPending.cancelled) return;
-      existingPending.reattach(
-        generation: generation,
-        kind: kind,
-        decision: thresholdDecision,
-      );
-      if (_isCurrentProduction(key, generation) && !_panelHidden) {
-        _setPhase(PreviewPhase.producing);
+      if (existingPending.cancelled) {
+        // A fresh request may queue behind the cancelled owner's cleanup.
+        _removePendingStart(key, existingPending);
+      } else {
+        existingPending.reattach(
+          generation: generation,
+          kind: kind,
+          decision: thresholdDecision,
+        );
+        if (_isCurrentProduction(key, generation) && !_panelHidden) {
+          _setPhase(PreviewPhase.producing);
+        }
+        return;
       }
-      return;
     }
     // Existing starts reattach before this up-front gate. A refocus must
     // not replace already-confirmed work with a second confirmation card.
@@ -1050,7 +1060,7 @@ final class PreviewSession extends ChangeNotifier {
       cancellation: pending.cancellation.future,
     );
     if (reservation == null) {
-      _pendingStarts.remove(key);
+      _removePendingStart(key, pending);
       _startCancels.remove(key);
       return;
     }
@@ -1061,27 +1071,29 @@ final class PreviewSession extends ChangeNotifier {
       final cancelledBeforeLookup =
           pending.cancelled || cancelRequestedBeforeLookup;
       if (_disposed || cancelledBeforeLookup) {
-        _pendingStarts.remove(key);
+        _removePendingStart(key, pending);
         return;
       }
       final File? cached;
       try {
         cached = await _cache.lookup(key);
       } on Object {
-        _pendingStarts.remove(key);
+        _removePendingStart(key, pending);
         _startCancels.remove(key);
-        _showRetryableProductionFailure(key, pending.focus.generation);
+        if (!pending.cancelled) {
+          _showRetryableProductionFailure(key, pending.focus.generation);
+        }
         return;
       }
       final cancelRequestedAfterLookup = _startCancels.remove(key);
       final cancelledAfterLookup =
           pending.cancelled || cancelRequestedAfterLookup;
       if (_disposed || cancelledAfterLookup) {
-        _pendingStarts.remove(key);
+        _removePendingStart(key, pending);
         return;
       }
       if (cached != null) {
-        _pendingStarts.remove(key);
+        _removePendingStart(key, pending);
         // Rendering and platform delivery may block. The cache key is
         // already complete, so let the next consumer attach now.
         reservation.release();
@@ -1125,12 +1137,14 @@ final class PreviewSession extends ChangeNotifier {
         expectedBytes: size,
       );
     } on Object {
-      _pendingStarts.remove(key);
+      _removePendingStart(key, pending);
       _startCancels.remove(key);
-      _showRetryableProductionFailure(key, pending.focus.generation);
+      if (!pending.cancelled) {
+        _showRetryableProductionFailure(key, pending.focus.generation);
+      }
       return;
     }
-    _pendingStarts.remove(key);
+    _removePendingStart(key, pending);
     final cancelRequestedAfterPrepare = _startCancels.remove(key);
     final cancelledAfterPrepare =
         pending.cancelled || cancelRequestedAfterPrepare;
@@ -1613,10 +1627,8 @@ final class PreviewSession extends ChangeNotifier {
     final pending = _pendingStarts[key];
     if (pending == null) return false;
     if (pending.cancelled) {
-      _setQuickLookCard(QuickLookCardKind.none);
-      _quickLookRequested = _quickLookActive;
-      notifyListeners();
-      return true;
+      _removePendingStart(key, pending);
+      return false;
     }
     pending.reattach(
       generation: generation,

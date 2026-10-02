@@ -265,6 +265,8 @@ class _SyncPlanViewState extends State<SyncPlanView> {
 
   /// Every compare affordance dispatches the same registered command.
   bool _runComparison(SyncItem item) {
+    if (!syncRowComparable(item)) return false;
+
     _activatePane();
     _controller.setComparisonTarget(item);
     final command = _compareCommand;

@@ -18,10 +18,12 @@ gate, and cancellation. Cache-key reservations prevent duplicate work across
 compare routes and the preview panel. Queue tickets wait for active I/O to
 drain, and repeatable aborts remove late cancellation writes. Each side keeps
 its scanned path spelling for case and Unicode variants. The v1.x computed
-diff remains demand-dependent.
+diff remains demand-dependent. Review hardening blocks stale-plan comparisons
+during rescans and lets cancelled preview starts retry immediately without an
+older cleanup removing the replacement.
 
 Core analysis is clean; all 1,920 core tests pass with 27 environment-gated
-skips. Flutter analysis is clean; all 3,408 app tests pass. Light-theme
+skips. Flutter analysis is clean; all 3,411 app tests pass. Light-theme
 before/after captures and provenance are in
 `tasks/sync-pair-compare/screenshots/`. No Séance source or pin changed.
 
