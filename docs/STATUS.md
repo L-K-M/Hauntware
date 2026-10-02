@@ -44,6 +44,19 @@ ownership boundaries and compatibility policies are documented in
 
 ## Verification
 
+### Ghost context menus, 2026-10-02
+
+The shared editor exports Poltergeist's desktop menu skin: 26 px rows,
+13 px interface text, scaled rounded panels, glyphs and shortcut hints.
+Planchette's tab and text-selection menus use it. Clipboard actions retain
+Flutter's selection and read-only guards; touch keeps adaptive toolbars.
+
+Local Linux checks: editor analysis and 402 tests passed; app analysis and
+440 tests passed, with two existing case-sensitive-volume skips. Regression
+tests failed first on oversized tab rows and missing selection-menu glyphs.
+Desktop variants cover macOS, Windows and Linux; these are widget checks,
+not native macOS runtime verification.
+
 ### Completed Planchette slices, 2026-10-02
 
 [PRs #119 to #124](TEXT_TOOLS.md#implementation-status-2026-10-02) deliver the

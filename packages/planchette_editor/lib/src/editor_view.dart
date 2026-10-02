@@ -11,6 +11,7 @@ import 'code_editing_controller.dart';
 import 'editor_controller.dart';
 import 'editor_fonts.dart';
 import 'editor_strings.dart';
+import 'ghost_menus.dart';
 import 'text_tools_browser.dart';
 
 /// What the Tab key does inside the document.
@@ -552,6 +553,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 },
                 child: TextField(
                   controller: c.search,
+                  contextMenuBuilder: ghostTextContextMenu,
                   focusNode: c.searchFocus,
                   autofocus: true,
                   autocorrect: false,
@@ -734,6 +736,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
             _searchRow(
               field: TextField(
                 controller: c.replacement,
+                contextMenuBuilder: ghostTextContextMenu,
                 focusNode: c.replacementFocus,
                 autocorrect: false,
                 enableSuggestions: false,
@@ -890,6 +893,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     return _searchRow(
       field: TextField(
         controller: c.extraction,
+        contextMenuBuilder: ghostTextContextMenu,
         focusNode: c.extractionFocus,
         autocorrect: false,
         enableSuggestions: false,
@@ -1007,6 +1011,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           Expanded(
             child: TextField(
               controller: c.goToLineInput,
+              contextMenuBuilder: ghostTextContextMenu,
               focusNode: c.goToLineFocus,
               autofocus: true,
               autocorrect: false,
@@ -1274,6 +1279,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                       },
                       child: TextField(
                         key: const ValueKey('planchette.document'),
+                        contextMenuBuilder: ghostTextContextMenu,
                         controller: c.text,
                         undoController: c.undoController,
                         readOnly: _locked,
@@ -1669,6 +1675,7 @@ class _ToolBarState extends State<_ToolBar> {
     width: option is IntegerOption ? 72 : 160,
     child: TextField(
       controller: _fields[option.id],
+      contextMenuBuilder: ghostTextContextMenu,
       focusNode: _nodes[option.id],
       autocorrect: false,
       enableSuggestions: false,

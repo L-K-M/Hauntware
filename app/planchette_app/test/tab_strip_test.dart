@@ -207,6 +207,35 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets(
+    'tab context menus use compact rows and command glyphs',
+    (tester) async {
+      workspace.newDocument();
+      await mount(tester);
+      await tester.tap(find.text('Untitled'), buttons: kSecondaryMouseButton);
+      await tester.pumpAndSettle();
+
+      final close = find.ancestor(
+        of: find.text('Close'),
+        matching: find.byWidgetPredicate((w) => w is PopupMenuItem<void>),
+      );
+      expect(tester.getSize(close).height, 26);
+      expect(
+        find.descendant(of: close, matching: find.byIcon(Icons.close)),
+        findsOneWidget,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Close All Tabs'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.macOS,
+      TargetPlatform.linux,
+      TargetPlatform.windows,
+    }),
+  );
+
   // From #42, whose tab actions moved into the strip.
   testWidgets('the tab menu closes others and all', (tester) async {
     workspace
@@ -278,7 +307,7 @@ void main() {
     final item = tester.widget<PopupMenuItem<void>>(
       find.ancestor(
         of: find.text('Copy Full Path'),
-        matching: find.byType(PopupMenuItem<void>),
+        matching: find.byWidgetPredicate((w) => w is PopupMenuItem<void>),
       ),
     );
     expect(item.enabled, isFalse);

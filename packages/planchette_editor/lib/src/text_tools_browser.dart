@@ -5,6 +5,7 @@ import 'package:planchette_core/planchette_core.dart';
 
 import 'editor_controller.dart';
 import 'editor_strings.dart';
+import 'ghost_menus.dart';
 import 'text_tool_history.dart';
 
 /// The shared text-tools catalog browser: Repeat and Recent first, then
@@ -96,6 +97,7 @@ class TextToolsBrowserState extends State<TextToolsBrowser> {
           ],
         ),
         TextField(
+          contextMenuBuilder: ghostTextContextMenu,
           controller: _filter,
           focusNode: _filterNode,
           onChanged: (_) => setState(() {}),
