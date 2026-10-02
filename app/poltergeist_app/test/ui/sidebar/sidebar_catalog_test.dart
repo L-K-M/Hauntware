@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/connection_status_controller.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
+import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/sidebar_controller.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
@@ -76,6 +77,8 @@ void main() {
     Set<String> pinned = const {},
     PinnedServerWriter? onPinnedChanged,
     void Function(ConnectionServer)? onReviewBlocked,
+    RegisteredCommand Function(ServerConfig server)? catalogTerminalCommand,
+    Future<void> Function(RegisteredCommand command)? onRunCommand,
   }) async {
     tester.view.physicalSize = const Size(600, 1000);
     tester.view.devicePixelRatio = 1;
@@ -111,6 +114,8 @@ void main() {
                 catalogListenable: source,
                 workspace: workspace,
                 onReviewBlocked: onReviewBlocked,
+                catalogTerminalCommand: catalogTerminalCommand,
+                onRunCommand: onRunCommand,
                 onOpenCatalogServer: withOpen
                     ? (server, action) => opens.add((server, action))
                     : null,
@@ -467,10 +472,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Open in New Tab'), findsOneWidget);
     expect(find.text('Open in Other Pane'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('sidebar.catalog.menu.openTerminalInSeance')),
+      findsNothing,
+    );
 
     await tester.tap(find.text('Open in Other Pane'));
     await tester.pumpAndSettle();
     expect(opens.single.$2, SidebarOpenAction.oppositePane);
+  });
+
+  testWidgets('catalog handoff renders through its registered command', (
+    tester,
+  ) async {
+    catalog.replace([_server('s1')]);
+    final runs = <String>[];
+    await pump(
+      tester,
+      catalogTerminalCommand: (server) => RegisteredCommand(
+        id: 'connect.openTerminalInSeance',
+        scope: CommandScope.pane,
+        label: (l10n) => l10n.sidebarOpenTerminalInSeance,
+        run: (_) async {},
+      ),
+      onRunCommand: (command) async => runs.add(command.id),
+    );
+
+    await tester.tap(row('s1'), buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('sidebar.catalog.menu.openTerminalInSeance')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(runs, ['connect.openTerminalInSeance']);
   });
 
   testWidgets('the filter field appears at five servers and filters', (

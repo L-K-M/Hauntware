@@ -21,6 +21,7 @@ import 'services/checkout_session.dart';
 import 'services/connection_state_bridge.dart';
 import 'services/content_size_reporter.dart';
 import 'services/double_click_action.dart';
+import 'services/deep_links.dart';
 import 'services/drag_out_producer.dart' show DragOutProducer;
 import 'services/editor_registry_controller.dart';
 import 'services/engine_session.dart';
@@ -30,6 +31,7 @@ import 'services/probe_settings_store.dart' show ProbeSettings;
 import 'services/quick_look_channel.dart' show QuickLookChannel;
 import 'services/quit_guard.dart';
 import 'services/recent_locations.dart';
+import 'services/seance_links.dart';
 import 'services/session_persistence.dart';
 import 'services/session_state.dart';
 import 'services/settings_models.dart' show AppearanceSettingsModel;
@@ -122,6 +124,8 @@ class PoltergeistApp extends StatefulWidget {
     this.previewThreshold,
     this.checkoutPrompts,
     this.appearance,
+    this.deepLinks,
+    this.seanceLauncher,
   });
 
   final double initialPaneRatio;
@@ -351,6 +355,9 @@ class PoltergeistApp extends StatefulWidget {
   /// section out.
   final AppearanceSettingsModel? appearance;
 
+  final DeepLinkCoordinator? deepLinks;
+  final SeanceLauncher? seanceLauncher;
+
   /// The prompt coordinator and other dialog owners show through this key;
   /// null keeps the default navigator. The session's coordinator and the
   /// [MaterialApp] must share one key: dialogs render on this navigator.
@@ -548,6 +555,8 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       previewThreshold: widget.previewThreshold,
       checkoutPrompts: widget.checkoutPrompts,
       appearance: widget.appearance,
+      deepLinks: widget.deepLinks,
+      seanceLauncher: widget.seanceLauncher,
     );
     final callback = widget.onContentSizeChanged;
     if (callback == null) return workspace;

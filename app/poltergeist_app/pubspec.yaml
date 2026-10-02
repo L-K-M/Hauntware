@@ -8,6 +8,9 @@ environment:
   flutter: '>=3.47.2'
 
 dependencies:
+  # Cross-platform delivery for the desktop URL schemes in 04 §7.1.
+  app_links: 7.2.1
+  # Keep all Planchette Git dependencies on the same full revision.
   ghost_ui:
     git:
       url: https://github.com/L-K-M/Planchette.git

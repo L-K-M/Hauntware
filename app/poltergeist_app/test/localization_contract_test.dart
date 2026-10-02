@@ -1282,6 +1282,43 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'sftp://${split.username}@${split.hostport}$suffix'",
     r"'/$path'",
   },
+  // Deep-link schemes, routes, query keys, path grammar, and display-safe
+  // endpoint composition. User-facing explanations live in ARB.
+  'lib/services/deep_links.dart': {
+    "'poltergeist'",
+    "'browse'",
+    r"r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
+    r"r'[.\u3002\uff0e\uff61]'",
+    "'unknown deep-link request'",
+    "'%'",
+    r"'${host.substring(0, zoneStart).toLowerCase()}'",
+    r"'${host.substring(zoneStart)}'",
+    "'/'",
+    "'serverId'",
+    "'path'",
+    "'port'",
+    "'host'",
+    "'username'",
+  },
+  // The outbound sibling-app URI grammar and programmer diagnostics.
+  'lib/services/seance_links.dart': {
+    "'seance'",
+    "'connect'",
+    "'A remote bookmark must carry a server reference.'",
+    "'serverId'",
+    "'A server reference must carry an id or identity.'",
+    "'host'",
+    "'port'",
+    r"'${identity.port}'",
+    "'username'",
+    "'The Séance link handler refused the request.'",
+  },
+  // Machine-derived ids and endpoint labels shared with Quick Connect.
+  'lib/services/quick_connect_bookmark.dart': {
+    r"'$quickConnectAdhocIdPrefix${uuidV4()}'",
+    r"'${target.host}:${target.port}'",
+    r"'${target.username}@$host'",
+  },
   // The Quick Connect form's widget keys, the adhoc-id mint, the tab
   // label compositions (username@host:port machine data beside
   // ARB-authored copy), and the empty-string fallbacks — plumbing, never
@@ -1292,9 +1329,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'quickConnect.importSshConfig'",
     "''",
     r"'${target.port}'",
-    r"'$quickConnectAdhocIdPrefix${uuidV4()}'",
-    r"'$username@${_hostLabel(target)}'",
-    r"'${target.host}:${target.port}'",
     // The `$USER@` prefill's environment keys and its user@ join (D32
     // §6) — process-environment machine data, never authored copy.
     "'USER'",
@@ -1461,7 +1495,22 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sidebar.catalog.menu.edit'",
     "'sidebar.catalog.menu.duplicate'",
     "'sidebar.catalog.menu.delete'",
+    "'sidebar.catalog.menu.openTerminalInSeance'",
     "'sidebar.adhoc.menu.save'",
+    "'sidebar.menu.openTerminalInSeance'",
+  },
+  // Registered command identity, not its localized label.
+  'lib/ui/sidebar/seance_commands.dart': {"'connect.openTerminalInSeance'"},
+  // Widget keys and numeric endpoint formatting; all visible prose is ARB.
+  'lib/ui/deep_link_dialogs.dart': {
+    "'deepLink.failure'",
+    "'deepLink.failure.close'",
+    "'deepLink.review'",
+    "'deepLink.overflow'",
+    "'deepLink.cancel'",
+    "'deepLink.discardAll'",
+    "'deepLink.connect'",
+    r"'$port'",
   },
   // The sidebar filter's term split and the path-separator trimming of
   // the selection match — machinery, never rendered.

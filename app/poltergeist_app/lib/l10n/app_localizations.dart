@@ -10549,6 +10549,168 @@ abstract class AppLocalizations {
   /// **'Quit'**
   String get appQuitLabel;
 
+  /// 04 §7.1 anti-phishing interstitial title for a host-form poltergeist:// link.
+  ///
+  /// In en, this message translates to:
+  /// **'Review connection link'**
+  String get deepLinkReviewTitle;
+
+  /// 04 §7.1 anti-phishing explanation shown before any host-form deep link can connect.
+  ///
+  /// In en, this message translates to:
+  /// **'A link is asking Poltergeist to connect. Verify the endpoint before continuing.'**
+  String get deepLinkReviewBody;
+
+  /// No description provided for @deepLinkHostLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get deepLinkHostLabel;
+
+  /// No description provided for @deepLinkPortLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Port'**
+  String get deepLinkPortLabel;
+
+  /// No description provided for @deepLinkUsernameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Username'**
+  String get deepLinkUsernameLabel;
+
+  /// No description provided for @deepLinkFolderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder'**
+  String get deepLinkFolderLabel;
+
+  /// No description provided for @deepLinkEmptyValue.
+  ///
+  /// In en, this message translates to:
+  /// **'Not specified'**
+  String get deepLinkEmptyValue;
+
+  /// No description provided for @deepLinkConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get deepLinkConnect;
+
+  /// No description provided for @deepLinkCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get deepLinkCancel;
+
+  /// No description provided for @deepLinkDiscardAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard all remaining'**
+  String get deepLinkDiscardAll;
+
+  /// Notice that rapid links for the same host, port, and username were coalesced into one review.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =2{This endpoint was opened twice.} other{This endpoint was opened {count} times.}}'**
+  String deepLinkRepeatedActivations(int count);
+
+  /// No description provided for @deepLinkWaitingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get deepLinkWaitingTitle;
+
+  /// Expandable overflow summary after the three directly visible deep-link endpoints.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 additional link activation pending} other{{count} additional link activations pending}}'**
+  String deepLinkAdditionalPending(int count);
+
+  /// Safe endpoint summary in the pending deep-link review list.
+  ///
+  /// In en, this message translates to:
+  /// **'{username}@{host}:{port}'**
+  String deepLinkEndpointSummary(String username, String host, int port);
+
+  /// No description provided for @deepLinkInternationalizedWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Internationalized hostname. Check every character.'**
+  String get deepLinkInternationalizedWarning;
+
+  /// No description provided for @deepLinkMixedScriptWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Mixed writing systems detected in this hostname.'**
+  String get deepLinkMixedScriptWarning;
+
+  /// No description provided for @deepLinkUnrecognizedScriptWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrecognized writing system in this hostname. Check every character.'**
+  String get deepLinkUnrecognizedScriptWarning;
+
+  /// No description provided for @deepLinkControlsRemovedWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden direction or line-control characters were removed for display.'**
+  String get deepLinkControlsRemovedWarning;
+
+  /// No description provided for @deepLinkFailureTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Link can’t be opened'**
+  String get deepLinkFailureTitle;
+
+  /// No description provided for @deepLinkFailureUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This Poltergeist link does not name a supported action.'**
+  String get deepLinkFailureUnsupported;
+
+  /// No description provided for @deepLinkFailureParameters.
+  ///
+  /// In en, this message translates to:
+  /// **'This Poltergeist link has invalid or unexpected parameters.'**
+  String get deepLinkFailureParameters;
+
+  /// No description provided for @deepLinkFailurePort.
+  ///
+  /// In en, this message translates to:
+  /// **'This Poltergeist link must name a numeric port from 1 to 65535.'**
+  String get deepLinkFailurePort;
+
+  /// No description provided for @deepLinkFailurePath.
+  ///
+  /// In en, this message translates to:
+  /// **'This Poltergeist link contains an unsafe folder path.'**
+  String get deepLinkFailurePath;
+
+  /// No description provided for @deepLinkFailureServer.
+  ///
+  /// In en, this message translates to:
+  /// **'The linked server is not in your synchronized server catalog.'**
+  String get deepLinkFailureServer;
+
+  /// No description provided for @deepLinkFailureClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get deepLinkFailureClose;
+
+  /// Server command and bookmark context-menu action that hands the server identity to Séance through seance://.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Terminal in Séance'**
+  String get sidebarOpenTerminalInSeance;
+
+  /// Disabled-command reason for Open Terminal in Séance when the active tab has no remote server.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires a tab connected to a server'**
+  String get commandDisabledNoRemoteServer;
+
   /// No description provided for @editorUndoLabel.
   ///
   /// In en, this message translates to:

@@ -93,7 +93,7 @@ final class WorkspaceWindow {
   Future<bool> _confirmEditorClose() async =>
       !isEditor || (await _editorCloseGuard?.call() ?? false);
 
-  Future<void> activate() => _owner._host.activate(viewId);
+  Future<void> activate() => _owner._activateWindow(this);
 
   Future<void> openEditor({
     required String key,
@@ -306,6 +306,19 @@ final class WorkspaceWindows extends ChangeNotifier
   Future<void> openWindow({SessionState? session}) =>
       _serialized(() => _openWindow(session));
 
+  /// Restores a workspace when an external request arrives while only
+  /// document editors remain. The request's handler raises the chosen window.
+  Future<void> ensureWorkspaceForExternalRequest() => _serialized(() async {
+    if (!_started || !_hostAvailable || _disposed || _quitPending) return;
+    final existing = activeWorkspaceWindow;
+    if (existing != null) {
+      await _activateWindow(existing);
+      return;
+    }
+
+    await _openWindow(null);
+  });
+
   Future<void> _openWindow(SessionState? session) async {
     if (!_hostAvailable || _disposed || _quitPending) return;
 
@@ -499,6 +512,15 @@ final class WorkspaceWindows extends ChangeNotifier
     _activation
       ..remove(window)
       ..add(window);
+  }
+
+  Future<void> _activateWindow(WorkspaceWindow window) async {
+    if (_disposed || !_windows.contains(window)) return;
+    final changed = !window.isActive;
+    _activate(window);
+    if (changed) notifyListeners();
+
+    await _host.activate(window.viewId);
   }
 
   bool _serverBoundOutside(WorkspaceWindow window, String serverId) {
