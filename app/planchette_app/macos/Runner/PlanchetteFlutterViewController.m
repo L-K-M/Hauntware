@@ -74,7 +74,10 @@ typedef struct {
 // The view an update is for; the implicit view when the producer is too old
 // to say.
 static int64_t PlanchetteSemanticsUpdateViewId(const void* update) {
-  const PlanchetteSemanticsUpdate* head = update;
+  // The accessibility fixture compiles this file as Objective-C++, where
+  // void* needs the cast the C rules allow implicitly.
+  const PlanchetteSemanticsUpdate* head =
+      (const PlanchetteSemanticsUpdate*)update;
   if (head->struct_size < offsetof(PlanchetteSemanticsUpdate, view_id) +
                               sizeof(head->view_id)) {
     return 0;
