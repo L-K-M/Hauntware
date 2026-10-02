@@ -73,10 +73,7 @@ the two previously deferred menu tools, Hard Wrap and Convert Tabs to Spaces.
 | Slice | Status and next step |
 |---|---|
 | 5c | Replacement backslash escapes declined by owner: replacements keep backslashes literal, only `$1`, `${1}`, `${name}` and `$$` expand. Active-match replacement preview built (worker-backed, bounded one line) |
-| 7 | Built in Planchette: `openTextTools()` with a list state (Repeat and
-Recent first, seven groups, keyword filter), verified at 320 px and doubled
-text scale. Host adoption is one header icon per host at the same reviewed
-revision, still to do. Poltergeist needs ARB keys or a recorded exception |
+| 7 | Built in Planchette: `openTextTools()` with Repeat/Recent, seven groups and keyword filter, verified at 320 px and doubled text scale. Both-host adoption is approved and will use one final reviewed pin. Poltergeist strings use its existing English ARB policy |
 | 8: wrap and interior tabs | Built using the owner's explicit text-cell policy; status/navigation coordinates remain UTF-16 |
 | 8: Unicode/ASCII | Built. `unorm_dart` in core (decision 4); Convert to ASCII uses a reviewed Latin table, keeps unmapped non-ASCII literal with a count |
 | 8: JSON | Built. Whitespace-only strict-JSON reformat (decision 7), values verbatim, invalid input refused with line/column, size capped by the runner |

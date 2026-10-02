@@ -43,6 +43,16 @@ ownership boundaries and compatibility policies are documented in
 
 ## Verification
 
+### Text-column tool integration, 2026-10-02
+
+On the integrated tree with the browser, Unicode/JSON, Edit/File and search
+slices: core 565 tests, editor 393 tests, app 406 tests pass locally. App has
+the two existing case-sensitive-volume skips. All analysis and format checks
+are clean. Hard Wrap and full tab expansion cover text-cell widths, CRLF,
+backward selections, comment/quote prefixes, protected lists and early output
+limits. A conditional saved-EOL policy matches raw-buffer host preflight
+without changing the host's save bytes. CI/review results are on the PR.
+
 ### Text tools slice 8 (Unicode/ASCII/JSON), 2026-10-01
 
 Local Linux checks with Flutter 3.47.2 / Dart 3.13.2:
