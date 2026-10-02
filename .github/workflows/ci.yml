@@ -122,6 +122,9 @@ jobs:
       - name: Native keyboard modifiers
         if: matrix.target == 'macos'
         run: scripts/test-macos-keyboard.sh
+      - name: Native Finder document delivery
+        if: matrix.target == 'macos'
+        run: bash scripts/test-macos-documents.sh
       - name: Native accessibility lifecycle
         if: matrix.target == 'macos'
         run: scripts/test-macos-accessibility.sh

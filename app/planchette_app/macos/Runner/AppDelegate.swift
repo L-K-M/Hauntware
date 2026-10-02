@@ -1,7 +1,9 @@
 import Cocoa
 import FlutterMacOS
 
+#if !PLANCHETTE_DOCUMENT_OPEN_TEST
 @main
+#endif
 class AppDelegate: FlutterAppDelegate {
   private var documentChannel: FlutterMethodChannel?
   private var pendingPaths: [String] = []
