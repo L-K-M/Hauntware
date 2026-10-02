@@ -59,6 +59,47 @@ void main() {
     expect(_shown(tester), 'short-name');
   });
 
+  testWidgets('measures with the merged style Text actually renders', (
+    tester,
+  ) async {
+    // The rendered Text is DefaultTextStyle.merge(style); the ambient
+    // letterSpacing makes that much wider than the raw style, so a slot
+    // between the two widths only overflows if measurement merges too.
+    const ambient = TextStyle(fontSize: 10, letterSpacing: 50);
+    const style = TextStyle(fontSize: 20);
+    const name = 'somewhat-long-name';
+    final raw = TextPainter(
+      text: const TextSpan(text: name, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final merged = TextPainter(
+      text: TextSpan(text: name, style: ambient.merge(style)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    addTearDown(() {
+      raw.dispose();
+      merged.dispose();
+    });
+    expect(merged.width, greaterThan(raw.width));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DefaultTextStyle(
+          style: ambient,
+          child: Center(
+            child: SizedBox(
+              width: (raw.width + merged.width) / 2,
+              child: const MiddleEllipsisText(name, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+    // The merged rendering overflows the slot, so it must truncate;
+    // measuring with the unmerged style would report a false fit.
+    expect(_shown(tester), contains('…'));
+    _expectWholeGraphemes(name, _shown(tester));
+  });
+
   testWidgets('truncates in the middle, keeping both ends', (tester) async {
     const long = 'prod-web-server-01.eu-west-1.example.internal';
     await tester.pumpWidget(_host(90, long));

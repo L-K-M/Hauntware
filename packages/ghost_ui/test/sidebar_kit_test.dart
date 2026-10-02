@@ -662,6 +662,164 @@ void main() {
       expect(find.text('kit-one'), findsNothing);
     });
 
+    List<SidebarMenuEntry> verbs() => [
+      SidebarMenuAction(
+        key: const ValueKey('one'),
+        label: 'kit-one',
+        onSelected: () {},
+      ),
+      SidebarMenuAction(
+        key: const ValueKey('two'),
+        label: 'kit-two',
+        onSelected: () {},
+      ),
+    ];
+
+    testWidgets('Tab to the "⋮" and Enter opens the menu into the '
+        'first verb', (tester) async {
+      SidebarRow row(String key, String title) => SidebarRow(
+        key: ValueKey(key),
+        mark: const Icon(Icons.folder, size: 16),
+        title: title,
+        onActivate: (_) {},
+        menuEntries: verbs,
+      );
+      await _pump(
+        tester,
+        Column(children: [row('r1', 'One'), row('r2', 'Two')]),
+        density: SidebarKitDensity.comfortable,
+      );
+      await tester.tap(find.byKey(const ValueKey('r1')));
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text('kit-one'), findsOneWidget);
+      // A keyboard-opened menu takes focus, or its own arrow, Enter and
+      // Esc handling cannot run.
+      expect(
+        Focus.of(tester.element(find.text('kit-one'))).hasPrimaryFocus,
+        isTrue,
+      );
+      // ↓ steps inside the menu, not to the row behind it.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(
+        Focus.of(tester.element(find.text('kit-two'))).hasPrimaryFocus,
+        isTrue,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('a pointer-opened "⋮" menu does not focus a verb', (
+      tester,
+    ) async {
+      // The same handler serves clicks: pointer origin asks for no
+      // focus in the menu — the anchor's scope holds it — while the
+      // menu's own arrows and Esc still work.
+      await _pump(
+        tester,
+        SidebarRow(
+          key: const ValueKey('r'),
+          mark: const Icon(Icons.folder, size: 16),
+          title: 'Docs',
+          onActivate: (_) {},
+          menuEntries: verbs,
+        ),
+        density: SidebarKitDensity.comfortable,
+      );
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      expect(find.text('kit-one'), findsOneWidget);
+      expect(
+        Focus.of(tester.element(find.text('kit-one'))).hasPrimaryFocus,
+        isFalse,
+      );
+      // ↓ steps into the menu, as a desktop context menu does.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(
+        Focus.of(tester.element(find.text('kit-one'))).hasPrimaryFocus,
+        isTrue,
+      );
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('kit-one'), findsNothing);
+    });
+
+    testWidgets('a chorded vertical arrow is the app\'s too — it must '
+        'not step the rows', (tester) async {
+      // Alt+↑/↓ is a real host binding (Planchette's Move Line); the
+      // chord guard covered ←/→ but ↑/↓ were handled first and were
+      // silently swallowed as sidebar steps.
+      final fired = <String>[];
+      await _pump(
+        tester,
+        CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.arrowUp, alt: true): () =>
+                fired.add('alt+up'),
+            const SingleActivator(
+              LogicalKeyboardKey.arrowDown,
+              alt: true,
+            ): () =>
+                fired.add('alt+down'),
+          },
+          child: Column(
+            children: [
+              SidebarSectionHeader(
+                headerKey: const ValueKey('h'),
+                title: 'Servers',
+                count: 2,
+                collapsed: false,
+                onToggle: () {},
+              ),
+              SidebarRow(
+                key: const ValueKey('r1'),
+                mark: const Icon(Icons.folder, size: 16),
+                title: 'One',
+                onActivate: (_) {},
+              ),
+              SidebarRow(
+                key: const ValueKey('r2'),
+                mark: const Icon(Icons.folder, size: 16),
+                title: 'Two',
+                onActivate: (_) {},
+              ),
+            ],
+          ),
+        ),
+      );
+      final r1 = Focus.of(tester.element(find.text('One')));
+      final r2 = Focus.of(tester.element(find.text('Two')));
+      final header = Focus.of(tester.element(find.byKey(const ValueKey('h'))));
+
+      r1.requestFocus();
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      expect(fired, ['alt+up']);
+      expect(r1.hasPrimaryFocus, isTrue);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      expect(fired, ['alt+up', 'alt+down']);
+      expect(r1.hasPrimaryFocus, isTrue);
+
+      // The header passes them on the same way.
+      header.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      expect(fired.last, 'alt+up');
+      expect(header.hasPrimaryFocus, isTrue);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+
+      // Unchorded arrows still walk the rows.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      expect(fired, hasLength(3));
+      expect(r1.hasPrimaryFocus || r2.hasPrimaryFocus, isTrue);
+    });
+
     testWidgets('the keyboard focus ring does not move what it frames', (
       tester,
     ) async {

@@ -367,6 +367,35 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('a host trailing control stays reachable in the '
+      'semantics tree', (tester) async {
+    final handle = tester.ensureSemantics();
+    var pressed = 0;
+    await tester.pumpWidget(
+      host(
+        row(
+          file('report.txt', modified: DateTime(2026, 3, 5, 9)),
+          trailing: IconButton(
+            tooltip: 'Actions for report.txt',
+            onPressed: () => pressed++,
+            icon: const Icon(Icons.more_vert, size: 15),
+          ),
+        ),
+      ),
+    );
+    // A blanket excludeSemantics on the row's root would drop this
+    // node — the host's per-row actions must stay reachable and
+    // activatable.
+    final button = tester.getSemantics(find.byType(IconButton));
+    expect(button.getSemanticsData().tooltip, 'Actions for report.txt');
+    expect(button.getSemanticsData().hasAction(ui.SemanticsAction.tap), isTrue);
+    // The composed label still announces the row, and the name's own
+    // text node stays excluded — the announcement must not double.
+    expect(find.bySemanticsLabel(RegExp('report\\.txt, file')), findsOneWidget);
+    expect(find.bySemanticsLabel('report.txt'), findsNothing);
+    handle.dispose();
+  });
+
   testWidgets('a long name stays on one line and ellipsizes', (tester) async {
     await tester.pumpWidget(
       host(SizedBox(width: 300, child: row(file('a' * 200 + '.txt')))),
