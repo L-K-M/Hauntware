@@ -177,6 +177,12 @@ void main() {
       expect(incrementNumber('0x7FFFFFFFFFFFFFFF', 2, 2), isNull);
       expect(decrementNumber('-9223372036854775808', 0, 0), isNull);
     });
+
+    test('review fix: multi-step deltas refuse past the boundary', () {
+      expect(changeNumber('9223372036854775805', 0, 0, 10), isNull);
+      expect(changeNumber('0x7FFFFFFFFFFFFFFD', 0, 0, 10), isNull);
+      expect(changeNumber('-9223372036854775805', 0, 0, -10), isNull);
+    });
   });
 
   group('toggleBlockComments', () {

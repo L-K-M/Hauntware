@@ -327,8 +327,8 @@ LineEdit? changeNumber(String text, int base, int extent, int delta) {
     final upper = digits.contains(RegExp(r'[A-F]'));
     final parsed = int.tryParse('${negative ? '-' : ''}$digits', radix: 16);
     if (parsed == null) return null;
-    if ((delta > 0 && parsed >= _maxInt64) ||
-        (delta < 0 && parsed <= _minInt64)) {
+    if ((delta > 0 && parsed > _maxInt64 - delta) ||
+        (delta < 0 && parsed < _minInt64 - delta)) {
       return null;
     }
     final next = parsed + delta;
@@ -358,8 +358,8 @@ LineEdit? changeNumber(String text, int base, int extent, int delta) {
   } else {
     final parsed = int.tryParse(raw);
     if (parsed == null) return null;
-    if ((delta > 0 && parsed >= _maxInt64) ||
-        (delta < 0 && parsed <= _minInt64)) {
+    if ((delta > 0 && parsed > _maxInt64 - delta) ||
+        (delta < 0 && parsed < _minInt64 - delta)) {
       return null;
     }
     final value = parsed + delta;
