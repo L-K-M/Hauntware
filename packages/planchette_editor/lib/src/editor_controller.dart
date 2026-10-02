@@ -1183,12 +1183,14 @@ class EditorController extends ChangeNotifier {
     for (final option in tool.options)
       option.id: _resolvedOption(
         option,
-        overrides[option.id] ??
-            (tool.id == 'convertTabsToSpaces' && option.id == 'width'
-                ? indentation.width
-                : null),
+        overrides[option.id] ?? _defaultToolOption(tool, option),
       ),
   };
+
+  Object _defaultToolOption(TextTool tool, TextToolOption option) =>
+      tool.id == 'convertTabsToSpaces' && option.id == 'width'
+      ? indentation.width
+      : option.defaultValue;
 
   static Object? _resolvedOption(TextToolOption option, Object? value) {
     if (option is ChoiceOption &&
@@ -1286,11 +1288,9 @@ class EditorController extends ChangeNotifier {
     if (_searchOpen) closeSearch();
     if (_goToLineOpen) closeGoToLine();
     _barTool = tool;
-    _barOptions = _toolHistory.lastOptionsFor(toolId);
-    if (toolId == 'convertTabsToSpaces' &&
-        !_toolHistory.recent.any((record) => record.toolId == toolId)) {
-      _barOptions = {..._barOptions, 'width': indentation.width};
-    }
+    _barOptions = _toolHistory.recent.any((record) => record.toolId == toolId)
+        ? _toolHistory.lastOptionsFor(toolId)
+        : _toolOptions(tool, const {});
     _barWholeDocument = false;
     _markBarStale();
     _notify();

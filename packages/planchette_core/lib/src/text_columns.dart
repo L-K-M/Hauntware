@@ -30,6 +30,7 @@ int textColumnAfter(
 
     // VS16 requests emoji presentation; plain text symbols keep one cell.
     final emoji =
+        _keycap.hasMatch(cluster) ||
         _emojiPresentation.hasMatch(cluster) ||
         (cluster.contains('\ufe0f') && _pictographic.hasMatch(cluster));
     column += emoji || cluster.runes.any(_wideRune) ? 2 : 1;
@@ -38,6 +39,7 @@ int textColumnAfter(
 }
 
 final _marksOnly = RegExp(r'^\p{Mark}+$', unicode: true);
+final _keycap = RegExp(r'^[0-9#*]\ufe0f?\u20e3', unicode: true);
 final _emojiPresentation = RegExp(r'\p{Emoji_Presentation}', unicode: true);
 final _pictographic = RegExp(r'\p{Extended_Pictographic}', unicode: true);
 final _invisibleOnly = RegExp(

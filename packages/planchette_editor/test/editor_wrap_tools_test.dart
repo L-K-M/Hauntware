@@ -4,6 +4,46 @@ import 'package:planchette_editor/planchette_editor.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'fill toggle off keeps existing lines and describes Repeat options',
+    () async {
+      final c = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\ntwo three',
+        undoQuiet: Duration.zero,
+      );
+      addTearDown(c.dispose);
+      await c.runTextTool('hardWrap', options: {'fill': false, 'width': 10});
+      expect(c.text.text, 'one\ntwo three');
+      expect(
+        const EditorStrings().repeatTextToolLabel(c.toolHistory.last),
+        contains('no Fill paragraphs'),
+      );
+    },
+  );
+  test(
+    'normalization makes a raw legacy CR buffer eligible for wrapping',
+    () async {
+      final c = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'one\rtwo three',
+        undoQuiet: Duration.zero,
+      );
+      addTearDown(c.dispose);
+      expect(
+        await c.runTextTool('hardWrap', options: {'width': 5}),
+        isA<TextToolRefused>(),
+      );
+      expect(
+        const EditorStrings().textToolNotice(c.toolReport!),
+        contains('Normalize Line Endings'),
+      );
+      expect(c.text.text, 'one\rtwo three');
+      await c.runTextTool('normalizeLineEndings');
+      await c.runTextTool('hardWrap', options: {'width': 5});
+      expect(c.text.text, 'one\ntwo\nthree');
+    },
+  );
   test('untitled shebang language supplies wrap comment prefixes', () async {
     const source = '#!/usr/bin/python\n\n# one two three four';
     final c = EditorController(

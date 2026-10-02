@@ -46,6 +46,12 @@ TextToolOutcome runTool(
 }
 
 void main() {
+  test('raw lone CR requires normalization before paragraph wrapping', () {
+    expect(
+      runTool('hardWrap', 'one\rtwo three', options: {'width': 4}),
+      isA<TextToolRefused>(),
+    );
+  });
   test('fills paragraphs and preserves blank lines and final breaks', () {
     expect(
       wrap('one two\nthree four\n\nfive six\n'),

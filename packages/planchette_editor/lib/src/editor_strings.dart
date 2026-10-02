@@ -643,6 +643,8 @@ class EditorStrings {
         TextToolRefusal.resultNotText => 'the result is binary, not text',
         TextToolRefusal.tooLarge => 'the result is too large to save',
         TextToolRefusal.requiresTabs => 'this format requires tab indentation',
+        TextToolRefusal.requiresNormalizedLineEndings =>
+          'use Normalize Line Endings first for lone CR separators',
         TextToolRefusal.noPattern => 'no pattern to match',
         TextToolRefusal.invalidPattern => 'the pattern does not compile',
         TextToolRefusal.patternFailed => 'the pattern search failed',

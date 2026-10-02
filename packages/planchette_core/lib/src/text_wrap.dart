@@ -12,6 +12,14 @@ final class TextWrapLimitExceeded implements Exception {
   String toString() => 'Wrapped text exceeds the output limit.';
 }
 
+/// Paragraph scopes elsewhere in the editor recognize LF and CRLF only.
+final class TextWrapNeedsNormalizedLineEndings implements Exception {
+  const TextWrapNeedsNormalizedLineEndings();
+
+  @override
+  String toString() => 'Normalize lone CR line endings before wrapping.';
+}
+
 /// Wrap words at text-cell boundaries. Long words are kept intact; a width is
 /// a target, not permission to split Unicode clusters or code identifiers.
 String hardWrapText(
@@ -26,6 +34,9 @@ String hardWrapText(
   if (width < 1) throw ArgumentError.value(width, 'width');
   if (tabWidth < 1) throw ArgumentError.value(tabWidth, 'tabWidth');
   if (maximumBytes < 0) throw ArgumentError.value(maximumBytes, 'maximumBytes');
+  if (_loneCarriageReturn.hasMatch(source)) {
+    throw const TextWrapNeedsNormalizedLineEndings();
+  }
   final insertedBreak = lineEnding == LineEnding.crlf ? '\r\n' : '\n';
 
   final lines = <({String body, String separator})>[];
@@ -110,6 +121,7 @@ String hardWrapText(
 enum ParagraphWrapMode { fill, lines }
 
 final _listLine = RegExp(r'^\s*(?:[-+*]|\d+[.)])\s+');
+final _loneCarriageReturn = RegExp(r'\r(?!\n)');
 
 ({String prefix, String body}) _prefix(String line, List<String> markers) {
   var end = RegExp(r'^[ \t]*').firstMatch(line)!.end;
@@ -142,7 +154,7 @@ Iterable<String> _wrapWords(
   var column = prefixWidth;
   var hasWord = false;
   for (final word in words) {
-    final next = textColumnAfter(
+    var next = textColumnAfter(
       word,
       initialColumn: column + (hasWord ? 1 : 0),
       tabWidth: tabWidth,
@@ -151,6 +163,7 @@ Iterable<String> _wrapWords(
       yield line.toString();
       line = StringBuffer(prefix);
       column = prefixWidth;
+      next = textColumnAfter(word, initialColumn: column, tabWidth: tabWidth);
       hasWord = false;
     }
     if (hasWord) {
@@ -158,7 +171,7 @@ Iterable<String> _wrapWords(
       column++;
     }
     line.write(word);
-    column = textColumnAfter(word, initialColumn: column, tabWidth: tabWidth);
+    column = next;
     hasWord = true;
   }
   yield line.toString();

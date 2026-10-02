@@ -72,6 +72,9 @@ enum TextToolRefusal {
   /// The file format mandates tab indentation (Makefile, Go).
   requiresTabs,
 
+  /// Normalize legacy lone-CR separators before using LF/CRLF paragraph scope.
+  requiresNormalizedLineEndings,
+
   /// A pattern tool was run with an empty pattern.
   noPattern,
 
@@ -1546,6 +1549,8 @@ TextToolOutcome _hardWrap(TextToolRun run) {
     );
   } on TextWrapLimitExceeded {
     return const TextToolRefused(TextToolRefusal.tooLarge);
+  } on TextWrapNeedsNormalizedLineEndings {
+    return const TextToolRefused(TextToolRefusal.requiresNormalizedLineEndings);
   }
   final scope = _linesOf(run.text, range.start, range.end).contents.length;
   return _blockEdit(

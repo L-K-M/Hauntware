@@ -30,6 +30,8 @@ status and Go to Line coordinates remain UTF-16 offsets.
 - Hard Wrap defaults to 80 text columns and paragraph fill. It repeats quote
   and language line-comment prefixes. List-containing paragraph runs and
   blank-line separators stay intact; unbreakable words may exceed the target.
+  Legacy lone-CR buffers explicitly require Normalize Line Endings first,
+  because paragraph scopes recognize LF/CRLF separators.
 - Convert Tabs to Spaces expands all tabs, starting with the document's tab
   width and retaining explicit last-used widths. It refuses tab-required
   formats. It does not change the indentation preference.

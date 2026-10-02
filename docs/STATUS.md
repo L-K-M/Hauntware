@@ -46,7 +46,7 @@ ownership boundaries and compatibility policies are documented in
 ### Text-column tool integration, 2026-10-02
 
 On the integrated tree with the browser, Unicode/JSON, Edit/File and search
-slices: core 565 tests, editor 393 tests, app 406 tests pass locally. App has
+slices: core 567 tests, editor 395 tests, app 406 tests pass locally. App has
 the two existing case-sensitive-volume skips. All analysis and format checks
 are clean. Hard Wrap and full tab expansion cover text-cell widths, CRLF,
 backward selections, comment/quote prefixes, protected lists and early output

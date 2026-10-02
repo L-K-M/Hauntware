@@ -2,6 +2,14 @@ import 'package:planchette_core/planchette_core.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('keycap emoji are wide, unrelated enclosing marks stay narrow', () {
+    expect(textColumnAfter('1\ufe0f\u20e3'), 2);
+    expect(textColumnAfter('#\ufe0f\u20e3'), 2);
+    expect(textColumnAfter('*\u20e3'), 2);
+    expect(textColumnAfter('1'), 1);
+    expect(textColumnAfter('#'), 1);
+    expect(textColumnAfter('a\u20e3'), 1);
+  });
   test('tabs advance to the next stop, not a fixed number of spaces', () {
     expect(textColumnAfter('\tind', tabWidth: 8), 11);
     expect(textColumnAfter('a\tb\t', tabWidth: 4), 8);
