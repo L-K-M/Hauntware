@@ -48,8 +48,10 @@ Rect clampFrameToWorkArea({
       !bounds.top.isFinite ||
       !bounds.width.isFinite ||
       !bounds.height.isFinite ||
-      bounds.width <= 0 ||
-      bounds.height <= 0) {
+      // Sub-pixel too: 0 < w < 1 passes coverage trivially and would
+      // "restore" an invisible window.
+      bounds.width < 1 ||
+      bounds.height < 1) {
     final width = fallbackWorkArea.width < 960.0
         ? fallbackWorkArea.width
         : 960.0;
