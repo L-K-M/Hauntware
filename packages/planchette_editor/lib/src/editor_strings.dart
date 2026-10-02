@@ -764,4 +764,63 @@ class EditorStrings {
   /// The extraction row's live count, as in "12 matches" or "3 lines".
   String extractCount(int count, {required bool wholeLines}) =>
       _plural(count, wholeLines ? 'line' : 'match');
+
+  // ── Find-bar replacement preview ──
+
+  /// The one-line preview under the replace field: what Replace would do to
+  /// the active match, truncated to one line. [groups] are the capture
+  /// groups as `$0`, `$1`, `${name}` with their values.
+  String replacementPreview(String expanded, List<String> groups) =>
+      groups.isEmpty ? '→ $expanded' : '→ $expanded  ${groups.join('  ')}';
+
+  /// Shown when the active match has no preview: no active match, an empty
+  /// replacement field, or a preview still on its way.
+  String get replacementPreviewEmpty => '';
+
+  /// A PCRE habit's Dart form, shown next to the engine's own error. Null
+  /// when the query needs no hint. Backslash escapes in replacements are
+  /// intentionally absent: replacements keep backslashes literal by owner
+  /// decision, only `$1`, `${1}`, `${name}` and `$$` expand.
+  String? regexHint(String query) => patternHintFor(query);
+
+  // ── Grep cheat sheet ──
+
+  /// The find bar's button that toggles the inline grep cheat sheet.
+  String get grepCheatSheet => 'Grep cheat sheet';
+  String get grepCheatSheetTitle => 'Regular expressions';
+
+  /// Dart syntax, one line per row. Kept short so the inline sheet stays
+  /// scannable in narrow layouts.
+  List<String> get grepCheatSheetDart => const [
+    r'. any character (except line breaks; (?s) includes them)',
+    r'\d digits  \w words  \s whitespace  \b word edge',
+    r'^ start of line  $ end of line  (?i) ignore case',
+    r'(a|b) either  (?:...) group  (?<n>...) named group',
+    r'a* none+  a+ one+  a? maybe  a{2,4} range (greedy)',
+    r'$1 ${1} ${name} $0 in replacements  $$ a dollar',
+    r'Backslashes stay literal in replacements: \n is two characters.',
+  ];
+
+  /// BBEdit compatibility: what PCRE habits become in Dart.
+  List<String> get grepCheatSheetBBEdit => const [
+    r'(?P<n>...) becomes (?<n>...)',
+    r'(?>...) becomes (?:...)',
+    r'a*+ becomes a* (no possessive quantifiers)',
+    r'[[:alpha:]] becomes \w or explicit ranges',
+    r'\A \z \Z become ^ $',
+    r'\x{NNNN} becomes \u{NNNN}',
+    r'(?x) verbose mode is unsupported',
+    r'\r alone matches CR only; use \r?\n for breaks',
+  ];
+
+  // ── Search history and selection ──
+
+  /// Session-only history, newest first. Never written to disk: queries can
+  /// hold secrets.
+  String get searchHistory => 'Search history';
+  String get searchHistoryEmpty => 'No recent searches this session.';
+
+  /// Use Selection for Find: seeds the find field from the selection.
+  String get useSelectionForFind => 'Use Selection for Find';
+  String get findSelectedText => 'Find Selected Text';
 }
