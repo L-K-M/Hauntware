@@ -4807,6 +4807,96 @@ abstract class AppLocalizations {
   /// **'other'**
   String get syncKindOther;
 
+  /// Title of the read-only sync-pair comparison (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Compare {path}'**
+  String syncCompareTitle(String path);
+
+  /// Registered command and sync-plan row menu verb that opens the selected pair in the read-only comparison (06 §6, D21).
+  ///
+  /// In en, this message translates to:
+  /// **'Compare Selected Item'**
+  String get syncCompareSelected;
+
+  /// Left column label in the sync-pair comparison (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Left'**
+  String get syncCompareSideLeft;
+
+  /// Right column label in the sync-pair comparison (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Right'**
+  String get syncCompareSideRight;
+
+  /// Size and modification time below a compare-side path (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · Modified {modified}'**
+  String syncCompareMetadata(String size, String modified);
+
+  /// Progress label while a local or cached comparison side loads (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get syncCompareLoading;
+
+  /// Comparison-side refusal when a file exceeds the built-in text limit (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'The built-in editor supports text files up to 4 MB.'**
+  String get syncCompareEditorLimit;
+
+  /// Comparison-side refusal when remote preview production is not composed (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Remote comparison is unavailable.'**
+  String get syncCompareRemoteUnavailable;
+
+  /// Fallback failure text for one comparison column (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'This side could not be loaded.'**
+  String get syncCompareFailed;
+
+  /// Comparison-side refusal for malformed UTF-8 (06 §1/§6).
+  ///
+  /// In en, this message translates to:
+  /// **'This file is not valid UTF-8 text.'**
+  String get syncCompareInvalidUtf8;
+
+  /// Comparison-side refusal for binary content (06 §1/§6).
+  ///
+  /// In en, this message translates to:
+  /// **'This file appears to be binary, not editable text.'**
+  String get syncCompareBinary;
+
+  /// Comparison-side refusal when bytes change during the guarded read (06 §1/§6).
+  ///
+  /// In en, this message translates to:
+  /// **'The local copy changed while it was being opened.'**
+  String get syncCompareChanged;
+
+  /// Comparison-side refusal when its local or cached file vanished (06 §1/§6).
+  ///
+  /// In en, this message translates to:
+  /// **'The file no longer exists.'**
+  String get syncCompareMissing;
+
+  /// Notice when the compared text uses different line endings (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'Line endings differ: {left} vs {right}'**
+  String syncCompareLineEndingsDiffer(String left, String right);
+
+  /// Notice when only one compared text file has a UTF-8 BOM (06 §6).
+  ///
+  /// In en, this message translates to:
+  /// **'BOM differs'**
+  String get syncCompareBomDiffers;
+
   /// Side label inside sync copy (05 §7) — the pane-A side.
   ///
   /// In en, this message translates to:
@@ -5501,6 +5591,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requires an open sync plan'**
   String get commandDisabledNoPlan;
+
+  /// Palette reason under Compare Selected Item while no comparable sync-plan row is focused.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires a selected file present on both sides'**
+  String get commandDisabledNoComparableItem;
 
   /// Palette reason under commands that need the bookmark store.
   ///

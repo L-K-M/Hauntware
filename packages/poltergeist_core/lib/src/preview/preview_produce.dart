@@ -85,8 +85,8 @@ final class PreviewProduceSpec {
   /// total and the task's `totalBytes`.
   final int? expectedSize;
 
-  /// 06 §5.3's unknown-size ceiling: applied only when [expectedSize]
-  /// is null — a listed size already passed the pane's cap checks.
+  /// The stream ceiling. Unknown-size transfers require it; callers may
+  /// retain it for known sizes so stale listing metadata cannot bypass a cap.
   final int? maximumBytes;
 
   /// The large-download checkpoint (06 §5.2): once the produced stream
@@ -275,6 +275,7 @@ final class QueuePreviewProducer implements PreviewProducer {
   final TransferQueue _queue;
   late final StreamSubscription<TransferQueueEvent> _subscription;
   final Map<String, Completer<RemoteFileEntry>> _pending = {};
+  bool _disposed = false;
 
   @override
   PreviewProduceTicket start(PreviewProduceSpec spec) {
@@ -286,10 +287,10 @@ final class QueuePreviewProducer implements PreviewProducer {
       // re-check like the checkout awaiter does.
       if (task.isTerminal) {
         _pending.remove(task.id);
-        _settle(completer, task);
+        _settleAfterDrain(completer, task);
       }
     } else {
-      _settle(completer, task);
+      _settleAfterDrain(completer, task);
     }
     return PreviewProduceTicket(taskId: task.id, result: completer.future);
   }
@@ -311,7 +312,18 @@ final class QueuePreviewProducer implements PreviewProducer {
     // will ever complete it.
     if (task == null || !task.isTerminal) return;
     _pending.remove(event.taskId);
-    _settle(completer, task);
+    _settleAfterDrain(completer, task);
+  }
+
+  void _settleAfterDrain(
+    Completer<RemoteFileEntry> completer,
+    TransferTask task,
+  ) {
+    unawaited(() async {
+      await _queue.waitForTaskDrain(task.id);
+      if (_disposed) return;
+      _settle(completer, task);
+    }());
   }
 
   void _settle(Completer<RemoteFileEntry> completer, TransferTask task) {
@@ -365,6 +377,7 @@ final class QueuePreviewProducer implements PreviewProducer {
   /// Releases the queue-event subscription; pending tickets stay
   /// incomplete — the session owning this producer is gone.
   Future<void> dispose() async {
+    _disposed = true;
     await _subscription.cancel();
     _pending.clear();
   }

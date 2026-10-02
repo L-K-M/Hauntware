@@ -171,6 +171,8 @@ class CompactBrowser extends StatelessWidget {
                 key: ValueKey(strip.paneId),
                 child: _PaneBody(
                   strip: strip,
+                  commands: commands,
+                  onRunCommand: onRunCommand,
                   selecting: selecting,
                   rowCallbacks: rowCallbacks,
                   seams: seams,
@@ -411,6 +413,8 @@ class _PaneSwitchTransition extends StatelessWidget {
 class _PaneBody extends StatelessWidget {
   const _PaneBody({
     required this.strip,
+    required this.commands,
+    required this.onRunCommand,
     required this.selecting,
     required this.rowCallbacks,
     required this.seams,
@@ -419,6 +423,8 @@ class _PaneBody extends StatelessWidget {
   });
 
   final PaneTabsController strip;
+  final List<RegisteredCommand> commands;
+  final Future<void> Function(RegisteredCommand command) onRunCommand;
   final bool selecting;
   final CompactRowCallbacks rowCallbacks;
   final CompactPaneSeams seams;
@@ -439,6 +445,8 @@ class _PaneBody extends StatelessWidget {
       body = SyncPlanView(
         key: ValueKey(tab.id),
         controller: session,
+        commands: commands,
+        onRunCommand: onRunCommand,
         onSaveAsFavorite: seams.onSyncSaveAsFavorite == null
             ? null
             : () => seams.onSyncSaveAsFavorite!(session),

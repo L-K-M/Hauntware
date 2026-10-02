@@ -773,6 +773,14 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'editor.paste'",
     "'editor.selectAll'",
   },
+  // Widget identities for the compare route and its two notice chips.
+  'lib/ui/compare_view.dart': {
+    "'sync.compare.view'",
+    "'sync.compare.left'",
+    "'sync.compare.right'",
+    "'sync.compare.line-endings'",
+    "'sync.compare.bom'",
+  },
   // The workspace controller's debug assert message — a dev-facing
   // invariant, never rendered.
   'lib/services/workspace_controller.dart': {
@@ -2022,6 +2030,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sync.synchronizePanes'",
     "'sync.newSavedSync'",
     "'sync.copyRsyncCommand'",
+    "'sync.compareSelected'",
   },
   // The pair editor's machine literals: numeric TextField seeds, the
   // 1–8 concurrency labels, and the decimal input-filter regex —

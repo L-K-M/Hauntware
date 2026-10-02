@@ -12,10 +12,12 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import 'rsync_endpoints.dart';
+import 'sync_compare_controller.dart';
 import 'sync_environment.dart';
 import 'sync_queue_facade.dart';
 import 'sync_state_store.dart';
@@ -299,6 +301,9 @@ final class SyncPlanController extends ChangeNotifier {
     this.deviceId = 'local',
     SyncCaseOverrides? caseOverrides,
     SyncPlanIntent intent = SyncPlanIntent.review,
+    PreviewCache? previewCache,
+    PreviewProducer? previewProducer,
+    int Function()? largeDownloadThresholdBytes,
     // Required rather than defaulted to `resolveRsyncEndpoints`: the
     // plain resolver cannot see the shared-mode server catalog, so a
     // construction site that forgot to bind one would silently disable
@@ -315,6 +320,13 @@ final class SyncPlanController extends ChangeNotifier {
        _pendingCaseOverrides = caseOverrides,
        _autoRunPending = intent == SyncPlanIntent.synchronize,
        // ignore: prefer_initializing_formals
+       _previewCache = previewCache,
+       // ignore: prefer_initializing_formals
+       _previewProducer = previewProducer,
+       _largeDownloadThresholdBytes =
+           largeDownloadThresholdBytes ??
+           (() => defaultLargeDownloadThresholdBytes),
+       // ignore: prefer_initializing_formals
        _rsyncEndpoints = rsyncEndpoints,
        _scanner = scanner ?? _TreeScannerAdapter(environment),
        _differ = differ ?? _EngineDiffer(environment);
@@ -326,6 +338,9 @@ final class SyncPlanController extends ChangeNotifier {
   final SyncQueueTasks syncTasks;
   final SyncPairScanner _scanner;
   final SyncPlanDiffer _differ;
+  final PreviewCache? _previewCache;
+  final PreviewProducer? _previewProducer;
+  final int Function() _largeDownloadThresholdBytes;
 
   /// Resolves the pair's server refs to the rsync exporter's
   /// connection-shaped endpoints (rsync_endpoints.dart); the shell
@@ -375,6 +390,13 @@ final class SyncPlanController extends ChangeNotifier {
   String? _leftRoot;
   String? _rightRoot;
 
+  /// Actual scan keys for pairs whose case or Unicode form differs by side.
+  Map<SyncItem, ({String left, String right})> _comparisonPaths =
+      Map.identity();
+
+  /// The plan row D21's contextual compare command resolves at run time.
+  SyncItem? _comparisonTarget;
+
   // -- Run state -----------------------------------------------------------
 
   SyncExecutor? _executor;
@@ -401,6 +423,12 @@ final class SyncPlanController extends ChangeNotifier {
   int get rightScanned => _rightScanned;
   bool get isRunning => _phase == SyncPlanPhase.running;
   bool get isPaused => _pause?.isPaused ?? false;
+
+  /// Whether the focused plan row can open 06 §6's paired-file view.
+  bool get canCompareSelection {
+    final target = _comparisonTarget;
+    return target != null && comparisonAvailableFor(target);
+  }
 
   /// Why Synchronize did not run this plan on its own (D32 §7's
   /// banner) — live over the effective actions, null once nothing that
@@ -444,6 +472,90 @@ final class SyncPlanController extends ChangeNotifier {
   /// holds unrestored trash entries (05 §8 rail 9).
   bool get canRestore =>
       _lastRun != null && _lastRun!.journal.hasUnpurgedTrash;
+
+  /// Updates the row resolved by the contextual compare command.
+  void setComparisonTarget(SyncItem? item) {
+    if (identical(_comparisonTarget, item)) return;
+    _comparisonTarget = item;
+    notifyListeners();
+  }
+
+  /// Whether [item] has regular files on both reviewed sides.
+  bool comparisonAvailableFor(SyncItem item) {
+    final stablePlan = switch (_phase) {
+      SyncPlanPhase.ready ||
+      SyncPlanPhase.completed ||
+      SyncPlanPhase.failed ||
+      SyncPlanPhase.cancelled => true,
+      SyncPlanPhase.scanning ||
+      SyncPlanPhase.running ||
+      SyncPlanPhase.error => false,
+    };
+    return stablePlan &&
+        _plan != null &&
+        _leftRoot != null &&
+        _rightRoot != null &&
+        _comparisonPaths.containsKey(item);
+  }
+
+  /// Builds the focused row's comparison at command invocation time.
+  SyncCompareController? comparisonForSelection() {
+    final target = _comparisonTarget;
+    return target == null ? null : comparisonFor(target);
+  }
+
+  /// Builds 06 §6's comparison from the roots the current scan reviewed.
+  /// Configured roots may contain `~` or symlinks and are not authoritative.
+  SyncCompareController? comparisonFor(SyncItem item) {
+    if (!comparisonAvailableFor(item)) return null;
+    final leftRoot = _leftRoot!;
+    final rightRoot = _rightRoot!;
+
+    SyncCompareSource source(
+      SyncSide side,
+      SyncEndpoint endpoint,
+      String root,
+      String relativePath,
+      EntrySnapshot snapshot,
+    ) => switch (endpoint) {
+      LocalEndpoint() => LocalSyncCompareSource(
+        side: side,
+        fullPath: p.joinAll([root, ...relativePath.split('/')]),
+        snapshot: snapshot,
+      ),
+      final RemoteEndpoint remote => RemoteSyncCompareSource(
+        side: side,
+        fullPath: remoteJoin(root, relativePath),
+        snapshot: snapshot,
+        serverId: _environment.serverIdFor(remote),
+      ),
+    };
+
+    final paths = _comparisonPaths[item];
+
+    return SyncCompareController(
+      request: SyncCompareRequest(
+        relativePath: item.relativePath,
+        left: source(
+          SyncSide.left,
+          _pair.left,
+          leftRoot,
+          paths?.left ?? item.relativePath,
+          item.left!,
+        ),
+        right: source(
+          SyncSide.right,
+          _pair.right,
+          rightRoot,
+          paths?.right ?? item.relativePath,
+          item.right!,
+        ),
+      ),
+      previewCache: _previewCache,
+      previewProducer: _previewProducer,
+      largeDownloadThresholdBytes: _largeDownloadThresholdBytes,
+    );
+  }
 
   /// The configured per-side trash path, or null (in-root
   /// `.poltergeist-trash` — §8 rail 5's default location text).
@@ -875,6 +987,7 @@ final class SyncPlanController extends ChangeNotifier {
     _lastRun = null;
     _binding?.retry = null;
     _holdingForReview = false;
+    _comparisonTarget = null;
     _phase = SyncPlanPhase.scanning;
     _errorMessage = null;
     _errorKind = null;
@@ -937,6 +1050,7 @@ final class SyncPlanController extends ChangeNotifier {
         mtimeUnreliableRight: _pairState.mtimeUnreliableRight,
       );
       if (_disposed || generation != _scanGeneration) return;
+      _comparisonPaths = _captureComparisonPaths(_plan!, left, right);
       _suggestHeavyDirectory();
       _phase = SyncPlanPhase.ready;
       _reassess();
@@ -959,6 +1073,39 @@ final class SyncPlanController extends ChangeNotifier {
         unawaited(_environment.releaseRemoteLeases());
       }
     }
+  }
+
+  Map<SyncItem, ({String left, String right})> _captureComparisonPaths(
+    SyncPlan plan,
+    ScanResult left,
+    ScanResult right,
+  ) {
+    final leftPaths = Map<EntrySnapshot, String>.identity();
+    final rightPaths = Map<EntrySnapshot, String>.identity();
+    for (final entry in left.entries.entries) {
+      leftPaths[entry.value] = entry.key;
+    }
+    for (final entry in right.entries.entries) {
+      rightPaths[entry.value] = entry.key;
+    }
+
+    // The differ carries each scan snapshot into its row. Identity recovers
+    // the original side spelling without duplicating the engine's match rules.
+    final paths = Map<SyncItem, ({String left, String right})>.identity();
+    for (final item in plan.items) {
+      final leftSnapshot = item.left;
+      final rightSnapshot = item.right;
+      if (leftSnapshot?.kind != EntryKind.file ||
+          rightSnapshot?.kind != EntryKind.file) {
+        continue;
+      }
+
+      paths[item] = (
+        left: leftPaths[leftSnapshot!] ?? item.relativePath,
+        right: rightPaths[rightSnapshot!] ?? item.relativePath,
+      );
+    }
+    return paths;
   }
 
   Future<ScanResult> _scanSide(

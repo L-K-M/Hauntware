@@ -14,9 +14,11 @@ import 'package:poltergeist_core/poltergeist_core.dart'
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../../services/registered_command.dart';
 import '../../services/sync_plan_controller.dart';
 import '../../theme/app_theme.dart';
 import 'rsync_copy.dart';
+import 'sync_commands.dart';
 import 'sync_plan_format.dart';
 import 'sync_plan_table.dart';
 
@@ -33,12 +35,24 @@ final class SyncPlanView extends StatefulWidget {
   const SyncPlanView({
     super.key,
     required this.controller,
+    this.focusNode,
+    this.onActivatePane,
+    this.commands,
+    this.onRunCommand,
     this.onSaveAsFavorite,
     this.onEditRules,
     this.clock,
   });
 
   final SyncPlanController controller;
+
+  /// The owning pane's shared focus node and activation seam.
+  final FocusNode? focusNode;
+  final VoidCallback? onActivatePane;
+
+  /// Registry and runner shared with menus, shortcuts, and the palette.
+  final List<RegisteredCommand>? commands;
+  final Future<void> Function(RegisteredCommand command)? onRunCommand;
 
   /// `sync.saveAsFavorite` — the shell opens the name dialog and
   /// persists the pair as a savedSync bookmark.
@@ -65,7 +79,9 @@ class _SyncPlanViewState extends State<SyncPlanView> {
   /// The keyboard's row (Space toggles it, the arrows move it).
   SyncItem? _focusedRow;
   final _collapsedSections = <SyncSection>{};
-  final _tableFocus = FocusNode(debugLabel: 'sync.plan.table');
+  final _ownedPaneFocus = FocusNode(debugLabel: 'sync.plan.table');
+
+  FocusNode get _paneFocus => widget.focusNode ?? _ownedPaneFocus;
 
   /// The rows in on-screen order (sections, collapsed ones skipped) —
   /// shift-range selection and the arrow keys walk this, not the
@@ -79,13 +95,18 @@ class _SyncPlanViewState extends State<SyncPlanView> {
   @override
   void initState() {
     super.initState();
-    _controller.start();
+    // The shell also listens for command enablement; start after its build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      _controller.start();
+    });
   }
 
   @override
   void dispose() {
     _filterField.dispose();
-    _tableFocus.dispose();
+    _ownedPaneFocus.dispose();
     super.dispose();
   }
 
@@ -204,8 +225,11 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         if (!_collapsedSections.contains(group.section)) ...group.items,
     ];
     return Focus(
-      focusNode: _tableFocus,
-      onFocusChange: (_) => setState(() {}),
+      focusNode: _paneFocus,
+      onFocusChange: (focused) {
+        if (focused) _activatePane();
+        setState(() {});
+      },
       onKeyEvent: _onTableKey,
       child: SyncPlanTable(
         controller: _controller,
@@ -213,9 +237,10 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         selected: _selected,
         focused: _focusedRow,
         collapsed: _collapsedSections,
-        tableFocused: _tableFocus.hasFocus,
+        tableFocused: _paneFocus.hasFocus,
         now: widget.clock?.call(),
         onRowTap: _onRowTap,
+        onRowDoubleTap: _runComparison,
         onGlyphTap: _cycleAction,
         onContextMenu: (position, item) =>
             _showOverrideMenu(context, position, item),
@@ -227,6 +252,29 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         }),
       ),
     );
+  }
+
+  void _activatePane() => widget.onActivatePane?.call();
+
+  RegisteredCommand? get _compareCommand {
+    for (final command in widget.commands ?? const <RegisteredCommand>[]) {
+      if (command.id == kSyncCompareSelectedCommandId) return command;
+    }
+    return null;
+  }
+
+  /// Every compare affordance dispatches the same registered command.
+  bool _runComparison(SyncItem item) {
+    if (!syncRowComparable(item)) return false;
+
+    _activatePane();
+    _controller.setComparisonTarget(item);
+    final command = _compareCommand;
+    final run = widget.onRunCommand;
+    if (command == null || run == null || !command.enabled()) return false;
+
+    unawaited(run(command));
+    return true;
   }
 
   /// Checked = the row acts (D32 §7): unchecking overrides to skip,
@@ -249,6 +297,15 @@ class _SyncPlanViewState extends State<SyncPlanView> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
+    if ((key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter) &&
+        event is KeyDownEvent) {
+      final row = _focusedRow;
+      if (row == null || !_runComparison(row)) {
+        return KeyEventResult.ignored;
+      }
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.space && event is KeyDownEvent) {
       final row = _focusedRow;
       if (row == null || _controller.isRunning) {
@@ -276,6 +333,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         ..add(row);
       _selectionAnchor = row;
     });
+    _controller.setComparisonTarget(row);
     return KeyEventResult.handled;
   }
 
@@ -318,7 +376,8 @@ class _SyncPlanViewState extends State<SyncPlanView> {
   }
 
   void _onRowTap(SyncItem item) {
-    _tableFocus.requestFocus();
+    _activatePane();
+    _paneFocus.requestFocus();
     setState(() {
       _focusedRow = item;
       final modifiers = HardwareKeyboard.instance;
@@ -345,6 +404,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         _selectionAnchor = item;
       }
     });
+    _controller.setComparisonTarget(item);
   }
 
   /// Tap on the action glyph cycles through the valid overrides (§7).
@@ -370,9 +430,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     }
   }
 
-  /// The per-row override menu (§7): skip, both copy directions,
-  /// delete (mirror rows only), reset — plus a bulk application when
-  /// the row sits inside a multi-selection.
+  /// The row's registered compare verb, then §7's override actions.
   Future<void> _showOverrideMenu(
     BuildContext context,
     Offset position,
@@ -381,8 +439,18 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     final l10n = AppLocalizations.of(context);
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
+    _focusContextRow(item);
+    final compare = _compareCommand;
     final actions = _controller.availableOverrides(item);
-    final entries = <PopupMenuEntry<SyncActionType>>[
+    final entries = <PopupMenuEntry<Object>>[
+      if (compare != null) ...[
+        PopupMenuItem(
+          value: compare,
+          enabled: compare.enabled(),
+          child: Text(compare.label(l10n)),
+        ),
+        const PopupMenuDivider(),
+      ],
       for (final action in actions)
         PopupMenuItem(
           value: action,
@@ -395,7 +463,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         child: Text(l10n.syncOverrideReset),
       ),
     ];
-    final chosen = await showMenu<SyncActionType>(
+    final chosen = await showMenu<Object>(
       context: context,
       position: RelativeRect.fromRect(
         position & const Size(1, 1),
@@ -403,15 +471,43 @@ class _SyncPlanViewState extends State<SyncPlanView> {
       ),
       items: entries,
     );
-    if (chosen == null || !mounted) return;
+    if (!mounted) return;
+    if (chosen == null) {
+      _paneFocus.requestFocus();
+      return;
+    }
+    if (chosen is RegisteredCommand) {
+      final run = widget.onRunCommand;
+      if (run != null && chosen.enabled()) await run(chosen);
+      return;
+    }
+    final action = chosen as SyncActionType;
     final targets = _selected.contains(item) && _selected.length > 1
         ? _selected
         : {item};
-    if (chosen == item.suggested && targets.length == 1) {
+    if (action == item.suggested && targets.length == 1) {
       _controller.resetOverride(item);
     } else {
-      _applyBulk(targets, chosen);
+      _applyBulk(targets, action);
     }
+    _paneFocus.requestFocus();
+  }
+
+  /// Right-click selects an unselected row but preserves an existing
+  /// multi-selection when the click lands inside it.
+  void _focusContextRow(SyncItem item) {
+    _activatePane();
+    _paneFocus.requestFocus();
+    setState(() {
+      _focusedRow = item;
+      if (_selected.contains(item)) return;
+
+      _selected
+        ..clear()
+        ..add(item);
+      _selectionAnchor = item;
+    });
+    _controller.setComparisonTarget(item);
   }
 
   String _actionMenuLabel(AppLocalizations l10n, SyncActionType action) =>

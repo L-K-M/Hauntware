@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show debugOnProfilePaint;
@@ -6,12 +8,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/pane_tabs_controller.dart';
+import 'package:poltergeist_app/services/registered_command.dart';
+import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/panes/pane_tabs_view.dart';
+import 'package:poltergeist_app/ui/sync/sync_commands.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import '../../services/pane_controller_test.dart';
+import '../../support/sync_harness.dart';
 import '../../support/test_panes.dart';
 
 Future<void> _pumpPane(
@@ -39,6 +46,100 @@ Future<void> _pumpPane(
 }
 
 void main() {
+  testWidgets('sync compare activates its owning pane before routing', (
+    tester,
+  ) async {
+    final scratch = Directory.systemTemp.createTempSync('pg-tabs-sync-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final pair = testSyncPair(
+      rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
+    );
+    final item = testItem(
+      'a.txt',
+      left: testFile(),
+      right: testFile(),
+      suggested: SyncActionType.conflict,
+      reason: SyncReason.bothChanged,
+    );
+    final session = testController(
+      pair: pair,
+      scanner: FakeSyncScanner(
+        left: testScanResult('/left', const {}),
+        right: testScanResult('/right', const {}),
+      ),
+      differ: FakeSyncDiffer(testPlan(pair, [item])),
+      environment: testSyncEnvironment(scratch),
+    );
+    final left = PaneTabsController(paneId: PaneTabsController.leftPaneId);
+    final right = PaneTabsController(paneId: PaneTabsController.rightPaneId)
+      ..openSyncPlanTab(session);
+    final workspace = WorkspaceController(left: left, right: right);
+    addTearDown(workspace.dispose);
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    final compared = <String>[];
+
+    SyncPlanController? activeSession() =>
+        workspace.activePane.activeTab?.syncSession;
+
+    final compare = RegisteredCommand(
+      id: kSyncCompareSelectedCommandId,
+      scope: CommandScope.selection,
+      label: (l10n) => l10n.syncCompareSelected,
+      enabled: () => activeSession()?.canCompareSelection == true,
+      run: (_) async {
+        final comparison = activeSession()?.comparisonForSelection();
+        if (comparison != null) compared.add(comparison.request.relativePath);
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: PaneTabsView(
+              tabs: right,
+              workspace: workspace,
+              focusNode: focusNode,
+              onSwapFocus: () {},
+              onCancelRecovery: () {},
+              commands: [compare],
+              onRunCommand: (command) async => command.run(context),
+            ),
+          ),
+        ),
+      ),
+    );
+    for (var i = 0; i < 20 && session.phase != SyncPlanPhase.ready; i++) {
+      await tester.pump();
+    }
+    await tester.pump();
+    expect(session.phase, SyncPlanPhase.ready);
+    final row = find.byKey(const ValueKey('sync.row.a.txt'));
+
+    expect(workspace.activePane, same(left));
+    await tester.tap(row);
+    await tester.pump();
+    expect(workspace.activePane, same(right));
+
+    workspace.setActivePane(left);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(workspace.activePane, same(right));
+    expect(compared, ['a.txt']);
+
+    compared.clear();
+    workspace.setActivePane(left);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(row, pointer: 2);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(row, pointer: 1);
+    await tester.pump();
+    expect(workspace.activePane, same(right));
+    expect(compared, ['a.txt']);
+  });
+
   testWidgets('switching a tab does not repaint the unchanged opposite pane', (
     tester,
   ) async {

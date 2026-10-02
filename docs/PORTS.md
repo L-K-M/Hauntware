@@ -1,5 +1,17 @@
 # Séance ports and pin audits
 
+## Sync-pair side-by-side compare (2026-10-02)
+
+Original Poltergeist composition over its existing shared Planchette editor
+and preview-production APIs. No Séance source was copied and no Séance pin
+changed. The Poltergeist compatibility adapter maps Planchette's stable load
+errors to typed failure kinds so the compare view selects ARB copy. Document
+I/O behavior is unchanged. Séance has no sync-plan surface to receive this
+behavior.
+
+Port-back candidates: Planchette could expose typed load failures directly;
+Séance has no sync-pair compare behavior to port.
+
 ## D22 third-party bookmark importers (2026-10-01)
 
 Original Poltergeist implementation; no Séance source was copied and no

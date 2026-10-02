@@ -11,6 +11,28 @@ const int builtInEditorMaximumBytes = shared.textDocumentMaximumBytes;
 typedef BuiltInTextDocument = shared.TextDocument;
 typedef BuiltInEditorException = shared.TextDocumentException;
 
+/// Machine-readable load failures for hosts that localize editor errors.
+enum BuiltInTextDocumentFailure { invalidUtf8, binary, changed, missing, other }
+
+const _invalidUtf8Message = 'This file is not valid UTF-8 text.';
+const _binaryMessage = 'This file appears to be binary, not editable text.';
+const _changedMessage = 'The local copy changed while it was being opened.';
+const _missingMessage = 'The file no longer exists.';
+const _missingOrNonregularMessage =
+    'The local copy is missing or no longer a regular file.';
+
+/// Adapts Planchette's stable message contract to a localized host enum.
+BuiltInTextDocumentFailure classifyBuiltInTextDocumentFailure(
+  BuiltInEditorException error,
+) => switch (error.message) {
+  _invalidUtf8Message => BuiltInTextDocumentFailure.invalidUtf8,
+  _binaryMessage => BuiltInTextDocumentFailure.binary,
+  _changedMessage => BuiltInTextDocumentFailure.changed,
+  _missingMessage ||
+  _missingOrNonregularMessage => BuiltInTextDocumentFailure.missing,
+  _ => BuiltInTextDocumentFailure.other,
+};
+
 /// A managed download exceeded its caller's cap before opening the editor.
 final class CheckoutLimitException implements Exception {
   const CheckoutLimitException(this.message);

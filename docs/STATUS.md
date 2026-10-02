@@ -4,6 +4,29 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Sync-pair side-by-side compare (2026-10-02)
+
+Double-clicking a sync-plan row backed by files on both sides now opens two
+independent locked Planchette editors with find, path, size, and modified-time
+headers. BOM and line-ending differences stay explicit; one failed or refused
+side does not hide the other.
+
+Remote sides reuse the preview cache and queue-visible producer. Known files
+over the 4 MiB editor limit refuse before queueing; unknown streams stop at the
+same limit. Lower download thresholds retain per-side confirmation, progress,
+gate, and cancellation. Cache-key reservations prevent duplicate work across
+compare routes and the preview panel. Queue tickets wait for active I/O to
+drain, and repeatable aborts remove late cancellation writes. Each side keeps
+its scanned path spelling for case and Unicode variants. The v1.x computed
+diff remains demand-dependent. Review hardening blocks stale-plan comparisons
+during rescans and lets cancelled preview starts retry immediately without an
+older cleanup removing the replacement.
+
+Core analysis is clean; all 1,920 core tests pass with 27 environment-gated
+skips. Flutter analysis is clean; all 3,411 app tests pass. Light-theme
+before/after captures and provenance are in
+`tasks/sync-pair-compare/screenshots/`. No Séance source or pin changed.
+
 ## D27 ZIP local-region ownership (2026-10-01)
 
 ZIP extraction preflight now treats each local record as one half-open byte

@@ -281,7 +281,7 @@ export 'src/preview/preview_kinds.dart'
 export 'src/preview/preview_text.dart'
     show PreviewTextContent, fileLooksLikeUtf8Text, loadPreviewText;
 export 'src/preview/preview_cache.dart'
-    show PreviewCache, PreviewCacheSlot;
+    show PreviewCache, PreviewCacheSlot, PreviewProductionReservation;
 export 'src/preview/preview_produce.dart'
     show
         PreviewByteGate,
@@ -295,11 +295,13 @@ export 'src/preview/preview_produce.dart'
 export 'src/editor/built_in_text_document.dart'
     show
         BuiltInTextDocument,
+        BuiltInTextDocumentFailure,
         BuiltInEditorException,
         CheckoutLimitException,
         LineEnding,
         MaximumByteSink,
         builtInEditorMaximumBytes,
+        classifyBuiltInTextDocumentFailure,
         loadBuiltInTextDocument,
         loadBuiltInTextDocumentDetails,
         resolveBuiltInEditorTarget,

@@ -69,6 +69,7 @@ import '../services/workspace_windows/workspace_windows.dart';
 import '../theme/app_theme.dart';
 import 'activity/activity_commands.dart';
 import 'adaptive_shell.dart';
+import 'compare_view.dart';
 import 'inspector/alerts_view.dart';
 import 'inspector/inspector_view.dart';
 import 'built_in_text_editor.dart';
@@ -1771,9 +1772,13 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           copyRsyncEnabled: () =>
               !_commandSessionActive &&
               _activeSyncSession?.canExportRsync == true,
+          compareEnabled: () =>
+              !_commandSessionActive &&
+              _activeSyncSession?.canCompareSelection == true,
           synchronizePanes: (context) => _synchronizePanes(),
           newSavedSync: (context) => _newSavedSync(),
           copyRsync: (context) => _copyRsyncCommand(context),
+          compareSelected: _openSyncComparison,
         ),
       // `queue.togglePause` registers unconditionally (D21): its menu
       // row stays visible-disabled while no queue seam is bound.
@@ -1800,6 +1805,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       ?preview,
       // Save to Favorites… retires once the store carries the endpoint.
       ?sidebar,
+      // The focused plan row drives the compare command's enablement.
+      ?_activeSyncSession,
     ]);
 
     final platform = Theme.of(context).platform;
@@ -3843,6 +3850,17 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     await copyRsyncCommand(context, session);
   }
 
+  /// Opens 06 §6 from the focused row resolved by the active plan.
+  void _openSyncComparison(BuildContext context) {
+    final comparison = _activeSyncSession?.comparisonForSelection();
+    if (comparison == null) return;
+
+    final route = MaterialPageRoute<void>(
+      builder: (_) => CompareView(controller: comparison),
+    );
+    unawaited(Navigator.of(context).push(route));
+  }
+
   /// The ad-hoc pair's display name — one label per leg so the tab
   /// reads as a direction, like §7's header does.
   String _syncPairLabel(
@@ -4130,6 +4148,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         deviceId: deviceId,
         caseOverrides: caseOverrides,
         intent: intent,
+        previewCache: widget.previewCache,
+        previewProducer: widget.previewProducer,
+        largeDownloadThresholdBytes: () => _previewThresholdBytes,
         // 05 §2.1's export seam: shared-mode `serverConfigId` refs
         // resolve through the pulled Séance catalog; embedded
         // identities resolve directly (rsync_endpoints.dart).
