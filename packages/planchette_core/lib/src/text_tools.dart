@@ -2706,11 +2706,10 @@ TextToolOutcome _reformatJson(TextToolRun run, {required bool minify}) {
   } on JsonFormatError catch (e) {
     return TextToolRefused(TextToolRefusal.invalidJson, e.toString());
   }
-  // Keep the slice's final break so formatting an already-formatted file
-  // stays a no-op instead of eating its trailing newline.
-  final eol = slice.endsWith('\r\n')
-      ? '\r\n'
-      : (slice.endsWith('\n') ? '\n' : '');
+  // Keep a trailing break so formatting an already-formatted file stays
+  // a no-op instead of eating its trailing newline, using the document
+  // EOL so the reformatted region stays internally consistent.
+  final eol = slice.endsWith('\n') ? newline : '';
   final output = eol.isEmpty ? reformatted : '$reformatted$eol';
   if (output == slice) return TextToolUnchanged(scope: slice.length);
   return _replaceSlice(

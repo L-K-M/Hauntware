@@ -361,6 +361,22 @@ void main() {
       expect(outcome, isA<TextToolChanged>());
       expect((outcome as TextToolChanged).edit.text, '{\r\n  "a": 1\r\n}');
     });
+
+    test('the trailing break uses the document ending throughout', () {
+      // A mixed-ending slice keeps one EOL style in the result.
+      final crlf = outcomeOf(
+        'formatJson',
+        '{"a":1}\n|',
+        lineEnding: LineEnding.crlf,
+      );
+      expect((crlf as TextToolChanged).edit.text, '{\r\n  "a": 1\r\n}\r\n');
+      final lf = outcomeOf(
+        'formatJson',
+        '{"a":1}\r\n|',
+        lineEnding: LineEnding.lf,
+      );
+      expect((lf as TextToolChanged).edit.text, '{\n  "a": 1\n}\n');
+    });
   });
 
   group('minifyJson', () {
