@@ -337,7 +337,7 @@ Future<void> _runScenes(
 
   // The row's action sheet.
   await tester.tap(
-    find.byKey(const ValueKey((CompactKey.rowMore, '/home/deploy/notes.txt'))),
+    find.byKey(const ValueKey(('ghostFileRow.more', 'notes.txt'))),
   );
   await tester.pumpAndSettle();
   await _capture(tester, 'compact-$tone-row-sheet');
@@ -410,7 +410,7 @@ Future<void> _runScenes(
 
   // Rename through the row sheet.
   await tester.tap(
-    find.byKey(const ValueKey((CompactKey.rowMore, '/home/deploy/notes.txt'))),
+    find.byKey(const ValueKey(('ghostFileRow.more', 'notes.txt'))),
   );
   await tester.pumpAndSettle();
   await tester.tap(find.byKey(const ValueKey('pane.context.file.rename')));

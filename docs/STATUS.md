@@ -4,6 +4,23 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Shared Ghost UI and file lists (2026-10-02)
+
+The app consumes Planchette's `ghost_ui` package for sidebars, family hues,
+contrast, appearance helpers, ellipsis and top notices. Legacy import paths
+re-export the shared implementations. Theme adapters provide the existing
+chrome tokens; palettes and localized strings remain app-owned.
+
+Both desktop and touch listings now render through `GhostFileRow` and
+`GhostFileCompactRow`, with shared columns, kind glyphs and formatting.
+Selection, outline navigation, inline rename, context commands, drag/drop
+and transfer pipelines retain their existing owners. Core/editor/UI pins
+match Planchette #129's revision.
+
+Local Linux validation against the Git pin: analysis clean and 522 focused
+pane, compact, sidebar, theme and primitive tests passed. A metadata-sort
+header regression failed first on a misleading Name chevron, then passed.
+
 ## Ghost desktop context menus (2026-10-02)
 
 The app adopts the shared menu skin from Planchette #127, with matching

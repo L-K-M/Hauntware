@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostFileTheme;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/pane_location.dart';
@@ -100,33 +101,62 @@ void main() {
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: Row(
-            children: [
-              Expanded(
-                child: PaneView(
-                  controller: left,
-                  pane: leftStrip,
-                  workspace: workspace,
-                  focusNode: leftNode,
-                  onSwapFocus: () => rightNode.requestFocus(),
-                  onCancelRecovery: () => unawaited(left.cancelRecovery()),
-                  clock: clock,
+        // The rows now read GhostFileTheme — the app theme installs it
+        // from the resolved PoltergeistChrome. This harness runs the
+        // default theme, so it installs the extension from the same
+        // chrome fallback the assertions read through
+        // PoltergeistChrome.of.
+        home: Builder(
+          builder: (context) {
+            final chrome = PoltergeistChrome.of(context);
+            return Theme(
+              data: Theme.of(context).copyWith(
+                extensions: <ThemeExtension<dynamic>>[
+                  GhostFileTheme(
+                    paneBackground: chrome.paneBackground,
+                    separator: chrome.separator,
+                    hoverFill: chrome.hoverFill,
+                    selectionFill: chrome.selectionFill,
+                    onSelection: chrome.onSelection,
+                    inactiveSelectionFill: chrome.inactiveSelectionFill,
+                    activePaneIndicator: chrome.activePaneIndicator,
+                    secondaryText: chrome.secondaryText,
+                    rowExtent: chrome.rowExtent,
+                  ),
+                ],
+              ),
+              child: Scaffold(
+                body: Row(
+                  children: [
+                    Expanded(
+                      child: PaneView(
+                        controller: left,
+                        pane: leftStrip,
+                        workspace: workspace,
+                        focusNode: leftNode,
+                        onSwapFocus: () => rightNode.requestFocus(),
+                        onCancelRecovery: () =>
+                            unawaited(left.cancelRecovery()),
+                        clock: clock,
+                      ),
+                    ),
+                    Expanded(
+                      child: PaneView(
+                        controller: right,
+                        pane: rightStrip,
+                        workspace: workspace,
+                        focusNode: rightNode,
+                        onSwapFocus: () => leftNode.requestFocus(),
+                        onCancelRecovery: () =>
+                            unawaited(right.cancelRecovery()),
+                        clock: clock,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Expanded(
-                child: PaneView(
-                  controller: right,
-                  pane: rightStrip,
-                  workspace: workspace,
-                  focusNode: rightNode,
-                  onSwapFocus: () => leftNode.requestFocus(),
-                  onCancelRecovery: () => unawaited(right.cancelRecovery()),
-                  clock: clock,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

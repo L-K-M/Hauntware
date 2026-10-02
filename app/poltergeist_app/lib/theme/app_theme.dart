@@ -2,6 +2,7 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show SidebarThemeTokens, GhostFileTheme;
 import 'package:planchette_editor/planchette_editor.dart' show GhostMenuTheme;
 
 import 'family_hues.dart';
@@ -857,7 +858,31 @@ ThemeData buildPoltergeistThemeFor(
     snackBarTheme: scaled
         ? SnackBarThemeData(shape: rounded(_snackBarRadius))
         : null,
-    extensions: [chrome, FamilyPalette.forBrightness(drawnAt)],
+    extensions: [
+      chrome,
+      FamilyPalette.forBrightness(drawnAt),
+      SidebarThemeTokens(
+        sidebarBackground: chrome.sidebarBackground,
+        separator: chrome.separator,
+        hoverFill: chrome.hoverFill,
+        capsuleFill: chrome.capsuleFill,
+        inactiveSelectionFill: chrome.inactiveSelectionFill,
+        secondaryText: chrome.secondaryText,
+        sidebarRowExtent: chrome.sidebarRowExtent,
+        cornerScale: chrome.cornerScale,
+      ),
+      GhostFileTheme(
+        paneBackground: chrome.paneBackground,
+        separator: chrome.separator,
+        hoverFill: chrome.hoverFill,
+        selectionFill: chrome.selectionFill,
+        onSelection: chrome.onSelection,
+        inactiveSelectionFill: chrome.inactiveSelectionFill,
+        activePaneIndicator: chrome.activePaneIndicator,
+        secondaryText: chrome.secondaryText,
+        rowExtent: chrome.rowExtent,
+      ),
+    ],
   );
   return GhostMenuTheme.apply(theme, cornerScale: scale);
 }

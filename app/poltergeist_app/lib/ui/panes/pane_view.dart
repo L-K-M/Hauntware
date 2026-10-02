@@ -13,8 +13,8 @@ import 'package:flutter/gestures.dart'
         kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
-import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -34,7 +34,6 @@ import '../../services/sync_browsing_controller.dart';
 import '../../services/view_preferences.dart' show PaneViewMode;
 import '../../services/workspace_controller.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/family_hues.dart';
 import '../compact/compact_pane_messages.dart' show expandFailedText;
 import '../local_edits_review.dart';
 import '../server_appearance.dart';
@@ -42,7 +41,6 @@ import 'drag_out_notice.dart';
 import 'pane_column_header.dart';
 import 'pane_context_menu.dart';
 import 'pane_drop_area.dart';
-import 'kind_glyph.dart';
 import 'pane_format.dart';
 import 'save_favorite_bar.dart';
 import 'sync_browse_chip.dart';
@@ -1537,7 +1535,11 @@ class _PaneSurface extends StatelessWidget {
           metrics: PaneColumnMetrics.forWidth(
             constraints.maxWidth,
             MediaQuery.textScalerOf(context),
-            modifiedWidth: PaneColumnMetrics.modifiedWidthIn(context),
+            modifiedWidth: PaneColumnMetrics.modifiedWidthIn(
+              context,
+              today: l10n.paneDateToday,
+              yesterday: l10n.paneDateYesterday,
+            ),
           ),
           // Below the scope, so the surface's own reads (the rename
           // editor's name-column bounds) see the width the rows use.
@@ -2014,11 +2016,16 @@ class _PaneSurface extends StatelessWidget {
     final highlighted = controller.cursorIndex == index;
     final selected = controller.isRowSelected(index);
     final disclosure = controller.disclosureAt(index);
-    final row = _PaneRow(
-      entry: controller.entries[index],
+    final row = GhostFileRow(
+      item: paneFileItem(controller.entries[index]),
       outline: !gestures.touch,
       depth: controller.rowDepth(index),
-      disclosure: disclosure,
+      disclosure: switch (disclosure) {
+        PaneDisclosure.none => GhostFileDisclosure.none,
+        PaneDisclosure.collapsed => GhostFileDisclosure.collapsed,
+        PaneDisclosure.loading => GhostFileDisclosure.loading,
+        PaneDisclosure.expanded => GhostFileDisclosure.expanded,
+      },
       onDisclosurePointerDown: (event) =>
           gestures.onDisclosurePointerDown(index, event),
       onToggleDisclosure: disclosure == PaneDisclosure.none
@@ -2035,6 +2042,7 @@ class _PaneSurface extends StatelessWidget {
       dropTargeted: dropTargetRow == index,
       active: active,
       clock: clock,
+      strings: paneRowStrings(AppLocalizations.of(context)),
       touch: gestures.touch,
       onPointerDown: (event) => gestures.onPointerDown(index, event),
       onPointerMove: gestures.onPointerMove,
@@ -2889,382 +2897,6 @@ class _PointerModifiers {
   final bool shift;
   final bool meta;
   final bool control;
-}
-
-/// One dense listing row (D32 §6): kind glyph, 13 px name, and the size
-/// and date columns in the secondary tone with tabular figures. The
-/// ACTIVE pane's selection paints the accent fill with on-accent text;
-/// the inactive pane's is neutral grey. Desktop rows select on
-/// pointer-down (the pane state owns the double-click window); touch
-/// rows open on tap and select on long-press.
-class _PaneRow extends StatefulWidget {
-  const _PaneRow({
-    required this.entry,
-    this.outline = false,
-    this.depth = 0,
-    this.disclosure = PaneDisclosure.none,
-    this.onDisclosurePointerDown,
-    this.onToggleDisclosure,
-    required this.highlighted,
-    required this.cursorRing,
-    required this.selected,
-    this.renaming = false,
-    required this.dropTargeted,
-    required this.active,
-    required this.clock,
-    required this.touch,
-    required this.onPointerDown,
-    required this.onPointerMove,
-    required this.onPointerUp,
-    required this.onTap,
-    required this.onLongPress,
-    required this.onOpen,
-    this.onRename,
-  });
-
-  final RemoteFileEntry entry;
-
-  /// Whether the row reserves the disclosure column (desktop rows; 02
-  /// §2.5), and how deeply it is nested below the location.
-  final bool outline;
-  final int depth;
-
-  /// The folder's disclosure state; [PaneDisclosure.none] draws no
-  /// triangle, only its column.
-  final PaneDisclosure disclosure;
-
-  /// A press on the triangle (the pane toggles the folder and keeps the
-  /// press from selecting the row).
-  final ValueChanged<PointerDownEvent>? onDisclosurePointerDown;
-
-  /// Assistive tech's Expand/Collapse action; null for rows that do not
-  /// expand.
-  final VoidCallback? onToggleDisclosure;
-
-  /// Whether the cursor is on this row.
-  final bool highlighted;
-
-  /// Whether the cursor's shape marker shows (a subtle ring) — the
-  /// cursor must stay identifiable inside a multi-selection by shape,
-  /// not tint alone (02 §2.5).
-  final bool cursorRing;
-
-  /// The inline editor is open over this row: the editor shows the name
-  /// in place, so the label itself steps aside rather than peeking out
-  /// past the field.
-  final bool renaming;
-
-  /// Whether this row is in the selection (02 §2.5).
-  final bool selected;
-
-  /// Whether a live drag hover names this folder row its destination
-  /// (02 §5.1's target highlight) — a ring distinct from both cursor
-  /// and selection.
-  final bool dropTargeted;
-
-  /// Whether this row's pane is the active one.
-  final bool active;
-  final DateTime Function() clock;
-  final bool touch;
-  final ValueChanged<PointerDownEvent> onPointerDown;
-  final ValueChanged<PointerMoveEvent> onPointerMove;
-  final ValueChanged<PointerUpEvent> onPointerUp;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-
-  /// The row's primary verb for assistive tech: open.
-  final VoidCallback onOpen;
-
-  /// §13's rename affordance on the row's semantics node (keyboard/AT
-  /// parity with Enter/F2). Null when rename is unavailable — verbs
-  /// gated off or a flagged name.
-  final VoidCallback? onRename;
-
-  @override
-  State<_PaneRow> createState() => _PaneRowState();
-}
-
-class _PaneRowState extends State<_PaneRow> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final widget = this.widget;
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final chrome = PoltergeistChrome.of(context);
-    final metrics = PaneColumnMetrics.of(context);
-    final platform = theme.platform;
-
-    final size = formatPaneSize(
-      widget.entry.type == RemoteFileType.directory ? null : widget.entry.size,
-      platform: platform,
-    );
-    final modified = formatPaneModified(
-      widget.entry.modifiedAt,
-      now: widget.clock(),
-      localeName: Localizations.localeOf(context).toString(),
-      today: l10n.paneDateToday,
-      yesterday: l10n.paneDateYesterday,
-    );
-
-    // D32 §3: the accent selection belongs to the pane that decides
-    // transfers; the other pane's selection drops to neutral grey.
-    final accentSelected = widget.selected && widget.active;
-    final Color? fill = accentSelected
-        ? chrome.selectionFill
-        : widget.selected
-        ? chrome.inactiveSelectionFill
-        : (widget.dropTargeted || _hovered)
-        ? chrome.hoverFill
-        : null;
-    final foreground = accentSelected ? chrome.onSelection : colors.onSurface;
-    final secondary = accentSelected
-        ? chrome.onSelection
-        : chrome.secondaryText;
-    final captionStyle = theme.textTheme.bodySmall?.copyWith(
-      color: secondary,
-      fontFeatures: const [FontFeature.tabularFigures()],
-    );
-    final (glyph, hue) = kindGlyph(paneKindCategory(widget.entry));
-    final tint = FamilyPalette.of(context).glyph(hue);
-
-    // 02 §5.1's folder-row target ring outranks the cursor ring; both
-    // paint in the foreground so they never shift the row's layout.
-    final Border? ring = widget.dropTargeted
-        ? Border.all(color: colors.primary, width: 2)
-        : widget.cursorRing
-        ? Border.all(
-            color: widget.active
-                ? (accentSelected
-                      ? chrome.onSelection.withValues(alpha: 0.7)
-                      : chrome.activePaneIndicator)
-                : chrome.secondaryText.withValues(alpha: 0.6),
-          )
-        : null;
-
-    // 02 §13: the row's kind is part of the announced label
-    // (Name-Kind-Size-Date order); the glyph carries it only visually.
-    final kind = switch (widget.entry.type) {
-      RemoteFileType.file => l10n.paneRowKindFile,
-      RemoteFileType.directory => l10n.paneRowKindDirectory,
-      RemoteFileType.symbolicLink => l10n.paneRowKindSymbolicLink,
-      RemoteFileType.other => l10n.paneRowKindOther,
-    };
-
-    // 02 §13's flagged-name rule: a U+FFFD name is undecodable — the
-    // row keeps a warning badge + tooltip visually and spells the
-    // reason into the semantics label; rename is withheld above.
-    final flagged = nameIsFlagged(widget.entry.name);
-
-    Widget content = DecoratedBox(
-      decoration: BoxDecoration(color: fill),
-      position: DecorationPosition.background,
-      child: DecoratedBox(
-        decoration: BoxDecoration(border: ring),
-        position: DecorationPosition.foreground,
-        child: Padding(
-          padding: const EdgeInsetsDirectional.only(
-            start: PaneColumnMetrics.startPadding,
-            end: PaneColumnMetrics.endPadding,
-          ),
-          child: Row(
-            children: [
-              if (widget.outline) ...[
-                if (widget.depth > 0)
-                  SizedBox(
-                    width: widget.depth * PaneColumnMetrics.depthIndent,
-                  ),
-                SizedBox(
-                  width: PaneColumnMetrics.disclosureWidth,
-                  child: widget.disclosure == PaneDisclosure.none
-                      ? null
-                      : _DisclosureTriangle(
-                          state: widget.disclosure,
-                          color: secondary,
-                          onPointerDown: widget.onDisclosurePointerDown,
-                        ),
-                ),
-              ],
-              Icon(
-                glyph,
-                size: PaneColumnMetrics.glyphSize,
-                color: accentSelected ? chrome.onSelection : tint,
-              ),
-              const SizedBox(width: PaneColumnMetrics.glyphGap),
-              Expanded(
-                child: widget.renaming
-                    ? const SizedBox.shrink()
-                    : Text(
-                        widget.entry.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: foreground,
-                        ),
-                      ),
-              ),
-              // 02 §13's flagged-name marker: the name already shows
-              // U+FFFD; the badge + tooltip say why.
-              if (flagged)
-                Tooltip(
-                  message: l10n.paneFlaggedNameTooltip,
-                  child: Padding(
-                    padding: const EdgeInsetsDirectional.only(start: 4),
-                    child: Icon(
-                      Icons.warning_amber_outlined,
-                      size: 14,
-                      color: accentSelected ? chrome.onSelection : colors.error,
-                    ),
-                  ),
-                ),
-              if (metrics.showsSize) ...[
-                const SizedBox(width: PaneColumnMetrics.columnGap),
-                SizedBox(
-                  width: metrics.sizeWidth,
-                  child: Text(
-                    size,
-                    textAlign: TextAlign.end,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: captionStyle,
-                  ),
-                ),
-              ],
-              const SizedBox(width: PaneColumnMetrics.columnGap),
-              SizedBox(
-                width: metrics.modifiedWidth,
-                child: Text(
-                  modified,
-                  textAlign: TextAlign.end,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: captionStyle,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    content = widget.touch
-        ? GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onTap,
-            onLongPress: widget.onLongPress,
-            child: content,
-          )
-        : MouseRegion(
-            onEnter: (_) => setState(() => _hovered = true),
-            onExit: (_) => setState(() => _hovered = false),
-            child: Listener(
-              // Raw presses, never a tap recognizer: the row selects the
-              // moment the button goes down, and the pane state times the
-              // double-click itself (D32 §6).
-              behavior: HitTestBehavior.opaque,
-              onPointerDown: widget.onPointerDown,
-              onPointerMove: widget.onPointerMove,
-              onPointerUp: widget.onPointerUp,
-              child: content,
-            ),
-          );
-
-    return Semantics(
-      label: flagged
-          ? l10n.paneRowSemanticsFlagged(
-              widget.entry.name,
-              kind,
-              size,
-              modified,
-            )
-          : l10n.paneRowSemantics(widget.entry.name, kind, size, modified),
-      // The composed label replaces the child text's own semantics —
-      // without this, screen readers announce the name twice. The
-      // excluded child no longer provides the tap action either, so
-      // activation is exposed here.
-      excludeSemantics: true,
-      // AT activation opens the row: a screen reader's activate gesture
-      // is the row's primary verb here (the cursor-set single click is
-      // a sighted-user convention; Enter covers it for keyboards).
-      onTap: widget.onOpen,
-      // Announced membership follows the actual selection (02 §13),
-      // never the cursor: a plain move single-selects its row, so the
-      // cursor is announced selected except in the one state where it
-      // is not selected — a toggled-off row.
-      selected: widget.selected,
-      // 02 §2.5: an expandable folder announces whether it is open.
-      expanded: switch (widget.disclosure) {
-        PaneDisclosure.none => null,
-        PaneDisclosure.collapsed => false,
-        PaneDisclosure.loading || PaneDisclosure.expanded => true,
-      },
-      // §13's open/rename action pair: open rides onTap; rename is a
-      // custom action, absent when the row cannot take one. Folders
-      // that expand in place add Expand or Collapse.
-      customSemanticsActions: {
-        if (widget.onRename != null)
-          CustomSemanticsAction(label: l10n.fileRenameLabel):
-              widget.onRename!,
-        if (widget.onToggleDisclosure != null)
-          CustomSemanticsAction(
-            label: widget.disclosure == PaneDisclosure.collapsed
-                ? l10n.paneRowExpand
-                : l10n.paneRowCollapse,
-          ): widget.onToggleDisclosure!,
-      },
-      child: content,
-    );
-  }
-}
-
-/// A folder row's disclosure triangle (02 §2.5): points along the text
-/// direction while closed and turns down when open; a small spinner
-/// stands in while the folder's listing is in flight. The press is its
-/// own, reported before the row's (see [_RowGestures]).
-class _DisclosureTriangle extends StatelessWidget {
-  const _DisclosureTriangle({
-    required this.state,
-    required this.color,
-    required this.onPointerDown,
-  });
-
-  final PaneDisclosure state;
-  final Color color;
-  final ValueChanged<PointerDownEvent>? onPointerDown;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final rtl = Directionality.of(context) == TextDirection.rtl;
-    final Widget glyph = state == PaneDisclosure.loading
-        ? SizedBox.square(
-            dimension: 10,
-            child: CircularProgressIndicator(strokeWidth: 1.5, color: color),
-          )
-        : AnimatedRotation(
-            turns: state == PaneDisclosure.expanded ? (rtl ? -0.25 : 0.25) : 0,
-            duration: const Duration(milliseconds: 120),
-            child: Icon(
-              rtl ? Icons.arrow_left : Icons.arrow_right,
-              size: PaneColumnMetrics.disclosureWidth,
-              color: color,
-            ),
-          );
-    return Tooltip(
-      message: state == PaneDisclosure.collapsed
-          ? l10n.paneRowExpand
-          : l10n.paneRowCollapse,
-      waitDuration: const Duration(milliseconds: 600),
-      excludeFromSemantics: true,
-      child: Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: onPointerDown,
-        child: Center(child: glyph),
-      ),
-    );
-  }
 }
 
 class _ErrorOverlay extends StatelessWidget {

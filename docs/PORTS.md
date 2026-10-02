@@ -1,5 +1,14 @@
 # Séance ports and pin audits
 
+## Shared Ghost UI ownership (2026-10-02)
+
+The sidebar kit, family hues, contrast/brightness helpers, ellipsis, top
+notices and file-list presentation now belong to Planchette's `ghost_ui`
+package. Historical copy entries below remain provenance records; active
+implementations are Git-pinned, with compatibility exports at old paths.
+Host adapters retain ARB strings, resolved chrome, controllers, operations
+and drag payloads. Both apps use the same desktop/touch file-row widgets.
+
 ## Sync-pair side-by-side compare (2026-10-02)
 
 Original Poltergeist composition over its existing shared Planchette editor

@@ -1,68 +1,71 @@
 import 'package:flutter/foundation.dart' show TargetPlatform;
-import 'package:intl/intl.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_core/poltergeist_core.dart'
     show RemoteFileEntry, RemoteFileType;
 
-/// Presentation formatting for pane rows (02 §2.3's rendering rules,
-/// foundation subset). The literals here are technical (units, the
-/// unevaluated dash), reviewed per file in the localization contract.
-const _byteUnits = ['B', 'KB', 'MB', 'GB', 'TB'];
-const _unevaluated = '—';
+import '../../l10n/app_localizations.dart';
+
+/// Presentation formatting for pane rows (02 §2.3's rendering rules).
+/// The implementations moved to `package:ghost_ui` (`ghost_file_format.dart`,
+/// `ghost_file_kinds.dart`); this file keeps the pane vocabulary so the
+/// listing's other surfaces — the inspector, previews, sync tables — keep
+/// their names, and owns the two projections nothing else can do: the
+/// app's `RemoteFileEntry` onto the shared [GhostFileItem], and its ARB
+/// strings onto [GhostFileRowStrings].
 
 /// The shared "no value" glyph (02 §2.3's unevaluated dash) for surfaces
 /// beyond the row formatter — the Get Info inspector renders absent VFS
 /// metadata with the same dash the listing uses.
-const paneUnevaluated = _unevaluated;
+const paneUnevaluated = ghostUnevaluated;
+
+/// The neutral item the shared file rows render, projected from the
+/// app's wire entry: only presentation data crosses — the decoded name,
+/// the node type, and the optional size/modified metadata. The explicit
+/// switch keeps a future [RemoteFileType] a compile error here, not a
+/// silently misclassified row.
+GhostFileItem paneFileItem(RemoteFileEntry entry) => GhostFileItem(
+  name: entry.name,
+  type: switch (entry.type) {
+    RemoteFileType.file => GhostFileNodeType.file,
+    RemoteFileType.directory => GhostFileNodeType.directory,
+    RemoteFileType.symbolicLink => GhostFileNodeType.symbolicLink,
+    RemoteFileType.other => GhostFileNodeType.other,
+  },
+  size: entry.size,
+  modifiedAt: entry.modifiedAt,
+);
+
+/// The row strings the shared widgets need, from this app's ARB
+/// contract — the desktop [GhostFileRow] and the compact
+/// [GhostFileCompactRow] read the same bag, so the two surfaces cannot
+/// drift in what they announce.
+GhostFileRowStrings paneRowStrings(AppLocalizations l10n) =>
+    GhostFileRowStrings(
+      kindLabel: (type) => switch (type) {
+        GhostFileNodeType.file => l10n.paneRowKindFile,
+        GhostFileNodeType.directory => l10n.paneRowKindDirectory,
+        GhostFileNodeType.symbolicLink => l10n.paneRowKindSymbolicLink,
+        GhostFileNodeType.other => l10n.paneRowKindOther,
+      },
+      semanticsLabel: l10n.paneRowSemantics,
+      flaggedSemanticsLabel: l10n.paneRowSemanticsFlagged,
+      flaggedTooltip: l10n.paneFlaggedNameTooltip,
+      renameLabel: l10n.fileRenameLabel,
+      expandLabel: l10n.paneRowExpand,
+      collapseLabel: l10n.paneRowCollapse,
+      todayText: l10n.paneDateToday,
+      yesterdayText: l10n.paneDateYesterday,
+      folderLabel: l10n.compactRowFolder,
+      linkLabel: l10n.compactRowLink,
+      detailsText: l10n.compactRowDetails,
+      actionsTooltip: l10n.compactRowActions,
+    );
 
 /// Decimal size for macOS/Linux, binary for Windows — the platform file
 /// managers' convention (02 §2.3). The Linux decimal/binary preference
 /// setting lands with the settings slice.
-String formatPaneSize(int? bytes, {required TargetPlatform platform}) {
-  if (bytes == null) return _unevaluated;
-  final divisor = platform == TargetPlatform.windows ? 1024.0 : 1000.0;
-  var value = bytes.toDouble();
-  var unit = 0;
-  while (value >= divisor && unit < _byteUnits.length - 1) {
-    value /= divisor;
-    unit++;
-  }
-  if (unit == 0) return '$bytes ${_byteUnits[0]}';
-  // Round numerically first so renormalization never depends on parsing
-  // the formatted text (a later locale-aware formatter must not be able
-  // to break the loop on comma decimals).
-  double rounded() => value >= 10
-      ? value.roundToDouble()
-      : (value * 10).roundToDouble() / 10;
-  var text = value.toStringAsFixed(value >= 10 ? 0 : 1);
-  // Rounding can push the mantissa back up to the divisor (999.999 KB
-  // rounds to "1000 KB"); renormalize so a boundary value renders as
-  // the next unit, like Finder/Explorer.
-  while (rounded() >= divisor && unit < _byteUnits.length - 1) {
-    unit++;
-    value /= divisor;
-    text = value.toStringAsFixed(value >= 10 ? 0 : 1);
-  }
-  if (text.endsWith('.0')) text = text.substring(0, text.length - 2);
-  return '$text ${_byteUnits[unit]}';
-}
-
-// Retain only the current locale's parsed patterns across row builds.
-// Explicit locales keep these independent of Intl.defaultLocale.
-_PaneDateFormats? _cachedDateFormats;
-
-_PaneDateFormats _dateFormatsFor(String localeName) {
-  final cached = _cachedDateFormats;
-  if (cached != null && cached.localeName == localeName) return cached;
-  return _cachedDateFormats = _PaneDateFormats(localeName);
-}
-
-class _PaneDateFormats {
-  _PaneDateFormats(this.localeName);
-
-  final String localeName;
-  late final time = DateFormat.jm(localeName);
-  late final dateTime = DateFormat.yMd(localeName).add_jm();
-}
+String formatPaneSize(int? bytes, {required TargetPlatform platform}) =>
+    ghostFormatFileSize(bytes, platform: platform);
 
 /// Modified-time text: relative for today/yesterday, absolute otherwise
 /// (02 §2.3). Links and unevaluated sizes carry null metadata — the dash.
@@ -72,138 +75,34 @@ String formatPaneModified(
   required String localeName,
   required String Function(String time) today,
   required String Function(String time) yesterday,
-}) {
-  if (modified == null) return _unevaluated;
-  final localModified = modified.toLocal();
-  final localNow = now.toLocal();
-  final dayStart = DateTime(localNow.year, localNow.month, localNow.day);
-  final formats = _dateFormatsFor(localeName);
-  final time = formats.time.format(localModified);
-  if (!localModified.isBefore(dayStart)) {
-    // Same calendar day → "today"; genuinely future mtimes (clock skew,
-    // migrated archives) fall through to the absolute format rather
-    // than reading as today.
-    final nextDayStart = DateTime(
-      localNow.year,
-      localNow.month,
-      localNow.day + 1,
-    );
-    return localModified.isBefore(nextDayStart)
-        ? today(time)
-        : formats.dateTime.format(localModified);
-  }
-  // Calendar-day arithmetic, not 24-hour subtraction: across a DST
-  // transition, midnight minus 24h lands at 23:00 or 01:00 of the
-  // previous day (Dart normalizes out-of-range day components).
-  if (!localModified
-      .isBefore(DateTime(localNow.year, localNow.month, localNow.day - 1))) {
-    return yesterday(time);
-  }
-  return formats.dateTime.format(localModified);
-}
+}) => ghostFormatFileModified(
+  modified,
+  now: now,
+  localeName: localeName,
+  today: today,
+  yesterday: yesterday,
+);
 
 /// The `ls -l` symbolic rendering of a POSIX mode's permission bits
 /// (02 §2.6's read-only rwx display): nine positions — user, group,
 /// other — with suid/sgid/sticky folded into the execute slots the
-/// standard way (s/S, s/S, t/T). The mode's file-type bits are ignored;
-/// the kind column already names them. Char codes, not literals, keep
-/// the localization contract free of glyph plumbing.
-String formatPosixModeSymbolic(int mode) {
-  final out = StringBuffer();
-  const shifts = [6, 3, 0];
-  const specials = [0x800, 0x400, 0x200];
-  for (var triplet = 0; triplet < 3; triplet++) {
-    final bits = (mode >> shifts[triplet]) & 7;
-    out.writeCharCode((bits & 4) != 0 ? 0x72 : 0x2D); // r or -
-    out.writeCharCode((bits & 2) != 0 ? 0x77 : 0x2D); // w or -
-    final execute = (bits & 1) != 0;
-    if ((mode & specials[triplet]) == 0) {
-      out.writeCharCode(execute ? 0x78 : 0x2D); // x or -
-    } else if (triplet == 2) {
-      out.writeCharCode(execute ? 0x74 : 0x54); // t or T
-    } else {
-      out.writeCharCode(execute ? 0x73 : 0x53); // s or S
-    }
-  }
-  return out.toString();
-}
+/// standard way (s/S, s/S, t/T).
+String formatPosixModeSymbolic(int mode) => ghostFormatPosixModeSymbolic(mode);
 
 /// The mode's permission bits as four-digit octal (02 §2.6's octal
 /// display): 0755, 0644, 4755 — the leading digit carries suid/sgid/
 /// sticky, so nothing the symbolic render folded into its slots is lost.
-String formatPosixModeOctal(int mode) =>
-    (mode & 0xFFF).toRadixString(8).padLeft(4, '0');
+String formatPosixModeOctal(int mode) => ghostFormatPosixModeOctal(mode);
 
 /// The listing's kind-glyph families (D32 §6, coloured by D34's family
 /// hues in `kind_glyph.dart`). A glyph is a sighted-user hint only: the
 /// announced kind stays the entry's file type (02 §13), so a wrong guess
 /// from an extension never misleads assistive tech.
-enum PaneKindCategory {
-  folder,
-  link,
-  image,
-  document,
-  code,
-  archive,
-  pdf,
-  audio,
-  video,
-  other,
-}
-
-// Extension families, lowercase, one space-separated table per family —
-// machine data the classifier splits once, never rendered.
-const _imageExtensions =
-    'png jpg jpeg gif webp bmp tif tiff heic heif svg ico avif psd raw';
-const _documentExtensions =
-    'txt md markdown rst log csv tsv rtf doc docx odt pages xls xlsx ods '
-    'numbers ppt pptx odp epub';
-const _codeExtensions =
-    'json yaml yml toml xml html htm css scss js mjs ts jsx tsx dart py rb '
-    'go rs java kt swift c h cc cpp hpp';
-const _scriptExtensions =
-    'm mm cs php sh bash zsh fish ps1 bat sql ini conf cfg env lock';
-const _archiveExtensions =
-    'zip tar gz tgz bz2 xz 7z rar zst lz4 dmg iso deb rpm pkg jar apk';
-const _audioExtensions = 'mp3 wav flac aac ogg m4a opus';
-const _videoExtensions = 'mp4 mov mkv avi webm m4v wmv mpg';
-
-Set<String> _extensionSet(List<String> tables) => {
-  for (final table in tables) ...table.split(' '),
-};
-
-final _categoryByExtension = <String, PaneKindCategory>{
-  for (final ext in _extensionSet([_imageExtensions]))
-    ext: PaneKindCategory.image,
-  for (final ext in _extensionSet([_documentExtensions]))
-    ext: PaneKindCategory.document,
-  for (final ext in _extensionSet([_codeExtensions, _scriptExtensions]))
-    ext: PaneKindCategory.code,
-  for (final ext in _extensionSet([_archiveExtensions]))
-    ext: PaneKindCategory.archive,
-  for (final ext in _extensionSet([_audioExtensions]))
-    ext: PaneKindCategory.audio,
-  for (final ext in _extensionSet([_videoExtensions]))
-    ext: PaneKindCategory.video,
-  'pdf': PaneKindCategory.pdf,
-};
+typedef PaneKindCategory = GhostFileKind;
 
 /// The kind-glyph family for [entry]: its file type first (folders and
 /// links are never guessed from a name), then the lowercase extension
 /// after the last dot — a leading dot is part of a dotfile's stem, so
 /// `.bashrc` has no extension and reads as a generic file.
-PaneKindCategory paneKindCategory(RemoteFileEntry entry) {
-  switch (entry.type) {
-    case RemoteFileType.directory:
-      return PaneKindCategory.folder;
-    case RemoteFileType.symbolicLink:
-      return PaneKindCategory.link;
-    case RemoteFileType.file || RemoteFileType.other:
-      break;
-  }
-  final name = entry.name;
-  final dot = name.lastIndexOf('.');
-  if (dot <= 0 || dot == name.length - 1) return PaneKindCategory.other;
-  final extension = name.substring(dot + 1).toLowerCase();
-  return _categoryByExtension[extension] ?? PaneKindCategory.other;
-}
+PaneKindCategory paneKindCategory(RemoteFileEntry entry) =>
+    ghostFileKind(paneFileItem(entry));

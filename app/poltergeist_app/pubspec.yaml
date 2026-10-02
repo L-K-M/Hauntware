@@ -8,6 +8,11 @@ environment:
   flutter: '>=3.47.2'
 
 dependencies:
+  ghost_ui:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: cb42c9aa05914a33b227c209ecca1645ecab6c81
+      path: packages/ghost_ui
   # SHA-256 key identification for the vault re-key journal (the same use
   # Séance's FileVaultStore makes of it).
   crypto: 3.0.7
@@ -42,7 +47,7 @@ dependencies:
   planchette_editor:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: 7b833f34550c54b27a9f08783b5fd5711869253b
+      ref: cb42c9aa05914a33b227c209ecca1645ecab6c81
       path: packages/planchette_editor
   poltergeist_core:
     path: ../../packages/poltergeist_core
