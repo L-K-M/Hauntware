@@ -925,9 +925,12 @@ final class DocumentWorkspace extends ChangeNotifier {
     // one left to tell.
     String? staleReason() {
       if (_disposed || !_documents.contains(tab)) return '';
-      if (tab._reverting || tab.busy) {
+      if (tab._reverting) {
         return '$name is being reverted. Compare it again once the file is '
             'read.';
+      }
+      if (tab.busy) {
+        return '$name is busy. Compare it again once it finishes.';
       }
       if (tab.path == null || _pathKey(tab.path!) != _pathKey(path)) {
         return '$name was saved somewhere else while it was being compared. '

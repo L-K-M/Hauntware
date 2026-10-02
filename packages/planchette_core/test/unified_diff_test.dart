@@ -190,6 +190,17 @@ void main() {
       expect(result.text, isEmpty);
     });
 
+    test('a zero-context insertion mid-file reports the line before it', () {
+      final result = unifiedDiff('a\nb\nc\n', 'a\nX\nb\nc\n', context: 0);
+      expect(result.status, UnifiedDiffStatus.differs);
+      // Git counts an insertion after old line 1 as -1,0, not from zero.
+      expect(result.text, contains('@@ -1,0 +2 @@'));
+    });
+
+    test('a negative context is refused', () {
+      expect(() => unifiedDiff('a\n', 'b\n', context: -1), throwsRangeError);
+    });
+
     test('scattered edits inside a middle become minimal hunks', () {
       final oldLines = [
         for (var i = 0; i < 20; i++)

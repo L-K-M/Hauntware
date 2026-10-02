@@ -1407,8 +1407,9 @@ const _ghostLines = [
 @visibleForTesting
 String menuAcceleratorLabel(String label, String mnemonic) {
   final escaped = label.replaceAll('&', '&&');
-  final letters = escaped.toLowerCase();
   final letter = mnemonic.toLowerCase();
+  if (letter.isEmpty) return escaped;
+  final letters = escaped.toLowerCase();
   var at = -1;
   for (var i = 0; i < letters.length; i++) {
     if (letters.codeUnitAt(i) != letter.codeUnitAt(0)) continue;

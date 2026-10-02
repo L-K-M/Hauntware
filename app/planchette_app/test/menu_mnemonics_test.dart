@@ -32,6 +32,7 @@ void main() {
 
     test('a label without the letter comes back unmarked', () {
       expect(menuAcceleratorLabel('Renamed', 'z'), 'Renamed');
+      expect(menuAcceleratorLabel('Save', ''), 'Save');
     });
   });
 
@@ -94,16 +95,16 @@ void main() {
       workspace.newDocument();
       await mount(tester);
       expect(openMenuLabels(tester), isEmpty);
-      final barLabels = [
+      final labels = [
         for (final label in tester.widgetList<MenuAcceleratorLabel>(
           find.byType(MenuAcceleratorLabel),
         ))
           label.label,
       ];
-      expect(barLabels, unorderedEquals(barLabels.toList()));
-      expect(barLabels, hasLength(6));
-      expectUniqueAndMarked(barLabels, 'the menu bar');
-      expect(barLabels, containsAll(['&File', '&Edit', '&Text', '&View']));
+      expect(labels, unorderedEquals(barLabels.toList()));
+      expect(labels, hasLength(6));
+      expectUniqueAndMarked(labels, 'the menu bar');
+      expect(labels, containsAll(['&File', '&Edit', '&Text', '&View']));
     }, variant: const TargetPlatformVariant({TargetPlatform.linux}));
 
     for (final menu in ['File', 'Edit', 'Find', 'View', 'Window', 'Text']) {

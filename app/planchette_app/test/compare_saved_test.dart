@@ -146,6 +146,26 @@ void main() {
     expect(workspace.error, contains('being reverted'));
   });
 
+  test(
+    'a save in flight while the file is read reports busy, not a revert',
+    () async {
+      final tab = await open('one\n');
+      tab.editor.text.text = 'edited';
+      store.loadGate = Completer<void>();
+      store.writeGate = Completer<void>();
+      final comparing = workspace.compareWithSaved(tab);
+      final saving = workspace.save(tab);
+      await pumpEventQueue();
+      expect(tab.busy, isTrue);
+      store.loadGate!.complete();
+      expect(await comparing, isFalse);
+      store.writeGate!.complete();
+      expect(await saving, isTrue);
+      expect(workspace.error, contains('compared.txt is busy'));
+      expect(workspace.error, isNot(contains('reverted')));
+    },
+  );
+
   test('a Save As that retargets the tab mid-compare refuses', () async {
     final tab = await open('one\n');
     tab.editor.text.text = 'edited';
@@ -185,11 +205,11 @@ void main() {
       final disk = List.generate(
         6000,
         (i) => 'disk line $i ${'x' * 80}',
-      ).join();
+      ).join('\n');
       final buffer = List.generate(
         6000,
         (i) => 'edit line $i ${'y' * 80}',
-      ).join();
+      ).join('\n');
       final tab = await open('$disk\n');
       tab.editor.text.text = '$buffer\n';
 

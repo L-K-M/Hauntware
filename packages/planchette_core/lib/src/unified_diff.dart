@@ -68,6 +68,7 @@ UnifiedDiffResult unifiedDiff(
   int context = unifiedDiffContext,
   int outputLimit = unifiedDiffOutputLimit,
 }) {
+  RangeError.checkNotNegative(context, 'context');
   if (oldText == newText) {
     return const UnifiedDiffResult(UnifiedDiffStatus.identical);
   }
@@ -308,6 +309,10 @@ UnifiedDiffResult _format({
         if (newFirst < 0) newFirst = newIndex;
       }
     }
+    // A zero-count side reports the line before the hunk: when the hunk
+    // opens mid-file, that is the equal line just before its window.
+    if (oldCount == 0 && from > 0) oldFirst = annotated[from - 1].$2;
+    if (newCount == 0 && from > 0) newFirst = annotated[from - 1].$3;
 
     if (!wroteHeader) {
       out
@@ -339,9 +344,12 @@ UnifiedDiffResult _format({
       if (!line.endsWith('\n')) {
         out.writeln('\\ No newline at end of file');
       }
-    }
-    if (out.length > outputLimit) {
-      return const UnifiedDiffResult(UnifiedDiffStatus.tooLarge);
+      // Checked per line: the whole-middle fallback emits every changed
+      // line as one hunk, so a per-hunk check alone would let the buffer
+      // grow far past the limit before refusing.
+      if (out.length > outputLimit) {
+        return const UnifiedDiffResult(UnifiedDiffStatus.tooLarge);
+      }
     }
     change = last + 1;
   }
