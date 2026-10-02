@@ -24,15 +24,32 @@ class AppDelegate: FlutterAppDelegate {
     }
   }
 
-  // Finder may deliver files before Flutter has installed its handler.
-  // Queue them until the ready handshake; later batches go to the same shell.
-  override func application(_ sender: NSApplication, openFiles filenames: [String]) {
-    if documentReceiverReady {
-      documentChannel?.invokeMethod("open", arguments: filenames)
-    } else {
-      pendingPaths.append(contentsOf: filenames)
+  // AppKit prefers this inherited Flutter callback over openFiles. File URLs
+  // must reach our document queue; other URL schemes still belong to plugins.
+  override func application(_ sender: NSApplication, open urls: [URL]) {
+    let files = urls.filter { $0.isFileURL }.map { $0.path }
+    if !files.isEmpty {
+      receiveDocuments(sender, paths: files)
     }
+    let otherURLs = urls.filter { !$0.isFileURL }
+    if !otherURLs.isEmpty {
+      super.application(sender, open: otherURLs)
+    }
+  }
+
+  override func application(_ sender: NSApplication, openFiles filenames: [String]) {
+    receiveDocuments(sender, paths: filenames)
     sender.reply(toOpenOrPrint: .success)
+  }
+
+  // Finder can deliver paths before Dart registers its handler. Keep both
+  // native entrypoints on the same startup queue and ready handshake.
+  private func receiveDocuments(_ sender: NSApplication, paths: [String]) {
+    if documentReceiverReady {
+      documentChannel?.invokeMethod("open", arguments: paths)
+    } else {
+      pendingPaths.append(contentsOf: paths)
+    }
     mainFlutterWindow?.makeKeyAndOrderFront(nil)
   }
 
