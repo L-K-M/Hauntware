@@ -327,8 +327,12 @@ LineEdit? changeNumber(String text, int base, int extent, int delta) {
     final upper = digits.contains(RegExp(r'[A-F]'));
     final parsed = int.tryParse('${negative ? '-' : ''}$digits', radix: 16);
     if (parsed == null) return null;
+    if ((delta > 0 && parsed >= _maxInt64) ||
+        (delta < 0 && parsed <= _minInt64)) {
+      return null;
+    }
     final next = parsed + delta;
-    final nextDigits = next.abs().toRadixString(16);
+    final nextDigits = _absHex(next);
     final padded = nextDigits.length >= digits.length
         ? nextDigits
         : nextDigits.padLeft(digits.length, '0');
@@ -354,9 +358,13 @@ LineEdit? changeNumber(String text, int base, int extent, int delta) {
   } else {
     final parsed = int.tryParse(raw);
     if (parsed == null) return null;
+    if ((delta > 0 && parsed >= _maxInt64) ||
+        (delta < 0 && parsed <= _minInt64)) {
+      return null;
+    }
     final value = parsed + delta;
     final rawDigits = raw.replaceFirst('-', '');
-    final nextDigits = value.abs().toString();
+    final nextDigits = _absDecimal(value);
     final padded = nextDigits.length >= rawDigits.length
         ? nextDigits
         : nextDigits.padLeft(rawDigits.length, '0');
@@ -369,6 +377,20 @@ LineEdit? changeNumber(String text, int base, int extent, int delta) {
       ? LineEdit(result, found.start, end)
       : LineEdit(result, end, found.start);
 }
+
+/// 64-bit signed bounds: stepping past either wraps on the VM instead of
+/// refusing, so callers check first.
+const _maxInt64 = 9223372036854775807;
+const _minInt64 = -9223372036854775808;
+
+/// Magnitude digits without overflowing on [_minInt64], whose absolute
+/// value is not representable.
+String _absDecimal(int value) =>
+    value == _minInt64 ? '9223372036854775808' : value.abs().toString();
+
+/// Hex magnitude digits. See [_absDecimal].
+String _absHex(int value) =>
+    value == _minInt64 ? '8000000000000000' : value.abs().toRadixString(16);
 
 /// Adds one to the number at the caret or selection. See [changeNumber].
 LineEdit? incrementNumber(String text, int base, int extent) =>

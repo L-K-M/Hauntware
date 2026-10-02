@@ -171,6 +171,12 @@ void main() {
       final long = '1.${'9' * 320}';
       expect(incrementNumber(long, 0, 0), isNull);
     });
+
+    test('review fix: int64 boundaries refuse instead of wrapping', () {
+      expect(incrementNumber('9223372036854775807', 0, 0), isNull);
+      expect(incrementNumber('0x7FFFFFFFFFFFFFFF', 2, 2), isNull);
+      expect(decrementNumber('-9223372036854775808', 0, 0), isNull);
+    });
   });
 
   group('toggleBlockComments', () {
