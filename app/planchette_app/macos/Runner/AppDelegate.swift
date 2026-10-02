@@ -53,8 +53,10 @@ class AppDelegate: FlutterAppDelegate {
     }
     // No raise here: Dart routes the paths to the window that owns the
     // file (or the last-active one, or a fresh window) and raises that
-    // window through planchette/windows. Raising mainFlutterWindow would
-    // re-show the hidden main view and steal the owning window's focus.
+    // window through planchette/windows — its raise also brings the app
+    // itself forward when the event arrived in the background. Raising
+    // mainFlutterWindow would re-show the hidden main view and steal the
+    // owning window's focus.
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

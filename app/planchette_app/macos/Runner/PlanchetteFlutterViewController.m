@@ -121,8 +121,9 @@ static int64_t PlanchetteSemanticsUpdateViewId(const void* update) {
     return;
   }
   FlutterViewController* target = [self.engine viewControllerForIdentifier:viewId];
-  if (target == nil || target == self) {
-    // The window closed after its frame: nothing shows the tree.
+  if (target == nil || target == self || target.viewIdentifier != viewId) {
+    // The window closed after its frame, or the engine's map disagreed
+    // with the update: anything else could recurse forever.
     return;
   }
   // A controller made after semantics were enabled has no accessibility

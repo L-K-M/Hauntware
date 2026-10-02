@@ -1481,8 +1481,10 @@ class _DocumentShellState extends State<_DocumentShell>
     // A closing window retracts only its own menu; the next active one
     // publishes its own after this frame.
     final window = this.window;
-    window?.detachContent(this);
+    // Detaching notifies the owner; the listener has to go first or the
+    // notification reaches a defunct State.
     window?.owner.removeListener(_changed);
+    window?.detachContent(this);
     if (window != null) widget.menuSlot?.clear(window);
     FocusManager.instance.removeListener(_rememberTextFocus);
     super.dispose();

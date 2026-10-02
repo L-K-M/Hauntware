@@ -132,9 +132,20 @@ FlMethodResponse* create_window(DocumentWindowsHost* host,
                                  ? fl_value_get_string(title)
                                  : kWindowTitle);
   // The main window's size: a new window looks like the one it came from.
+  // Maximized or full screen reports the blown-up size instead, so the
+  // configured default stands in for it.
   gint width = 0;
   gint height = 0;
-  gtk_window_get_size(host->main_window, &width, &height);
+  GdkWindow* main_gdk_window =
+      gtk_widget_get_window(GTK_WIDGET(host->main_window));
+  if (gtk_window_is_maximized(host->main_window) ||
+      (main_gdk_window != nullptr &&
+       (gdk_window_get_state(main_gdk_window) & GDK_WINDOW_STATE_FULLSCREEN) !=
+           0)) {
+    gtk_window_get_default_size(host->main_window, &width, &height);
+  } else {
+    gtk_window_get_size(host->main_window, &width, &height);
+  }
   gtk_window_set_default_size(window, width, height);
 
   FlView* view = fl_view_new_for_engine(host->engine);
@@ -273,6 +284,9 @@ FlMethodResponse* open_picker(GtkWindow* parent, FlMethodCall* call,
   picker->save = save;
   g_signal_connect(native, "response", G_CALLBACK(picker_response_cb),
                    picker);
+  // file_selector runs the same dialog modally; the async version keeps
+  // that modality so the picker's window cannot be used under it.
+  gtk_native_dialog_set_modal(GTK_NATIVE_DIALOG(native), TRUE);
   gtk_native_dialog_show(GTK_NATIVE_DIALOG(native));
   return nullptr;  // Answered by picker_response_cb.
 }

@@ -149,6 +149,11 @@ std::optional<std::string> ItemPath(IShellItem* item) {
   PWSTR raw = nullptr;
   if (FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &raw)) ||
       raw == nullptr) {
+    // The contract says the out-parameter stays null on failure; a shell
+    // that still wrote it must not leak it.
+    if (raw != nullptr) {
+      ::CoTaskMemFree(raw);
+    }
     return std::nullopt;
   }
   std::wstring wide(raw);
@@ -368,6 +373,9 @@ void DocumentWindowsHost::HandleMethodCall(
     ShowWindow(window, IsIconic(window) ? SW_RESTORE : SW_SHOW);
     SetForegroundWindow(window);
   } else if (method == kHideMethod) {
+    // A pending first-frame show must not resurrect a window Dart just
+    // hid.
+    pending_show_.erase(*view_id);
     ShowWindow(window, SW_HIDE);
   } else if (method == kSetTitleMethod) {
     const std::string* title = StringArgument(arguments, kTitleKey);

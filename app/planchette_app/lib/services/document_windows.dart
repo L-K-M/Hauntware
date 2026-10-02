@@ -251,7 +251,22 @@ final class DocumentWindows extends ChangeNotifier
       // Its first frame before it shows, so it never shows the workspace
       // it had when it was closed.
       await _afterFrame();
-      await _host.activate(mainWindowViewId);
+      try {
+        await _host.activate(mainWindowViewId);
+      } on Object catch (error, stack) {
+        // The show failed: undo the registration so the next New Window
+        // retries the reuse path instead of leaving a listed-but-invisible
+        // window that quietly absorbs file opens.
+        _windows.remove(main);
+        _activation.remove(main);
+        _detachTitleSync(main);
+        main.workspace.dispose();
+        main._dispose();
+        notifyListeners();
+        _report(error, stack);
+        _reportError('Could not open a window: $error');
+        return null;
+      }
       return main;
     }
 
@@ -325,7 +340,14 @@ final class DocumentWindows extends ChangeNotifier
       for (final window in List.of(_windows)) {
         if (!_windows.contains(window)) continue;
         // The window its prompt belongs to comes forward to ask it.
-        await _host.activate(window.viewId);
+        try {
+          await _host.activate(window.viewId);
+        } on Object catch (error, stack) {
+          // A raise that fails must cancel the quit, not throw out of the
+          // review: the finally below releases every consented lock.
+          _report(error, stack);
+          return false;
+        }
         if (!await window.workspace.confirmQuit()) return false;
       }
       granted = true;
@@ -478,7 +500,13 @@ final class DocumentWindows extends ChangeNotifier
     workspace.revealTab(tab);
     for (final window in _windows) {
       if (identical(window.workspace, workspace)) {
-        unawaited(_host.activate(window.viewId));
+        unawaited(
+          _host
+              .activate(window.viewId)
+              .catchError(
+                (Object error, StackTrace stack) => _report(error, stack),
+              ),
+        );
         return;
       }
     }

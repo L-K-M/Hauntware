@@ -96,9 +96,16 @@ final class DocumentWindowsHost: NSObject, NSWindowDelegate {
         // not ask windowShouldClose.
         if window !== mainWindow {
           window.close()
+        } else {
+          NSLog("Planchette: destroy on the main window is a no-op; "
+            + "window_manager owns closing it")
         }
       case "activate":
         // Shows it again if it was hidden, and makes it key either way.
+        // makeKeyAndOrderFront orders a window of an inactive app forward
+        // only within the app, so a raise answering a backgrounded
+        // file-open or a Dock Quit's review brings the app forward too.
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
       case "hide":
         window.orderOut(nil)
@@ -148,6 +155,12 @@ final class DocumentWindowsHost: NSObject, NSWindowDelegate {
     let controller = PlanchetteFlutterViewController(
       engine: engine, nibName: nil, bundle: nil)
     let viewId = controller.viewIdentifier
+    guard viewId != Self.mainViewId else {
+      result(FlutterError(
+        code: "CREATE_FAILED",
+        message: "the engine did not assign a fresh view id", details: nil))
+      return
+    }
 
     // The size and place of the window it opens over.
     let reference = documentWindow(NSApp.keyWindow) ?? mainWindow
@@ -239,7 +252,7 @@ final class DocumentWindowsHost: NSObject, NSWindowDelegate {
     if window === mainWindow {
       return Self.mainViewId
     }
-    return windows.first { $0.value === window }?.key
+    return (window as? DocumentWindow)?.viewId
   }
 
   /// [window] when it is one of the document windows (not a panel).

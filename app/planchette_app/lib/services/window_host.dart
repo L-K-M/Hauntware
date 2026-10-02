@@ -228,7 +228,10 @@ final class MethodChannelWindowHost implements WindowHost {
     if (answer is! List) {
       throw const WindowHostException('the runner answered no path list');
     }
-    return [for (final path in answer) '$path'];
+    return [
+      for (final path in answer)
+        if (path is String) path,
+    ];
   }
 
   @override
@@ -277,11 +280,10 @@ final class MethodChannelWindowHost implements WindowHost {
         ? arguments[WindowHostKey.viewId.name]
         : null;
     if (viewId is! int) return null;
-    switch (call.method) {
-      case 'activated':
-        _listener?.onWindowActivated(viewId);
-      case 'closeRequested':
-        _listener?.onWindowCloseRequested(viewId);
+    if (call.method == WindowHostEvent.activated.name) {
+      _listener?.onWindowActivated(viewId);
+    } else if (call.method == WindowHostEvent.closeRequested.name) {
+      _listener?.onWindowCloseRequested(viewId);
     }
     return null;
   }
