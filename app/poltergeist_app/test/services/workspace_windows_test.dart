@@ -198,6 +198,41 @@ void main() {
     expect(notified, greaterThan(0));
   });
 
+  test('an external request restores a workspace beside editors', () async {
+    await windows.start();
+    await windows.openEditor(
+      key: 'local:/one',
+      builder: (_) => const SizedBox(),
+    );
+    await windows.closeWindow(windows.windows.first);
+    host.calls.clear();
+
+    await windows.ensureWorkspaceForExternalRequest();
+
+    expect(windows.activeWorkspaceWindow, isNotNull);
+    expect(windows.activeWorkspaceWindow!.isMain, isTrue);
+    expect(host.calls, ['activate 0']);
+  });
+
+  test(
+    'programmatic activation updates the active model before native reply',
+    () async {
+      await windows.start();
+      final workspace = windows.windows.single;
+      await windows.openEditor(
+        key: 'local:/one',
+        builder: (_) => const SizedBox(),
+      );
+      host.calls.clear();
+
+      final activating = workspace.activate();
+
+      expect(windows.activeWindow, same(workspace));
+      await activating;
+      expect(host.calls, ['activate 0']);
+    },
+  );
+
   test('a window the runner could not create is reported, not added', () async {
     await windows.start();
     host.createError = const WindowHostException('no');

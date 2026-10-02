@@ -1,5 +1,22 @@
 # Séance ports and pin audits
 
+## Cross-app deep links (2026-10-02)
+
+Original Poltergeist implementation; no Séance source was copied and no
+Séance pin changed. `poltergeist://browse` accepts only an exact catalog
+id/path form or host/port/username/path form. Catalog misses stop; host forms
+always show the endpoint review before any connection or credential prompt.
+Queue ownership follows the active workspace, coalesces exact endpoints,
+serializes distinct endpoints, and limits bulk discard to the endpoint list
+the user reviewed. Native runners register and forward the scheme; the
+sidebar exposes `seance://connect` only when the OS reports a handler.
+
+Port-back candidate: the reciprocal Séance handler and “Browse Files in
+Poltergeist” command are proposed in
+[Séance #168](https://github.com/L-K-M/Seance/issues/168). That proposal must
+retain §7.1's safety contract: every embedded-host link gets an interstitial,
+and a missing `serverId` is a dead end with no host or connection fallback.
+
 ## Sync-pair side-by-side compare (2026-10-02)
 
 Original Poltergeist composition over its existing shared Planchette editor

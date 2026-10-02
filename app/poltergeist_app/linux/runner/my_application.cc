@@ -22,9 +22,31 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
 
+// Settings is transient for the main window. Skip it so an external link
+// raises the workspace that owns the review dialog instead of covering it.
+static GtkWindow* active_workspace_window(GtkApplication* application) {
+  for (GList* cursor = gtk_application_get_windows(application);
+       cursor != nullptr; cursor = cursor->next) {
+    GtkWindow* window = GTK_WINDOW(cursor->data);
+    if (gtk_window_get_transient_for(window) != nullptr) {
+      continue;
+    }
+    return window;
+  }
+  return nullptr;
+}
+
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+
+  GtkWindow* workspace_window =
+      active_workspace_window(GTK_APPLICATION(application));
+  if (workspace_window != nullptr) {
+    gtk_window_present(workspace_window);
+    return;
+  }
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -80,7 +102,7 @@ static gboolean my_application_local_command_line(GApplication* application,
   g_application_activate(application);
   *exit_status = 0;
 
-  return TRUE;
+  return FALSE;
 }
 
 // Implements GApplication::startup.
@@ -128,5 +150,7 @@ MyApplication* my_application_new() {
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID, "flags",
-                                     G_APPLICATION_NON_UNIQUE, nullptr));
+                                     G_APPLICATION_HANDLES_COMMAND_LINE |
+                                         G_APPLICATION_HANDLES_OPEN,
+                                     nullptr));
 }
