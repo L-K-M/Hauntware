@@ -572,7 +572,15 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   /// Space toggles, Ctrl/⌘+A selects all, Escape clears, and the Menu
   /// key or Shift+F10 opens the cursor row's verbs.
   KeyEventResult _onListingKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    // Key-down and the arrows' key-repeat run; a held Enter would keep
+    // re-opening rows and repeating Space/select-all is meaningless, so
+    // only cursor movement honours auto-repeat.
+    if (event is! KeyDownEvent &&
+        !(event is KeyRepeatEvent &&
+            (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+                event.logicalKey == LogicalKeyboardKey.arrowUp))) {
+      return KeyEventResult.ignored;
+    }
     final controller = widget.controller;
     final entries = controller.entries;
     if (entries.isEmpty) return KeyEventResult.ignored;

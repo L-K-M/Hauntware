@@ -150,10 +150,7 @@ void main() {
       await tester.tap(find.text('b.bin'));
       await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
       await tester.pump();
-      expect(
-        files.selectedPaths,
-        containsAll(<String>['$_home/a.txt', '$_home/b.bin']),
-      );
+      expect(files.selectedPaths, {'$_home/a.txt', '$_home/b.bin'});
 
       // Ctrl-tap on a selected row takes it back out.
       await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
@@ -362,6 +359,34 @@ void main() {
       await tester.runAsync(() async {});
       await tester.pump();
       expect(files.currentPath, '$_home/docs');
+    },
+  );
+
+  platformTest(
+    'a held arrow repeats while held action keys do not',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+
+      await tester.tap(find.text('a.txt'));
+      await tester.pump();
+
+      // A held arrow keeps stepping: the key-down and two repeats walk
+      // the cursor from a.txt to z.txt.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(files.selectedPaths, {'$_home/z.txt'});
+
+      // A held action key fires once: Space's down toggles z.txt off
+      // and its repeat must not toggle it back on.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.space);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.space);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      expect(files.selectedPaths, isEmpty);
     },
   );
 }

@@ -265,15 +265,20 @@ class RemoteFilesController extends ChangeNotifier {
   }
 
   /// Shift-press on [path]: selects the contiguous run from the anchor
-  /// (the last plain selection, or [path] itself when none stands) in the
-  /// visible, filtered order — never entries a filter currently hides.
+  /// (the last plain selection, or [path] itself when none stands — a
+  /// filter that hid the anchor counts as none) in the visible, filtered
+  /// order — never entries a filter currently hides.
   void selectRangeTo(String path) {
-    final anchor = _selectionAnchor ?? path;
+    final visible = entries;
+    var anchor = _selectionAnchor;
+    if (anchor == null || !visible.any((entry) => entry.path == anchor)) {
+      anchor = path;
+    }
     var start = -1;
     var end = -1;
-    for (var i = 0; i < entries.length; i++) {
-      if (entries[i].path == anchor) start = i;
-      if (entries[i].path == path) end = i;
+    for (var i = 0; i < visible.length; i++) {
+      if (visible[i].path == anchor) start = i;
+      if (visible[i].path == path) end = i;
     }
     if (start < 0 || end < 0) return;
     if (end < start) {
@@ -281,14 +286,18 @@ class RemoteFilesController extends ChangeNotifier {
       start = end;
       end = swap;
     }
+    _selectionAnchor = anchor;
     selectedPaths
       ..clear()
-      ..addAll([for (var i = start; i <= end; i++) entries[i].path]);
+      ..addAll([for (var i = start; i <= end; i++) visible[i].path]);
     _notify();
   }
 
-  /// Selects every visible entry (the keyboard's select-all).
+  /// Selects every visible entry (the keyboard's select-all), anchored
+  /// at the first visible row so a later Shift-press extends from the
+  /// top, like the desktop file managers.
   void selectAll() {
+    _selectionAnchor = entries.isEmpty ? null : entries.first.path;
     selectedPaths
       ..clear()
       ..addAll([for (final entry in entries) entry.path]);

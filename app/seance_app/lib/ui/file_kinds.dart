@@ -40,8 +40,10 @@ FileKind fileKind(RemoteFileEntry entry) =>
 (IconData, FamilyHue) fileKindGlyph(FileKind kind) => ghostFileKindGlyph(kind);
 
 /// [entry]'s kind glyph as an [Icon] in its hue for [context]'s theme.
-Icon fileKindIcon(
-  BuildContext context,
-  RemoteFileEntry entry, {
-  double? size,
-}) => ghostFileKindIcon(context, fileKind(entry), size: size ?? 24);
+/// An omitted [size] defers to the ambient IconTheme, like a plain Icon
+/// — the shared [ghostFileKindIcon] requires an explicit size, so this
+/// builds on the shared glyph/hue data directly instead.
+Icon fileKindIcon(BuildContext context, RemoteFileEntry entry, {double? size}) {
+  final (glyph, hue) = fileKindGlyph(fileKind(entry));
+  return Icon(glyph, size: size, color: FamilyPalette.of(context).glyph(hue));
+}
