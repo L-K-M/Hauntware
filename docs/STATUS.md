@@ -4,6 +4,38 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Shared Planchette text tools (2026-10-02)
+
+The editor adopts the shared text-tools catalog at the same reviewed
+Planchette revision Séance pins (`53153c8e`, merges of Planchette
+#119–#124). A header icon on every editor surface — desktop windows and
+the phone route alike — opens the shared catalog browser; locked
+documents still browse, with rows that refuse to run. Choosing a tool
+opens the shared options bar or runs at once, and runs leave the shared
+notice with its Undo.
+
+Every string the shared browser, tool bar, notice, and the find bar's
+new extras (line actions, extraction, replacement preview, grep cheat
+sheet, search history, selection seeding) render in Poltergeist comes
+from `app_en.arb` through `PoltergeistEditorStrings` — 380 new keys
+covering all 53 catalog tools (names, descriptions, filter keywords),
+their option and choice labels, the Repeat/Recent summaries, and the
+per-tool changed/unchanged/preview sentences with English plurals. A
+catalog-coverage test fails the build if a future pin ships a tool the
+ARB does not carry, and the localization contract inventories the
+adapter's id-switch literals. The controller keeps the default
+`normalize` policy, so the normalized-buffer loader and the CRLF/BOM
+restoring saver stay matched; a regression drives a real BOM+CRLF file
+through edit and local save.
+
+Local validation: core analysis is clean and all 1,920 core tests pass
+(27 environment-gated skips); Flutter analysis is clean and all 3,153
+app tests pass, including the new browser, filter, lock, notice,
+phone-width, and normalization suites. Light/dark captures of the browser
+and options bar are in `tasks/planchette-text-tools/screenshots/`. Cross
+-platform CI and final review results are recorded on the adoption PR.
+No Séance source or pin changed.
+
 ## Sync-pair side-by-side compare (2026-10-02)
 
 Double-clicking a sync-plan row backed by files on both sides now opens two

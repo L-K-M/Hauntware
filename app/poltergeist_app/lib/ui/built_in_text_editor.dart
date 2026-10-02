@@ -153,6 +153,10 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
   }
 
   void _openSearch() => _editor.openSearch();
+  // The shared controller owns the browser's open/close state; a locked
+  // document may still browse (its rows refuse to run), matching the
+  // package's own contract.
+  void _openTextTools() => _editor.openTextTools();
   void _closeSearch() => _editor.closeSearch();
   void _nextMatch() => _editor.nextMatch();
   void _previousMatch() => _editor.previousMatch();
@@ -294,6 +298,11 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
               ],
             ),
             actions: [
+              IconButton(
+                tooltip: l10n.editorTextToolsTooltip,
+                onPressed: _loading || _error != null ? null : _openTextTools,
+                icon: const Icon(Icons.construction_outlined),
+              ),
               IconButton(
                 tooltip: l10n.editorFindTooltip,
                 onPressed: _loading || _error != null ? null : _openSearch,

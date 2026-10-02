@@ -324,6 +324,64 @@ void main() {
     await capture('editor-find-bar');
   });
 
+  testWidgets('captures the text-tools browser and tool bar', (tester) async {
+    await tester.runAsync(_loadRealFonts);
+    tester.view.physicalSize = const Size(1100, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const sample =
+        '# Release checklist\n'
+        'beta item\n'
+        'alpha item\n'
+        'gamma item\n'
+        'alpha item\n'
+        '\n'
+        'done\n';
+    for (final brightness in [Brightness.light, Brightness.dark]) {
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: const ValueKey('capture.editor'),
+          child: MaterialApp(
+            key: ValueKey(brightness),
+            debugShowCheckedModeBanner: false,
+            theme: _captureTheme(brightness: brightness),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: BuiltInTextEditorScreen(
+              file: File('/Users/example/Projects/release/checklist.txt'),
+              initialText: sample,
+              onCloseRequested: () async {},
+              onQuitRequested: () async {},
+              onNewWindowRequested: () async {},
+              showToast: (context, message) =>
+                  showTopToastIn(context, message: message),
+              monoFontFallback: const ['DejaVu Sans Mono'],
+              basenameOf: remoteBasename,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Text Tools'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Filter tools'),
+        'sort',
+      );
+      await tester.pumpAndSettle();
+      await _capture(tester)('editor-text-tools-${brightness.name}');
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Filter tools'),
+        '',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sort Lines…'));
+      await tester.pumpAndSettle();
+      await _capture(tester)('editor-tool-bar-${brightness.name}');
+    }
+  });
+
   testWidgets('captures the conflict-blocked save dialog', (tester) async {
     EditorCheckoutHarness? harness;
     try {
