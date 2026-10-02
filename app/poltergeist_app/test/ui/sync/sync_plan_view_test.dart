@@ -7,6 +7,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -16,10 +17,13 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/rsync_endpoints.dart';
 import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
+import 'package:poltergeist_app/ui/compare_view.dart';
+import 'package:poltergeist_app/ui/sync/sync_commands.dart';
 import 'package:poltergeist_app/ui/sync/sync_plan_view.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
@@ -77,16 +81,19 @@ Future<void> pumpSyncPlanView(
   SyncPlanController controller, {
   VoidCallback? onSaveAsFavorite,
   VoidCallback? onEditRules,
+  Future<void> Function(RegisteredCommand command)? onRunCommand,
   DateTime Function()? clock,
   Size size = const Size(1200, 720),
 }) {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final base = buildPoltergeistTheme(Brightness.dark);
+  final capture = Platform.environment['POLTERGEIST_CAPTURE'] == '1';
+  final base = buildPoltergeistTheme(
+    capture ? Brightness.light : Brightness.dark);
   // The house capture convention: the loaded family must be requested
   // by the theme — FontLoader alone cannot reach default-styled text.
-  final theme = Platform.environment['POLTERGEIST_CAPTURE'] == '1'
+  final theme = capture
       ? base.copyWith(
           textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
           primaryTextTheme: base.primaryTextTheme.apply(
@@ -94,6 +101,23 @@ Future<void> pumpSyncPlanView(
           ),
         )
       : base;
+  final compareCommand = RegisteredCommand(
+    id: kSyncCompareSelectedCommandId,
+    scope: CommandScope.selection,
+    label: (l10n) => l10n.syncCompareSelected,
+    enabled: () => controller.canCompareSelection,
+    run: (context) async {
+      final comparison = controller.comparisonForSelection();
+      if (comparison == null) return;
+      unawaited(
+        Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => CompareView(controller: comparison, clock: clock),
+          ),
+        ),
+      );
+    },
+  );
   return tester.pumpWidget(
     // The boundary wraps MaterialApp so overlay surfaces (the typed
     // DELETE dialog, the override popup) land inside the capture.
@@ -104,12 +128,16 @@ Future<void> pumpSyncPlanView(
         theme: theme,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
+        home: Builder(
+          builder: (context) => Scaffold(
           body: SyncPlanView(
             controller: controller,
+              commands: [compareCommand],
+              onRunCommand: onRunCommand ?? (command) => command.run(context),
             onSaveAsFavorite: onSaveAsFavorite,
             onEditRules: onEditRules,
             clock: clock,
+            ),
           ),
         ),
       ),
@@ -137,15 +165,22 @@ SyncPlanController fakeController(
   required SyncPair pair,
   required SyncPlan plan,
   List<ScanWarning> warnings = const [],
-}) => testController(
+}) {
+  String rootOf(SyncEndpoint endpoint) => switch (endpoint) {
+        LocalEndpoint(:final path) => path,
+        RemoteEndpoint(:final path) => path,
+      };
+
+  return testController(
   pair: pair,
   scanner: FakeSyncScanner(
-    left: testScanResult('/left', const {}),
-    right: testScanResult('/right', const {}),
+    left: testScanResult(rootOf(pair.left), const {}),
+    right: testScanResult(rootOf(pair.right), const {}),
   ),
   differ: FakeSyncDiffer(plan),
   environment: testSyncEnvironment(scratch),
 );
+}
 
 Future<void> capturePlan(
   WidgetTester tester,
@@ -379,8 +414,288 @@ void main() {
       // The run button collapses to its empty consequence.
       expect(
         find.widgetWithText(FilledButton, 'Nothing to Do'),
-        findsOneWidget,
-      );
+        findsOneWidget);
+  });
+
+  testWidgets('double-clicking a two-file row opens compare', (tester) async {
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final left = Directory('${scratch.path}/left')..createSync();
+    final right = Directory('${scratch.path}/right')..createSync();
+    final leftBytes = utf8.encode('alpha\r\nbeta\r\n');
+    final rightBytes = [0xef, 0xbb, 0xbf, ...utf8.encode('alpha\ngamma\n')];
+    File('${left.path}/a.txt').writeAsBytesSync(leftBytes);
+    File('${right.path}/a.txt').writeAsBytesSync(rightBytes);
+    final pair = testSyncPair(
+      left: left.path,
+      right: right.path,
+      rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
+    );
+    final item = testItem(
+      'a.txt',
+      left: testFile(size: leftBytes.length, mtimeSecs: 1700000000),
+      right: testFile(size: rightBytes.length, mtimeSecs: 1700000010),
+      suggested: SyncActionType.conflict,
+      reason: SyncReason.bothChanged,
+    );
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, [item]),
+    );
+    addTearDown(controller.dispose);
+
+    await pumpSyncPlanView(
+      tester,
+      controller,
+      clock: () => DateTime.fromMillisecondsSinceEpoch(
+        1700000000 * Duration.millisecondsPerSecond,
+      ),
+    );
+    await pumpToReady(tester, controller);
+    await capturePlan(tester, 'before-sync-pair-compare');
+
+    await tester.tap(find.byKey(const ValueKey('sync.row.a.txt')), pointer: 2);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byKey(const ValueKey('sync.row.a.txt')), pointer: 1);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('sync.compare.view')), findsOneWidget);
+    final comparison = tester.widget<CompareView>(find.byType(CompareView));
+    expect(comparison.clock, isNotNull);
+    expect(
+      comparison.clock!(),
+      DateTime.fromMillisecondsSinceEpoch(
+        1700000000 * Duration.millisecondsPerSecond,
+      ),
+    );
+  });
+
+  testWidgets('double-click ignores a row without two files', (tester) async {
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final pair = testSyncPair();
+    final item = testItem(
+      'a.txt',
+      left: testFile(size: 4),
+      suggested: SyncActionType.copyLeftToRight,
+      reason: SyncReason.onlyOnLeft,
+    );
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, [item]),
+    );
+    addTearDown(controller.dispose);
+
+    await pumpSyncPlanView(tester, controller);
+    await pumpToReady(tester, controller);
+
+    await tester.tap(find.byKey(const ValueKey('sync.row.a.txt')), pointer: 2);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(find.byKey(const ValueKey('sync.row.a.txt')), pointer: 1);
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const ValueKey('sync.compare.view')), findsNothing);
+  });
+
+  testWidgets('context menu dispatches the registered compare command', (
+    tester,
+  ) async {
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final pair = testSyncPair();
+    final item = testItem(
+      'a.txt',
+      left: testFile(),
+      right: testFile(),
+      suggested: SyncActionType.conflict,
+      reason: SyncReason.bothChanged,
+    );
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, [item]),
+    );
+    addTearDown(controller.dispose);
+    final ran = <String>[];
+
+    await pumpSyncPlanView(
+      tester,
+      controller,
+      onRunCommand: (command) async => ran.add(command.id),
+    );
+    await pumpToReady(tester, controller);
+
+    await tester.tap(
+      find.byKey(const ValueKey('sync.row.a.txt')),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Compare Selected Item'));
+    await tester.pump();
+
+    expect(ran, [kSyncCompareSelectedCommandId]);
+  });
+
+  testWidgets('context menu selects its row and restores table focus', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final pair = testSyncPair(
+      rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
+    );
+    final first = testItem(
+      'a.txt',
+      left: testFile(),
+      right: testFile(),
+      suggested: SyncActionType.conflict,
+      reason: SyncReason.bothChanged,
+    );
+    final second = testItem(
+      'b.txt',
+      left: testFile(),
+      right: testFile(),
+      suggested: SyncActionType.conflict,
+      reason: SyncReason.bothChanged,
+    );
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, [first, second]),
+    );
+    addTearDown(controller.dispose);
+    String? compared;
+
+    await pumpSyncPlanView(
+      tester,
+      controller,
+      onRunCommand: (_) async {
+        compared = controller.comparisonForSelection()?.request.relativePath;
+      },
+    );
+    await pumpToReady(tester, controller);
+    final firstRow = find.byKey(const ValueKey('sync.row.a.txt'));
+    final secondRow = find.byKey(const ValueKey('sync.row.b.txt'));
+
+    await tester.tap(firstRow);
+    await tester.pump();
+    await tester.tap(secondRow, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    final firstSemantics = tester.getSemantics(firstRow).getSemanticsData();
+    final secondSemantics = tester.getSemantics(secondRow).getSemanticsData();
+    expect(firstSemantics.flagsCollection.isSelected, ui.Tristate.isFalse);
+    expect(secondSemantics.flagsCollection.isSelected, ui.Tristate.isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(compared, 'b.txt');
+    semantics.dispose();
+  });
+
+  testWidgets('Enter and semantics expose the registered compare command', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final pair = testSyncPair();
+    final item = testItem(
+      'a.txt',
+      left: testFile(),
+      right: testFile(),
+      suggested: SyncActionType.conflict,
+      reason: SyncReason.bothChanged,
+    );
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, [item]),
+    );
+    addTearDown(controller.dispose);
+    final ran = <String>[];
+
+    await pumpSyncPlanView(
+      tester,
+      controller,
+      onRunCommand: (command) async => ran.add(command.id),
+    );
+    await pumpToReady(tester, controller);
+    final row = find.byKey(const ValueKey('sync.row.a.txt'));
+
+    expect(
+      tester
+          .getSemantics(row)
+          .getSemanticsData()
+          .hasAction(ui.SemanticsAction.tap),
+      isTrue,
+    );
+
+    await tester.tap(row);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(ran, [kSyncCompareSelectedCommandId]);
+    semantics.dispose();
+  });
+
+  testWidgets('double-clicking row controls does not open compare', (
+    tester,
+  ) async {
+    final scratch = Directory.systemTemp.createTempSync('pg-view-');
+    addTearDown(() => scratch.deleteSync(recursive: true));
+    final left = Directory('${scratch.path}/left')..createSync();
+    final right = Directory('${scratch.path}/right')..createSync();
+    File('${left.path}/a.txt').writeAsStringSync('left');
+    File('${right.path}/a.txt').writeAsStringSync('right');
+    final pair = testSyncPair(
+      left: left.path,
+      right: right.path,
+      rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
+    );
+    final item = testItem(
+      'a.txt',
+      left: testFile(size: 4),
+      right: testFile(size: 5),
+      suggested: SyncActionType.conflict,
+      reason: SyncReason.bothChanged,
+    );
+    final controller = fakeController(
+      scratch,
+      pair: pair,
+      plan: testPlan(pair, [item]),
+    );
+    addTearDown(controller.dispose);
+
+    await pumpSyncPlanView(tester, controller);
+    await pumpToReady(tester, controller);
+
+    final checkbox = find.byKey(const ValueKey('sync.row.a.txt.check'));
+    await tester.tap(checkbox, pointer: 2);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(checkbox, pointer: 1);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('sync.compare.view')), findsNothing);
+
+    final row = find.byKey(const ValueKey('sync.row.a.txt'));
+    final glyph = find.descendant(of: row, matching: find.byType(InkWell));
+    expect(glyph, findsOneWidget);
+    await tester.tap(glyph, pointer: 2);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tap(glyph, pointer: 1);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('sync.compare.view')), findsNothing);
     },
   );
 

@@ -279,6 +279,13 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
   List<TransferTask> get tasks =>
       List.unmodifiable(_tasks.values.map((rt) => rt.task));
 
+  /// Completes after [taskId] is terminal and its active I/O has unwound.
+  /// Callers that own a produce destination use this before final cleanup.
+  Future<void> waitForTaskDrain(String taskId) async {
+    final done = _tasks[taskId]?.done.future;
+    if (done != null) await done;
+  }
+
   bool get isPaused => _paused;
 
   /// The user's per-server caps on files in flight (00 D37). Setting
@@ -752,7 +759,8 @@ class TransferQueue implements ManagedCheckoutQueue, TransferProducer {
               writeLimiter: _localLimiter,
               sourcePath: produce.remotePath,
               destinationPath: produce.destinationPath,
-              length: produce.expectedSize,
+              // Listing size is only a progress hint; the stream cap
+              // safely handles a remote file that grew after listing.
               maximumBytes: produce.maximumBytes,
               // A preview's temp is the cache's exclusive sibling, so
               // overwrite is the expected shape; the commit rename

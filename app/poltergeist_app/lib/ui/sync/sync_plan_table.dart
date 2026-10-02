@@ -9,6 +9,14 @@
 // jumping into Skipped; the glyph keeps showing the EFFECTIVE action.
 // The view owns selection, focus, and the override verbs; this file is
 // the grouping rules (pure) and the layout.
+import 'dart:async';
+
+import 'package:flutter/gestures.dart'
+    show
+        PointerDownEvent,
+        kDoubleTapSlop,
+        kDoubleTapTimeout,
+        kPrimaryMouseButton;
 import 'package:flutter/material.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
@@ -42,6 +50,11 @@ bool syncRowIncluded(SyncItem item) => item.effective != SyncActionType.skip;
 /// itself skips has nothing to include unless the user overrode it.
 bool syncRowToggleable(SyncItem item) =>
     item.suggested != SyncActionType.skip || item.userOverridden;
+
+/// Compare only two regular-file snapshots. A missing side or a kind
+/// mismatch has no second text document to show.
+bool syncRowComparable(SyncItem item) =>
+    item.left?.kind == EntryKind.file && item.right?.kind == EntryKind.file;
 
 /// A section header's tri-state over its toggleable rows: all checked
 /// (true), none (false), or a mix (null). A section with nothing to
@@ -139,6 +152,7 @@ final class SyncPlanTable extends StatelessWidget {
     required this.collapsed,
     required this.tableFocused,
     required this.onRowTap,
+    required this.onRowDoubleTap,
     required this.onGlyphTap,
     required this.onContextMenu,
     required this.onSetIncluded,
@@ -157,6 +171,7 @@ final class SyncPlanTable extends StatelessWidget {
   /// The active-selection tint only while the table holds focus.
   final bool tableFocused;
   final ValueChanged<SyncItem> onRowTap;
+  final ValueChanged<SyncItem> onRowDoubleTap;
   final ValueChanged<SyncItem> onGlyphTap;
   final void Function(Offset position, SyncItem item) onContextMenu;
   final void Function(Iterable<SyncItem> items, bool include) onSetIncluded;
@@ -209,6 +224,9 @@ final class SyncPlanTable extends StatelessWidget {
                     running: controller.isRunning,
                     now: now,
                     onTap: () => onRowTap(item),
+                    onDoubleTap: syncRowComparable(item)
+                        ? () => onRowDoubleTap(item)
+                        : null,
                     onGlyphTap: () => onGlyphTap(item),
                     onContextMenu: (position) => onContextMenu(position, item),
                     onSetIncluded: (include) => onSetIncluded([item], include),
@@ -415,6 +433,7 @@ class _SyncItemRow extends StatelessWidget {
     required this.tableFocused,
     required this.running,
     required this.onTap,
+    required this.onDoubleTap,
     required this.onGlyphTap,
     required this.onContextMenu,
     required this.onSetIncluded,
@@ -430,6 +449,7 @@ class _SyncItemRow extends StatelessWidget {
   final bool running;
   final DateTime? now;
   final VoidCallback onTap;
+  final VoidCallback? onDoubleTap;
   final VoidCallback onGlyphTap;
   final void Function(Offset position) onContextMenu;
   final ValueChanged<bool> onSetIncluded;
@@ -516,6 +536,9 @@ class _SyncItemRow extends StatelessWidget {
       container: true,
       label: l10n.syncRowSemantics(item.relativePath, actionLabel, reason),
       selected: selected,
+      // Assistive activation is the same primary verb as a desktop
+      // double-click and keyboard Enter: compare the two reviewed files.
+      onTap: onDoubleTap,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onSecondaryTapDown: (details) => onContextMenu(details.globalPosition),
@@ -587,44 +610,56 @@ class _SyncItemRow extends StatelessWidget {
                   ],
                 ),
               ),
-              if (statusIcon != null) ...[statusIcon, const SizedBox(width: 4)],
-              // The row's own label already speaks the path, action,
-              // and reason — the cells stay out of the tree.
               Expanded(
-                flex: 3,
-                child: ExcludeSemantics(
-                  child: Text(
-                    item.relativePath,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: included ? text : secondary,
-                    ),
+                child: _ImmediateDoubleTap(
+                  onDoubleTap: onDoubleTap,
+                  child: Row(
+                    children: [
+                      if (statusIcon != null) ...[
+                        statusIcon,
+                        const SizedBox(width: 4),
+                      ],
+                      // The row's own label already speaks the path, action,
+                      // and reason — the cells stay out of the tree.
+                      Expanded(
+                        flex: 3,
+                        child: ExcludeSemantics(
+                          child: Text(
+                            item.relativePath,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: included ? text : secondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (columns.sizes) ...[
+                        const SizedBox(width: 8),
+                        ExcludeSemantics(child: side(first)),
+                        const SizedBox(width: 8),
+                        ExcludeSemantics(child: side(second)),
+                      ],
+                      if (columns.reason) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ExcludeSemantics(
+                            child: Text(
+                              reason,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: item.error != null
+                                    ? mark(theme.colorScheme.error)
+                                    : secondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ),
-              if (columns.sizes) ...[
-                const SizedBox(width: 8),
-                ExcludeSemantics(child: side(first)),
-                const SizedBox(width: 8),
-                ExcludeSemantics(child: side(second)),
-              ],
-              if (columns.reason) ...[
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ExcludeSemantics(
-                    child: Text(
-                      reason,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: item.error != null
-                            ? mark(theme.colorScheme.error)
-                            : secondary,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -642,5 +677,68 @@ class _SyncItemRow extends StatelessWidget {
       today: l10n.paneDateToday,
       yesterday: l10n.paneDateYesterday,
     );
+  }
+}
+
+/// Detects a desktop double-click without delaying pointer-down selection.
+final class _ImmediateDoubleTap extends StatefulWidget {
+  const _ImmediateDoubleTap({required this.onDoubleTap, required this.child});
+
+  final VoidCallback? onDoubleTap;
+  final Widget child;
+
+  @override
+  State<_ImmediateDoubleTap> createState() => _ImmediateDoubleTapState();
+}
+
+final class _ImmediateDoubleTapState extends State<_ImmediateDoubleTap> {
+  ({Offset position, Duration timeStamp})? _armed;
+  Timer? _timer;
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    behavior: HitTestBehavior.opaque,
+    onPointerDown: _pointerDown,
+    child: widget.child,
+  );
+
+  void _pointerDown(PointerDownEvent event) {
+    if (event.buttons != kPrimaryMouseButton || widget.onDoubleTap == null) {
+      _disarm();
+      return;
+    }
+
+    final armed = _armed;
+    if (armed != null &&
+        (event.position - armed.position).distance <= kDoubleTapSlop &&
+        _withinWindow(armed.timeStamp, event.timeStamp)) {
+      _disarm();
+      widget.onDoubleTap!();
+      return;
+    }
+
+    _timer?.cancel();
+    _armed = (position: event.position, timeStamp: event.timeStamp);
+    _timer = event.timeStamp == Duration.zero
+        ? Timer(kDoubleTapTimeout, _disarm)
+        : null;
+  }
+
+  bool _withinWindow(Duration first, Duration second) {
+    if (first == Duration.zero || second == Duration.zero) return true;
+    final gap = second - first;
+    return !gap.isNegative && gap <= kDoubleTapTimeout;
+  }
+
+  void _disarm() {
+    _timer?.cancel();
+    _timer = null;
+    _armed = null;
   }
 }

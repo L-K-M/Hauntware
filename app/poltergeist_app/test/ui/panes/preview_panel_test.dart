@@ -73,6 +73,7 @@ void main() {
     await drive(tester, () async {
       await tester.tap(find.byKey(const ValueKey('preview.download')));
       await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.isNotEmpty);
     });
     await tester.pump();
     expect(find.byKey(const ValueKey('preview.progress')), findsOneWidget);
@@ -121,6 +122,7 @@ void main() {
         find.byKey(const ValueKey('preview.confirm.download')),
       );
       await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.isNotEmpty);
     });
     await tester.pump();
     expect(h.producer.specs, hasLength(1));
@@ -136,6 +138,7 @@ void main() {
       await untilPhase(h.session, PreviewPhase.prompt);
       h.session.previewFocused();
       await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.isNotEmpty);
       h.producer.specs.single.gate!
           .wrap(const NullByteSink())
           .add(List.filled(16, 0));
@@ -167,6 +170,7 @@ void main() {
       await untilPhase(h.session, PreviewPhase.prompt);
       h.session.previewFocused();
       await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.isNotEmpty);
       await h.producer.complete(0, utf8.encode('hello'));
       await untilPhase(h.session, PreviewPhase.rendered);
     });

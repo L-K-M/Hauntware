@@ -183,12 +183,17 @@ final class PreviewHarness {
     int cacheCapacityBytes = 1 << 20,
     bool infoTabShown = false,
     QuickLookChannel? quickLook,
+    Future<bool> Function(File)? lookupCacheFileExists,
+    PreviewProducer? previewProducer,
+    Future<void> Function()? afterCacheTempPrepared,
   }) async {
     final h = PreviewHarness();
     h.tempDir = Directory.systemTemp.createTempSync('preview_test');
     h.cache = PreviewCache(
       directory: h.tempDir,
       capacityBytes: cacheCapacityBytes,
+      lookupFileExists: lookupCacheFileExists,
+      afterTempPrepared: afterCacheTempPrepared,
     );
     await h.cache.open();
     h.lanes = ctl.FakePaneLanes();
@@ -204,7 +209,7 @@ final class PreviewHarness {
       workspace: h.workspace,
       cache: h.cache,
       largeDownloadThresholdBytes: () => thresholdBytes,
-      producer: withProducer ? h.producer : null,
+      producer: withProducer ? previewProducer ?? h.producer : null,
       quickLook: quickLook ?? h.quickLook,
       platform: platform,
     );
@@ -257,6 +262,22 @@ final class PreviewHarness {
     await left.openLocalAt(dir.path);
     await previewSettle();
     if (cursor >= 0) left.setCursorIndex(cursor);
+    await previewSettle();
+    return channel;
+  }
+
+  /// Binds the right pane to a local listing without changing focus.
+  Future<ctl.FakePaneChannel> connectRightLocal(
+    Directory dir,
+    List<RemoteFileEntry> entries, {
+    int cursor = 0,
+  }) async {
+    final channel = ctl.FakePaneChannel(dir.path);
+    channel.listings[dir.path] = entries;
+    lanes.nextLocalChannel = channel;
+    await right.openLocalAt(dir.path);
+    await previewSettle();
+    if (cursor >= 0) right.setCursorIndex(cursor);
     await previewSettle();
     return channel;
   }

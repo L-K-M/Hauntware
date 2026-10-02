@@ -202,6 +202,7 @@ void main() {
       await untilPhase(h.session, PreviewPhase.prompt);
       h.session.previewFocused();
       await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.isNotEmpty);
       h.producer.progress(0, 2, 4);
     });
     await tester.pump();
@@ -240,8 +241,10 @@ void main() {
     await act(() async {
       h.left.setCursorIndex(5);
       await untilPhase(h.session, PreviewPhase.prompt);
+      final producerCount = h.producer.specs.length;
       h.session.previewFocused();
       await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.length > producerCount);
       h.producer.specs.last.gate!
           .wrap(const NullByteSink())
           .add(List.filled(5000, 0));
@@ -267,8 +270,10 @@ void main() {
     await act(() async {
       h.left.setCursorIndex(3);
       await untilPhase(h.session, PreviewPhase.prompt);
+      final producerCount = h.producer.specs.length;
       h.session.previewFocused();
       await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.length > producerCount);
       await h.producer.complete(
         h.producer.specs.length - 1,
         _pngBytes,
@@ -286,8 +291,10 @@ void main() {
     await act(() async {
       h.left.setCursorIndex(4);
       await untilPhase(h.session, PreviewPhase.prompt);
+      final producerCount = h.producer.specs.length;
       h.session.previewFocused();
       await untilPhase(h.session, PreviewPhase.producing);
+      await untilTrue(() => h.producer.specs.length > producerCount);
       await h.producer.complete(
         h.producer.specs.length - 1,
         utf8.encode('%PDF-1.4 stub\n'),

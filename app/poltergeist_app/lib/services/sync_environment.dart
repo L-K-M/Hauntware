@@ -110,6 +110,22 @@ final class SyncEnvironment {
     }
   }
 
+  /// Resolves a remote endpoint to the pooled identity used by queued
+  /// preview production. Registration stays inside this environment boundary.
+  String serverIdFor(RemoteEndpoint endpoint) {
+    final configs = _serverConfigs;
+    if (configs == null) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'sync endpoint',
+        path: endpoint.path,
+        message: 'remote sync endpoints are not available yet',
+      );
+    }
+
+    return configs.registerEndpoint(endpoint.server);
+  }
+
   /// Returns every remote lease sync holds — called when a scan, run,
   /// retry, or restore settles and when a plan view disposes, so an idle
   /// pair never pins pool channels. The next remote call leases again.

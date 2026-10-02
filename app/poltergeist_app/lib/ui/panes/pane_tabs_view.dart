@@ -208,6 +208,10 @@ class PaneTabsView extends StatelessWidget {
                 return SyncPlanView(
                   key: ValueKey(activeTab.id),
                   controller: syncSession,
+                  focusNode: focusNode,
+                  onActivatePane: () => workspace.setActivePane(tabs),
+                  commands: commands,
+                  onRunCommand: onRunCommand,
                   onSaveAsFavorite: onSyncSaveAsFavorite == null
                       ? null
                       : () => onSyncSaveAsFavorite!(syncSession),

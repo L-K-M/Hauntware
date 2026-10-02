@@ -38,7 +38,7 @@ enum PreviewPhase {
   /// no-op and Esc cancels the download without closing the panel.
   producing,
 
-  /// An unknown-size stream parked at the threshold (§5.3's gate):
+  /// An unconfirmed stream parked at the threshold (§5.3's gate):
   /// `Cancel` / `Keep downloading` — Space is a no-op, Esc answers the
   /// card's Cancel (the confirmation dismisses, the panel stays open).
   gateConfirm,
@@ -77,6 +77,13 @@ enum PreviewRefusal {
   missing,
 }
 
+final class _ProductionFocus {
+  _ProductionFocus({required this.generation, required this.kind});
+
+  int generation;
+  PreviewKind kind;
+}
+
 /// One in-flight remote production, keyed by the cache key it will
 /// commit to. Kept in a map so re-focusing the item (or Quick Look
 /// arrow-stepping back to it) attaches to the same work instead of
@@ -85,20 +92,21 @@ final class _Production {
   _Production({
     required this.ticket,
     required this.slot,
-    required this.generation,
+    required this.focus,
     required this.entry,
     required this.serverId,
   });
 
   final PreviewProduceTicket ticket;
   final PreviewCacheSlot slot;
-  final int generation;
+  final _ProductionFocus focus;
   final RemoteFileEntry entry;
   final String serverId;
 
-  /// The unknown-size stream's threshold gate (null when the size was
-  /// known) — a re-attaching focus lands on gateConfirm when this is
-  /// parked.
+  int get generation => focus.generation;
+
+  /// The stream's threshold gate (null after an up-front confirmation)
+  /// — a re-attaching focus lands on gateConfirm when this is parked.
   PreviewByteGate? gate;
   int transferred = 0;
   int? total;
@@ -108,6 +116,39 @@ final class _Production {
 /// routed the request. Exposed for the pane's key dispatch (and tests)
 /// — the card/panel rendering keys off [phase] instead.
 enum PreviewSurface { none, panel, quickLook }
+
+enum _ThresholdDecision { unconfirmed, confirmed }
+
+final class _PendingStart {
+  _PendingStart({
+    required int generation,
+    required PreviewKind kind,
+    required this.thresholdDecision,
+  }) : focus = _ProductionFocus(generation: generation, kind: kind);
+
+  final _ProductionFocus focus;
+  _ThresholdDecision thresholdDecision;
+  final cancellation = Completer<void>();
+  bool cancelled = false;
+
+  void cancel() {
+    cancelled = true;
+    if (!cancellation.isCompleted) cancellation.complete();
+  }
+
+  void reattach({
+    required int generation,
+    required PreviewKind kind,
+    required _ThresholdDecision decision,
+  }) {
+    if (cancelled) return;
+    focus.generation = generation;
+    focus.kind = kind;
+    if (decision == _ThresholdDecision.confirmed) {
+      thresholdDecision = decision;
+    }
+  }
+}
 
 /// 06 §5's preview driver: the per-window owner of the Space/Esc state
 /// machine (§5.2), the Quick Look surface (§5.1: the native panel on
@@ -159,6 +200,8 @@ final class PreviewSession extends ChangeNotifier {
   // -- State the panel renders ----------------------------------------
 
   PreviewPhase _phase = PreviewPhase.idle;
+  String? _phaseKey;
+  int _phaseGeneration = -1;
 
   /// The §5.2 state machine's current phase (meaningful only while the
   /// panel is visible — see [WorkspaceController.previewPanelHidden]).
@@ -234,6 +277,8 @@ final class PreviewSession extends ChangeNotifier {
   bool get quickLookCardVisible =>
       _quickLookCard != QuickLookCardKind.none;
   QuickLookCardKind _quickLookCard = QuickLookCardKind.none;
+  String? _quickLookCardKey;
+  int _quickLookCardGeneration = -1;
   QuickLookCardKind get quickLookCard => _quickLookCard;
 
   /// The entry names behind the produced paths handed to the Quick Look
@@ -268,10 +313,9 @@ final class PreviewSession extends ChangeNotifier {
   /// re-focused Esc's cancel target.
   final _productions = <String, _Production>{};
 
-  /// Keys whose `_startProduction` sits inside `cache.prepare` — no
-  /// ticket exists to cancel yet, so Esc flags [_startCancels] instead
-  /// and the start aborts the slot as soon as it lands.
-  final _pendingStarts = <String>{};
+  /// Keys waiting on cache-key ownership or `cache.prepare` — no ticket
+  /// exists yet, so Esc cancels the wait or aborts the slot when it lands.
+  final _pendingStarts = <String, _PendingStart>{};
   final _startCancels = <String>{};
 
   /// Temp slots handed out but not yet committed or aborted — disposal
@@ -374,12 +418,22 @@ final class PreviewSession extends ChangeNotifier {
     _entry = entry;
     _pane = entry == null ? null : pane;
     _syncSelectionHeader(pane);
+    _invalidateTargetCards();
+    notifyListeners();
     // The Info tab's well and an open Quick Look both follow the focused
     // item (D32: Quick Look opens over the panes while the inspector
     // stays up). The well evaluates first; the follow then only adds
     // its own card state on top.
     if (!_workspace.previewPanelHidden) _evaluate();
-    if (_quickLookActive) _quickLookFollow();
+    if (_quickLookRequested || _quickLookActive) _quickLookFollow();
+  }
+
+  void _invalidateTargetCards() {
+    _phase = PreviewPhase.idle;
+    _phaseKey = null;
+    _phaseGeneration = -1;
+    _gate = null;
+    _setQuickLookCard(QuickLookCardKind.none);
   }
 
   void _syncSelectionHeader(PaneController? pane) {
@@ -450,7 +504,7 @@ final class PreviewSession extends ChangeNotifier {
     }
     switch (_phase) {
       case PreviewPhase.prompt:
-        unawaited(_startProduction(generation: _generation));
+        unawaited(_startProduction(generation: _generation, kind: _kind));
         return true;
       case PreviewPhase.confirm:
       case PreviewPhase.gateConfirm:
@@ -488,12 +542,19 @@ final class PreviewSession extends ChangeNotifier {
   /// this only ever sees the in-app states.
   bool escape() {
     if (_quickLookActive || _quickLookCard != QuickLookCardKind.none) {
+      if (_quickLookCard != QuickLookCardKind.none &&
+          !_quickLookCardIsCurrent) {
+        _setQuickLookCard(QuickLookCardKind.none);
+        _quickLookRequested = _quickLookActive;
+        notifyListeners();
+        return true;
+      }
       // A parked gate card or in-flight production under Quick Look:
       // Esc answers it — the native panel stays up (its own Esc closes
       // it and cancels via the close edge).
       switch (_quickLookCard) {
         case QuickLookCardKind.confirm:
-          _quickLookCard = QuickLookCardKind.none;
+          _setQuickLookCard(QuickLookCardKind.none);
           // Answering a Quick Look card retracts the pending request
           // unless the surface itself is still open — otherwise a late
           // completion would deliver into showPreview the user just
@@ -504,7 +565,7 @@ final class PreviewSession extends ChangeNotifier {
           return true;
         case QuickLookCardKind.gateConfirm:
           _gate?.deny();
-          _quickLookCard = QuickLookCardKind.none;
+          _setQuickLookCard(QuickLookCardKind.none);
           _quickLookRequested = _quickLookActive;
           notifyListeners();
           return true;
@@ -515,7 +576,7 @@ final class PreviewSession extends ChangeNotifier {
         case QuickLookCardKind.refused:
           // The metadata refusal card dismisses under Quick Look like
           // the panel's promptless cards — the native surface stays up.
-          _quickLookCard = QuickLookCardKind.none;
+          _setQuickLookCard(QuickLookCardKind.none);
           _quickLookRequested = _quickLookActive;
           notifyListeners();
           return true;
@@ -576,15 +637,23 @@ final class PreviewSession extends ChangeNotifier {
   /// downloading" — phase-scoped so a stale card never releases the
   /// wrong gate.
   void confirmDownload() {
+    if (!_panelCardIsCurrent) return;
+
     switch (_phase) {
       case PreviewPhase.confirm:
-        unawaited(_startProduction(generation: _generation));
+        unawaited(
+          _startProduction(
+            generation: _generation,
+            kind: _kind,
+            thresholdDecision: _ThresholdDecision.confirmed,
+          ),
+        );
       case PreviewPhase.gateConfirm:
         _gate?.confirm();
         _phase = PreviewPhase.producing;
         notifyListeners();
       case PreviewPhase.prompt:
-        unawaited(_startProduction(generation: _generation));
+        unawaited(_startProduction(generation: _generation, kind: _kind));
       default:
         break;
     }
@@ -596,6 +665,8 @@ final class PreviewSession extends ChangeNotifier {
   /// path then lands the same prompt card (§5.2's failed/cancelled
   /// rule).
   void denyDownload() {
+    if (!_panelCardIsCurrent) return;
+
     if (_phase == PreviewPhase.gateConfirm) {
       _gate?.deny();
       _phase = PreviewPhase.producing;
@@ -622,14 +693,17 @@ final class PreviewSession extends ChangeNotifier {
     // Esc inside the slot-prepare window: the produce task does not
     // exist yet, so flag the start — it aborts the moment the temp
     // lands rather than launching work the user already cancelled.
-    if (key != null && _pendingStarts.contains(key)) {
-      _startCancels.add(key);
-      if (_quickLookCard != QuickLookCardKind.none) {
-        _quickLookCard = QuickLookCardKind.none;
-        notifyListeners();
-      } else {
-        _refusal = PreviewRefusal.cancelled;
+    final pending = key == null ? null : _pendingStarts[key];
+    if (pending != null) {
+      _startCancels.add(key!);
+      pending.cancel();
+      final quickLookChanged = _quickLookCard != QuickLookCardKind.none;
+      _setQuickLookCard(QuickLookCardKind.none);
+      _refusal = PreviewRefusal.cancelled;
+      if (!_panelHidden) {
         _setPhase(PreviewPhase.prompt);
+      } else if (quickLookChanged) {
+        notifyListeners();
       }
       return;
     }
@@ -719,6 +793,38 @@ final class PreviewSession extends ChangeNotifier {
       return;
     }
     final key = _focusedKey!;
+    final production = _productions[key];
+    if (production != null) {
+      production.focus.generation = _generation;
+      production.focus.kind = kind;
+      _transferred = production.transferred;
+      _totalBytes = production.total;
+      _gate = production.gate;
+      _setPhase(
+        production.gate != null && production.gate!.isAwaitingConfirmation
+            ? PreviewPhase.gateConfirm
+            : PreviewPhase.producing,
+      );
+      return;
+    }
+    final pending = _pendingStarts[key];
+    if (pending != null) {
+      if (pending.cancelled) {
+        _refusal = PreviewRefusal.cancelled;
+        _setPhase(PreviewPhase.prompt);
+        return;
+      }
+      pending.reattach(
+        generation: _generation,
+        kind: kind,
+        decision: pending.thresholdDecision,
+      );
+      _transferred = 0;
+      _totalBytes = size;
+      _gate = null;
+      _setPhase(PreviewPhase.producing);
+      return;
+    }
     unawaited(
       _cache.lookup(key).then((file) {
         if (_disposed) return;
@@ -727,17 +833,37 @@ final class PreviewSession extends ChangeNotifier {
           // An in-flight production for this key re-attaches — rapid
           // paging back to the item shows live progress, never a second
           // task (§5.3's dedupe).
-          final production = _productions[key];
-          if (production != null) {
-            _transferred = production.transferred;
-            _totalBytes = production.total;
-            _gate = production.gate;
+          final currentProduction = _productions[key];
+          if (currentProduction != null) {
+            currentProduction.focus.generation = _generation;
+            currentProduction.focus.kind = kind;
+            _transferred = currentProduction.transferred;
+            _totalBytes = currentProduction.total;
+            _gate = currentProduction.gate;
             _setPhase(
-              production.gate != null &&
-                      production.gate!.isAwaitingConfirmation
+              currentProduction.gate != null &&
+                      currentProduction.gate!.isAwaitingConfirmation
                   ? PreviewPhase.gateConfirm
                   : PreviewPhase.producing,
             );
+            return;
+          }
+          final currentPending = _pendingStarts[key];
+          if (currentPending != null) {
+            if (currentPending.cancelled) {
+              _refusal = PreviewRefusal.cancelled;
+              _setPhase(PreviewPhase.prompt);
+              return;
+            }
+            currentPending.reattach(
+              generation: _generation,
+              kind: kind,
+              decision: currentPending.thresholdDecision,
+            );
+            _transferred = 0;
+            _totalBytes = size;
+            _gate = null;
+            _setPhase(PreviewPhase.producing);
             return;
           }
           _setPhase(PreviewPhase.prompt);
@@ -821,16 +947,45 @@ final class PreviewSession extends ChangeNotifier {
 
   void _setPhase(PreviewPhase next) {
     _phase = next;
+    _phaseKey = _focusedKey;
+    _phaseGeneration = _generation;
     notifyListeners();
   }
+
+  bool get _panelCardIsCurrent =>
+      _phaseKey == _focusedKey && _phaseGeneration == _generation;
+
+  void _setQuickLookCard(
+    QuickLookCardKind next, {
+    String? key,
+    int? generation,
+  }) {
+    _quickLookCard = next;
+    if (next == QuickLookCardKind.none) {
+      _quickLookCardKey = null;
+      _quickLookCardGeneration = -1;
+      return;
+    }
+    _quickLookCardKey = key ?? _focusedKey;
+    _quickLookCardGeneration = generation ?? _generation;
+  }
+
+  bool get _quickLookCardIsCurrent =>
+      _quickLookCardKey == _focusedKey &&
+      _quickLookCardGeneration == _generation;
 
   // -- Production --------------------------------------------------------
 
   /// Starts (or attaches to) the focused item's remote production —
   /// the §5.3 prompt card's Space/button and the §8 threshold confirm's
   /// Download share this. Over-threshold known sizes land on the
-  /// confirm card first; unknown sizes run under the mid-stream gate.
-  Future<void> _startProduction({required int generation}) async {
+  /// confirm card first; every unconfirmed stream keeps the mid-stream
+  /// gate because listing sizes are only hints.
+  Future<void> _startProduction({
+    required int generation,
+    required PreviewKind kind,
+    _ThresholdDecision thresholdDecision = _ThresholdDecision.unconfirmed,
+  }) async {
     final producer = _producer;
     final pane = _pane;
     final entry = _entry;
@@ -843,23 +998,125 @@ final class PreviewSession extends ChangeNotifier {
         location is! RemotePaneLocation) {
       return;
     }
-    // The §8 up-front gate: a KNOWN size over the threshold confirms
-    // before any bytes move (the unknown-size case rides the stream
-    // gate instead — it cannot be decided up front).
+    final production = _productions[key];
+    if (production != null) {
+      production.focus.generation = generation;
+      production.focus.kind = kind;
+      if (_isCurrentProduction(key, generation) && !_panelHidden) {
+        _setPhase(
+          production.gate != null && production.gate!.isAwaitingConfirmation
+              ? PreviewPhase.gateConfirm
+              : PreviewPhase.producing,
+        );
+      }
+      return;
+    }
+    final existingPending = _pendingStarts[key];
+    if (existingPending != null) {
+      if (existingPending.cancelled) return;
+      existingPending.reattach(
+        generation: generation,
+        kind: kind,
+        decision: thresholdDecision,
+      );
+      if (_isCurrentProduction(key, generation) && !_panelHidden) {
+        _setPhase(PreviewPhase.producing);
+      }
+      return;
+    }
+    // Existing starts reattach before this up-front gate. A refocus must
+    // not replace already-confirmed work with a second confirmation card.
     final size = entry.size;
     final threshold = largeDownloadThresholdBytes();
-    if (_phase == PreviewPhase.prompt &&
+    if (thresholdDecision == _ThresholdDecision.unconfirmed &&
+        _phase == PreviewPhase.prompt &&
         size != null &&
         size > threshold) {
       _confirmBytes = size;
       _setPhase(PreviewPhase.confirm);
       return;
     }
-    if (_productions.containsKey(key)) {
+    final pending = _PendingStart(
+      generation: generation,
+      kind: kind,
+      thresholdDecision: thresholdDecision,
+    );
+    _pendingStarts[key] = pending;
+    if (_isCurrentProduction(key, generation) && !_panelHidden) {
       _setPhase(PreviewPhase.producing);
+    }
+    final reservation = await _cache.reserveProduction(
+      key,
+      cancellation: pending.cancellation.future,
+    );
+    if (reservation == null) {
+      _pendingStarts.remove(key);
+      _startCancels.remove(key);
       return;
     }
-    _pendingStarts.add(key);
+    try {
+      // Cancellation/disposal may win the same event turn that grants
+      // the reservation. Release without touching the cache in that case.
+      final cancelRequestedBeforeLookup = _startCancels.remove(key);
+      final cancelledBeforeLookup =
+          pending.cancelled || cancelRequestedBeforeLookup;
+      if (_disposed || cancelledBeforeLookup) {
+        _pendingStarts.remove(key);
+        return;
+      }
+      final File? cached;
+      try {
+        cached = await _cache.lookup(key);
+      } on Object {
+        _pendingStarts.remove(key);
+        _startCancels.remove(key);
+        _showRetryableProductionFailure(key, pending.focus.generation);
+        return;
+      }
+      final cancelRequestedAfterLookup = _startCancels.remove(key);
+      final cancelledAfterLookup =
+          pending.cancelled || cancelRequestedAfterLookup;
+      if (_disposed || cancelledAfterLookup) {
+        _pendingStarts.remove(key);
+        return;
+      }
+      if (cached != null) {
+        _pendingStarts.remove(key);
+        // Rendering and platform delivery may block. The cache key is
+        // already complete, so let the next consumer attach now.
+        reservation.release();
+        await _useCachedProduction(
+          entry,
+          cached,
+          key,
+          pending.focus.kind,
+          pending.focus.generation,
+        );
+        return;
+      }
+      await _produceReserved(
+        producer: producer,
+        entry: entry,
+        key: key,
+        location: location,
+        size: size,
+        threshold: threshold,
+        pending: pending,
+      );
+    } finally {
+      reservation.release();
+    }
+  }
+
+  Future<void> _produceReserved({
+    required PreviewProducer producer,
+    required RemoteFileEntry entry,
+    required String key,
+    required RemotePaneLocation location,
+    required int? size,
+    required int threshold,
+    required _PendingStart pending,
+  }) async {
     final PreviewCacheSlot slot;
     try {
       slot = await _cache.prepare(
@@ -870,13 +1127,14 @@ final class PreviewSession extends ChangeNotifier {
     } on Object {
       _pendingStarts.remove(key);
       _startCancels.remove(key);
-      if (_disposed) return;
-      _refusal = PreviewRefusal.failed;
-      _setPhase(PreviewPhase.prompt);
+      _showRetryableProductionFailure(key, pending.focus.generation);
       return;
     }
     _pendingStarts.remove(key);
-    if (_disposed || _startCancels.remove(key)) {
+    final cancelRequestedAfterPrepare = _startCancels.remove(key);
+    final cancelledAfterPrepare =
+        pending.cancelled || cancelRequestedAfterPrepare;
+    if (_disposed || cancelledAfterPrepare) {
       // Esc landed while the temp was being prepared — drop the slot,
       // never the task (§5.2's cancel-before-bytes rule). A disposed
       // session aborts it the same way: the slot is ours alone and a
@@ -885,31 +1143,44 @@ final class PreviewSession extends ChangeNotifier {
       return;
     }
     _openSlots.add(slot);
+    final focus = pending.focus;
 
-    // Unknown-size streams carry the kind cap where one exists (image/
-    // PDF) and the preview-cache cap otherwise, plus the mid-stream
-    // threshold gate (§5.3).
-    final kindCap = previewKindCapBytes(_kind);
-    final maximumBytes = size == null
-        ? (kindCap ?? _cache.capacityBytes)
-        : null;
-    final PreviewByteGate? gate = size == null
+    // Listing sizes are progress hints, not byte limits. Every stream
+    // carries the tighter cache/kind cap; unconfirmed streams also keep
+    // the threshold gate so stale known sizes cannot bypass consent.
+    final kindCap = previewKindCapBytes(focus.kind);
+    final cacheCap = _cache.capacityBytes;
+    final kindCapIsTighter = kindCap != null && kindCap < cacheCap;
+    final maximumBytes = kindCapIsTighter ? kindCap : cacheCap;
+    final capRefusal = kindCapIsTighter
+        ? PreviewRefusal.overKindCap
+        : PreviewRefusal.overCacheCap;
+    final needsThresholdGate =
+        pending.thresholdDecision == _ThresholdDecision.unconfirmed;
+    final PreviewByteGate? gate = needsThresholdGate
         ? PreviewByteGate(
             thresholdBytes: threshold,
             onThresholdReached: (transferred) {
-              if (_disposed) return;
+              if (!_isCurrentProduction(key, focus.generation)) return;
               _transferred = transferred;
-              if (_generation == generation &&
-                  _phase == PreviewPhase.producing) {
-                _setPhase(PreviewPhase.gateConfirm);
-              } else if (_quickLookCard == QuickLookCardKind.producing) {
-                _quickLookCard = QuickLookCardKind.gateConfirm;
-                notifyListeners();
+              var changed = false;
+              if (!_panelHidden && _phase == PreviewPhase.producing) {
+                _phase = PreviewPhase.gateConfirm;
+                changed = true;
               }
+              if (_quickLookCard == QuickLookCardKind.producing) {
+                _setQuickLookCard(
+                  QuickLookCardKind.gateConfirm,
+                  key: key,
+                  generation: focus.generation,
+                );
+                changed = true;
+              }
+              if (changed) notifyListeners();
             },
           )
         : null;
-    _gate = gate;
+    if (_isCurrentProduction(key, focus.generation)) _gate = gate;
     final ticket = producer.start(
       PreviewProduceSpec(
         serverId: location.serverId,
@@ -925,33 +1196,44 @@ final class PreviewSession extends ChangeNotifier {
             production.transferred = transferred;
             production.total = total;
           }
-          if (_focusedKey == key && _phase == PreviewPhase.producing) {
+          if (!_isCurrentProduction(key, focus.generation)) return;
+          var changed = false;
+          if (!_panelHidden && _phase == PreviewPhase.producing) {
             _transferred = transferred;
             _totalBytes = total;
-            notifyListeners();
+            changed = true;
           }
           if (_quickLookCard == QuickLookCardKind.producing) {
             _transferred = transferred;
             _totalBytes = total;
-            notifyListeners();
+            changed = true;
           }
+          if (changed) notifyListeners();
         },
       ),
     );
     final production = _Production(
       ticket: ticket,
       slot: slot,
-      generation: generation,
+      focus: focus,
       entry: entry,
       serverId: location.serverId,
     )..gate = gate;
     _productions[key] = production;
-    if (_phase != PreviewPhase.gateConfirm) {
+    if (_isCurrentProduction(key, focus.generation) &&
+        !_panelHidden &&
+        _phase != PreviewPhase.gateConfirm) {
       _setPhase(PreviewPhase.producing);
     }
     try {
       await ticket.result;
-      if (_disposed) return; // dispose() already aborted the slot
+      if (_disposed) {
+        // A producer may ignore cancellation and recreate its destination.
+        // Abort again after its final write so teardown leaves no live temp.
+        _openSlots.remove(slot);
+        await slot.abort();
+        return;
+      }
       _openSlots.remove(slot);
       // Commit always runs — a stale generation's file lands in the
       // cache for a later preview (§5.1/§5.2's close rule).
@@ -962,22 +1244,31 @@ final class PreviewSession extends ChangeNotifier {
         // The commit's own enforce pass evicted the just-committed
         // bytes — they alone exceeded the cap. That is the §5.3
         // over-cap refusal, not a vanished file.
+        if (!_isCurrentProduction(key, focus.generation)) return;
         _gate = null;
         _refusal = PreviewRefusal.overCacheCap;
+        var quickLookChanged = false;
         if (_quickLookCard != QuickLookCardKind.none) {
-          _quickLookCard = QuickLookCardKind.refused;
-          notifyListeners();
-        } else if (_generation == generation && !_panelHidden) {
+          _setQuickLookCard(
+            QuickLookCardKind.refused,
+            key: key,
+            generation: focus.generation,
+          );
+          quickLookChanged = true;
+        }
+        if (!_panelHidden) {
           _setPhase(PreviewPhase.rendered);
+        } else if (quickLookChanged) {
+          notifyListeners();
         }
         return;
       }
-      if (_generation == generation) {
+      if (_isCurrentProduction(key, focus.generation)) {
         _gate = null;
-        if (_kind == PreviewKind.text) {
-          unawaited(_loadText(file, generation));
+        if (focus.kind == PreviewKind.text) {
+          unawaited(_loadText(file, focus.generation));
         } else {
-          unawaited(_renderFile(file, _kind, generation));
+          unawaited(_renderFile(file, focus.kind, focus.generation));
         }
       }
       if (_quickLookRequested || _quickLookActive) {
@@ -987,17 +1278,13 @@ final class PreviewSession extends ChangeNotifier {
       _openSlots.remove(slot);
       _productions.remove(key);
       await slot.abort();
+      if (!_isCurrentProduction(key, focus.generation)) return;
       _gate = null;
-      if (_disposed) return;
-      // The unknown-size stream cap arrives typed (the produce seam's
+      // The stream cap arrives typed (the produce seam's
       // suffix-pin): render the §5.3 over-cap refusal, never a
       // retryable failure — Space on a prompt would re-download the
       // same bytes into the same cap forever.
-      final overCap =
-          error is CheckoutLimitException && maximumBytes != null;
-      final capRefusal = maximumBytes == kindCap
-          ? PreviewRefusal.overKindCap
-          : PreviewRefusal.overCacheCap;
+      final overCap = error is CheckoutLimitException;
       if (_quickLookCard != QuickLookCardKind.none) {
         // A cancelled/failed Quick Look production leaves the native
         // panel on its previous item — the card clears, the surface
@@ -1006,11 +1293,15 @@ final class PreviewSession extends ChangeNotifier {
         // the docked panel stays hidden under Quick Look, so set it
         // here rather than inside the panel-hidden guard below.
         if (overCap) _refusal = capRefusal;
-        _quickLookCard =
-            overCap ? QuickLookCardKind.refused : QuickLookCardKind.none;
+        _setQuickLookCard(
+          overCap ? QuickLookCardKind.refused : QuickLookCardKind.none,
+          key: key,
+          generation: focus.generation,
+        );
+        if (!overCap) _quickLookRequested = _quickLookActive;
         notifyListeners();
       }
-      if (_generation == generation && !_panelHidden) {
+      if (!_panelHidden) {
         // Failed or cancelled → the prompt card returns so Space
         // retries (§5.2); a cap refusal renders the promptless card.
         _refusal = overCap
@@ -1024,18 +1315,80 @@ final class PreviewSession extends ChangeNotifier {
     }
   }
 
+  Future<void> _useCachedProduction(
+    RemoteFileEntry entry,
+    File file,
+    String key,
+    PreviewKind kind,
+    int generation,
+  ) async {
+    if (_disposed) return;
+    if (_isCurrentProduction(key, generation)) {
+      _gate = null;
+      if (kind == PreviewKind.text) {
+        unawaited(_loadText(file, generation));
+      } else {
+        unawaited(_renderFile(file, kind, generation));
+      }
+    }
+    if (!_quickLookRequested || !_isCurrentProduction(key, generation)) {
+      return;
+    }
+
+    _quickLookNames[file.path] = entry.name;
+    if (_quickLookActive) {
+      await _quickLook.updatePreview([file.path], 0);
+    } else {
+      await _quickLook.showPreview([file.path], 0);
+    }
+    if (!_quickLookRequested || !_isCurrentProduction(key, generation)) {
+      return;
+    }
+    if (!_quickLookActive) {
+      _quickLookActive = true;
+      _quickLookListenClose();
+    }
+    _setQuickLookCard(QuickLookCardKind.none);
+    notifyListeners();
+  }
+
+  bool _isCurrentProduction(String key, int generation) =>
+      !_disposed && _focusedKey == key && _generation == generation;
+
+  void _showRetryableProductionFailure(String key, int generation) {
+    if (!_isCurrentProduction(key, generation)) return;
+    final quickLookPending =
+        _quickLookRequested || _quickLookCard != QuickLookCardKind.none;
+    _setQuickLookCard(QuickLookCardKind.none);
+    _quickLookRequested = _quickLookActive;
+    _refusal = PreviewRefusal.failed;
+    if (!_panelHidden) {
+      _setPhase(PreviewPhase.prompt);
+      return;
+    }
+    if (quickLookPending) notifyListeners();
+  }
+
   // -- Quick Look --------------------------------------------------------
 
   Future<void> _quickLookOpen(PaneController pane) async {
-    if (!await _quickLook.isAvailable()) {
-      if (_disposed) return;
+    final openingGeneration = _generation;
+    final available = await _quickLook.isAvailable();
+    if (_disposed) return;
+    final currentPane = _boundTab;
+    if (currentPane == null) return;
+    if (!available) {
       // Channel absent on a non-macOS host or a headless test — the
       // Info tab's well is the honest fallback surface, and Space gets
       // its answer there (show it, or the visible card's own verb).
-      _panelVerb(pane);
+      _panelVerb(currentPane);
       return;
     }
-    if (_disposed) return;
+    if (!identical(pane, currentPane) || openingGeneration != _generation) {
+      _quickLookRequested = true;
+      _quickLookFollow();
+      return;
+    }
     final location = pane.location;
     final cursor = pane.cursorIndex!;
     if (location is RemotePaneLocation) {
@@ -1050,12 +1403,12 @@ final class PreviewSession extends ChangeNotifier {
     final index = items.indexWhere(
       (item) => item.path == pane.entries[cursor].path,
     );
-    await _quickLook.showPreview(paths, index < 0 ? 0 : index);
-    if (_disposed) return;
     _quickLookRequested = true;
-    _quickLookActive = true;
-    _quickLookListenClose();
-    notifyListeners();
+    await _quickLookFollowLocal(
+      paths,
+      index < 0 ? 0 : index,
+      _generation,
+    );
   }
 
   /// §5.1's selection-follow while the native panel is open: local
@@ -1086,7 +1439,28 @@ final class PreviewSession extends ChangeNotifier {
     final index = items.indexWhere(
       (item) => item.path == pane.entries[cursor].path,
     );
-    unawaited(_quickLook.updatePreview(paths, index < 0 ? 0 : index));
+    unawaited(
+      _quickLookFollowLocal(paths, index < 0 ? 0 : index, _generation),
+    );
+  }
+
+  Future<void> _quickLookFollowLocal(
+    List<String> paths,
+    int index,
+    int generation,
+  ) async {
+    if (_disposed || !_quickLookRequested || generation != _generation) return;
+    if (_quickLookActive) {
+      await _quickLook.updatePreview(paths, index);
+    } else {
+      await _quickLook.showPreview(paths, index);
+    }
+    if (_disposed || !_quickLookRequested || generation != _generation) return;
+    if (!_quickLookActive) {
+      _quickLookActive = true;
+      _quickLookListenClose();
+    }
+    notifyListeners();
   }
 
   /// Produces the remote focused item for Quick Look (§5.1): cached
@@ -1116,51 +1490,152 @@ final class PreviewSession extends ChangeNotifier {
     );
     final generation = _generation;
     final size = entry.size;
+    final kind = previewKindForName(entry.name);
+    if (_reattachQuickLookStart(
+      pane: pane,
+      entry: entry,
+      key: key,
+      generation: generation,
+      kind: kind,
+    )) {
+      return;
+    }
     // The metadata refusals apply to Quick Look productions too — the
     // overlay card carries them (QL renders kinds the panel cannot, so
     // only the cache cap gates here; §5.3).
     if (size != null && !_cache.canAccommodate(size)) {
-      _quickLookCard = QuickLookCardKind.refused;
+      _setQuickLookCard(
+        QuickLookCardKind.refused,
+        key: key,
+        generation: generation,
+      );
       _refusal = PreviewRefusal.overCacheCap;
       _entry = entry;
       _pane = pane;
-      _kind = previewKindForName(entry.name);
+      _kind = kind;
       notifyListeners();
       return;
     }
-    final cached = await _cache.lookup(key);
-    if (_disposed) return;
+    final File? cached;
+    try {
+      cached = await _cache.lookup(key);
+    } on Object {
+      _showRetryableProductionFailure(key, generation);
+      return;
+    }
+    if (!_quickLookRequested || !_isCurrentProduction(key, generation)) {
+      return;
+    }
     if (cached != null) {
       _quickLookNames[cached.path] = entry.name;
       if (_quickLookActive) {
         await _quickLook.updatePreview([cached.path], 0);
       } else {
         await _quickLook.showPreview([cached.path], 0);
-        if (_disposed) return;
+      }
+      if (!_quickLookRequested || !_isCurrentProduction(key, generation)) {
+        return;
+      }
+      if (!_quickLookActive) {
         _quickLookActive = true;
         _quickLookListenClose();
       }
-      return;
-    }
-    // Up-front §8 gate on a known size; the mid-stream gate covers the
-    // unknown-size case inside _startProduction.
-    if (size != null && size > largeDownloadThresholdBytes()) {
-      _quickLookCard = QuickLookCardKind.confirm;
-      _confirmBytes = size;
-      _entry = entry;
-      _pane = pane;
-      _kind = previewKindForName(entry.name);
+      _setQuickLookCard(QuickLookCardKind.none);
       notifyListeners();
       return;
     }
-    _quickLookCard = QuickLookCardKind.producing;
+    if (_reattachQuickLookStart(
+      pane: pane,
+      entry: entry,
+      key: key,
+      generation: generation,
+      kind: kind,
+    )) {
+      return;
+    }
+    // Up-front §8 gate on a known size; unconfirmed production keeps a
+    // stream gate too because that listing size may be stale.
+    if (size != null && size > largeDownloadThresholdBytes()) {
+      _setQuickLookCard(
+        QuickLookCardKind.confirm,
+        key: key,
+        generation: generation,
+      );
+      _confirmBytes = size;
+      _entry = entry;
+      _pane = pane;
+      _kind = kind;
+      notifyListeners();
+      return;
+    }
+    _setQuickLookCard(
+      QuickLookCardKind.producing,
+      key: key,
+      generation: generation,
+    );
     _transferred = 0;
     _totalBytes = size;
     _entry = entry;
     _pane = pane;
-    _kind = previewKindForName(entry.name);
+    _kind = kind;
     notifyListeners();
-    await _startProduction(generation: generation);
+    await _startProduction(generation: generation, kind: kind);
+  }
+
+  bool _reattachQuickLookStart({
+    required PaneController pane,
+    required RemoteFileEntry entry,
+    required String key,
+    required int generation,
+    required PreviewKind kind,
+  }) {
+    final production = _productions[key];
+    if (production != null) {
+      production.focus.generation = generation;
+      production.focus.kind = kind;
+      _entry = entry;
+      _pane = pane;
+      _kind = kind;
+      _transferred = production.transferred;
+      _totalBytes = production.total;
+      _gate = production.gate;
+      _setQuickLookCard(
+        production.gate != null && production.gate!.isAwaitingConfirmation
+            ? QuickLookCardKind.gateConfirm
+            : QuickLookCardKind.producing,
+        key: key,
+        generation: generation,
+      );
+      notifyListeners();
+      return true;
+    }
+
+    final pending = _pendingStarts[key];
+    if (pending == null) return false;
+    if (pending.cancelled) {
+      _setQuickLookCard(QuickLookCardKind.none);
+      _quickLookRequested = _quickLookActive;
+      notifyListeners();
+      return true;
+    }
+    pending.reattach(
+      generation: generation,
+      kind: kind,
+      decision: pending.thresholdDecision,
+    );
+    _entry = entry;
+    _pane = pane;
+    _kind = kind;
+    _transferred = 0;
+    _totalBytes = entry.size;
+    _gate = null;
+    _setQuickLookCard(
+      QuickLookCardKind.producing,
+      key: key,
+      generation: generation,
+    );
+    notifyListeners();
+    return true;
   }
 
   /// Delivers a completed Quick Look production to the native panel —
@@ -1180,12 +1655,16 @@ final class PreviewSession extends ChangeNotifier {
     } else {
       await _quickLook.showPreview([file.path], 0);
     }
-    if (_disposed) return;
+    if (_disposed ||
+        !_quickLookRequested ||
+        production.generation != _generation) {
+      return;
+    }
     if (!_quickLookActive) {
       _quickLookActive = true;
       _quickLookListenClose();
     }
-    _quickLookCard = QuickLookCardKind.none;
+    _setQuickLookCard(QuickLookCardKind.none);
     notifyListeners();
   }
 
@@ -1194,7 +1673,7 @@ final class PreviewSession extends ChangeNotifier {
       if (_disposed) return;
       _quickLookActive = false;
       _quickLookRequested = false;
-      _quickLookCard = QuickLookCardKind.none;
+      _setQuickLookCard(QuickLookCardKind.none);
       _quickLookNames.clear();
       notifyListeners();
       // The surface-close sweep (§5.3): released handles unblock the
@@ -1206,7 +1685,7 @@ final class PreviewSession extends ChangeNotifier {
   void _hideQuickLook() {
     _quickLookActive = false;
     _quickLookRequested = false;
-    _quickLookCard = QuickLookCardKind.none;
+    _setQuickLookCard(QuickLookCardKind.none);
     _quickLookNames.clear();
     unawaited(_quickLook.hidePreview());
     unawaited(_cache.sweepTemps());
@@ -1216,19 +1695,30 @@ final class PreviewSession extends ChangeNotifier {
   /// The overlay card's Download answer (Quick Look surface): starts
   /// the production the card gated.
   void quickLookConfirm() {
-    if (_quickLookCard != QuickLookCardKind.confirm) return;
-    _quickLookCard = QuickLookCardKind.producing;
+    if (_quickLookCard != QuickLookCardKind.confirm ||
+        !_quickLookCardIsCurrent) {
+      return;
+    }
+    _setQuickLookCard(QuickLookCardKind.producing);
     notifyListeners();
-    unawaited(_startProduction(generation: _generation));
+    unawaited(
+      _startProduction(
+        generation: _generation,
+        kind: _kind,
+        thresholdDecision: _ThresholdDecision.confirmed,
+      ),
+    );
   }
 
   /// The overlay card's Cancel: drops the pending production — the
   /// native panel keeps showing the previous item (§5.1).
   void quickLookDeny() {
+    if (!_quickLookCardIsCurrent) return;
+
     if (_quickLookCard == QuickLookCardKind.gateConfirm) {
       _gate?.deny();
     }
-    _quickLookCard = QuickLookCardKind.none;
+    _setQuickLookCard(QuickLookCardKind.none);
     // The decline retracts the pending request — collapse the flag to
     // whether the surface is actually up, else a same-generation
     // production could still deliver into showPreview (and a
@@ -1239,9 +1729,12 @@ final class PreviewSession extends ChangeNotifier {
 
   /// The gate card's "Keep downloading" on the Quick Look surface.
   void quickLookKeepDownloading() {
-    if (_quickLookCard != QuickLookCardKind.gateConfirm) return;
+    if (_quickLookCard != QuickLookCardKind.gateConfirm ||
+        !_quickLookCardIsCurrent) {
+      return;
+    }
     _gate?.confirm();
-    _quickLookCard = QuickLookCardKind.producing;
+    _setQuickLookCard(QuickLookCardKind.producing);
     notifyListeners();
   }
 
@@ -1253,6 +1746,18 @@ final class PreviewSession extends ChangeNotifier {
     _boundStrip?.removeListener(_onFocusChainChanged);
     _boundTab?.removeListener(_onFocusChainChanged);
     unawaited(_quickLookCloseSub?.cancel());
+    for (final pending in _pendingStarts.values) {
+      pending.cancel();
+    }
+    _pendingStarts.clear();
+    for (final production in _productions.values) {
+      production.gate?.deny();
+      try {
+        _producer?.cancel(production.ticket.taskId);
+      } on Object {
+        // Teardown still aborts the owned temp when cancellation fails.
+      }
+    }
     for (final slot in _openSlots) {
       unawaited(slot.abort());
     }
@@ -1263,7 +1768,7 @@ final class PreviewSession extends ChangeNotifier {
 }
 
 /// The Quick Look surface's overlay-card kinds (§5.1): confirmation for
-/// a known-size over-threshold production, the parked-gate card for an
-/// unknown-size one, progress while bytes move, and the metadata
+/// a known-size over-threshold production, the parked stream-gate card,
+/// progress while bytes move, and the metadata
 /// refusal.
 enum QuickLookCardKind { none, confirm, gateConfirm, producing, refused }

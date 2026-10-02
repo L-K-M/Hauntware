@@ -261,6 +261,51 @@ void main() {
     }
   });
 
+  test('classifies loader failures for localized hosts', () {
+    expect(
+      classifyBuiltInTextDocumentFailure(
+        const BuiltInEditorException('This file is not valid UTF-8 text.'),
+      ),
+      BuiltInTextDocumentFailure.invalidUtf8,
+    );
+    expect(
+      classifyBuiltInTextDocumentFailure(
+        const BuiltInEditorException(
+          'This file appears to be binary, not editable text.',
+        ),
+      ),
+      BuiltInTextDocumentFailure.binary,
+    );
+    expect(
+      classifyBuiltInTextDocumentFailure(
+        const BuiltInEditorException(
+          'The local copy changed while it was being opened.',
+        ),
+      ),
+      BuiltInTextDocumentFailure.changed,
+    );
+    expect(
+      classifyBuiltInTextDocumentFailure(
+        const BuiltInEditorException(
+          'The local copy is missing or no longer a regular file.',
+        ),
+      ),
+      BuiltInTextDocumentFailure.missing,
+    );
+    expect(
+      classifyBuiltInTextDocumentFailure(
+        const BuiltInEditorException('The file no longer exists.'),
+      ),
+      BuiltInTextDocumentFailure.missing,
+    );
+    expect(
+      classifyBuiltInTextDocumentFailure(
+        const BuiltInEditorException('Unrecognized failure.'),
+      ),
+      BuiltInTextDocumentFailure.other,
+    );
+  });
+
   test('the save refuses when the target vanished mid-save', () async {
     final document = await loadBuiltInTextDocumentDetails(file);
     await file.delete();

@@ -4,7 +4,8 @@
 // it in the Sync sheet; `sync.newSavedSync` opens the same sheet in its
 // new-favorite mode, which persists a savedSync bookmark;
 // `sync.copyRsyncCommand` copies the active plan's rsync export (05
-// §2.1). All live in the Server menu.
+// §2.1); `sync.compareSelected` opens 06 §6's paired-file view. All
+// live in the Server menu.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import '../../theme/family_hues.dart';
 const kSyncSynchronizePanesCommandId = 'sync.synchronizePanes';
 const kSyncNewSavedSyncCommandId = 'sync.newSavedSync';
 const kSyncCopyRsyncCommandId = 'sync.copyRsyncCommand';
+const kSyncCompareSelectedCommandId = 'sync.compareSelected';
 
 /// The sync command registrations. The verbs themselves are shell
 /// operations (pair construction reads both pane strips; the sheet's
@@ -28,9 +30,11 @@ List<RegisteredCommand> buildSyncCommands({
   required bool Function() synchronizeEnabled,
   required bool Function() savedSyncEnabled,
   required bool Function() copyRsyncEnabled,
+  required bool Function() compareEnabled,
   required FutureOr<void> Function(BuildContext context) synchronizePanes,
   required FutureOr<void> Function(BuildContext context) newSavedSync,
   required FutureOr<void> Function(BuildContext context) copyRsync,
+  required FutureOr<void> Function(BuildContext context) compareSelected,
 }) {
   return [
     RegisteredCommand(
@@ -104,6 +108,23 @@ List<RegisteredCommand> buildSyncCommands({
       menuPlacement: const CommandMenuPlacement(
         menu: AppMenuId.server,
         order: 37,
+        group: 1,
+      ),
+    ),
+    RegisteredCommand(
+      id: kSyncCompareSelectedCommandId,
+      scope: CommandScope.selection,
+      label: (l10n) => l10n.syncCompareSelected,
+      icon: Icons.compare_arrows,
+      hue: FamilyHue.indigo,
+      enabled: compareEnabled,
+      disabledReason: (l10n) => l10n.commandDisabledNoComparableItem,
+      run: (context) async => compareSelected(context),
+      // The plan-row context menu and double-click render this same
+      // command. Its menu slot satisfies 02 §8.1 on every platform.
+      menuPlacement: const CommandMenuPlacement(
+        menu: AppMenuId.server,
+        order: 39,
         group: 1,
       ),
     ),

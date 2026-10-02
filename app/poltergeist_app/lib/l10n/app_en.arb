@@ -4096,6 +4096,77 @@
   "@syncKindOther": {
     "description": "Entry-kind label inside reason strings (05 §7)."
   },
+  "syncCompareTitle": "Compare {path}",
+  "@syncCompareTitle": {
+    "description": "Title of the read-only sync-pair comparison (06 §6).",
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "syncCompareSelected": "Compare Selected Item",
+  "@syncCompareSelected": {
+    "description": "Registered command and sync-plan row menu verb that opens the selected pair in the read-only comparison (06 §6, D21)."
+  },
+  "syncCompareSideLeft": "Left",
+  "@syncCompareSideLeft": {
+    "description": "Left column label in the sync-pair comparison (06 §6)."
+  },
+  "syncCompareSideRight": "Right",
+  "@syncCompareSideRight": {
+    "description": "Right column label in the sync-pair comparison (06 §6)."
+  },
+  "syncCompareMetadata": "{size} · Modified {modified}",
+  "@syncCompareMetadata": {
+    "description": "Size and modification time below a compare-side path (06 §6).",
+    "placeholders": {
+      "size": {"type": "String"},
+      "modified": {"type": "String"}
+    }
+  },
+  "syncCompareLoading": "Loading…",
+  "@syncCompareLoading": {
+    "description": "Progress label while a local or cached comparison side loads (06 §6)."
+  },
+  "syncCompareEditorLimit": "The built-in editor supports text files up to 4 MB.",
+  "@syncCompareEditorLimit": {
+    "description": "Comparison-side refusal when a file exceeds the built-in text limit (06 §6)."
+  },
+  "syncCompareRemoteUnavailable": "Remote comparison is unavailable.",
+  "@syncCompareRemoteUnavailable": {
+    "description": "Comparison-side refusal when remote preview production is not composed (06 §6)."
+  },
+  "syncCompareFailed": "This side could not be loaded.",
+  "@syncCompareFailed": {
+    "description": "Fallback failure text for one comparison column (06 §6)."
+  },
+  "syncCompareInvalidUtf8": "This file is not valid UTF-8 text.",
+  "@syncCompareInvalidUtf8": {
+    "description": "Comparison-side refusal for malformed UTF-8 (06 §1/§6)."
+  },
+  "syncCompareBinary": "This file appears to be binary, not editable text.",
+  "@syncCompareBinary": {
+    "description": "Comparison-side refusal for binary content (06 §1/§6)."
+  },
+  "syncCompareChanged": "The local copy changed while it was being opened.",
+  "@syncCompareChanged": {
+    "description": "Comparison-side refusal when bytes change during the guarded read (06 §1/§6)."
+  },
+  "syncCompareMissing": "The file no longer exists.",
+  "@syncCompareMissing": {
+    "description": "Comparison-side refusal when its local or cached file vanished (06 §1/§6)."
+  },
+  "syncCompareLineEndingsDiffer": "Line endings differ: {left} vs {right}",
+  "@syncCompareLineEndingsDiffer": {
+    "description": "Notice when the compared text uses different line endings (06 §6).",
+    "placeholders": {
+      "left": {"type": "String"},
+      "right": {"type": "String"}
+    }
+  },
+  "syncCompareBomDiffers": "BOM differs",
+  "@syncCompareBomDiffers": {
+    "description": "Notice when only one compared text file has a UTF-8 BOM (06 §6)."
+  },
   "syncSideLeft": "left",
   "@syncSideLeft": {
     "description": "Side label inside sync copy (05 §7) — the pane-A side."
@@ -4626,6 +4697,10 @@
   "commandDisabledNoPlan": "Requires an open sync plan",
   "@commandDisabledNoPlan": {
     "description": "Palette reason under Copy rsync Command while the active tab is not a sync plan."
+  },
+  "commandDisabledNoComparableItem": "Requires a selected file present on both sides",
+  "@commandDisabledNoComparableItem": {
+    "description": "Palette reason under Compare Selected Item while no comparable sync-plan row is focused."
   },
   "commandDisabledNoBookmarks": "Requires saved favorites",
   "@commandDisabledNoBookmarks": {

@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 
 import '../fs/local_fs_safety.dart';
@@ -30,13 +31,35 @@ import 'preview_kinds.dart';
 /// cache can sit over budget until the next enforcement pass or the
 /// sweep that runs when a preview surface closes.
 final class PreviewCache {
-  PreviewCache({required this.directory, int? capacityBytes})
-    : _capacityBytes = capacityBytes ?? defaultPreviewCacheCapacityBytes;
+  PreviewCache({
+    required this.directory,
+    int? capacityBytes,
+    @visibleForTesting Future<bool> Function(File)? lookupFileExists,
+    @visibleForTesting Future<void> Function()? beforeIndexWrite,
+    @visibleForTesting Future<void> Function()? beforeMutation,
+    @visibleForTesting Future<void> Function()? afterTempPrepared,
+    @visibleForTesting Future<void> Function()? beforeTempCommit,
+  }) : _capacityBytes = capacityBytes ?? defaultPreviewCacheCapacityBytes,
+       _lookupFileExists = lookupFileExists ?? _fileExists,
+       _beforeIndexWrite = beforeIndexWrite ?? _skipIndexWriteHook,
+       _beforeMutation = beforeMutation ?? _skipMutationHook,
+       _afterTempPrepared = afterTempPrepared ?? _skipTempHook,
+       _beforeTempCommit = beforeTempCommit ?? _skipTempHook;
 
   /// The directory the cache owns outright.
   final Directory directory;
 
   int _capacityBytes;
+  final Future<bool> Function(File) _lookupFileExists;
+  final Future<void> Function() _beforeIndexWrite;
+  final Future<void> Function() _beforeMutation;
+  final Future<void> Function() _afterTempPrepared;
+  final Future<void> Function() _beforeTempCommit;
+
+  static Future<bool> _fileExists(File file) => file.exists();
+  static Future<void> _skipIndexWriteHook() => Future<void>.value();
+  static Future<void> _skipMutationHook() => Future<void>.value();
+  static Future<void> _skipTempHook() => Future<void>.value();
 
   /// The live cap. Lowering it evicts on the next [enforce] — the
   /// settings surface calls [enforce] immediately after writing so the
@@ -57,6 +80,15 @@ final class PreviewCache {
   /// skips them; everything else matching the temp pattern is a stale
   /// sibling from a dead run.
   final Set<String> _liveTemps = <String>{};
+
+  /// A cache key has one lookup-to-commit owner across every preview surface.
+  final Map<String, _PreviewProductionQueue> _productionQueues = {};
+
+  /// Index snapshots and atomic replacements must keep mutation order.
+  Future<void> _indexWriteTail = Future<void>.value();
+
+  /// File, entry, and index mutations form one ordered transaction.
+  Future<void> _mutationTail = Future<void>.value();
 
   bool _opened = false;
 
@@ -91,14 +123,84 @@ final class PreviewCache {
   /// recency update). A hit whose file vanished since indexing is a
   /// miss that drops the entry.
   Future<File?> lookup(String key) async {
-    final entry = _entries.remove(key);
+    final entry = _entries[key];
     if (entry == null) return null;
     final file = File(entry.path);
-    if (!await file.exists()) return null;
-    entry.lastUsedMs = DateTime.now().millisecondsSinceEpoch;
-    _entries[key] = entry;
-    await _persistIndex();
-    return file;
+    final fileExists = await _lookupFileExists(file);
+
+    return _serializeMutation(() async {
+      if (!identical(_entries[key], entry)) return null;
+      if (!fileExists) {
+        _entries.remove(key);
+        return null;
+      }
+      entry.lastUsedMs = DateTime.now().millisecondsSinceEpoch;
+      _entries.remove(key);
+      _entries[key] = entry;
+      await _persistIndex();
+      if (!identical(_entries[key], entry)) return null;
+      return file;
+    });
+  }
+
+  /// Reserves [key] across lookup, production and commit.
+  ///
+  /// A cancelled waiter leaves the queue immediately and never cancels the
+  /// current owner. Callers must release the returned reservation in `finally`.
+  Future<PreviewProductionReservation?> reserveProduction(
+    String key, {
+    Future<void>? cancellation,
+  }) {
+    final queue = _productionQueues.putIfAbsent(
+      key,
+      _PreviewProductionQueue.new,
+    );
+    final waiter = _PreviewProductionWaiter();
+    if (!queue.held) {
+      queue.held = true;
+      waiter.completer.complete(
+        PreviewProductionReservation._(this, key, queue),
+      );
+    } else {
+      queue.waiters.add(waiter);
+    }
+
+    if (cancellation != null) {
+      unawaited(
+        cancellation.then<void>(
+          (_) => _cancelProductionWaiter(key, queue, waiter),
+          onError: (Object _, StackTrace __) =>
+              _cancelProductionWaiter(key, queue, waiter),
+        ),
+      );
+    }
+    return waiter.completer.future;
+  }
+
+  void _cancelProductionWaiter(
+    String key,
+    _PreviewProductionQueue queue,
+    _PreviewProductionWaiter waiter,
+  ) {
+    if (waiter.completer.isCompleted || !queue.waiters.remove(waiter)) return;
+    waiter.completer.complete(null);
+    if (!queue.held && queue.waiters.isEmpty) {
+      _productionQueues.remove(key);
+    }
+  }
+
+  void _releaseProduction(String key, _PreviewProductionQueue queue) {
+    if (!identical(_productionQueues[key], queue) || !queue.held) return;
+
+    while (queue.waiters.isNotEmpty) {
+      final next = queue.waiters.removeFirst();
+      if (next.completer.isCompleted) continue;
+      next.completer.complete(PreviewProductionReservation._(this, key, queue));
+      return;
+    }
+
+    queue.held = false;
+    _productionQueues.remove(key);
   }
 
   /// Whether a remote file of [sizeBytes] could ever fit — the §5.3
@@ -129,9 +231,16 @@ final class PreviewCache {
     final ext = sanitizePreviewExtension(extension);
     final tempName = 'tmp-${_nextTempId()}.part';
     final temp = File(p.join(directory.path, tempName));
-    await temp.create(recursive: true, exclusive: true);
-    await restrictLocalPathPermissions(temp.path, '600');
     _liveTemps.add(temp.path);
+    try {
+      // Protect the name across every await where a sweep could observe it.
+      await temp.create(recursive: true, exclusive: true);
+      await restrictLocalPathPermissions(temp.path, '600');
+      await _afterTempPrepared();
+    } on Object {
+      _liveTemps.remove(temp.path);
+      rethrow;
+    }
     return PreviewCacheSlot._(
       cache: this,
       key: key,
@@ -145,7 +254,9 @@ final class PreviewCache {
   /// refuse to unlink (still open by a preview surface or the OS)
   /// stay indexed and still count toward the total — the cache may sit
   /// over budget until the next pass (06 §5.3).
-  Future<void> enforce() async {
+  Future<void> enforce() => _serializeMutation(_enforce);
+
+  Future<void> _enforce() async {
     if (totalBytes <= _capacityBytes) return;
     final evicted = <String>[];
     // Evictions land in [_entries] only after the pass, so the loop
@@ -175,7 +286,9 @@ final class PreviewCache {
   /// Deletes every committed entry and live temp; returns the bytes
   /// reclaimed — the "Clear Preview Cache" action's report (06 §5.3).
   /// Unlink failures are tolerated and simply not counted.
-  Future<int> clear() async {
+  Future<int> clear() => _serializeMutation(_clear);
+
+  Future<int> _clear() async {
     var reclaimed = 0;
     for (final entry in _entries.values) {
       try {
@@ -215,20 +328,33 @@ final class PreviewCache {
     String? extension,
     File temp,
     int? expectedBytes,
+  ) => _serializeMutation(
+    () => _commitEntry(key, extension, temp, expectedBytes),
+  );
+
+  Future<String> _commitEntry(
+    String key,
+    String? extension,
+    File temp,
+    int? expectedBytes,
   ) async {
     final targetPath = extension == null
         ? p.join(directory.path, key)
         : p.join(directory.path, '$key.$extension');
     final target = File(targetPath);
-    _liveTemps.remove(temp.path);
     try {
-      await temp.rename(targetPath);
-    } on FileSystemException {
-      // Cross-device or an existing file at the target (should not
-      // happen — the key is fresh): fall back to copy + delete so the
-      // commit still lands one whole file.
-      await temp.copy(targetPath);
-      await temp.delete();
+      await _beforeTempCommit();
+      try {
+        await temp.rename(targetPath);
+      } on FileSystemException {
+        // Cross-device or an existing file at the target (should not
+        // happen — the key is fresh): fall back to copy + delete so the
+        // commit still lands one whole file.
+        await temp.copy(targetPath);
+        await temp.delete();
+      }
+    } finally {
+      _liveTemps.remove(temp.path);
     }
     await restrictLocalPathPermissions(targetPath, '600');
     final bytes = await target.length();
@@ -241,7 +367,7 @@ final class PreviewCache {
     await _persistIndex();
     // A completion that cannot fit even after eviction is dropped —
     // the §5.3 over-cap rule applied to the produced bytes.
-    await enforce();
+    await _enforce();
     if (!_entries.containsKey(key)) {
       // Evicted in the same pass (over-cap completion): remove the file
       // so no orphan survives.
@@ -301,10 +427,9 @@ final class PreviewCache {
           _PreviewCacheEntry(
             path: p.join(directory.path, fileName),
             bytes: bytes,
-            expectedBytes:
-                value['expectedBytes'] is int
-                    ? value['expectedBytes'] as int
-                    : null,
+            expectedBytes: value['expectedBytes'] is int
+                ? value['expectedBytes'] as int
+                : null,
             lastUsedMs: lastUsed,
           ),
         ),
@@ -344,9 +469,33 @@ final class PreviewCache {
     await _persistIndex();
   }
 
+  Future<T> _serializeMutation<T>(Future<T> Function() operation) {
+    final mutation = _mutationTail.then<T>((_) async {
+      await _beforeMutation();
+      return operation();
+    });
+    _mutationTail = mutation.then<void>(
+      (_) {},
+      // A failed caller must not prevent later mutations from running.
+      onError: (Object _, StackTrace __) {},
+    );
+    return mutation;
+  }
+
   /// Temp-file plus rename — the index is small, so it writes eagerly
   /// on every mutation rather than batching recency updates.
-  Future<void> _persistIndex() async {
+  Future<void> _persistIndex() {
+    final write = _indexWriteTail.then((_) => _writeIndex());
+    _indexWriteTail = write.then<void>(
+      (_) {},
+      // A failed caller must not prevent later mutations from persisting.
+      onError: (Object _, StackTrace __) {},
+    );
+    return write;
+  }
+
+  Future<void> _writeIndex() async {
+    await _beforeIndexWrite();
     final indexPath = p.join(directory.path, _indexFileName);
     final tempPath = p.join(directory.path, 'tmp-index-${_nextTempId()}.json');
     final payload = jsonEncode({
@@ -375,6 +524,31 @@ final class PreviewCache {
       await temp.rename(indexPath);
     }
   }
+}
+
+/// Exclusive ownership of one preview cache key's production transaction.
+final class PreviewProductionReservation {
+  PreviewProductionReservation._(this._cache, this._key, this._queue);
+
+  final PreviewCache _cache;
+  final String _key;
+  final _PreviewProductionQueue _queue;
+  bool _released = false;
+
+  void release() {
+    if (_released) return;
+    _released = true;
+    _cache._releaseProduction(_key, _queue);
+  }
+}
+
+final class _PreviewProductionQueue {
+  bool held = false;
+  final ListQueue<_PreviewProductionWaiter> waiters = ListQueue();
+}
+
+final class _PreviewProductionWaiter {
+  final completer = Completer<PreviewProductionReservation?>();
 }
 
 /// One committed entry's index record — the "actual size recorded as
@@ -436,9 +610,9 @@ final class PreviewCacheSlot {
   }
 
   /// Discards the temp — cancellation, failure, or a superseded
-  /// production.
+  /// production. Repeated calls remove bytes a cancelled destination
+  /// wrote after the first abort.
   Future<void> abort() async {
-    if (_settled) return;
     _settled = true;
     await cache._abort(temp);
   }

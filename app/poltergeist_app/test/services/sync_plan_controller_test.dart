@@ -8,7 +8,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/services/rsync_endpoints.dart';
+import 'package:poltergeist_app/services/sync_compare_controller.dart';
 import 'package:poltergeist_app/services/sync_environment.dart';
 import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
@@ -88,6 +90,137 @@ void main() {
       expect(controller.errorMessage, contains('boom'));
       expect(controller.errorKind, RemoteFileErrorKind.other);
     });
+
+    test('comparison uses the canonical scan roots', () async {
+      final scratch = Directory.systemTemp.createTempSync();
+      addTearDown(() => scratch.deleteSync(recursive: true));
+      final leftRoot = p.join(scratch.path, 'canonical-left');
+      final rightRoot = p.join(scratch.path, 'canonical-right');
+      final pair = testSyncPair(left: '~/left', right: '~/right');
+      final item = testItem(
+        'nested/a.txt',
+        left: testFile(),
+        right: testFile(),
+        suggested: SyncActionType.conflict,
+        reason: SyncReason.bothChanged,
+      );
+      final controller = SyncPlanController(
+        pair: pair,
+        environment: testSyncEnvironment(scratch),
+        syncTasks: SyncQueueTasks(),
+        scanner: FakeSyncScanner(
+          left: testScanResult(leftRoot, const {}),
+          right: testScanResult(rightRoot, const {}),
+        ),
+        differ: FakeSyncDiffer(testPlan(pair, [item])),
+        rsyncEndpoints: resolveRsyncEndpoints,
+      );
+      addTearDown(controller.dispose);
+      await _ready(controller);
+
+      final comparison = controller.comparisonFor(item)!;
+      addTearDown(comparison.dispose);
+
+      expect(
+        (comparison.request.left as LocalSyncCompareSource).fullPath,
+        p.join(leftRoot, 'nested', 'a.txt'),
+      );
+      expect(
+        (comparison.request.right as LocalSyncCompareSource).fullPath,
+        p.join(rightRoot, 'nested', 'a.txt'),
+      );
+    });
+
+    test('focused comparison selection drives command enablement', () async {
+      final pair = testSyncPair();
+      final comparable = testItem(
+        'both.txt',
+        left: testFile(),
+        right: testFile(),
+        suggested: SyncActionType.conflict,
+        reason: SyncReason.bothChanged,
+      );
+      final oneSided = testItem(
+        'left.txt',
+        left: testFile(),
+        suggested: SyncActionType.copyLeftToRight,
+        reason: SyncReason.onlyOnLeft,
+      );
+      final controller = await _ready(
+        _controller(
+          pair: pair,
+          plan: testPlan(pair, [comparable, oneSided]),
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      expect(controller.canCompareSelection, isFalse);
+
+      controller.setComparisonTarget(oneSided);
+      expect(controller.canCompareSelection, isFalse);
+
+      controller.setComparisonTarget(comparable);
+      expect(controller.canCompareSelection, isTrue);
+      final comparison = controller.comparisonForSelection()!;
+      addTearDown(comparison.dispose);
+      expect(comparison.request.relativePath, 'both.txt');
+
+      final rescan = controller.rescan();
+      expect(controller.canCompareSelection, isFalse);
+      await rescan;
+    });
+
+    for (final variant in [
+      (
+        name: 'normalization variants',
+        leftPath: 'nested/caf\u00e9.txt',
+        rightPath: 'nested/cafe\u0301.txt',
+        rightCaseSensitive: true,
+      ),
+      (
+        name: 'case variants',
+        leftPath: 'nested/Report.txt',
+        rightPath: 'nested/report.txt',
+        rightCaseSensitive: false,
+      ),
+    ]) {
+      test('comparison preserves ${variant.name} on each side', () async {
+        final scratch = Directory.systemTemp.createTempSync();
+        addTearDown(() => scratch.deleteSync(recursive: true));
+        final leftRoot = p.join(scratch.path, 'left');
+        final rightRoot = p.join(scratch.path, 'right');
+        final pair = testSyncPair(left: leftRoot, right: rightRoot);
+        final controller = SyncPlanController(
+          pair: pair,
+          environment: testSyncEnvironment(scratch),
+          syncTasks: SyncQueueTasks(),
+          scanner: FakeSyncScanner(
+            left: testScanResult(leftRoot, {
+              variant.leftPath: testFile(size: 4),
+            }),
+            right: testScanResult(rightRoot, {
+              variant.rightPath: testFile(size: 8),
+            }, caseSensitive: variant.rightCaseSensitive),
+          ),
+          rsyncEndpoints: resolveRsyncEndpoints,
+        );
+        addTearDown(controller.dispose);
+        await _ready(controller);
+
+        final item = controller.plan!.items.single;
+        final comparison = controller.comparisonFor(item)!;
+        addTearDown(comparison.dispose);
+
+        expect(
+          (comparison.request.left as LocalSyncCompareSource).fullPath,
+          p.joinAll([leftRoot, ...variant.leftPath.split('/')]),
+        );
+        expect(
+          (comparison.request.right as LocalSyncCompareSource).fullPath,
+          p.joinAll([rightRoot, ...variant.rightPath.split('/')]),
+        );
+      });
+    }
   });
 
   group('availableOverrides', () {

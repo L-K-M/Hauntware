@@ -3119,6 +3119,61 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncKindOther => 'other';
 
   @override
+  String syncCompareTitle(String path) {
+    return 'Compare $path';
+  }
+
+  @override
+  String get syncCompareSelected => 'Compare Selected Item';
+
+  @override
+  String get syncCompareSideLeft => 'Left';
+
+  @override
+  String get syncCompareSideRight => 'Right';
+
+  @override
+  String syncCompareMetadata(String size, String modified) {
+    return '$size · Modified $modified';
+  }
+
+  @override
+  String get syncCompareLoading => 'Loading…';
+
+  @override
+  String get syncCompareEditorLimit =>
+      'The built-in editor supports text files up to 4 MB.';
+
+  @override
+  String get syncCompareRemoteUnavailable =>
+      'Remote comparison is unavailable.';
+
+  @override
+  String get syncCompareFailed => 'This side could not be loaded.';
+
+  @override
+  String get syncCompareInvalidUtf8 => 'This file is not valid UTF-8 text.';
+
+  @override
+  String get syncCompareBinary =>
+      'This file appears to be binary, not editable text.';
+
+  @override
+  String get syncCompareChanged =>
+      'The local copy changed while it was being opened.';
+
+  @override
+  String get syncCompareMissing => 'The file no longer exists.';
+
+  @override
+  String syncCompareLineEndingsDiffer(String left, String right) {
+    return 'Line endings differ: $left vs $right';
+  }
+
+  @override
+  String get syncCompareBomDiffers => 'BOM differs';
+
+  @override
   String get syncSideLeft => 'left';
 
   @override
@@ -3581,6 +3636,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commandDisabledNoPlan => 'Requires an open sync plan';
+
+  @override
+  String get commandDisabledNoComparableItem =>
+      'Requires a selected file present on both sides';
 
   @override
   String get commandDisabledNoBookmarks => 'Requires saved favorites';

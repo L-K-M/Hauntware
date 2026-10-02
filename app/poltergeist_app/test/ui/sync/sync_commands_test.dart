@@ -27,15 +27,18 @@ void main() {
     var synchronizeCalls = 0;
     var newSavedCalls = 0;
     var copyRsyncCalls = 0;
+    var compareCalls = 0;
     var enabled = true;
     final commands = buildSyncCommands(
       workspace: workspace,
       synchronizeEnabled: () => enabled,
       savedSyncEnabled: () => enabled,
       copyRsyncEnabled: () => enabled,
+      compareEnabled: () => enabled,
       synchronizePanes: (_) => synchronizeCalls++,
       newSavedSync: (_) => newSavedCalls++,
       copyRsync: (_) => copyRsyncCalls++,
+      compareSelected: (_) => compareCalls++,
     );
 
     final synchronize = commands.firstWhere(
@@ -46,6 +49,9 @@ void main() {
     );
     final copyRsync = commands.firstWhere(
       (c) => c.id == kSyncCopyRsyncCommandId,
+    );
+    final compare = commands.firstWhere(
+      (c) => c.id == kSyncCompareSelectedCommandId,
     );
 
     // ⌥⌘Y on macOS, Ctrl+Alt+Y elsewhere (02 §8.3).
@@ -73,6 +79,7 @@ void main() {
     // menu/palette (and, for the latter, the plan view's action bar).
     expect(newSaved.activators, isNull);
     expect(copyRsync.activators, isNull);
+    expect(compare.activators, isNull);
 
     // 02 §9's Commands table: Synchronize sits between the transfer
     // block and Calculate Folder Sizes; New Saved Sync right under it;
@@ -82,6 +89,9 @@ void main() {
     expect(newSaved.menuPlacement?.order, 35);
     expect(copyRsync.menuPlacement?.menu, AppMenuId.server);
     expect(copyRsync.menuPlacement?.order, 37);
+    expect(compare.scope, CommandScope.selection);
+    expect(compare.menuPlacement?.menu, AppMenuId.server);
+    expect(compare.menuPlacement?.order, 39);
 
     // Enabled predicates delegate to the shell's checks.
     expect(synchronize.enabled(), isTrue);
@@ -89,6 +99,7 @@ void main() {
     expect(synchronize.enabled(), isFalse);
     expect(newSaved.enabled(), isFalse);
     expect(copyRsync.enabled(), isFalse);
+    expect(compare.enabled(), isFalse);
     enabled = true;
 
     // Runs reach the delegates.
@@ -99,8 +110,10 @@ void main() {
     await synchronize.run(context);
     await newSaved.run(context);
     await copyRsync.run(context);
+    await compare.run(context);
     expect(synchronizeCalls, 1);
     expect(newSavedCalls, 1);
     expect(copyRsyncCalls, 1);
+    expect(compareCalls, 1);
   });
 }

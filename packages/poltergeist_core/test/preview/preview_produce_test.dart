@@ -9,6 +9,7 @@ library;
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
@@ -95,6 +96,26 @@ void main() {
     expect(s1.calls.where((c) => c == 'download:/r/hello.txt'), hasLength(1));
   });
 
+  test('a stale known size remains a progress hint', () async {
+    s1.addFile('/r/grown.txt', [1, 2, 3, 4]);
+    final producer = QueuePreviewProducer(queue);
+    addTearDown(producer.dispose);
+    final ticket = producer.start(
+      PreviewProduceSpec(
+        serverId: 's1',
+        remotePath: '/r/grown.txt',
+        destinationPath: '${outDir.path}/grown.txt',
+        expectedSize: 2,
+        maximumBytes: 10,
+      ),
+    );
+
+    final entry = await ticket.result;
+
+    expect(entry.size, 4);
+    expect(await File('${outDir.path}/grown.txt').readAsBytes(), [1, 2, 3, 4]);
+  });
+
   test('the produce row sits at the head of the queue listing', () async {
     // Park an ordinary task behind a lease gate, then a produce must
     // still list ahead of it — the §4.7 head-insertion exception.
@@ -154,6 +175,64 @@ void main() {
     expect(task.state, TransferTaskState.cancelled);
     // The cancel path writes nothing to the journal.
     expect(persistence.journal, isEmpty);
+  });
+
+  test('a cancelled ticket waits for a late destination commit', () async {
+    final destination = _LateCommitFileSystem();
+    final lateQueue = TransferQueue(
+      connections: connections,
+      localFileSystem: destination,
+    );
+    addTearDown(lateQueue.dispose);
+    final producer = QueuePreviewProducer(lateQueue);
+    addTearDown(producer.dispose);
+    addTearDown(() {
+      if (!destination.allowCommit.isCompleted) {
+        destination.allowCommit.complete();
+      }
+    });
+    final cache = PreviewCache(
+      directory: Directory('${tempDir.path}/late-cache'),
+    );
+    await cache.open();
+    final slot = await cache.prepare('late', extension: 'txt');
+    s1.addFile('/r/late.txt', [1, 2, 3]);
+    final ticket = producer.start(
+      PreviewProduceSpec(
+        serverId: 's1',
+        remotePath: '/r/late.txt',
+        destinationPath: slot.tempFile.path,
+      ),
+    );
+    await destination.readyToCommit.future;
+
+    producer.cancel(ticket.taskId);
+    await slot.abort();
+    var settled = false;
+    unawaited(
+      ticket.result.then<void>(
+        (_) => settled = true,
+        onError: (Object _, StackTrace __) => settled = true,
+      ),
+    );
+    await pump();
+
+    expect(settled, isFalse);
+
+    destination.allowCommit.complete();
+    await expectLater(
+      ticket.result,
+      throwsA(
+        isA<RemoteFileException>().having(
+          (error) => error.kind,
+          'kind',
+          RemoteFileErrorKind.cancelled,
+        ),
+      ),
+    );
+    await slot.abort();
+
+    expect(slot.tempFile.existsSync(), isFalse);
   });
 
   test('the produce-slot cap admits at most two concurrent hops', () async {
@@ -219,6 +298,23 @@ void main() {
     final task = produce('/r/big.bin', 'big.bin', maximumBytes: 10);
     await pumpUntil(() => task.isTerminal);
     expect(task.state, TransferTaskState.failed);
+  });
+
+  test('a stale known size still aborts at maximumBytes', () async {
+    s1.addFile('/r/grown.bin', List<int>.filled(100, 9));
+    final producer = QueuePreviewProducer(queue);
+    addTearDown(producer.dispose);
+    final ticket = producer.start(
+      PreviewProduceSpec(
+        serverId: 's1',
+        remotePath: '/r/grown.bin',
+        destinationPath: '${outDir.path}/grown.bin',
+        expectedSize: 1,
+        maximumBytes: 10,
+      ),
+    );
+
+    await expectLater(ticket.result, throwsA(isA<CheckoutLimitException>()));
   });
 
   test('the over-cap ticket error is the typed limit exception', () async {
@@ -466,4 +562,40 @@ void main() {
       await pumpUntil(() => strayTemps().isEmpty, reason: 'temp removed');
     });
   });
+}
+
+final class _LateCommitFileSystem extends FakeTreeFileSystem {
+  final readyToCommit = Completer<void>();
+  final allowCommit = Completer<void>();
+
+  @override
+  Future<RemoteFileEntry> upload(
+    String path,
+    Stream<List<int>> content, {
+    int? length,
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) async {
+    final bytes = BytesBuilder(copy: false);
+    await for (final chunk in content) {
+      bytes.add(chunk);
+    }
+    readyToCommit.complete();
+
+    // Model the local adapter's final replace window after its last
+    // cancellation check.
+    await allowCommit.future;
+    final value = bytes.takeBytes();
+    await File(path).writeAsBytes(value);
+    return RemoteFileEntry(
+      path: path,
+      name: path.split(Platform.pathSeparator).last,
+      type: RemoteFileType.file,
+      size: value.length,
+    );
+  }
 }
