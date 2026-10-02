@@ -66,6 +66,27 @@ analysis clean and 402 tests passed through the compatibility export; app
 analysis clean, with 478 tests passed and two existing filesystem skips
 after integrating the reviewed multi-window changes.
 
+### Shared command/shortcut/menu infrastructure (ghost-commands)
+
+`ghost_ui` grew `ghost_chords` and `ghost_command_menu`: one
+`formatShortcutActivator`, the resolved-snapshot `GhostCommandSpec`/
+`GhostMenu`/`GhostMenuRow` model, `ghostPlatformMenuGroups`/
+`ghostPlatformMenus` native serialization with modified-only key
+equivalents, `ghostMenuSignature` for resync memoization,
+`ghostMenuBarChildren` in-window rendering (mnemonics, checked rows,
+disabled-dimmed `GhostShortcutHint`), `CheckedPlatformMenuItem`/
+`CheckedPlatformMenuDelegate` for AppKit checkmarks over `flutter/menu`,
+`ghostEditingTextIntent` for Edit-chord retargeting into a focused
+`EditableText`, and `dispatchGhostChord`/`GhostChordScope` for the
+hosts' app-level chord layers.
+
+All three apps consume it: Planchette renders its shell menus and palette
+through it, Poltergeist's registry-derived menus, compact sheet, hints and
+checked bridge do, and Séance's tab-shortcut dispatch and shortcut hints
+do. Hosts keep their action sets, localized labels, scopes, enablement,
+native focus retargeting and Séance's storyboard menu — `installMacMenu`
+and the `seance/menu` channel are untouched.
+
 ### Ghost context menus, 2026-10-02
 
 The shared editor exports Poltergeist's desktop menu skin: 26 px rows,

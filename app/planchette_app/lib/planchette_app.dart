@@ -3,7 +3,18 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:ghost_ui/ghost_ui.dart' show GhostMenuDivider, GhostMenuItem;
+import 'package:ghost_ui/ghost_ui.dart'
+    show
+        GhostCommandRow,
+        GhostCommandSpec,
+        GhostMenu,
+        GhostMenuDivider,
+        GhostMenuItem,
+        GhostMenuRow,
+        GhostSubmenuRow,
+        formatShortcutActivator,
+        ghostMenuBarChildren,
+        ghostPlatformMenuGroups;
 import 'package:planchette_editor/planchette_editor.dart'
     hide GhostMenuDivider, GhostMenuItem;
 
@@ -359,7 +370,13 @@ class _DocumentShellState extends State<_DocumentShell>
     }
   }
 
-  String _keyLabel(String key) => mac ? '⌘$key' : 'Ctrl+$key';
+  /// The tooltip spelling of a base chord with [key]: `⌘N`/`Ctrl+N`.
+  String _keyLabel(LogicalKeyboardKey key) =>
+      formatShortcutActivator(
+        _shortcut(key),
+        mac ? TargetPlatform.macOS : TargetPlatform.linux,
+      ) ??
+      key.keyLabel;
 
   void _showTabMenu(Offset position, DocumentTab tab) {
     final overlay =
@@ -1096,12 +1113,25 @@ class _DocumentShellState extends State<_DocumentShell>
     ];
   }
 
-  List<PlatformMenuItem> _nativeItems(List<_MenuEntry> entries) {
-    final groups = <PlatformMenuItem>[];
-    var group = <PlatformMenuItem>[];
+  /// The shared snapshot for one command: the primary shortcut first so
+  /// hint and native key equivalent spell it, the aliases after.
+  GhostCommandSpec _commandSpec(_Command command) => GhostCommandSpec(
+    id: command.id,
+    label: command.label,
+    enabled: command.enabled,
+    mnemonic: command.mnemonic,
+    activators: [?command.shortcut, ...command.aliases],
+    onSelected: command.run,
+  );
+
+  /// One menu's entries as shared model groups, split at separators.
+  /// A submenu's items are commands only — menus never nest deeper.
+  List<List<GhostMenuRow>> _menuGroups(List<_MenuEntry> entries) {
+    final groups = <List<GhostMenuRow>>[];
+    var group = <GhostMenuRow>[];
     void flush() {
       if (group.isEmpty) return;
-      groups.add(PlatformMenuItemGroup(members: group));
+      groups.add(group);
       group = [];
     }
 
@@ -1113,21 +1143,33 @@ class _DocumentShellState extends State<_DocumentShell>
           // A submenu is one item to its parent; it shares the current
           // group so adjacent submenus are not separated by dividers.
           group.add(
-            PlatformMenu(label: entry.label, menus: _nativeItems(entry.items)),
-          );
-        case _Command():
-          group.add(
-            PlatformMenuItem(
-              label: entry.label,
-              shortcut: entry.shortcut,
-              onSelected: entry.enabled ? entry.run : null,
+            GhostSubmenuRow(
+              title: entry.label,
+              mnemonic: entry.mnemonic,
+              items: [
+                for (final item in entry.items)
+                  if (item case final _Command command)
+                    GhostCommandRow(_commandSpec(command)),
+              ],
             ),
           );
+        case _Command():
+          group.add(GhostCommandRow(_commandSpec(entry)));
       }
     }
     flush();
     return groups;
   }
+
+  /// The menu as the shared model sees it, for both renderers.
+  GhostMenu _ghostMenu(_ShellMenu menu) => GhostMenu(
+    title: menu.label,
+    mnemonic: menu.mnemonic,
+    groups: _menuGroups(menu.items),
+  );
+
+  List<PlatformMenuItem> _nativeItems(List<_MenuEntry> entries) =>
+      ghostPlatformMenuGroups(_menuGroups(entries));
 
   /// The full native menu tree this window would show — the application
   /// menu plus every top-level menu. With several windows the root renders
@@ -1218,29 +1260,6 @@ class _DocumentShellState extends State<_DocumentShell>
     });
   }
 
-  List<Widget> _menuBarItems(List<_MenuEntry> entries) => [
-    for (final entry in entries)
-      switch (entry) {
-        _Separator() => const Divider(height: 8),
-        _Submenu() => SubmenuButton(
-          menuChildren: _menuBarItems(entry.items),
-          child: _menuEntryLabel(entry.label, entry.mnemonic),
-        ),
-        _Command() => MenuItemButton(
-          onPressed: entry.enabled ? entry.run : null,
-          shortcut: entry.shortcut,
-          child: _menuEntryLabel(entry.label, entry.mnemonic),
-        ),
-      },
-  ];
-
-  /// The in-window bar's label: an Alt-accelerated one on Windows and
-  /// Linux, plain text anywhere else or whenever no mnemonic fits.
-  Widget _menuEntryLabel(String label, String? mnemonic) {
-    if (mnemonic == null) return Text(label);
-    return MenuAcceleratorLabel(menuAcceleratorLabel(label, mnemonic));
-  }
-
   Widget _menuBar(List<_ShellMenu> menus) => MenuBar(
     style: MenuStyle(
       elevation: const WidgetStatePropertyAll(0),
@@ -1248,13 +1267,9 @@ class _DocumentShellState extends State<_DocumentShell>
         Theme.of(context).colorScheme.surface,
       ),
     ),
-    children: [
-      for (final menu in menus)
-        SubmenuButton(
-          menuChildren: _menuBarItems(menu.items),
-          child: _menuEntryLabel(menu.label, menu.mnemonic),
-        ),
-    ],
+    children: ghostMenuBarChildren([
+      for (final menu in menus) _ghostMenu(menu),
+    ], divider: const Divider(height: 8)),
   );
 
   @override
@@ -1323,9 +1338,9 @@ class _DocumentShellState extends State<_DocumentShell>
                 onNew: _new,
                 onOpen: () => unawaited(workspace.openDialog()),
                 onSave: _documentReady ? _save : null,
-                newTooltip: 'New (${_keyLabel('N')})',
-                openTooltip: 'Open… (${_keyLabel('O')})',
-                saveTooltip: 'Save (${_keyLabel('S')})',
+                newTooltip: 'New (${_keyLabel(LogicalKeyboardKey.keyN)})',
+                openTooltip: 'Open… (${_keyLabel(LogicalKeyboardKey.keyO)})',
+                saveTooltip: 'Save (${_keyLabel(LogicalKeyboardKey.keyS)})',
               ),
               if (workspace.error case final error?)
                 _errorBanner(
@@ -1511,36 +1526,6 @@ const _ghostLines = [
   'Start typing. Rest a finger on the planchette…',
   'Start typing. Ask, and it will answer…',
 ];
-
-/// A menu label marked for [MenuAcceleratorLabel]: an `&` before the
-/// mnemonic's occurrence — at the start of a word when the letter starts
-/// one, so "Save &As" beats "S&ave As" — with any literal `&` escaped so
-/// the marker stays unambiguous. A label that has lost its mnemonic letter
-/// (renamed, localized) comes back unmarked rather than underlining a
-/// character the user cannot see.
-@visibleForTesting
-String menuAcceleratorLabel(String label, String mnemonic) {
-  final escaped = label.replaceAll('&', '&&');
-  final letter = mnemonic.toLowerCase();
-  if (letter.isEmpty) return escaped;
-  final letters = escaped.toLowerCase();
-  var at = -1;
-  for (var i = 0; i < letters.length; i++) {
-    if (letters.codeUnitAt(i) != letter.codeUnitAt(0)) continue;
-    final start = i == 0 || !_isLetter(escaped.codeUnitAt(i - 1));
-    if (at < 0) at = i;
-    if (start) {
-      at = i;
-      break;
-    }
-  }
-  if (at < 0) return escaped;
-  return '${escaped.substring(0, at)}&${escaped.substring(at)}';
-}
-
-bool _isLetter(int codeUnit) =>
-    (codeUnit >= 0x41 && codeUnit <= 0x5a) ||
-    (codeUnit >= 0x61 && codeUnit <= 0x7a);
 
 /// The ghost line for a tab: fixed for that tab, and different for the tab
 /// created right after it.
