@@ -10,6 +10,7 @@ final class DesktopWindow with WindowListener {
     required this.confirmQuit,
     required this.onQuitFailed,
     this.onFocus,
+    this.closeInstead,
     this.windowBackgroundColor,
     Future<void> Function()? destroyWindow,
     Future<void> Function(String title)? setWindowTitle,
@@ -17,6 +18,12 @@ final class DesktopWindow with WindowListener {
        _setWindowTitle = setWindowTitle ?? windowManager.setTitle;
   final Future<bool> Function() confirmQuit;
   final void Function(Object error) onQuitFailed;
+
+  /// The main window's close button, when other windows can stay open:
+  /// answers true when this window closed alone (hidden — the engine's
+  /// implicit view cannot leave), false when the app should quit. Null in
+  /// the one-window app, where a close always means quit.
+  final Future<bool> Function()? closeInstead;
 
   /// Called when the window becomes active again, so files that other
   /// programs changed in the meantime are noticed.
@@ -75,7 +82,23 @@ final class DesktopWindow with WindowListener {
   }
 
   @override
-  void onWindowClose() => unawaited(requestQuit());
+  void onWindowClose() => unawaited(_close());
+
+  /// A second close event while the first is still deciding must not run
+  /// again: it would find the window already hidden and read it as the
+  /// last one, quitting the app over two open windows.
+  bool _closeRunning = false;
+
+  Future<void> _close() async {
+    if (_destroying || _closeRunning) return;
+    _closeRunning = true;
+    try {
+      if (await closeInstead?.call() ?? false) return;
+      await requestQuit();
+    } finally {
+      _closeRunning = false;
+    }
+  }
 
   @override
   void onWindowFocus() => onFocus?.call();
