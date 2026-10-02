@@ -81,21 +81,25 @@ ThemeData planchetteTheme(Brightness brightness) {
         outline: palette.faded,
         outlineVariant: palette.rule,
       );
-  return ThemeData(
-    brightness: brightness,
-    colorScheme: scheme,
-    scaffoldBackgroundColor: palette.page,
-    dividerColor: palette.rule,
-    dividerTheme: DividerThemeData(color: palette.rule, thickness: 1),
-    textSelectionTheme: TextSelectionThemeData(
-      selectionColor: palette.selection,
-      cursorColor: palette.accent,
-      selectionHandleColor: palette.accent,
+  return GhostMenuTheme.apply(
+    ThemeData(
+      brightness: brightness,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: palette.page,
+      dividerColor: palette.rule,
+      dividerTheme: DividerThemeData(color: palette.rule, thickness: 1),
+      textSelectionTheme: TextSelectionThemeData(
+        selectionColor: palette.selection,
+        cursorColor: palette.accent,
+        selectionHandleColor: palette.accent,
+      ),
+      useMaterial3: true,
+      visualDensity: VisualDensity.compact,
+      extensions: [
+        dark
+            ? PlanchettePalette.seanceSyntax
+            : PlanchettePalette.parchmentSyntax,
+      ],
     ),
-    useMaterial3: true,
-    visualDensity: VisualDensity.compact,
-    extensions: [
-      dark ? PlanchettePalette.seanceSyntax : PlanchettePalette.parchmentSyntax,
-    ],
   );
 }

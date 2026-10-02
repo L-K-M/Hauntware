@@ -334,27 +334,35 @@ class _DocumentShellState extends State<_DocumentShell> {
         Offset.zero & overlay.size,
       ),
       items: [
-        PopupMenuItem(
+        GhostMenuItem<void>(
+          context: context,
+          label: 'Close',
+          icon: Icons.close,
           enabled: !workspace.interactionLocked && !tab.busy,
           onTap: () => unawaited(workspace.closeTab(tab)),
-          child: const Text('Close'),
         ),
-        PopupMenuItem(
+        GhostMenuItem<void>(
+          context: context,
+          label: 'Close Others',
+          icon: Icons.tab_unselected,
           enabled: hasOthers && !workspace.interactionLocked,
           onTap: () => unawaited(workspace.closeOthers(tab)),
-          child: const Text('Close Others'),
         ),
-        PopupMenuItem(
+        GhostMenuItem<void>(
+          context: context,
+          label: 'Close All Tabs',
+          icon: Icons.clear_all,
           enabled: !workspace.interactionLocked,
           onTap: () => unawaited(workspace.closeAllTabs()),
-          child: const Text('Close All Tabs'),
         ),
-        const PopupMenuDivider(),
+        const GhostMenuDivider(),
         // From #66.
-        PopupMenuItem(
+        GhostMenuItem<void>(
+          context: context,
+          label: 'Copy Full Path',
+          icon: Icons.copy,
           enabled: tab.path != null,
           onTap: () => _copyPath(tab.path),
-          child: const Text('Copy Full Path'),
         ),
       ],
     );
