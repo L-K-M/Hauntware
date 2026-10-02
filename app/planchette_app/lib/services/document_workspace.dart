@@ -254,10 +254,18 @@ final class DocumentWorkspace extends ChangeNotifier {
     _notify();
   }
 
-  DocumentTab _makeTab({String? path, String? initialText}) {
+  DocumentTab _makeTab({
+    String? path,
+    String? initialText,
+    String? untitledName,
+  }) {
     final id = _nextId++;
-    final tab = DocumentTab._(id, path == null ? _freeUntitledName() : '')
-      ..path = path;
+    // A file tab shows its path; an untitled one shows the free name it was
+    // given — generated, or the named result of a compare.
+    final tab = DocumentTab._(
+      id,
+      path != null ? '' : untitledName ?? _freeUntitledName(),
+    )..path = path;
     tab.editor = EditorController(
       displayPath: path ?? tab.untitledName,
       initialText: initialText,
@@ -886,6 +894,133 @@ final class DocumentWorkspace extends ChangeNotifier {
   /// document says nothing about an export that did not work.
   static Object _exportScope(DocumentTab tab) => (exportOf: tab);
 
+  /// Compares [tab]'s buffer with the file on disk and shows the unified
+  /// diff in a new untitled tab. Reads the file through the store — never
+  /// the tab's baseline — and computes the diff off the UI isolate, so the
+  /// tab may move on while that runs; a buffer, path or reload that changed,
+  /// a closed or disposed workspace, or a dialog opened meanwhile refuses
+  /// rather than shows a comparison of text nobody is looking at. The source
+  /// tab's text, dirty state, baseline and digest guards are untouched.
+  ///
+  /// Returns whether a diff tab was shown. No differences, refusals and
+  /// failures all report through the banner; nothing is ever claimed
+  /// unchanged that was not compared.
+  Future<bool> compareWithSaved(DocumentTab tab) async {
+    final path = tab.path;
+    if (interactionLocked ||
+        path == null ||
+        !_documents.contains(tab) ||
+        tab.busy ||
+        tab.editor.isLoading ||
+        tab.editor.error != null) {
+      return false;
+    }
+
+    final name = tab.name;
+    final scope = _compareScope(tab);
+    final bufferText = tab.editor.text.text;
+
+    // Everything that can invalidate the read or the diff while it runs.
+    // A vanished tab reports nothing: the user closed it, and there is no
+    // one left to tell.
+    String? staleReason() {
+      if (_disposed || !_documents.contains(tab)) return '';
+      if (tab._reverting) {
+        return '$name is being reverted. Compare it again once the file is '
+            'read.';
+      }
+      if (tab.busy) {
+        return '$name is busy. Compare it again once it finishes.';
+      }
+      if (tab.path == null || _pathKey(tab.path!) != _pathKey(path)) {
+        return '$name was saved somewhere else while it was being compared. '
+            'Compare it again.';
+      }
+      if (tab.editor.text.text != bufferText) {
+        return '$name changed while it was being compared. Compare it again.';
+      }
+      if (interactionLocked) {
+        return 'A dialog is open, so the comparison of $name could not be '
+            'shown. Compare it again after closing it.';
+      }
+      return null;
+    }
+
+    try {
+      final document = await store.load(path);
+      if (staleReason() case final reason?) {
+        if (reason.isNotEmpty) _reportError(reason, scope: scope);
+        return false;
+      }
+      final result = await boundedUnifiedDiff(
+        document.text,
+        bufferText,
+        oldLabel: '$name (on disk)',
+        newLabel: '$name (in the editor)',
+      );
+      if (staleReason() case final reason?) {
+        if (reason.isNotEmpty) _reportError(reason, scope: scope);
+        return false;
+      }
+      switch (result.status) {
+        case UnifiedDiffStatus.identical:
+          _reportError(
+            '$name has no differences from the file on disk.',
+            scope: scope,
+          );
+          return false;
+        case UnifiedDiffStatus.differs:
+          _diffDocument(name, result.text);
+          return true;
+        case UnifiedDiffStatus.tooLarge:
+          _reportError(
+            'The differences between $name and the file on disk are too '
+            'large to show as a diff.',
+            scope: scope,
+          );
+        case UnifiedDiffStatus.timedOut:
+          _reportError(
+            'Comparing $name with the file on disk ran out of time. Compare '
+            'it again.',
+            scope: scope,
+          );
+        case UnifiedDiffStatus.failed:
+          _reportError(
+            'Could not compare $name with the file on disk: ${result.detail}',
+            scope: scope,
+          );
+      }
+      return false;
+    } catch (error) {
+      _reportError(
+        'Could not compare $name with the file on disk: $error',
+        scope: scope,
+      );
+      return false;
+    }
+  }
+
+  /// The compare result's tab: untitled, named for its source with the
+  /// extension that gives it diff highlighting, and editable like Extract
+  /// Matches's destination.
+  void _diffDocument(String name, String diff) {
+    if (interactionLocked) return;
+    final base = '$name vs saved.diff';
+    final used = {for (final tab in _documents) tab.name};
+    var label = base;
+    for (var number = 2; used.contains(label); number++) {
+      label = '$base $number';
+    }
+    final tab = _makeTab(initialText: diff, untitledName: label);
+    _documents.add(tab);
+    _active = tab;
+    _notify();
+  }
+
+  /// A compare's refusals, apart from its save, export and disk-check
+  /// failures: only a later compare of the same tab retires them.
+  static Object _compareScope(DocumentTab tab) => (compareOf: tab);
+
   Future<bool> closeTab(DocumentTab tab) async {
     if (interactionLocked ||
         !_documents.contains(tab) ||
@@ -1497,8 +1632,11 @@ final class DocumentWorkspace extends ChangeNotifier {
     _documents.remove(tab);
     _saveFailures.remove(tab);
     _declinedSaves.remove(tab);
-    // An export or a disk check of a closed tab cannot be retried from it.
-    if (_errorScope == _exportScope(tab) || _errorScope == _diskScope(tab)) {
+    // An export, disk check or compare of a closed tab cannot be retried
+    // from it.
+    if (_errorScope == _exportScope(tab) ||
+        _errorScope == _diskScope(tab) ||
+        _errorScope == _compareScope(tab)) {
       _error = null;
       _errorScope = null;
     }

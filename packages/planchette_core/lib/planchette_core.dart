@@ -13,3 +13,4 @@ export 'src/text_metrics.dart';
 export 'src/text_save_options.dart';
 export 'src/text_tools.dart';
 export 'src/text_wrap.dart';
+export 'src/unified_diff.dart';
