@@ -9450,6 +9450,75 @@
   "@appQuitLabel": {
     "description": "10 §8: the Linux/Windows File menu's Quit row, which closes the window through the same quit guard as the titlebar's close button."
   },
+  "deepLinkReviewTitle": "Review connection link",
+  "@deepLinkReviewTitle": {
+    "description": "04 §7.1 anti-phishing interstitial title for a host-form poltergeist:// link."
+  },
+  "deepLinkReviewBody": "A link is asking Poltergeist to connect. Verify the endpoint before continuing.",
+  "@deepLinkReviewBody": {
+    "description": "04 §7.1 anti-phishing explanation shown before any host-form deep link can connect."
+  },
+  "deepLinkHostLabel": "Host",
+  "deepLinkPortLabel": "Port",
+  "deepLinkUsernameLabel": "Username",
+  "deepLinkFolderLabel": "Folder",
+  "deepLinkEmptyValue": "Not specified",
+  "deepLinkConnect": "Connect",
+  "deepLinkCancel": "Cancel",
+  "deepLinkDiscardAll": "Discard all remaining",
+  "deepLinkRepeatedActivations": "{count, plural, =2{This endpoint was opened twice.} other{This endpoint was opened {count} times.}}",
+  "@deepLinkRepeatedActivations": {
+    "description": "Notice that rapid links for the same host, port, and username were coalesced into one review.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "deepLinkWaitingTitle": "Waiting",
+  "deepLinkAdditionalPending": "{count, plural, =1{1 additional link activation pending} other{{count} additional link activations pending}}",
+  "@deepLinkAdditionalPending": {
+    "description": "Expandable overflow summary after the three directly visible deep-link endpoints.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "deepLinkEndpointSummary": "{username}@{host}:{port}",
+  "@deepLinkEndpointSummary": {
+    "description": "Safe endpoint summary in the pending deep-link review list.",
+    "placeholders": {
+      "username": {
+        "type": "String"
+      },
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "deepLinkInternationalizedWarning": "Internationalized hostname. Check every character.",
+  "deepLinkMixedScriptWarning": "Mixed writing systems detected in this hostname.",
+  "deepLinkUnrecognizedScriptWarning": "Unrecognized writing system in this hostname. Check every character.",
+  "deepLinkControlsRemovedWarning": "Hidden direction or line-control characters were removed for display.",
+  "deepLinkFailureTitle": "Link can’t be opened",
+  "deepLinkFailureUnsupported": "This Poltergeist link does not name a supported action.",
+  "deepLinkFailureParameters": "This Poltergeist link has invalid or unexpected parameters.",
+  "deepLinkFailurePort": "This Poltergeist link must name a numeric port from 1 to 65535.",
+  "deepLinkFailurePath": "This Poltergeist link contains an unsafe folder path.",
+  "deepLinkFailureServer": "The linked server is not in your synchronized server catalog.",
+  "deepLinkFailureClose": "Close",
+  "sidebarOpenTerminalInSeance": "Open Terminal in Séance",
+  "@sidebarOpenTerminalInSeance": {
+    "description": "Server command and bookmark context-menu action that hands the server identity to Séance through seance://."
+  },
+  "commandDisabledNoRemoteServer": "Requires a tab connected to a server",
+  "@commandDisabledNoRemoteServer": {
+    "description": "Disabled-command reason for Open Terminal in Séance when the active tab has no remote server."
+  },
   "editorUndoLabel": "Undo",
   "editorRedoLabel": "Redo"
 }

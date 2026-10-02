@@ -13,6 +13,7 @@ import 'package:poltergeist_app/services/connection_status_controller.dart';
 import 'package:poltergeist_app/services/local_volumes.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/pane_drop.dart';
+import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/sidebar_controller.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
@@ -189,6 +190,8 @@ void main() {
     SidebarDensity? density = SidebarDensity.compact,
     Set<String> pinned = const {},
     PinnedServerWriter? onPinnedChanged,
+    RegisteredCommand Function(Bookmark bookmark)? bookmarkTerminalCommand,
+    Future<void> Function(RegisteredCommand command)? onRunCommand,
   }) async {
     // Wider than the rail: the drop tests park a drag source beside it,
     // and a context menu needs room to open where it was asked.
@@ -247,6 +250,8 @@ void main() {
       onQuickConnect: onQuickConnect,
       onOpenSettings: onOpenSettings,
       onAddCatalogServer: onAddServer,
+      bookmarkTerminalCommand: bookmarkTerminalCommand,
+      onRunCommand: onRunCommand,
       dropDelegate: dropDelegate,
       clock: clock ?? DateTime.now,
     );
@@ -782,6 +787,39 @@ void main() {
 
       expect(find.byKey(const ValueKey('sidebar.menu.open')), findsOneWidget);
       expect(find.byKey(const ValueKey('sidebar.menu.rename')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('sidebar.menu.openTerminalInSeance')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('shows the registered Séance handoff only when supplied', (
+      tester,
+    ) async {
+      store.bookmarks = [_remote('a')];
+      final runs = <String>[];
+      await pumpSidebar(
+        tester,
+        bookmarkTerminalCommand: (bookmark) => RegisteredCommand(
+          id: 'connect.openTerminalInSeance',
+          scope: CommandScope.pane,
+          label: (l10n) => l10n.sidebarOpenTerminalInSeance,
+          run: (_) async {},
+        ),
+        onRunCommand: (command) async => runs.add(command.id),
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey('sidebar.favorite.a')),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('sidebar.menu.openTerminalInSeance')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(runs, ['connect.openTerminalInSeance']);
     });
 
     testWidgets('a clicked row wears no focus ring until a key arrives', (

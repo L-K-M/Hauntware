@@ -332,10 +332,11 @@ Type=Application
 Name=Poltergeist
 GenericName=File Transfer Client
 Comment=The ghost that moves your files
-Exec=$2
+Exec=$2 %u
 Icon=poltergeist
 Terminal=false
 Categories=Network;FileTransfer;FileManager;
+MimeType=x-scheme-handler/poltergeist;
 # The packaged build reports this X11 WM_CLASS class (the instance is the
 # lowercase application id); StartupWMClass is case-sensitive.
 StartupWMClass=$LINUX_STARTUP_WM_CLASS

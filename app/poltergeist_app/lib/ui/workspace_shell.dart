@@ -23,6 +23,7 @@ import '../services/checkout_prompt_ledger.dart';
 import '../services/checkout_session.dart';
 import '../services/connection_state_bridge.dart';
 import '../services/connection_status_controller.dart';
+import '../services/deep_links.dart';
 import '../services/double_click_action.dart';
 import '../services/drag_out_controller.dart';
 import '../services/drag_out_producer.dart' show DragOutProducer;
@@ -40,10 +41,12 @@ import '../services/pane_tabs_controller.dart';
 import '../services/preview_session.dart';
 import '../services/probe_settings_store.dart';
 import '../services/quick_look_channel.dart';
+import '../services/quick_connect_bookmark.dart';
 import '../services/quit_guard.dart';
 import '../services/recent_locations.dart';
 import '../services/registered_command.dart';
 import '../services/rsync_endpoints.dart';
+import '../services/seance_links.dart';
 import '../services/server_duplication.dart';
 import '../services/session_persistence.dart';
 import '../services/session_state.dart';
@@ -70,6 +73,7 @@ import '../theme/app_theme.dart';
 import 'activity/activity_commands.dart';
 import 'adaptive_shell.dart';
 import 'compare_view.dart';
+import 'deep_link_dialogs.dart';
 import 'inspector/alerts_view.dart';
 import 'inspector/inspector_view.dart';
 import 'built_in_text_editor.dart';
@@ -106,6 +110,7 @@ import 'shell/shell_commands.dart';
 import 'shell/shell_splitter.dart';
 import 'shell/window_commands.dart';
 import 'sidebar/sidebar_view.dart';
+import 'sidebar/seance_commands.dart';
 import 'sync/rsync_copy.dart';
 import 'sync/sync_commands.dart';
 import 'sync/sync_pair_editor.dart';
@@ -189,6 +194,8 @@ class WorkspaceShell extends StatefulWidget {
     this.previewThreshold,
     this.checkoutPrompts,
     this.appearance,
+    this.deepLinks,
+    this.seanceLauncher,
   });
 
   final double initialPaneRatio;
@@ -485,12 +492,17 @@ class WorkspaceShell extends StatefulWidget {
   /// General). Null leaves the section out.
   final AppearanceSettingsModel? appearance;
 
+  /// App-wide deep-link intake and the probed sibling-app handoff. Both are
+  /// composition seams so tests and unsupported platforms remain inert.
+  final DeepLinkCoordinator? deepLinks;
+  final SeanceLauncher? seanceLauncher;
+
   @override
   State<WorkspaceShell> createState() => _WorkspaceShellState();
 }
 
 class _WorkspaceShellState extends State<WorkspaceShell>
-    implements WorkspaceWindowContent {
+    implements WorkspaceWindowContent, DeepLinkHandler {
   bool _commandSessionActive = false;
 
   /// The latest assembled registry — the Quick Open palette reads it at
@@ -558,6 +570,26 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   bool get _ownsAppReactions => widget.window?.isActiveWorkspace ?? true;
 
   BuildContext get _promptContext => widget.window?.promptContext ?? context;
+
+  bool _deepLinkBindingScheduled = false;
+
+  /// Only the active workspace may own the app-wide review queue. Deferring
+  /// avoids opening a dialog while an inherited-window update is building.
+  void _scheduleDeepLinkBinding() {
+    if (_deepLinkBindingScheduled) return;
+    _deepLinkBindingScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _deepLinkBindingScheduled = false;
+      if (!mounted) return;
+      final deepLinks = widget.deepLinks;
+      if (deepLinks == null) return;
+      if (_ownsAppReactions) {
+        deepLinks.activate(this);
+      } else {
+        deepLinks.deactivate(this);
+      }
+    });
+  }
 
   /// The production Quick Look channel, created once so session
   /// rebuilds share the one native binding (06 §5.1).
@@ -716,6 +748,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     widget.workspaces?.addListener(_onWorkspacesChanged);
     widget.quitGuard?.bindQueue(_quitGuardQueue);
     _attachCheckoutSession(widget.checkoutSession);
+    _scheduleDeepLinkBinding();
   }
 
   /// The §3.3 watcher's app-side surface: the session re-publishes on
@@ -766,6 +799,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       widget.settingsWindow?.attach(_settingsWindowSources());
     }
     _wasActiveWindow = active;
+    _scheduleDeepLinkBinding();
   }
 
   @override
@@ -906,10 +940,15 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     }
     _attachCheckoutSession(widget.checkoutSession);
     _attachBookmarkBackup(widget.bookmarkBackup);
+    if (!identical(oldWidget.deepLinks, widget.deepLinks)) {
+      oldWidget.deepLinks?.deactivate(this);
+      _scheduleDeepLinkBinding();
+    }
   }
 
   @override
   void dispose() {
+    widget.deepLinks?.deactivate(this);
     widget.workspaces?.removeListener(_onWorkspacesChanged);
     widget.quitGuard?.unbindQueue(_quitGuardQueue);
     _attachCheckoutSession(null);
@@ -1722,6 +1761,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       // Favorites and Save to Favorites… run from the menus too.
       if (workspace != null && sidebar != null)
         ...buildSidebarVerbCommands(sidebar: sidebar, workspace: workspace),
+      if (workspace != null && widget.seanceLauncher?.available == true)
+        buildOpenTerminalInSeanceCommand(
+          workspace: workspace,
+          launcher: widget.seanceLauncher!,
+        ),
       if (workspace != null)
         ...buildShellCommands(
           workspace: workspace,
@@ -3392,6 +3436,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     final session = widget.engineSession;
     final backup = widget.bookmarkBackup;
     final queue = widget.transferQueue;
+    final seanceLauncher = widget.seanceLauncher;
     // The rail's Connect, Settings, and Sync-setup affordances run the
     // registered commands (D21) — the same enablement and one-shot
     // session rule as their menu rows; an unregistered one hides.
@@ -3436,6 +3481,21 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       onLocalEdits: widget.checkoutSession == null
           ? null
           : (bookmark) => unawaited(_showLocalEditsReview(bookmark.id)),
+      bookmarkTerminalCommand:
+          seanceLauncher == null || !seanceLauncher.available
+          ? null
+          : (bookmark) => buildBookmarkTerminalCommand(
+              bookmark: bookmark,
+              launcher: seanceLauncher,
+            ),
+      catalogTerminalCommand:
+          seanceLauncher == null || !seanceLauncher.available
+          ? null
+          : (server) => buildCatalogTerminalCommand(
+              server: server,
+              launcher: seanceLauncher,
+            ),
+      onRunCommand: _runCommand,
       onDisconnect: session == null
           ? null
           : (server) => unawaited(_disconnectServer(server.serverId)),
@@ -3602,17 +3662,115 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// The transient bookmark a catalog open binds through: never
   /// persisted — the catalog is the truth; this only carries the
   /// reference and the display fields the pane chrome reads.
-  Bookmark _catalogOpenBookmark(ServerConfig server) => Bookmark(
-    id: server.id,
-    kind: BookmarkKind.remotePath,
-    label: server.label,
-    color: server.color,
-    icon: server.icon,
-    server: BookmarkServerRef(serverConfigId: server.id),
-    sortKey: '',
-    createdAt: DateTime.fromMillisecondsSinceEpoch(server.createdAt),
-    updatedAt: DateTime.fromMillisecondsSinceEpoch(server.updatedAt),
-  );
+  Bookmark _catalogOpenBookmark(ServerConfig server, {String? remotePath}) =>
+      Bookmark(
+        id: server.id,
+        kind: BookmarkKind.remotePath,
+        label: server.label,
+        color: server.color,
+        icon: server.icon,
+        server: BookmarkServerRef(serverConfigId: server.id),
+        remotePath: remotePath,
+        sortKey: '',
+        createdAt: DateTime.fromMillisecondsSinceEpoch(server.createdAt),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(server.updatedAt),
+      );
+
+  @override
+  Future<DeepLinkReviewDecision> reviewHost(DeepLinkReview review) async {
+    if (!await _prepareDeepLinkOperation(review)) {
+      return DeepLinkReviewDecision.cancel;
+    }
+
+    final promptContext = _deepLinkPromptContext;
+    if (!promptContext.mounted) return DeepLinkReviewDecision.cancel;
+
+    return showDeepLinkReviewDialog(promptContext, review);
+  }
+
+  @override
+  Future<DeepLinkHostResult> openHost(
+    HostDeepLink link,
+    DeepLinkOperation operation,
+  ) async {
+    if (!await _prepareDeepLinkOperation(operation)) {
+      return DeepLinkHostResult.notCommitted;
+    }
+
+    _openFavorite(
+      buildQuickConnectBookmark(link.target),
+      SidebarOpenAction.plain,
+    );
+    return DeepLinkHostResult.committed;
+  }
+
+  @override
+  Future<DeepLinkServerResult> openServer(
+    ServerDeepLink link,
+    DeepLinkOperation operation,
+  ) async {
+    if (!await _prepareDeepLinkOperation(operation)) {
+      return DeepLinkServerResult.notFound;
+    }
+    final server = _serverConfigById(link.serverId);
+    if (server == null) return DeepLinkServerResult.notFound;
+    _openFavorite(
+      _catalogOpenBookmark(server, remotePath: link.remotePath),
+      SidebarOpenAction.plain,
+    );
+    return DeepLinkServerResult.opened;
+  }
+
+  @override
+  Future<void> showFailure(
+    DeepLinkFailure failure,
+    DeepLinkOperation operation,
+  ) async {
+    if (!await _prepareDeepLinkOperation(operation)) return;
+
+    final promptContext = _deepLinkPromptContext;
+    if (!promptContext.mounted) return;
+
+    await showDeepLinkFailureDialog(
+      promptContext,
+      failure,
+      operation: operation,
+    );
+  }
+
+  BuildContext get _deepLinkPromptContext =>
+      widget.window?.navigatorKey.currentContext ?? context;
+
+  Future<bool> _prepareDeepLinkOperation(DeepLinkOperation operation) async {
+    if (!mounted) return false;
+    final window = widget.window;
+    if (window != null && !window.isActiveWorkspace) {
+      // The active-window rebuild will bind its handler and cancel this one.
+      await operation.cancelled;
+      return false;
+    }
+    if (!await _activateDeepLinkWindow()) return false;
+    if (!mounted || operation.isCancelled) return false;
+    if (window == null || window.isActiveWorkspace) return true;
+
+    await operation.cancelled;
+    return false;
+  }
+
+  /// Native link delivery may use a hidden transport window or foreground an
+  /// editor. Raise the workspace that owns the request before touching UI.
+  Future<bool> _activateDeepLinkWindow() async {
+    if (!mounted) return false;
+    final window = widget.window;
+    if (window == null) return true;
+
+    try {
+      await window.activate();
+    } on Object catch (error, stackTrace) {
+      ApplicationErrorReporter().report(error, stackTrace);
+    }
+    return mounted;
+  }
 
   /// A favorite activation resolved against the panes (02 §4):
   /// localFolder and remotePath bind the resolved pane's tab per the
