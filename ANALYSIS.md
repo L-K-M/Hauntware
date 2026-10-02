@@ -760,6 +760,11 @@ and one undo removes the edit. Existing selection/reveal plumbing helps, but
 does not establish that IME, accessibility and rendering are solved; coordinate P3.
 
 ### B8. Specify display-column semantics — M (inherited finding)
+Owner decision, 2026-10-02: text tools use text cells (tab stops, wide CJK
+and emoji two cells, combining marks zero, grapheme clusters intact). Hard
+Wrap and full tab expansion share `textColumnAfter`; rendering pixels are
+not inferred. Existing status/navigation remain UTF-16 coordinates.
+
 `caretLineColumn` counts UTF-16 units, not tab-expanded/display columns;
 surrogate pairs count two. The newer source reports `"\tindented"` at offset 4
 as Col 5 versus visual column 9 under eight-wide tabs. That visual number

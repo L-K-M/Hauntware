@@ -15,12 +15,38 @@ turns them into tests. Ids such as B8 or E5 are entries in
 
 ## Implementation status, 2026-10-01
 
+### Owner decisions and text-column tools, 2026-10-02
+
+The owner approved both-host exposure, `unorm_dart`, JSON tools and the
+pure-Dart `characters` dependency. Replacement backslashes stay literal.
+Unicode/ASCII/JSON, the shared browser and Edit/File commands are merged
+as #119, #121 and #120 respectively.
+
+Hard Wrap and Convert Tabs to Spaces use the approved text-cell convention:
+configured tab stops, two cells for wide CJK/emoji, no extra cells for
+combining marks, and intact grapheme clusters. This is not pixel measurement;
+status and Go to Line coordinates remain UTF-16 offsets.
+
+- Hard Wrap defaults to 80 text columns and paragraph fill. It repeats quote
+  and language line-comment prefixes. List-containing paragraph runs and
+  blank-line separators stay intact; unbreakable words may exceed the target.
+  Legacy lone-CR buffers explicitly require Normalize Line Endings first,
+  because paragraph scopes recognize LF/CRLF separators.
+- Convert Tabs to Spaces expands all tabs, starting with the document's tab
+  width and retaining explicit last-used widths. It refuses tab-required
+  formats. It does not change the indentation preference.
+- The original 48 menu-table tools are now implemented, plus Format/Minify
+  JSON and Extract Matches: 51 catalog entries.
+- Raw-buffer hosts may provide `saveNormalizationForLineEnding` separately
+  from buffer `normalization`. This keeps saved-size preflight aligned with
+  conditional savers, including Séance's CRLF normalization, without changing
+  their existing save bytes.
+
 Slices 1 to 5b are merged (#108 to #112 and #114). Slice 6 adds file-format
 choices, save cleanup and Normalize Line Endings. Slice 8 (Unicode/ASCII
 and JSON) adds Compose Accents, Decompose Accents, Strip Diacritics,
-Convert to ASCII, Format JSON and Minify JSON. The catalog now contains
-48 menu tools, plus Extract Matches in Find: 49 catalog entries. The two
-deferred menu tools are Hard Wrap and Convert Tabs to Spaces.
+Convert to ASCII, Format JSON and Minify JSON. The text-column slice completes
+the two previously deferred menu tools, Hard Wrap and Convert Tabs to Spaces.
 
 ### Slice 6 contracts
 
@@ -49,11 +75,8 @@ deferred menu tools are Hard Wrap and Convert Tabs to Spaces.
 | Slice | Status and next step |
 |---|---|
 | 5c | Replacement backslash escapes declined by owner: replacements keep backslashes literal, only `$1`, `${1}`, `${name}` and `$$` expand. Active-match replacement preview built (worker-backed, bounded one line) |
-| 7 | Built in Planchette: `openTextTools()` with a list state (Repeat and
-Recent first, seven groups, keyword filter), verified at 320 px and doubled
-text scale. Host adoption is one header icon per host at the same reviewed
-revision, still to do. Poltergeist needs ARB keys or a recorded exception |
-| 8: wrap and interior tabs | Deferred until B8 defines display columns and tab stops |
+| 7 | Built in Planchette: `openTextTools()` with Repeat/Recent, seven groups and keyword filter, verified at 320 px and doubled text scale. Both-host adoption is approved and will use one final reviewed pin. Poltergeist strings use its existing English ARB policy |
+| 8: wrap and interior tabs | Built using the owner's explicit text-cell policy; status/navigation coordinates remain UTF-16 |
 | 8: Unicode/ASCII | Built. `unorm_dart` in core (decision 4); Convert to ASCII uses a reviewed Latin table, keeps unmapped non-ASCII literal with a count |
 | 8: JSON | Built. Whitespace-only strict-JSON reformat (decision 7), values verbatim, invalid input refused with line/column, size capped by the runner |
 | 8: search | Built: regex hints (leading `(?i)`/`(?s)`/`(?m)` accepted, PCRE habits explained), inline grep cheat sheet with a BBEdit section, active-match replacement preview, Use Selection for Find, Find Selected Text, session-only search history. Find in Selection and Extract already shipped. Compare with Saved is main-owned work, unstarted |
