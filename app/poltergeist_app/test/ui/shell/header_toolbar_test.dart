@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/l10n/app_localizations_en.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
-import 'package:poltergeist_app/services/shortcut_format.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/theme/family_hues.dart';
 import 'package:poltergeist_app/ui/shell/header_toolbar.dart';

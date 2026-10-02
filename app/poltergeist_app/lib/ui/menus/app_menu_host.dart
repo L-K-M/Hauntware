@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 
 import '../../l10n/app_localizations.dart';
-import '../../services/checked_platform_menu.dart';
 import '../../services/registered_command.dart';
 import '../../services/workspace_windows/workspace_window_scope.dart';
 import '../../services/workspace_windows/workspace_windows.dart'
@@ -66,6 +66,17 @@ class _AppMenuHostState extends State<AppMenuHost> {
   Object? _menuRunner;
   List<PlatformMenuItem>? _platformMenus;
 
+  /// The one runner every in-window row activates through — the same
+  /// [AppMenuHost.onRun] the chord layer and toolbar take.
+  void _runRow(GhostCommandSpec spec) =>
+      unawaited(widget.onRun(ghostRowCommand(spec)));
+
+  /// The hint a row trails: the command's first registered activator in
+  /// the chrome's secondary colour.
+  Widget? _hint(GhostCommandSpec spec) => spec.activators.isEmpty
+      ? null
+      : MenuShortcutHint(spec.activators.first, enabled: spec.enabled);
+
   @override
   Widget build(BuildContext context) {
     final platform = Theme.of(context).platform;
@@ -77,7 +88,7 @@ class _AppMenuHostState extends State<AppMenuHost> {
     );
 
     if (platform == TargetPlatform.macOS) {
-      final synced = _syncedMenus(menus, l10n);
+      final synced = _syncedMenus(menus);
       // With several windows the root renders the one native menu bar,
       // and the active window's items go there (00 D39).
       final window = WorkspaceWindowScope.maybeOf(context);
@@ -97,20 +108,11 @@ class _AppMenuHostState extends State<AppMenuHost> {
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: MenuBar(
-            children: [
-              for (final menu in menus)
-                SubmenuButton(
-                  key: ValueKey('menu.${menu.id.name}'),
-                  menuChildren: [
-                    for (var i = 0; i < menu.groups.length; i++) ...[
-                      if (i > 0) const _MenuGroupDivider(),
-                      for (final row in menu.groups[i])
-                        _anchorMenuRow(row, l10n, platform, widget.onRun),
-                    ],
-                  ],
-                  child: Text(menu.title),
-                ),
-            ],
+            children: ghostMenuBarChildren(
+              menus,
+              activate: _runRow,
+              trailingFor: _hint,
+            ),
           ),
         ),
         const Divider(height: 1),
@@ -139,146 +141,23 @@ class _AppMenuHostState extends State<AppMenuHost> {
   /// Serializes [menus] once per content change; a rebuild with an
   /// unchanged signature reuses the same item objects so the platform
   /// bar's `listEquals` check short-circuits the channel sync.
-  List<PlatformMenuItem> _syncedMenus(
-    List<AppMenuModel> menus,
-    AppLocalizations l10n,
-  ) {
-    final signature = _signature(menus, l10n);
+  List<PlatformMenuItem> _syncedMenus(List<GhostMenu> menus) {
+    final signature = ghostMenuSignature(menus);
     final cached = _platformMenus;
     if (cached != null &&
         _menuRunner == widget.onRun &&
         listEquals(signature, _menuSignature)) {
       return cached;
     }
-    final built = [for (final menu in menus) _platformMenu(menu, l10n)];
+    final built = ghostPlatformMenus(
+      menus,
+      activate: (spec, shortcut) =>
+          () => _activateNative(ghostRowCommand(spec), shortcut),
+    );
     _menuSignature = signature;
     _menuRunner = widget.onRun;
     _platformMenus = built;
     return built;
-  }
-
-  /// Everything a native menu item can carry — structure, titles, each
-  /// command's enablement and bound key equivalent — flattened to scalars
-  /// and records so [listEquals] can compare two builds field-by-field.
-  List<Object?> _signature(List<AppMenuModel> menus, AppLocalizations l10n) => [
-    for (final menu in menus) ...[
-      menu.id,
-      menu.title,
-      for (final group in menu.groups) ...[
-        _rowBoundary,
-        for (final row in group) ..._rowSignature(row, l10n),
-      ],
-    ],
-  ];
-
-  /// Positional marker inside a signature; identity-stable across builds.
-  static const _rowBoundary = Object();
-
-  Iterable<Object?> _rowSignature(AppMenuRow row, AppLocalizations l10n) sync* {
-    switch (row) {
-      case AppMenuCommandRow(:final command):
-        yield (
-          command.id,
-          command.label(l10n),
-          command.enabled(),
-          command.checked?.call(),
-          _nativeShortcut(command),
-        );
-      case AppMenuSubmenuRow(:final title, :final items):
-        yield _rowBoundary;
-        yield title;
-        for (final item in items) {
-          yield* _rowSignature(item, l10n);
-        }
-      case AppMenuProvidedRow(:final type):
-        yield type;
-    }
-  }
-
-
-  // -- PlatformMenuBar (macOS) ------------------------------------------
-
-  PlatformMenu _platformMenu(AppMenuModel menu, AppLocalizations l10n) {
-    return PlatformMenu(
-      label: menu.title,
-      menus: [
-        for (final group in menu.groups)
-          PlatformMenuItemGroup(
-            members: [
-              for (final row in group) _platformRow(row, l10n),
-            ],
-          ),
-      ],
-    );
-  }
-
-  PlatformMenuItem _platformRow(AppMenuRow row, AppLocalizations l10n) {
-    return switch (row) {
-      AppMenuCommandRow(:final command) => _platformCommand(command, l10n),
-      AppMenuSubmenuRow(:final title, :final items) => PlatformMenu(
-        label: title,
-        menus: [
-          PlatformMenuItemGroup(
-            members: [
-              for (final item in items)
-                _platformCommand(item.command, l10n),
-            ],
-          ),
-        ],
-      ),
-      AppMenuProvidedRow(:final type) => PlatformProvidedMenuItem(
-        type: type,
-      ),
-    };
-  }
-
-  PlatformMenuItem _platformCommand(
-    RegisteredCommand command,
-    AppLocalizations l10n,
-  ) {
-    final shortcut = _nativeShortcut(command);
-    final onSelected = command.enabled()
-        ? () => _activateNative(command, shortcut)
-        : null;
-    if (command.checked case final checked?) {
-      return CheckedPlatformMenuItem(
-        label: command.label(l10n),
-        checked: checked(),
-        shortcut: shortcut,
-        onSelected: onSelected,
-      );
-    }
-    return PlatformMenuItem(
-      label: command.label(l10n),
-      shortcut: shortcut,
-      onSelected: onSelected,
-    );
-  }
-
-  /// The activator macOS binds natively as the item's key equivalent.
-  ///
-  /// A natively bound key equivalent intercepts the keystroke before any
-  /// in-window surface sees it, so only *modified* chords may bind — an
-  /// unmodified equivalent (Enter, Tab, a letter) would steal typing and
-  /// focus navigation.
-  MenuSerializableShortcut? _nativeShortcut(RegisteredCommand command) {
-    for (final activator
-        in command.activators?.call(TargetPlatform.macOS) ??
-            const <ShortcutActivator>[]) {
-      if (activator is SingleActivator) {
-        if (!activator.meta && !activator.control && !activator.alt) {
-          continue;
-        }
-        return activator;
-      }
-      if (activator is CharacterActivator) {
-        if (!activator.meta && !activator.control && !activator.alt) {
-          continue;
-        }
-        return activator;
-      }
-    }
-    return null;
   }
 
   /// Runs a menu item activated natively (click or key equivalent).
@@ -303,7 +182,7 @@ class _AppMenuHostState extends State<AppMenuHost> {
     RegisteredCommand command,
     MenuSerializableShortcut? shortcut,
   ) {
-    final intent = shortcut == null ? null : _textFieldIntent(shortcut);
+    final intent = shortcut == null ? null : ghostEditingTextIntent(shortcut);
     final focus = FocusManager.instance.primaryFocus;
     final focusContext = focus?.context;
     if (intent != null &&
@@ -323,83 +202,6 @@ class _AppMenuHostState extends State<AppMenuHost> {
     }
     unawaited(widget.onRun(command));
   }
-
-  /// Maps a field-owned macOS chord to the intent a focused text field
-  /// expects — the same intents the platform Edit verbs would carry.
-  Intent? _textFieldIntent(MenuSerializableShortcut shortcut) {
-    if (shortcut is! SingleActivator) return null;
-    if (!shortcut.meta || shortcut.control || shortcut.alt) return null;
-    const cause = SelectionChangedCause.keyboard;
-    return switch ((shortcut.trigger, shortcut.shift)) {
-      (LogicalKeyboardKey.keyA, false) => const SelectAllTextIntent(cause),
-      (LogicalKeyboardKey.keyC, false) => CopySelectionTextIntent.copy,
-      (LogicalKeyboardKey.keyX, false) =>
-        const CopySelectionTextIntent.cut(cause),
-      (LogicalKeyboardKey.keyV, false) => const PasteTextIntent(cause),
-      (LogicalKeyboardKey.keyZ, false) => const UndoTextIntent(cause),
-      (LogicalKeyboardKey.keyZ, true) => const RedoTextIntent(cause),
-      (LogicalKeyboardKey.backspace, false) =>
-        const DeleteToLineBreakIntent(forward: false),
-      _ => null,
-    };
-  }
-}
-
-/// Divider between menu sections inside a [SubmenuButton] popup.
-class _MenuGroupDivider extends StatelessWidget {
-  const _MenuGroupDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Divider(height: 9, indent: 12, endIndent: 12);
-  }
-}
-
-/// One registered-command row in a Flutter menu (the Windows/Linux
-/// [MenuBar] and the D32 ☰ button share it): `menu.item.<id>` keys,
-/// display-only shortcut hints ([MenuShortcutHint]), and activation
-/// through [onRun].
-Widget _anchorMenuRow(
-  AppMenuRow row,
-  AppLocalizations l10n,
-  TargetPlatform platform,
-  Future<void> Function(RegisteredCommand command) onRun,
-) {
-  return switch (row) {
-    AppMenuCommandRow(:final command) =>
-      command.checked == null
-          ? MenuItemButton(
-              key: ValueKey('menu.item.${command.id}'),
-              trailingIcon: MenuShortcutHint.forCommand(command, platform),
-              onPressed: command.enabled()
-                  ? () => unawaited(onRun(command))
-                  : null,
-              child: Text(command.label(l10n)),
-            )
-          // CheckboxMenuButton forwards its key to the MenuItemButton it
-          // builds, which would put `menu.item.<id>` on two widgets; the
-          // subtree carries it once, like the plain rows.
-          : KeyedSubtree(
-              key: ValueKey('menu.item.${command.id}'),
-              child: CheckboxMenuButton(
-                trailingIcon: MenuShortcutHint.forCommand(command, platform),
-                value: command.checked!(),
-                onChanged: command.enabled()
-                    ? (_) => unawaited(onRun(command))
-                    : null,
-                child: Text(command.label(l10n)),
-              ),
-            ),
-    AppMenuSubmenuRow(:final title, :final items) => SubmenuButton(
-      menuChildren: [
-        for (final item in items) _anchorMenuRow(item, l10n, platform, onRun),
-      ],
-      child: Text(title),
-    ),
-    // Provided rows are macOS chrome; the model never emits them on
-    // other platforms.
-    AppMenuProvidedRow() => const SizedBox.shrink(),
-  };
 }
 
 /// D32's Windows/Linux main menu (10 §8): the whole registry-derived
@@ -447,20 +249,16 @@ class AppMainMenuButton extends StatelessWidget {
         minimumSize: WidgetStatePropertyAll(Size(_panelWidth, 0)),
         visualDensity: VisualDensity.standard,
       ),
-      menuChildren: [
-        for (final menu in menus)
-          SubmenuButton(
-            key: ValueKey('menu.${menu.id.name}'),
-            menuChildren: [
-              for (var i = 0; i < menu.groups.length; i++) ...[
-                if (i > 0) const _MenuGroupDivider(),
-                for (final row in menu.groups[i])
-                  _anchorMenuRow(row, l10n, platform, onRun),
-              ],
-            ],
-            child: Text(menu.title),
-          ),
-      ],
+      menuChildren: ghostMenuBarChildren(
+        menus,
+        activate: (spec) => unawaited(onRun(ghostRowCommand(spec))),
+        trailingFor: (spec) => spec.activators.isEmpty
+            ? null
+            : MenuShortcutHint(
+                spec.activators.first,
+                enabled: spec.enabled,
+              ),
+      ),
       builder: (context, controller, _) => IconButton(
         key: const ValueKey('menu.main'),
         tooltip: l10n.mainMenuTooltip,

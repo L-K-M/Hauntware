@@ -17,7 +17,7 @@ import 'package:poltergeist_app/services/engine_session.dart';
 import 'package:poltergeist_app/services/pane_tabs_controller.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
-import 'package:poltergeist_app/services/shortcut_format.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:poltergeist_app/services/ssh_config_import_setup.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
 import 'package:poltergeist_app/services/update_check_controller.dart';

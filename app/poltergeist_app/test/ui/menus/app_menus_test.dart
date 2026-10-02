@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/l10n/app_localizations_en.dart';
@@ -71,10 +72,10 @@ void _useRecordingMenuDelegate() {
   });
 }
 
-List<String> _commandIds(AppMenuModel menu) => [
+List<String> _commandIds(GhostMenu menu) => [
   for (final group in menu.groups)
     for (final row in group)
-      if (row is AppMenuCommandRow) row.command.id,
+      if (row is GhostCommandRow) ghostRowCommand(row.command).id,
 ];
 
 List<PlatformMenuItem> _leavesOf(PlatformMenu menu) => [
@@ -173,10 +174,10 @@ void main() {
       );
 
       final row = menus.single.groups.single.single;
-      final submenu = row as AppMenuSubmenuRow;
+      final submenu = row as GhostSubmenuRow;
       expect(submenu.title, 'Sort By');
       expect(
-        submenu.items.map((item) => item.command.id),
+        submenu.items.map((item) => ghostRowCommand(item.command).id),
         ['a.byName', 'a.bySize'],
       );
     });
@@ -202,11 +203,11 @@ void main() {
       expect(mac.first.title, 'Poltergeist');
       expect(
         mac.first.groups.expand((g) => g),
-        everyElement(isA<AppMenuProvidedRow>()),
+        everyElement(isA<GhostProvidedRow>()),
       );
       // Window carries the standard items ahead of the commands.
       final window = mac.firstWhere((m) => m.id == AppMenuId.window);
-      expect(window.groups.first, everyElement(isA<AppMenuProvidedRow>()));
+      expect(window.groups.first, everyElement(isA<GhostProvidedRow>()));
       expect(_commandIds(window), ['a.tab']);
 
       final linux = buildAppMenus(
@@ -217,7 +218,7 @@ void main() {
       expect(linux.single.id, AppMenuId.window);
       expect(
         linux.single.groups.expand((g) => g),
-        everyElement(isA<AppMenuCommandRow>()),
+        everyElement(isA<GhostCommandRow>()),
       );
     });
 
@@ -250,7 +251,7 @@ void main() {
       expect(app.id, AppMenuId.app);
       // About leads; the command sits right under it, ahead of Services.
       expect(
-        (app.groups.first.single as AppMenuProvidedRow).type,
+        (app.groups.first.single as GhostProvidedRow).type,
         PlatformProvidedMenuItemType.about,
       );
       expect(_commandIds(app), ['a.settings']);

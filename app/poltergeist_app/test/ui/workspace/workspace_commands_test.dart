@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/l10n/app_localizations_en.dart';
@@ -148,9 +149,9 @@ void main() {
         (menu) => menu.id == AppMenuId.server,
       );
       final rows = commandsMenu.groups.expand((group) => group).toList();
-      final submenu = rows.whereType<AppMenuSubmenuRow>().single;
+      final submenu = rows.whereType<GhostSubmenuRow>().single;
       expect(submenu.title, 'Workspaces');
-      expect(submenu.items.map((item) => item.command.id), [
+      expect(submenu.items.map((item) => ghostRowCommand(item.command).id), [
         'workspace.open.empty',
       ]);
     });
@@ -180,16 +181,16 @@ void main() {
           .singleWhere((menu) => menu.id == AppMenuId.server)
           .groups
           .expand((group) => group)
-          .whereType<AppMenuSubmenuRow>()
+          .whereType<GhostSubmenuRow>()
           .single;
       // The submenu renders the favorites' own order (the sidebar's
       // sortKey sequence — appended rows land at the tail), so the menu
       // and the sidebar can never disagree about sequence.
-      expect(submenu.items.map((item) => item.command.label(l10n)), [
+      expect(submenu.items.map((item) => ghostRowCommand(item.command).label(l10n)), [
         'First',
         'Second',
       ]);
-      expect(submenu.items.map((item) => item.command.id), [
+      expect(submenu.items.map((item) => ghostRowCommand(item.command).id), [
         'workspace.open.${library.workspaces[0].id}',
         'workspace.open.${library.workspaces[1].id}',
       ]);

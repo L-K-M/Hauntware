@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 
 
 import '../../l10n/app_localizations.dart';
 import '../../services/registered_command.dart';
-import '../../services/shortcut_format.dart';
 import '../../theme/app_theme.dart';
 import 'command_icon.dart';
 import 'corner_count_badge.dart';

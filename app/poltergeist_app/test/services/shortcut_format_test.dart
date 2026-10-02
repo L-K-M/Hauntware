@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/services/shortcut_format.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 
 void main() {
   test('macOS renders glyph order ⌃⌥⇧⌘', () {

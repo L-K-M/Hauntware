@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/services/checked_platform_menu.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show CheckedPlatformMenuDelegate, CheckedPlatformMenuItem;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +37,7 @@ void main() {
         return null;
       });
 
-      CheckedPlatformMenuDelegate().setMenus([
+      CheckedPlatformMenuDelegate(channelName: 'poltergeist/menu_checks').setMenus([
         PlatformMenu(
           label: 'View',
           menus: [
@@ -92,7 +93,7 @@ void main() {
         updates.add(call.arguments as Map<dynamic, dynamic>);
         return null;
       });
-      final delegate = CheckedPlatformMenuDelegate();
+      final delegate = CheckedPlatformMenuDelegate(channelName: 'poltergeist/menu_checks');
       for (final checked in [false, true]) {
         delegate.setMenus([
           PlatformMenu(
