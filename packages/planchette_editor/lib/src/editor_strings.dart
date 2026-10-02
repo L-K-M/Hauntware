@@ -617,6 +617,26 @@ class EditorStrings {
   String _plural(int count, String noun) =>
       '$count $noun${count == 1 ? '' : 's'}';
 
+  // ── Text tools browser ──
+
+  /// The Text menu row that opens the catalog browser.
+  String get browseTextTools => 'Browse Text Tools…';
+
+  /// The browser's heading, naming the catalog it lists.
+  String get textToolsTitle => 'Text Tools';
+
+  /// The hint in the browser's filter field.
+  String get textToolsFilterHint => 'Filter tools';
+
+  /// The browser's close button.
+  String get textToolsClose => 'Close text tools';
+
+  /// What the browser shows when the filter matches no tool.
+  String get textToolsNoResults => 'No tools match.';
+
+  /// The group the browser lists Repeat and Recent under.
+  String get textToolsHistoryGroup => 'Repeat and Recent';
+
   // ── Find-bar pattern tools ──
 
   /// The find bar's control that toggles the line-action row.

@@ -9,3 +9,4 @@ export 'src/editor_fonts.dart';
 export 'src/editor_strings.dart';
 export 'src/editor_view.dart';
 export 'src/text_tool_history.dart';
+export 'src/text_tools_browser.dart';

@@ -486,29 +486,16 @@ class _DocumentShellState extends State<_DocumentShell> {
 
   /// Repeat runs the last tool with the options it last used — bar and
   /// menu runs both record, so the label's summary is what re-runs.
-  void _repeatTextTool() => _runRecentTextTool(workspace.toolHistory.last);
+  void _repeatTextTool() {
+    final editor = workspace.active?.editor;
+    if (editor == null) return;
+    unawaited(editor.repeatTextTool());
+  }
 
   void _runRecentTextTool(TextToolRunRecord? record) {
     final editor = workspace.active?.editor;
     if (record == null || editor == null) return;
-    final tool = textToolById(record.toolId);
-    // A record can outlive its tool — the catalog is checked on the way
-    // in, but a host-built record may still name one that is gone.
-    if (tool == null) return;
-    // A pattern tool replays by reopening its find-bar row seeded with the
-    // recorded query, so a catastrophic expression never runs on the UI
-    // isolate and the destination is chosen where it lives.
-    if (tool.usesFindBar) {
-      editor.openFindTool(record.toolId, options: record.options);
-    } else {
-      unawaited(
-        editor.runTextTool(
-          record.toolId,
-          options: record.options,
-          wholeDocument: record.wholeDocument,
-        ),
-      );
-    }
+    unawaited(editor.runRecentTextTool(record));
   }
 
   void _find({bool replace = false}) {
@@ -735,6 +722,14 @@ class _DocumentShellState extends State<_DocumentShell> {
               ),
         ]),
         const _Separator(),
+        // The browser is the phone and header-icon entry to the same
+        // catalog the submenus below list; the menus stay primary.
+        _Command(
+          _editorStrings.browseTextTools,
+          () => active?.editor.openTextTools(),
+          enabled: ready,
+          id: 'browseTextTools',
+        ),
         for (final group in TextToolGroup.values)
           if (textToolCatalog.any(
             (tool) => tool.group == group && tool.showsInMenu,
