@@ -231,11 +231,7 @@ void main() {
     testWidgets('lists Repeat and Recent before the seven groups', (
       tester,
     ) async {
-      final editor = await _pumpBrowser(
-        tester,
-        'b\na',
-        seedTool: 'reverseLines',
-      );
+      await _pumpBrowser(tester, 'b\na', seedTool: 'reverseLines');
 
       expect(find.text('Repeat Reverse Lines'), findsOneWidget);
       expect(find.text('Reverse Lines'), findsOneWidget);
