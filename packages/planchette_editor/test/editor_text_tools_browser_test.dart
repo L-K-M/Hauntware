@@ -21,6 +21,7 @@ Future<EditorController> _pumpBrowser(
   String text, {
   Size? size,
   double textScale = 1.0,
+  String? seedTool,
 }) async {
   final editor = EditorController(displayPath: 'notes.txt', initialText: text);
   addTearDown(editor.dispose);
@@ -29,12 +30,25 @@ Future<EditorController> _pumpBrowser(
     addTearDown(() async => tester.binding.setSurfaceSize(null));
   }
   await tester.pumpWidget(
+    // The wrapper carries the surface size too: the browser slot clamps
+    // itself to the window height, and a bare MediaQueryData is zero.
     MediaQuery(
-      data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+      data: MediaQueryData(
+        textScaler: TextScaler.linear(textScale),
+        size: size ?? const Size(800, 600),
+      ),
       child: _app(editor),
     ),
   );
   await tester.pump();
+  if (seedTool != null) {
+    // A seeded run waits out the default undo-quiet window on the fake
+    // clock, so settle it with a pump rather than awaiting it cold.
+    final pending = editor.runTextTool(seedTool);
+    await tester.pump(_undoWait);
+    await pending;
+    await tester.pump();
+  }
   editor.text.selection = const TextSelection.collapsed(offset: 0);
   await tester.pump(_undoWait);
   editor.openTextTools();
@@ -92,10 +106,14 @@ void main() {
     test('opening closes find, go to line and the options bar', () {
       final c = controller();
       c.openSearch();
+      c.openGoToLine();
+      c.openTextTool('sortLines');
       c.openTextTools();
 
       expect(c.textToolsOpen, isTrue);
       expect(c.searchOpen, isFalse);
+      expect(c.goToLineOpen, isFalse);
+      expect(c.toolBarTool, isNull);
     });
 
     test('opening find, go to line or the bar closes the browser', () {
@@ -213,18 +231,11 @@ void main() {
     testWidgets('lists Repeat and Recent before the seven groups', (
       tester,
     ) async {
-      final editor = EditorController(
-        displayPath: 'notes.txt',
-        initialText: 'b\na',
-        undoQuiet: Duration.zero,
+      final editor = await _pumpBrowser(
+        tester,
+        'b\na',
+        seedTool: 'reverseLines',
       );
-      addTearDown(editor.dispose);
-      await tester.pumpWidget(_app(editor));
-      await tester.pump();
-      await editor.runTextTool('reverseLines');
-      await tester.pump();
-      editor.openTextTools();
-      await tester.pump();
 
       expect(find.text('Repeat Reverse Lines'), findsOneWidget);
       expect(find.text('Reverse Lines'), findsOneWidget);
@@ -324,21 +335,14 @@ void main() {
     });
 
     testWidgets('the Repeat row reruns the last tool', (tester) async {
-      final editor = EditorController(
-        displayPath: 'notes.txt',
-        initialText: 'b\na',
-        undoQuiet: Duration.zero,
+      final editor = await _pumpBrowser(
+        tester,
+        'b\na',
+        seedTool: 'reverseLines',
       );
-      addTearDown(editor.dispose);
-      await tester.pumpWidget(_app(editor));
-      await tester.pump();
-      await editor.runTextTool('reverseLines');
-      await tester.pump();
-      editor.openTextTools();
-      await tester.pump();
 
       await tester.tap(find.text('Repeat Reverse Lines'));
-      await tester.pump();
+      await tester.pump(_undoWait);
 
       expect(editor.text.text, 'b\na');
       expect(editor.textToolsOpen, isFalse);
@@ -411,6 +415,38 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.text('Remove Duplicate Lines…'), findsOneWidget);
+    });
+
+    testWidgets('a short window keeps the sheet inside it', (tester) async {
+      await _pumpBrowser(tester, 'b\na', size: const Size(320, 300));
+
+      expect(find.text('Text Tools'), findsOneWidget);
+      expect(_filterField(), findsOneWidget);
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a record for a removed tool lists no Repeat or Recent', (
+      tester,
+    ) async {
+      final history = TextToolHistory();
+      // A host-built record can outlive its tool; recording keeps it.
+      history.record('gone', {});
+      final editor = EditorController(
+        displayPath: 'notes.txt',
+        initialText: 'b\na',
+        toolHistory: history,
+      );
+      addTearDown(editor.dispose);
+      await tester.pumpWidget(_app(editor));
+      await tester.pump();
+      editor.openTextTools();
+      await tester.pump();
+
+      expect(find.text('Repeat gone'), findsNothing);
+      expect(find.text('Repeat and Recent'), findsNothing);
+      // The catalog itself still lists.
+      expect(find.text('Sort Lines…'), findsOneWidget);
     });
 
     testWidgets('the title and groups announce as headings', (tester) async {

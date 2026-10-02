@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -423,7 +424,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               canRequestFocus: false,
               skipTraversal: true,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
+                // The sheet never takes more than its catalog needs, nor
+                // more than a short window can spare: below about 540 px
+                // of window the cap yields to the chrome around it, down
+                // to a floor that still shows the filter and one row.
+                constraints: BoxConstraints(
+                  maxHeight: math.min(
+                    320.0,
+                    math.max(160.0, MediaQuery.sizeOf(context).height - 220),
+                  ),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
                   child: TextToolsBrowser(

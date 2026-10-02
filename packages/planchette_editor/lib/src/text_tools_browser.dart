@@ -120,9 +120,11 @@ class TextToolsBrowserState extends State<TextToolsBrowser> {
 
     bool matchesTool(TextTool tool) => words.isEmpty || _matches(tool, words);
     bool matchesRecord(TextToolRunRecord record) {
-      if (words.isEmpty) return true;
+      // A host-built record can outlive its tool; without a row to run,
+      // it is filtered from Repeat and Recent whatever the filter is.
       final tool = textToolById(record.toolId);
       if (tool == null) return false;
+      if (words.isEmpty) return true;
       final summary = strings.textToolOptionsSummary(record);
       final haystack =
           '${strings.textToolName(tool.id)} $summary ${strings.textToolDescription(tool.id)}';
