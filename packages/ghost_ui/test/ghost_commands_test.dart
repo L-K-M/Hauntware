@@ -69,14 +69,18 @@ void main() {
     );
 
     test('runs a matching binding and reports handled', () {
-      final result = dispatchGhostChord([binding(LogicalKeyboardKey.keyA)], down(LogicalKeyboardKey.keyA));
+      final result = dispatchGhostChord([
+        binding(LogicalKeyboardKey.keyA),
+      ], down(LogicalKeyboardKey.keyA));
       expect(ran, 1);
       expect(result, KeyEventResult.handled);
     });
 
     test('ignores non-matching and key-up events', () {
       expect(
-        dispatchGhostChord([binding(LogicalKeyboardKey.keyA)], down(LogicalKeyboardKey.keyB)),
+        dispatchGhostChord([
+          binding(LogicalKeyboardKey.keyA),
+        ], down(LogicalKeyboardKey.keyB)),
         KeyEventResult.ignored,
       );
       expect(
@@ -100,10 +104,9 @@ void main() {
         timeStamp: Duration.zero,
       );
       expect(
-        dispatchGhostChord(
-          [binding(LogicalKeyboardKey.keyA, repeats: false)],
-          event,
-        ),
+        dispatchGhostChord([
+          binding(LogicalKeyboardKey.keyA, repeats: false),
+        ], event),
         KeyEventResult.handled,
       );
       expect(ran, 0);
@@ -115,10 +118,9 @@ void main() {
     });
 
     test('a refused mayRunFrom is consumed without running', () {
-      final result = dispatchGhostChord(
-        [binding(LogicalKeyboardKey.keyA, mayRunFrom: (_) => false)],
-        down(LogicalKeyboardKey.keyA),
-      );
+      final result = dispatchGhostChord([
+        binding(LogicalKeyboardKey.keyA, mayRunFrom: (_) => false),
+      ], down(LogicalKeyboardKey.keyA));
       expect(result, KeyEventResult.handled);
       expect(ran, 0);
     });
@@ -180,13 +182,17 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.f5);
       expect(ran, 0);
 
-      await pumpScope(tester, [
-        GhostChordBinding(
-          activator: const SingleActivator(LogicalKeyboardKey.f5),
-          onInvoke: () => ran++,
-        ),
-      ], unmodifiedPolicy: GhostUnmodifiedChordPolicy.allowlisted,
-          unmodifiedTriggers: {LogicalKeyboardKey.f5});
+      await pumpScope(
+        tester,
+        [
+          GhostChordBinding(
+            activator: const SingleActivator(LogicalKeyboardKey.f5),
+            onInvoke: () => ran++,
+          ),
+        ],
+        unmodifiedPolicy: GhostUnmodifiedChordPolicy.allowlisted,
+        unmodifiedTriggers: {LogicalKeyboardKey.f5},
+      );
       await tester.sendKeyEvent(LogicalKeyboardKey.f5);
       expect(ran, 1);
     });
@@ -239,7 +245,11 @@ void main() {
       );
       expect(
         ghostEditingTextIntent(
-          const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true),
+          const SingleActivator(
+            LogicalKeyboardKey.keyZ,
+            meta: true,
+            shift: true,
+          ),
         ),
         isA<RedoTextIntent>(),
       );
@@ -394,9 +404,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(
-          home: MenuBar(children: ghostMenuBarChildren([menu()])),
-        ),
+        MaterialApp(home: MenuBar(children: ghostMenuBarChildren([menu()]))),
       );
       await tester.tap(find.text('File'));
       await tester.pumpAndSettle();
@@ -414,9 +422,11 @@ void main() {
 
       expect(find.text('Sort By'), findsOneWidget);
       expect(
-        tester.widget<CheckboxMenuButton>(
-          find.widgetWithText(CheckboxMenuButton, 'Toggle'),
-        ).value,
+        tester
+            .widget<CheckboxMenuButton>(
+              find.widgetWithText(CheckboxMenuButton, 'Toggle'),
+            )
+            .value,
         isTrue,
       );
     });

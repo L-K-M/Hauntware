@@ -33,15 +33,9 @@ void main() {
       meta: true,
       shift: true,
     );
-    expect(
-      formatShortcutActivator(saveAs, TargetPlatform.macOS),
-      '⇧⌘S',
-    );
+    expect(formatShortcutActivator(saveAs, TargetPlatform.macOS), '⇧⌘S');
     const next = SingleActivator(LogicalKeyboardKey.tab, control: true);
-    expect(
-      formatShortcutActivator(next, TargetPlatform.linux),
-      'Ctrl+Tab',
-    );
+    expect(formatShortcutActivator(next, TargetPlatform.linux), 'Ctrl+Tab');
     const up = SingleActivator(LogicalKeyboardKey.arrowUp, alt: true);
     expect(formatShortcutActivator(up, TargetPlatform.macOS), '⌥↑');
     expect(formatShortcutActivator(up, TargetPlatform.windows), 'Alt+Up');

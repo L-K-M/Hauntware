@@ -226,8 +226,7 @@ class GhostChordScope extends StatelessWidget {
         // event propagating upward to them.
         if (suspendWhileEditing) {
           final primary = FocusManager.instance.primaryFocus;
-          if (primary?.context?.findAncestorWidgetOfExactType<
-                  EditableText>() !=
+          if (primary?.context?.findAncestorWidgetOfExactType<EditableText>() !=
               null) {
             return KeyEventResult.ignored;
           }

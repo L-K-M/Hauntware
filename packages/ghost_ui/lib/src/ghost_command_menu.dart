@@ -70,8 +70,11 @@ final class GhostCommandRow extends GhostMenuRow {
 
 /// A named submenu grouping command rows ("Sort By", "Recent").
 final class GhostSubmenuRow extends GhostMenuRow {
-  GhostSubmenuRow({required this.title, required List<GhostCommandRow> items, this.mnemonic})
-    : items = List.unmodifiable(items);
+  GhostSubmenuRow({
+    required this.title,
+    required List<GhostCommandRow> items,
+    this.mnemonic,
+  }) : items = List.unmodifiable(items);
 
   final String title;
 
@@ -151,13 +154,15 @@ Intent? ghostEditingTextIntent(MenuSerializableShortcut shortcut) {
   return switch ((shortcut.trigger, shortcut.shift)) {
     (LogicalKeyboardKey.keyA, false) => const SelectAllTextIntent(cause),
     (LogicalKeyboardKey.keyC, false) => CopySelectionTextIntent.copy,
-    (LogicalKeyboardKey.keyX, false) =>
-      const CopySelectionTextIntent.cut(cause),
+    (LogicalKeyboardKey.keyX, false) => const CopySelectionTextIntent.cut(
+      cause,
+    ),
     (LogicalKeyboardKey.keyV, false) => const PasteTextIntent(cause),
     (LogicalKeyboardKey.keyZ, false) => const UndoTextIntent(cause),
     (LogicalKeyboardKey.keyZ, true) => const RedoTextIntent(cause),
-    (LogicalKeyboardKey.backspace, false) =>
-      const DeleteToLineBreakIntent(forward: false),
+    (LogicalKeyboardKey.backspace, false) => const DeleteToLineBreakIntent(
+      forward: false,
+    ),
     _ => null,
   };
 }
@@ -405,7 +410,12 @@ bool _isLetter(int codeUnit) =>
 /// text colour so the label leads. Display only: the chord layer
 /// dispatches.
 class GhostShortcutHint extends StatelessWidget {
-  const GhostShortcutHint(this.activator, {super.key, this.enabled = true, this.color});
+  const GhostShortcutHint(
+    this.activator, {
+    super.key,
+    this.enabled = true,
+    this.color,
+  });
 
   /// The hint for [spec]'s first activator, or null when it has none.
   static GhostShortcutHint? forSpec(GhostCommandSpec spec, {Color? color}) {
@@ -556,7 +566,9 @@ List<Widget> ghostMenuBarChildren(
       ),
       child: menu.mnemonic == null
           ? Text(menu.title)
-          : MenuAcceleratorLabel(menuAcceleratorLabel(menu.title, menu.mnemonic!)),
+          : MenuAcceleratorLabel(
+              menuAcceleratorLabel(menu.title, menu.mnemonic!),
+            ),
     ),
 ];
 
