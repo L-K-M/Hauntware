@@ -22,6 +22,33 @@ class _Marked extends AppLocalizationsEn {
   String editorGoToLineHint(int lines) => '[1..$lines]';
   @override
   String editorGoToLineInvalid(int lines) => '[not 1..$lines]';
+  @override
+  String get editorTextToolsTitle => '[tools]';
+  @override
+  String get editorTextToolsFilterHint => '[filter]';
+  @override
+  String get editorTextToolNameSortLines => '[sort]';
+  @override
+  String get editorTextToolDescriptionSortLines => '[orders]';
+  @override
+  String get editorTextToolApply => '[apply]';
+  @override
+  String get editorTextToolAppliesTo => '[applies to]';
+  @override
+  String editorTextToolNoticeSentence(String name, String sentence) =>
+      '$name :: $sentence';
+  @override
+  String editorTextToolChangedSortLines(
+    int changed,
+    int scope,
+    String where,
+  ) => '[moved $changed/$scope $where]';
+  @override
+  String get editorTextToolWhereDocument => '[everywhere]';
+  @override
+  String get editorLineActions => '[line actions]';
+  @override
+  String get editorSearchHistory => '[history]';
 }
 
 void main() {
@@ -84,5 +111,108 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     expect(find.text('[not 1..3]'), findsOneWidget);
+  });
+
+  testWidgets('the browser, tool bar and notice use the ARB copy', (
+    tester,
+  ) async {
+    final controller = EditorController(
+      displayPath: '/srv/notes.txt',
+      initialText: 'b\na\n',
+      undoQuiet: Duration.zero,
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlanchetteEditor(
+            controller: controller,
+            strings: PoltergeistEditorStrings(_Marked()),
+            showStatus: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    controller.openTextTools();
+    await tester.pumpAndSettle();
+    expect(find.text('[tools]'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '[filter]'), findsOneWidget);
+    expect(find.text('[sort]…'), findsOneWidget);
+    expect(find.text('[orders]'), findsOneWidget);
+
+    controller.chooseTextTool('sortLines');
+    await tester.pumpAndSettle();
+    expect(find.text('[applies to]'), findsOneWidget);
+    expect(find.text('[apply]'), findsOneWidget);
+
+    await tester.tap(find.text('[apply]'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('[sort] :: [moved 2/2 [everywhere]]'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the find bar extras come from the ARB copy', (tester) async {
+    final controller = EditorController(
+      displayPath: '/srv/notes.txt',
+      initialText: 'b\na\n',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlanchetteEditor(
+            controller: controller,
+            strings: PoltergeistEditorStrings(_Marked()),
+            showStatus: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    controller.openSearch();
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('[line actions]'), findsOneWidget);
+  });
+
+  test('the ARB catalog covers every shared text tool, option and choice', () {
+    final strings = PoltergeistEditorStrings(AppLocalizationsEn());
+
+    // A fallback leak means the shared package's own English would render.
+    // The case tools whose display name legitimately is the id itself are
+    // exempt from the not-the-id heuristic. Find-bar tools render their
+    // options as find-row controls, never as labeled options-bar rows, so
+    // their option ids are not label keys either.
+    const selfNamed = {'lowercase', 'camelCase', 'snakeCase', 'kebabCase'};
+    final choiceIds = <String>{};
+    for (final tool in textToolCatalog) {
+      if (!selfNamed.contains(tool.id)) {
+        expect(strings.textToolName(tool.id), isNot(tool.id),
+          reason: '${tool.id} has no ARB name');
+      }
+      expect(strings.textToolDescription(tool.id), isNotEmpty,
+        reason: '${tool.id} has no ARB description');
+      expect(strings.textToolKeywords(tool.id), isNotEmpty,
+        reason: '${tool.id} has no ARB keywords');
+      for (final option in tool.options) {
+        if (!tool.usesFindBar) {
+          expect(strings.textToolOptionName(tool.id, option.id),
+            isNot(option.id),
+            reason: '${tool.id}/${option.id} has no ARB label');
+        }
+        if (option is ChoiceOption) choiceIds.addAll(option.choices);
+      }
+    }
+    for (final choiceId in choiceIds) {
+      expect(strings.textToolChoiceName(choiceId), isNot(choiceId),
+        reason: '$choiceId has no ARB label');
+    }
+    for (final group in TextToolGroup.values) {
+      expect(strings.textToolGroupName(group), isNotEmpty,
+        reason: '$group has no ARB label');
+    }
   });
 }

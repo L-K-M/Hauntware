@@ -111,6 +111,20 @@ Pin audit (2026-09-29): both packages move from `5b75f9dc` to
 #104), in both pubspecs and both lockfiles. Séance moves to the same
 revision in its own PR, so the two hosts stay on one reviewed revision.
 
+Pin audit (2026-10-02): both packages move from `ff487394` to
+`53153c8e0829f6c131de2d8beb219d16f70c0914` (Planchette main, merges of its
+#119–#124: the Unicode/JSON, Edit/File, browser, search-extras,
+wrap-columns, and compare/mnemonics text-tools slices), in both pubspecs
+and both lockfiles. Séance adopts the same reviewed revision in its own
+PR. The editor package surface gains the text-tools catalog browser,
+options bar, post-run notice, and find-bar extras; every string those
+surfaces render in Poltergeist comes from the app's ARB catalog through
+`PoltergeistEditorStrings`, per the English-only host policy — the
+adapter's id-keyed switches and list joiners are the only new technical
+literals, inventoried in the localization contract. The controller keeps
+its default `TextNormalization.normalize`, matching
+`loadBuiltInTextDocumentDetails` and `saveBuiltInTextDocument`.
+
 ## Destination collision ownership (2026-09-27)
 
 Original Poltergeist implementation; no Séance source was copied and no pin
