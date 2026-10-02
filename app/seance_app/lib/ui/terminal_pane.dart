@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:planchette_editor/planchette_editor.dart'
     show GhostMenuDivider, GhostMenuItem;
 import 'package:seance_core/seance_core.dart';
@@ -1348,7 +1349,15 @@ class _SessionViewState extends State<_SessionView> {
     // The same chords _handleKeyEvent binds: ⌘ on Apple platforms,
     // Ctrl+Shift elsewhere, where plain Ctrl belongs to the shell.
     final apple = Platform.isMacOS || Platform.isIOS;
-    Text keys(String key) => Text(apple ? '⌘$key' : 'Ctrl+Shift+$key');
+    Text keys(LogicalKeyboardKey key) => Text(
+      formatShortcutActivator(
+            apple
+                ? SingleActivator(key, meta: true)
+                : SingleActivator(key, control: true, shift: true),
+            apple ? TargetPlatform.macOS : TargetPlatform.linux,
+          ) ??
+          key.keyLabel,
+    );
     final choice = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -1365,7 +1374,7 @@ class _SessionViewState extends State<_SessionView> {
           label: 'Copy',
           icon: Icons.copy,
           iconColor: palette.glyph(FamilyHue.cyan),
-          shortcut: keys('C'),
+          shortcut: keys(LogicalKeyboardKey.keyC),
         ),
         GhostMenuItem(
           context: context,
@@ -1373,7 +1382,7 @@ class _SessionViewState extends State<_SessionView> {
           label: 'Paste',
           icon: Icons.content_paste,
           iconColor: palette.glyph(FamilyHue.cyan),
-          shortcut: keys('V'),
+          shortcut: keys(LogicalKeyboardKey.keyV),
         ),
         const GhostMenuDivider(),
         GhostMenuItem(
@@ -1382,7 +1391,7 @@ class _SessionViewState extends State<_SessionView> {
           label: 'Select all',
           icon: Icons.select_all,
           iconColor: palette.glyph(FamilyHue.graphite),
-          shortcut: keys('A'),
+          shortcut: keys(LogicalKeyboardKey.keyA),
         ),
         GhostMenuItem(
           context: context,
@@ -1390,7 +1399,7 @@ class _SessionViewState extends State<_SessionView> {
           label: 'Find…',
           icon: Icons.search,
           iconColor: palette.glyph(FamilyHue.graphite),
-          shortcut: keys('F'),
+          shortcut: keys(LogicalKeyboardKey.keyF),
         ),
         const GhostMenuDivider(),
         // No shortcut hint here: the item opens the list itself.

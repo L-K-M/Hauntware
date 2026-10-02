@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 
 import 'app_menus.dart';
 
@@ -90,25 +91,14 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
 }
 
 /// [chord] as the platform writes it: modifier glyphs in Apple's order
-/// (⌃⌥⇧⌘) run together, or "Ctrl+Shift+W".
-String _describe(SingleActivator chord, {required bool apple}) {
-  final key = chord.trigger;
-  if (apple) {
-    return [
-      if (chord.control) '⌃',
-      if (chord.alt) '⌥',
-      if (chord.shift) '⇧',
-      if (chord.meta) '⌘',
-      key == LogicalKeyboardKey.tab ? '⇥' : key.keyLabel,
-    ].join();
-  }
-  return [
-    if (chord.control) 'Ctrl',
-    if (chord.alt) 'Alt',
-    if (chord.shift) 'Shift',
-    key.keyLabel,
-  ].join('+');
-}
+/// (⌃⌥⇧⌘) run together, or "Ctrl+Shift+W". The shared formatter only
+/// knows macOS glyphs, so iPadOS spells them through it as macOS.
+String _describe(SingleActivator chord, {required bool apple}) =>
+    formatShortcutActivator(
+          chord,
+          apple ? TargetPlatform.macOS : TargetPlatform.linux,
+        ) ??
+        chord.trigger.keyLabel;
 
 /// The shortcut list in a dialog, for this platform.
 Future<void> showKeyboardShortcuts(BuildContext context) {
