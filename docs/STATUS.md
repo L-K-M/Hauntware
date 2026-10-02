@@ -30,18 +30,58 @@ ownership boundaries and compatibility policies are documented in
   Linux desktop entries pass selected files; Windows builds are portable.
 - Desktop CI builds and a release pipeline for macOS, Linux and Windows.
 - Text menu groups, palette keywords/paths, an inline options bar, Repeat and
-  Recent, and a result notice with Undo. The catalog contains 48 menu tools
-  plus Extract Matches. The find bar supports Keep/Delete Lines Matching,
+  Recent, and a result notice with Undo. The catalog contains all 48 original
+  menu-table tools, Format/Minify JSON and Extract Matches: 51 entries. The
+  find bar supports Keep/Delete Lines Matching,
   Extract and a stored Find in Selection scope. A shared catalog browser
   (Repeat and Recent first, the seven groups with descriptions, keyword
   filter) opens from `controller.openTextTools()` and from the app's Text
-  menu; hosts add one header icon each on adoption.
+  menu; a host header entry exposes the same browser on phones and desktop.
 - Clickable app status segments for indentation, LF/CRLF and UTF-8 BOM, with
   metadata-aware dirty state. Opt-in trim/final-newline save settings and
-  Normalize Line Endings. Remaining host/deferred work is recorded in
+  Normalize Line Endings. Delivery status and limitations are recorded in
   [TEXT_TOOLS.md](TEXT_TOOLS.md#remaining-work-slices-5c-7-and-8).
 
 ## Verification
+
+### Completed Planchette slices, 2026-10-02
+
+[PRs #119 to #124](TEXT_TOOLS.md#implementation-status-2026-10-02) deliver the
+remaining Unicode/ASCII/JSON, browser, Edit/File, search, text-column and
+comparison/menu slices. The common code revision is
+`53153c8e0829f6c131de2d8beb219d16f70c0914`.
+
+- Latest reviewed integrated tree: core 588 tests, editor 395 tests and app
+  437 tests passed, with two existing app filesystem skips. All analysis and
+  format checks passed; CI passed core suites and desktop builds on all three
+  OSes, including native macOS fixtures.
+- Replacement backslashes remain literal by owner decision. JSON formatting
+  preserves literal values. Text-cell widths are independent of font pixels;
+  legacy lone-CR wrapping requires Normalize Line Endings first.
+- Alt/AltGr checks use simulated framework key events, not native keyboard
+  layouts. Alt-alone focus and bare-letter access within open menus remain
+  unsupported by the chosen Flutter accelerator facility.
+
+### Host adoption, 2026-10-02
+
+Both hosts pin core/editor to `53153c8e0829f6c131de2d8beb219d16f70c0914` and
+expose the shared browser through a header icon on phones and desktop:
+
+- [Séance #166](https://github.com/L-K-M/Seance/pull/166), merged as `27a87b2`:
+  analysis clean, 1,215 Flutter tests passed; raw-buffer/conditional-save
+  preflight, CRLF, lock and 320 px doubled-scale entry tests pass.
+- [Poltergeist #246](https://github.com/L-K-M/Poltergeist/pull/246), merged as
+  `45e97df6`: analysis clean, 1,920 core tests passed (27 environment skips),
+  3,153 Flutter tests passed; English ARB routing/coverage, browser entry,
+  locks, notices and phone layouts pass.
+- Both latest CI matrices passed Android, iOS, Linux, macOS and Windows
+  builds. Both completed two review rounds with no important findings left.
+  Mobile/native runtime drives were not performed locally; captures were
+  test-generated rather than visually inspected.
+
+Optional review leftovers are recorded in the PRs: small documentation/test
+coverage suggestions, a redundant unused ARB description key and browser
+filter/lifecycle polish. They do not block this delivery.
 
 ### Text-column tool integration, 2026-10-02
 
@@ -116,8 +156,7 @@ Flutter 3.47.2 / Dart 3.13.2, the versions CI uses:
 Earlier local checks on macOS (Flutter 3.47.3) also covered real macOS file
 publication and Save As casing on case-insensitive temporary volumes.
 
-The two host results below predate the integration; both hosts still need
-to move to the current shared-editor revision.
+Historical host results below predate the integration and current adoption.
 
 - Poltergeist adapter: analysis clean, 58 core document/checkout and 90
   Flutter editor/window/localization/syntax/checkout tests passed. Real-font

@@ -1574,9 +1574,10 @@ Also applies to extensionless *files* (`script` with a `#!/bin/sh` first
 line), not only untitled buffers — the original entry missed that.
 
 ### E13. Text tools: BBEdit-style transforms — L, risk: low (idea, 2026-09-30)
-Slices 1 to 6 implement 42 menu tools plus Extract Matches. Six menu tools
-remain deferred; optional host exposure is slice 7. See the plan's status
-section for blockers and outstanding owner decisions.
+Completed through #119 to #124: all 48 original menu tools, two JSON tools
+and Extract Matches. Séance #166 and Poltergeist #246 expose the shared
+browser at the same reviewed pin. See the plan's status for verified limits
+and the owner's literal-backslash replacement decision.
 
 Sort, dedupe, filter, prefix, number, case, whitespace, gremlin, encode and
 insert tools as one const catalog of pure functions in core. Each returns an
@@ -1796,8 +1797,9 @@ shell rewrites and one geometry owner land, so the panel is built once;
 do not grow a second search engine beside E5.
 
 ### A16. Text menu, tool bar, Repeat and Recent — L, risk: medium (idea, 2026-09-30)
-The standalone menu, bar, history and palette exposure are implemented in
-slices 1 to 6. The optional host list/sheet and adoption work remain slice 7.
+The standalone menu, bar, history and palette, plus the shared browser and
+both-host adoption, are implemented. Host header entries reach the same
+catalog on phones and desktop; pin parity is recorded in the plan's status.
 
 Exposure for E13, designed in [docs/TEXT_TOOLS.md](docs/TEXT_TOOLS.md): a
 Text menu generated from the catalog (nine rows, seven submenus, every

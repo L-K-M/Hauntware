@@ -13,7 +13,23 @@ CR) were run as a throwaway probe on Flutter 3.47.2 / Dart 3.13.2; slice 1
 turns them into tests. Ids such as B8 or E5 are entries in
 [ANALYSIS.md](../ANALYSIS.md); this plan is E13 and A16 there.
 
-## Implementation status, 2026-10-01
+## Implementation status, 2026-10-02
+
+Planchette's remaining planned slices are merged: Unicode/ASCII/JSON
+([#119](https://github.com/L-K-M/Planchette/pull/119)), shared browser
+([#121](https://github.com/L-K-M/Planchette/pull/121)), Edit/File commands
+([#120](https://github.com/L-K-M/Planchette/pull/120)), search extras
+([#122](https://github.com/L-K-M/Planchette/pull/122)), text-column tools
+([#123](https://github.com/L-K-M/Planchette/pull/123)) and comparison/menu keys
+([#124](https://github.com/L-K-M/Planchette/pull/124)). The common reviewed
+host pin is `53153c8e0829f6c131de2d8beb219d16f70c0914`.
+
+Both hosts adopted that pin with a phone/desktop header entry:
+[Séance #166](https://github.com/L-K-M/Seance/pull/166) (merge `27a87b2`) and
+[Poltergeist #246](https://github.com/L-K-M/Poltergeist/pull/246) (merge
+`45e97df6`). Both passed CI across all five client platforms and two completed
+review rounds. Poltergeist routes the shared strings through its English ARB
+adapter; Séance preserves raw buffers with its existing conditional save policy.
 
 ### Owner decisions and text-column tools, 2026-10-02
 
@@ -75,7 +91,7 @@ the two previously deferred menu tools, Hard Wrap and Convert Tabs to Spaces.
 | Slice | Status and next step |
 |---|---|
 | 5c | Replacement backslash escapes declined by owner: replacements keep backslashes literal, only `$1`, `${1}`, `${name}` and `$$` expand. Active-match replacement preview built (worker-backed, bounded one line) |
-| 7 | Built in Planchette: `openTextTools()` with Repeat/Recent, seven groups and keyword filter, verified at 320 px and doubled text scale. Both-host adoption is approved and will use one final reviewed pin. Poltergeist strings use its existing English ARB policy |
+| 7 | Built and adopted by both hosts at `53153c8`: `openTextTools()` with Repeat/Recent, seven groups and keyword filter, verified at 320 px and doubled text scale. A header icon reaches it on phones and desktop. Poltergeist uses its English ARB adapter |
 | 8: wrap and interior tabs | Built using the owner's explicit text-cell policy; status/navigation coordinates remain UTF-16 |
 | 8: Unicode/ASCII | Built. `unorm_dart` in core (decision 4); Convert to ASCII uses a reviewed Latin table, keeps unmapped non-ASCII literal with a count |
 | 8: JSON | Built. Whitespace-only strict-JSON reformat (decision 7), values verbatim, invalid input refused with line/column, size capped by the runner |
@@ -83,12 +99,10 @@ the two previously deferred menu tools, Hard Wrap and Convert Tabs to Spaces.
 | 8: Edit/File | Shipped: Select Line, Select Paragraph, Select Enclosing Brackets, Insert Line Above/Below, Paste and Match Indentation, Increment/Decrement Number, Copy/Cut Line, Toggle Comment block fallback and File-menu Copy Path. Go to Matching Bracket and tab-menu Copy Full Path already existed |
 | 8: menu keyboard access | Built: Alt mnemonics on the in-window menu bar (Windows, Linux) through Flutter's `MenuAcceleratorLabel`, assigned to the six top menus and the app's static commands — never to per-tool rows, whose labels come from the localizable catalog. Native macOS menus, the palette and command ids are unchanged. Ctrl+Alt (the Windows AltGr report) and AltGr-produced characters never trigger an accelerator; validated in the framework's key-event model only, not against native keyboard layouts |
 
-No host pins were changed for slice 6. On a later pin bump the shared API
-gains format/save options and normalization; clickable status menus and the
-save-settings UI belong to the standalone app. Hosts still gain the shared
-find-bar actions from slice 5. A pin bump alone does not expose the full
-catalog. Broader E10 language selection and `.editorconfig` support (A1)
-remain separate work.
+Clickable status menus and the save-settings UI belong to the standalone
+app. Hosts reuse the shared browser, options/result surfaces and find-bar
+actions through their own header entries. Broader E10 language selection and
+`.editorconfig` support (A1) remain separate work.
 
 ## 1. Recommendation
 
