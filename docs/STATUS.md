@@ -40,7 +40,7 @@ ownership boundaries and compatibility policies are documented in
 - Clickable app status segments for indentation, LF/CRLF and UTF-8 BOM, with
   metadata-aware dirty state. Opt-in trim/final-newline save settings and
   Normalize Line Endings. Delivery status and limitations are recorded in
-  [TEXT_TOOLS.md](TEXT_TOOLS.md#remaining-work-slices-5c-7-and-8).
+  [TEXT_TOOLS.md](TEXT_TOOLS.md#implementation-status-2026-10-02).
 
 ## Verification
 
@@ -64,7 +64,7 @@ comparison/menu slices. The common code revision is
 
 ### Host adoption, 2026-10-02
 
-Both hosts pin core/editor to `53153c8e0829f6c131de2d8beb219d16f70c0914` and
+Both hosts pin core/editor to the reviewed revision `53153c8` and
 expose the shared browser through a header icon on phones and desktop:
 
 - [Séance #166](https://github.com/L-K-M/Seance/pull/166), merged as `27a87b2`:
@@ -74,8 +74,8 @@ expose the shared browser through a header icon on phones and desktop:
   `45e97df6`: analysis clean, 1,920 core tests passed (27 environment skips),
   3,153 Flutter tests passed; English ARB routing/coverage, browser entry,
   locks, notices and phone layouts pass.
-- Both latest CI matrices passed Android, iOS, Linux, macOS and Windows
-  builds. Both completed two review rounds with no important findings left.
+- CI passed Android, iOS, Linux, macOS and Windows builds in both hosts.
+  Both completed two review rounds with no important findings left.
   Mobile/native runtime drives were not performed locally; captures were
   test-generated rather than visually inspected.
 

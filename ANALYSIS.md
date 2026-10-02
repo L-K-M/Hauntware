@@ -1574,7 +1574,7 @@ Also applies to extensionless *files* (`script` with a `#!/bin/sh` first
 line), not only untitled buffers — the original entry missed that.
 
 ### E13. Text tools: BBEdit-style transforms — L, risk: low (idea, 2026-09-30)
-Completed through #119 to #124: all 48 original menu tools, two JSON tools
+Completed in PRs #119 to #124: all 48 original menu tools, two JSON tools
 and Extract Matches. Séance #166 and Poltergeist #246 expose the shared
 browser at the same reviewed pin. See the plan's status for verified limits
 and the owner's literal-backslash replacement decision.

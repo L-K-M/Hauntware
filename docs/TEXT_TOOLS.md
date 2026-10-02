@@ -16,9 +16,9 @@ turns them into tests. Ids such as B8 or E5 are entries in
 ## Implementation status, 2026-10-02
 
 Planchette's remaining planned slices are merged: Unicode/ASCII/JSON
-([#119](https://github.com/L-K-M/Planchette/pull/119)), shared browser
-([#121](https://github.com/L-K-M/Planchette/pull/121)), Edit/File commands
-([#120](https://github.com/L-K-M/Planchette/pull/120)), search extras
+([#119](https://github.com/L-K-M/Planchette/pull/119)), Edit/File commands
+([#120](https://github.com/L-K-M/Planchette/pull/120)), shared browser
+([#121](https://github.com/L-K-M/Planchette/pull/121)), search extras
 ([#122](https://github.com/L-K-M/Planchette/pull/122)), text-column tools
 ([#123](https://github.com/L-K-M/Planchette/pull/123)) and comparison/menu keys
 ([#124](https://github.com/L-K-M/Planchette/pull/124)). The common reviewed
@@ -27,7 +27,7 @@ host pin is `53153c8e0829f6c131de2d8beb219d16f70c0914`.
 Both hosts adopted that pin with a phone/desktop header entry:
 [Séance #166](https://github.com/L-K-M/Seance/pull/166) (merge `27a87b2`) and
 [Poltergeist #246](https://github.com/L-K-M/Poltergeist/pull/246) (merge
-`45e97df6`). Both passed CI across all five client platforms and two completed
+`45e97df6`). Both passed CI across all five client platforms and completed two
 review rounds. Poltergeist routes the shared strings through its English ARB
 adapter; Séance preserves raw buffers with its existing conditional save policy.
 
