@@ -95,7 +95,10 @@ void main() {
       expect(result.status, UnifiedDiffStatus.differs);
       // Change 1 at line 5, change 2 the missing final newline at line 40;
       // more than twice the context separates them.
-      expect(result.text, contains('@@ -2,7 +2,7 @@\n l2\n l3\n l4\n-l5\n+FIVE\n'));
+      expect(
+        result.text,
+        contains('@@ -2,7 +2,7 @@\n l2\n l3\n l4\n-l5\n+FIVE\n'),
+      );
       expect(RegExp('@@ .* @@').allMatches(result.text).length, 2);
     });
 

@@ -961,8 +961,10 @@ final class DocumentWorkspace extends ChangeNotifier {
       }
       switch (result.status) {
         case UnifiedDiffStatus.identical:
-          _reportError('$name has no differences from the file on disk.',
-              scope: scope);
+          _reportError(
+            '$name has no differences from the file on disk.',
+            scope: scope,
+          );
           return false;
         case UnifiedDiffStatus.differs:
           _diffDocument(name, result.text);
