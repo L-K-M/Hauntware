@@ -74,6 +74,20 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
+  testWidgets('Browse Text Tools opens the catalog browser', (tester) async {
+    final tab = workspace.newDocument()!..editor.text.text = 'b\na';
+    await mount(tester);
+    tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
+
+    item(tester, 'Text', 'Browse Text Tools…').onSelected!();
+    await tester.pump();
+
+    expect(tab.editor.textToolsOpen, isTrue);
+    expect(find.text('Text Tools'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   testWidgets('a tool with options opens the tool bar, not a run', (
     tester,
   ) async {

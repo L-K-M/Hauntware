@@ -32,7 +32,10 @@ ownership boundaries and compatibility policies are documented in
 - Text menu groups, palette keywords/paths, an inline options bar, Repeat and
   Recent, and a result notice with Undo. The catalog contains 48 menu tools
   plus Extract Matches. The find bar supports Keep/Delete Lines Matching,
-  Extract and a stored Find in Selection scope.
+  Extract and a stored Find in Selection scope. A shared catalog browser
+  (Repeat and Recent first, the seven groups with descriptions, keyword
+  filter) opens from `controller.openTextTools()` and from the app's Text
+  menu; hosts add one header icon each on adoption.
 - Clickable app status segments for indentation, LF/CRLF and UTF-8 BOM, with
   metadata-aware dirty state. Opt-in trim/final-newline save settings and
   Normalize Line Endings. Remaining host/deferred work is recorded in
@@ -72,6 +75,19 @@ Local Linux checks with Flutter 3.47.2 / Dart 3.13.2:
   rejection, undo/redo cleanup, concurrent typing, composition refusal and
   narrow status controls at doubled text scale. Independent save-path review
   found no important defects. Cross-platform CI is recorded on the PR.
+
+### Text tools browser (slice 7), 2026-10-02
+
+Local Linux checks with Flutter 3.47.2 / Dart 3.13.2:
+
+- Core: analysis clean, 446 tests passed (unchanged).
+- Shared editor: analysis clean, 345 tests passed (24 new: browser state,
+  dispatch, filter, 320 px width, doubled text scale, keyboard, headings,
+  focus and lock).
+- App: analysis clean, 403 tests passed (1 new menu-entry test); two
+  case-insensitive-volume tests skipped on this case-sensitive host.
+- `dart format` and `git diff --check` clean. Cross-platform CI is recorded
+  on the PR.
 
 ### Integration baseline, 2026-09-28
 

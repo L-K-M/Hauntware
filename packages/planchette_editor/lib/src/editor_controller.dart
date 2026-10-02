@@ -837,6 +837,84 @@ class EditorController extends ChangeNotifier {
   /// from it.
   TextToolHistory get toolHistory => _toolHistory;
 
+  // ── Text tools browser ──
+
+  /// Whether the catalog browser is open. Hosts open it from a header
+  /// icon through [openTextTools]; the shared view renders it, and the
+  /// standalone app also offers it from its Text menu.
+  bool get textToolsOpen => _textToolsOpen;
+  bool _textToolsOpen = false;
+
+  /// Opens the catalog browser: Repeat and Recent first, then the seven
+  /// groups with a keyword filter. Browsing edits nothing, so a locked
+  /// document may still open it — its rows then stay disabled. Takes the
+  /// find bar's slot, closing find, Go to Line and the options bar.
+  void openTextTools() {
+    if (_loading || _error != null) return;
+    if (_searchOpen) closeSearch();
+    if (_goToLineOpen) closeGoToLine();
+    if (_barTool != null) closeTextTool(refocus: false);
+    _textToolsOpen = true;
+    _notify();
+  }
+
+  /// Closes the catalog browser. Focus returns to the document, so Escape
+  /// and choosing an immediate tool both leave the caret usable; [refocus]
+  /// is off for callers handing focus to another bar right after.
+  void closeTextTools({bool refocus = true}) {
+    if (!_textToolsOpen) return;
+    _textToolsOpen = false;
+    _notify();
+    if (refocus) editorFocus.requestFocus();
+  }
+
+  /// Chooses a catalog tool from the browser list: a find-bar tool opens
+  /// its find row, a tool with options opens the options bar, and the rest
+  /// run at their defaults through the guarded [runTextTool]. Closes the
+  /// browser first; focus moves to the bar or row, or back to the document.
+  void chooseTextTool(String toolId) {
+    final tool = textToolById(toolId);
+    if (tool == null) {
+      throw ArgumentError.value(toolId, 'toolId', 'No text tool');
+    }
+    if (_loading || _error != null) return;
+    if (tool.usesFindBar) {
+      closeTextTools(refocus: false);
+      openFindTool(toolId);
+    } else if (tool.options.isEmpty) {
+      closeTextTools();
+      unawaited(runTextTool(toolId));
+    } else {
+      closeTextTools(refocus: false);
+      openTextTool(toolId);
+    }
+  }
+
+  /// Reruns a recorded tool with the options it ran with: a find-bar tool
+  /// reopens its seeded find row, the rest rerun through [runTextTool].
+  Future<TextToolOutcome?> runRecentTextTool(TextToolRunRecord record) {
+    final tool = textToolById(record.toolId);
+    if (tool == null) return Future.value(null);
+    if (tool.usesFindBar) {
+      closeTextTools(refocus: false);
+      openFindTool(record.toolId, options: record.options);
+      return Future.value(null);
+    }
+    closeTextTools();
+    return runTextTool(
+      record.toolId,
+      options: record.options,
+      wholeDocument: record.wholeDocument,
+    );
+  }
+
+  /// Reruns the last recorded tool, or null before the first run.
+  Future<TextToolOutcome?> repeatTextTool() {
+    final last = _toolHistory.last;
+    if (last == null) return Future.value(null);
+    return runRecentTextTool(last);
+  }
+
   /// Declared option defaults overlaid with the caller's [overrides];
   /// unknown overrides and values that no longer fit their option — a
   /// restored choice outside the current choices — drop to the default.
@@ -934,6 +1012,7 @@ class EditorController extends ChangeNotifier {
       throw ArgumentError.value(toolId, 'toolId', 'No text tool');
     }
     if (_loading || _error != null) return;
+    if (_textToolsOpen) closeTextTools(refocus: false);
     // A pattern tool's options live in the find bar, not here.
     if (tool.usesFindBar) return openFindTool(toolId);
     if (_searchOpen) closeSearch();
@@ -1375,6 +1454,7 @@ class EditorController extends ChangeNotifier {
 
   void openSearch({bool replace = false}) {
     if (_loading || _error != null) return;
+    if (_textToolsOpen) closeTextTools(refocus: false);
     // The find bar and the tool bar share one slot.
     if (_barTool != null) closeTextTool(refocus: false);
     // A plain Find reopens without the pattern-tool rows; the menu paths
@@ -1859,6 +1939,7 @@ class EditorController extends ChangeNotifier {
 
   void openGoToLine() {
     if (_loading || _error != null) return;
+    if (_textToolsOpen) closeTextTools(refocus: false);
     if (_barTool != null) closeTextTool(refocus: false);
     _goToLineOpen = true;
     _invalidGoToLine = null;

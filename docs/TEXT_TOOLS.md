@@ -49,7 +49,10 @@ deferred menu tools are Hard Wrap and Convert Tabs to Spaces.
 | Slice | Status and next step |
 |---|---|
 | 5c | Unbuilt. Replacement backslash escapes require decision 5 because they change existing host templates. The active-match replacement preview also remains unbuilt |
-| 7 | Optional, unbuilt. Decide whether both hosts should expose the full catalog (decision 2), then build `openTextTools()` with a list/sheet, followed by one adoption PR per host at the same reviewed revision. Poltergeist needs ARB keys or a recorded exception. Verify narrow layouts and phone access before claiming them |
+| 7 | Built in Planchette: `openTextTools()` with a list state (Repeat and
+Recent first, seven groups, keyword filter), verified at 320 px and doubled
+text scale. Host adoption is one header icon per host at the same reviewed
+revision, still to do. Poltergeist needs ARB keys or a recorded exception |
 | 8: wrap and interior tabs | Deferred until B8 defines display columns and tab stops |
 | 8: Unicode/ASCII | Built. `unorm_dart` in core (decision 4); Convert to ASCII uses a reviewed Latin table, keeps unmapped non-ASCII literal with a count |
 | 8: JSON | Built. Whitespace-only strict-JSON reformat (decision 7), values verbatim, invalid input refused with line/column, size capped by the runner |
@@ -320,9 +323,9 @@ What a pin bump shows in the hosts:
 
 Slice 7 gives the tool bar a list state (Repeat and Recent first, then the
 seven groups with descriptions and a keyword filter) opened by
-`controller.openTextTools()`. On narrow widths it is a scrolling sheet; that
-layout is unverified. Without slice 7 the hosts gain the find-bar actions
-and nothing else.
+`controller.openTextTools()`. On narrow widths it is a scrolling surface in
+the find bar's slot, verified at 320 px and doubled text scale. Without
+slice 7 the hosts gain the find-bar actions and nothing else.
 
 Strings come from a few `EditorStrings` lookups keyed by id: names,
 descriptions, keywords, option labels, count and notice text. Poltergeist
@@ -512,7 +515,7 @@ shared packages; each PR lists what hosts will see on the next pin bump.
 | 5b | Find in Selection (E5) | L | Scope for find, replace and 5a |
 | 5c | Replacement escapes, preview line | M | If decision 5 is yes |
 | 6 | Metadata setter and dirty state; status segments for indentation, line ending, BOM (E10, V5); trim and final newline on save (E9); Normalize Line Endings | L | Document properties. 42 of 48 tools built |
-| 7 | Tool list state, `openTextTools()`; then a pin bump and one icon in each host | L, three PRs | Hosts and phones. Optional (decision 2) |
+| 7 | Tool list state, `openTextTools()`; then a pin bump and one icon in each host | L, three PRs | Built in Planchette (decision 2: yes, both hosts including phones); host icons pending |
 | 8 | Not scheduled: Hard Wrap and Convert Tabs to Spaces (B8); Convert to ASCII (needs a Latin table); Strip Diacritics, Compose and Decompose Accents (decision 4); Format and Minify JSON (decision 7); regex hints and cheat sheet; Use Selection for Find; search history; Edit and File menu commands; Alt mnemonics; Compare with Saved | | |
 
 Slices 1 and 2 need no bar; the only new surface is the result notice.
