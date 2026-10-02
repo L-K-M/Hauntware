@@ -8,7 +8,9 @@ import 'editor_syntax.dart' show FindPattern, isWordRune;
 import 'indentation.dart';
 import 'line_operations.dart';
 import 'text_document.dart' show LineEnding;
+import 'text_json_tools.dart';
 import 'text_save_options.dart';
+import 'text_unicode.dart';
 
 // Text-transform tools, the BBEdit-style "Text" menu: a catalog of pure
 // functions over the buffer, generated into menu, palette and options-bar
@@ -79,6 +81,10 @@ enum TextToolRefusal {
   /// The host did not wire what the run needs — an action whose callback
   /// is null. Falling back silently would act on the wrong target.
   unavailable,
+
+  /// The JSON tools found input that is not strict JSON. The refusal's
+  /// detail carries the actionable line and column.
+  invalidJson,
 }
 
 /// What a run did. Only [TextToolChanged] touches the buffer; a tool that
@@ -133,10 +139,13 @@ final class TextToolUnchanged extends TextToolOutcome {
 }
 
 /// The run did not apply; [reason] says why, in a way the notice can show.
+/// [detail] carries extra context for reasons that need it, such as the
+/// JSON tools' line and column.
 final class TextToolRefused extends TextToolOutcome {
-  const TextToolRefused(this.reason);
+  const TextToolRefused(this.reason, [this.detail]);
 
   final TextToolRefusal reason;
+  final String? detail;
 }
 
 /// A finished run, kept by the editor for the result notice.
@@ -584,6 +593,30 @@ const textToolCatalog = <TextTool>[
     scope: TextToolScope.document,
     run: _removeAnsiEscapes,
   ),
+  TextTool(
+    id: 'convertToAscii',
+    group: TextToolGroup.cleanUp,
+    scope: TextToolScope.document,
+    run: _convertToAscii,
+  ),
+  TextTool(
+    id: 'stripDiacritics',
+    group: TextToolGroup.cleanUp,
+    scope: TextToolScope.document,
+    run: _stripDiacritics,
+  ),
+  TextTool(
+    id: 'composeAccents',
+    group: TextToolGroup.cleanUp,
+    scope: TextToolScope.document,
+    run: _composeAccents,
+  ),
+  TextTool(
+    id: 'decomposeAccents',
+    group: TextToolGroup.cleanUp,
+    scope: TextToolScope.document,
+    run: _decomposeAccents,
+  ),
 
   // Wrap
   TextTool(
@@ -652,6 +685,18 @@ const textToolCatalog = <TextTool>[
     group: TextToolGroup.encode,
     scope: TextToolScope.selection,
     run: _unescapeBackslashSequences,
+  ),
+  TextTool(
+    id: 'formatJson',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.document,
+    run: _formatJson,
+  ),
+  TextTool(
+    id: 'minifyJson',
+    group: TextToolGroup.encode,
+    scope: TextToolScope.document,
+    run: _minifyJson,
   ),
 
   // Insert
@@ -2193,6 +2238,94 @@ TextToolOutcome _removeAnsiEscapes(TextToolRun run) {
   );
 }
 
+// ── Clean Up: Unicode and ASCII ───────────────────────────────────────
+
+// Counts differing code units plus the length delta, so NFC/NFD runs
+// report characters rather than claiming the whole slice changed.
+int _normalizedChanged(String before, String after) {
+  var changed = (after.length - before.length).abs();
+  final shared = math.min(before.length, after.length);
+  for (var i = 0; i < shared; i++) {
+    if (before.codeUnitAt(i) != after.codeUnitAt(i)) changed++;
+  }
+  return changed;
+}
+
+/// Composes the slice to NFC: e plus combining acute becomes é.
+TextToolOutcome _composeAccents(TextToolRun run) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
+  final composed = unicodeNfc(slice);
+  if (composed == slice) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    composed,
+    changed: _normalizedChanged(slice, composed),
+    scope: slice.length,
+  );
+}
+
+/// Decomposes the slice to NFD: é becomes e plus combining acute.
+TextToolOutcome _decomposeAccents(TextToolRun run) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
+  final decomposed = unicodeNfd(slice);
+  if (decomposed == slice) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    decomposed,
+    changed: _normalizedChanged(slice, decomposed),
+    scope: slice.length,
+  );
+}
+
+/// Removes combining marks after NFD, leaving base letters. Characters
+/// without a decomposition pass through unchanged.
+TextToolOutcome _stripDiacritics(TextToolRun run) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
+  final stripped = stripDiacritics(slice);
+  if (stripped == slice) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    stripped,
+    changed: _normalizedChanged(slice, stripped),
+    scope: slice.length,
+  );
+}
+
+/// Replaces quotes, dashes and accented Latin with ASCII look-alikes.
+/// Non-ASCII with no equivalent is kept literal and counted in [detail]
+/// as `unmapped:N`, never deleted.
+TextToolOutcome _convertToAscii(TextToolRun run) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
+  final result = transliterateToAscii(slice);
+  final detail = result.unmapped > 0 ? 'unmapped:${result.unmapped}' : null;
+  if (result.text == slice) {
+    return TextToolUnchanged(scope: slice.length, detail: detail);
+  }
+  final outcome = _replaceSlice(
+    run,
+    result.text,
+    changed: result.converted,
+    scope: slice.length,
+  );
+  if (outcome is TextToolChanged) {
+    return TextToolChanged(
+      outcome.edit,
+      changed: outcome.changed,
+      scope: outcome.scope,
+      detail: detail,
+    );
+  }
+  return outcome;
+}
+
 // ── Wrap ──────────────────────────────────────────────────────────────
 
 /// Joins each run of non-blank lines into one line; blank lines stay as
@@ -2553,6 +2686,45 @@ TextToolOutcome _unescapeBackslashSequences(TextToolRun run) {
     scope: slice.length,
   );
 }
+
+// ── Encode: JSON document tools ───────────────────────────────────────
+
+// Reformats the slice's strict JSON without touching values: numbers,
+// strings and literals are copied verbatim, so large integers, exponents
+// and escapes keep their spelling and object order is preserved. Output
+// size is capped by the runner's existing preflight, not here.
+TextToolOutcome _reformatJson(TextToolRun run, {required bool minify}) {
+  final start = math.min(run.base, run.extent);
+  final end = math.max(run.base, run.extent);
+  final slice = run.text.substring(start, end);
+  final newline = run.context.lineEnding == LineEnding.crlf ? '\r\n' : '\n';
+  final String reformatted;
+  try {
+    reformatted = minify
+        ? minifyJsonWhitespace(slice)
+        : formatJsonWhitespace(slice, newline: newline);
+  } on JsonFormatError catch (e) {
+    return TextToolRefused(TextToolRefusal.invalidJson, e.toString());
+  }
+  // Keep a trailing break so formatting an already-formatted file stays
+  // a no-op instead of eating its trailing newline, using the document
+  // EOL so the reformatted region stays internally consistent.
+  final eol = slice.endsWith('\n') ? newline : '';
+  final output = eol.isEmpty ? reformatted : '$reformatted$eol';
+  if (output == slice) return TextToolUnchanged(scope: slice.length);
+  return _replaceSlice(
+    run,
+    output,
+    changed: _normalizedChanged(slice, output),
+    scope: slice.length,
+  );
+}
+
+TextToolOutcome _formatJson(TextToolRun run) =>
+    _reformatJson(run, minify: false);
+
+TextToolOutcome _minifyJson(TextToolRun run) =>
+    _reformatJson(run, minify: true);
 
 // ── Insert ────────────────────────────────────────────────────────────
 
