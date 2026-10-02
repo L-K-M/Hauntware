@@ -29,13 +29,16 @@ const int patternMatchLimit = 100000;
 final class FindPattern {
   /// Throws a [FormatException] whose message says why when [source] is not a
   /// valid pattern.
+  ///
+  /// A leading `(?i)`, `(?s)` or `(?m)` — alone or combined as in `(?is)` —
+  /// is accepted and stripped before compiling: `(?i)` forces case-insensitive
+  /// matching, `(?s)` lets `.` match line breaks, `(?m)` is the find bar's
+  /// default already. Only leading flags are special; the same text elsewhere
+  /// keeps the engine's meaning. Replacement templates are untouched:
+  /// backslashes stay literal there, only `$1`, `${1}`, `${name}` and `$$`
+  /// expand (see [expandPatternReplacement]).
   FindPattern(this.source, {this.caseSensitive = false})
-    : _regExp = RegExp(
-        source,
-        multiLine: true,
-        unicode: true,
-        caseSensitive: caseSensitive,
-      );
+    : _regExp = _compilePattern(source, caseSensitive);
 
   /// A pattern that matches [source] literally, for the find bar's line
   /// tools when the regular-expression toggle is off.
@@ -327,6 +330,171 @@ int _nextCharacter(String text, int index) =>
         _isLowSurrogate(text.codeUnitAt(index + 1))
     ? index + 2
     : index + 1;
+
+/// Compiles [source] with the find bar's defaults, stripping leading
+/// `(?i)`, `(?s)` and `(?m)` flags first. Only a run of such groups at the
+/// very start is special, so `(?is)foo` and `(?i)(?m)foo` work while `a(?i)`
+/// keeps the engine's meaning (an error, like elsewhere).
+RegExp _compilePattern(String source, bool caseSensitive) {
+  var rest = source;
+  var insensitive = !caseSensitive;
+  var dotAll = false;
+  while (rest.startsWith('(?') && rest.length > 3) {
+    final close = rest.indexOf(')');
+    if (close < 3 || close > 7) break;
+    final flags = rest.substring(2, close);
+    if (flags.isEmpty || !flags.codeUnits.every(_isFlagLetter)) break;
+    for (final unit in flags.codeUnits) {
+      if (unit == 0x69) insensitive = true; // i
+      if (unit == 0x73) dotAll = true; // s
+      // m is the default; accepted so PCRE habits paste cleanly.
+    }
+    rest = rest.substring(close + 1);
+  }
+  return RegExp(
+    rest,
+    multiLine: true,
+    unicode: true,
+    caseSensitive: !insensitive,
+    dotAll: dotAll,
+  );
+}
+
+bool _isFlagLetter(int unit) => unit == 0x69 || unit == 0x73 || unit == 0x6d;
+
+/// A hint for Dart's ECMAScript patterns when [source] uses a PCRE habit
+/// BBEdit veterans type by reflex, or null when nothing stands out.
+///
+/// The find bar shows this next to the engine's own error, so a pattern that
+/// fails — or quietly matches nothing — teaches the Dart form. Backslash
+/// escapes in *replacements* are intentionally absent: replacements keep
+/// backslashes literal by owner decision, only `$1`, `${1}`, `${name}` and
+/// `$$` expand.
+String? patternHintFor(String source) {
+  if (source.contains('(?P<')) {
+    return 'Use (?<name>...) for named groups; (?P<name>...) is PCRE.';
+  }
+  if (source.contains('(?>')) {
+    return 'Atomic groups (?>...) are not supported; use (?:...).';
+  }
+  if (RegExp(r'[*+?}]\+').hasMatch(source)) {
+    return 'Possessive quantifiers (a*+) are not supported; remove the +.';
+  }
+  if (source.contains('[[:')) {
+    return 'POSIX classes like [[:alpha:]] are not supported; use '
+        r'\w, \d or explicit ranges.';
+  }
+  if (source.contains(r'\A') ||
+      source.contains(r'\z') ||
+      source.contains(r'\Z')) {
+    return r'Use ^ and $ for anchors; \A, \z and \Z are PCRE.';
+  }
+  if (source.contains(r'\x{')) {
+    return r'Use \u{NNNN} for code points; \x{...} is PCRE.';
+  }
+  if (source.contains('(?x')) {
+    return 'Verbose (?x) mode is not supported.';
+  }
+  if (source.contains(r'\r') && !source.contains(r'\n')) {
+    return r'Match breaks with \r?\n; a lone \r matches a CR only.';
+  }
+  return null;
+}
+
+/// How long an expanded replacement preview may be before it truncates.
+const int replacementPreviewLimit = 120;
+
+/// How many capture groups a preview lists before it truncates.
+const int replacementPreviewGroupLimit = 6;
+
+/// How long one group value may be in a preview before it truncates.
+const int replacementPreviewGroupValueLimit = 40;
+
+/// Truncates [value] to [limit] code units with an ellipsis, keeping the
+/// preview line bounded in the find bar.
+String truncatePreview(String value, int limit) {
+  if (value.length <= limit) return value;
+  if (limit <= 0) return '…';
+  return '${value.substring(0, limit)}…';
+}
+
+/// One capture group's preview: `$0` is the whole match, `$1`.. the numbered
+/// groups, then named groups by `${name}`.
+final class PreviewGroup {
+  const PreviewGroup(this.label, this.value);
+  final String label;
+  final String value;
+}
+
+/// What Replace would do to the active match: [expanded] is [template]
+/// expanded for that match, [groups] its capture groups, both truncated for
+/// the find bar's one-line preview.
+final class ReplacementPreview {
+  const ReplacementPreview({
+    required this.expanded,
+    required this.groups,
+    required this.matchStart,
+    required this.matchEnd,
+  });
+  final String expanded;
+  final List<PreviewGroup> groups;
+  final int matchStart;
+  final int matchEnd;
+}
+
+/// Builds the preview for [template] at [match], truncating the expansion
+/// and each group value so the find bar stays one line.
+ReplacementPreview buildReplacementPreview(
+  String template,
+  RegExpMatch match, {
+  int limit = replacementPreviewLimit,
+}) {
+  final expanded = truncatePreview(
+    expandPatternReplacement(template, match),
+    limit,
+  );
+  final groups = <PreviewGroup>[];
+  final shown = match.groupCount.clamp(0, replacementPreviewGroupLimit);
+  groups.add(
+    PreviewGroup(
+      r'$0',
+      truncatePreview(
+        match.group(0) ?? '',
+        replacementPreviewGroupValueLimit,
+      ),
+    ),
+  );
+  for (var i = 1; i <= shown; i++) {
+    groups.add(
+      PreviewGroup(
+        '\$$i',
+        truncatePreview(
+          match.group(i) ?? '',
+          replacementPreviewGroupValueLimit,
+        ),
+      ),
+    );
+  }
+  for (final name in match.groupNames) {
+    if (groups.length > replacementPreviewGroupLimit) break;
+    if (groups.any((group) => group.label == '\${$name}')) continue;
+    groups.add(
+      PreviewGroup(
+        '\${$name}',
+        truncatePreview(
+          match.namedGroup(name) ?? '',
+          replacementPreviewGroupValueLimit,
+        ),
+      ),
+    );
+  }
+  return ReplacementPreview(
+    expanded: expanded,
+    groups: groups,
+    matchStart: match.start,
+    matchEnd: match.end,
+  );
+}
 
 /// [template] with the references to [match]'s groups replaced by their text.
 ///
@@ -683,6 +851,29 @@ final class PatternWorker {
     scopeEnd: scope?.end,
   );
 
+  /// What Replace would do to the match starting at [matchStart]: the
+  /// template expanded for it plus its capture groups, truncated for the
+  /// find bar's one line. Null when no reportable match starts there.
+  /// Runs in the worker under [budget] like every user pattern, so a
+  /// catastrophic expression times out instead of freezing the editor.
+  Future<PatternOutcome<ReplacementPreview?>> previewReplacement(
+    String text,
+    String source,
+    String template,
+    int matchStart, {
+    bool caseSensitive = false,
+    bool wholeWord = false,
+  }) => _submit<ReplacementPreview?>(
+    (reply) => reply as ReplacementPreview?,
+    kind: _RequestKind.preview,
+    text: text,
+    source: source,
+    caseSensitive: caseSensitive,
+    wholeWord: wholeWord,
+    template: template,
+    previewStart: matchStart,
+  );
+
   /// Stops the worker. A request still running reports [PatternCancelled],
   /// and so does every later one.
   void dispose() {
@@ -708,6 +899,7 @@ final class PatternWorker {
     String? template,
     int? scopeStart,
     int? scopeEnd,
+    int? previewStart,
   }) {
     if (_disposed) return Future.value(PatternCancelled<T>());
     _cancelPending();
@@ -730,6 +922,7 @@ final class PatternWorker {
           template: template,
           scopeStart: scopeStart,
           scopeEnd: scopeEnd,
+          previewStart: previewStart,
         ),
       ),
     );
@@ -852,7 +1045,7 @@ final class _PendingPattern<T> {
 }
 
 /// What a [_PatternRequest] asks the worker to run.
-enum _RequestKind { search, replace, countLines, filterLines, extract }
+enum _RequestKind { search, replace, countLines, filterLines, extract, preview }
 
 final class _PatternRequest {
   const _PatternRequest({
@@ -869,6 +1062,7 @@ final class _PatternRequest {
     required this.template,
     required this.scopeStart,
     required this.scopeEnd,
+    this.previewStart,
   });
 
   final int ticket;
@@ -897,6 +1091,9 @@ final class _PatternRequest {
   /// two offsets; both or neither is set.
   final int? scopeStart;
   final int? scopeEnd;
+
+  /// Where the preview's match starts, for a preview request.
+  final int? previewStart;
 }
 
 final class _PatternReply {
@@ -966,6 +1163,16 @@ void _patternWorkerMain(SendPort replies) {
           template: request.template,
           scope: scope,
         ),
+        _RequestKind.preview => () {
+          final at = request.previewStart ?? 0;
+          final found = pattern!.matchAt(
+            request.text,
+            at,
+            wholeWord: request.wholeWord,
+          );
+          if (found == null) return null;
+          return buildReplacementPreview(request.template ?? '', found);
+        }(),
       };
       replies.send(_PatternReply(request.ticket, payload, null));
     } on FormatException catch (error) {

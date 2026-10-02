@@ -47,12 +47,12 @@ Convert to ASCII, Strip Diacritics, Compose Accents and Decompose Accents.
 
 | Slice | Status and next step |
 |---|---|
-| 5c | Unbuilt. Replacement backslash escapes require decision 5 because they change existing host templates. The active-match replacement preview also remains unbuilt |
+| 5c | Replacement backslash escapes declined by owner: replacements keep backslashes literal, only \$1, \${1}, \${name} and \$\$ expand. Active-match replacement preview built (worker-backed, bounded one line) |
 | 7 | Optional, unbuilt. Decide whether both hosts should expose the full catalog (decision 2), then build `openTextTools()` with a list/sheet, followed by one adoption PR per host at the same reviewed revision. Poltergeist needs ARB keys or a recorded exception. Verify narrow layouts and phone access before claiming them |
 | 8: wrap and interior tabs | Deferred until B8 defines display columns and tab stops |
 | 8: Unicode/ASCII | Compose/Decompose/Strip Diacritics need decision 4 on `unorm_dart`; Convert to ASCII separately needs a reviewed Latin transliteration table |
 | 8: JSON | Format/Minify JSON need decision 7 on scope |
-| 8: search | Regex hints/cheat sheet, Use Selection for Find, session search history and Compare with Saved are unstarted. Find in Selection and Extract are already shipped |
+| 8: search | Regex hints (leading (?i)/(?s)/(?m) plus PCRE hints), inline grep cheat sheet with BBEdit section, Use Selection for Find and Find Selected Text, and session-only search history built. Find in Selection and Extract already shipped. Compare with Saved is separate main-owned work, unstarted here |
 | 8: Edit/File | Selection commands, Insert Line Above/Below, Paste and Match Indentation, number increment/decrement, Copy/Cut Line, block-comment fallback and File-menu Copy Path are unstarted. Go to Matching Bracket and tab-menu Copy Full Path already exist |
 | 8: menu keyboard access | Alt mnemonics remain unbuilt; validate AltGr and desktop/input-method conflicts before assigning them |
 
@@ -443,14 +443,14 @@ budget, paging past 1,000 highlights, Replace, Replace All, `$1`, `${name}`.
 | Gap | Plan |
 |---|---|
 | Find in Selection, Replace All in Selection | Build (E5). A stored range, shown tinted, that survives stepping through matches |
-| Replacement `\U \L \E \u \l`, `\n`, `\t`, `\1`, `\0` | Build if decision 5 is yes. `&` and `\P<name>` stay literal |
+| Replacement `\U \L \E \u \l`, `\n`, `\t`, `\1`, `\0` | Declined by owner: backslashes stay literal, only \$1, \${1}, \${name} and \$\$ expand. `&` and `\P<name>` stay literal |
 | Extract | Extract Matches… (section 2) |
-| Pattern Playground | One preview line in the find bar: active match, arrow, expanded replacement, capture groups. No window |
-| PCRE habits | BBEdit is PCRE; Dart is ECMAScript. `(?P<n>…)`, `(?>…)`, possessive quantifiers, POSIX classes, `\A`, `\z`, `\Z`, `\x{NNNN}`, `(?x)`, and `\r` as "line break" fail or match nothing. Add hints on the error line; accept a leading `(?s)`, `(?i)`, `(?m)` |
-| Grep cheat sheet | Build, describing Dart syntax, with a "coming from BBEdit" section |
+| Pattern Playground | Built: one preview line in the find bar (active match, arrow, expanded replacement, capture groups, truncated). Regex runs in the worker with stale-result and time-budget guards. No window |
+| PCRE habits | Built: BBEdit is PCRE; Dart is ECMAScript. Hints on the error line for `(?P<n>…)`, `(?>…)`, possessive quantifiers, POSIX classes, `\A`, `\z`, `\Z`, `\x{NNNN}`, `(?x)`, and `\r` as "line break"; a leading `(?s)`, `(?i)`, `(?m)` is accepted and stripped |
+| Grep cheat sheet | Built: inline sheet in the find bar (regex mode) describing Dart syntax, with a "coming from BBEdit" section |
 | `^` or `$` alone | Empty matches are skipped today, so "replace `^` with `> `" does nothing. Point to Prefix/Suffix Lines; allowing empty matches would split CRLF pairs |
-| Use Selection for Find (Cmd+E), Find Selected Text | Build |
-| Search history | Build (V4); session only by default |
+| Use Selection for Find (Cmd+E on macOS; Ctrl+Shift+E elsewhere avoids the Emacs/GNOME Ctrl+E line-end conflict), Find Selected Text | Built on the existing matching and focus flow |
+| Search history | Built (V4): session-only, bounded, never written to disk; Up recalls older, Down newer |
 | Saved grep patterns | Later; app only |
 | Replace to End | Skip: select to the end, then Replace All in Selection |
 | Find All results list | Later. Needs a list surface |
@@ -533,9 +533,10 @@ build to the recommended option.
    tables) as a fourth core dependency, inherited by both hosts, enables
    Compose and Decompose Accents and a correct Strip Diacritics. Without it
    they stay out.
-5. **Replacement escapes.** Making backslash special in regex replacements
-   changes existing templates that contain a literal `\n` or `\U`, in the
-   hosts too.
+5. **Replacement escapes.** Declined by the owner: backslashes stay
+   literal in replacements, and making backslash special would change
+   existing templates that contain a literal `\n` or `\U`, in the hosts
+   too. Only `$1`, `${1}`, `${name}` and `$$` expand.
 6. **Edit menu.** Leave the five line commands in Edit (recommended), or move
    them under Text. Lines would reach 15 items and split, and the shell's
    skip-the-Edit-menu shortcut rule would become a per-command flag.

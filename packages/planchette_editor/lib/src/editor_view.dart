@@ -363,6 +363,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           ): c.previousMatch,
           const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
               c.openGoToLine,
+          // Use Selection for Find and Find Selected Text: Cmd+E seeds the
+          // field from the selection without opening, Cmd+Shift+E opens it.
+          const SingleActivator(LogicalKeyboardKey.keyE, meta: true):
+              c.useSelectionForFind,
+          const SingleActivator(
+            LogicalKeyboardKey.keyE,
+            meta: true,
+            shift: true,
+          ): c.findSelectedText,
         } else ...{
           const SingleActivator(LogicalKeyboardKey.keyF, control: true):
               c.openSearch,
@@ -370,6 +379,15 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               c.openSearch(replace: true),
           const SingleActivator(LogicalKeyboardKey.keyG, control: true):
               c.openGoToLine,
+          // Plain Ctrl+E is End of Line in Emacs and GNOME text bindings,
+          // and Ctrl+Shift+E can summon emoji on some GNOME setups, but both
+          // are free in Flutter's defaults and in this repo; Shift avoids the
+          // line-end conflict while staying discoverable next to Find.
+          const SingleActivator(
+            LogicalKeyboardKey.keyE,
+            control: true,
+            shift: true,
+          ): c.useSelectionForFind,
         },
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
@@ -461,33 +479,57 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         capped: c.matchesMayContinue,
       ),
     };
+    // A PCRE habit teaches its Dart form next to the engine's own error.
+    final hint = c.useRegularExpression
+        ? strings.regexHint(c.search.text)
+        : null;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
       child: Column(
         children: [
           _searchRow(
-            field: TextField(
-              controller: c.search,
-              focusNode: c.searchFocus,
-              autofocus: true,
-              autocorrect: false,
-              enableSuggestions: false,
-              style: theme.textTheme.bodyMedium,
-              decoration: InputDecoration(
-                hintText: c.useRegularExpression
-                    ? strings.findPatternHint
-                    : strings.findHint,
-                isDense: true,
-                border: InputBorder.none,
-              ),
-              onSubmitted: (_) {
-                if (HardwareKeyboard.instance.isShiftPressed) {
-                  c.previousMatch();
-                } else {
-                  c.nextMatch();
-                }
-                c.searchFocus.requestFocus();
+            field: Shortcuts(
+              shortcuts: const {
+                SingleActivator(LogicalKeyboardKey.arrowUp): _HistoryIntent(
+                  older: true,
+                ),
+                SingleActivator(LogicalKeyboardKey.arrowDown): _HistoryIntent(
+                  older: false,
+                ),
               },
+              child: Actions(
+                actions: {
+                  _HistoryIntent: CallbackAction<_HistoryIntent>(
+                    onInvoke: (intent) =>
+                        c.recallSearchHistory(older: intent.older)
+                            ? null
+                            : null,
+                  ),
+                },
+                child: TextField(
+                  controller: c.search,
+                  focusNode: c.searchFocus,
+                  autofocus: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  style: theme.textTheme.bodyMedium,
+                  decoration: InputDecoration(
+                    hintText: c.useRegularExpression
+                        ? strings.findPatternHint
+                        : strings.findHint,
+                    isDense: true,
+                    border: InputBorder.none,
+                  ),
+                  onSubmitted: (_) {
+                    if (HardwareKeyboard.instance.isShiftPressed) {
+                      c.previousMatch();
+                    } else {
+                      c.nextMatch();
+                    }
+                    c.searchFocus.requestFocus();
+                  },
+                ),
+              ),
             ),
             controls: [
               if (c.searchScope != null)
@@ -580,6 +622,16 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                       ),
                     ),
                   ),
+                  // Only in regex mode, so the literal bar keeps its eight
+                  // controls side by side with the field.
+                  if (c.useRegularExpression)
+                    IconButton(
+                      isSelected: c.cheatSheetOpen,
+                      tooltip: strings.grepCheatSheet,
+                      visualDensity: VisualDensity.compact,
+                      onPressed: c.toggleCheatSheet,
+                      icon: const Icon(Icons.help_outline),
+                    ),
                   IconButton(
                     isSelected: c.lineActionsOpen,
                     tooltip: strings.lineActions,
@@ -618,6 +670,19 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
           ),
           if (c.lineActionsOpen) _lineActionsRow(context),
           if (c.extractOpen) _extractRow(context),
+          if (hint != null && hint.isNotEmpty)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                hint,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.tertiary,
+                ),
+              ),
+            ),
+          if (c.cheatSheetOpen) _grepCheatSheet(context),
           if (c.replaceOpen)
             _searchRow(
               field: TextField(
@@ -647,6 +712,79 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 ),
               ],
             ),
+          if (c.replaceOpen) _replacementPreviewLine(context),
+        ],
+      ),
+    );
+  }
+
+  /// One preview line under the replace field: the active match, an arrow,
+  /// the expanded replacement and its capture groups, truncated in core to
+  /// stay one line. Errors and timeouts from the preview worker read like the
+  /// search counter; while the preview is on its way nothing is claimed.
+  Widget _replacementPreviewLine(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    final failure = c.replacementPreviewFailure;
+    final preview = c.replacementPreview;
+    final text = switch (failure) {
+      PatternUnusable(:final message) => strings.patternInvalid(message),
+      PatternTimedOut() => strings.patternTooSlow,
+      null when c.replacementPreviewPending => '',
+      null when preview == null => strings.replacementPreviewEmpty,
+      null => strings.replacementPreview(
+        preview!.expanded,
+        [for (final group in preview.groups) '${group.label}=${group.value}'],
+      ),
+    };
+    if (text.isEmpty) return const SizedBox.shrink();
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: failure != null ? theme.colorScheme.error : null,
+        ),
+      ),
+    );
+  }
+
+  /// The inline grep cheat sheet: Dart syntax plus a coming-from-BBEdit
+  /// section. Inline, not a dialog, so narrow layouts stack it like the rows
+  /// above and focus never leaves the find bar.
+  Widget _grepCheatSheet(BuildContext context) {
+    final strings = widget.strings;
+    final theme = Theme.of(context);
+    Widget section(String title, List<String> rows) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: theme.textTheme.labelSmall),
+        for (final row in rows)
+          Text(
+            row,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontFamily: 'monospace',
+            ),
+          ),
+      ],
+    );
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            strings.grepCheatSheetTitle,
+            style: theme.textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          section('Dart', strings.grepCheatSheetDart),
+          section('Coming from BBEdit (PCRE)', strings.grepCheatSheetBBEdit),
         ],
       ),
     );
@@ -1878,4 +2016,12 @@ class _BracketJumpAction extends Action<_BracketJumpIntent> {
   @override
   bool invoke(_BracketJumpIntent intent) =>
       _controller().goToMatchingBracket(extend: intent.extend);
+}
+
+/// Recalls session search history from the find field: Up for an older
+/// query, Down for a newer one. Single-line fields need no Up/Down caret
+/// motion, and the controller ignores recall while composing.
+class _HistoryIntent extends Intent {
+  const _HistoryIntent({required this.older});
+  final bool older;
 }

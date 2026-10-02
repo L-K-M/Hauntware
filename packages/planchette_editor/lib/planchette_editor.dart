@@ -8,4 +8,5 @@ export 'src/editor_controller.dart';
 export 'src/editor_fonts.dart';
 export 'src/editor_strings.dart';
 export 'src/editor_view.dart';
+export 'src/search_history.dart';
 export 'src/text_tool_history.dart';
