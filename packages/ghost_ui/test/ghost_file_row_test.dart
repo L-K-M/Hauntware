@@ -44,6 +44,7 @@ GhostFileRow row(
   VoidCallback? onLongPress,
   ValueChanged<PointerDownEvent>? onPointerDown,
   ValueChanged<PointerUpEvent>? onPointerUp,
+  Widget? trailing,
 }) => GhostFileRow(
   item: item,
   outline: outline,
@@ -66,6 +67,7 @@ GhostFileRow row(
   onLongPress: onLongPress ?? () {},
   onOpen: () {},
   onRename: onRename,
+  trailing: trailing,
 );
 
 Widget host(Widget child) => MaterialApp(
@@ -133,6 +135,34 @@ void main() {
     expect(find.byIcon(Icons.folder), findsOneWidget);
     // Directory size and the absent date both render the dash.
     expect(find.text('—'), findsNWidgets(2));
+  });
+
+  testWidgets('row actions do not shift size and date columns', (tester) async {
+    await tester.pumpWidget(
+      host(
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            row(file('plain.txt', modified: DateTime(2026, 3, 5, 9))),
+            row(
+              file('actions.txt', modified: DateTime(2026, 3, 5, 9)),
+              trailing: const SizedBox(width: 38, height: 20),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final sizes = find.text('1.5 KB');
+    final dates = find.textContaining('Today at ');
+    expect(
+      tester.getTopLeft(sizes.at(0)).dx,
+      tester.getTopLeft(sizes.at(1)).dx,
+    );
+    expect(
+      tester.getTopLeft(dates.at(0)).dx,
+      tester.getTopLeft(dates.at(1)).dx,
+    );
   });
 
   testWidgets('active selection paints the accent fill', (tester) async {

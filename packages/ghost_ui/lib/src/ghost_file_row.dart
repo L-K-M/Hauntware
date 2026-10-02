@@ -231,9 +231,8 @@ class GhostFileRow extends StatefulWidget {
   /// gated off or a flagged name.
   final VoidCallback? onRename;
 
-  /// An optional host widget after the date column (a pending-changes
-  /// badge, a per-row ⋮ — whatever the listing still shows that the
-  /// shared columns do not cover).
+  /// Host actions trail the name, before metadata, so variable-width
+  /// badges and menus never shift the columns away from their headers.
   final Widget? trailing;
 
   @override
@@ -377,6 +376,7 @@ class _GhostFileRowState extends State<GhostFileRow> {
                     ),
                   ),
                 ),
+              ?widget.trailing,
               if (metrics.showsSize) ...[
                 const SizedBox(width: GhostFileColumnMetrics.columnGap),
                 SizedBox(
@@ -401,7 +401,6 @@ class _GhostFileRowState extends State<GhostFileRow> {
                   style: captionStyle,
                 ),
               ),
-              ?widget.trailing,
             ],
           ),
         ),
