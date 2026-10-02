@@ -2903,9 +2903,7 @@ class EditorController extends ChangeNotifier {
   void useSelectionForFind() {
     if (!hasSelection) return;
     final selected = text.selection.textInside(text.text);
-    if (selected.isEmpty ||
-        selected.contains('\n') ||
-        selected.length > 200) {
+    if (selected.isEmpty || selected.contains('\n') || selected.length > 200) {
       return;
     }
     final query = _useRegularExpression ? RegExp.escape(selected) : selected;
@@ -2947,10 +2945,9 @@ class EditorController extends ChangeNotifier {
       return;
     }
     if (text.value.composing.isValid) return;
-    final active =
-        _activeMatch >= 0 && _activeMatch < _matches.length
-            ? _matches[_activeMatch]
-            : null;
+    final active = _activeMatch >= 0 && _activeMatch < _matches.length
+        ? _matches[_activeMatch]
+        : null;
     final template = replacement.text;
     if (active == null || template.isEmpty) {
       _clearPreview(notify: false);
@@ -2988,7 +2985,8 @@ class EditorController extends ChangeNotifier {
       active.start,
       active.end,
     );
-    if (_replacementPreviewKey == key && (_previewPending || _replacementPreview != null)) {
+    if (_replacementPreviewKey == key &&
+        (_previewPending || _replacementPreview != null)) {
       return;
     }
     _replacementPreviewKey = key;

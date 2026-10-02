@@ -458,10 +458,7 @@ ReplacementPreview buildReplacementPreview(
   groups.add(
     PreviewGroup(
       r'$0',
-      truncatePreview(
-        match.group(0) ?? '',
-        replacementPreviewGroupValueLimit,
-      ),
+      truncatePreview(match.group(0) ?? '', replacementPreviewGroupValueLimit),
     ),
   );
   for (var i = 1; i <= shown; i++) {

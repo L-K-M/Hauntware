@@ -201,8 +201,7 @@ void main() {
       expect(editor.replacementPreview, isNull);
     });
 
-    test('stale edit discards the preview for the old active match',
-        () async {
+    test('stale edit discards the preview for the old active match', () async {
       final editor = _editor('cat dog');
       editor
         ..openSearch(replace: true)
@@ -222,9 +221,7 @@ void main() {
         editor.replacementPreview,
         anyOf(
           isNull,
-          predicate<ReplacementPreview>(
-            (preview) => preview.matchStart != 0,
-          ),
+          predicate<ReplacementPreview>((preview) => preview.matchStart != 0),
         ),
       );
     });

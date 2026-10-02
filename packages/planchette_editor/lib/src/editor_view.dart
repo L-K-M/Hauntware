@@ -544,8 +544,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   _HistoryIntent: CallbackAction<_HistoryIntent>(
                     onInvoke: (intent) =>
                         c.recallSearchHistory(older: intent.older)
-                            ? null
-                            : null,
+                        ? null
+                        : null,
                   ),
                 },
                 child: TextField(
@@ -774,10 +774,9 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
       PatternTimedOut() => strings.patternTooSlow,
       null when c.replacementPreviewPending => '',
       null when preview == null => strings.replacementPreviewEmpty,
-      null => strings.replacementPreview(
-        preview!.expanded,
-        [for (final group in preview.groups) '${group.label}=${group.value}'],
-      ),
+      null => strings.replacementPreview(preview!.expanded, [
+        for (final group in preview.groups) '${group.label}=${group.value}',
+      ]),
     };
     if (text.isEmpty) return const SizedBox.shrink();
     return Align(

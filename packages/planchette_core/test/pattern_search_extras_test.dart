@@ -48,10 +48,9 @@ void main() {
       final match = RegExp(r'(\w+)@(\w+)').firstMatch('a@b')!;
       final preview = buildReplacementPreview(r'$2 at $1', match);
       expect(preview.expanded, 'b at a');
-      expect(
-        [for (final group in preview.groups) group.label],
-        containsAll([r'$0', r'$1', r'$2']),
-      );
+      expect([
+        for (final group in preview.groups) group.label,
+      ], containsAll([r'$0', r'$1', r'$2']));
       expect(preview.matchStart, 0);
       expect(preview.matchEnd, 3);
     });
@@ -95,10 +94,7 @@ void main() {
     test(r'only dollar forms expand; $$ is a dollar', () {
       expect(expand(r'(a)-(b)', 'a-b', r'$2/$1'), 'b/a');
       expect(expand(r'(a)', 'a', r'$$$1'), r'$a');
-      expect(
-        FindPattern(r'(a)-(b)').replaceAll('a-b', r'\n$1')?.text,
-        r'\na',
-      );
+      expect(FindPattern(r'(a)-(b)').replaceAll('a-b', r'\n$1')?.text, r'\na');
     });
   });
 
@@ -113,8 +109,7 @@ void main() {
         0,
       );
       expect(outcome, isA<PatternCompleted<ReplacementPreview?>>());
-      final preview =
-          (outcome as PatternCompleted<ReplacementPreview?>).value!;
+      final preview = (outcome as PatternCompleted<ReplacementPreview?>).value!;
       expect(preview.expanded, 'b/a');
       expect(preview.groups, isNotEmpty);
     });
@@ -122,17 +117,9 @@ void main() {
     test('null when no reportable match starts there', () async {
       final worker = PatternWorker();
       addTearDown(worker.dispose);
-      final outcome = await worker.previewReplacement(
-        'abc',
-        'b',
-        'x',
-        0,
-      );
+      final outcome = await worker.previewReplacement('abc', 'b', 'x', 0);
       expect(outcome, isA<PatternCompleted<ReplacementPreview?>>());
-      expect(
-        (outcome as PatternCompleted<ReplacementPreview?>).value,
-        isNull,
-      );
+      expect((outcome as PatternCompleted<ReplacementPreview?>).value, isNull);
     });
 
     test('a bad pattern reports PatternUnusable', () async {
