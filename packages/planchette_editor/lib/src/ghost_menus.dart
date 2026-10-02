@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 const _desktopRowExtent = 26.0;
 const _desktopFontSize = 13.0;
 const _menuRadius = 8.0;
+const _minimumCornerScale = 1.0;
 const _iconSize = 16.0;
 const _viewportInset = 8.0;
 const _panelElevation = 3.0;
@@ -17,7 +18,8 @@ bool _desktop(TargetPlatform platform) => switch (platform) {
 };
 
 /// Poltergeist's compact menu skin, shared by all three Ghost apps.
-/// Hosts keep their own palette, interface font and corner preference.
+/// Hosts keep their palette and font; desktop panels stay rounded even
+/// when a host theme makes its other surfaces square.
 abstract final class GhostMenuTheme {
   static ThemeData apply(ThemeData theme, {double? cornerScale}) {
     if (!_desktop(theme.platform)) return theme;
@@ -28,7 +30,10 @@ abstract final class GhostMenuTheme {
                 borderRadius: BorderRadius.all(Radius.circular(_menuRadius)),
               )
         : RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(_menuRadius * cornerScale),
+            borderRadius: BorderRadius.circular(
+              _menuRadius *
+                  cornerScale.clamp(_minimumCornerScale, double.infinity),
+            ),
           );
     final text = theme.textTheme.bodyMedium!.copyWith(
       fontSize: _desktopFontSize,

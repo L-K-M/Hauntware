@@ -47,11 +47,12 @@ ownership boundaries and compatibility policies are documented in
 ### Ghost context menus, 2026-10-02
 
 The shared editor exports Poltergeist's desktop menu skin: 26 px rows,
-13 px interface text, scaled rounded panels, glyphs and shortcut hints.
+13 px interface text, rounded panels with an 8 px minimum radius, glyphs
+and shortcut hints.
 Planchette's tab and text-selection menus use it. Clipboard actions retain
 Flutter's selection and read-only guards; touch keeps adaptive toolbars.
 
-Local Linux checks: editor analysis and 402 tests passed; app analysis and
+Local Linux checks: editor analysis and 404 tests passed; app analysis and
 440 tests passed, with two existing case-sensitive-volume skips. Regression
 tests failed first on oversized tab rows and missing selection-menu glyphs.
 Desktop variants cover macOS, Windows and Linux; these are widget checks,
