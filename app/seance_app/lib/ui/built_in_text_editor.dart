@@ -80,6 +80,13 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
     _editor = EditorController(
       displayPath: widget.remotePath,
       initialText: widget.initialText,
+      // The buffer keeps line breaks as they are in the file; the byte
+      // preflight follows the managed save, which folds a CRLF-dominant
+      // document's breaks to CRLF and leaves an LF document's alone.
+      normalization: TextNormalization.preserve,
+      saveNormalizationForLineEnding: (ending) => ending == LineEnding.crlf
+          ? TextNormalization.normalize
+          : TextNormalization.preserve,
       loadDocument: () => loadTextDocument(
         widget.file,
         normalization: TextNormalization.preserve,
@@ -379,6 +386,14 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
                 ],
               ),
             ),
+          ),
+          IconButton(
+            tooltip: const EditorStrings().browseTextTools,
+            visualDensity: VisualDensity.compact,
+            onPressed: _editor.isLoading || _editor.error != null
+                ? null
+                : _editor.openTextTools,
+            icon: const Icon(Icons.construction_outlined),
           ),
           IconButton(
             tooltip: 'Find',

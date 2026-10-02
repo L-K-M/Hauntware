@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Built-in editor: the shared Planchette editor brings its text tools. A
+  header button opens the tool browser (Repeat and Recent, seven groups,
+  a keyword filter); tools run from an options bar or at their defaults,
+  each behind a one-line result notice and its own undo step. The find
+  bar gains Keep and Delete Lines Matching, Extract Matches, Find in
+  Selection, regular-expression hints, a replacement preview and a
+  session search history. The buffer keeps line endings exactly as the
+  file has them, and files save with the same bytes as before.
 - Terminal and editor tabs look like Poltergeist's pane tabs and
   Planchette's document tabs. The tabs are flat on the header's colour,
   with a hairline after each, and the open tab takes the pane's colour
