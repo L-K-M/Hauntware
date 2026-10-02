@@ -1179,46 +1179,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rename editor's stem-selection dot — name arithmetic, not copy.
     "'.'",
   },
-  // D32 §6's column header keys — plumbing keyed to the tab id and the
-  // sort key's enum name, never authored copy.
-  'lib/ui/panes/pane_column_header.dart': {
-    r"'$paneTabId.columns'",
-    r"'$paneTabId.column.${key.name}'",
-  },
   // The context menu's row keys — registry plumbing, never copy.
   'lib/ui/panes/pane_context_menu.dart': {r"'pane.context.${command.id}'"},
   // The missing-mirror cause's empty-name fallback — a null-safety
   // placeholder, never rendered as copy.
   'lib/ui/panes/sync_browse_chip.dart': {"''"},
-  // Byte-unit table, the unevaluated dash, and the trailing-".0" trim
-  // — technical formatting (02 §2.3 rendering rules).
-  'lib/ui/panes/pane_format.dart': {
-    "'B'",
-    "'KB'",
-    "'MB'",
-    "'GB'",
-    "'TB'",
-    "'—'",
-    "'.0'",
-    r"'$bytes ${_byteUnits[0]}'",
-    r"'$text ${_byteUnits[unit]}'",
-    // The octal pad's fill character — formatting mechanics, not copy.
-    "'0'",
-    // The kind-glyph classifier's extension tables, their separator,
-    // and the extension dot — file-name machine data, never rendered.
-    "'png jpg jpeg gif webp bmp tif tiff heic heif svg ico avif psd raw'",
-    "'txt md markdown rst log csv tsv rtf doc docx odt pages xls xlsx ods '",
-    "'numbers ppt pptx odp epub'",
-    "'json yaml yml toml xml html htm css scss js mjs ts jsx tsx dart py rb '",
-    "'go rs java kt swift c h cc cpp hpp'",
-    "'m mm cs php sh bash zsh fish ps1 bat sql ini conf cfg env lock'",
-    "'zip tar gz tgz bz2 xz 7z rar zst lz4 dmg iso deb rpm pkg jar apk'",
-    "'mp3 wav flac aac ogg m4a opus'",
-    "'mp4 mov mkv avi webm m4v wmv mpg'",
-    "' '",
-    "'pdf'",
-    "'.'",
-  },
   // D34's standard-folder table: lowercase folder names matched against
   // a path's last segment: file-name machine data, never rendered.
   'lib/ui/place_glyphs.dart': {
@@ -1498,20 +1463,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sidebar.catalog.menu.delete'",
     "'sidebar.adhoc.menu.save'",
   },
-  // The portable kit's empty query (the filter's clear button).
-  'lib/ui/sidebar/sidebar_kit.dart': {
-    "''",
-    // The first-verb, row button and header "+" focus nodes' debug
-    // labels: diagnostics, never shown.
-    "'SidebarRow first verb'",
-    "'SidebarRow action'",
-    "'SidebarRow menu button'",
-    "'SidebarSectionHeader add'",
-    // A header dot's words join its title and count on a line of their
-    // own, as a merged semantics node joins its parts: a separator, not
-    // copy (the words are the host's).
-    r"'\n'",
-  },
   // The sidebar filter's term split and the path-separator trimming of
   // the selection match — machinery, never rendered.
   'lib/ui/sidebar/sidebar_facts.dart': {
@@ -1535,13 +1486,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'view.toggleSidebarDensity'",
     "'favorite.add'",
     "'connect.saveToServers'",
-  },
-  // The ported middle-ellipsis glyph and its head/tail compositions —
-  // typography, not copy.
-  'lib/ui/middle_ellipsis_text.dart': {
-    "'…'",
-    r"'${graphemes.take(head).join()}$_ellipsis'",
-    r"'${graphemes.skip(graphemes.length - tail).join()}'",
   },
   // The collapse-key namespaces, the legacy keys they migrate, the
   // empty filter query, and the controller's ArgumentError/StateError
