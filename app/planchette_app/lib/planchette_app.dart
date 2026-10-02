@@ -719,6 +719,9 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.slash),
           enabled: inDocument && (active?.editor.canToggleComment ?? false),
         ),
+        // No chords for this group: the existing Edit shortcuts already
+        // cover the field's bindings, and new chords are unchecked against
+        // desktop environments and input methods.
         const _Separator(),
         _Command(
           'Select Line',
@@ -781,9 +784,6 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: lineCommands,
           id: 'decrementNumber',
         ),
-        // No chords: the existing Edit shortcuts already cover the field's
-        // bindings, and new chords are unchecked against desktop
-        // environments and input methods.
         _Command(
           'Paste and Match Indentation',
           () {

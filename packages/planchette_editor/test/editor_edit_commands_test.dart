@@ -167,6 +167,48 @@ void main() {
     expect(editor.text.text, '  a');
   });
 
+  test('review fix: paste lands at the caret moved during the read', () async {
+    final editor = controller('ab\ncd', caret: 0);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.getData') {
+            editor.text.selection = const TextSelection.collapsed(offset: 5);
+            return {'text': 'X'};
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    expect(await editor.pasteAndMatchIndentation(), isTrue);
+    expect(editor.text.text, 'ab\ncdX');
+  });
+
+  test('review fix: cut removes the line under the moved caret', () async {
+    final editor = controller('a\nb\nc', caret: 0);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            editor.text.selection = const TextSelection.collapsed(offset: 4);
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    expect(await editor.cutLine(), isTrue);
+    expect(editor.text.text, 'a\nb');
+  });
+
+  test('pasteAndMatchIndentation refuses a locked document', () async {
+    mockClipboard(getText: 'x');
+    final editor = controller('  a', caret: 3, locked: true);
+    expect(await editor.pasteAndMatchIndentation(), isFalse);
+    expect(editor.text.text, '  a');
+  });
+
   test('toggleComment falls back to block markers in XML', () {
     final editor = controller('<a>hi</a>', path: 'page.html', caret: 4);
     expect(editor.canToggleComment, isTrue);

@@ -839,7 +839,8 @@ class EditorController extends ChangeNotifier {
   }
 
   /// Copies the touched lines and removes them. The clipboard write lands
-  /// first; a buffer that changed meanwhile keeps its text.
+  /// first; a buffer that changed meanwhile keeps its text. The deletion
+  /// follows the caret as it stands after the write, not where it was.
   Future<bool> cutLine() async {
     if (!canEditText) return false;
     final source = text.text;
@@ -851,18 +852,20 @@ class EditorController extends ChangeNotifier {
       selection.extentOffset,
     );
     if (copyText.isEmpty) return false;
-    final removed = core.deleteLines(
-      source,
-      selection.baseOffset,
-      selection.extentOffset,
-    );
-    if (removed == null) return false;
     try {
       await Clipboard.setData(ClipboardData(text: copyText));
     } catch (_) {
       return false;
     }
     if (_disposed || !canEditText || text.text != source) return false;
+    final current = text.selection;
+    if (!current.isValid) return false;
+    final removed = core.deleteLines(
+      source,
+      current.baseOffset,
+      current.extentOffset,
+    );
+    if (removed == null) return false;
     _requestCaretReveal(CaretReveal.nearest);
     text.value = TextEditingValue(
       text: removed.text,
@@ -876,13 +879,13 @@ class EditorController extends ChangeNotifier {
 
   /// Pastes the clipboard with later lines reindented to the caret line.
   /// Default paste is untouched. Reads the clipboard first, then waits out
-  /// the undo throttle so the insert is one undo step; a buffer that
-  /// changed meanwhile is left alone.
+  /// the undo throttle so the insert is one undo step; the caret is reread
+  /// afterwards, so a move during the waits pastes where it now stands.
+  /// A buffer that changed meanwhile is left alone.
   Future<bool> pasteAndMatchIndentation() async {
     if (!canEditText) return false;
     final source = text.text;
-    final selection = text.selection;
-    if (!selection.isValid) return false;
+    if (!text.selection.isValid) return false;
     final ClipboardData? data;
     try {
       data = await Clipboard.getData('text/plain');
@@ -894,10 +897,12 @@ class EditorController extends ChangeNotifier {
     if (_disposed || !canEditText || text.text != source) return false;
     await _waitForUndoQuiet();
     if (_disposed || !canEditText || text.text != source) return false;
+    final current = text.selection;
+    if (!current.isValid) return false;
     final edit = core.pasteWithIndentation(
       source,
-      selection.baseOffset,
-      selection.extentOffset,
+      current.baseOffset,
+      current.extentOffset,
       pasted,
       separator: bufferLineEnding == LineEnding.crlf ? '\r\n' : '\n',
     );

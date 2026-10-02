@@ -111,7 +111,7 @@ bool _isTextToken(SyntaxToken token) =>
     if (pair.close + 1 < to) continue;
     if (pair.open == from && pair.close + 1 == to) continue;
     if (from == to) {
-      if (!(pair.open < from && pair.close >= from)) continue;
+      if (!(pair.open <= from && pair.close >= from)) continue;
     } else {
       if (!(pair.open <= from && pair.close + 1 >= to)) continue;
     }
@@ -134,7 +134,7 @@ bool _isTextToken(SyntaxToken token) =>
   for (final token in tokens) {
     if (!_isTextToken(token)) continue;
     if (token.start <= from && to <= token.end) {
-      final end = token.end.clamp(0, text.length);
+      final end = math.min(token.end, text.length);
       return (text: text, start: token.start, end: end);
     }
   }
@@ -201,12 +201,12 @@ String _leadingIndent(String text, int offset) {
   return text.substring(start, i);
 }
 
-/// A break for a new line next to [lineStart, contentEnd]: the line's own
+/// A break for a new line next to [lineBegins, contentEnd]: the line's own
 /// break, or the one before it, or LF on a single line without breaks.
-String _nearbySeparator(String text, int lineStart, int contentEnd) {
+String _nearbySeparator(String text, int lineBegins, int contentEnd) {
   final after = lineSeparatorAt(text, contentEnd);
   if (after.isNotEmpty) return after;
-  if (lineStart > 0) return lineSeparatorBefore(text, lineStart);
+  if (lineBegins > 0) return lineSeparatorBefore(text, lineBegins);
   return '\n';
 }
 
@@ -216,7 +216,7 @@ String _nearbySeparator(String text, int lineStart, int contentEnd) {
 LineEdit insertLineAbove(String text, int base, int extent) {
   RangeError.checkValueInInterval(base, 0, text.length, 'base');
   RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
-  final caret = extent.clamp(0, text.length);
+  final caret = extent;
   final start = lineStart(text, caret);
   final end = lineContentEnd(text, caret);
   final leading = _leadingIndent(text, caret);
@@ -232,7 +232,7 @@ LineEdit insertLineAbove(String text, int base, int extent) {
 LineEdit insertLineBelow(String text, int base, int extent) {
   RangeError.checkValueInInterval(base, 0, text.length, 'base');
   RangeError.checkValueInInterval(extent, 0, text.length, 'extent');
-  final caret = extent.clamp(0, text.length);
+  final caret = extent;
   final start = lineStart(text, caret);
   final end = lineContentEnd(text, caret);
   final leading = _leadingIndent(text, caret);
@@ -278,8 +278,7 @@ final _hexNumber = RegExp(r'-?0[xX][0-9a-fA-F]+');
     final from = math.min(base, extent);
     final to = math.max(base, extent);
     final selected = text.substring(from, to);
-    if (_hexNumber.patternAllows(selected) &&
-        RegExp('^${_hexNumber.pattern}\$').hasMatch(selected)) {
+    if (RegExp('^${_hexNumber.pattern}\$').hasMatch(selected)) {
       return (start: from, end: to, hex: true, fractions: 0);
     }
     if (RegExp('^${_decimalNumber.pattern}\$').hasMatch(selected)) {
@@ -307,10 +306,6 @@ final _hexNumber = RegExp(r'-?0[xX][0-9a-fA-F]+');
     }
   }
   return null;
-}
-
-extension on RegExp {
-  bool patternAllows(String value) => hasMatch(value);
 }
 
 /// Adds [delta] to the number at the caret or selection, preserving its
@@ -467,21 +462,22 @@ LineEdit? toggleBlockComments(
     var innerEnd = closeEnd - close.length;
     if (innerStart < innerEnd &&
         text.codeUnitAt(innerStart) == _space &&
-        text.substring(innerStart, innerStart + open.length + 1) != '$open  ') {
+        !(innerStart + 1 < innerEnd &&
+            text.codeUnitAt(innerStart + 1) == _space)) {
       innerStart++;
     }
     if (innerEnd > innerStart &&
         text.codeUnitAt(innerEnd - 1) == _space &&
-        (innerEnd - 1 - close.length < 0 ||
-            text.substring(innerEnd - 1 - close.length, innerEnd - 1) !=
-                '  $close')) {
+        !(innerEnd - 2 >= innerStart &&
+            text.codeUnitAt(innerEnd - 2) == _space)) {
       innerEnd--;
     }
     final inner = text.substring(innerStart, innerEnd);
     final result = text.replaceRange(openStart, closeEnd, inner);
     final end = openStart + inner.length;
     if (collapsed) {
-      final caret = (base - innerStart).clamp(0, inner.length) + openStart;
+      final caret =
+          math.min(math.max(base - innerStart, 0), inner.length) + openStart;
       return LineEdit(result, caret, caret);
     }
     return forward

@@ -197,6 +197,22 @@ void main() {
     test('does nothing on a blank line', () {
       expect(toggleBlockComments('a\n  \nb', 3, 3, '/*', '*/'), isNull);
     });
+
+    test('review fix: selecting between markers unwraps without throwing', () {
+      expect(
+        run(
+          (t, b, e) => toggleBlockComments(t, b, e, '<!--', '-->'),
+          '<!--[ ]-->',
+        ),
+        '|',
+      );
+    });
+
+    test('review fix: a caret on an opener selects its pair', () {
+      final r = selectEnclosingBracketsRange('(a)', 0, 0, const []);
+      expect(r, isNotNull);
+      expect('(a)'.substring(r!.base, r.extent), '(a)');
+    });
   });
 
   group('pasteWithIndentation', () {
