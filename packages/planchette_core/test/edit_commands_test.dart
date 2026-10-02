@@ -164,6 +164,13 @@ void main() {
     test('returns null with no number', () {
       expect(incrementNumber('abc', 1, 1), isNull);
     });
+
+    test('review fix: oversized literals refuse instead of throwing', () {
+      expect(incrementNumber('id 1234567890123456789012345', 4, 4), isNull);
+      expect(incrementNumber('0xFFFFFFFFFFFFFFFFFF', 2, 2), isNull);
+      final long = '1.${'9' * 320}';
+      expect(incrementNumber(long, 0, 0), isNull);
+    });
   });
 
   group('toggleBlockComments', () {
@@ -205,6 +212,16 @@ void main() {
           '<!--[ ]-->',
         ),
         '|',
+      );
+    });
+
+    test('review fix: double-spaced content unwraps instead of nesting', () {
+      expect(
+        run(
+          (t, b, e) => toggleBlockComments(t, b, e, '/*', '*/'),
+          '/*  [keep]  */',
+        ),
+        '[  keep  ]',
       );
     });
 

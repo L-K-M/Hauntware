@@ -325,8 +325,9 @@ LineEdit? changeNumber(String text, int base, int extent, int delta) {
     final digitsStart = negative ? 3 : 2;
     final digits = raw.substring(digitsStart);
     final upper = digits.contains(RegExp(r'[A-F]'));
-    final value = int.parse('${negative ? '-' : ''}$digits', radix: 16);
-    final next = value + delta;
+    final parsed = int.tryParse('${negative ? '-' : ''}$digits', radix: 16);
+    if (parsed == null) return null;
+    final next = parsed + delta;
     final nextDigits = next.abs().toRadixString(16);
     final padded = nextDigits.length >= digits.length
         ? nextDigits
@@ -334,7 +335,13 @@ LineEdit? changeNumber(String text, int base, int extent, int delta) {
     final cased = upper ? padded.toUpperCase() : padded.toLowerCase();
     replacement = '${next < 0 ? '-' : ''}$prefix$cased';
   } else if (found.fractions > 0) {
-    final value = double.parse(raw) + delta;
+    if (found.fractions > 20) return null;
+    final parsed = double.tryParse(raw);
+    if (parsed == null || !parsed.isFinite || parsed.abs() >= 1e21) {
+      return null;
+    }
+    final value = parsed + delta;
+    if (!value.isFinite || value.abs() >= 1e21) return null;
     final fixed = value.toStringAsFixed(found.fractions);
     // Keep the integer width a leading zero implies: 007.50 + 1 is 008.50.
     final rawInt = raw.split('.').first.replaceFirst('-', '');
@@ -345,7 +352,9 @@ LineEdit? changeNumber(String text, int base, int extent, int delta) {
         : '${fixed.startsWith('-') ? '-' : ''}${fixedInt.padLeft(rawInt.length, '0')}';
     replacement = '$paddedInt.${fixedParts.last}';
   } else {
-    final value = int.parse(raw) + delta;
+    final parsed = int.tryParse(raw);
+    if (parsed == null) return null;
+    final value = parsed + delta;
     final rawDigits = raw.replaceFirst('-', '');
     final nextDigits = value.abs().toString();
     final padded = nextDigits.length >= rawDigits.length
@@ -369,6 +378,26 @@ LineEdit? incrementNumber(String text, int base, int extent) =>
 /// [changeNumber].
 LineEdit? decrementNumber(String text, int base, int extent) =>
     changeNumber(text, base, extent, -1);
+
+/// Whitespace between a selection edge and its block markers, so runs of
+/// any width resolve to the same pair a single space would.
+int _gapBefore(String text, int from) {
+  var gap = 0;
+  while (from - gap - 1 >= 0 &&
+      _isIndentUnit(text.codeUnitAt(from - gap - 1))) {
+    gap++;
+  }
+  return gap;
+}
+
+/// Whitespace after a selection edge. See [_gapBefore].
+int _gapAfter(String text, int to) {
+  var gap = 0;
+  while (to + gap < text.length && _isIndentUnit(text.codeUnitAt(to + gap))) {
+    gap++;
+  }
+  return gap;
+}
 
 /// Wraps [inner] with a block-comment pair, spacing bare text as
 /// `/* text */` and `<!-- text -->` do. Markers already spaced are left
@@ -445,11 +474,22 @@ LineEdit? toggleBlockComments(
     return forward ? LineEdit(result, from, end) : LineEdit(result, end, from);
   }
   // Sits between the markers: remove the surrounding pair and its spaces.
-  var openStart = from - open.length - 1;
+  // Measure the whitespace run on each side so double-spaced content
+  // unwraps instead of nesting a second pair around itself. Single
+  // non-space gaps keep their previous match, so partial content still
+  // resolves as it did.
+  var openStart = from - open.length - _gapBefore(text, from);
+  if (openStart < 0 || !text.startsWith(open, openStart)) {
+    openStart = from - open.length - 1;
+  }
   if (openStart < 0 || !text.startsWith(open, openStart)) {
     openStart = from - open.length;
   }
-  var closeEnd = to + close.length + 1;
+  var closeEnd = to + close.length + _gapAfter(text, to);
+  if (closeEnd > text.length ||
+      !text.startsWith(close, closeEnd - close.length)) {
+    closeEnd = to + close.length + 1;
+  }
   if (closeEnd > text.length ||
       !text.startsWith(close, closeEnd - close.length)) {
     closeEnd = to + close.length;
