@@ -63,7 +63,8 @@ the Poltergeist sidebar widget suite ported wholesale (controls, semantics,
 keyboard traversal, control-click, touch sheets, densities) plus focused
 contrast, family-hue, toast, ellipsis, token and ghost-menu tests. Editor
 analysis clean and 402 tests passed through the compatibility export; app
-analysis clean, with 440 tests passed and two existing filesystem skips.
+analysis clean, with 478 tests passed and two existing filesystem skips
+after integrating the reviewed multi-window changes.
 
 ### Ghost context menus, 2026-10-02
 
