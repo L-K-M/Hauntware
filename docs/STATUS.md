@@ -4,6 +4,18 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Ghost desktop context menus (2026-10-02)
+
+The app adopts the shared menu skin from Planchette #127, with matching
+core/editor pins. Pane menus retain their compact rows; sync context menus
+now use the same rows, glyphs and registered shortcut hints. Popup panels
+share the pane menu's rounded shape, with an 8 px desktop minimum even in
+square-corner themes. Shared editor selection menus gain the same skin.
+
+Local Linux validation: analysis clean; 67 focused theme, pane and sync
+tests passed. The full app suite is gated by CI. Widget variants exercise
+desktop and mobile behavior; native Mac runtime verification is pending.
+
 ## Shared Planchette text tools (2026-10-02)
 
 The editor adopts the shared text-tools catalog at the same reviewed

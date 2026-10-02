@@ -45,6 +45,15 @@ Map<String, Object> _chromeValues(PoltergeistChrome c) => {
   'sidebarRowExtent': c.sidebarRowExtent,
 };
 
+void _expectLegacyExceptDesktopPopup(ThemeData theme, ThemeData legacy) {
+  // Desktop popup routes now share the pane-menu skin; every other
+  // component, and the whole mobile theme, still match the old fixture.
+  final comparable = isDesktopPlatform(theme.platform)
+      ? theme.copyWith(popupMenuTheme: legacy.popupMenuTheme)
+      : theme;
+  expect(comparable.copyWith(extensions: const []), legacy);
+}
+
 void main() {
   group('the Poltergeist palette draws what the app always drew', () {
     for (final platform in _platforms) {
@@ -55,7 +64,7 @@ void main() {
 
           // Everything ThemeData compares: the scheme, the type ramp,
           // density, and every component theme, the shapes included.
-          expect(theme.copyWith(extensions: const []), legacy);
+          _expectLegacyExceptDesktopPopup(theme, legacy);
 
           final chrome = theme.extension<PoltergeistChrome>()!;
           expect(_chromeValues(chrome), legacyChrome(brightness, platform));
@@ -69,8 +78,8 @@ void main() {
 
     test('with the host platform too', () {
       for (final brightness in Brightness.values) {
-        expect(
-          buildPoltergeistTheme(brightness).copyWith(extensions: const []),
+        _expectLegacyExceptDesktopPopup(
+          buildPoltergeistTheme(brightness),
           legacyTheme(brightness),
         );
       }
@@ -81,12 +90,12 @@ void main() {
         AppAppearance(palette: ThemePresets.poltergeist),
       );
       expect(themes.themeMode, ThemeMode.system);
-      expect(
-        themes.theme.copyWith(extensions: const []),
+      _expectLegacyExceptDesktopPopup(
+        themes.theme,
         legacyTheme(Brightness.light),
       );
-      expect(
-        themes.darkTheme.copyWith(extensions: const []),
+      _expectLegacyExceptDesktopPopup(
+        themes.darkTheme,
         legacyTheme(Brightness.dark),
       );
     });

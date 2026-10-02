@@ -2,6 +2,7 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:planchette_editor/planchette_editor.dart' show GhostMenuTheme;
 
 import 'family_hues.dart';
 import 'app_appearance.dart';
@@ -585,9 +586,6 @@ PoltergeistChrome _chromeOver(
   );
 }
 
-/// A desktop menu row's height (context menus and the ☰ tree).
-const double _desktopMenuRowExtent = 26;
-
 /// Desktop type ramp (13 px body, 11 px captions — the macOS system
 /// sizes); touch platforms keep Material's defaults.
 TextTheme _desktopText(TextTheme base) => base.copyWith(
@@ -763,7 +761,7 @@ ThemeData buildPoltergeistThemeFor(
   final scaled = scale != 1;
   final buttonShape = rounded(_buttonRadius);
 
-  return base.copyWith(
+  final theme = base.copyWith(
     visualDensity: VisualDensity.compact,
     scaffoldBackgroundColor: scheme.surface,
     dividerColor: scheme.outlineVariant,
@@ -798,27 +796,6 @@ ThemeData buildPoltergeistThemeFor(
             : null,
       ),
     ),
-    // D32's desktop menu rows (context menus, the ☰ tree, every
-    // MenuAnchor): 26 px, 13 px text, a tight inset. Touch keeps
-    // Material's 48 dp rows. The density is pinned to standard so the
-    // theme-wide compact density does not shave the row below 26 px.
-    menuButtonTheme: desktop
-        ? MenuButtonThemeData(
-            style: ButtonStyle(
-              minimumSize: const WidgetStatePropertyAll(
-                Size(64, _desktopMenuRowExtent),
-              ),
-              padding: const WidgetStatePropertyAll(
-                EdgeInsets.symmetric(horizontal: 10),
-              ),
-              visualDensity: VisualDensity.standard,
-              iconSize: const WidgetStatePropertyAll(16),
-              textStyle: WidgetStatePropertyAll(
-                _desktopText(base.textTheme).bodyMedium,
-              ),
-            ),
-          )
-        : null,
     // Desktop dialog titles sit on the 13 px ramp at 17 px semibold
     // (Material's 24 px headlineSmall reads oversized beside it); touch
     // keeps Material's title.
@@ -882,4 +859,5 @@ ThemeData buildPoltergeistThemeFor(
         : null,
     extensions: [chrome, FamilyPalette.forBrightness(drawnAt)],
   );
+  return GhostMenuTheme.apply(theme, cornerScale: scale);
 }
