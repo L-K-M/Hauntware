@@ -107,6 +107,13 @@ class RemoteFilesController extends ChangeNotifier {
   bool showHidden = true;
   String filterQuery = '';
   final Set<String> selectedPaths = {};
+
+  /// The pointer/keyboard anchor Shift-range selection extends from: the
+  /// last plainly-selected row. Kept on the listing, not the widget, so a
+  /// desktop cursor and the touch multi-select share one notion of the
+  /// selection's origin.
+  String? _selectionAnchor;
+
   final List<String> bookmarks = [];
   final List<RemoteTransferItem> transfers = [];
   final Map<String, ManagedRemoteFile> localCopies = {};
@@ -173,6 +180,7 @@ class RemoteFilesController extends ChangeNotifier {
       currentPath = canonical;
       _allEntries = List.unmodifiable(next);
       selectedPaths.clear();
+      _selectionAnchor = null;
       // A fresh listing doubles as a freshness check for managed copies in
       // this directory — no extra round trips needed.
       for (final entry in next) {
@@ -238,17 +246,57 @@ class RemoteFilesController extends ChangeNotifier {
   }
 
   void toggleSelection(String path) {
-    if (selectedPaths.remove(path)) {
-      _notify();
-      return;
+    if (!_allEntries.any((entry) => entry.path == path)) return;
+    _selectionAnchor = path;
+    if (!selectedPaths.remove(path)) selectedPaths.add(path);
+    _notify();
+  }
+
+  /// A plain desktop press on [path]: it alone stays selected and becomes
+  /// the range anchor.
+  void selectOnly(String path) {
+    if (!_allEntries.any((entry) => entry.path == path)) return;
+    _selectionAnchor = path;
+    if (selectedPaths.length == 1 && selectedPaths.contains(path)) return;
+    selectedPaths
+      ..clear()
+      ..add(path);
+    _notify();
+  }
+
+  /// Shift-press on [path]: selects the contiguous run from the anchor
+  /// (the last plain selection, or [path] itself when none stands) in the
+  /// visible, filtered order — never entries a filter currently hides.
+  void selectRangeTo(String path) {
+    final anchor = _selectionAnchor ?? path;
+    var start = -1;
+    var end = -1;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].path == anchor) start = i;
+      if (entries[i].path == path) end = i;
     }
-    if (_allEntries.any((entry) => entry.path == path)) {
-      selectedPaths.add(path);
-      _notify();
+    if (start < 0 || end < 0) return;
+    if (end < start) {
+      final swap = start;
+      start = end;
+      end = swap;
     }
+    selectedPaths
+      ..clear()
+      ..addAll([for (var i = start; i <= end; i++) entries[i].path]);
+    _notify();
+  }
+
+  /// Selects every visible entry (the keyboard's select-all).
+  void selectAll() {
+    selectedPaths
+      ..clear()
+      ..addAll([for (final entry in entries) entry.path]);
+    _notify();
   }
 
   void clearSelection() {
+    _selectionAnchor = null;
     if (selectedPaths.isEmpty) return;
     selectedPaths.clear();
     _notify();
