@@ -166,14 +166,27 @@ void main() {
     expect(host.calls.last, 'activate 0');
   });
 
-  test('a runner without the host keeps the app at one window', () async {
+  test('a runner without the host ignores window requests', () async {
     host.available = false;
     await windows.start();
 
     await windows.openWindow();
+    await windows.ensureWorkspaceForExternalRequest();
 
     expect(windows.canOpenWindows, isFalse);
     expect(windows.windows, hasLength(1));
+    expect(host.calls, isEmpty);
+  });
+
+  test('an external request cannot interrupt application quit', () async {
+    await windows.start();
+    var notified = 0;
+    windows.addListener(() => notified++);
+    windows.setEditorQuitPending(true);
+
+    await windows.ensureWorkspaceForExternalRequest();
+
+    expect(notified, isZero);
     expect(host.calls, isEmpty);
   });
 
@@ -200,11 +213,12 @@ void main() {
 
   test('an external request restores a workspace beside editors', () async {
     await windows.start();
+    final workspace = windows.windows.single;
     await windows.openEditor(
       key: 'local:/one',
       builder: (_) => const SizedBox(),
     );
-    await windows.closeWindow(windows.windows.first);
+    await windows.closeWindow(workspace);
     host.calls.clear();
 
     await windows.ensureWorkspaceForExternalRequest();

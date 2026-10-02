@@ -40,6 +40,9 @@ void main() {
     });
     expect(uri.toString(), contains('host=fe80%3A%3A1%25en0'));
     expect(uri.toString(), contains('username=ops+%26+build'));
+    expect(uri.toString(), isNot(contains('vault-password')));
+    expect(uri.toString(), isNot(contains('private-key')));
+    expect(uri.toString(), isNot(contains('secretRef')));
   });
 
   test('hides the command when no handler is available', () async {

@@ -10,7 +10,6 @@ const _fieldSpacing = 10.0;
 const _overflowRowHeight = 32.0;
 const _overflowVisibleRowLimit = 5;
 const _reviewActionArmDelay = Duration(milliseconds: 750);
-final _neverCancelled = Completer<void>().future;
 
 enum _BarrierDismissal { allowed, blocked }
 
@@ -86,7 +85,8 @@ final class _NeverCancelledDeepLinkOperation implements DeepLinkOperation {
   const _NeverCancelledDeepLinkOperation();
 
   @override
-  Future<void> get cancelled => _neverCancelled;
+  // A fresh future lets each dialog and its callback be garbage-collected.
+  Future<void> get cancelled => Completer<void>().future;
 
   @override
   bool get isCancelled => false;

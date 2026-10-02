@@ -309,7 +309,7 @@ final class WorkspaceWindows extends ChangeNotifier
   /// Restores a workspace when an external request arrives while only
   /// document editors remain. The request's handler raises the chosen window.
   Future<void> ensureWorkspaceForExternalRequest() => _serialized(() async {
-    if (!_started) return;
+    if (!_started || !_hostAvailable || _disposed || _quitPending) return;
     final existing = activeWorkspaceWindow;
     if (existing != null) {
       await _activateWindow(existing);

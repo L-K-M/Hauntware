@@ -114,6 +114,57 @@ void main() {
       }
     });
 
+    test('rejects invisible controls in endpoint values', () {
+      for (final control in [
+        '\u0085',
+        '\u200e',
+        '\u202e',
+        '\ufeff',
+        '\u{e0001}',
+      ]) {
+        for (final field in ['host', 'username']) {
+          final parsed = parsePoltergeistDeepLink(
+            Uri(
+              scheme: poltergeistDeepLinkScheme,
+              host: poltergeistBrowseRoute,
+              queryParameters: {
+                'host': field == 'host' ? 'files${control}example' : 'files',
+                'port': '22',
+                'username': field == 'username' ? 'op${control}s' : 'ops',
+                'path': '/',
+              },
+            ),
+          );
+
+          expect(
+            parsed.failure?.kind,
+            DeepLinkFailureKind.invalidParameters,
+            reason:
+                '$field accepted U+${control.runes.single.toRadixString(16)}',
+          );
+          expect(parsed.request, isNull);
+        }
+      }
+    });
+
+    test('keeps ordinary printable endpoint values', () {
+      final parsed = parsePoltergeistDeepLink(
+        Uri(
+          scheme: poltergeistDeepLinkScheme,
+          host: poltergeistBrowseRoute,
+          queryParameters: const {
+            'host': 'files.example',
+            'port': '22',
+            'username': 'ops build',
+            'path': '/',
+          },
+        ),
+      );
+
+      expect(parsed.failure, isNull);
+      expect((parsed.request as HostDeepLink).username, 'ops build');
+    });
+
     test('requires a UUID catalog id', () {
       final parsed = parsePoltergeistDeepLink(
         Uri.parse('poltergeist://browse?serverId=server-1&path=%2F'),
@@ -434,6 +485,36 @@ void main() {
       expect(second.reviews.single.value.current.host, 'files.example');
     });
 
+    test(
+      'preserves repeats added while a review failure is reported',
+      () async {
+        final first = _Handler();
+        final second = _Handler();
+        late final DeepLinkCoordinator coordinator;
+        var reported = false;
+        coordinator = DeepLinkCoordinator(
+          onError: (_, _) {
+            reported = true;
+            coordinator.add(_hostUri('files.example', path: '/during-error'));
+          },
+        );
+        coordinator.activate(first);
+        coordinator.add(_hostUri('files.example', path: '/first'));
+        await first.waitForReviews(1);
+
+        first.failReview(StateError('handler closed'));
+        await _waitFor(() => reported, 'reported review error');
+        coordinator.activate(second);
+
+        await second.waitForReviews(1);
+        final retried = second.reviews.single.value.current;
+        expect(retried.activationCount, 2);
+        expect(retried.remotePath, '/during-error');
+        second.answer(DeepLinkReviewDecision.cancel);
+        await coordinator.idle;
+      },
+    );
+
     test('queues a repeated endpoint while its confirmed open runs', () async {
       final handler = _Handler(hostOpen: _HostOpenBehavior.waitAfterCommit);
       final coordinator = DeepLinkCoordinator();
@@ -661,10 +742,20 @@ final class _Handler implements DeepLinkHandler {
   @override
   Future<DeepLinkReviewDecision> reviewHost(DeepLinkReview review) async {
     reviews.add(review);
-    return Future.any([
-      _answers.stream.first,
-      review.cancelled.then((_) => DeepLinkReviewDecision.cancel),
-    ]);
+    final decision = Completer<DeepLinkReviewDecision>();
+    final subscription = _answers.stream.listen(
+      decision.complete,
+      onError: decision.completeError,
+      cancelOnError: true,
+    );
+    try {
+      return await Future.any([
+        decision.future,
+        review.cancelled.then((_) => DeepLinkReviewDecision.cancel),
+      ]);
+    } finally {
+      await subscription.cancel();
+    }
   }
 
   @override
@@ -717,6 +808,9 @@ final class _Handler implements DeepLinkHandler {
   }
 
   void answer(DeepLinkReviewDecision decision) {
+    if (reviews.isEmpty) {
+      throw StateError('answer() called before a review was presented');
+    }
     if (decision == DeepLinkReviewDecision.discardAllRemaining) {
       reviews.last.markRemainingReviewed(reviews.last.value);
     }

@@ -17,13 +17,14 @@ enum class DeepLinkLaunchIntent {
 // Registers poltergeist:// for this executable under the current user.
 bool RegisterDeepLinkScheme();
 
-// Claims the process-wide primary role or forwards this launch to it.
+// Determines whether this launch carries a poltergeist:// URI argument.
 DeepLinkLaunchIntent CurrentLaunchIntent();
 
+// Claims the process-wide primary role or forwards this launch to it.
 DeepLinkInstanceDisposition ClaimOrForwardDeepLinkInstance(
     DeepLinkLaunchIntent intent);
 
-// Makes the primary window discoverable after Dart has subscribed to links.
+// Makes the primary window discoverable once the first frame is presented.
 bool MarkPrimaryDeepLinkWindow(HWND window);
 
 #endif  // RUNNER_DEEP_LINK_SCHEME_H_

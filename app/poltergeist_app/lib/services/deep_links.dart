@@ -214,7 +214,7 @@ int? _parseDecimalPort(String value) {
 bool _validHost(String value) {
   if (value.isEmpty || value.length > _maxEndpointValueLength) return false;
   for (final rune in value.runes) {
-    if (rune <= 0x20 || rune == 0x7f) return false;
+    if (rune <= 0x20 || _isUnsafeDisplayControl(rune)) return false;
     if (const [0x2f, 0x5c, 0x40, 0x3f, 0x23, 0x26].contains(rune)) {
       return false;
     }
@@ -224,7 +224,7 @@ bool _validHost(String value) {
 
 bool _validUsername(String value) {
   if (value.length > _maxEndpointValueLength) return false;
-  return value.runes.every((rune) => rune >= 0x20 && rune != 0x7f);
+  return value.runes.every((rune) => !_isUnsafeDisplayControl(rune));
 }
 
 bool _validRemotePath(String path) {
@@ -649,6 +649,7 @@ final class DeepLinkCoordinator {
       _compactPendingHostOrder();
       return _DispatchResult.completed;
     } on Object catch (error, stackTrace) {
+      review.stopAcceptingActivations();
       reviewedHost = review.value.current;
       _requeueHostFirst(reviewedHost);
       _onError(error, stackTrace);
