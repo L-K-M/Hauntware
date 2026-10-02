@@ -183,10 +183,11 @@ final class LocalSettingsStore implements SettingsStore {
 
   /// `settings.json` in the platform's per-user configuration directory. With
   /// no such directory to be found, the settings last for this session only.
-  static SettingsStore defaultLocation() => switch (_defaultPath()) {
-    final path? => LocalSettingsStore(File(path)),
-    null => _SessionSettingsStore(),
-  };
+  static SettingsStore defaultLocation() =>
+      switch (defaultFilePath('settings.json')) {
+        final path? => LocalSettingsStore(File(path)),
+        null => _SessionSettingsStore(),
+      };
 
   final File file;
 
@@ -239,26 +240,29 @@ final class LocalSettingsStore implements SettingsStore {
     }
   }
 
-  static String? _defaultPath() {
+  /// The per-user application path for [fileName], wherever the platform
+  /// says one belongs — `null` when there is no such place. Shared with the
+  /// files Planchette keeps beside `settings.json`, like `window_state.json`.
+  static String? defaultFilePath(String fileName) {
     final environment = Platform.environment;
     if (Platform.isMacOS) {
       if (environment['HOME'] case final home? when home.isNotEmpty) {
-        return '$home/Library/Application Support/Planchette/settings.json';
+        return '$home/Library/Application Support/Planchette/$fileName';
       }
     }
     if (Platform.isWindows) {
       if (environment['APPDATA'] case final appData? when appData.isNotEmpty) {
-        return '$appData\\Planchette\\settings.json';
+        return '$appData\\Planchette\\$fileName';
       }
     }
     // The XDG base directory spec says to ignore a relative value, which
     // would otherwise put the settings under the working directory.
     if (environment['XDG_CONFIG_HOME'] case final config?
         when paths.isAbsolute(config)) {
-      return '$config/planchette/settings.json';
+      return '$config/planchette/$fileName';
     }
     if (environment['HOME'] case final home? when home.isNotEmpty) {
-      return '$home/.config/planchette/settings.json';
+      return '$home/.config/planchette/$fileName';
     }
     return null;
   }

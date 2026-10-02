@@ -44,6 +44,23 @@ ownership boundaries and compatibility policies are documented in
 
 ## Verification
 
+### Shared window lifecycle, 2026-10-02
+
+`packages/ghost_desktop` holds the desktop window lifecycle the three apps
+share: frame snapshot and restore-before-show, missing-monitor policy,
+maximized/full-screen restore, debounced normal-frame capture, and the
+veto/retry close path behind host-owned window/display/persistence
+adapters. Planchette's primary window persists its state through
+`WindowStateStore` (`window_state.json` beside `settings.json`); document
+windows PR128 added keep their own placement and bypass the primary's
+intercepted close.
+
+Local Linux checks: `ghost_desktop` analysis clean and 65 tests passed;
+app analysis clean with 491 tests passed and two existing
+case-sensitive-volume skips. Native launch, mixed-DPI and real-hardware
+restore smoke tests were not performed — the lifecycle is verified at the
+adapter boundary, not against a running window server.
+
 ### Ghost context menus, 2026-10-02
 
 The shared editor exports Poltergeist's desktop menu skin: 26 px rows,

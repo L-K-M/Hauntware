@@ -12,12 +12,17 @@ versioned dependency updates.
 |---|---|
 | `planchette_core` | Language detection, tokenization, search ranges, document encoding metadata, bounded loading, guarded local-file writes |
 | `planchette_editor` | Editing state, highlighting, search and replace, gutter, status, focus, editing surface, and shared save/close contracts |
+| `ghost_desktop` | Desktop window lifecycle shared by all three apps: remembered frame, missing-monitor policy, maximized/full-screen restore, and the intercepted close path behind host-owned adapters |
 | Planchette app | Local document tabs, native menus, Open/New/Save/Save As, file-open events, and application close/quit |
 | Host applications | Their own windows/tabs, localized chrome, remote sessions, managed working copies, uploads, conflict resolution, and notifications |
 
 The dependency direction is app → Flutter editor → pure Dart core. The core
 has no SSH or application dependency, and the editor has no native window
-manager. A remote document remains a managed local working copy owned by its
+manager. `ghost_desktop` keeps the same leaf rule: it depends on Flutter
+plus the window_manager/screen_retriever plugins and declares the adapter
+interfaces each host satisfies — persistence, close policy, monitor
+fallback and show trigger stay host choices. A remote document remains a
+managed local working copy owned by its
 host; no second virtual filesystem is introduced.
 
 ## Compatibility

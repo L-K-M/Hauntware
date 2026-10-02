@@ -49,10 +49,24 @@ jobs:
       - name: Resolve packages
         run: |
           (cd packages/planchette_core && dart pub get)
+          (cd packages/ghost_ui && flutter pub get)
           (cd packages/planchette_editor && flutter pub get)
+          (cd packages/ghost_desktop && flutter pub get)
           (cd app/planchette_app && flutter pub get)
+      - name: Shared UI primitives
+        working-directory: packages/ghost_ui
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
       - name: Shared editor
         working-directory: packages/planchette_editor
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+      - name: Shared desktop window lifecycle
+        working-directory: packages/ghost_desktop
         run: |
           flutter pub get
           flutter analyze
@@ -68,7 +82,7 @@ jobs:
         run: >-
           dart format --set-exit-if-changed --output=none
           packages/planchette_core packages/planchette_editor
-          app/planchette_app
+          packages/ghost_ui packages/ghost_desktop app/planchette_app
 
   desktop:
     name: Desktop (${{ matrix.target }})

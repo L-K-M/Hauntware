@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import window_manager
 
 class MainFlutterWindow: NSWindow {
   /// More document windows on this engine (DocumentWindows.swift).
@@ -32,5 +33,17 @@ class MainFlutterWindow: NSWindow {
   override func close() {
     documentWindows?.closeAll()
     super.close()
+  }
+
+  /// Keep the window invisible while Dart puts it back where it was closed:
+  /// DesktopWindow.initialize() (main.dart, before the first frame) applies
+  /// the previous session's frame and then shows the window — always, even
+  /// when restoring fails — so the storyboard's default-size window never
+  /// flashes. Only this window launches hidden; document windows the runner
+  /// opens later appear on request. Do not remove this without removing
+  /// that contract too.
+  override public func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
+    super.order(place, relativeTo: otherWin)
+    hiddenWindowAtLaunch()
   }
 }
