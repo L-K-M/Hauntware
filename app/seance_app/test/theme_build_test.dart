@@ -97,7 +97,21 @@ void main() {
           // shape at the designed scale.
           expect(theme.dialogTheme, plain.dialogTheme);
           expect(theme.cardTheme, plain.cardTheme);
-          expect(theme.popupMenuTheme, plain.popupMenuTheme);
+          if (desktop) {
+            // GhostMenuTheme's shared compact skin: 8 px scaled corners,
+            // a 4 px panel inset, 13 px labels.
+            expect(
+              theme.popupMenuTheme.shape,
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            );
+            expect(
+              theme.popupMenuTheme.menuPadding,
+              const EdgeInsets.symmetric(vertical: 4),
+            );
+            expect(theme.popupMenuTheme.textStyle?.fontSize, 13);
+          } else {
+            expect(theme.popupMenuTheme, plain.popupMenuTheme);
+          }
           expect(theme.inputDecorationTheme, plain.inputDecorationTheme);
           expect(theme.filledButtonTheme, plain.filledButtonTheme);
           expect(theme.outlinedButtonTheme, plain.outlinedButtonTheme);
@@ -336,14 +350,18 @@ void main() {
       final theme = SeanceTheme.build(
         ThemePresets.seance.copyWith(cornerScale: 0.5),
         Brightness.light,
+        platform: TargetPlatform.linux,
       );
       expect(
         theme.dialogTheme.shape,
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       );
+      // The shared desktop menu skin (GhostMenuTheme.apply) clamps its
+      // corners to an 8 px minimum, so it alone does not follow the scale
+      // below 1; every other component keeps the scaled radius.
       expect(
         theme.menuTheme.style?.shape?.resolve({}),
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       );
       expect(
         (theme.tooltipTheme.decoration! as BoxDecoration).borderRadius,
@@ -367,6 +385,25 @@ void main() {
       expect(
         theme.dialogTheme.shape,
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(0)),
+      );
+    });
+
+    test('a square theme keeps rounded desktop menus', () {
+      // The Terminal preset's cornerScale is 0 — square panels everywhere —
+      // but the shared menu skin clamps desktop menu corners to an 8 px
+      // minimum, for both popup routes and MenuAnchor panels.
+      final theme = SeanceTheme.build(
+        ThemePresets.terminal,
+        Brightness.dark,
+        platform: TargetPlatform.linux,
+      );
+      expect(
+        theme.popupMenuTheme.shape,
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      );
+      expect(
+        theme.menuTheme.style?.shape?.resolve({}),
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       );
     });
 

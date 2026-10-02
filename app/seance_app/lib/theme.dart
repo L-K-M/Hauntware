@@ -2,6 +2,8 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show GhostMenuTheme;
 
 import 'family_hues.dart';
 import 'theme/app_appearance.dart';
@@ -576,7 +578,7 @@ class SeanceTheme {
     // with a rounded rectangle of its scaled radius.
     final scaled = scale != 1;
     final buttonShape = rounded(_buttonRadius);
-    return base.copyWith(
+    final theme = base.copyWith(
       visualDensity: VisualDensity.comfortable,
       scaffoldBackgroundColor: scheme.surface,
       dividerColor: scheme.outlineVariant,
@@ -588,19 +590,12 @@ class SeanceTheme {
         thickness: 1,
       ),
       // The sibling apps' menus (the sidebar kit's context menus): 8 px
-      // corners like every other surface, and on desktop the compact rows
-      // Poltergeist's theme gives them, rather than touch-height items in
-      // a pointer menu.
+      // corners like every other surface. On desktop GhostMenuTheme.apply
+      // below overlays the shared compact skin (26 px rows, 13 px type)
+      // rather than touch-height items in a pointer menu.
       menuTheme: MenuThemeData(
         style: MenuStyle(shape: WidgetStatePropertyAll(rounded(_menuRadius))),
       ),
-      menuButtonTheme: desktop
-          ? MenuButtonThemeData(
-              style: MenuItemButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-              ),
-            )
-          : null,
       tooltipTheme: TooltipThemeData(
         waitDuration: const Duration(milliseconds: 500),
         decoration: BoxDecoration(
@@ -663,6 +658,10 @@ class SeanceTheme {
         FamilyPalette.forBrightness(drawnAt),
       ],
     );
+    // The compact pointer-menu skin shared through planchette_editor: it
+    // rewrites the menu, menuButton and popupMenu themes on desktop and
+    // returns the theme untouched on touch platforms.
+    return GhostMenuTheme.apply(theme, cornerScale: scale);
   }
 
   /// Monospace font stack for the terminal and code.

@@ -3,6 +3,25 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Ghost desktop context menus (2026-10-02)
+
+The app pins core/editor to Planchette #127's reviewed revision `7b833f3`,
+matching Poltergeist. The terminal, terminal-tab and editor-tab context
+menus now use the shared
+Ghost menu skin from `planchette_editor` — `GhostMenuTheme.apply` overlays
+the finished theme, and `GhostMenuItem`/`GhostMenuDivider` replace the
+action rows — giving desktop 26 px rows with 13 px labels, 16 px glyphs in
+family hues and a 4 px panel inset, while panel corners clamp to an 8 px
+minimum even for square palettes like Terminal's. Terminal actions carry
+their real platform chords (⌘C/V/A/F on Apple hosts, Ctrl+Shift+C/V/A/F
+elsewhere) and the keyboard-shortcuts item opens the list without a fake
+hint; touch rows stay at 48 dp and the multi-line tab metadata headers are
+unchanged. Focused runs — `terminal_find_bar_test.dart` (including the
+compact-rows regression), `terminal_tab_strip_test.dart`,
+`theme_build_test.dart`, `tab_rename_test.dart`, `tab_shortcuts_test.dart`
+and `terminal_selection_test.dart` — all pass, and `flutter analyze` is
+clean. Native Mac UI runtime checks are not available on this Linux host.
+
 The desktop terminal footer now matches the sidebar's 30 px height and text
 scaling, keeping their top borders aligned. Touch sizing is unchanged. The
 alignment regression failed before the fix and passes on macOS, Linux and
