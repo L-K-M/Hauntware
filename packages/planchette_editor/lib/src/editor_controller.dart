@@ -9,12 +9,22 @@ import 'package:planchette_core/planchette_core.dart'
 import 'package:planchette_core/planchette_core.dart'
     as core
     show
+        copyLineText,
+        decrementNumber,
         deleteIndentBackward,
         deleteLines,
         duplicateLines,
+        incrementNumber,
+        insertLineAbove,
+        insertLineBelow,
         joinLines,
         moveLines,
-        patternSearchBudget;
+        pasteWithIndentation,
+        patternSearchBudget,
+        selectEnclosingBracketsRange,
+        selectLineRange,
+        selectParagraphRange,
+        toggleBlockComments;
 
 import 'code_editing_controller.dart';
 import 'pattern_find.dart';
@@ -738,19 +748,215 @@ class EditorController extends ChangeNotifier {
   bool joinLines() => _applyLineEdit(core.joinLines);
 
   /// Whether [toggleComment] can act: the buffer is editable and its
-  /// language has a line-comment marker. Plain text, Markdown, JSON, XML and
-  /// CSS have none.
-  bool get canToggleComment =>
-      canEditText && (text.language?.lineComments.isNotEmpty ?? false);
+  /// language has a line-comment marker, or a block pair for the fallback.
+  /// Plain text, Markdown and JSON have neither.
+  bool get canToggleComment {
+    if (!canEditText) return false;
+    final language = text.language;
+    return language != null &&
+        (language.lineComments.isNotEmpty || language.blockComments.isNotEmpty);
+  }
 
   /// Comments the touched lines with the language's line-comment marker, or
-  /// uncomments them when all already carry one. See [toggleLineComments].
+  /// uncomments them when all already carry one. Languages without a line
+  /// marker but with a block pair (XML, CSS) wrap with that pair instead.
+  /// See [toggleLineComments] and [toggleBlockComments].
   bool toggleComment() {
-    final markers = text.language?.lineComments;
-    if (markers == null) return false;
-    return _applyLineEdit(
-      (text, base, extent) => toggleLineComments(text, base, extent, markers),
+    final language = text.language;
+    if (language == null) return false;
+    if (language.lineComments.isNotEmpty) {
+      final markers = language.lineComments;
+      return _applyLineEdit(
+        (text, base, extent) => toggleLineComments(text, base, extent, markers),
+      );
+    }
+    if (language.blockComments.isNotEmpty) {
+      final pair = language.blockComments.first;
+      return _applyLineEdit(
+        (text, base, extent) =>
+            core.toggleBlockComments(text, base, extent, pair[0], pair[1]),
+      );
+    }
+    return false;
+  }
+
+  /// Selects the caret's line, or every line the selection touches.
+  /// Selection only, so a locked document allows it.
+  bool selectLine() {
+    if (!canMoveCaret) return false;
+    final selection = text.selection;
+    final range = core.selectLineRange(
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
     );
+    _requestCaretReveal(CaretReveal.nearest);
+    text.selection = TextSelection(
+      baseOffset: range.base,
+      extentOffset: range.extent,
+    );
+    return true;
+  }
+
+  /// Selects the paragraph at the caret: a run of non-blank lines.
+  /// Selection only, so a locked document allows it.
+  bool selectParagraph() {
+    if (!canMoveCaret) return false;
+    final selection = text.selection;
+    final range = core.selectParagraphRange(
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    _requestCaretReveal(CaretReveal.nearest);
+    text.selection = TextSelection(
+      baseOffset: range.base,
+      extentOffset: range.extent,
+    );
+    return true;
+  }
+
+  /// Selects the innermost bracket pair around the selection, expanding
+  /// outwards on repeat. Selection only, so a locked document allows it.
+  /// Returns false with no enclosing pair.
+  bool selectEnclosingBrackets() {
+    if (!canMoveCaret) return false;
+    final selection = text.selection;
+    final range = core.selectEnclosingBracketsRange(
+      text.text,
+      selection.baseOffset,
+      selection.extentOffset,
+      text.syntaxTokens,
+    );
+    if (range == null) return false;
+    _requestCaretReveal(CaretReveal.nearest);
+    text.selection = TextSelection(
+      baseOffset: range.base,
+      extentOffset: range.extent,
+    );
+    return true;
+  }
+
+  /// Inserts an empty indented line above the caret's line.
+  bool insertLineAbove() => _applyLineEdit(
+    (text, base, extent) => core.insertLineAbove(text, base, extent),
+  );
+
+  /// Inserts an empty indented line below the caret's line.
+  bool insertLineBelow() => _applyLineEdit(
+    (text, base, extent) => core.insertLineBelow(text, base, extent),
+  );
+
+  /// Adds one to the number at the caret or selection, keeping its width,
+  /// decimal places and hex shape. Returns false with no number there.
+  bool incrementNumber() => _applyLineEdit(
+    (text, base, extent) => core.incrementNumber(text, base, extent),
+  );
+
+  /// Subtracts one from the number at the caret or selection. See
+  /// [incrementNumber].
+  bool decrementNumber() => _applyLineEdit(
+    (text, base, extent) => core.decrementNumber(text, base, extent),
+  );
+
+  /// Copies the touched lines to the clipboard. No edit, so a locked
+  /// document allows it. Returns false when the buffer changed mid-copy
+  /// or the clipboard refused it.
+  Future<bool> copyLine() async {
+    if (!canMoveCaret) return false;
+    final source = text.text;
+    final selection = text.selection;
+    if (!selection.isValid) return false;
+    final copyText = core.copyLineText(
+      source,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    if (copyText.isEmpty) return false;
+    try {
+      await Clipboard.setData(ClipboardData(text: copyText));
+    } catch (_) {
+      return false;
+    }
+    if (_disposed || text.text != source) return false;
+    return true;
+  }
+
+  /// Copies the touched lines and removes them. The clipboard write lands
+  /// first; a buffer that changed meanwhile keeps its text. The deletion
+  /// stays anchored to the copied lines, so clipboard and buffer agree
+  /// even when the caret moved during the write.
+  Future<bool> cutLine() async {
+    if (!canEditText) return false;
+    final source = text.text;
+    final selection = text.selection;
+    if (!selection.isValid) return false;
+    final copyText = core.copyLineText(
+      source,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    if (copyText.isEmpty) return false;
+    // Delete exactly the lines that were copied; a caret move during the
+    // clipboard write must not re-target the deletion away from them.
+    final removed = core.deleteLines(
+      source,
+      selection.baseOffset,
+      selection.extentOffset,
+    );
+    if (removed == null) return false;
+    try {
+      await Clipboard.setData(ClipboardData(text: copyText));
+    } catch (_) {
+      return false;
+    }
+    if (_disposed || !canEditText || text.text != source) return false;
+    _requestCaretReveal(CaretReveal.nearest);
+    text.value = TextEditingValue(
+      text: removed.text,
+      selection: TextSelection(
+        baseOffset: removed.selectionBase,
+        extentOffset: removed.selectionExtent,
+      ),
+    );
+    return true;
+  }
+
+  /// Pastes the clipboard with later lines reindented to the caret line.
+  /// Default paste is untouched. Reads the clipboard first, then waits out
+  /// the undo throttle so the insert is one undo step; the caret is reread
+  /// afterwards, so a move during the waits pastes where it now stands.
+  /// A buffer that changed meanwhile is left alone.
+  Future<bool> pasteAndMatchIndentation() async {
+    if (!canEditText) return false;
+    final source = text.text;
+    if (!text.selection.isValid) return false;
+    final ClipboardData? data;
+    try {
+      data = await Clipboard.getData('text/plain');
+    } catch (_) {
+      return false;
+    }
+    final pasted = data?.text;
+    if (pasted == null || pasted.isEmpty) return false;
+    if (_disposed || !canEditText || text.text != source) return false;
+    await _waitForUndoQuiet();
+    if (_disposed || !canEditText || text.text != source) return false;
+    final current = text.selection;
+    if (!current.isValid) return false;
+    final edit = core.pasteWithIndentation(
+      source,
+      current.baseOffset,
+      current.extentOffset,
+      pasted,
+      separator: bufferLineEnding == LineEnding.crlf ? '\r\n' : '\n',
+    );
+    _requestCaretReveal(CaretReveal.nearest);
+    text.value = TextEditingValue(
+      text: edit.text,
+      selection: TextSelection.collapsed(offset: edit.selectionBase),
+    );
+    return true;
   }
 
   bool _applyLineEdit(
@@ -881,6 +1087,84 @@ class EditorController extends ChangeNotifier {
   /// from it.
   TextToolHistory get toolHistory => _toolHistory;
 
+  // ── Text tools browser ──
+
+  /// Whether the catalog browser is open. Hosts open it from a header
+  /// icon through [openTextTools]; the shared view renders it, and the
+  /// standalone app also offers it from its Text menu.
+  bool get textToolsOpen => _textToolsOpen;
+  bool _textToolsOpen = false;
+
+  /// Opens the catalog browser: Repeat and Recent first, then the seven
+  /// groups with a keyword filter. Browsing edits nothing, so a locked
+  /// document may still open it — its rows then stay disabled. Takes the
+  /// find bar's slot, closing find, Go to Line and the options bar.
+  void openTextTools() {
+    if (_loading || _error != null) return;
+    if (_searchOpen) closeSearch();
+    if (_goToLineOpen) closeGoToLine();
+    if (_barTool != null) closeTextTool(refocus: false);
+    _textToolsOpen = true;
+    _notify();
+  }
+
+  /// Closes the catalog browser. Focus returns to the document, so Escape
+  /// and choosing an immediate tool both leave the caret usable; [refocus]
+  /// is off for callers handing focus to another bar right after.
+  void closeTextTools({bool refocus = true}) {
+    if (!_textToolsOpen) return;
+    _textToolsOpen = false;
+    _notify();
+    if (refocus) editorFocus.requestFocus();
+  }
+
+  /// Chooses a catalog tool from the browser list: a find-bar tool opens
+  /// its find row, a tool with options opens the options bar, and the rest
+  /// run at their defaults through the guarded [runTextTool]. Closes the
+  /// browser first; focus moves to the bar or row, or back to the document.
+  void chooseTextTool(String toolId) {
+    final tool = textToolById(toolId);
+    if (tool == null) {
+      throw ArgumentError.value(toolId, 'toolId', 'No text tool');
+    }
+    if (_loading || _error != null) return;
+    if (tool.usesFindBar) {
+      closeTextTools(refocus: false);
+      openFindTool(toolId);
+    } else if (tool.options.isEmpty) {
+      closeTextTools();
+      unawaited(runTextTool(toolId));
+    } else {
+      closeTextTools(refocus: false);
+      openTextTool(toolId);
+    }
+  }
+
+  /// Reruns a recorded tool with the options it ran with: a find-bar tool
+  /// reopens its seeded find row, the rest rerun through [runTextTool].
+  Future<TextToolOutcome?> runRecentTextTool(TextToolRunRecord record) {
+    final tool = textToolById(record.toolId);
+    if (tool == null) return Future.value(null);
+    if (tool.usesFindBar) {
+      closeTextTools(refocus: false);
+      openFindTool(record.toolId, options: record.options);
+      return Future.value(null);
+    }
+    closeTextTools();
+    return runTextTool(
+      record.toolId,
+      options: record.options,
+      wholeDocument: record.wholeDocument,
+    );
+  }
+
+  /// Reruns the last recorded tool, or null before the first run.
+  Future<TextToolOutcome?> repeatTextTool() {
+    final last = _toolHistory.last;
+    if (last == null) return Future.value(null);
+    return runRecentTextTool(last);
+  }
+
   /// Declared option defaults overlaid with the caller's [overrides];
   /// unknown overrides and values that no longer fit their option — a
   /// restored choice outside the current choices — drop to the default.
@@ -978,6 +1262,7 @@ class EditorController extends ChangeNotifier {
       throw ArgumentError.value(toolId, 'toolId', 'No text tool');
     }
     if (_loading || _error != null) return;
+    if (_textToolsOpen) closeTextTools(refocus: false);
     // A pattern tool's options live in the find bar, not here.
     if (tool.usesFindBar) return openFindTool(toolId);
     if (_searchOpen) closeSearch();
@@ -1419,6 +1704,7 @@ class EditorController extends ChangeNotifier {
 
   void openSearch({bool replace = false}) {
     if (_loading || _error != null) return;
+    if (_textToolsOpen) closeTextTools(refocus: false);
     // The find bar and the tool bar share one slot.
     if (_barTool != null) closeTextTool(refocus: false);
     // A plain Find reopens without the pattern-tool rows; the menu paths
@@ -1907,6 +2193,7 @@ class EditorController extends ChangeNotifier {
 
   void openGoToLine() {
     if (_loading || _error != null) return;
+    if (_textToolsOpen) closeTextTools(refocus: false);
     if (_barTool != null) closeTextTool(refocus: false);
     _goToLineOpen = true;
     _invalidGoToLine = null;

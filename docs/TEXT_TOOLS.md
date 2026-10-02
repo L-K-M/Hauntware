@@ -16,10 +16,11 @@ turns them into tests. Ids such as B8 or E5 are entries in
 ## Implementation status, 2026-10-01
 
 Slices 1 to 5b are merged (#108 to #112 and #114). Slice 6 adds file-format
-choices, save cleanup and Normalize Line Endings. The catalog now contains
-42 of the menu table's 48 tools, plus Extract Matches in Find: 43 catalog
-entries. The six deferred menu tools are Hard Wrap, Convert Tabs to Spaces,
-Convert to ASCII, Strip Diacritics, Compose Accents and Decompose Accents.
+choices, save cleanup and Normalize Line Endings. Slice 8 (Unicode/ASCII
+and JSON) adds Compose Accents, Decompose Accents, Strip Diacritics,
+Convert to ASCII, Format JSON and Minify JSON. The catalog now contains
+48 menu tools, plus Extract Matches in Find: 49 catalog entries. The two
+deferred menu tools are Hard Wrap and Convert Tabs to Spaces.
 
 ### Slice 6 contracts
 
@@ -47,13 +48,16 @@ Convert to ASCII, Strip Diacritics, Compose Accents and Decompose Accents.
 
 | Slice | Status and next step |
 |---|---|
-| 5c | Replacement backslash escapes declined by owner: replacements keep backslashes literal, only \$1, \${1}, \${name} and \$\$ expand. Active-match replacement preview built (worker-backed, bounded one line) |
-| 7 | Optional, unbuilt. Decide whether both hosts should expose the full catalog (decision 2), then build `openTextTools()` with a list/sheet, followed by one adoption PR per host at the same reviewed revision. Poltergeist needs ARB keys or a recorded exception. Verify narrow layouts and phone access before claiming them |
+| 5c | Replacement backslash escapes declined by owner: replacements keep backslashes literal, only `$1`, `${1}`, `${name}` and `$$` expand. Active-match replacement preview built (worker-backed, bounded one line) |
+| 7 | Built in Planchette: `openTextTools()` with a list state (Repeat and
+Recent first, seven groups, keyword filter), verified at 320 px and doubled
+text scale. Host adoption is one header icon per host at the same reviewed
+revision, still to do. Poltergeist needs ARB keys or a recorded exception |
 | 8: wrap and interior tabs | Deferred until B8 defines display columns and tab stops |
-| 8: Unicode/ASCII | Compose/Decompose/Strip Diacritics need decision 4 on `unorm_dart`; Convert to ASCII separately needs a reviewed Latin transliteration table |
-| 8: JSON | Format/Minify JSON need decision 7 on scope |
-| 8: search | Regex hints (leading (?i)/(?s)/(?m) plus PCRE hints), inline grep cheat sheet with BBEdit section, Use Selection for Find and Find Selected Text, and session-only search history built. Find in Selection and Extract already shipped. Compare with Saved is separate main-owned work, unstarted here |
-| 8: Edit/File | Selection commands, Insert Line Above/Below, Paste and Match Indentation, number increment/decrement, Copy/Cut Line, block-comment fallback and File-menu Copy Path are unstarted. Go to Matching Bracket and tab-menu Copy Full Path already exist |
+| 8: Unicode/ASCII | Built. `unorm_dart` in core (decision 4); Convert to ASCII uses a reviewed Latin table, keeps unmapped non-ASCII literal with a count |
+| 8: JSON | Built. Whitespace-only strict-JSON reformat (decision 7), values verbatim, invalid input refused with line/column, size capped by the runner |
+| 8: search | Built: regex hints (leading `(?i)`/`(?s)`/`(?m)` accepted, PCRE habits explained), inline grep cheat sheet with a BBEdit section, active-match replacement preview, Use Selection for Find, Find Selected Text, session-only search history. Find in Selection and Extract already shipped. Compare with Saved is main-owned work, unstarted |
+| 8: Edit/File | Shipped: Select Line, Select Paragraph, Select Enclosing Brackets, Insert Line Above/Below, Paste and Match Indentation, Increment/Decrement Number, Copy/Cut Line, Toggle Comment block fallback and File-menu Copy Path. Go to Matching Bracket and tab-menu Copy Full Path already existed |
 | 8: menu keyboard access | Alt mnemonics remain unbuilt; validate AltGr and desktop/input-method conflicts before assigning them |
 
 No host pins were changed for slice 6. On a later pin bump the shared API
@@ -319,9 +323,9 @@ What a pin bump shows in the hosts:
 
 Slice 7 gives the tool bar a list state (Repeat and Recent first, then the
 seven groups with descriptions and a keyword filter) opened by
-`controller.openTextTools()`. On narrow widths it is a scrolling sheet; that
-layout is unverified. Without slice 7 the hosts gain the find-bar actions
-and nothing else.
+`controller.openTextTools()`. On narrow widths it is a scrolling surface in
+the find bar's slot, verified at 320 px and doubled text scale. Without
+slice 7 the hosts gain the find-bar actions and nothing else.
 
 Strings come from a few `EditorStrings` lookups keyed by id: names,
 descriptions, keywords, option labels, count and notice text. Poltergeist
@@ -443,7 +447,7 @@ budget, paging past 1,000 highlights, Replace, Replace All, `$1`, `${name}`.
 | Gap | Plan |
 |---|---|
 | Find in Selection, Replace All in Selection | Build (E5). A stored range, shown tinted, that survives stepping through matches |
-| Replacement `\U \L \E \u \l`, `\n`, `\t`, `\1`, `\0` | Declined by owner: backslashes stay literal, only \$1, \${1}, \${name} and \$\$ expand. `&` and `\P<name>` stay literal |
+| Replacement `\U \L \E \u \l`, `\n`, `\t`, `\1`, `\0` | Declined by owner: backslashes stay literal, only `$1`, `${1}`, `${name}` and `$$` expand. `&` and `\P<name>` stay literal |
 | Extract | Extract Matches… (section 2) |
 | Pattern Playground | Built: one preview line in the find bar (active match, arrow, expanded replacement, capture groups, truncated). Regex runs in the worker with stale-result and time-budget guards. No window |
 | PCRE habits | Built: BBEdit is PCRE; Dart is ECMAScript. Hints on the error line for `(?P<n>…)`, `(?>…)`, possessive quantifiers, POSIX classes, `\A`, `\z`, `\Z`, `\x{NNNN}`, `(?x)`, and `\r` as "line break"; a leading `(?s)`, `(?i)`, `(?m)` is accepted and stripped |
@@ -460,7 +464,7 @@ budget, paging past 1,000 highlights, Replace, Replace All, `$1`, `${name}`.
 
 ### Edit and File menus
 
-Caret and file commands, not catalog tools. Not scheduled (slice 8):
+Caret and file commands, not catalog tools. Shipped (slice 8):
 
 - Select Line, Select Paragraph, Select Enclosing Brackets (BBEdit's
   Balance). Selection only: no edit, allowed when locked.
@@ -470,8 +474,8 @@ Caret and file commands, not catalog tools. Not scheduled (slice 8):
 - Increment / Decrement Number.
 - Copy Line, Cut Line.
 - Toggle Comment's block fallback (E1).
-- Copy Path, added to the File menu (FU5); today it is in the tab context
-  menu only.
+- Copy Path, added to the File menu (FU5); the tab context menu keeps
+  its Copy Full Path, and both share one copy routine.
 
 ### Later
 
@@ -511,7 +515,7 @@ shared packages; each PR lists what hosts will see on the next pin bump.
 | 5b | Find in Selection (E5) | L | Scope for find, replace and 5a |
 | 5c | Replacement escapes, preview line | M | If decision 5 is yes |
 | 6 | Metadata setter and dirty state; status segments for indentation, line ending, BOM (E10, V5); trim and final newline on save (E9); Normalize Line Endings | L | Document properties. 42 of 48 tools built |
-| 7 | Tool list state, `openTextTools()`; then a pin bump and one icon in each host | L, three PRs | Hosts and phones. Optional (decision 2) |
+| 7 | Tool list state, `openTextTools()`; then a pin bump and one icon in each host | L, three PRs | Built in Planchette (decision 2: yes, both hosts including phones); host icons pending |
 | 8 | Not scheduled: Hard Wrap and Convert Tabs to Spaces (B8); Convert to ASCII (needs a Latin table); Strip Diacritics, Compose and Decompose Accents (decision 4); Format and Minify JSON (decision 7); regex hints and cheat sheet; Use Selection for Find; search history; Edit and File menu commands; Alt mnemonics; Compare with Saved | | |
 
 Slices 1 and 2 need no bar; the only new surface is the result notice.

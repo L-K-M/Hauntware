@@ -105,6 +105,10 @@ class EditorStrings {
     'straightenQuotes' => 'Straighten Quotes',
     'zapGremlins' => 'Zap Gremlins',
     'removeAnsiEscapes' => 'Remove ANSI Escapes',
+    'convertToAscii' => 'Convert to ASCII',
+    'stripDiacritics' => 'Strip Diacritics',
+    'composeAccents' => 'Compose Accents',
+    'decomposeAccents' => 'Decompose Accents',
     'prefixSuffixLines' => 'Prefix/Suffix Lines',
     'numberLines' => 'Number Lines',
     'unwrapParagraphs' => 'Unwrap Paragraphs',
@@ -117,6 +121,8 @@ class EditorStrings {
     'htmlEntityDecode' => 'Decode HTML Entities',
     'escapeJsonString' => 'Escape as JSON String',
     'unescapeBackslashSequences' => 'Unescape Backslash Sequences',
+    'formatJson' => 'Format JSON',
+    'minifyJson' => 'Minify JSON',
     'insertDate' => 'Date',
     'insertDateTime' => 'Date and Time',
     'insertUtcTimestamp' => 'UTC Timestamp',
@@ -285,6 +291,13 @@ class EditorStrings {
     'straightenQuotes' => 'Replaces curly quotes with straight ASCII quotes.',
     'zapGremlins' =>
       'Removes or replaces characters that do not belong in text.',
+    'convertToAscii' =>
+      'Replaces quotes, dashes and accented Latin with ASCII look-alikes.',
+    'stripDiacritics' => 'Removes combining marks, leaving the base letters.',
+    'composeAccents' =>
+      'Composes accented characters into their composed form.',
+    'decomposeAccents' =>
+      'Decomposes accented characters into base plus marks.',
     'prefixSuffixLines' =>
       'Adds or removes the same text at the start or end of each line.',
     'numberLines' => 'Adds or removes line numbers.',
@@ -300,6 +313,10 @@ class EditorStrings {
     'escapeJsonString' => 'Escapes the selection as a JSON string body.',
     'unescapeBackslashSequences' =>
       r'Decodes backslash escapes such as \n and \uXXXX.',
+    'formatJson' =>
+      'Pretty-prints JSON with two-space indent, keeping values verbatim.',
+    'minifyJson' =>
+      'Removes insignificant whitespace from JSON, keeping values verbatim.',
     'insertDate' => 'Inserts the current date as YYYY-MM-DD.',
     'insertDateTime' =>
       'Inserts the local date and time as YYYY-MM-DDThh:mm:ss.',
@@ -351,6 +368,25 @@ class EditorStrings {
     'convertIndentationToTabs' => const ['spaces to tabs', 'entab'],
     'straightenQuotes' => const ['smart quotes', 'typographic quotes'],
     'zapGremlins' => const ['control characters', 'invisible characters'],
+    'convertToAscii' => const ['ascii', 'transliterate', 'latin', 'unaccent'],
+    'stripDiacritics' => const [
+      'diacritics',
+      'accents',
+      'remove marks',
+      'combining',
+    ],
+    'composeAccents' => const [
+      'nfc',
+      'precompose',
+      'unicode normalize',
+      'accents',
+    ],
+    'decomposeAccents' => const [
+      'nfd',
+      'decompose',
+      'unicode normalize',
+      'accents',
+    ],
     'prefixSuffixLines' => const ['quote level', 'comment out', 'affix'],
     'numberLines' => const ['line numbers', 'enumerate'],
     'removeAnsiEscapes' => const ['terminal colors', 'ansi codes', 'vt100'],
@@ -372,6 +408,8 @@ class EditorStrings {
       'escape sequences',
       'backslash',
     ],
+    'formatJson' => const ['pretty print', 'json format', 'indent json'],
+    'minifyJson' => const ['minify', 'compact json', 'json min'],
     'keepLinesMatching' => const [
       'process lines matching',
       'filter lines',
@@ -403,8 +441,8 @@ class EditorStrings {
       TextToolRanOn.caret => 'at the caret',
     };
     return switch (report.outcome) {
-      TextToolRefused(:final reason) =>
-        '$name: not applied, ${_refusalText(reason)}.',
+      TextToolRefused(:final reason, :final detail) =>
+        '$name: not applied, ${_refusalText(reason, detail)}.',
       TextToolUnchanged(:final scope, :final detail) =>
         '$name: ${_unchangedText(report.tool.id, scope, where, detail)}',
       TextToolChanged(:final changed, :final scope, :final detail) =>
@@ -453,6 +491,12 @@ class EditorStrings {
     'uppercase' => 'uppercased ${_plural(changed, 'character')} $where.',
     'lowercase' => 'lowercased ${_plural(changed, 'character')} $where.',
     'straightenQuotes' => 'straightened ${_plural(changed, 'quote')} $where.',
+    'convertToAscii' => _asciiChanged(changed, where, detail),
+    'stripDiacritics' => 'stripped ${_plural(changed, 'mark')} $where.',
+    'composeAccents' => 'composed ${_plural(changed, 'character')} $where.',
+    'decomposeAccents' => 'decomposed ${_plural(changed, 'character')} $where.',
+    'formatJson' => 'formatted ${_plural(changed, 'character')} $where.',
+    'minifyJson' => 'minified ${_plural(changed, 'character')} $where.',
     'zapGremlins' => switch (detail) {
       'escape' => 'escaped ${_plural(changed, 'gremlin')} $where.',
       'replace' => 'replaced ${_plural(changed, 'gremlin')} $where.',
@@ -485,6 +529,22 @@ class EditorStrings {
     'extractMatches' => _extractText(changed, where, detail),
     _ => 'changed $scope units $where.',
   };
+
+  /// What Convert to ASCII did: the run's detail is `unmapped:N` when
+  /// non-ASCII without an equivalent was kept literal.
+  String _asciiChanged(int changed, String where, String? detail) {
+    final left = _unmappedCount(detail);
+    if (left > 0) {
+      return 'converted ${_plural(changed, 'character')} $where, '
+          '${_plural(left, 'character')} without an equivalent left.';
+    }
+    return 'converted ${_plural(changed, 'character')} $where.';
+  }
+
+  int _unmappedCount(String? detail) {
+    if (detail == null || !detail.startsWith('unmapped:')) return 0;
+    return int.tryParse(detail.substring('unmapped:'.length)) ?? 0;
+  }
 
   /// What Extract Matches did, per the 'unit:target' detail the run
   /// reported — in place rewrites the buffer, the other destinations do
@@ -531,6 +591,12 @@ class EditorStrings {
         'constantCase' => 'nothing to change $where.',
         'straightenQuotes' => 'nothing to straighten $where.',
         'zapGremlins' => 'nothing to zap $where.',
+        'convertToAscii' => _asciiUnchanged(where, detail),
+        'stripDiacritics' => 'no diacritics $where.',
+        'composeAccents' => 'already composed $where.',
+        'decomposeAccents' => 'already decomposed $where.',
+        'formatJson' => 'already formatted $where.',
+        'minifyJson' => 'already minified $where.',
         'removeAnsiEscapes' => 'no escape sequences $where.',
         'unwrapParagraphs' => 'nothing to unwrap $where.',
         'joinLinesWith' => 'nothing to join $where.',
@@ -542,17 +608,31 @@ class EditorStrings {
         _ => 'nothing to change $where.',
       };
 
-  String _refusalText(TextToolRefusal reason) => switch (reason) {
-    TextToolRefusal.nothingSelected => 'nothing selected',
-    TextToolRefusal.noWordAtCaret => 'no word at the caret',
-    TextToolRefusal.resultNotText => 'the result is binary, not text',
-    TextToolRefusal.tooLarge => 'the result is too large to save',
-    TextToolRefusal.requiresTabs => 'this format requires tab indentation',
-    TextToolRefusal.noPattern => 'no pattern to match',
-    TextToolRefusal.invalidPattern => 'the pattern does not compile',
-    TextToolRefusal.patternFailed => 'the pattern search failed',
-    TextToolRefusal.unavailable => 'this destination is not available',
-  };
+  /// What an unchanged Convert to ASCII found: ASCII already, or
+  /// non-ASCII with no equivalent that stays literal.
+  String _asciiUnchanged(String where, String? detail) {
+    final left = _unmappedCount(detail);
+    if (left > 0) {
+      return 'nothing to convert $where, '
+          '${_plural(left, 'character')} without an equivalent.';
+    }
+    return 'already ASCII $where.';
+  }
+
+  String _refusalText(TextToolRefusal reason, String? detail) =>
+      switch (reason) {
+        TextToolRefusal.nothingSelected => 'nothing selected',
+        TextToolRefusal.noWordAtCaret => 'no word at the caret',
+        TextToolRefusal.resultNotText => 'the result is binary, not text',
+        TextToolRefusal.tooLarge => 'the result is too large to save',
+        TextToolRefusal.requiresTabs => 'this format requires tab indentation',
+        TextToolRefusal.noPattern => 'no pattern to match',
+        TextToolRefusal.invalidPattern => 'the pattern does not compile',
+        TextToolRefusal.patternFailed => 'the pattern search failed',
+        TextToolRefusal.unavailable => 'this destination is not available',
+        TextToolRefusal.invalidJson =>
+          detail == null ? 'invalid JSON' : 'invalid JSON at $detail',
+      };
 
   // ── Tool bar ──
 
@@ -583,7 +663,8 @@ class EditorStrings {
       changed,
       scope,
     ),
-    TextToolRefused(:final reason) => 'not applied, ${_refusalText(reason)}',
+    TextToolRefused(:final reason, :final detail) =>
+      'not applied, ${_refusalText(reason, detail)}',
     TextToolUnchanged() => 'nothing to change',
   };
 
@@ -606,6 +687,12 @@ class EditorStrings {
     'removeAnsiEscapes' => 'will remove ${_plural(changed, 'escape sequence')}',
     'unwrapParagraphs' =>
       'will join lines at ${_plural(changed, 'line break')}',
+    'convertToAscii' => 'will convert ${_plural(changed, 'character')}',
+    'stripDiacritics' => 'will strip ${_plural(changed, 'mark')}',
+    'composeAccents' => 'will compose ${_plural(changed, 'character')}',
+    'decomposeAccents' => 'will decompose ${_plural(changed, 'character')}',
+    'formatJson' => 'will format ${_plural(changed, 'character')}',
+    'minifyJson' => 'will minify ${_plural(changed, 'character')}',
     'zapGremlins' => 'will zap ${_plural(changed, 'gremlin')}',
     'prefixSuffixLines' => 'will change $changed of ${_lines(scope)}',
     'numberLines' => 'will renumber ${_lines(scope)}',
@@ -616,6 +703,26 @@ class EditorStrings {
   String _lines(int count) => _plural(count, 'line');
   String _plural(int count, String noun) =>
       '$count $noun${count == 1 ? '' : 's'}';
+
+  // ── Text tools browser ──
+
+  /// The Text menu row that opens the catalog browser.
+  String get browseTextTools => 'Browse Text Tools…';
+
+  /// The browser's heading, naming the catalog it lists.
+  String get textToolsTitle => 'Text Tools';
+
+  /// The hint in the browser's filter field.
+  String get textToolsFilterHint => 'Filter tools';
+
+  /// The browser's close button.
+  String get textToolsClose => 'Close text tools';
+
+  /// What the browser shows when the filter matches no tool.
+  String get textToolsNoResults => 'No tools match.';
+
+  /// The group the browser lists Repeat and Recent under.
+  String get textToolsHistoryGroup => 'Repeat and Recent';
 
   // ── Find-bar pattern tools ──
 

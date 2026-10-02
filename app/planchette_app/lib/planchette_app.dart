@@ -353,16 +353,22 @@ class _DocumentShellState extends State<_DocumentShell> {
         // From #66.
         PopupMenuItem(
           enabled: tab.path != null,
-          onTap: () {
-            if (tab.path case final path?) {
-              unawaited(Clipboard.setData(ClipboardData(text: path)));
-            }
-          },
+          onTap: () => _copyPath(tab.path),
           child: const Text('Copy Full Path'),
         ),
       ],
     );
   }
+
+  /// Copies a file path to the clipboard. Shared by the tab context menu
+  /// and File › Copy Path, so both copy the same text.
+  void _copyPath(String? path) {
+    if (path case final value?) {
+      unawaited(Clipboard.setData(ClipboardData(text: value)));
+    }
+  }
+
+  void _copyActivePath() => _copyPath(workspace.active?.path);
 
   void _nextTab({bool previous = false}) {
     final tabs = workspace.documents;
@@ -486,29 +492,16 @@ class _DocumentShellState extends State<_DocumentShell> {
 
   /// Repeat runs the last tool with the options it last used — bar and
   /// menu runs both record, so the label's summary is what re-runs.
-  void _repeatTextTool() => _runRecentTextTool(workspace.toolHistory.last);
+  void _repeatTextTool() {
+    final editor = workspace.active?.editor;
+    if (editor == null) return;
+    unawaited(editor.repeatTextTool());
+  }
 
   void _runRecentTextTool(TextToolRunRecord? record) {
     final editor = workspace.active?.editor;
     if (record == null || editor == null) return;
-    final tool = textToolById(record.toolId);
-    // A record can outlive its tool — the catalog is checked on the way
-    // in, but a host-built record may still name one that is gone.
-    if (tool == null) return;
-    // A pattern tool replays by reopening its find-bar row seeded with the
-    // recorded query, so a catastrophic expression never runs on the UI
-    // isolate and the destination is chosen where it lives.
-    if (tool.usesFindBar) {
-      editor.openFindTool(record.toolId, options: record.options);
-    } else {
-      unawaited(
-        editor.runTextTool(
-          record.toolId,
-          options: record.options,
-          wholeDocument: record.wholeDocument,
-        ),
-      );
-    }
+    unawaited(editor.runRecentTextTool(record));
   }
 
   void _find({bool replace = false}) {
@@ -534,6 +527,9 @@ class _DocumentShellState extends State<_DocumentShell> {
     // A composing input method or a host lock refuses line edits too.
     final inDocument = ready && _documentInUse;
     final lineCommands = inDocument && (active?.editor.canEditText ?? false);
+    // Selection moves nothing, so a locked document allows it.
+    final selectionCommands =
+        inDocument && (active?.editor.canMoveCaret ?? false);
     final hasSelection = inDocument && (active?.editor.hasSelection ?? false);
     return [
       _ShellMenu('File', [
@@ -583,6 +579,12 @@ class _DocumentShellState extends State<_DocumentShell> {
               active?.disk != DiskState.missing,
         ),
         _Command('Export as HTML…', _exportHtml, enabled: ready),
+        _Command(
+          'Copy Path',
+          _copyActivePath,
+          enabled: active?.path != null,
+          id: 'copyPath',
+        ),
         const _Separator(),
         // macOS keeps Settings in the application menu instead.
         if (!mac)
@@ -704,6 +706,82 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.slash),
           enabled: inDocument && (active?.editor.canToggleComment ?? false),
         ),
+        // No chords for this group: the existing Edit shortcuts already
+        // cover the field's bindings, and new chords are unchecked against
+        // desktop environments and input methods.
+        const _Separator(),
+        _Command(
+          'Select Line',
+          () => active?.editor.selectLine(),
+          enabled: selectionCommands,
+          id: 'selectLine',
+        ),
+        _Command(
+          'Select Paragraph',
+          () => active?.editor.selectParagraph(),
+          enabled: selectionCommands,
+          id: 'selectParagraph',
+        ),
+        _Command(
+          'Select Enclosing Brackets',
+          () => active?.editor.selectEnclosingBrackets(),
+          enabled: selectionCommands,
+          id: 'selectEnclosingBrackets',
+        ),
+        const _Separator(),
+        _Command(
+          'Insert Line Above',
+          () => active?.editor.insertLineAbove(),
+          enabled: lineCommands,
+          id: 'insertLineAbove',
+        ),
+        _Command(
+          'Insert Line Below',
+          () => active?.editor.insertLineBelow(),
+          enabled: lineCommands,
+          id: 'insertLineBelow',
+        ),
+        _Command(
+          'Copy Line',
+          () {
+            final editor = active?.editor;
+            if (editor != null) unawaited(editor.copyLine().then<void>((_) {}));
+          },
+          enabled: selectionCommands,
+          id: 'copyLine',
+        ),
+        _Command(
+          'Cut Line',
+          () {
+            final editor = active?.editor;
+            if (editor != null) unawaited(editor.cutLine().then<void>((_) {}));
+          },
+          enabled: lineCommands,
+          id: 'cutLine',
+        ),
+        _Command(
+          'Increment Number',
+          () => active?.editor.incrementNumber(),
+          enabled: lineCommands,
+          id: 'incrementNumber',
+        ),
+        _Command(
+          'Decrement Number',
+          () => active?.editor.decrementNumber(),
+          enabled: lineCommands,
+          id: 'decrementNumber',
+        ),
+        _Command(
+          'Paste and Match Indentation',
+          () {
+            final editor = active?.editor;
+            if (editor != null) {
+              unawaited(editor.pasteAndMatchIndentation().then<void>((_) {}));
+            }
+          },
+          enabled: lineCommands,
+          id: 'pasteMatchIndentation',
+        ),
       ]),
       // The catalog drives the menu: Repeat and Recent head it, then one
       // submenu per group that has at least one built tool — a group not
@@ -735,6 +813,14 @@ class _DocumentShellState extends State<_DocumentShell> {
               ),
         ]),
         const _Separator(),
+        // The browser is the phone and header-icon entry to the same
+        // catalog the submenus below list; the menus stay primary.
+        _Command(
+          _editorStrings.browseTextTools,
+          () => active?.editor.openTextTools(),
+          enabled: ready,
+          id: 'browseTextTools',
+        ),
         for (final group in TextToolGroup.values)
           if (textToolCatalog.any(
             (tool) => tool.group == group && tool.showsInMenu,

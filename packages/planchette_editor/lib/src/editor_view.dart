@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'code_editing_controller.dart';
 import 'editor_controller.dart';
 import 'editor_fonts.dart';
 import 'editor_strings.dart';
+import 'text_tools_browser.dart';
 
 /// What the Tab key does inside the document.
 enum EditorTabKeyBehavior {
@@ -94,6 +96,13 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   /// The same for the tool bar's fields and controls.
   final _toolBarFocus = FocusNode(
     debugLabel: 'tool bar',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+
+  /// The same for the text-tools browser's filter field.
+  final _textToolsFocus = FocusNode(
+    debugLabel: 'text tools',
     canRequestFocus: false,
     skipTraversal: true,
   );
@@ -296,6 +305,8 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
   void _escape() {
     if (c.toolBarOpen) {
       c.closeTextTool();
+    } else if (c.textToolsOpen) {
+      c.closeTextTools();
     } else if (c.goToLineOpen && !_searchBarFocus.hasFocus) {
       c.closeGoToLine();
     } else {
@@ -335,6 +346,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     c.setViewEditingLocked(this, false);
     _gutterRepaint.dispose();
     _searchBarFocus.dispose();
+    _textToolsFocus.dispose();
     super.dispose();
   }
 
@@ -392,7 +404,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         const SingleActivator(LogicalKeyboardKey.f3): c.nextMatch,
         const SingleActivator(LogicalKeyboardKey.f3, shift: true):
             c.previousMatch,
-        if (c.searchOpen || c.goToLineOpen || c.toolBarOpen)
+        if (c.searchOpen || c.goToLineOpen || c.toolBarOpen || c.textToolsOpen)
           const SingleActivator(LogicalKeyboardKey.escape): _escape,
       },
       child: Column(
@@ -419,6 +431,36 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               canRequestFocus: false,
               skipTraversal: true,
               child: _toolBar(context, c.toolBarTool!),
+            ),
+            const Divider(height: 1),
+          ],
+          // The catalog browser takes the same slot; choosing a row hands
+          // over to the find row or the tool bar above.
+          if (c.textToolsOpen) ...[
+            Focus(
+              focusNode: _textToolsFocus,
+              canRequestFocus: false,
+              skipTraversal: true,
+              child: ConstrainedBox(
+                // The sheet never takes more than its catalog needs, nor
+                // more than a short window can spare: below about 540 px
+                // of window the cap yields to the chrome around it, down
+                // to a floor that still shows the filter and one row.
+                constraints: BoxConstraints(
+                  maxHeight: math.min(
+                    320.0,
+                    math.max(160.0, MediaQuery.sizeOf(context).height - 220),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+                  child: TextToolsBrowser(
+                    controller: c,
+                    strings: widget.strings,
+                    locked: _locked,
+                  ),
+                ),
+              ),
             ),
             const Divider(height: 1),
           ],

@@ -30,15 +30,37 @@ ownership boundaries and compatibility policies are documented in
   Linux desktop entries pass selected files; Windows builds are portable.
 - Desktop CI builds and a release pipeline for macOS, Linux and Windows.
 - Text menu groups, palette keywords/paths, an inline options bar, Repeat and
-  Recent, and a result notice with Undo. The catalog contains 42 menu tools
+  Recent, and a result notice with Undo. The catalog contains 48 menu tools
   plus Extract Matches. The find bar supports Keep/Delete Lines Matching,
-  Extract and a stored Find in Selection scope.
+  Extract and a stored Find in Selection scope. A shared catalog browser
+  (Repeat and Recent first, the seven groups with descriptions, keyword
+  filter) opens from `controller.openTextTools()` and from the app's Text
+  menu; hosts add one header icon each on adoption.
 - Clickable app status segments for indentation, LF/CRLF and UTF-8 BOM, with
   metadata-aware dirty state. Opt-in trim/final-newline save settings and
   Normalize Line Endings. Remaining host/deferred work is recorded in
   [TEXT_TOOLS.md](TEXT_TOOLS.md#remaining-work-slices-5c-7-and-8).
 
 ## Verification
+
+### Text tools slice 8 (Unicode/ASCII/JSON), 2026-10-01
+
+Local Linux checks with Flutter 3.47.2 / Dart 3.13.2:
+
+- Core: analysis clean, 490 tests passed (44 new). Compose Accents
+  (NFC), Decompose Accents (NFD) and Strip Diacritics run through
+  `unorm_dart`, new in core; Convert to ASCII uses a small Latin
+  table and keeps unmapped non-ASCII literal with a count.
+  Format/Minify JSON reformat whitespace only, keep number and
+  string literals verbatim, and refuse invalid input with line and
+  column. Output size stays capped by the existing runner preflight.
+- Shared editor: analysis clean, 324 tests passed (3 new: JSON
+  size cap, JSON line/column refusal, Unicode run scope).
+- App: analysis clean, 402 tests passed; two case-insensitive-volume
+  tests skipped on this case-sensitive host.
+- `dart format` and `git diff --check` clean.
+- Replacement backslash escapes are untouched. Hard Wrap and
+  Convert Tabs to Spaces stay deferred on B8.
 
 ### Text tools through slice 6, 2026-10-01
 
@@ -53,6 +75,19 @@ Local Linux checks with Flutter 3.47.2 / Dart 3.13.2:
   rejection, undo/redo cleanup, concurrent typing, composition refusal and
   narrow status controls at doubled text scale. Independent save-path review
   found no important defects. Cross-platform CI is recorded on the PR.
+
+### Text tools browser (slice 7), 2026-10-02
+
+Local Linux checks with Flutter 3.47.2 / Dart 3.13.2:
+
+- Core: analysis clean, 446 tests passed (unchanged).
+- Shared editor: analysis clean, 345 tests passed (24 new: browser state,
+  dispatch, filter, 320 px width, doubled text scale, keyboard, headings,
+  focus and lock).
+- App: analysis clean, 403 tests passed (1 new menu-entry test); two
+  case-insensitive-volume tests skipped on this case-sensitive host.
+- `dart format` and `git diff --check` clean. Cross-platform CI is recorded
+  on the PR.
 
 ### Integration baseline, 2026-09-28
 
