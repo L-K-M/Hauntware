@@ -57,8 +57,9 @@ void main() {
   );
 
   Future<void> settle(WidgetTester tester) async {
-    // A connecting terminal animates indefinitely: pump fixed frames.
-    for (var i = 0; i < 6; i++) {
+    // A connecting terminal animates indefinitely: pump fixed frames. Eight
+    // cover a dismissing popup route's exit animation (400 ms in test time).
+    for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 50));
     }
   }
@@ -190,6 +191,29 @@ void main() {
 
     expect(find.byType(TerminalFindBar), findsNothing);
     expect(utf8.decode(sent), '\x06', reason: "readline's forward-char");
+  });
+
+  testWidgets('the terminal context menu uses compact desktop rows', (
+    tester,
+  ) async {
+    await pumpTerminal(tester);
+    await tester.tap(find.byType(TerminalView), buttons: kSecondaryButton);
+    await settle(tester);
+
+    final copy = find.ancestor(
+      of: find.text('Copy'),
+      matching: find.byWidgetPredicate((w) => w is PopupMenuItem<String>),
+    );
+    expect(tester.getSize(copy).height, 26);
+    expect(tester.widget<PopupMenuItem<String>>(copy).enabled, isFalse);
+    expect(find.descendant(of: copy, matching: find.byIcon(Icons.copy)),
+        findsOneWidget);
+    expect(find.text(apple ? '⌘C' : 'Ctrl+Shift+C'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    expect(find.text('Keyboard shortcuts'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('the context menu opens it, and it reopens with the last '

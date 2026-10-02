@@ -4,6 +4,8 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show GhostMenuDivider, GhostMenuItem;
 import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart';
 
@@ -704,6 +706,7 @@ class _TabChip extends StatelessWidget {
     if (overlay is! RenderBox) return;
     final metadata = session.metadata.value;
     final config = session.config;
+    final palette = FamilyPalette.of(context);
     final choice = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -734,11 +737,24 @@ class _TabChip extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(value: 'rename', child: Text('Rename tab…')),
-        const PopupMenuItem(value: 'close', child: Text('Close tab')),
+        const GhostMenuDivider(),
+        GhostMenuItem(
+          context: context,
+          value: 'rename',
+          label: 'Rename tab…',
+          icon: Icons.edit,
+          iconColor: palette.glyph(FamilyHue.graphite),
+        ),
+        GhostMenuItem(
+          context: context,
+          value: 'close',
+          label: 'Close tab',
+          icon: Icons.close,
+          iconColor: palette.glyph(FamilyHue.red),
+        ),
       ],
     );
+    if (!context.mounted) return;
     if (choice == 'rename') {
       onRename?.call();
     } else if (choice == 'close') {
@@ -793,6 +809,7 @@ class _EditorTabChip extends StatelessWidget {
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
     final config = tab.config;
+    final palette = FamilyPalette.of(context);
     final choice = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -817,10 +834,17 @@ class _EditorTabChip extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(value: 'close', child: Text('Close tab')),
+        const GhostMenuDivider(),
+        GhostMenuItem(
+          context: context,
+          value: 'close',
+          label: 'Close tab',
+          icon: Icons.close,
+          iconColor: palette.glyph(FamilyHue.red),
+        ),
       ],
     );
+    if (!context.mounted) return;
     if (choice == 'close') onClose();
   }
 
@@ -1320,6 +1344,11 @@ class _SessionViewState extends State<_SessionView> {
   ) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final hasSelection = _terminalController.selection != null;
+    final palette = FamilyPalette.of(context);
+    // The same chords _handleKeyEvent binds: ⌘ on Apple platforms,
+    // Ctrl+Shift elsewhere, where plain Ctrl belongs to the shell.
+    final apple = Platform.isMacOS || Platform.isIOS;
+    Text keys(String key) => Text(apple ? '⌘$key' : 'Ctrl+Shift+$key');
     final choice = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -1329,19 +1358,48 @@ class _SessionViewState extends State<_SessionView> {
         overlay.size.height - globalPosition.dy,
       ),
       items: [
-        PopupMenuItem(
+        GhostMenuItem(
+          context: context,
           value: 'copy',
           enabled: hasSelection,
-          child: const Text('Copy'),
+          label: 'Copy',
+          icon: Icons.copy,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          shortcut: keys('C'),
         ),
-        const PopupMenuItem(value: 'paste', child: Text('Paste')),
-        const PopupMenuDivider(),
-        const PopupMenuItem(value: 'selectAll', child: Text('Select all')),
-        const PopupMenuItem(value: 'find', child: Text('Find…')),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
+        GhostMenuItem(
+          context: context,
+          value: 'paste',
+          label: 'Paste',
+          icon: Icons.content_paste,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          shortcut: keys('V'),
+        ),
+        const GhostMenuDivider(),
+        GhostMenuItem(
+          context: context,
+          value: 'selectAll',
+          label: 'Select all',
+          icon: Icons.select_all,
+          iconColor: palette.glyph(FamilyHue.graphite),
+          shortcut: keys('A'),
+        ),
+        GhostMenuItem(
+          context: context,
+          value: 'find',
+          label: 'Find…',
+          icon: Icons.search,
+          iconColor: palette.glyph(FamilyHue.graphite),
+          shortcut: keys('F'),
+        ),
+        const GhostMenuDivider(),
+        // No shortcut hint here: the item opens the list itself.
+        GhostMenuItem(
+          context: context,
           value: 'shortcuts',
-          child: Text('Keyboard shortcuts'),
+          label: 'Keyboard shortcuts',
+          icon: Icons.keyboard,
+          iconColor: palette.glyph(FamilyHue.graphite),
         ),
       ],
     );
