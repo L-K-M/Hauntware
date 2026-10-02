@@ -510,6 +510,13 @@ class _DocumentShellState extends State<_DocumentShell> {
     }
   }
 
+  /// Compare with Saved runs on the saved file the active tab holds, so the
+  /// command waits for one; untitled tabs keep the row, greyed.
+  void _compareWithSaved() {
+    final tab = workspace.active;
+    if (tab != null) unawaited(workspace.compareWithSaved(tab));
+  }
+
   SingleActivator _shortcut(
     LogicalKeyboardKey key, {
     bool shift = false,
@@ -536,12 +543,14 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'New',
           _new,
+          mnemonic: 'n',
           shortcut: _shortcut(LogicalKeyboardKey.keyN),
           enabled: unlocked,
         ),
         _Command(
           'Open…',
           () => unawaited(workspace.openDialog()),
+          mnemonic: 'o',
           shortcut: _shortcut(LogicalKeyboardKey.keyO),
           enabled: unlocked,
         ),
@@ -549,12 +558,14 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Save',
           _save,
+          mnemonic: 's',
           shortcut: _shortcut(LogicalKeyboardKey.keyS),
           enabled: ready,
         ),
         _Command(
           'Save As…',
           () => _save(saveAs: true),
+          mnemonic: 'a',
           shortcut: _shortcut(LogicalKeyboardKey.keyS, shift: true),
           enabled: ready,
         ),
@@ -563,6 +574,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           _saveAll,
           // Menu-only off macOS: Windows reports AltGr as Ctrl+Alt, so
           // Ctrl+Alt+S would swallow text such as Polish AltGr+S.
+          mnemonic: 'l',
           shortcut: mac ? _shortcut(LogicalKeyboardKey.keyS, alt: true) : null,
           enabled:
               unlocked && workspace.documents.any((tab) => tab.editor.isDirty),
@@ -573,15 +585,17 @@ class _DocumentShellState extends State<_DocumentShell> {
           'Revert to Saved',
           _revert,
           // A deleted file has no saved version to go back to.
+          mnemonic: 'r',
           enabled:
               ready &&
               active?.path != null &&
               active?.disk != DiskState.missing,
         ),
-        _Command('Export as HTML…', _exportHtml, enabled: ready),
+        _Command('Export as HTML…', _exportHtml, mnemonic: 'x', enabled: ready),
         _Command(
           'Copy Path',
           _copyActivePath,
+          mnemonic: 'p',
           enabled: active?.path != null,
           id: 'copyPath',
         ),
@@ -591,18 +605,21 @@ class _DocumentShellState extends State<_DocumentShell> {
           _Command(
             'Settings…',
             _showSettings,
+            mnemonic: 'e',
             shortcut: _shortcut(LogicalKeyboardKey.comma),
             enabled: !workspace.interactionLocked,
           ),
         _Command(
           'Close Tab',
           _close,
+          mnemonic: 'c',
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
           enabled: closable,
         ),
         _Command(
           'Reopen Closed Tab',
           () => unawaited(workspace.reopenClosed()),
+          mnemonic: 't',
           shortcut: _shortcut(LogicalKeyboardKey.keyT, shift: true),
           enabled: workspace.canReopenClosed,
         ),
@@ -611,16 +628,18 @@ class _DocumentShellState extends State<_DocumentShell> {
           _Command(
             'Quit',
             () => unawaited(widget.onQuit!()),
+            mnemonic: 'q',
             shortcut: _shortcut(LogicalKeyboardKey.keyQ),
             enabled: unlocked,
           ),
         ],
-      ]),
+      ], mnemonic: 'f'),
       _ShellMenu('Edit', [
         _Command(
           'Undo',
           () =>
               _textAction(const UndoTextIntent(SelectionChangedCause.keyboard)),
+          mnemonic: 'u',
           shortcut: _shortcut(LogicalKeyboardKey.keyZ),
           enabled: ready,
         ),
@@ -628,6 +647,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           'Redo',
           () =>
               _textAction(const RedoTextIntent(SelectionChangedCause.keyboard)),
+          mnemonic: 'r',
           shortcut: _shortcut(LogicalKeyboardKey.keyZ, shift: true),
           enabled: ready,
         ),
@@ -637,12 +657,14 @@ class _DocumentShellState extends State<_DocumentShell> {
           () => _textAction(
             const CopySelectionTextIntent.cut(SelectionChangedCause.keyboard),
           ),
+          mnemonic: 't',
           shortcut: _shortcut(LogicalKeyboardKey.keyX),
           enabled: ready,
         ),
         _Command(
           'Copy',
           () => _textAction(CopySelectionTextIntent.copy),
+          mnemonic: 'c',
           shortcut: _shortcut(LogicalKeyboardKey.keyC),
           enabled: ready,
         ),
@@ -651,6 +673,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           () => _textAction(
             const PasteTextIntent(SelectionChangedCause.keyboard),
           ),
+          mnemonic: 'p',
           shortcut: _shortcut(LogicalKeyboardKey.keyV),
           enabled: ready,
         ),
@@ -659,6 +682,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           () => _textAction(
             const SelectAllTextIntent(SelectionChangedCause.keyboard),
           ),
+          mnemonic: 'a',
           shortcut: _shortcut(LogicalKeyboardKey.keyA),
           enabled: ready,
         ),
@@ -666,6 +690,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Duplicate Line',
           () => active?.editor.duplicateLines(),
+          mnemonic: 'd',
           shortcut: _shortcut(LogicalKeyboardKey.keyD, shift: true),
           enabled: lineCommands,
         ),
@@ -690,12 +715,14 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Delete Line',
           () => active?.editor.deleteLines(),
+          mnemonic: 'l',
           shortcut: _shortcut(LogicalKeyboardKey.keyK, shift: true),
           enabled: lineCommands,
         ),
         _Command(
           'Join Lines',
           () => active?.editor.joinLines(),
+          mnemonic: 'j',
           shortcut: _shortcut(LogicalKeyboardKey.keyJ),
           enabled: lineCommands,
         ),
@@ -713,6 +740,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Select Line',
           () => active?.editor.selectLine(),
+          mnemonic: 's',
           enabled: selectionCommands,
           id: 'selectLine',
         ),
@@ -732,12 +760,14 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Insert Line Above',
           () => active?.editor.insertLineAbove(),
+          mnemonic: 'v',
           enabled: lineCommands,
           id: 'insertLineAbove',
         ),
         _Command(
           'Insert Line Below',
           () => active?.editor.insertLineBelow(),
+          mnemonic: 'b',
           enabled: lineCommands,
           id: 'insertLineBelow',
         ),
@@ -782,7 +812,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           enabled: lineCommands,
           id: 'pasteMatchIndentation',
         ),
-      ]),
+      ], mnemonic: 'e'),
       // The catalog drives the menu: Repeat and Recent head it, then one
       // submenu per group that has at least one built tool — a group not
       // yet built is absent rather than empty. A tool that declares
@@ -791,6 +821,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           _editorStrings.repeatTextToolLabel(workspace.toolHistory.last),
           _repeatTextTool,
+          mnemonic: 'r',
           shortcut: _shortcut(LogicalKeyboardKey.keyR, shift: true),
           enabled: lineCommands && workspace.toolHistory.last != null,
           id: 'repeatTextTool',
@@ -811,13 +842,14 @@ class _DocumentShellState extends State<_DocumentShell> {
                 enabled: lineCommands,
                 id: 'recentTextTool:$index',
               ),
-        ]),
+        ], mnemonic: 'e'),
         const _Separator(),
         // The browser is the phone and header-icon entry to the same
         // catalog the submenus below list; the menus stay primary.
         _Command(
           _editorStrings.browseTextTools,
           () => active?.editor.openTextTools(),
+          mnemonic: 'b',
           enabled: ready,
           id: 'browseTextTools',
         ),
@@ -835,17 +867,19 @@ class _DocumentShellState extends State<_DocumentShell> {
                     id: tool.id,
                   ),
             ]),
-      ]),
+      ], mnemonic: 't'),
       _ShellMenu('Find', [
         _Command(
           'Find…',
           _find,
+          mnemonic: 'f',
           shortcut: _shortcut(LogicalKeyboardKey.keyF),
           enabled: ready,
         ),
         _Command(
           'Replace…',
           () => _find(replace: true),
+          mnemonic: 'r',
           shortcut: mac
               ? _shortcut(LogicalKeyboardKey.keyF, alt: true)
               : _shortcut(LogicalKeyboardKey.keyH),
@@ -854,6 +888,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Find Next',
           () => active?.editor.nextMatch(),
+          mnemonic: 'n',
           shortcut: mac
               ? _shortcut(LogicalKeyboardKey.keyG)
               : const SingleActivator(LogicalKeyboardKey.f3),
@@ -862,6 +897,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Find Previous',
           () => active?.editor.previousMatch(),
+          mnemonic: 'p',
           shortcut: mac
               ? _shortcut(LogicalKeyboardKey.keyG, shift: true)
               : const SingleActivator(LogicalKeyboardKey.f3, shift: true),
@@ -870,11 +906,13 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           _editorStrings.findInSelection,
           () => active?.editor.findInSelection(),
+          mnemonic: 's',
           enabled: hasSelection,
         ),
         _Command(
           _editorStrings.textToolMenuLabel('extractMatches'),
           () => active?.editor.openFindTool('extractMatches'),
+          mnemonic: 'x',
           enabled: lineCommands,
           id: 'extractMatches',
         ),
@@ -882,12 +920,14 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Go to Matching Bracket',
           () => active?.editor.goToMatchingBracket(),
+          mnemonic: 'g',
           shortcut: _shortcut(LogicalKeyboardKey.keyB),
           enabled: inDocument,
         ),
         _Command(
           'Select to Matching Bracket',
           () => active?.editor.goToMatchingBracket(extend: true),
+          mnemonic: 't',
           shortcut: _shortcut(LogicalKeyboardKey.keyB, shift: true),
           enabled: inDocument,
         ),
@@ -895,16 +935,31 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Go to Line…',
           () => workspace.active?.editor.openGoToLine(),
+          mnemonic: 'l',
           shortcut: _shortcut(
             mac ? LogicalKeyboardKey.keyL : LogicalKeyboardKey.keyG,
           ),
           enabled: ready,
         ),
-      ]),
+        const _Separator(),
+        _Command(
+          'Compare with Saved',
+          _compareWithSaved,
+          // A deleted file has no saved version on disk to compare with,
+          // the same rule Revert to Saved follows.
+          mnemonic: 'c',
+          enabled:
+              ready &&
+              active?.path != null &&
+              active?.disk != DiskState.missing,
+          id: 'compareWithSaved',
+        ),
+      ], mnemonic: 'n'),
       _ShellMenu('View', [
         _Command(
           'Zoom In',
           _zoomIn,
+          mnemonic: 'i',
           shortcut: _shortcut(LogicalKeyboardKey.equal),
           // `+` sits on different keys, shifted or not, across layouts.
           aliases: [
@@ -918,6 +973,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Zoom Out',
           _zoomOut,
+          mnemonic: 'o',
           shortcut: _shortcut(LogicalKeyboardKey.minus),
           aliases: [_shortcut(LogicalKeyboardKey.numpadSubtract)],
           enabled: _fontSize > _zoomSizes.first,
@@ -925,15 +981,17 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Actual Size',
           () => _setFontSize(AppSettings.defaultFontSize),
+          mnemonic: 'a',
           shortcut: _shortcut(LogicalKeyboardKey.digit0),
           aliases: [_shortcut(LogicalKeyboardKey.numpad0)],
           enabled: _fontSize != AppSettings.defaultFontSize,
         ),
-      ]),
+      ], mnemonic: 'v'),
       _ShellMenu('Window', [
         _Command(
           'Command Palette…',
           _openPalette,
+          mnemonic: 'c',
           shortcut: _shortcut(LogicalKeyboardKey.keyP, shift: true),
           enabled: unlocked,
         ),
@@ -941,6 +999,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Next Tab',
           _nextTab,
+          mnemonic: 'n',
           shortcut: const SingleActivator(
             LogicalKeyboardKey.tab,
             control: true,
@@ -950,6 +1009,7 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Command(
           'Previous Tab',
           () => _nextTab(previous: true),
+          mnemonic: 'p',
           shortcut: const SingleActivator(
             LogicalKeyboardKey.tab,
             control: true,
@@ -957,7 +1017,7 @@ class _DocumentShellState extends State<_DocumentShell> {
           ),
           enabled: unlocked && workspace.documents.length > 1,
         ),
-      ]),
+      ], mnemonic: 'w'),
     ];
   }
 
@@ -1067,15 +1127,22 @@ class _DocumentShellState extends State<_DocumentShell> {
         _Separator() => const Divider(height: 8),
         _Submenu() => SubmenuButton(
           menuChildren: _menuBarItems(entry.items),
-          child: Text(entry.label),
+          child: _menuEntryLabel(entry.label, entry.mnemonic),
         ),
         _Command() => MenuItemButton(
           onPressed: entry.enabled ? entry.run : null,
           shortcut: entry.shortcut,
-          child: Text(entry.label),
+          child: _menuEntryLabel(entry.label, entry.mnemonic),
         ),
       },
   ];
+
+  /// The in-window bar's label: an Alt-accelerated one on Windows and
+  /// Linux, plain text anywhere else or whenever no mnemonic fits.
+  Widget _menuEntryLabel(String label, String? mnemonic) {
+    if (mnemonic == null) return Text(label);
+    return MenuAcceleratorLabel(menuAcceleratorLabel(label, mnemonic));
+  }
 
   Widget _menuBar(List<_ShellMenu> menus) => MenuBar(
     style: MenuStyle(
@@ -1088,7 +1155,7 @@ class _DocumentShellState extends State<_DocumentShell> {
       for (final menu in menus)
         SubmenuButton(
           menuChildren: _menuBarItems(menu.items),
-          child: Text(menu.label),
+          child: _menuEntryLabel(menu.label, menu.mnemonic),
         ),
     ],
   );
@@ -1331,6 +1398,35 @@ const _ghostLines = [
   'Start typing. Ask, and it will answer…',
 ];
 
+/// A menu label marked for [MenuAcceleratorLabel]: an `&` before the
+/// mnemonic's occurrence — at the start of a word when the letter starts
+/// one, so "Save &As" beats "S&ave As" — with any literal `&` escaped so
+/// the marker stays unambiguous. A label that has lost its mnemonic letter
+/// (renamed, localized) comes back unmarked rather than underlining a
+/// character the user cannot see.
+@visibleForTesting
+String menuAcceleratorLabel(String label, String mnemonic) {
+  final escaped = label.replaceAll('&', '&&');
+  final letters = escaped.toLowerCase();
+  final letter = mnemonic.toLowerCase();
+  var at = -1;
+  for (var i = 0; i < letters.length; i++) {
+    if (letters.codeUnitAt(i) != letter.codeUnitAt(0)) continue;
+    final start = i == 0 || !_isLetter(escaped.codeUnitAt(i - 1));
+    if (at < 0) at = i;
+    if (start) {
+      at = i;
+      break;
+    }
+  }
+  if (at < 0) return escaped;
+  return '${escaped.substring(0, at)}&${escaped.substring(at)}';
+}
+
+bool _isLetter(int codeUnit) =>
+    (codeUnit >= 0x41 && codeUnit <= 0x5a) ||
+    (codeUnit >= 0x61 && codeUnit <= 0x7a);
+
 /// The ghost line for a tab: fixed for that tab, and different for the tab
 /// created right after it.
 @visibleForTesting
@@ -1350,9 +1446,14 @@ const _digits = [
 ];
 
 class _ShellMenu {
-  const _ShellMenu(this.label, this.items);
+  const _ShellMenu(this.label, this.items, {this.mnemonic});
   final String label;
   final List<_MenuEntry> items;
+
+  /// The Alt-access letter on the in-window menu bar, Windows and Linux
+  /// only. Null leaves the label unmarked; the native macOS menu and the
+  /// palette never see it.
+  final String? mnemonic;
 }
 
 sealed class _MenuEntry {
@@ -1367,9 +1468,13 @@ final class _Separator extends _MenuEntry {
 /// never go deeper: Apple's and Windows' guidance both stop at one level
 /// of submenus.
 final class _Submenu extends _MenuEntry {
-  const _Submenu(this.label, this.items);
+  const _Submenu(this.label, this.items, {this.mnemonic});
   final String label;
   final List<_MenuEntry> items;
+
+  /// The Alt-access letter on the in-window menu bar, Windows and Linux
+  /// only. Null leaves the label unmarked.
+  final String? mnemonic;
 }
 
 final class _Command extends _MenuEntry {
@@ -1381,6 +1486,7 @@ final class _Command extends _MenuEntry {
     this.enabled = true,
     this.id,
     this.inPalette = true,
+    this.mnemonic,
   });
 
   /// The stable identifier the palette resolves the command by, so a row
@@ -1398,6 +1504,13 @@ final class _Command extends _MenuEntry {
   /// Placeholder rows such as "No Recent Runs" fill an empty menu but are
   /// not commands; they do not belong in the palette.
   final bool inPalette;
+
+  /// The Alt-access letter on the in-window menu bar, Windows and Linux
+  /// only. Assigned to the app's own static commands — File, Edit, Find,
+  /// View, Window and the Text menu's head — never to per-tool rows, whose
+  /// labels come from the localizable shared catalog. Null leaves the label
+  /// unmarked.
+  final String? mnemonic;
 }
 
 /// The placeholder for an empty Recent submenu — it can never be chosen.

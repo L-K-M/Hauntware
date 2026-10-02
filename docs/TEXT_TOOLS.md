@@ -56,9 +56,9 @@ revision, still to do. Poltergeist needs ARB keys or a recorded exception |
 | 8: wrap and interior tabs | Deferred until B8 defines display columns and tab stops |
 | 8: Unicode/ASCII | Built. `unorm_dart` in core (decision 4); Convert to ASCII uses a reviewed Latin table, keeps unmapped non-ASCII literal with a count |
 | 8: JSON | Built. Whitespace-only strict-JSON reformat (decision 7), values verbatim, invalid input refused with line/column, size capped by the runner |
-| 8: search | Built: regex hints (leading `(?i)`/`(?s)`/`(?m)` accepted, PCRE habits explained), inline grep cheat sheet with a BBEdit section, active-match replacement preview, Use Selection for Find, Find Selected Text, session-only search history. Find in Selection and Extract already shipped. Compare with Saved is main-owned work, unstarted |
+| 8: search | Built: regex hints (leading `(?i)`/`(?s)`/`(?m)` accepted, PCRE habits explained), inline grep cheat sheet with a BBEdit section, active-match replacement preview, Use Selection for Find, Find Selected Text, session-only search history. Find in Selection and Extract already shipped. Compare with Saved is built as an app-only Find-menu command: it reads the file through the store, computes a bounded unified diff in a worker, and shows it in a new tab with the diff highlighter; no merge editor, and the source tab's buffer, baseline and digests stay untouched |
 | 8: Edit/File | Shipped: Select Line, Select Paragraph, Select Enclosing Brackets, Insert Line Above/Below, Paste and Match Indentation, Increment/Decrement Number, Copy/Cut Line, Toggle Comment block fallback and File-menu Copy Path. Go to Matching Bracket and tab-menu Copy Full Path already existed |
-| 8: menu keyboard access | Alt mnemonics remain unbuilt; validate AltGr and desktop/input-method conflicts before assigning them |
+| 8: menu keyboard access | Built: Alt mnemonics on the in-window menu bar (Windows, Linux) through Flutter's `MenuAcceleratorLabel`, assigned to the six top menus and the app's static commands — never to per-tool rows, whose labels come from the localizable catalog. Native macOS menus, the palette and command ids are unchanged. Ctrl+Alt (the Windows AltGr report) and AltGr-produced characters never trigger an accelerator; validated in the framework's key-event model only, not against native keyboard layouts |
 
 No host pins were changed for slice 6. On a later pin bump the shared API
 gains format/save options and normalization; clickable status menus and the
@@ -460,7 +460,7 @@ budget, paging past 1,000 highlights, Replace, Replace All, `$1`, `${name}`.
 | Find All results list | Later. Needs a list surface |
 | Find & Select All | Blocked on multiple selections (B7) |
 | Multi-file search, file filters | A15 |
-| Find Differences | Later: Compare with Saved as a unified diff in a new tab, on the existing Diff highlighter, off the UI isolate. No merge window |
+| Find Differences | Built as Compare with Saved (app only): a unified diff in a new tab, on the existing Diff highlighter, off the UI isolate. No merge window |
 
 ### Edit and File menus
 
