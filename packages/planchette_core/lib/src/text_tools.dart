@@ -4,13 +4,16 @@ import 'dart:math' as math;
 import 'package:uuid/data.dart' show V4Options;
 import 'package:uuid/uuid.dart';
 
-import 'editor_syntax.dart' show FindPattern, isWordRune;
+import 'editor_syntax.dart' show FindPattern, isWordRune, syntaxLanguageFor;
 import 'indentation.dart';
 import 'line_operations.dart';
-import 'text_document.dart' show LineEnding;
+import 'text_columns.dart';
+import 'text_document.dart' show LineEnding, textDocumentMaximumBytes;
 import 'text_json_tools.dart';
+import 'text_metrics.dart';
 import 'text_save_options.dart';
 import 'text_unicode.dart';
+import 'text_wrap.dart';
 
 // Text-transform tools, the BBEdit-style "Text" menu: a catalog of pure
 // functions over the buffer, generated into menu, palette and options-bar
@@ -211,6 +214,8 @@ final class TextToolContext {
     this.indentationPreference,
     this.displayPath = '',
     this.lineEnding = LineEnding.lf,
+    this.maximumOutputBytes = textDocumentMaximumBytes,
+    this.lineCommentMarkers,
     DateTime Function()? now,
     math.Random? random,
   }) : now = now ?? DateTime.now,
@@ -232,6 +237,14 @@ final class TextToolContext {
 
   /// The buffer's convention, which can differ from the next save's ending.
   final LineEnding lineEnding;
+
+  /// Bound expansion before allocating its output; hosts include their
+  /// saved-size policy and permit non-growing edits on oversized buffers.
+  final int maximumOutputBytes;
+
+  /// The active language's markers, including shebang-detected untitled files.
+  /// Null lets standalone core callers use filename detection.
+  final List<String>? lineCommentMarkers;
 
   /// The clock insertions read; injectable for tests.
   final DateTime Function() now;
@@ -553,6 +566,13 @@ const textToolCatalog = <TextTool>[
     run: _indentationToTabs,
   ),
   TextTool(
+    id: 'convertTabsToSpaces',
+    group: TextToolGroup.whitespace,
+    scope: TextToolScope.document,
+    options: [IntegerOption('width', value: defaultIndentWidth, min: 1)],
+    run: _tabsToSpaces,
+  ),
+  TextTool(
     id: 'normalizeLineEndings',
     group: TextToolGroup.whitespace,
     scope: TextToolScope.document,
@@ -619,6 +639,16 @@ const textToolCatalog = <TextTool>[
   ),
 
   // Wrap
+  TextTool(
+    id: 'hardWrap',
+    group: TextToolGroup.wrap,
+    scope: TextToolScope.paragraph,
+    options: [
+      IntegerOption('width', value: defaultHardWrapColumns, min: 1),
+      ToggleOption('fill', value: true),
+    ],
+    run: _hardWrap,
+  ),
   TextTool(
     id: 'unwrapParagraphs',
     group: TextToolGroup.wrap,
@@ -1442,6 +1472,90 @@ List<_Edit> _trailingWhitespaceEdits(_Lines block) {
     }
   }
   return edits;
+}
+
+TextToolOutcome _tabsToSpaces(TextToolRun run) {
+  if (requiredIndentationFor(run.context.displayPath)?.style ==
+      IndentStyle.tabs) {
+    return const TextToolRefused(TextToolRefusal.requiresTabs);
+  }
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final block = _linesOf(run.text, range.start, range.end);
+  final width = run.option<int>('width');
+  if (width < 1) throw ArgumentError.value(width, 'width');
+  final initialBytes = utf8EncodedLength(run.text);
+  var remaining =
+      math.max(run.context.maximumOutputBytes, initialBytes) - initialBytes;
+  final edits = <_Edit>[];
+  for (var line = 0; line < block.contents.length; line++) {
+    final content = block.contents[line];
+    var column = 0;
+    var start = 0;
+    for (
+      var at = content.indexOf('\t');
+      at >= 0;
+      at = content.indexOf('\t', start)
+    ) {
+      column = textColumnAfter(
+        content.substring(start, at),
+        initialColumn: column,
+        tabWidth: width,
+      );
+      final spaces = width - column % width;
+      if (spaces - 1 > remaining) {
+        return const TextToolRefused(TextToolRefusal.tooLarge);
+      }
+      remaining -= spaces - 1;
+      edits.add((
+        start: block.starts[line] + at,
+        end: block.starts[line] + at + 1,
+        insert: ' ' * spaces,
+      ));
+      column += spaces;
+      start = at + 1;
+    }
+  }
+  return _spanEdit(
+    run,
+    edits,
+    changed: edits.length,
+    scope: block.contents.length,
+  );
+}
+
+TextToolOutcome _hardWrap(TextToolRun run) {
+  final range = touchedLineRange(run.text, run.base, run.extent);
+  final slice = run.text.substring(range.start, range.end);
+  final language = syntaxLanguageFor(run.context.displayPath);
+  final String replacement;
+  try {
+    replacement = hardWrapText(
+      slice,
+      width: run.option<int>('width'),
+      tabWidth: run.context.indentation.width,
+      lineEnding: run.context.lineEnding,
+      mode: run.option<bool>('fill')
+          ? ParagraphWrapMode.fill
+          : ParagraphWrapMode.lines,
+      commentMarkers:
+          run.context.lineCommentMarkers ?? language?.lineComments ?? const [],
+      maximumBytes: math.max(
+        run.context.maximumOutputBytes,
+        utf8EncodedLength(run.text),
+      ),
+    );
+  } on TextWrapLimitExceeded {
+    return const TextToolRefused(TextToolRefusal.tooLarge);
+  }
+  final scope = _linesOf(run.text, range.start, range.end).contents.length;
+  return _blockEdit(
+    run,
+    range.start,
+    range.end,
+    replacement,
+    changed: scope,
+    scope: scope,
+  );
 }
 
 /// One undoable save cleanup, with offsets mapped by the same span edits as

@@ -72,6 +72,7 @@ class EditorController extends ChangeNotifier {
     this.maximumBytes = defaultTextDocumentMaximumBytes,
     this.undoQuiet = defaultUndoQuiet,
     this.normalization = TextNormalization.normalize,
+    this._saveNormalizationForLineEnding,
     TextToolHistory? toolHistory,
   }) : _displayPath = displayPath,
        _fold = caseFolder ?? _defaultCaseFolder,
@@ -145,6 +146,13 @@ class EditorController extends ChangeNotifier {
   /// Match the host's load/save policy. Normalized buffers use LF; hosts
   /// preserving raw line endings normalize to the chosen file convention.
   final TextNormalization normalization;
+
+  // Some hosts preserve the editing buffer but normalize CRLF-dominant files
+  // on save. Match their existing byte policy without rewriting the buffer.
+  final TextNormalization Function(LineEnding)? _saveNormalizationForLineEnding;
+  TextNormalization get _saveNormalization =>
+      _saveNormalizationForLineEnding?.call(_metadata.lineEnding) ??
+      normalization;
 
   TextSaveOptions saveOptions = const TextSaveOptions();
 
@@ -578,7 +586,7 @@ class EditorController extends ChangeNotifier {
   int get fileByteCount {
     _updateMetrics();
     final bomBytes = _metadata.utf8Bom.byteLength;
-    if (normalization == TextNormalization.preserve) {
+    if (_saveNormalization == TextNormalization.preserve) {
       return byteCount + bomBytes;
     }
     // Folding to LF drops the CR of each CRLF and turns a lone CR into LF.
@@ -1129,7 +1137,13 @@ class EditorController extends ChangeNotifier {
     Map<String, Object?> overrides,
   ) => {
     for (final option in tool.options)
-      option.id: _resolvedOption(option, overrides[option.id]),
+      option.id: _resolvedOption(
+        option,
+        overrides[option.id] ??
+            (tool.id == 'convertTabsToSpaces' && option.id == 'width'
+                ? indentation.width
+                : null),
+      ),
   };
 
   static Object? _resolvedOption(TextToolOption option, Object? value) {
@@ -1151,6 +1165,10 @@ class EditorController extends ChangeNotifier {
     indentationPreference: _preferredIndentation,
     displayPath: _displayPath,
     lineEnding: bufferLineEnding,
+    lineCommentMarkers: text.language?.lineComments ?? const [],
+    maximumOutputBytes: fileByteCount > maximumBytes
+        ? fileByteCount
+        : maximumBytes,
     now: _now,
   );
 
@@ -1158,14 +1176,14 @@ class EditorController extends ChangeNotifier {
     final size = textDocumentByteCount(
       after,
       _metadata,
-      normalization: normalization,
+      normalization: _saveNormalization,
     );
     return size > maximumBytes &&
         size >
             textDocumentByteCount(
               before,
               _metadata,
-              normalization: normalization,
+              normalization: _saveNormalization,
             );
   }
 
@@ -1225,6 +1243,10 @@ class EditorController extends ChangeNotifier {
     if (_goToLineOpen) closeGoToLine();
     _barTool = tool;
     _barOptions = _toolHistory.lastOptionsFor(toolId);
+    if (toolId == 'convertTabsToSpaces' &&
+        !_toolHistory.recent.any((record) => record.toolId == toolId)) {
+      _barOptions = {..._barOptions, 'width': indentation.width};
+    }
     _barWholeDocument = false;
     _markBarStale();
     _notify();

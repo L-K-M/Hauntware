@@ -102,6 +102,8 @@ class EditorStrings {
     'normalizeLineEndings' => 'Normalize Line Endings',
     'convertIndentationToSpaces' => 'Convert Indentation to Spaces',
     'convertIndentationToTabs' => 'Convert Indentation to Tabs',
+    'convertTabsToSpaces' => 'Convert Tabs to Spaces',
+    'hardWrap' => 'Hard Wrap',
     'straightenQuotes' => 'Straighten Quotes',
     'zapGremlins' => 'Zap Gremlins',
     'removeAnsiEscapes' => 'Remove ANSI Escapes',
@@ -175,6 +177,9 @@ class EditorStrings {
         ('joinLinesWith', 'separator') => 'Separator',
         ('joinLinesWith', 'trim') => 'Trim lines',
         ('joinLinesWith', 'skipBlankLines') => 'Skip blank lines',
+        ('convertTabsToSpaces', 'width') => 'Tab width',
+        ('hardWrap', 'width') => 'Text columns',
+        ('hardWrap', 'fill') => 'Fill paragraphs',
         _ => optionId,
       };
 
@@ -201,10 +206,8 @@ class EditorStrings {
     _ => choiceId,
   };
 
-  /// A run's short option summary for Repeat and Recent rows — the choice
-  /// and toggle options that differ from their defaults, so "Repeat Sort
-  /// Lines (Z to A, Ignore case)" says what the re-run does. Text and
-  /// number options (a custom separator, a start value) are not included.
+  /// Repeat/Recent summarize non-default choices, toggles and numbers.
+  /// Text options stay out of labels because they can hold private content.
   /// Empty when nothing distinguishes it.
   String textToolOptionsSummary(TextToolRunRecord record) {
     final tool = textToolById(record.toolId);
@@ -220,7 +223,11 @@ class EditorStrings {
             record.options[option.id] != option.defaultValue)
           record.options[option.id] == true
               ? textToolOptionName(tool.id, option.id)
-              : textToolDisabledToggleName(tool.id, option.id),
+              : textToolDisabledToggleName(tool.id, option.id)
+        else if (option is IntegerOption &&
+            record.options[option.id] is int &&
+            record.options[option.id] != option.defaultValue)
+          '${textToolOptionName(tool.id, option.id)} ${record.options[option.id]}',
     ];
     return parts.join(', ');
   }
@@ -259,6 +266,10 @@ class EditorStrings {
 
   /// The one-line description the palette shows under a tool's name.
   String textToolDescription(String id) => switch (id) {
+    'convertTabsToSpaces' =>
+      'Expands all tabs to text-column stops. The width starts from the document setting.',
+    'hardWrap' =>
+      'Wraps words to text columns, keeping quote/comment prefixes and leaving lists intact.',
     'normalizeLineEndings' =>
       'Makes all line breaks follow the buffer convention.',
     'sortLines' => 'Orders lines alphabetically.',
@@ -333,6 +344,8 @@ class EditorStrings {
   /// Other words the palette matches a tool by, so "dedupe" finds Remove
   /// Duplicate Lines.
   List<String> textToolKeywords(String id) => switch (id) {
+    'convertTabsToSpaces' => const ['detab', 'expand tabs', 'tab stops'],
+    'hardWrap' => const ['reflow', 'fill paragraph', 'wrap lines'],
     'normalizeLineEndings' => const ['eol', 'crlf', 'lf', 'carriage return'],
     'sortLines' => const ['order', 'alphabetize', 'arrange'],
     'reverseLines' => const ['flip', 'invert order'],
@@ -471,6 +484,8 @@ class EditorStrings {
     'trimLeadingWhitespace' =>
       'trimmed whitespace on $changed of ${_lines(scope)} $where.',
     'normalizeSpaces' => 'normalized ${_plural(changed, 'space')} $where.',
+    'convertTabsToSpaces' => 'expanded ${_plural(changed, 'tab')} $where.',
+    'hardWrap' => 'wrapped ${_lines(scope)} $where.',
     'normalizeLineEndings' =>
       'normalized $changed of ${_plural(scope, 'line break')} $where.',
     'titleCase' ||
@@ -577,6 +592,8 @@ class EditorStrings {
         'trimTrailingWhitespace' => 'nothing to trim $where.',
         'trimLeadingWhitespace' => 'nothing to trim $where.',
         'normalizeSpaces' => 'no Unicode spaces $where.',
+        'convertTabsToSpaces' => 'no tabs to expand $where.',
+        'hardWrap' => 'nothing to wrap $where.',
         'normalizeLineEndings' => 'line endings already consistent $where.',
         'convertIndentationToSpaces' ||
         'convertIndentationToTabs' => 'nothing to convert $where.',
@@ -672,6 +689,8 @@ class EditorStrings {
   String get textToolPreviewDeferred => 'count is computed on Apply';
 
   String _previewText(String id, int changed, int scope) => switch (id) {
+    'convertTabsToSpaces' => 'will expand ${_plural(changed, 'tab')}',
+    'hardWrap' => 'will wrap ${_lines(scope)}',
     'normalizeLineEndings' =>
       'will normalize ${_plural(changed, 'line break')}',
     'sortLines' => '$changed of ${_lines(scope)} will move',
