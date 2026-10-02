@@ -26,6 +26,7 @@ class AppDelegate: FlutterAppDelegate {
 
   // AppKit prefers this inherited Flutter callback over openFiles. File URLs
   // must reach our document queue; other URL schemes still belong to plugins.
+  // This delegate owns document delivery, so plugins do not receive file URLs.
   override func application(_ sender: NSApplication, open urls: [URL]) {
     let files = urls.filter { $0.isFileURL }.map { $0.path }
     if !files.isEmpty {
