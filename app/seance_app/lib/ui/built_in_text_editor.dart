@@ -16,6 +16,14 @@ export '../services/editor_document.dart';
 export 'package:planchette_core/planchette_core.dart'
     show lineStartOffsets, utf8EncodedLength;
 
+/// The managed save folds a CRLF-dominant document's breaks to CRLF and
+/// leaves an LF document's alone; the controller's byte preflight must
+/// agree with it, so both read this one policy.
+TextNormalization seanceSaveNormalization(LineEnding ending) =>
+    ending == LineEnding.crlf
+    ? TextNormalization.normalize
+    : TextNormalization.preserve;
+
 class BuiltInTextEditorScreen extends StatefulWidget {
   final File file;
   final String remotePath;
@@ -81,12 +89,9 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
       displayPath: widget.remotePath,
       initialText: widget.initialText,
       // The buffer keeps line breaks as they are in the file; the byte
-      // preflight follows the managed save, which folds a CRLF-dominant
-      // document's breaks to CRLF and leaves an LF document's alone.
+      // preflight follows the managed save's conditional fold.
       normalization: TextNormalization.preserve,
-      saveNormalizationForLineEnding: (ending) => ending == LineEnding.crlf
-          ? TextNormalization.normalize
-          : TextNormalization.preserve,
+      saveNormalizationForLineEnding: seanceSaveNormalization,
       loadDocument: () => loadTextDocument(
         widget.file,
         normalization: TextNormalization.preserve,

@@ -94,7 +94,10 @@ void main() {
 
     final controller = await pumpLoaded(tester, 'hello\n');
 
-    await tester.tap(find.byTooltip(tooltip), warnIfMissed: false);
+    // The tap must really land: a clipped or pushed-out button is the
+    // narrow-layout regression this test exists to catch.
+    expect(find.byTooltip(tooltip).hitTestable(), findsOneWidget);
+    await tester.tap(find.byTooltip(tooltip));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -152,6 +155,18 @@ void main() {
     expect(utf8.encode(controller.text.text).length, 8);
   });
 
+  testWidgets('an LF-dominant buffer counts its stray CRLF raw', (
+    tester,
+  ) async {
+    // The other branch of the conditional save: an LF document's breaks
+    // stay as they are, so the saved size is the raw buffer's bytes.
+    final controller = await pumpLoaded(tester, 'a\nb\r\nc\n');
+
+    expect(controller.bufferLineEnding, LineEnding.lf);
+    expect(controller.fileByteCount, 7);
+    expect(utf8.encode(controller.text.text).length, 7);
+  });
+
   test(
     'a growing tool is refused once the folded bytes pass the cap',
     () async {
@@ -162,9 +177,7 @@ void main() {
         displayPath: 'notes.txt',
         initialText: 'a\nb\n',
         normalization: TextNormalization.preserve,
-        saveNormalizationForLineEnding: (ending) => ending == LineEnding.crlf
-            ? TextNormalization.normalize
-            : TextNormalization.preserve,
+        saveNormalizationForLineEnding: seanceSaveNormalization,
         maximumBytes: 7,
         undoQuiet: Duration.zero,
       );
