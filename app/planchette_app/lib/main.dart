@@ -9,50 +9,88 @@ import 'services/app_settings.dart';
 import 'services/desktop_window.dart';
 import 'services/document_dialogs.dart';
 import 'services/document_store.dart';
+import 'services/document_windows.dart';
 import 'services/document_workspace.dart';
 import 'services/open_documents.dart';
+import 'services/semantics_view_routing.dart';
+import 'services/window_host.dart';
+import 'ui/document_windows_root.dart';
 
 Future<void> main(List<String> arguments) async {
-  WidgetsFlutterBinding.ensureInitialized();
+  PlanchetteBinding.ensureInitialized();
   // Loaded before the window exists: the stored theme is the one source for
   // both the app and the window's pre-paint color.
   final settings = SettingsController(
     store: LocalSettingsStore.defaultLocation(),
   );
   await settings.load();
-  final navigatorKey = GlobalKey<NavigatorState>();
-  final workspace = DocumentWorkspace(
-    store: LocalDocumentStore(),
-    dialogs: AppDocumentDialogs(navigatorKey),
-    toolHistory: TextToolHistory.decode(settings.value.recentTextTools),
-  );
+
+  // The runner's window host and the app's windows: every window is a view
+  // on the one engine, holding its own workspace over the shared settings
+  // and text-tool history.
+  final host = MethodChannelWindowHost();
+  final toolHistory = TextToolHistory.decode(settings.value.recentTextTools);
+  late final DocumentWindows windows;
   final desktop = DesktopWindow(
     confirmQuit: () async {
-      if (!await workspace.confirmQuit()) return false;
+      // Quit reviews every window's documents, not only the main one's.
+      if (!await windows.confirmAllClose()) return false;
       // A zoom or setting chosen just before quitting may still be on its
       // way to disk.
       await settings.flush();
       return true;
     },
-    onQuitFailed: workspace.quitFailed,
-    onFocus: () => unawaited(workspace.checkDisk()),
+    // Closures, not tear-offs: `windows` is assigned below them.
+    onQuitFailed: (error) => windows.quitFailed(error),
+    closeInstead: () => windows.closeMainWindowInstead(),
+    onFocus: () => windows.onWindowActivated(mainWindowViewId),
     windowBackgroundColor: windowBackdrop(
       effectiveBrightness(settings.value.themeMode),
     ),
   );
-  runApp(
-    PlanchetteApp(
-      workspace: workspace,
-      settings: settings,
-      navigatorKey: navigatorKey,
-      onQuit: desktop.requestQuit,
+  windows = DocumentWindows(
+    host: host,
+    workspaceFactory: (window) => DocumentWorkspace(
+      store: LocalDocumentStore(),
+      dialogs: AppDocumentDialogs(
+        window.navigatorKey,
+        pickers: WindowPickers(window),
+      ),
+      toolHistory: toolHistory,
+    ),
+    quitApplication: desktop.requestQuit,
+    mainTitle: desktop.setTitle,
+  );
+  await windows.start();
+  // runWidget, not runApp: runApp wraps the root in its own View for the
+  // implicit view, and ViewCollection would then mount a second View for
+  // view 0 — two render trees on one FlutterView is forbidden.
+  runWidget(
+    DocumentWindowsRoot(
+      windows: windows,
+      buildWindow: (window, menuSlot) => PlanchetteApp(
+        workspace: window.workspace,
+        settings: settings,
+        window: window,
+        menuSlot: menuSlot,
+        onQuit: desktop.requestQuit,
+      ),
     ),
   );
   await desktop.initialize();
-  workspace.addListener(() => desktop.setTitle(workspace.windowTitle));
-  final intake = OpenDocuments(open: workspace.open);
+
+  // Finder/argv opens route through the windows: to whoever holds the file,
+  // the active window, or a fresh one.
+  final intake = OpenDocuments(open: windows.openDocument);
   await intake.start(arguments, macOS: Platform.isMacOS);
-  if (workspace.documents.isEmpty && workspace.error == null) {
-    workspace.newDocument();
+
+  // The launch window gets the blank page; windows opened later start
+  // empty and invite a document, like an empty tab set.
+  final launch = windows.windows.firstWhere(
+    (window) => window.isLaunchWindow,
+    orElse: () => windows.windows.first,
+  );
+  if (launch.workspace.documents.isEmpty && launch.workspace.error == null) {
+    launch.workspace.newDocument();
   }
 }

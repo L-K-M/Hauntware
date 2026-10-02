@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "document_windows.h"
 #include "win32_window.h"
 
 // A window that does nothing but host a Flutter view.
@@ -28,6 +29,10 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // More document windows on this engine. Declared after the controller so
+  // it is destroyed first: its windows' views are the engine's.
+  std::unique_ptr<DocumentWindowsHost> document_windows_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

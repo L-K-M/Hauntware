@@ -2,23 +2,43 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as paths;
 
+import 'document_windows.dart';
 import 'document_workspace.dart';
 
 final class AppDocumentDialogs implements DocumentDialogs {
-  AppDocumentDialogs(this.navigatorKey);
+  AppDocumentDialogs(this.navigatorKey, {this.pickers});
   final GlobalKey<NavigatorState> navigatorKey;
+
+  /// The window's own native file dialogs. file_selector parents every
+  /// dialog to the plugin registry's view — the main window — which may be
+  /// hidden while other windows are open, so a window that can be one of
+  /// several asks the runner for a dialog owned by its own view instead.
+  final WindowPickers? pickers;
 
   // file_selector shows each platform's own dialog. On Linux that is GTK's
   // chooser, which goes through the desktop portal only where GTK would, so
   // Open and Save As work on desktops that run no portal service.
   @override
   Future<List<String>> pickOpenFiles() async {
+    final window = pickers;
+    if (window != null && window.available) {
+      return window.pickOpenFiles();
+    }
     final files = await openFiles(confirmButtonText: 'Open');
     return [for (final file in files) file.path];
   }
 
   @override
   Future<String?> pickSavePath(String suggestedName) async {
+    final window = pickers;
+    if (window != null && window.available) {
+      return window.pickSavePath(
+        suggestedName: paths.basename(suggestedName),
+        initialDirectory: paths.isAbsolute(suggestedName)
+            ? paths.dirname(suggestedName)
+            : null,
+      );
+    }
     final location = await getSaveLocation(
       suggestedName: paths.basename(suggestedName),
       initialDirectory: paths.isAbsolute(suggestedName)

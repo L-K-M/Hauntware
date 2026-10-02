@@ -6,8 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 import 'services/app_settings.dart';
+import 'services/document_windows.dart';
 import 'services/document_workspace.dart';
 import 'services/settings_dialog.dart';
+import 'ui/document_windows_root.dart';
 import 'theme/planchette_theme.dart';
 import 'widgets/command_palette.dart';
 import 'widgets/disk_notice.dart';
@@ -40,15 +42,30 @@ class PlanchetteApp extends StatelessWidget {
     required this.workspace,
     required this.settings,
     this.navigatorKey,
+    this.window,
+    this.menuSlot,
     this.onQuit,
   });
 
+  /// This window's documents. Equals `window.workspace` when [window] is
+  /// set; standalone in the single-window tests that build the app directly.
   final DocumentWorkspace workspace;
 
   /// The user's choices, and the only place the theme, the text size and the
   /// indentation for new documents come from.
   final SettingsController settings;
+
+  /// The window's navigator: dialogs and prompts open in it. Null in the
+  /// one-window app, where dialogs take the app's own navigator.
   final GlobalKey<NavigatorState>? navigatorKey;
+
+  /// The window this app is one view of; null when there is only ever one
+  /// window — under `flutter test`, say, where no runner hosts views.
+  final DocumentWindow? window;
+
+  /// macOS: the app's one native menu bar, published to while this window
+  /// is the active one. Null keeps the in-window `PlatformMenuBar`.
+  final MenuBarSlot? menuSlot;
   final Future<void> Function()? onQuit;
 
   @override
@@ -56,7 +73,8 @@ class PlanchetteApp extends StatelessWidget {
     listenable: settings,
     builder: (context, _) => MaterialApp(
       title: 'Planchette',
-      navigatorKey: navigatorKey,
+      navigatorKey: navigatorKey ?? window?.navigatorKey,
+      scaffoldMessengerKey: window?.scaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       theme: planchetteTheme(Brightness.light),
       darkTheme: planchetteTheme(Brightness.dark),
@@ -64,6 +82,8 @@ class PlanchetteApp extends StatelessWidget {
       home: _DocumentShell(
         workspace: workspace,
         settings: settings,
+        window: window,
+        menuSlot: menuSlot,
         onQuit: onQuit,
       ),
     ),
@@ -74,18 +94,24 @@ class _DocumentShell extends StatefulWidget {
   const _DocumentShell({
     required this.workspace,
     required this.settings,
+    this.window,
+    this.menuSlot,
     this.onQuit,
   });
   final DocumentWorkspace workspace;
   final SettingsController settings;
+  final DocumentWindow? window;
+  final MenuBarSlot? menuSlot;
   final Future<void> Function()? onQuit;
 
   @override
   State<_DocumentShell> createState() => _DocumentShellState();
 }
 
-class _DocumentShellState extends State<_DocumentShell> {
+class _DocumentShellState extends State<_DocumentShell>
+    implements DocumentWindowContent {
   DocumentWorkspace get workspace => widget.workspace;
+  DocumentWindow? get window => widget.window;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
   FocusNode? _lastTextFocus;
 
@@ -160,9 +186,19 @@ class _DocumentShellState extends State<_DocumentShell> {
     workspace.addListener(_changed);
     settings.addListener(_settingsChanged);
     workspace.toolHistory.addListener(_toolHistoryChanged);
+    window?.attachContent(this);
+    // Activation and the window list are the window registry's news, not
+    // this workspace's: which shell publishes the macOS menu and which
+    // window rows the Window menu lists both follow it.
+    window?.owner.addListener(_changed);
     _applySettings();
     FocusManager.instance.addListener(_rememberTextFocus);
   }
+
+  /// The window came forward remembering nothing (its first activation):
+  /// focus goes to the document it is showing.
+  @override
+  void claimDefaultFocus() => workspace.active?.editor.restoreFocus();
 
   @override
   void didUpdateWidget(_DocumentShell oldWidget) {
@@ -547,6 +583,16 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyN),
           enabled: unlocked,
         ),
+        // One window per workspace; greyed where the runner cannot host
+        // more than the one it launched with.
+        if (window case final w?)
+          _Command(
+            'New Window',
+            () => unawaited(w.openWindow()),
+            mnemonic: 'w',
+            shortcut: _shortcut(LogicalKeyboardKey.keyN, shift: true),
+            enabled: w.canOpenWindows,
+          ),
         _Command(
           'Open…',
           () => unawaited(workspace.openDialog()),
@@ -616,6 +662,14 @@ class _DocumentShellState extends State<_DocumentShell> {
           shortcut: _shortcut(LogicalKeyboardKey.keyW),
           enabled: closable,
         ),
+        // The window's own close: the same dirty guard its close button
+        // runs, and the last window quits the app.
+        if (window case final w?)
+          _Command(
+            'Close Window',
+            () => unawaited(w.close()),
+            shortcut: _shortcut(LogicalKeyboardKey.keyW, shift: true),
+          ),
         _Command(
           'Reopen Closed Tab',
           () => unawaited(workspace.reopenClosed()),
@@ -1017,6 +1071,17 @@ class _DocumentShellState extends State<_DocumentShell> {
           ),
           enabled: unlocked && workspace.documents.length > 1,
         ),
+        // The app's windows, front-marked: choosing one raises it.
+        if (window case final w?) ...[
+          const _Separator(),
+          for (final other in w.owner.windows)
+            _Command(
+              '${other.isActive ? '✓ ' : ''}${other.workspace.windowTitle}',
+              () => unawaited(other.activate()),
+              enabled: true,
+              inPalette: false,
+            ),
+        ],
       ], mnemonic: 'w'),
     ];
   }
@@ -1054,72 +1119,94 @@ class _DocumentShellState extends State<_DocumentShell> {
     return groups;
   }
 
-  Widget _nativeMenu(List<_ShellMenu> menus, Widget child) => PlatformMenuBar(
-    menus: [
-      PlatformMenu(
-        label: 'Planchette',
-        menus: [
-          const PlatformProvidedMenuItem(
-            type: PlatformProvidedMenuItemType.about,
-          ),
-          // Settings belong in the application menu on macOS.
-          PlatformMenuItemGroup(
-            members: [
-              PlatformMenuItem(
-                label: 'Settings…',
-                shortcut: _shortcut(LogicalKeyboardKey.comma),
-                onSelected: workspace.interactionLocked ? null : _showSettings,
-              ),
-            ],
-          ),
-          const PlatformMenuItemGroup(
-            members: [
-              PlatformProvidedMenuItem(
-                type: PlatformProvidedMenuItemType.servicesSubmenu,
-              ),
-              PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hide),
-              PlatformProvidedMenuItem(
-                type: PlatformProvidedMenuItemType.hideOtherApplications,
-              ),
-              PlatformProvidedMenuItem(
-                type: PlatformProvidedMenuItemType.showAllApplications,
-              ),
-            ],
-          ),
-          PlatformMenuItem(
-            label: 'Quit Planchette',
-            shortcut: _shortcut(LogicalKeyboardKey.keyQ),
-            onSelected: widget.onQuit == null
-                ? null
-                : () => unawaited(widget.onQuit!()),
-          ),
-        ],
-      ),
-      for (final menu in menus)
-        PlatformMenu(
-          label: menu.label,
-          menus: [
-            ..._nativeItems(menu.items),
-            if (menu.label == 'Window') ...const [
-              PlatformMenuItemGroup(
-                members: [
-                  PlatformProvidedMenuItem(
-                    type: PlatformProvidedMenuItemType.minimizeWindow,
-                  ),
-                  PlatformProvidedMenuItem(
-                    type: PlatformProvidedMenuItemType.zoomWindow,
-                  ),
-                  PlatformProvidedMenuItem(
-                    type: PlatformProvidedMenuItemType.arrangeWindowsInFront,
-                  ),
-                ],
-              ),
-            ],
+  /// The full native menu tree this window would show — the application
+  /// menu plus every top-level menu. With several windows the root renders
+  /// the single bar these are published into; in the one-window app they go
+  /// to this window's own `PlatformMenuBar`.
+  List<PlatformMenuItem> _nativeMenus(List<_ShellMenu> menus) => [
+    PlatformMenu(
+      label: 'Planchette',
+      menus: [
+        const PlatformProvidedMenuItem(
+          type: PlatformProvidedMenuItemType.about,
+        ),
+        // Settings belong in the application menu on macOS.
+        PlatformMenuItemGroup(
+          members: [
+            PlatformMenuItem(
+              label: 'Settings…',
+              shortcut: _shortcut(LogicalKeyboardKey.comma),
+              onSelected: workspace.interactionLocked ? null : _showSettings,
+            ),
           ],
         ),
-    ],
-    child: child,
-  );
+        const PlatformMenuItemGroup(
+          members: [
+            PlatformProvidedMenuItem(
+              type: PlatformProvidedMenuItemType.servicesSubmenu,
+            ),
+            PlatformProvidedMenuItem(type: PlatformProvidedMenuItemType.hide),
+            PlatformProvidedMenuItem(
+              type: PlatformProvidedMenuItemType.hideOtherApplications,
+            ),
+            PlatformProvidedMenuItem(
+              type: PlatformProvidedMenuItemType.showAllApplications,
+            ),
+          ],
+        ),
+        PlatformMenuItem(
+          label: 'Quit Planchette',
+          shortcut: _shortcut(LogicalKeyboardKey.keyQ),
+          onSelected: widget.onQuit == null
+              ? null
+              : () => unawaited(widget.onQuit!()),
+        ),
+      ],
+    ),
+    for (final menu in menus)
+      PlatformMenu(
+        label: menu.label,
+        menus: [
+          ..._nativeItems(menu.items),
+          if (menu.label == 'Window') ...const [
+            PlatformMenuItemGroup(
+              members: [
+                PlatformProvidedMenuItem(
+                  type: PlatformProvidedMenuItemType.minimizeWindow,
+                ),
+                PlatformProvidedMenuItem(
+                  type: PlatformProvidedMenuItemType.zoomWindow,
+                ),
+                PlatformProvidedMenuItem(
+                  type: PlatformProvidedMenuItemType.arrangeWindowsInFront,
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+  ];
+
+  Widget _nativeMenu(List<_ShellMenu> menus, Widget child) =>
+      PlatformMenuBar(menus: _nativeMenus(menus), child: child);
+
+  /// The latest native menu tree this build made: the post-frame publish
+  /// checks identity so a newer build's items win over a stale callback.
+  List<PlatformMenuItem>? _latestNativeMenus;
+
+  /// Hands this window's menus to the root's one menu bar after the frame
+  /// (a slot change rebuilds the root, which must not happen mid-build).
+  /// Only the active window publishes, and only its newest items land.
+  void _publishMenu(MenuBarSlot slot, List<PlatformMenuItem> menus) {
+    _latestNativeMenus = menus;
+    final window = this.window;
+    if (window == null || !window.isActive) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !window.isActive) return;
+      if (!identical(_latestNativeMenus, menus)) return;
+      slot.publish(window, menus);
+    });
+  }
 
   List<Widget> _menuBarItems(List<_MenuEntry> entries) => [
     for (final entry in entries)
@@ -1324,7 +1411,16 @@ class _DocumentShellState extends State<_DocumentShell> {
         ),
       ),
     );
-    if (mac) body = _nativeMenu(menus, body);
+    if (mac) {
+      final slot = widget.menuSlot;
+      if (slot != null && window != null) {
+        // The root renders the one native menu bar; this window's items go
+        // there while it is the active one.
+        _publishMenu(slot, _nativeMenus(menus));
+      } else {
+        body = _nativeMenu(menus, body);
+      }
+    }
     return body;
   }
 
@@ -1382,6 +1478,12 @@ class _DocumentShellState extends State<_DocumentShell> {
     workspace.removeListener(_changed);
     settings.removeListener(_settingsChanged);
     workspace.toolHistory.removeListener(_toolHistoryChanged);
+    // A closing window retracts only its own menu; the next active one
+    // publishes its own after this frame.
+    final window = this.window;
+    window?.detachContent(this);
+    window?.owner.removeListener(_changed);
+    if (window != null) widget.menuSlot?.clear(window);
     FocusManager.instance.removeListener(_rememberTextFocus);
     super.dispose();
   }
