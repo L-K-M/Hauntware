@@ -80,19 +80,26 @@ void main() {
     },
   );
 
-  test('a save through a symlink writes the link target', () async {
-    final target = File(paths.join(tempDir.path, 'real_state.json'));
-    final link = Link(paths.join(tempDir.path, 'linked_state.json'));
-    await link.create(target.path);
+  test(
+    'a save through a symlink writes the link target',
+    () async {
+      final target = File(paths.join(tempDir.path, 'real_state.json'));
+      final link = Link(paths.join(tempDir.path, 'linked_state.json'));
+      await link.create(target.path);
 
-    final linked = WindowStateStore(File(link.path));
-    const snapshot = GhostWindowSnapshot(bounds: Rect.fromLTWH(5, 5, 640, 480));
-    await linked.save(snapshot);
+      final linked = WindowStateStore(File(link.path));
+      const snapshot = GhostWindowSnapshot(
+        bounds: Rect.fromLTWH(5, 5, 640, 480),
+      );
+      await linked.save(snapshot);
 
-    expect(await target.exists(), isTrue);
-    expect(await FileSystemEntity.isLink(link.path), isTrue);
-    expect(await WindowStateStore(target).load(), snapshot);
-  });
+      expect(await target.exists(), isTrue);
+      expect(await FileSystemEntity.isLink(link.path), isTrue);
+      expect(await WindowStateStore(target).load(), snapshot);
+    },
+    // Link.create needs administrator or developer-mode privileges there.
+    skip: Platform.isWindows ? 'symlink creation needs privileges' : null,
+  );
 
   test('a crash mid-write leaves the previous state readable', () async {
     const first = GhostWindowSnapshot(bounds: Rect.fromLTWH(1, 1, 100, 100));

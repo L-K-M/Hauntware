@@ -229,10 +229,13 @@ final class WindowManagerGhostWindowAdapter
 
   @override
   void onWindowEvent(String eventName) {
+    // window_manager's native side emits 'show' (the Linux plugin on the
+    // GtkWidget signal, Windows on WM_SHOWWINDOW); only the raw eventName
+    // path reaches it — the named-callback table has no show entry.
     if (eventName == 'show') {
-      for (final listener in _listeners) {
-        listener.onWindowShow();
-      }
+      // _forEach copies the set: a listener may not unsubscribe itself
+      // mid-dispatch.
+      _forEach((l) => l.onWindowShow());
     }
   }
 

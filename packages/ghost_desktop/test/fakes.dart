@@ -163,8 +163,12 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
 
   @override
   void removeListener(GhostWindowListener listener) {
-    if (identical(_listener, listener)) _listener = null;
-    listenerRegistered = false;
+    // Only the attached listener detaches — removing a stale one must not
+    // leave a live listener behind a flag claiming none is registered.
+    if (identical(_listener, listener)) {
+      _listener = null;
+      listenerRegistered = false;
+    }
   }
 
   void emitMove() => _listener?.onWindowMove();

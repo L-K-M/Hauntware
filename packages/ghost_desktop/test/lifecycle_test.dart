@@ -55,7 +55,7 @@ void main() {
       final first = lifecycle.prepare();
       await window.ensureInitializedStarted.future;
       final second = lifecycle.prepare();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
       final initializationCalls = window.ensureInitializedCalls;
 
       window.releaseEnsureInitialized();
@@ -80,10 +80,10 @@ void main() {
       final window = FakeWindowAdapter()..blockEnsureInitialized = true;
       final lifecycle = _lifecycle(window: window);
 
-      unawaited(lifecycle.prepare());
+      lifecycle.prepare().ignore();
       await window.ensureInitializedStarted.future;
       final closing = lifecycle.close();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(window.events, isNot(contains('destroy')));
 
@@ -98,10 +98,10 @@ void main() {
         ..failEnsureInitialized = true;
       final lifecycle = _lifecycle(window: window);
 
-      unawaited(lifecycle.prepare());
+      lifecycle.prepare().ignore();
       await window.ensureInitializedStarted.future;
       final closing = lifecycle.close();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
       window.releaseEnsureInitialized();
 
       expect(await closing, isTrue);
@@ -150,7 +150,7 @@ void main() {
       await lifecycle.prepare();
       final showing = lifecycle.show();
       await window.readyToShowStarted.future;
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
       expect(ready, isFalse);
 
       window.releaseReadyToShow();
@@ -166,7 +166,7 @@ void main() {
 
       await expectLater(lifecycle.prepare(), throwsA(isA<StateError>()));
       await lifecycle.show();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(window.events, isNot(contains('ready')));
       expect(ready, isFalse);
@@ -411,10 +411,10 @@ void main() {
       final lifecycle = _lifecycle(window: window);
 
       await lifecycle.prepare();
-      unawaited(lifecycle.show());
+      lifecycle.show().ignore();
       await window.readyToShowStarted.future;
       final calibrating = lifecycle.calibrateMinimumSize(const Size(1000, 600));
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
 
       expect(window.getBoundsStarted.isCompleted, isFalse);
 
@@ -449,9 +449,9 @@ void main() {
         final lifecycle = _lifecycle(window: window);
 
         await lifecycle.prepare();
-        unawaited(lifecycle.show());
+        lifecycle.show().ignore();
         await window.readyToShowStarted.future;
-        unawaited(lifecycle.calibrateMinimumSize(const Size(1000, 600)));
+        lifecycle.calibrateMinimumSize(const Size(1000, 600)).ignore();
         final closing = lifecycle.close();
         window.releaseReadyToShow();
         await closing;
@@ -467,10 +467,10 @@ void main() {
 
       await lifecycle.prepare();
       await lifecycle.show();
-      unawaited(lifecycle.calibrateMinimumSize(const Size(1000, 600)));
+      lifecycle.calibrateMinimumSize(const Size(1000, 600)).ignore();
       await window.getBoundsStarted.future;
       final closing = lifecycle.close();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
       expect(window.events, isNot(contains('destroy')));
 
       window.releaseGetBounds();
@@ -673,7 +673,7 @@ void main() {
 
       await lifecycle.prepare();
       final closing = lifecycle.close();
-      await Future<void>.delayed(Duration.zero);
+      await pumpEventQueue();
       expect(window.events, isNot(contains('destroy')));
 
       flushed.complete();
@@ -800,6 +800,28 @@ void main() {
       expect(errors, contains(isA<StateError>()));
     });
 
+    test('a guard error does not wedge the close operation queue', () async {
+      final window = FakeWindowAdapter();
+      var failGuard = true;
+      final lifecycle = _lifecycle(
+        window: window,
+        confirmClose: () async {
+          if (failGuard) throw StateError('guard failed');
+          return true;
+        },
+      );
+
+      await lifecycle.prepare();
+      await expectLater(lifecycle.close(), throwsA(isA<StateError>()));
+      expect(window.events, isNot(contains('destroy')));
+
+      // The queue must have released its slot: a fixed guard retires the
+      // window on the next close.
+      failGuard = false;
+      expect(await lifecycle.close(), isTrue);
+      expect(window.events.last, 'destroy');
+    });
+
     test('another window taking the close skips the whole quit path', () async {
       final window = FakeWindowAdapter();
       var guardCalls = 0;
@@ -827,8 +849,7 @@ void main() {
       expect(window.events.last, 'destroy');
     });
 
-    test('saveBounds writes the current bounds for a quit that skips the '
-        'close path', () async {
+    test('saveBounds writes the current bounds only once prepared', () async {
       final window = FakeWindowAdapter();
       final persistence = MemoryPersistence();
       final lifecycle = _lifecycle(window: window, persistence: persistence);
@@ -897,8 +918,12 @@ void main() {
         expect(window.events, isNot(contains('bounds')));
         expect(window.readyOptions?.placement, GhostWindowPlacement.centered);
 
-        // But the first normal-frame capture may still restore it later if a
-        // display reappears — the retained frame, not the live one, was saved.
+        // Prepare and show never write: the retained frame must not be
+        // overwritten before a real capture happens.
+        expect(persistence.writes, isEmpty);
+
+        // "Keep" holds only through restore; the first real capture
+        // legitimately records where the window actually lives now.
         window.emitMove();
         await debounce.fire();
         expect(persistence.writes.single.bounds, window.bounds);

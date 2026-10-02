@@ -18,6 +18,7 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
   var minimized = false;
   var maximized = false;
   var fullScreen = false;
+  var preventClose = false;
   var failDestroy = false;
   var destroyCalls = 0;
   GhostWindowOptions? readyOptions;
@@ -59,14 +60,21 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
   @override
   Future<void> maximize() async => events.add('maximize');
   @override
-  Future<void> setFullScreen(bool value) async => events.add('setFullScreen');
+  Future<void> setFullScreen(bool value) async {
+    fullScreen = value;
+    events.add('setFullScreen');
+  }
+
   @override
   Future<void> show() async => events.add('show');
   @override
   Future<void> focus() async => events.add('focus');
   @override
-  Future<void> setPreventClose(bool prevent) async =>
-      events.add('preventClose');
+  Future<void> setPreventClose(bool prevent) async {
+    preventClose = prevent;
+    events.add('preventClose');
+  }
+
   @override
   Future<void> destroy() async {
     if (failDestroy) throw StateError('native close failed');
@@ -277,21 +285,33 @@ void main() {
   });
 
   test('a maximized window is remembered without its frame', () async {
-    final window = FakeWindowAdapter()..maximized = true;
+    final window = FakeWindowAdapter();
     final persistence = FakeWindowPersistence();
+    final pending = <Future<void> Function()>[];
     final desktop = desktopFor(
       window: window,
       persistence: persistence,
       confirmQuit: () async => true,
+      scheduleDebounce: (_, callback) {
+        pending.add(callback);
+        return () => pending.remove(callback);
+      },
     );
     addTearDown(desktop.dispose);
     await desktop.initialize();
+
+    // Save a normal frame first, then maximize and quit: the remembered
+    // normal frame must survive — the maximized bounds would resurrect as
+    // the "normal" frame, so the flag is saved beside what was kept.
+    const normal = Rect.fromLTWH(40, 30, 800, 500);
+    window.bounds = normal;
+    window.emitMove();
+    await pending.single();
+    window.maximized = true;
     await desktop.requestQuit();
 
-    // The maximized bounds would resurrect as the "normal" frame — the flag
-    // is saved instead, and the frame stays what it was.
     expect(persistence.stored?.isMaximized, isTrue);
-    expect(persistence.stored?.bounds, isNull);
+    expect(persistence.stored?.bounds, normal);
   });
 
   test(
@@ -312,6 +332,9 @@ void main() {
       );
       addTearDown(desktop.dispose);
       await desktop.initialize();
+
+      // The intercept policy armed the native close guard during prepare.
+      expect(window.preventClose, isTrue);
 
       window.emitClose();
       await Future<void>.delayed(Duration.zero);

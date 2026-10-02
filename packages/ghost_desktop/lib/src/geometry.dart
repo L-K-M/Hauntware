@@ -41,6 +41,42 @@ Rect clampFrameToWorkArea({
   required List<Rect> workAreas,
   required Rect fallbackWorkArea,
 }) {
+  // Degenerate or non-finite saved geometry (NaN survives num.clamp, so it
+  // must be stopped here): center a usable frame on the fallback rather
+  // than propagate it into the native setBounds.
+  if (!bounds.left.isFinite ||
+      !bounds.top.isFinite ||
+      !bounds.width.isFinite ||
+      !bounds.height.isFinite ||
+      bounds.width <= 0 ||
+      bounds.height <= 0) {
+    final width = fallbackWorkArea.width < 960.0
+        ? fallbackWorkArea.width
+        : 960.0;
+    final height = fallbackWorkArea.height < 640.0
+        ? fallbackWorkArea.height
+        : 640.0;
+    return Rect.fromCenter(
+      center: fallbackWorkArea.center,
+      width: width,
+      height: height,
+    );
+  }
+
+  // A frame already fully covered by the present work areas — one
+  // legitimately spanning two displays, for instance — is not a
+  // missing-monitor case at all: nothing is off-screen to recover.
+  // Work areas are disjoint, so summing per-area intersections is the
+  // union's coverage.
+  var covered = 0.0;
+  for (final area in workAreas) {
+    final overlap = bounds.intersect(area);
+    covered +=
+        overlap.width.clamp(0.0, double.infinity) *
+        overlap.height.clamp(0.0, double.infinity);
+  }
+  if (covered >= bounds.width * bounds.height - 1) return bounds;
+
   final target = _bestWorkArea(bounds, workAreas) ?? fallbackWorkArea;
   final width = bounds.width.clamp(0, target.width).toDouble();
   final height = bounds.height.clamp(0, target.height).toDouble();

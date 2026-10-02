@@ -95,7 +95,7 @@ void main() {
     });
 
     test('a sliver of overlap is not enough to restore', () {
-      // Only 40x945 points remain on-screen: too thin to grab the title bar.
+      // Only 40x700 points remain on-screen: too thin to grab the title bar.
       const saved = Rect.fromLTWH(1472, 0, 1000, 700);
       expect(resolveRestorableFrame(saved, [laptop]), isNull);
     });
@@ -181,6 +181,8 @@ void main() {
           workAreas: [primary],
           fallbackWorkArea: primary,
         ),
+        // Centered in the 1920x1040 fallback: (1920-900)/2 = 510,
+        // (1040-600)/2 = 220.
         const Rect.fromLTWH(510, 220, 900, 600),
       );
     });
@@ -194,6 +196,48 @@ void main() {
           fallbackWorkArea: primary,
         ),
         const Rect.fromLTWH(0, 0, 1920, 1040),
+      );
+    });
+
+    test('a frame spanning two present displays stays untouched', () {
+      // 240 px straddle the boundary — fully on-screen across the union of
+      // the two work areas, so there is nothing to recover.
+      const saved = Rect.fromLTWH(1800, 200, 240, 600);
+      expect(
+        clampFrameToWorkArea(
+          bounds: saved,
+          workAreas: [primary, side],
+          fallbackWorkArea: primary,
+        ),
+        saved,
+      );
+    });
+
+    test('a frame only half covered by the union still clamps', () {
+      // Half the span sits off the right edge of the single display: it is
+      // not fully covered, so the usual clamp pulls it on-screen.
+      const saved = Rect.fromLTWH(1800, 200, 240, 600);
+      expect(
+        clampFrameToWorkArea(
+          bounds: saved,
+          workAreas: [primary],
+          fallbackWorkArea: primary,
+        ),
+        const Rect.fromLTWH(1680, 200, 240, 600),
+      );
+    });
+
+    test('a non-finite frame centers a usable window on the fallback', () {
+      const saved = Rect.fromLTWH(double.nan, 0, 900, 600);
+      expect(
+        clampFrameToWorkArea(
+          bounds: saved,
+          workAreas: [primary],
+          fallbackWorkArea: primary,
+        ),
+        // The degenerate fallback: 960x640 centered in the 1920x1040
+        // primary area.
+        const Rect.fromLTWH(480, 200, 960, 640),
       );
     });
   });

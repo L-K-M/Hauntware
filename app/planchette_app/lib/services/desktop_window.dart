@@ -158,7 +158,7 @@ final class DesktopWindow with WindowListener {
   }
 
   void dispose() {
-    _window.removeListener(_lifecycle);
+    _lifecycle.dispose();
     windowManager.removeListener(this);
     _appLifecycle?.dispose();
   }

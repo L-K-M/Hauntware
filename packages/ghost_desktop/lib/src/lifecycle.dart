@@ -262,11 +262,12 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     await _enqueueWindowOperation(() async {
       if (_closing) return;
 
-      await _window.waitUntilReadyToShow(_effectiveOptions());
-      if (!_windowReady.isCompleted) _windowReady.complete();
-      if (_closing) return;
-
       try {
+        // The rescue covers readiness too: a plugin failure here would
+        // otherwise leave macOS's hidden-at-launch window invisible.
+        await _window.waitUntilReadyToShow(_effectiveOptions());
+        if (!_windowReady.isCompleted) _windowReady.complete();
+        if (_closing) return;
         await _applyRestored();
       } catch (_) {
         await _rescueHiddenWindow();
@@ -282,7 +283,10 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     try {
       await _window.show();
       await _window.focus();
-    } catch (_) {}
+    } catch (error, stack) {
+      // The last-ditch path failing is exactly the case diagnostics need.
+      _report(error, stack);
+    }
   }
 
   GhostWindowOptions? _effectiveOptions() {
@@ -321,13 +325,18 @@ base class GhostWindowLifecycle extends GhostWindowListener {
         if (fullScreen) await _window.setFullScreen(true);
       case GhostDesktopPlatform.windows:
         if (bounds != null) {
-          final logical = _toLogicalSpace(bounds);
           // Two passes: crossing onto a different-DPI monitor makes the
           // runner apply the OS's suggested frame (WM_DPICHANGED — handled
           // synchronously inside the first call), which rescales the window.
           // Re-asserting the full frame afterwards sticks exactly.
-          await _window.setBounds(null, position: logical.topLeft);
-          await _window.setBounds(logical);
+          await _window.setBounds(
+            null,
+            position: _toLogicalSpace(bounds).topLeft,
+          );
+          // The second conversion reads the ratio after the move — the
+          // first pass may have crossed onto a different-DPI monitor, and
+          // this call is converted with the destination's ratio.
+          await _window.setBounds(_toLogicalSpace(bounds));
         }
         if (maximized || fullScreen) {
           _pendingWindowsFlags = (maximized: maximized, fullScreen: fullScreen);
@@ -487,10 +496,23 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     return _enqueueWindowOperation(_captureAndSave);
   }
 
+  /// Detaches the lifecycle from its window and cancels anything still
+  /// scheduled — the debounced geometry save and the Windows flags
+  /// backstop — so nothing reaches the native side through a torn-down
+  /// owner.
+  void dispose() {
+    _cancelScheduledSave?.call();
+    _cancelScheduledSave = null;
+    _cancelFlagsBackstop?.call();
+    _cancelFlagsBackstop = null;
+    _window.removeListener(this);
+  }
+
   // -- Window events ------------------------------------------------------
 
   @override
-  void onWindowShow() => unawaited(_applyPendingWindowsFlags());
+  void onWindowShow() =>
+      unawaited(_enqueueWindowOperation(_applyPendingWindowsFlags));
 
   // Geometry events arrive continuously during a drag; the debounce means one
   // write per interaction, not one per pixel.
@@ -518,7 +540,9 @@ base class GhostWindowLifecycle extends GhostWindowListener {
         // process dies before the write lands, the previous save still holds.
         _cancelScheduledSave?.call();
         _cancelScheduledSave = null;
-        unawaited(_captureAndSave());
+        // Through the queue: a debounced capture may still be pending, and
+        // native window reads must never overlap it.
+        unawaited(_enqueueWindowOperation(_captureAndSave));
       case GhostClosePolicy.intercept:
         unawaited(_closeFromCallback());
     }
@@ -592,8 +616,19 @@ base class GhostWindowLifecycle extends GhostWindowListener {
       _report(error, stack);
     }
 
-    await _window.destroy();
-    _window.removeListener(this);
+    // Disarm the Windows flags backstop too: a pending timer must not
+    // reach a window that is about to be destroyed.
+    _cancelFlagsBackstop?.call();
+    _cancelFlagsBackstop = null;
+    var destroyed = false;
+    try {
+      await _window.destroy();
+      destroyed = true;
+    } finally {
+      // Only a successful destroy detaches us: a failed one left the native
+      // window alive, and its close button must still reach the retry path.
+      if (destroyed) _window.removeListener(this);
+    }
     return true;
   }
 

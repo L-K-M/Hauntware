@@ -42,7 +42,9 @@ final class WindowStateStore implements GhostWindowPersistence {
       return GhostWindowSnapshot.fromJson(
         jsonDecode(await file.readAsString()),
       );
-    } on Exception {
+      // Not `on Exception`: nothing this code runs — present or future —
+      // may leave the app unable to open. A malformed file starts over.
+    } catch (_) {
       return null;
     }
   }
