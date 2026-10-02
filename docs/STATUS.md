@@ -24,9 +24,31 @@ including reconnect/disconnect regressions. Without real fonts,
 two desktop sidebar capture tests fail on both unchanged main and this branch.
 Cross-platform CI and final review results are recorded on the adoption PR.
 
-The Planchette pin moved from `5b75f9dc` to `ff487394` (Planchette main on
-2026-09-29), the same revision Poltergeist adopts. The status bar now uses
-the shared strings and shows the selection, indentation, language name and
+The built-in editor gains Planchette's text tools. A header icon (the
+construction glyph, tooltip "Browse Text Tools…") opens the shared catalog
+browser: Repeat and Recent first, then the seven tool groups behind a
+keyword filter, scrolling in the find bar's slot. A tool with options opens
+the options bar, the rest run at their defaults, and every run lands in its
+own undo step behind a one-line result notice. The find bar gains Keep and
+Delete Lines Matching, Extract Matches, a stored Find in Selection scope,
+regex hints with a cheat sheet, a replacement preview and session-only
+search history. Replacement backslashes stay literal by owner decision;
+only `$1`, `${1}`, `${name}` and `$$` expand.
+
+The editing buffer keeps line breaks exactly as the file has them
+(`TextNormalization.preserve`), and the controller's byte preflight follows
+the managed save's conditional policy through
+`saveNormalizationForLineEnding`: a CRLF-dominant document's size counts
+its breaks folded to CRLF, an LF document's counts them raw. Saved bytes
+are unchanged. The syntax palettes add the find-in-selection wash
+(`searchScopeBackground`). A locked document (a reload in progress) still
+browses; its rows stay disabled until the lock lifts. Narrow phone widths
+were checked at 320 px and doubled text scale.
+
+The Planchette pin moved from `ff487394` to `53153c8` (Planchette main on
+2026-10-02, text tools slices 1 to 8), the same revision Poltergeist
+adopts. The status bar now uses the shared strings and shows the
+selection, indentation, language name and
 large-file notice, and its caret position opens Go to Line. The editor view
 is no longer locked while a reload runs: Planchette now keeps the view's
 lock apart from the host's, and a view lock would refuse the reload itself.
