@@ -565,7 +565,7 @@ void main() {
   });
 
   group('unicode and JSON tools', () {
-    EditorController jsonController(String text, {int? maximumBytes}) {
+    EditorController makeController(String text, {int? maximumBytes}) {
       final c = EditorController(
         displayPath: 'a.txt',
         initialText: text,
@@ -579,7 +579,7 @@ void main() {
     test(
       'a JSON format that would grow past maximumBytes is refused',
       () async {
-        final c = jsonController('{"a":1}', maximumBytes: 8);
+        final c = makeController('{"a":1}', maximumBytes: 8);
         final outcome = await c.runTextTool('formatJson');
         expect(c.text.text, '{"a":1}');
         expect(
@@ -594,7 +594,7 @@ void main() {
     );
 
     test('invalid JSON refuses with its line and column', () async {
-      final c = jsonController('{"a":1,}');
+      final c = makeController('{"a":1,}');
       final outcome = await c.runTextTool('formatJson');
       expect(c.text.text, '{"a":1,}');
       expect(
@@ -606,10 +606,35 @@ void main() {
       expect(c.toolReport?.ranOn, TextToolRanOn.document);
     });
 
+    test('formatJson pretty-prints with two-space indent', () async {
+      final c = makeController('{"a":1}');
+      final outcome = await c.runTextTool('formatJson');
+      expect(c.text.text, '{\n  "a": 1\n}');
+      expect(outcome, isA<TextToolChanged>());
+    });
+
+    test('minifyJson compacts a pretty document', () async {
+      final c = makeController('{\n  "a": [1, 2]\n}');
+      final outcome = await c.runTextTool('minifyJson');
+      expect(c.text.text, '{"a":[1,2]}');
+      expect(outcome, isA<TextToolChanged>());
+    });
+
+    test('convertToAscii reports kept characters in its detail', () async {
+      final c = makeController('caf\u00e9 \u65e5');
+      final outcome = await c.runTextTool('convertToAscii');
+      expect(c.text.text, 'cafe \u65e5');
+      expect(
+        outcome,
+        isA<TextToolChanged>().having((r) => r.detail, 'detail', 'unmapped:1'),
+      );
+    });
+
     test('a unicode run applies and reports its scope', () async {
-      final c = jsonController('é');
+      // NFD input: 'e' plus combining acute; NFC expectation: precomposed.
+      final c = makeController('e\u0301');
       final outcome = await c.runTextTool('composeAccents');
-      expect(c.text.text, 'é');
+      expect(c.text.text, '\u00e9');
       expect(outcome, isA<TextToolChanged>());
       expect(c.toolReport?.ranOn, TextToolRanOn.document);
     });

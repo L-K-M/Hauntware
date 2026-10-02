@@ -18,10 +18,11 @@ final class JsonFormatError implements Exception {
   String toString() => 'line $line, column $column: $message';
 }
 
-/// Pretty-prints [input] as JSON with two-space indent. Throws
-/// [JsonFormatError] on invalid input.
-String formatJsonWhitespace(String input) =>
-    _JsonReformatter(input, pretty: true).run();
+/// Pretty-prints [input] as JSON with two-space indent. [newline] is the
+/// line separator for the emitted breaks — the caller's document EOL —
+/// defaulting to LF. Throws [JsonFormatError] on invalid input.
+String formatJsonWhitespace(String input, {String newline = '\n'}) =>
+    _JsonReformatter(input, pretty: true, newline: newline).run();
 
 /// Minifies [input] to JSON with no insignificant whitespace. Throws
 /// [JsonFormatError] on invalid input.
@@ -29,10 +30,14 @@ String minifyJsonWhitespace(String input) =>
     _JsonReformatter(input, pretty: false).run();
 
 class _JsonReformatter {
-  _JsonReformatter(this.input, {required this.pretty});
+  _JsonReformatter(this.input, {required this.pretty, this.newline = '\n'});
 
   final String input;
   final bool pretty;
+
+  /// The separator pretty output breaks lines with. Minified output has
+  /// no breaks, so it never reads this.
+  final String newline;
   int pos = 0;
 
   static const _maxDepth = 200;
@@ -110,14 +115,14 @@ class _JsonReformatter {
     }
     // Nested values already carry their absolute indentation from
     // _parseValue(depth + 1); only the first line joins the key's line.
-    final out = StringBuffer()..write('{\n');
+    final out = StringBuffer()..write('{$newline');
     for (var i = 0; i < keys.length; i++) {
       out.write(_indent(depth + 1));
       out.write(keys[i]);
       out.write(': ');
       out.write(values[i]);
       if (i + 1 < keys.length) out.write(',');
-      out.write('\n');
+      out.write(newline);
     }
     out.write(_indent(depth));
     out.write('}');
@@ -152,12 +157,12 @@ class _JsonReformatter {
       throw _error("expected ',' or ']'", pos);
     }
     if (!pretty) return '[${items.join(',')}]';
-    final out = StringBuffer()..write('[\n');
+    final out = StringBuffer()..write('[$newline');
     for (var i = 0; i < items.length; i++) {
       out.write(_indent(depth + 1));
       out.write(items[i]);
       if (i + 1 < items.length) out.write(',');
-      out.write('\n');
+      out.write(newline);
     }
     out.write(_indent(depth));
     out.write(']');

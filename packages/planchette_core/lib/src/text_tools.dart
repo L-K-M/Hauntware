@@ -2697,19 +2697,26 @@ TextToolOutcome _reformatJson(TextToolRun run, {required bool minify}) {
   final start = math.min(run.base, run.extent);
   final end = math.max(run.base, run.extent);
   final slice = run.text.substring(start, end);
+  final newline = run.context.lineEnding == LineEnding.crlf ? '\r\n' : '\n';
   final String reformatted;
   try {
     reformatted = minify
         ? minifyJsonWhitespace(slice)
-        : formatJsonWhitespace(slice);
+        : formatJsonWhitespace(slice, newline: newline);
   } on JsonFormatError catch (e) {
     return TextToolRefused(TextToolRefusal.invalidJson, e.toString());
   }
-  if (reformatted == slice) return TextToolUnchanged(scope: slice.length);
+  // Keep the slice's final break so formatting an already-formatted file
+  // stays a no-op instead of eating its trailing newline.
+  final eol = slice.endsWith('\r\n')
+      ? '\r\n'
+      : (slice.endsWith('\n') ? '\n' : '');
+  final output = eol.isEmpty ? reformatted : '$reformatted$eol';
+  if (output == slice) return TextToolUnchanged(scope: slice.length);
   return _replaceSlice(
     run,
-    reformatted,
-    changed: slice.length,
+    output,
+    changed: _normalizedChanged(slice, output),
     scope: slice.length,
   );
 }

@@ -23,7 +23,11 @@ String describe(TextToolOutcome outcome) => switch (outcome) {
   TextToolRefused(:final reason) => 'refused:${reason.name}',
 };
 
-TextToolOutcome outcomeOf(String id, String input) {
+TextToolOutcome outcomeOf(
+  String id,
+  String input, {
+  LineEnding lineEnding = LineEnding.lf,
+}) {
   final caretMark = input.indexOf('|');
   final int base;
   final int extent;
@@ -54,6 +58,7 @@ TextToolOutcome outcomeOf(String id, String input) {
       context: TextToolContext(
         fold: (s) => s.toLowerCase(),
         indentation: const Indentation.spaces(4),
+        lineEnding: lineEnding,
       ),
     ),
   );
@@ -150,13 +155,22 @@ void main() {
     });
 
     test('emoji, ZWJ sequences and non-Latin pass through', () {
-      expect(run('stripDiacritics', '\u{1f600}|'), 'unchanged');
+      expect(run('stripDiacritics', '😀|'), 'unchanged');
       // Family emoji needs its zero-width joiners; they are not marks.
-      expect(
-        run('stripDiacritics', '\u{1f468}\u200d\u{1f469}\u200d\u{1f467}|'),
-        'unchanged',
-      );
-      expect(run('stripDiacritics', '\u65e5\u672c|'), 'unchanged');
+      expect(run('stripDiacritics', '👨‍👩‍👧|'), 'unchanged');
+      expect(run('stripDiacritics', '日本|'), 'unchanged');
+    });
+
+    test('Hangul and voiced kana come back byte-for-byte', () {
+      // Both decompose canonically (syllable to jamo, が to か plus
+      // U+3099) with no mark in the stripped ranges: without the guard
+      // the tool would report a change for a visually identical result.
+      expect(run('stripDiacritics', '가|'), 'unchanged');
+      expect(run('stripDiacritics', 'が|'), 'unchanged');
+    });
+
+    test('stripped survivors recompose beside untouched scripts', () {
+      expect(run('stripDiacritics', 'é가|'), 'e가|');
     });
 
     test('a selection strips only its slice', () {
@@ -183,6 +197,29 @@ void main() {
       final outcome = outcomeOf('convertToAscii', 'abc|');
       expect(outcome, isA<TextToolUnchanged>());
       expect((outcome as TextToolUnchanged).detail, isNull);
+    });
+
+    test('decomposed accents convert as one character', () {
+      // NFD text from macOS filenames and pastes: e plus combining
+      // acute reaches the table path composed.
+      final outcome = outcomeOf('convertToAscii', 'cafe\u0301|');
+      expect(outcome, isA<TextToolChanged>());
+      final changed = outcome as TextToolChanged;
+      expect(changed.edit.text, 'cafe');
+      expect(changed.detail, isNull);
+    });
+
+    test('a precomposed letter can fall back to its base table entry', () {
+      // ǿ U+01FF decomposes to ø plus an acute; ø maps to o.
+      expect(run('convertToAscii', '\u01ff|'), 'o|');
+    });
+
+    test('a mark with no precomposed form stays literal', () {
+      // q plus combining acute has no composition: the mark is kept
+      // and counted rather than deleted.
+      final outcome = outcomeOf('convertToAscii', 'q\u0301|');
+      expect(outcome, isA<TextToolUnchanged>());
+      expect((outcome as TextToolUnchanged).detail, 'unmapped:1');
     });
 
     test('unmapped non-ASCII is kept literal and reported', () {
@@ -306,6 +343,24 @@ void main() {
       final refused = outcome as TextToolRefused;
       expect(refused.detail, contains('line 2'));
     });
+
+    test('a trailing newline is kept, not eaten', () {
+      // An already-formatted file with its final newline stays a no-op.
+      expect(run('formatJson', '{\n  "a": 1\n}\n|'), 'unchanged');
+      final outcome = outcomeOf('formatJson', '{"a":1}\n|');
+      expect(outcome, isA<TextToolChanged>());
+      expect((outcome as TextToolChanged).edit.text, '{\n  "a": 1\n}\n');
+    });
+
+    test('pretty output follows the document line ending', () {
+      final outcome = outcomeOf(
+        'formatJson',
+        '{"a":1}|',
+        lineEnding: LineEnding.crlf,
+      );
+      expect(outcome, isA<TextToolChanged>());
+      expect((outcome as TextToolChanged).edit.text, '{\r\n  "a": 1\r\n}');
+    });
   });
 
   group('minifyJson', () {
@@ -336,6 +391,12 @@ void main() {
 
     test('a selected value minifies in place', () {
       expect(run('minifyJson', 'x[{ "a" : 1 }]y'), 'x[{"a":1}]y');
+    });
+
+    test('a trailing newline is kept, not eaten', () {
+      expect(run('minifyJson', '{"a":1}\n|'), 'unchanged');
+      expect(run('minifyJson', '{ "a" : 1 }\n|'), '{"a":1}\n|');
+      expect(run('minifyJson', '{"a":1}|'), 'unchanged');
     });
 
     test('a backward selection keeps its direction', () {

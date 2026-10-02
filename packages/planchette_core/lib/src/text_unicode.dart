@@ -12,8 +12,9 @@ String unicodeNfc(String input) => unorm.nfc(input);
 String unicodeNfd(String input) => unorm.nfd(input);
 
 /// Whether [rune] is a combining mark Strip Diacritics removes: the five
-/// combining blocks that hold accents and marks. U+200C/U+200D are not
-/// marks and are kept, so emoji and scripts that need them survive.
+/// combining blocks that hold Latin-script accents and marks. Combining
+/// marks outside them (Hebrew points, Arabic harakat, Thai vowels) and
+/// U+200C/U+200D are kept, so those scripts and emoji survive intact.
 bool isCombiningMark(int rune) =>
     (rune >= 0x0300 && rune <= 0x036f) ||
     (rune >= 0x1ab0 && rune <= 0x1aff) ||
@@ -23,14 +24,24 @@ bool isCombiningMark(int rune) =>
 
 /// Removes combining marks after canonical decomposition, leaving base
 /// letters. Characters without a decomposition (ø, ł, emoji, CJK) pass
-/// through unchanged.
+/// through unchanged, as do scripts that decompose with no removable
+/// mark (Hangul syllables to jamo, voiced kana to base plus U+3099 or
+/// U+309A): with nothing removed the input comes back byte-for-byte.
 String stripDiacritics(String input) {
   final decomposed = unorm.nfd(input);
   final out = StringBuffer();
+  var removed = false;
   for (final rune in decomposed.runes) {
-    if (!isCombiningMark(rune)) out.writeCharCode(rune);
+    if (isCombiningMark(rune)) {
+      removed = true;
+    } else {
+      out.writeCharCode(rune);
+    }
   }
-  return out.toString();
+  if (!removed) return input;
+  // Recompose so survivors that only traveled through NFD (Hangul jamo
+  // beside a stripped accent) return to their composed form.
+  return unorm.nfc(out.toString());
 }
 
 // The reviewed Latin transliteration table: punctuation look-alikes,
@@ -107,7 +118,11 @@ const asciiTable = <int, String>{
   final out = StringBuffer();
   var converted = 0;
   var unmapped = 0;
-  for (final rune in input.runes) {
+  // Compose first so a decomposed base plus mark (common from macOS
+  // filenames and pasted text) reaches the table and stripping paths as
+  // one character. A mark with no precomposed form still has no partner
+  // and stays literal, counted unmapped rather than deleted.
+  for (final rune in unorm.nfc(input).runes) {
     if (rune <= 0x7f) {
       out.writeCharCode(rune);
       continue;
@@ -126,8 +141,9 @@ const asciiTable = <int, String>{
       converted++;
       continue;
     }
-    // A stripped base with no ASCII form may still have a table entry
-    // (ø decomposes to itself, then maps to o).
+    // A precomposed letter may strip down to a single base that still
+    // has a table entry (ǿ U+01FF decomposes to ø plus an acute, then
+    // maps to o).
     if (stripped.runes.length == 1) {
       final mapped = asciiTable[stripped.runes.single];
       if (mapped != null) {
