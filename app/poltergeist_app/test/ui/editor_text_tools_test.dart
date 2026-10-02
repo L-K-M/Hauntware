@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -210,7 +211,7 @@ void main() {
     // BOM + CRLF: the loader normalizes the buffer to LF and keeps the
     // bytes as metadata; the saver must restore both.
     file.writeAsBytesSync([
-      0xEF, 0xBB, 0xBF, ...'one\r\ntwo\r\n'.codeUnits,
+      0xEF, 0xBB, 0xBF, ...utf8.encode('one\r\ntwo\r\n'),
     ]);
 
     // The load and save ride real I/O, so the drive runs where the event
@@ -252,6 +253,6 @@ void main() {
     });
 
     final saved = file.readAsBytesSync();
-    expect(saved, [0xEF, 0xBB, 0xBF, ...'uno\r\ntwo\r\n'.codeUnits]);
+    expect(saved, [0xEF, 0xBB, 0xBF, ...utf8.encode('uno\r\ntwo\r\n')]);
   });
 }
