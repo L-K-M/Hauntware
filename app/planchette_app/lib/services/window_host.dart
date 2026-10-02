@@ -228,10 +228,15 @@ final class MethodChannelWindowHost implements WindowHost {
     if (answer is! List) {
       throw const WindowHostException('the runner answered no path list');
     }
-    return [
+    final paths = [
       for (final path in answer)
         if (path is String) path,
     ];
+    assert(
+      paths.length == answer.length,
+      'the runner answered a non-string path entry',
+    );
+    return paths;
   }
 
   @override

@@ -85,10 +85,13 @@ Future<void> main(List<String> arguments) async {
   await intake.start(arguments, macOS: Platform.isMacOS);
 
   // The launch window gets the blank page; windows opened later start
-  // empty and invite a document, like an empty tab set.
-  final launch = windows.windows.firstWhere(
+  // empty and invite a document, like an empty tab set. A registry
+  // disposed under start() leaves no window to seed.
+  final open = windows.windows;
+  if (open.isEmpty) return;
+  final launch = open.firstWhere(
     (window) => window.isLaunchWindow,
-    orElse: () => windows.windows.first,
+    orElse: () => open.first,
   );
   if (launch.workspace.documents.isEmpty && launch.workspace.error == null) {
     launch.workspace.newDocument();

@@ -346,6 +346,7 @@ final class DocumentWindows extends ChangeNotifier
           // A raise that fails must cancel the quit, not throw out of the
           // review: the finally below releases every consented lock.
           _report(error, stack);
+          _reportError('Could not bring a window forward to close it: $error');
           return false;
         }
         if (!await window.workspace.confirmQuit()) return false;

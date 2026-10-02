@@ -20,13 +20,19 @@ final class PlanchetteBinding extends WidgetsFlutterBinding {
 
   static bool _initialized = false;
 
-  /// Installs this binding, unless one is already running.
+  /// Installs this binding, unless one is already running — the test
+  /// harness's, say, which stays in charge rather than being replaced
+  /// (a second BindingBase would assert in debug).
   static WidgetsBinding ensureInitialized() {
-    if (!_initialized) {
+    if (_initialized) return WidgetsBinding.instance;
+    try {
+      // checkInstance throws a FlutterError until a binding's
+      // constructor has run.
+      return WidgetsBinding.instance;
+    } on FlutterError {
       _initialized = true;
-      PlanchetteBinding._();
+      return PlanchetteBinding._();
     }
-    return WidgetsBinding.instance;
   }
 
   @override
