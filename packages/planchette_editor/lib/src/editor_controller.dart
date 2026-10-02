@@ -28,6 +28,7 @@ import 'package:planchette_core/planchette_core.dart'
 
 import 'code_editing_controller.dart';
 import 'pattern_find.dart';
+import 'search_history.dart';
 import 'text_tool_history.dart';
 
 enum EditorSaveMode { local, primary }
@@ -81,6 +82,7 @@ class EditorController extends ChangeNotifier {
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
+    replacement.addListener(_replacementChanged);
     extraction.addListener(_extractionChanged);
     goToLineInput.addListener(_goToLineEdited);
     for (final node in [
@@ -284,6 +286,32 @@ class EditorController extends ChangeNotifier {
   /// The regular-expression search, while that mode is on.
   PatternFind? _patternFind;
 
+  /// Session-only find queries, newest first. Never written to disk:
+  /// a query can hold a secret. Each controller keeps its own, like the
+  /// tool history without a shared host instance.
+  final SearchHistory searchHistory = SearchHistory();
+
+  /// Keyboard recall through [searchHistory]: -1 while typing, else the
+  /// index recalled, with [_historyDraft] the text recall started from.
+  int _historyCursor = -1;
+  String? _historyDraft;
+
+  /// The active-match replacement preview: what Replace would do now.
+  /// Literal mode computes it synchronously; regex mode asks a worker
+  /// under the search budget, so a catastrophic pattern times out instead
+  /// of freezing the editor. A newer query, edit, match step or template
+  /// cancels one on its way.
+  ReplacementPreview? _replacementPreview;
+  PatternFailure? _previewFailure;
+  bool _previewPending = false;
+  Timer? _replacementPreviewTimer;
+  PatternWorker? _replacementPreviewWorker;
+  int _replacementPreviewGeneration = 0;
+  _PreviewKey? _replacementPreviewKey;
+
+  /// Whether the find bar shows its inline grep cheat sheet.
+  bool _cheatSheetOpen = false;
+
   /// Whether the pattern search on its way was asked for by a new query or
   /// setting, whose first match the view should scroll to when it arrives.
   bool _revealPatternResults = false;
@@ -444,6 +472,22 @@ class EditorController extends ChangeNotifier {
   /// matches shown may be about to change. Literal search never waits.
   bool get patternSearchPending =>
       _useRegularExpression && (_patternFind?.pending ?? false);
+
+  /// What Replace would do to the active match, or null when there is no
+  /// active match or its answer is still on its way ([previewPending]) or
+  /// failed ([previewFailure]). Literal mode is synchronous; regex mode
+  /// arrives from a worker under the search budget with stale answers
+  /// discarded.
+  ReplacementPreview? get replacementPreview => _replacementPreview;
+  PatternFailure? get replacementPreviewFailure => _previewFailure;
+  bool get replacementPreviewPending => _previewPending;
+
+  /// Whether the find bar shows its inline grep cheat sheet.
+  bool get cheatSheetOpen => _cheatSheetOpen;
+  void toggleCheatSheet() {
+    _cheatSheetOpen = !_cheatSheetOpen;
+    _notify();
+  }
 
   /// True when the last case-insensitive search had to compare exactly
   /// because this text could not be lowercased without moving its offsets.
@@ -1730,7 +1774,11 @@ class EditorController extends ChangeNotifier {
     if (!_searchOpen) return;
     _searchOpen = false;
     _replaceOpen = false;
+    _cheatSheetOpen = false;
     _closeFindRows();
+    _clearPreview(notify: false);
+    _historyCursor = -1;
+    _historyDraft = null;
     _searchScope = null;
     if (_focusMemory == searchFocus ||
         _focusMemory == replacementFocus ||
@@ -2242,6 +2290,7 @@ class EditorController extends ChangeNotifier {
       // steal when it really did — a host may share our focus scope.
       if (replacementFocus.hasFocus) restoreFocus();
     }
+    _schedulePreview();
     _notify();
   }
 
@@ -2282,6 +2331,8 @@ class EditorController extends ChangeNotifier {
         search.text == _lastQuery) {
       return;
     }
+    _historyCursor = -1;
+    _historyDraft = null;
     _updateMatches(resetActive: true);
     _revealRequest++;
     _notify();
@@ -2332,6 +2383,7 @@ class EditorController extends ChangeNotifier {
     } finally {
       _updatingSearch = false;
     }
+    _schedulePreview();
   }
 
   /// Searches again after an edit without moving the user: the page and the
@@ -2408,11 +2460,18 @@ class EditorController extends ChangeNotifier {
     } finally {
       _updatingSearch = false;
     }
+    _schedulePreview();
   }
 
-  void nextMatch() => _findAgain(1);
+  void nextMatch() {
+    _recordHistory();
+    _findAgain(1);
+  }
 
-  void previousMatch() => _findAgain(-1);
+  void previousMatch() {
+    _recordHistory();
+    _findAgain(-1);
+  }
 
   /// Find Next and Find Previous. With the find bar closed, they reopen it
   /// on the remembered query and step from the caret, leaving focus in the
@@ -2486,6 +2545,8 @@ class EditorController extends ChangeNotifier {
         pageStart: _matches.first.start,
       );
     }
+    // _updateMatches/_stayOn already scheduled the preview for the settled
+    // matches; a queued command may step it right away, which reschedules.
     final waiting = List.of(_afterPatternSearch);
     _afterPatternSearch.clear();
     for (final command in waiting) {
@@ -2516,6 +2577,7 @@ class EditorController extends ChangeNotifier {
     if (_matches.isEmpty) {
       _activeMatch = -1;
       text.setSearchMatches(_matches, _activeMatch);
+      _schedulePreview();
       _notify();
       return;
     }
@@ -2527,6 +2589,7 @@ class EditorController extends ChangeNotifier {
       extentOffset: match.end,
     );
     _revealRequest++;
+    _schedulePreview();
     _notify();
   }
 
@@ -2657,7 +2720,8 @@ class EditorController extends ChangeNotifier {
   }
 
   /// Replaces the active match. A regular expression's replacement expands
-  /// `$1`, `${1}`, `${name}` and `$$`; while its search is on its way, the
+  /// `$1`, `${1}`, `${name}` and `$$` — backslashes stay literal by owner
+  /// decision; while its search is on its way, the
   /// replacement waits for it, so it never acts on a match carried through
   /// an edit that may no longer match.
   void replaceCurrent() {
@@ -2668,6 +2732,7 @@ class EditorController extends ChangeNotifier {
       _afterPatternSearch.add(replaceCurrent);
       return;
     }
+    _recordHistory();
     final match = _matches[_activeMatch];
     var replaced = replacement.text;
     if (_useRegularExpression) {
@@ -2697,11 +2762,13 @@ class EditorController extends ChangeNotifier {
   ///
   /// Literal text is replaced before this returns. A regular expression is
   /// replaced in a worker under the search budget, expanding `$1`, `${1}`,
-  /// `${name}` and `$$`; its result is dropped if the document was edited,
+  /// `${name}` and `$$` (backslashes stay literal); its result is dropped if
+  /// the document was edited,
   /// locked or closed meanwhile, since it describes the text as it was, and
   /// a timeout is reported through [patternFailure].
   Future<bool> replaceAll() async {
     if (editingLocked || isBusy || search.text.isEmpty) return false;
+    _recordHistory();
     if (_useRegularExpression) return _replaceAllMatches();
     final source = text.text;
     final matches = findSearchMatches(
@@ -2775,6 +2842,228 @@ class EditorController extends ChangeNotifier {
     return false;
   }
 
+  // ── Search history, selection seeds and replacement preview ──
+
+  /// Records the find field's query in the session history. Empty queries
+  /// and repeats of the newest add nothing; older repeats move to front.
+  void _recordHistory() {
+    searchHistory.push(search.text);
+    _historyCursor = -1;
+    _historyDraft = null;
+  }
+
+  /// Recalls history with the keyboard: [older] true for Up, false for
+  /// Down. While an input method composes, recall stays off so it cannot
+  /// steal the composition. Returns false when there is nothing to recall.
+  bool recallSearchHistory({required bool older}) {
+    // Recall edits the find field, so it is the find field's composition
+    // that must not be disturbed — not the document's.
+    if (search.value.composing.isValid) return false;
+    final queries = searchHistory.queries;
+    if (queries.isEmpty) return false;
+    if (_historyCursor < 0) {
+      if (!older) return false;
+      _historyDraft = search.text;
+      _historyCursor = 0;
+    } else if (older) {
+      if (_historyCursor + 1 >= queries.length) return false;
+      _historyCursor++;
+    } else {
+      _historyCursor--;
+      if (_historyCursor < 0) {
+        _updatingQuery = true;
+        try {
+          search.text = _historyDraft ?? '';
+        } finally {
+          _updatingQuery = false;
+        }
+        _historyDraft = null;
+        _updateMatches(resetActive: true);
+        _notify();
+        return true;
+      }
+    }
+    _updatingQuery = true;
+    try {
+      search.text = queries[_historyCursor];
+      search.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: queries[_historyCursor].length,
+      );
+    } finally {
+      _updatingQuery = false;
+    }
+    _updateMatches(resetActive: true);
+    _notify();
+    return true;
+  }
+
+  /// Use Selection for Find: seeds the find field from the selection without
+  /// opening the bar or moving focus, so Cmd+G finds it next. A multiline
+  /// or long selection is ignored; in regex mode the text is escaped so a
+  /// selected `a.b` does not also find `axb`.
+  void useSelectionForFind() {
+    if (!hasSelection) return;
+    final selected = text.selection.textInside(text.text);
+    if (selected.isEmpty || selected.contains('\n') || selected.length > 200) {
+      return;
+    }
+    final query = _useRegularExpression ? RegExp.escape(selected) : selected;
+    _updatingQuery = true;
+    try {
+      search.text = query;
+    } finally {
+      _updatingQuery = false;
+    }
+    _recordHistory();
+    if (_searchOpen) {
+      _updateMatches(resetActive: true);
+      _revealRequest++;
+    }
+    _notify();
+  }
+
+  /// Find Selected Text: opens the find bar seeded from the selection using
+  /// the existing open/prefill/focus flow. With no selection, opens the bar
+  /// as usual.
+  void findSelectedText() {
+    openSearch();
+    _recordHistory();
+  }
+
+  void _replacementChanged() {
+    _historyCursor = -1;
+    _historyDraft = null;
+    _schedulePreview();
+    // The literal path inside answers synchronously without notifying, so
+    // the preview line repaints for every keystroke in the replace field.
+    _notify();
+  }
+
+  /// Schedules the active-match replacement preview. Literal mode answers
+  /// synchronously; regex mode debounces into a worker under the search
+  /// budget, discarding answers for a text, query, template or active match
+  /// that changed meanwhile. While an input method composes in any of the
+  /// three fields, the preview waits: the composition owns the text.
+  void _schedulePreview() {
+    if (!_searchOpen || !_replaceOpen) {
+      _clearPreview(notify: false);
+      return;
+    }
+    if (text.value.composing.isValid ||
+        search.value.composing.isValid ||
+        replacement.value.composing.isValid) {
+      return;
+    }
+    final active = _activeMatch >= 0 && _activeMatch < _matches.length
+        ? _matches[_activeMatch]
+        : null;
+    final template = replacement.text;
+    if (active == null || template.isEmpty) {
+      _clearPreview(notify: false);
+      return;
+    }
+    if (!_useRegularExpression) {
+      _replacementPreviewTimer?.cancel();
+      _replacementPreviewTimer = null;
+      _previewPending = false;
+      _previewFailure = null;
+      _replacementPreview = ReplacementPreview(
+        expanded: truncatePreview(template, replacementPreviewLimit),
+        groups: const [],
+        matchStart: active.start,
+        matchEnd: active.end,
+      );
+      _replacementPreviewKey = _PreviewKey(
+        text.text,
+        search.text,
+        template,
+        _caseSensitive,
+        _wholeWord,
+        false,
+        active.start,
+        active.end,
+      );
+      return;
+    }
+    if (patternSearchPending || _patternFind?.pattern == null) return;
+    final key = _PreviewKey(
+      text.text,
+      search.text,
+      template,
+      _caseSensitive,
+      _wholeWord,
+      true,
+      active.start,
+      active.end,
+    );
+    if (_replacementPreviewKey == key &&
+        (_previewPending || _replacementPreview != null)) {
+      return;
+    }
+    _replacementPreviewKey = key;
+    _previewPending = true;
+    _previewFailure = null;
+    final generation = ++_replacementPreviewGeneration;
+    _replacementPreviewTimer?.cancel();
+    _replacementPreviewTimer = Timer(
+      PatternFind.settleDelay,
+      () => unawaited(_runPreview(key, generation)),
+    );
+  }
+
+  Future<void> _runPreview(_PreviewKey key, int generation) async {
+    final worker = _replacementPreviewWorker ??= PatternWorker(
+      budget: _patternSearchBudget,
+    );
+    final outcome = await worker.previewReplacement(
+      key.text,
+      key.query,
+      key.template,
+      key.matchStart,
+      caseSensitive: key.caseSensitive,
+      wholeWord: key.wholeWord,
+    );
+    if (_disposed ||
+        generation != _replacementPreviewGeneration ||
+        !identical(key, _replacementPreviewKey) ||
+        text.text != key.text ||
+        _activeMatch < 0 ||
+        _activeMatch >= _matches.length ||
+        _matches[_activeMatch].start != key.matchStart ||
+        _matches[_activeMatch].end != key.matchEnd) {
+      return;
+    }
+    _previewPending = false;
+    switch (outcome) {
+      case PatternCompleted(:final value):
+        _replacementPreview = value;
+        _previewFailure = null;
+      case PatternFailed(:final failure):
+        _replacementPreview = null;
+        _previewFailure = failure;
+      case PatternCancelled():
+        // A successor already owns the pending flag when it cancelled this
+        // one; resetting keeps it honest when none did.
+        _previewPending = false;
+        return;
+    }
+    _notify();
+  }
+
+  void _clearPreview({bool notify = true}) {
+    _replacementPreviewGeneration++;
+    _replacementPreviewTimer?.cancel();
+    _replacementPreviewTimer = null;
+    _previewPending = false;
+    _replacementPreview = null;
+    _previewFailure = null;
+    _replacementPreviewKey = null;
+    _replacementPreviewWorker?.dispose();
+    _replacementPreviewWorker = null;
+    if (notify) _notify();
+  }
+
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -2785,8 +3074,12 @@ class EditorController extends ChangeNotifier {
     _patternFind?.dispose();
     _linesWorker?.dispose();
     _linesCountDelay?.cancel();
+    _replacementPreviewTimer?.cancel();
+    _replacementPreviewWorker?.dispose();
+    _replacementPreviewWorker = null;
     text.removeListener(_textChanged);
     search.removeListener(_queryChanged);
+    replacement.removeListener(_replacementChanged);
     extraction.removeListener(_extractionChanged);
     goToLineInput.removeListener(_goToLineEdited);
     text.dispose();
@@ -2814,6 +3107,58 @@ class EditorController extends ChangeNotifier {
 bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
 
 bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
+
+/// What a replacement preview was requested for. A newer query, template,
+/// text, flag or active match makes an answer stale, so it is discarded.
+final class _PreviewKey {
+  const _PreviewKey(
+    this.text,
+    this.query,
+    this.template,
+    this.caseSensitive,
+    this.wholeWord,
+    this.regularExpression,
+    this.matchStart,
+    this.matchEnd,
+  );
+
+  final String text;
+  final String query;
+  final String template;
+  final bool caseSensitive;
+  final bool wholeWord;
+
+  /// Literal and regex previews differ even for identical inputs: literal
+  /// inserts the template as it stands, regex expands its groups. The mode
+  /// is part of the key so a mode toggle forces a recomputation.
+  final bool regularExpression;
+  final int matchStart;
+  final int matchEnd;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _PreviewKey &&
+      identical(text, other.text) &&
+      query == other.query &&
+      template == other.template &&
+      caseSensitive == other.caseSensitive &&
+      wholeWord == other.wholeWord &&
+      regularExpression == other.regularExpression &&
+      matchStart == other.matchStart &&
+      matchEnd == other.matchEnd;
+
+  @override
+  int get hashCode => Object.hash(
+    identityHashCode(text),
+    query,
+    template,
+    caseSensitive,
+    wholeWord,
+    regularExpression,
+    matchStart,
+    matchEnd,
+  );
+}
 
 /// Where one edit changed the text, found by comparing it before and after:
 /// the unchanged runs at both ends are the prefix and suffix, and the rest
