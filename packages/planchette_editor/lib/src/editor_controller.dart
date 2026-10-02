@@ -2856,7 +2856,9 @@ class EditorController extends ChangeNotifier {
   /// Down. While an input method composes, recall stays off so it cannot
   /// steal the composition. Returns false when there is nothing to recall.
   bool recallSearchHistory({required bool older}) {
-    if (text.value.composing.isValid) return false;
+    // Recall edits the find field, so it is the find field's composition
+    // that must not be disturbed — not the document's.
+    if (search.value.composing.isValid) return false;
     final queries = searchHistory.queries;
     if (queries.isEmpty) return false;
     if (_historyCursor < 0) {
@@ -2933,18 +2935,26 @@ class EditorController extends ChangeNotifier {
     _historyCursor = -1;
     _historyDraft = null;
     _schedulePreview();
+    // The literal path inside answers synchronously without notifying, so
+    // the preview line repaints for every keystroke in the replace field.
+    _notify();
   }
 
   /// Schedules the active-match replacement preview. Literal mode answers
   /// synchronously; regex mode debounces into a worker under the search
   /// budget, discarding answers for a text, query, template or active match
-  /// that changed meanwhile.
+  /// that changed meanwhile. While an input method composes in any of the
+  /// three fields, the preview waits: the composition owns the text.
   void _schedulePreview() {
     if (!_searchOpen || !_replaceOpen) {
       _clearPreview(notify: false);
       return;
     }
-    if (text.value.composing.isValid) return;
+    if (text.value.composing.isValid ||
+        search.value.composing.isValid ||
+        replacement.value.composing.isValid) {
+      return;
+    }
     final active = _activeMatch >= 0 && _activeMatch < _matches.length
         ? _matches[_activeMatch]
         : null;
@@ -2970,6 +2980,7 @@ class EditorController extends ChangeNotifier {
         template,
         _caseSensitive,
         _wholeWord,
+        false,
         active.start,
         active.end,
       );
@@ -2982,6 +2993,7 @@ class EditorController extends ChangeNotifier {
       template,
       _caseSensitive,
       _wholeWord,
+      true,
       active.start,
       active.end,
     );
@@ -3031,6 +3043,9 @@ class EditorController extends ChangeNotifier {
         _replacementPreview = null;
         _previewFailure = failure;
       case PatternCancelled():
+        // A successor already owns the pending flag when it cancelled this
+        // one; resetting keeps it honest when none did.
+        _previewPending = false;
         return;
     }
     _notify();
@@ -3102,6 +3117,7 @@ final class _PreviewKey {
     this.template,
     this.caseSensitive,
     this.wholeWord,
+    this.regularExpression,
     this.matchStart,
     this.matchEnd,
   );
@@ -3111,6 +3127,11 @@ final class _PreviewKey {
   final String template;
   final bool caseSensitive;
   final bool wholeWord;
+
+  /// Literal and regex previews differ even for identical inputs: literal
+  /// inserts the template as it stands, regex expands its groups. The mode
+  /// is part of the key so a mode toggle forces a recomputation.
+  final bool regularExpression;
   final int matchStart;
   final int matchEnd;
 
@@ -3122,6 +3143,7 @@ final class _PreviewKey {
       template == other.template &&
       caseSensitive == other.caseSensitive &&
       wholeWord == other.wholeWord &&
+      regularExpression == other.regularExpression &&
       matchStart == other.matchStart &&
       matchEnd == other.matchEnd;
 
@@ -3132,6 +3154,7 @@ final class _PreviewKey {
     template,
     caseSensitive,
     wholeWord,
+    regularExpression,
     matchStart,
     matchEnd,
   );

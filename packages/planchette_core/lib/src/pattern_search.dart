@@ -411,11 +411,15 @@ const int replacementPreviewGroupLimit = 6;
 const int replacementPreviewGroupValueLimit = 40;
 
 /// Truncates [value] to [limit] code units with an ellipsis, keeping the
-/// preview line bounded in the find bar.
+/// preview line bounded in the find bar. Steps back over a trailing high
+/// surrogate so the cut never splits an astral character in half.
 String truncatePreview(String value, int limit) {
   if (value.length <= limit) return value;
   if (limit <= 0) return '…';
-  return '${value.substring(0, limit)}…';
+  var end = limit;
+  final last = value.codeUnitAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end--;
+  return '${value.substring(0, end)}…';
 }
 
 /// One capture group's preview: `$0` is the whole match, `$1`.. the numbered
@@ -1161,7 +1165,8 @@ void _patternWorkerMain(SendPort replies) {
           scope: scope,
         ),
         _RequestKind.preview => () {
-          final at = request.previewStart ?? 0;
+          // Clamped: a stale caller offset must never reach the engine.
+          final at = (request.previewStart ?? 0).clamp(0, request.text.length);
           final found = pattern!.matchAt(
             request.text,
             at,

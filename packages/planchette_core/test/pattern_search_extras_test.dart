@@ -56,7 +56,7 @@ void main() {
     });
 
     test('truncates long expansions and group values', () {
-      final match = RegExp(r'(a+)').firstMatch('a' * 200)!;
+      final match = RegExp('(a+)').firstMatch('a' * 200)!;
       final preview = buildReplacementPreview('${'x' * 200}\$1', match);
       expect(preview.expanded.length, lessThanOrEqualTo(121));
       expect(preview.expanded, endsWith('…'));
@@ -66,6 +66,22 @@ void main() {
           lessThanOrEqualTo(replacementPreviewGroupValueLimit + 1),
         );
       }
+    });
+
+    test('never cuts an astral character in half', () {
+      final emoji = '😀' * 100; // 200 code units, 100 characters
+      // A limit landing after a high surrogate steps back one unit.
+      final cut = truncatePreview(emoji, 101);
+      expect(cut.endsWith('…'), isTrue);
+      expect(
+        cut.codeUnitAt(cut.length - 2),
+        predicate<int>(
+          (unit) => unit < 0xd800 || unit > 0xdbff,
+          'not a lone high surrogate',
+        ),
+      );
+      // An even boundary splits between characters and keeps the length.
+      expect(truncatePreview(emoji, 100).length, 101);
     });
 
     test('bounds the group list', () {

@@ -542,10 +542,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
               child: Actions(
                 actions: {
                   _HistoryIntent: CallbackAction<_HistoryIntent>(
-                    onInvoke: (intent) =>
-                        c.recallSearchHistory(older: intent.older)
-                        ? null
-                        : null,
+                    onInvoke: (intent) {
+                      c.recallSearchHistory(older: intent.older);
+                      // Marked handled either way: an ignored Up/Down must
+                      // not fall through to the field's own bindings.
+                      return true;
+                    },
                   ),
                 },
                 child: TextField(
@@ -724,7 +726,10 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 ),
               ),
             ),
-          if (c.cheatSheetOpen) _grepCheatSheet(context),
+          // The sheet's toggle only exists in regex mode; the render stays
+          // in step so toggling regex off closes a sheet opened before.
+          if (c.useRegularExpression && c.cheatSheetOpen)
+            _grepCheatSheet(context),
           if (c.replaceOpen)
             _searchRow(
               field: TextField(

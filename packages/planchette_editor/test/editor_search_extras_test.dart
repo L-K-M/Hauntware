@@ -186,6 +186,38 @@ void main() {
       expect(editor.replacementPreview?.groups, isNotEmpty);
     });
 
+    test('toggling regex mode recomputes the preview, not reuses it', () async {
+      final editor = _editor('a@b x');
+      editor
+        ..openSearch(replace: true)
+        // 'a@b' is both a literal and a valid expression finding the same
+        // range, so the toggle changes only the mode — and the preview.
+        ..toggleRegularExpression()
+        ..search.text = 'a@b'
+        ..replacement.text = r'[$0]';
+      await _settled(editor);
+      await _previewSettled(editor);
+      // Regex: $0 expands to the whole match.
+      expect(editor.replacementPreview?.expanded, '[a@b]');
+
+      // Literal: the template previews as it stands.
+      editor.toggleRegularExpression();
+      expect(editor.replacementPreview?.expanded, r'[$0]');
+
+      // Back to regex: the mode alone must force a recompute, not reuse
+      // the cached literal template.
+      editor.toggleRegularExpression();
+      await _settled(editor);
+      await _previewSettled(editor);
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (editor.replacementPreview == null &&
+          editor.replacementPreviewFailure == null) {
+        if (DateTime.now().isAfter(deadline)) break;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(editor.replacementPreview?.expanded, '[a@b]');
+    });
+
     test('a bad pattern reports preview failure, not a preview', () async {
       final editor = _editor('abc');
       editor

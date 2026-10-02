@@ -18,10 +18,12 @@ final class SearchHistory extends ChangeNotifier {
   List<String> get queries => List.unmodifiable(_queries);
 
   /// Records [query]: empty queries are ignored, a repeat of the newest
-  /// moves nothing, and an older repeat moves to the front.
+  /// changes nothing, and an older repeat moves to the front.
   void push(String query) {
     if (query.isEmpty) return;
-    _queries.remove(query);
+    final index = _queries.indexOf(query);
+    if (index == 0) return;
+    if (index > 0) _queries.removeAt(index);
     _queries.insert(0, query);
     while (_queries.length > keep) {
       _queries.removeLast();
