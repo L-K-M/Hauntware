@@ -16,10 +16,11 @@ turns them into tests. Ids such as B8 or E5 are entries in
 ## Implementation status, 2026-10-01
 
 Slices 1 to 5b are merged (#108 to #112 and #114). Slice 6 adds file-format
-choices, save cleanup and Normalize Line Endings. The catalog now contains
-42 of the menu table's 48 tools, plus Extract Matches in Find: 43 catalog
-entries. The six deferred menu tools are Hard Wrap, Convert Tabs to Spaces,
-Convert to ASCII, Strip Diacritics, Compose Accents and Decompose Accents.
+choices, save cleanup and Normalize Line Endings. Slice 8 (Unicode/ASCII
+and JSON) adds Compose Accents, Decompose Accents, Strip Diacritics,
+Convert to ASCII, Format JSON and Minify JSON. The catalog now contains
+48 menu tools, plus Extract Matches in Find: 49 catalog entries. The two
+deferred menu tools are Hard Wrap and Convert Tabs to Spaces.
 
 ### Slice 6 contracts
 
@@ -50,8 +51,8 @@ Convert to ASCII, Strip Diacritics, Compose Accents and Decompose Accents.
 | 5c | Unbuilt. Replacement backslash escapes require decision 5 because they change existing host templates. The active-match replacement preview also remains unbuilt |
 | 7 | Optional, unbuilt. Decide whether both hosts should expose the full catalog (decision 2), then build `openTextTools()` with a list/sheet, followed by one adoption PR per host at the same reviewed revision. Poltergeist needs ARB keys or a recorded exception. Verify narrow layouts and phone access before claiming them |
 | 8: wrap and interior tabs | Deferred until B8 defines display columns and tab stops |
-| 8: Unicode/ASCII | Compose/Decompose/Strip Diacritics need decision 4 on `unorm_dart`; Convert to ASCII separately needs a reviewed Latin transliteration table |
-| 8: JSON | Format/Minify JSON need decision 7 on scope |
+| 8: Unicode/ASCII | Built. `unorm_dart` in core (decision 4); Convert to ASCII uses a reviewed Latin table, keeps unmapped non-ASCII literal with a count |
+| 8: JSON | Built. Whitespace-only strict-JSON reformat (decision 7), values verbatim, invalid input refused with line/column, size capped by the runner |
 | 8: search | Regex hints/cheat sheet, Use Selection for Find, session search history and Compare with Saved are unstarted. Find in Selection and Extract are already shipped |
 | 8: Edit/File | Shipped: Select Line, Select Paragraph, Select Enclosing Brackets, Insert Line Above/Below, Paste and Match Indentation, Increment/Decrement Number, Copy/Cut Line, Toggle Comment block fallback and File-menu Copy Path. Go to Matching Bracket and tab-menu Copy Full Path already existed |
 | 8: menu keyboard access | Alt mnemonics remain unbuilt; validate AltGr and desktop/input-method conflicts before assigning them |
