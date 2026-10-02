@@ -9,6 +9,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show GhostMenuItem, GhostMenuDivider;
 import 'package:poltergeist_core/poltergeist_core.dart'
     show RemoteFileErrorKind;
 import 'package:poltergeist_sync/poltergeist_sync.dart';
@@ -17,6 +19,8 @@ import '../../l10n/app_localizations.dart';
 import '../../services/registered_command.dart';
 import '../../services/sync_plan_controller.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/family_hues.dart';
+import '../menus/menu_shortcut_hint.dart';
 import 'rsync_copy.dart';
 import 'sync_commands.dart';
 import 'sync_plan_format.dart';
@@ -444,23 +448,42 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     final actions = _controller.availableOverrides(item);
     final entries = <PopupMenuEntry<Object>>[
       if (compare != null) ...[
-        PopupMenuItem(
+        GhostMenuItem<Object>(
+          context: context,
           value: compare,
           enabled: compare.enabled(),
-          child: Text(compare.label(l10n)),
+          label: compare.label(l10n),
+          icon: compare.icon,
+          iconColor: compare.hue == null
+              ? null
+              : FamilyPalette.of(context).glyph(compare.hue!),
+          shortcut: MenuShortcutHint.forCommand(
+            compare,
+            Theme.of(context).platform,
+          ),
         ),
-        const PopupMenuDivider(),
+        const GhostMenuDivider(),
       ],
       for (final action in actions)
-        PopupMenuItem(
+        GhostMenuItem<Object>(
+          context: context,
           value: action,
-          child: Text(_actionMenuLabel(l10n, action)),
+          label: _actionMenuLabel(l10n, action),
+          icon: _actionIcon(action),
+          iconColor: FamilyPalette.of(context).glyph(
+            action == SyncActionType.deleteLeft ||
+                    action == SyncActionType.deleteRight
+                ? FamilyHue.red
+                : FamilyHue.cyan,
+          ),
         ),
-      const PopupMenuDivider(),
-      PopupMenuItem(
+      const GhostMenuDivider(),
+      GhostMenuItem<Object>(
+        context: context,
         value: item.suggested,
         enabled: item.userOverridden,
-        child: Text(l10n.syncOverrideReset),
+        label: l10n.syncOverrideReset,
+        icon: Icons.undo,
       ),
     ];
     final chosen = await showMenu<Object>(
@@ -523,6 +546,18 @@ class _SyncPlanViewState extends State<SyncPlanView> {
           l10n.syncOverrideDelete,
         SyncActionType.conflict => l10n.syncOverrideReset,
       };
+
+  IconData _actionIcon(SyncActionType action) => switch (action) {
+    SyncActionType.skip => Icons.skip_next,
+    SyncActionType.copyLeftToRight ||
+    SyncActionType.updateLeftToRight ||
+    SyncActionType.makeDirRight => Icons.arrow_forward,
+    SyncActionType.copyRightToLeft ||
+    SyncActionType.updateRightToLeft ||
+    SyncActionType.makeDirLeft => Icons.arrow_back,
+    SyncActionType.deleteLeft || SyncActionType.deleteRight => Icons.delete,
+    SyncActionType.conflict => Icons.undo,
+  };
 
   /// Run — rail 3's typed DELETE dialog interposes when the gate
   /// trips; rail 4 never reaches here (the button is disabled).
