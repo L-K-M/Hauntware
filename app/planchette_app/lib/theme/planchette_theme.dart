@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:planchette_editor/planchette_editor.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostMenuTheme;
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorSyntaxTheme;
 
 /// Planchette's two looks, named for the board it borrows from: Parchment,
 /// warm paper and ink, for light mode; Séance, a candle-lit room, for dark.
