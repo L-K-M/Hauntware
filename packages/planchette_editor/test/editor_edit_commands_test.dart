@@ -185,25 +185,28 @@ void main() {
     expect(editor.text.text, 'ab\ncdX');
   });
 
-  test('review fix: cut deletes the copied lines, not the moved caret', () async {
-    final editor = controller('a\nb\nc', caret: 0);
-    String? copied;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-          if (call.method == 'Clipboard.setData') {
-            copied = (call.arguments as Map)['text'] as String?;
-            editor.text.selection = const TextSelection.collapsed(offset: 4);
-          }
-          return null;
-        });
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null),
-    );
-    expect(await editor.cutLine(), isTrue);
-    expect(copied, 'a\n');
-    expect(editor.text.text, 'b\nc');
-  });
+  test(
+    'review fix: cut deletes the copied lines, not the moved caret',
+    () async {
+      final editor = controller('a\nb\nc', caret: 0);
+      String? copied;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') {
+              copied = (call.arguments as Map)['text'] as String?;
+              editor.text.selection = const TextSelection.collapsed(offset: 4);
+            }
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+      expect(await editor.cutLine(), isTrue);
+      expect(copied, 'a\n');
+      expect(editor.text.text, 'b\nc');
+    },
+  );
 
   test('pasteAndMatchIndentation refuses a locked document', () async {
     mockClipboard(getText: 'x');
