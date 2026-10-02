@@ -22,6 +22,8 @@
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* PlanchetteFlutterViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* PlanchetteFlutterViewController.m */; };
+		A10000000000000000000006 /* PlanchetteMultiView.m in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000007 /* PlanchetteMultiView.m */; };
+		A10000000000000000000009 /* DocumentWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000008 /* DocumentWindows.swift */; };
 		331C80D8294CF71000263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C80D7294CF71000263BE5 /* RunnerTests.swift */; };
 		335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 335BBD1A22A9A15E00E9071D /* GeneratedPluginRegistrant.swift */; };
 		33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC10F02044A3C60003C045 /* AppDelegate.swift */; };
@@ -64,6 +66,9 @@
 /* Begin PBXFileReference section */
 		A10000000000000000000002 /* PlanchetteFlutterViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PlanchetteFlutterViewController.m; sourceTree = "<group>"; };
 		A10000000000000000000003 /* PlanchetteFlutterViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PlanchetteFlutterViewController.h; sourceTree = "<group>"; };
+		A10000000000000000000005 /* PlanchetteMultiView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PlanchetteMultiView.h; sourceTree = "<group>"; };
+		A10000000000000000000007 /* PlanchetteMultiView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PlanchetteMultiView.m; sourceTree = "<group>"; };
+		A10000000000000000000008 /* DocumentWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentWindows.swift; sourceTree = "<group>"; };
 		A10000000000000000000004 /* Runner-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Runner-Bridging-Header.h"; sourceTree = "<group>"; };
 		331C80D5294CF71000263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		331C80D7294CF71000263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -174,6 +179,9 @@
 				33CC11122044BFA00003C045 /* MainFlutterWindow.swift */,
 				A10000000000000000000002 /* PlanchetteFlutterViewController.m */,
 				A10000000000000000000003 /* PlanchetteFlutterViewController.h */,
+				A10000000000000000000005 /* PlanchetteMultiView.h */,
+				A10000000000000000000007 /* PlanchetteMultiView.m */,
+				A10000000000000000000008 /* DocumentWindows.swift */,
 				A10000000000000000000004 /* Runner-Bridging-Header.h */,
 				33E51913231747F40026EE4D /* DebugProfile.entitlements */,
 				33E51914231749380026EE4D /* Release.entitlements */,
@@ -363,6 +371,8 @@
 			files = (
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				A10000000000000000000001 /* PlanchetteFlutterViewController.m in Sources */,
+				A10000000000000000000006 /* PlanchetteMultiView.m in Sources */,
+				A10000000000000000000009 /* DocumentWindows.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
 			);

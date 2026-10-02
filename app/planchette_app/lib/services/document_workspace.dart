@@ -78,6 +78,22 @@ abstract interface class DocumentDialogs {
   Future<bool> confirmRevert(String name);
 }
 
+/// What other document windows hold, for app-wide open deduplication and
+/// the no-overwrite rules on Save As and export. Implemented by the window
+/// registry; null in a one-window app, where nothing else holds documents.
+abstract interface class PeerDocuments {
+  /// A tab another workspace holds for [path]'s canonical key: its
+  /// workspace and the tab, or null.
+  ({DocumentWorkspace workspace, DocumentTab tab})? tabHolding(
+    String path, {
+    required DocumentWorkspace except,
+  });
+
+  /// Points that workspace's window at the tab: selects it, flashes it,
+  /// and brings the window forward.
+  void focusTab(DocumentWorkspace workspace, DocumentTab tab);
+}
+
 /// One controller survives tab switches, retaining undo, selection, find and
 /// scroll state. Its path changes only after a successful Save As commit.
 final class DocumentTab {
@@ -182,6 +198,11 @@ final class DocumentWorkspace extends ChangeNotifier {
   static const _closedPathLimit = 20;
   int _nextId = 1;
   int _dialogCount = 0;
+
+  /// The other windows' open documents, for app-wide deduplication and the
+  /// no-overwrite rules. The window registry installs itself here; in a
+  /// one-window app this stays null and every peer check passes.
+  PeerDocuments? peers;
 
   /// The run history every tab's editor shares, so Repeat and Recent see
   /// tools run in any document.
@@ -515,6 +536,12 @@ final class DocumentWorkspace extends ChangeNotifier {
       _notify();
       return null;
     }
+    // Another window may already hold the file: it gets the document, as a
+    // second buffer would race every save the two windows run.
+    if (peers?.tabHolding(path, except: this) case final held?) {
+      peers!.focusTab(held.workspace, held.tab);
+      return null;
+    }
     final previous = _active;
     final tab = _makeTab(path: _paths.normalize(_paths.absolute(path)));
     _documents.add(tab);
@@ -531,11 +558,18 @@ final class DocumentWorkspace extends ChangeNotifier {
       // A symlink may resolve onto an already-open document. Keep the existing
       // buffer rather than allowing two tabs to overwrite the same target.
       final duplicate = _findPath(tab.path!, except: tab);
+      final held = duplicate == null
+          ? peers?.tabHolding(tab.path!, except: this)
+          : null;
       if (duplicate != null) {
         _remove(tab);
         _active = duplicate;
         // The link resolved onto an open document, so again no new tab.
         duplicate.flashRequest++;
+      } else if (held != null) {
+        // The resolved path lands in another window's tab.
+        _remove(tab);
+        peers!.focusTab(held.workspace, held.tab);
       } else {
         tab.editor.displayPath = tab.path!;
       }
@@ -675,6 +709,14 @@ final class DocumentWorkspace extends ChangeNotifier {
         final other = _findPath(target, except: tab);
         if (other != null) {
           final message = '${other.name} is already open in another tab.';
+          _reportError(message, scope: tab);
+          _saveFailures[tab] = message;
+          return null;
+        }
+        // A file open in another window is the same conflict across the
+        // app boundary: two buffers must never share one save target.
+        if (peers?.tabHolding(target, except: this) case final held?) {
+          final message = '${held.tab.name} is already open in another window.';
           _reportError(message, scope: tab);
           _saveFailures[tab] = message;
           return null;
@@ -847,6 +889,14 @@ final class DocumentWorkspace extends ChangeNotifier {
         if (open != null) {
           _reportError(
             '${open.name} is open in a tab. Export to another file.',
+            scope: scope,
+          );
+          return false;
+        }
+        if (peers?.tabHolding(target, except: this) case final held?) {
+          _reportError(
+            '${held.tab.name} is open in another window. Export to another '
+            'file.',
             scope: scope,
           );
           return false;
@@ -1515,6 +1565,23 @@ final class DocumentWorkspace extends ChangeNotifier {
     return null;
   }
 
+  /// The tab holding [path]'s canonical key, or null. The window registry
+  /// consults it for app-wide deduplication; [revealTab] is its companion.
+  DocumentTab? tabForPath(String path) => _findPath(path);
+
+  /// Selects [tab] and flashes it: the answer to a file-open that named a
+  /// document this workspace already holds. Unlike [select] it is not gated
+  /// on [interactionLocked] — a modal's question stands on its own, and the
+  /// window it is asked to show is the one the open was about.
+  void revealTab(DocumentTab tab) {
+    if (!_documents.contains(tab) || _disposed) return;
+    final previous = _active;
+    _active = tab;
+    tab.flashRequest++;
+    _dropPristine(previous);
+    _notify();
+  }
+
   /// A New tab still in its initial state: never saved, nothing typed,
   /// nothing to lose. Type-then-erase-all also reads pristine (the buffer is
   /// empty and clean); its dropped undo tail is accepted and documented.
@@ -1580,6 +1647,19 @@ final class DocumentWorkspace extends ChangeNotifier {
     _quitAccepted = false;
     _reportError('Could not close Planchette: $error');
   }
+
+  /// The quit decision's consent, released: a cancelled app quit, or a
+  /// teardown that failed after this workspace already said yes, means the
+  /// app is not exiting and the lock its answer left behind goes.
+  void releaseQuit() {
+    if (!_quitAccepted) return;
+    _quitAccepted = false;
+    _notify();
+  }
+
+  /// A failure with no document or retry counterpart — a window could not
+  /// be opened or closed. Shown on the banner until dismissed or cleared.
+  void reportError(String message) => _reportError(message);
 
   /// Replace the banner with [message], remembering what it is about so the
   /// matching success can retire it. Failures with no retry counterpart pass
