@@ -1,0 +1,86 @@
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart
+00:00 +0: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:00 +1: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +2: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +3: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +4: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +5: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +6: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +7: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +8: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +9: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +10: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +11: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +12: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +13: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_commands_test.dart: an enabled command's chord runs it
+00:01 +14: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration opens the surface from the toolbar
+00:01 +15: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration opens the surface from the toolbar
+00:01 +16: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:01 +17: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:02 +18: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:02 +19: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:02 +20: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:02 +21: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: renders a local listing: name, kind glyph, size, mtime
+00:02 +22: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: renders a local listing: name, kind glyph, size, mtime
+00:02 +23: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: renders a local listing: name, kind glyph, size, mtime
+00:02 +24: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: the list without an engine every row reads not connected
+00:02 +25: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: the list without an engine every row reads not connected
+00:02 +26: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Ctrl+R refreshes the focused pane only
+00:02 +27: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Ctrl+R refreshes the focused pane only
+00:02 +28: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Ctrl+R refreshes the focused pane only
+00:02 +29: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: taxonomy errors render inline with Retry over stale entries
+00:02 +30: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: taxonomy errors render inline with Retry over stale entries
+00:02 +31: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:02 +32: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:02 +33: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:02 +34: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:02 +35: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:02 +36: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:02 +37: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:02 +38: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:03 +39: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:03 +40: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:03 +41: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:03 +42: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: arrow keys move the cursor and Enter opens a directory
+00:03 +43: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: without an engine the panes render the no-engine state
+00:03 +44: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Enter does not open on macOS (rename-key muscle memory)
+00:03 +45: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:03 +46: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:03 +47: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:03 +48: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:03 +49: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Enter is inert on stale entries during connection-lost
+00:03 +50: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:03 +51: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:03 +52: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:03 +53: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:03 +54: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: every fault variant renders its ARB sentence, never the sentinel
+00:03 +55: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: remote connect renders the connecting state until it lands
+00:03 +56: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:03 +57: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: path bar segments navigate to their ancestor
+00:03 +58: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: a navigation from a scrolled listing reveals the top
+00:04 +59: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: the focused pane path renders in the accent color
+00:04 +60: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: rows announce name, size, and date to semantics
+00:04 +61: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: a null lanes pane renders the no-engine state
+00:04 +62: All tests passed!

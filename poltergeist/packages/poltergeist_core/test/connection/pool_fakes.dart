@@ -1,0 +1,716 @@
+import 'dart:async';
+import 'dart:math';
+
+import 'package:fake_async/fake_async.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:test/test.dart';
+
+/// Flush pool work without advancing time, preserving an unexpected error's
+/// stack instead of misreporting it as a timer-dependent operation.
+T completeWithoutTimers<T>(FakeAsync time, Future<T> future) {
+  late T result;
+  var completed = false;
+  (Object, StackTrace)? failure;
+  future.then<void>(
+    (value) {
+      result = value;
+      completed = true;
+    },
+    onError: (Object error, StackTrace stack) {
+      failure = (error, stack);
+    },
+  );
+  time.flushMicrotasks();
+
+  final caught = failure;
+  if (caught != null) Error.throwWithStackTrace(caught.$1, caught.$2);
+
+  expect(
+    completed,
+    isTrue,
+    reason: 'The operation must finish without a timer.',
+  );
+  return result;
+}
+
+/// Opens a browse pane-tab synchronously to completion — the common opening
+/// move of every pool suite.
+PaneChannel browsePane(
+  FakeAsync time,
+  PoolHarness harness,
+  String tab, {
+  String server = 's1',
+}) => completeWithoutTimers(
+  time,
+  harness.manager.openBrowseChannel(server, paneTabId: tab),
+);
+
+/// No one-shot clock (idle, cleanup, backoff) may be pending, and the only
+/// periodic timer is the pool's keepalive clock at the given cadence — the
+/// D3 one-clock invariant, pinned instead of assumed.
+void expectOnlyKeepAliveClock(FakeAsync time, Duration interval) {
+  expect(time.nonPeriodicTimerCount, 0);
+  expect(
+    time.pendingTimers
+        .whereType<FakeTimer>()
+        .where((timer) => timer.isPeriodic)
+        .single
+        .duration,
+    interval,
+  );
+}
+
+/// In-memory TOFU pin store (tests never touch real persistence).
+class FakeHostKeyStore implements HostKeyStore {
+  final Map<String, HostKey> pins = {};
+
+  @override
+  Future<HostKey?> get(String host, int port) async => pins['$host:$port'];
+
+  @override
+  Future<void> put(HostKey key) async => pins['${key.host}:${key.port}'] = key;
+
+  @override
+  Future<List<HostKey>> all() async => List.of(pins.values);
+}
+
+/// Minimal filesystem stand-in: the pool only ever calls `canonicalize('.')`
+/// on it (home resolution at open). Any other call fails loudly.
+class StubRemoteFileSystem implements RemoteFileSystem {
+  final String home;
+  int canonicalizeCalls = 0;
+
+  final Completer<void>? canonicalizeGate;
+
+  StubRemoteFileSystem(this.home, {this.canonicalizeGate});
+
+  @override
+  Future<String> canonicalize(String path) async {
+    // The pool only ever resolves the home — anything else means production
+    // code drifted, and the stub must fail loudly, not invent a path.
+    if (path != '.') {
+      throw StateError(
+        'StubRemoteFileSystem only supports canonicalize("."), got "$path".',
+      );
+    }
+    canonicalizeCalls++;
+    await canonicalizeGate?.future;
+    return home;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
+    'StubRemoteFileSystem only implements canonicalize("."), got '
+    '${invocation.memberName}.',
+  );
+}
+
+class FakeChannel implements SftpChannel {
+  @override
+  final RemoteFileSystem fs;
+
+  bool closed = false;
+  Object? closeFailure;
+  Completer<void>? closeGate;
+
+  /// Whether [close] has settled — [closed] flips at close() entry, so
+  /// a gated close distinguishes "started" from "finished" only here.
+  /// A FAILED close also counts as settled: production bookkeeping frees
+  /// the slot when the close settles regardless of outcome, and the fake
+  /// models that server-side assumption.
+  bool closeCompleted = false;
+
+  FakeChannel(this.fs);
+
+  @override
+  Future<void> close() async {
+    closed = true;
+    await closeGate?.future;
+    final failure = closeFailure;
+    closeCompleted = true;
+    if (failure != null) throw failure;
+  }
+}
+
+/// A fake transport whose channels are plain records — pool and lease logic
+/// without sockets (08 §3.2). Closed transports keep their channel list so
+/// post-teardown assertions can inspect what was open.
+class FakeTransport implements SshTransport {
+  @override
+  final AuthKind authKind;
+
+  /// When set, [openChannel] throws once this many channels exist — the
+  /// server-side MaxSessions refusal, for fallback-path tests.
+  final int? openLimit;
+
+  /// Builds each new channel's filesystem (default: the canonicalize-only
+  /// stub). Engine-suite tests inject a listing-capable fake here.
+  final RemoteFileSystem Function(String home)? fsBuilder;
+
+  final List<FakeChannel> channels = [];
+  bool closed = false;
+  final Completer<void> _done = Completer<void>();
+
+  // Closure and error completion must both trigger the same recovery.
+  void die([Object? error]) {
+    closed = true;
+    if (_done.isCompleted) return;
+    if (error == null) {
+      _done.complete();
+      return;
+    }
+    _done.completeError(error);
+  }
+
+  @override
+  Future<void> get done => _done.future;
+
+  Completer<void>? openGate;
+  Completer<void>? canonicalizeGate;
+  Completer<void>? closeGate;
+  Object? closeFailure;
+
+  /// Every openChannel() attempt, refused or not — proves whether the pool
+  /// tried to spend capacity the server has not actually freed.
+  int openCalls = 0;
+
+  /// How many close() calls started — late cleanup must not re-close.
+  int closeCalls = 0;
+
+  /// Whether [close] has settled — like [FakeChannel.closeCompleted], this
+  /// distinguishes a gated (in-flight) close from a finished one.
+  bool closeCompleted = false;
+
+  /// Channel close failures swallowed during [close], kept so tests can
+  /// assert on or debug them after the fact.
+  final List<Object> channelCloseFailures = <Object>[];
+
+  /// Refuse opens on this transport without poisoning healthy siblings.
+  Object? openFailure;
+
+  /// Marks the transport dead the way a dropped connection would — without
+  /// touching close bookkeeping, so "external death" stays distinguishable
+  /// from a pool-initiated close in assertions.
+  void simulateExternalDeath() => die();
+
+  /// When set, [isClosed] reports closure only once [close] has settled —
+  /// dartssh2's closed flag follows the socket teardown, not the close()
+  /// call, so a wedged close leaves the transport looking open (the window
+  /// where a ping-timeout verdict must not be stacked onto).
+  bool isClosedOnlyWhenSettled = false;
+
+  @override
+  bool get isClosed => isClosedOnlyWhenSettled ? closeCompleted : closed;
+
+  FakeTransport({required this.authKind, this.openLimit, this.fsBuilder});
+
+  @override
+  Future<SftpChannel> openChannel({
+    Duration timeout = SshTransport.defaultOpenTimeout,
+  }) async {
+    openCalls++;
+    if (closed) {
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'open SFTP',
+        message: 'The SSH transport is disconnected.',
+      );
+    }
+    final failure = openFailure;
+    if (failure != null) throw failure;
+
+    // Server-side MaxSessions accounting: a session frees only once its
+    // close settles — a close that started but is still in flight keeps
+    // occupying the slot (the client-side pool detaches earlier).
+    if (openLimit != null &&
+        channels.where((c) => !c.closeCompleted).length >= openLimit!) {
+      // Aligned with the production funnel: a channel-open refusal is not
+      // a RemoteFileException, so the transport maps it to `unsupported`.
+      throw const RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'open SFTP',
+        message: 'Channel open refused (fake MaxSessions limit).',
+      );
+    }
+
+    final channel = FakeChannel(
+      fsBuilder?.call('/home/test') ??
+          StubRemoteFileSystem(
+            '/home/test',
+            canonicalizeGate: canonicalizeGate,
+          ),
+    );
+    channels.add(channel);
+    await openGate?.future;
+    return channel;
+  }
+
+  /// Whether any VFS operation is outstanding (03 §3.3). Scripted
+  /// directly: the real transport aggregates its channels' concrete
+  /// adapters, which the fakes never build.
+  bool activeOperations = false;
+
+  /// When set, [ping] never completes on its own — an unanswered keepalive
+  /// whose timeout the pool (not the transport) owns.
+  Completer<void>? pingGate;
+
+  /// Thrown by every [ping] when set — a failed roundtrip that is not a
+  /// timeout, so closure stays the done-watcher's business.
+  Object? pingFailure;
+
+  int pingCalls = 0;
+
+  @override
+  bool get hasActiveOperations => activeOperations;
+
+  @override
+  Future<void> ping() async {
+    pingCalls++;
+    final failure = pingFailure;
+    if (failure != null) throw failure;
+    await pingGate?.future;
+  }
+
+  @override
+  Future<void> close() async {
+    closeCalls++;
+    closed = true;
+    await closeGate?.future;
+    for (final channel in List<FakeChannel>.of(channels)) {
+      try {
+        await channel.close();
+      } on Object catch (error) {
+        // A failed channel close still frees its server-side slot; keep
+        // closing siblings so the fake matches the documented settle
+        // semantics (closeCompleted flips regardless of outcome).
+        channelCloseFailures.add(error);
+      }
+    }
+    final failure = closeFailure;
+    closeCompleted = true;
+    if (!_done.isCompleted) _done.complete();
+    if (failure != null) throw failure;
+  }
+}
+
+/// One recorded opener call — everything the growth rules reason about.
+/// [transport] is null when the attempt failed (challenge or rejection):
+/// the call itself still counts.
+class RecordedOpenCall {
+  final ServerConfig config;
+  final SshCredentials credentials;
+  final HostKeyPrompter onHostKey;
+  final KeyboardInteractiveResponder? onKeyboardInteractive;
+  final SshJumpHostResolver? resolveJumpHost;
+  final ConnectPrompting prompting;
+
+  final List<ResolvedSshHost> jumpHosts = [];
+
+  /// The forwarding log the pool passed for this attempt; tests append
+  /// lines through it to drive transcript fan-out.
+  SshConnectionLog log = SshConnectionLog();
+
+  FakeTransport? transport;
+
+  RecordedOpenCall({
+    required this.config,
+    required this.credentials,
+    required this.onHostKey,
+    required this.onKeyboardInteractive,
+    required this.resolveJumpHost,
+    required this.prompting,
+    this.transport,
+  });
+}
+
+/// Fake opener mirroring `openAuthenticatedClient`'s TOFU behavior: verify
+/// through the verifier, prompt when untrusted, pin on approval. Growth
+/// behavior is scripted per test.
+class FakeTransportOpener {
+  AuthKind authKind;
+
+  /// When set, that route member requests keyboard-interactive auth during
+  /// each prompting-enabled open.
+  final String? keyboardChallengeServerId;
+
+  /// A prompting-disabled connect behaves as if the server demanded
+  /// interaction: auth fails without a prompt (rule 3's growth case).
+  final bool growthRequiresChallenge;
+
+  /// Fingerprint presented per call (last value repeats) — index 1 differing
+  /// from index 0 is how a key change is staged.
+  final List<String> presentedFingerprints;
+
+  /// Handed to every created transport: refuse opens past this many
+  /// channels (a fake MaxSessions ceiling).
+  int? transportOpenLimit;
+
+  /// Per-transport open-limit script (last value repeats) — lets one
+  /// transport host channels while a growth transport refuses SFTP. Wins
+  /// over the uniform [transportOpenLimit] when non-empty (an empty list
+  /// falls back to it). Indexed by CREATED transport: a connect attempt
+  /// that throws before construction does not consume an index slot.
+  final List<int?>? transportOpenLimits;
+
+  /// When set, every prompting-disabled (growth) connect parks on this
+  /// completer before returning — for teardown-race tests.
+  Completer<void>? growthGate;
+
+  /// Passed to every created transport's [FakeTransport.fsBuilder].
+  RemoteFileSystem Function(String home)? transportFsBuilder;
+
+  /// Hold a growth verdict before it reaches the pool's trust gate.
+  Completer<void>? growthVerificationGate;
+
+  /// Extra verifications inside one open, run after the scripted
+  /// fingerprint's own check and prompt. No production opener verifies
+  /// twice per attempt; this exists so a test can stage one attempt that
+  /// installs a block and then observes a trusted key — the shape the 1a
+  /// lift's trust-epoch guard refuses.
+  Future<void> Function(RecordedOpenCall call, TofuVerifier tofu)? reverify;
+
+  /// Fail authentication after TOFU has persisted any approved key.
+  Object? connectFailure;
+  Object? Function(RecordedOpenCall call)? failureForCall;
+
+  /// Pause a completed handshake to model death before the pool receives it.
+  Completer<void>? connectGate;
+
+  final List<RecordedOpenCall> calls = [];
+
+  FakeTransportOpener({
+    this.authKind = AuthKind.key,
+    this.keyboardChallengeServerId,
+    this.growthRequiresChallenge = false,
+    this.presentedFingerprints = const ['SHA256:presented'],
+    this.transportOpenLimit,
+    this.transportOpenLimits,
+    this.transportFsBuilder,
+  });
+
+  SshTransportOpener get opener =>
+      ({
+        required config,
+        required credentials,
+        required tofu,
+        required onHostKey,
+        onKeyboardInteractive,
+        required resolveJumpHost,
+        required prompting,
+        timeout = const Duration(seconds: 15),
+        log,
+      }) async {
+        final index = calls.length;
+        final call = RecordedOpenCall(
+          config: config,
+          credentials: credentials,
+          onHostKey: onHostKey,
+          onKeyboardInteractive: onKeyboardInteractive,
+          resolveJumpHost: resolveJumpHost,
+          prompting: prompting,
+        );
+        // The pool always passes its forwarding log; the recorded default
+        // keeps the fake usable for suites that construct one directly.
+        call.log = log ?? SshConnectionLog();
+        calls.add(call);
+
+        // Mirror upstream's route-resolution boundary: every config and
+        // credential resolves before the first host-key/network step.
+        final route = <ServerConfig>[config];
+        final visited = <String>{config.id};
+        var current = config;
+        while (current.jumpHostId != null) {
+          final jumpHostId = current.jumpHostId!;
+          if (!visited.add(jumpHostId)) {
+            throw StateError('ProxyJump cycle at $jumpHostId');
+          }
+          final resolver = resolveJumpHost;
+          if (resolver == null) {
+            throw StateError('No resolver for jump host $jumpHostId');
+          }
+          final resolved = await resolver(jumpHostId);
+          if (resolved == null) {
+            throw StateError('Missing jump host $jumpHostId');
+          }
+          call.jumpHosts.add(resolved);
+          route.add(resolved.config);
+          current = resolved.config;
+        }
+
+        // An empty script is a test bug; fail with a clear message instead
+        // of a mid-connect RangeError.
+        if (presentedFingerprints.isEmpty) {
+          throw StateError('presentedFingerprints must not be empty');
+        }
+        final fingerprint =
+            presentedFingerprints[index < presentedFingerprints.length
+                ? index
+                : presentedFingerprints.length - 1];
+
+        for (final hop in route.reversed) {
+          final presented = HostKey(
+            host: hop.host,
+            port: hop.port,
+            type: 'ssh-ed25519',
+            fingerprintSha256: fingerprint,
+            pinnedAt: 0,
+          );
+
+          final decision = await tofu.check(presented);
+          final verificationGate = growthVerificationGate;
+          if (prompting == ConnectPrompting.disabled &&
+              verificationGate != null) {
+            await verificationGate.future;
+          }
+          if (!decision.isTrusted) {
+            final approved = await onHostKey(decision);
+            if (!approved) {
+              throw SshConnectException(
+                'Host key not accepted for ${hop.host}:${hop.port}.',
+                StateError('host key rejected'),
+                log ?? SshConnectionLog(),
+              );
+            }
+            await tofu.pin(presented);
+          }
+
+          if (hop.id == keyboardChallengeServerId) {
+            final responder = onKeyboardInteractive;
+            if (responder == null) {
+              throw const AuthChallengeRequiredError(
+                'The server requires interactive authentication.',
+              );
+            }
+            await responder(
+              KeyboardInteractiveChallenge(
+                server: hop,
+                prompts: const ['Code'],
+                name: '2FA',
+                instruction: '',
+              ),
+            );
+          }
+        }
+
+        final extraVerification = reverify;
+        if (extraVerification != null) await extraVerification(call, tofu);
+
+        if (prompting == ConnectPrompting.disabled) {
+          if (growthGate != null) await growthGate!.future;
+          if (growthRequiresChallenge) {
+            throw const AuthChallengeRequiredError(
+              'The server requires interactive authentication.',
+            );
+          }
+        }
+
+        final failure = failureForCall?.call(call) ?? connectFailure;
+        if (failure != null) throw failure;
+
+        final limits = transportOpenLimits;
+        // Index by created transports, not attempts: `index` above counts
+        // connect attempts, and a scripted connectFailure must not shift the
+        // limit mapping for the transports that do get created. `transports`
+        // is a getter derived from `calls` (see its declaration), so the
+        // synchronous `call.transport = transport` assignment below grows
+        // the length immediately — before the connect gate parks — and two
+        // parked connects can never observe the same length.
+        final createdIndex = transports.length;
+        final openLimit = limits == null || limits.isEmpty
+            ? transportOpenLimit
+            : limits[createdIndex < limits.length
+                  ? createdIndex
+                  : limits.length - 1];
+
+        final transport = FakeTransport(
+          // Growth (prompting-disabled) connects re-authenticate
+          // non-interactively, so they report a non-interactive kind even
+          // when `authKind` scripts an interactive server.
+          authKind: prompting == ConnectPrompting.disabled
+              ? AuthKind.key
+              : authKind,
+          openLimit: openLimit,
+          fsBuilder: transportFsBuilder,
+        );
+        call.transport = transport;
+        if (connectGate != null) await connectGate!.future;
+        return transport;
+      };
+
+  List<FakeTransport> get transports => [
+    for (final call in calls)
+      if (call.transport != null) call.transport!,
+  ];
+}
+
+class FakeReconnectProber implements Prober {
+  ProbeStatus status = ProbeStatus.online;
+  int calls = 0;
+  Completer<void>? gate;
+
+  @override
+  Future<ProbeStatus> probe(
+    String host,
+    int port, {
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    calls++;
+    await gate?.future;
+    return status;
+  }
+}
+
+class FixedRandom implements Random {
+  final double _value;
+  FixedRandom(this._value);
+
+  @override
+  double nextDouble() => _value;
+  @override
+  bool nextBool() => throw UnimplementedError();
+  @override
+  int nextInt(int max) => throw UnimplementedError();
+}
+
+/// Wires a [PooledConnectionManager] over the fakes with a static
+/// serverId → connection table and a user host-key prompter the test
+/// controls.
+class PoolHarness {
+  final FakeHostKeyStore store = FakeHostKeyStore();
+
+  /// The incident store the harness wired into its manager (a fresh
+  /// in-memory one by default) — tests assert persisted records on it.
+  late final IncidentStore incidentStore;
+  late final FakeTransportOpener opener;
+  late final PooledConnectionManager manager;
+
+  final Map<String, ServerConfig> servers = {};
+  int resolveCalls = 0;
+  int credentialResolveCalls = 0;
+  final List<CredentialResolutionScope> resolutionScopes = [];
+  Completer<void>? credentialGate;
+  Object? credentialFailure;
+  int keyboardCalls = 0;
+  Completer<List<String>>? keyboardGate;
+  final recoveryFailures = <({
+    String serverId,
+    String? paneTabId,
+    RemoteFileException error,
+  })>[];
+
+  /// Incident-store failures reported by the manager's observer hook.
+  final incidentStoreErrors = <Object>[];
+
+  /// When set, every resolve parks on this completer — for tests that race
+  /// a disconnect against an in-flight first connect.
+  Completer<void>? resolveGate;
+
+  /// Set per test; defaults to approving every host key.
+  Future<bool> Function(HostKeyDecision decision) onHostKey = (_) async => true;
+
+  PoolHarness({
+    FakeTransportOpener? opener,
+    SshHostKeyPreflight? hostKeyPreflight,
+    PoolPolicy policy = const PoolPolicy(),
+    Prober? prober,
+    Random? random,
+    IncidentStore? incidentStore,
+    ResolvedCredentials resolvedCredentials = const ResolvedCredentials(
+      credentials: SshCredentials.privateKey('TEST KEY'),
+      origin: CredentialOrigin.stored,
+    ),
+    FutureOr<ResolvedCredentials> Function(ServerConfig config)?
+    credentialsFor,
+    void Function(Object error)? onIncidentStoreError,
+    void Function(String, RemoteFileException, {String? paneTabId})?
+        onRecoveryFailure,
+  }) {
+    this.opener = opener ?? FakeTransportOpener();
+    this.incidentStore = incidentStore ?? InMemoryIncidentStore();
+    manager = PooledConnectionManager(
+      resolveServer: _resolve,
+      resolveCredentials: (config, scope) async {
+        credentialResolveCalls++;
+        resolutionScopes.add(scope);
+        await credentialGate?.future;
+        final failure = credentialFailure;
+        if (failure != null) throw failure;
+
+        if (credentialsFor != null) return await credentialsFor(config);
+
+        return resolvedCredentials;
+      },
+      tofu: TofuVerifier(store),
+      onHostKey: (decision) => onHostKey(decision),
+      // A trivial responder: interactive-auth servers still complete their
+      // first connect, which is what the pool reasons about.
+      onKeyboardInteractive: (challenge) async {
+        keyboardCalls++;
+        return await keyboardGate?.future ??
+            List.filled(challenge.prompts.length, '');
+      },
+      policy: policy,
+      openTransport: this.opener.opener,
+      hostKeyPreflight: hostKeyPreflight,
+      prober: prober ?? FakeReconnectProber(),
+      reconnectRandom: random ?? FixedRandom(0),
+      incidentStore: this.incidentStore,
+      onIncidentStoreError: (error) {
+        // Record before custom hooks so throwing observers remain
+        // inspectable.
+        incidentStoreErrors.add(error);
+        onIncidentStoreError?.call(error);
+      },
+      onRecoveryFailure: (serverId, error, {paneTabId}) {
+        // Record before custom hooks so throwing observers remain inspectable.
+        recoveryFailures.add((
+          serverId: serverId,
+          paneTabId: paneTabId,
+          error: error,
+        ));
+        onRecoveryFailure?.call(serverId, error, paneTabId: paneTabId);
+      },
+    );
+  }
+
+  Future<ServerConfig> _resolve(String serverId) async {
+    if (resolveGate != null) await resolveGate!.future;
+    resolveCalls++;
+
+    final resolved = servers[serverId];
+    if (resolved == null) {
+      throw StateError('unknown serverId $serverId');
+    }
+    return resolved;
+  }
+
+  void addServer(
+    String serverId, {
+    String host = 'example.com',
+    int port = 22,
+    String username = 'test',
+    AuthMethod authMethod = AuthMethod.privateKey,
+    String? jumpHostId,
+  }) {
+    servers[serverId] = ServerConfig(
+      id: serverId,
+      label: serverId,
+      host: host,
+      port: port,
+      username: username,
+      authMethod: authMethod,
+      jumpHostId: jumpHostId,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+  }
+
+  List<FakeChannel> get channels => [
+    for (final transport in opener.transports) ...transport.channels,
+  ];
+
+  /// Channels not yet closed — for "currently open" assertions that must
+  /// not count channels a teardown already closed.
+  Iterable<FakeChannel> get openChannels =>
+      channels.where((channel) => !channel.closed);
+}

@@ -1,0 +1,310 @@
+import Cocoa
+import FlutterMacOS
+import Quartz
+import macos_window_utils
+import window_manager
+
+class MainFlutterWindow: NSWindow {
+  private var trashChannel: FlutterMethodChannel?
+  private var filesChannel: FlutterMethodChannel?
+  private var dragOutChannel: DragOutChannel?
+  private var windowChannel: FlutterMethodChannel?
+  private var menuChecks: MenuChecks?
+
+  /// In full screen, or entering it: set on AppKit's will-enter and
+  /// will-exit edges, so the toolbar and the Flutter layout switch as a
+  /// transition starts rather than after its animation.
+  private var inFullScreen = false
+
+  /// The Dart side installs the unified toolbar after launch (D32 §3),
+  /// possibly after a restored window already entered full screen, so
+  /// every toolbar the window receives takes the current visibility.
+  override var toolbar: NSToolbar? {
+    didSet { toolbar?.isVisible = !inFullScreen }
+  }
+
+  /// Settings in a window of its own (SettingsWindow.swift).
+  private var settingsWindow: SettingsWindowHost?
+
+  /// More workspace windows on this engine (WorkspaceWindows.swift).
+  private var workspaceWindows: WorkspaceWindowsHost?
+
+  /// Quick Look for every workspace window (QuickLookHost.swift).
+  private var quickLook: QuickLookHost?
+
+  override func awakeFromNib() {
+    // Poltergeist has its own per-pane tab model (02 §9): the system must
+    // never offer window tabs alongside it — automatic for all windows,
+    // and disallowed for this window even when triggered explicitly.
+    NSWindow.allowsAutomaticWindowTabbing = false
+    tabbingMode = .disallowed
+
+    let windowFrame = self.frame
+    // The accessibility-lifecycle guard (ported from Séance; see
+    // PoltergeistFlutterViewController.m): Flutter 3.47 destroys the
+    // accessibility tree before detaching native text fields, which can
+    // crash text input while any accessibility client (VoiceOver, window
+    // managers, writing tools) is active.
+    let macOSWindowUtilsViewController = MacOSWindowUtilsViewController(
+      flutterViewController: PoltergeistFlutterViewController()
+    )
+    self.contentViewController = macOSWindowUtilsViewController
+    self.setFrame(windowFrame, display: true)
+
+    MainFlutterWindowManipulator.start(mainFlutterWindow: self)
+    RegisterGeneratedPlugins(
+      registry: macOSWindowUtilsViewController.flutterViewController
+    )
+    menuChecks = MenuChecks(
+      messenger: macOSWindowUtilsViewController.flutterViewController.engine
+        .binaryMessenger
+    )
+
+    settingsWindow = SettingsWindowHost(
+      mainWindow: self,
+      messenger: macOSWindowUtilsViewController.flutterViewController.engine
+        .binaryMessenger
+    )
+    quickLook = QuickLookHost(
+      messenger: macOSWindowUtilsViewController.flutterViewController.engine
+        .binaryMessenger
+    )
+
+    // D15 trash (03 §7.1): FileManager.trashItem delivers to the OS
+    // Trash and returns the trashed URL — the Put Back anchor. Put Back
+    // itself is Finder's best-effort behavior, not ours. The call runs
+    // off the platform thread so a large trash cannot stall the UI;
+    // FlutterResult is safe to invoke from any thread.
+    trashChannel = FlutterMethodChannel(
+      name: "poltergeist/trash",
+      binaryMessenger: macOSWindowUtilsViewController.flutterViewController.engine.binaryMessenger
+    )
+    trashChannel?.setMethodCallHandler { call, result in
+      guard call.method == "trash" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let arguments = call.arguments as? [String: Any],
+            let path = arguments["path"] as? String,
+            !path.isEmpty else {
+        result(FlutterError(
+          code: "TRASH_BAD_ARGS",
+          message: "the trash call needs a 'path' string argument",
+          details: nil
+        ))
+        return
+      }
+      DispatchQueue.global(qos: .userInitiated).async {
+        var trashedUrl: NSURL?
+        do {
+          try FileManager.default.trashItem(
+            at: URL(fileURLWithPath: path),
+            resultingItemURL: &trashedUrl
+          )
+          if let trashedPath = trashedUrl?.path {
+            result(["trashedPath": trashedPath])
+          } else {
+            result(nil)
+          }
+        } catch {
+          result(FlutterError(
+            code: "TRASH_FAILED",
+            message: error.localizedDescription,
+            details: nil
+          ))
+        }
+      }
+    }
+
+    // External editors (06 §4.3): the ported seance/files channel —
+    // pickApplication (NSOpenPanel rooted at /Applications; the panel
+    // navigates freely, so /System/Applications and ~/Applications stay
+    // selectable) and openWithApplication (NSWorkspace.open by bundle
+    // id). Results marshal on the main queue; errors surface as
+    // FlutterError.
+    filesChannel = FlutterMethodChannel(
+      name: "poltergeist/files",
+      binaryMessenger: macOSWindowUtilsViewController.flutterViewController.engine.binaryMessenger
+    )
+    filesChannel?.setMethodCallHandler { call, result in
+      if call.method == "pickApplication" {
+        let panel = NSOpenPanel()
+        panel.title =
+          (call.arguments as? [String: Any])?["title"] as? String
+            ?? "Choose an editor application"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.resolvesAliases = true
+        // .applicationBundle is the non-deprecated equivalent of the
+        // legacy allowedFileTypes = ["app"] filter.
+        panel.allowedContentTypes = [.applicationBundle]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.begin { response in
+          guard response == .OK, let url = panel.url else {
+            result(nil)
+            return
+          }
+          guard let bundle = Bundle(url: url),
+                let bundleIdentifier = bundle.bundleIdentifier else {
+            result(FlutterError(
+              code: "INVALID_APPLICATION",
+              message: "The selected item is not an application bundle.",
+              details: nil))
+            return
+          }
+          let info = bundle.infoDictionary
+          let displayName = (info?["CFBundleDisplayName"] as? String)
+            ?? (info?["CFBundleName"] as? String)
+            ?? url.deletingPathExtension().lastPathComponent
+          result([
+            "displayName": displayName,
+            "bundleIdentifier": bundleIdentifier,
+          ])
+        }
+        return
+      }
+      guard call.method == "openWithApplication" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      // Malformed args are a wiring bug on the Dart side — report them
+      // as such rather than looking like an unregistered handler.
+      guard let arguments = call.arguments as? [String: Any],
+            let path = arguments["path"] as? String,
+            let bundleIdentifier = arguments["bundleIdentifier"] as? String else {
+        result(FlutterError(
+          code: "INVALID_ARGUMENTS",
+          message: "openWithApplication requires 'path' and 'bundleIdentifier'.",
+          details: nil))
+        return
+      }
+      guard let application = NSWorkspace.shared.urlForApplication(
+        withBundleIdentifier: bundleIdentifier) else {
+        result(FlutterError(
+          code: "APPLICATION_NOT_FOUND",
+          message: "The configured editor application is not installed.",
+          details: nil))
+        return
+      }
+      NSWorkspace.shared.open(
+        [URL(fileURLWithPath: path)],
+        withApplicationAt: application,
+        configuration: NSWorkspace.OpenConfiguration()) { _, error in
+          if let error = error {
+            DispatchQueue.main.async {
+              result(FlutterError(
+                code: "OPEN_FAILED",
+                message: error.localizedDescription,
+                details: nil))
+            }
+          } else {
+            DispatchQueue.main.async { result(nil) }
+          }
+        }
+    }
+
+    // OS drag-out (00 D14's 2026-09-25 amendment): `poltergeist/dragout`
+    // hands a pane row drag that left the window to an AppKit dragging
+    // session (local file URLs, remote file promises). See
+    // DragOutChannel.swift.
+    dragOutChannel = DragOutChannel(
+      flutterViewController: macOSWindowUtilsViewController.flutterViewController
+    )
+
+    // Created after the channels it lends its windows' views to.
+    workspaceWindows = WorkspaceWindowsHost(
+      mainWindow: self,
+      engine: macOSWindowUtilsViewController.flutterViewController.engine,
+      quickLook: quickLook,
+      dragOut: dragOutChannel
+    )
+
+    // Full screen (D32 §3): AppKit keeps a window's toolbar permanently
+    // visible in full screen, in an opaque strip of its own above the
+    // content. The empty unified toolbar that gives the windowed titlebar
+    // its 52 pt band would cover the shell header drawn beneath it, so
+    // it hides for the duration and the titlebar only slides in with the
+    // menu bar. `poltergeist/window` tells the Dart side the band is gone
+    // (the header drops its traffic-light inset, routes their band
+    // reservation). Notifications rather than delegate methods, because
+    // window_manager owns the window's delegate. A failed entry is only
+    // reported to that delegate; the next full-screen round trip
+    // resynchronizes.
+    windowChannel = FlutterMethodChannel(
+      name: "poltergeist/window",
+      binaryMessenger: macOSWindowUtilsViewController.flutterViewController.engine.binaryMessenger
+    )
+    windowChannel?.setMethodCallHandler { [weak self] call, result in
+      guard let self, call.method == "isToolbarBandVisible" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      result(!self.inFullScreen)
+    }
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(hideToolbarBandForFullScreen(_:)),
+      name: NSWindow.willEnterFullScreenNotification,
+      object: self
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(showToolbarBandLeavingFullScreen(_:)),
+      name: NSWindow.willExitFullScreenNotification,
+      object: self
+    )
+
+    super.awakeFromNib()
+  }
+
+  /// The Settings window and any extra workspace window close with this
+  /// one, so closing the app's window still leaves no window open and quits
+  /// the app (AppDelegate.applicationShouldTerminateAfterLastWindowClosed).
+  /// With other workspace windows open, the close button only hides this
+  /// window (DesktopWindowLifecycle), so this runs as the app quits.
+  override func close() {
+    settingsWindow?.close()
+    workspaceWindows?.closeAll()
+    super.close()
+  }
+
+  /// Keep the window invisible while Dart puts it back where it was closed:
+  /// DesktopWindowLifecycle.show() (main.dart, after runApp) applies the
+  /// previous session's frame and then shows the window — always, even when
+  /// restoring fails — so the storyboard's default-size window never
+  /// flashes. Do not remove this without removing that contract too.
+  override public func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
+    super.order(place, relativeTo: otherWin)
+    hiddenWindowAtLaunch()
+  }
+
+  @objc private func hideToolbarBandForFullScreen(_ notification: Notification) {
+    setInFullScreen(true)
+  }
+
+  @objc private func showToolbarBandLeavingFullScreen(_ notification: Notification) {
+    setInFullScreen(false)
+  }
+
+  private func setInFullScreen(_ value: Bool) {
+    guard value != inFullScreen else { return }
+    inFullScreen = value
+    toolbar?.isVisible = !value
+    windowChannel?.invokeMethod("toolbarBandChanged", arguments: !value)
+  }
+
+  // -- QLPreviewPanel control: the one panel's host (QuickLookHost) ----
+
+  override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+    quickLook?.acceptsControl(panel) ?? false
+  }
+
+  override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+    quickLook?.beginControl(panel)
+  }
+
+  override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+    quickLook?.endControl(panel)
+  }
+}

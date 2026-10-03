@@ -1,0 +1,1 @@
+flutter test --reporter expanded /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/reconnect/../recovery4/route_lifecycle_test.dart /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/reconnect/../recovery4/cleanup_ownership_test.dart 

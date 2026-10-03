@@ -1,0 +1,344 @@
+[
+  {
+    "file": "tasks/run3-task15-logs/recovery3/app-analyze.log",
+    "exit": "0",
+    "sha256": "4095dc7bf709ba52d142a6f42925b3842eb1e697ecce60678f36cbcab6d484ad",
+    "bytes": 1015,
+    "last_line": "No issues found! (ran in 2.1s)",
+    "failure_markers": [
+      "No issues found! (ran in 2.1s)"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/app-tests.log",
+    "exit": "0",
+    "sha256": "2be4f3818af99e87fa20db28d96696349db8a6f1ce37eb2905f622584373272b",
+    "bytes": 92248,
+    "last_line": "00:23 +548: All tests passed!",
+    "failure_markers": [
+      "00:23 +548: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/cancel-replacement-green.log",
+    "exit": "0",
+    "sha256": "38e5f40f65dd9d33d976ba5e2ff4dda181fe415cebfb2eb98f129aaa6db73c50",
+    "bytes": 1706,
+    "last_line": "00:00 +9: All tests passed!",
+    "failure_markers": [
+      "00:00 +9: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/cancel-replacement-red.log",
+    "exit": "1",
+    "sha256": "42ef902bf713331990f5bc066dd130d6d59324ab11e6ab642194bc554c67bed6",
+    "bytes": 2193,
+    "last_line": "  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: cancelRecovery cannot disconnect a replacement bind",
+    "failure_markers": [
+      "00:00 +7 -1: cancelRecovery cannot disconnect a replacement bind [E]",
+      "00:00 +8 -1: Some tests failed."
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/controller-green.log",
+    "exit": "0",
+    "sha256": "51b53ad2803aa0b8f03c9d6ca9b2f37f29667de54631ba03d54a794cc9fe605c",
+    "bytes": 8158,
+    "last_line": "00:00 +33: All tests passed!",
+    "failure_markers": [
+      "00:00 +33: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/controller-red.log",
+    "exit": "1",
+    "sha256": "53401c72b3e9df1f444e5be7b239af2b6cb5ad5b662725607f2cdc67a8968efb",
+    "bytes": 2309,
+    "last_line": "  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: a stale pending path never leaks into another bookmark",
+    "failure_markers": [
+      "00:00 +2 -1: a stale pending path never leaks into another bookmark [E]",
+      "00:00 +7 -1: Some tests failed."
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/core-analyze.log",
+    "exit": "0",
+    "sha256": "599bdf0f34cb5d0153fde8f7205a3e4e9f89ba9f7a462184a0da7242ad182abf",
+    "bytes": 47,
+    "last_line": "No issues found!",
+    "failure_markers": [
+      "No issues found!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/core-tests.log",
+    "exit": "0",
+    "sha256": "5d7145b4bd5438fb077cf261e72e19bf9e30f4b77219bcae9c3fad1229edaea3",
+    "bytes": 123121,
+    "last_line": "00:22 +749 ~16: All tests passed!",
+    "failure_markers": [
+      "  Skip: Windows-only unsupported contract",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_AUTHMATRIX to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_AUTHMATRIX to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_AUTHMATRIX to enable.",
+      "  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_AUTHMATRIX to enable.",
+      "00:22 +749 ~16: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/imports.log",
+    "exit": "0",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0,
+    "last_line": "",
+    "failure_markers": []
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/protocol-tests.log",
+    "exit": "0",
+    "sha256": "f76f557fb00b42f8b308a702faba02f51630a3d2c4f66b1f8b324cbf631a15b9",
+    "bytes": 6410,
+    "last_line": "00:49 +51: All tests passed!",
+    "failure_markers": [
+      "00:49 +51: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/protocol.log",
+    "exit": "0",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0,
+    "last_line": "",
+    "failure_markers": []
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/route-final.log",
+    "exit": "0",
+    "sha256": "687c99876eb5175f4b71641c81beba199e66a1487c68624a3428a37b28ca5308",
+    "bytes": 11025,
+    "last_line": "00:04 +62: All tests passed!",
+    "failure_markers": [
+      "00:04 +62: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/route-green.log",
+    "exit": "1",
+    "sha256": "1bdaa6f53e1abafbb1304eb42a70190271b894e6ec9011da76db6d425b088c85",
+    "bytes": 13157,
+    "last_line": "  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: live connection state a row can open its bookmark in a pane",
+    "failure_markers": [
+      "00:02 +35 -1: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: live connection state a row can open its bookmark in a pane [E]",
+      "00:04 +61 -1: Some tests failed."
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/route-red.log",
+    "exit": "1",
+    "sha256": "1503137d38fd6960fe3e29bd1f50a1aa1c8c64a3a48bb4f4fee8b627677eb558",
+    "bytes": 5061,
+    "last_line": "  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a vetoed pop does not open a pane behind Connections",
+    "failure_markers": [
+      "00:01 +2 -1: a vetoed pop does not open a pane behind Connections [E]",
+      "00:01 +2 -2: a stale row callback cannot pop a covering route [E]",
+      "00:01 +3 -2: Some tests failed."
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/shared-session-diagnostic.log",
+    "exit": "124",
+    "sha256": "517d4e0201538fe885650a3a22a35195562f1a78bb99c2c6af9851068ab809ed",
+    "bytes": 1268,
+    "last_line": "lifetime: shut down",
+    "failure_markers": []
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/shared-session-green.log",
+    "exit": "0",
+    "sha256": "26295de479f9ac4e0b19ca9e6c24781f48826d02ca417133333b0f10e35346a7",
+    "bytes": 1207,
+    "last_line": "00:01 +2: All tests passed!",
+    "failure_markers": [
+      "00:01 +2: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/shared-session-teardown.log",
+    "exit": "124",
+    "sha256": "181851f71f9bf1368453c8a384e1278ae7497b64999150a0bc85fb236f034738",
+    "bytes": 3771,
+    "last_line": "  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown (did not complete)",
+    "failure_markers": [
+      "00:26 +0: both pane connects share FIFO prompts and independent teardown - did not complete [E]",
+      "00:26 +0: Some tests failed."
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery3/shared-session.log",
+    "exit": "124",
+    "sha256": "2fc33dc844e13ca34177c5f9e1ee7502e75a315ad7e0cca2ba8cffac8b422dac",
+    "bytes": 1110,
+    "last_line": "00:00 +0: both pane connects share FIFO prompts and independent teardown",
+    "failure_markers": []
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/app-analyze-f38.log",
+    "exit": "0",
+    "sha256": "0d74333733d5f882e65d32a233606de8f6ec09a39f82e78c891cb3dc94b1e933",
+    "bytes": 1049,
+    "last_line": "No issues found! (ran in 1.4s)",
+    "failure_markers": [
+      "No issues found! (ran in 1.4s)"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/app-analyze.log",
+    "exit": "0",
+    "sha256": "e6e1d940bce50af290ac06a086f29065f5b6e785b3b5bdd09b9a0226d8decbb3",
+    "bytes": 1049,
+    "last_line": "No issues found! (ran in 2.2s)",
+    "failure_markers": [
+      "No issues found! (ran in 2.2s)"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/app-tests.log",
+    "exit": "0",
+    "sha256": "c7d13bc7eaf436578a122d204f3b6a76ed4257404ba9061606b6cdd5099d9609",
+    "bytes": 91649,
+    "last_line": "00:28 +551: All tests passed!",
+    "failure_markers": [
+      "00:28 +551: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/capture-before-toolbar.log",
+    "exit": "0",
+    "sha256": "465d9b06d13007831237ccff5719bf4073243fa74fd099264bfab81c5bc0426f",
+    "bytes": 1160,
+    "last_line": "00:01 +1: All tests passed!",
+    "failure_markers": [
+      "00:01 +1: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/capture-compile-failure.log",
+    "exit": "1",
+    "sha256": "665ff8f89ca2497d0265380b452fd5839a250fb8b85e731cf967a6fe16acdc1b",
+    "bytes": 2570,
+    "last_line": "  /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart: loading /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart",
+    "failure_markers": [
+      "00:00 +0 -1: loading /home/paseo/workspace/Poltergeist/tasks/run3-task15-logs/recovery4/readable_capture_test.dart [E]",
+      "00:00 +0 -1: Some tests failed."
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/capture-no-icons.log",
+    "exit": "0",
+    "sha256": "465d9b06d13007831237ccff5719bf4073243fa74fd099264bfab81c5bc0426f",
+    "bytes": 1160,
+    "last_line": "00:01 +1: All tests passed!",
+    "failure_markers": [
+      "00:01 +1: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/capture.log",
+    "exit": "0",
+    "sha256": "465d9b06d13007831237ccff5719bf4073243fa74fd099264bfab81c5bc0426f",
+    "bytes": 1160,
+    "last_line": "00:01 +1: All tests passed!",
+    "failure_markers": [
+      "00:01 +1: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/focused-f38.log",
+    "exit": "0",
+    "sha256": "7bed780d693e7ff8e885da5c415a315f808cbff3b5d9fd09ecbf0aabf673cad5",
+    "bytes": 17122,
+    "last_line": "00:05 +89: All tests passed!",
+    "failure_markers": [
+      "00:05 +89: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/focused.log",
+    "exit": "0",
+    "sha256": "5bf4a58d3ac36e4859bbd26927152222332b30f0ba59c4cdda34f460382dc771",
+    "bytes": 17775,
+    "last_line": "00:05 +92: All tests passed!",
+    "failure_markers": [
+      "00:05 +92: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/lifecycle.log",
+    "exit": "0",
+    "sha256": "6ba007cb604e8e7907e105c7e585d8a297c8fa6127e88504693cd063d71b48d3",
+    "bytes": 1900,
+    "last_line": "00:01 +5: All tests passed!",
+    "failure_markers": [
+      "00:01 +5: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/toolbar-cursor-harness.log",
+    "exit": "1",
+    "sha256": "5705d0ea2f31a766045420de37c3d7efe2eae3843cf9abe28f12043dad449c25",
+    "bytes": 3546,
+    "last_line": "  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes",
+    "failure_markers": [
+      "00:01 +2 -1: toolbar open follows cursor and active pane changes [E]",
+      "00:02 +10 -1: Some tests failed."
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/toolbar-final-baseline-red.log",
+    "exit": "1",
+    "sha256": "9c83ec685e9253d14883d43147d33da449e10f6a4d31c134b250ebe9c0748c04",
+    "bytes": 6580,
+    "last_line": "  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar refresh becomes available after initial binding",
+    "failure_markers": [
+      "00:01 +0 -1: toolbar refresh becomes available after initial binding [E]",
+      "00:02 +0 -2: toolbar open follows cursor and active pane changes [E]",
+      "00:02 +0 -3: toolbar parent tracks pending and completed listings [E]",
+      "00:02 +0 -3: Some tests failed."
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/toolbar-green.log",
+    "exit": "0",
+    "sha256": "72347c3f50066c9affa5d0a5faf612242abb3edbdfda54648a7b101268328d29",
+    "bytes": 1753,
+    "last_line": "00:02 +11: All tests passed!",
+    "failure_markers": [
+      "00:02 +11: All tests passed!"
+    ]
+  },
+  {
+    "file": "tasks/run3-task15-logs/recovery4/toolbar-red.log",
+    "exit": "1",
+    "sha256": "cb9f1c155e5731c7ab2b9efefb9504334a48c323bf7ae332403c3b6dffc1aae0",
+    "bytes": 6580,
+    "last_line": "  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar refresh becomes available after initial binding",
+    "failure_markers": [
+      "00:01 +0 -1: toolbar refresh becomes available after initial binding [E]",
+      "00:01 +0 -2: toolbar open follows cursor and active pane changes [E]",
+      "00:01 +0 -3: toolbar parent tracks pending and completed listings [E]",
+      "00:01 +0 -3: Some tests failed."
+    ]
+  }
+]

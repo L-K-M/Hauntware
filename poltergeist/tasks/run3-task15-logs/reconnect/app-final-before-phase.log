@@ -1,0 +1,611 @@
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  archive 4.2.0 (4.3.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+18 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart
+00:00 +0: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart: MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug) probeKeystore returns null and marks the keystore unavailable
+00:00 +1: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart: MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug) reads degrade to "not set" instead of throwing
+00:00 +2: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart: MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug) writes throw a clear KeystoreException
+00:00 +3: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart: MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug) a keystore that comes back is picked up on re-probe
+00:00 +4: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart: MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug) the master key is stored under the Poltergeist entry name
+00:00 +5: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart: MasterKeyManager on a locked keystore (the Ubuntu KeyringLocked bug) probeKeystore never fabricates an ephemeral key while locked
+00:00 +6: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart: LockedSecretVault reads and writes throw VaultLockedException; deletes work
+00:00 +7: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/keystore_resilience_test.dart: LockedSecretVault the locked message tells the user what to do
+00:00 +8: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/file_stores_test.dart: FileVaultStore persists sealed blobs across store instances
+00:00 +9: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/file_stores_test.dart: FileVaultStore deleting a secret removes it from disk
+00:00 +10: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/workspace_shell_test.dart: renders localized two-pane workspace with quiet chrome
+00:00 +11: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/workspace_shell_test.dart: renders localized two-pane workspace with quiet chrome
+00:00 +12: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/workspace_shell_test.dart: renders localized two-pane workspace with quiet chrome
+00:00 +13: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/workspace_shell_test.dart: renders localized two-pane workspace with quiet chrome
+00:01 +14: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/workspace_shell_test.dart: renders localized two-pane workspace with quiet chrome
+00:01 +15: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/atomic_file_test.dart: replaces existing content and leaves no temporary file
+00:01 +16: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/atomic_file_test.dart: replaces existing content and leaves no temporary file
+00:01 +17: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/atomic_file_test.dart: removes the temporary sibling after rename fails
+00:01 +18: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: prepare configures the window and macOS titlebar
+00:01 +19: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: show restores clamped geometry before showing and focusing
+00:01 +20: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: prepare returns platform initialization failures
+00:01 +21: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: concurrent prepare calls share platform initialization
+00:01 +22: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: prepare retries after platform initialization fails
+00:01 +23: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close waits for in-flight prepare before destroying
+00:01 +24: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close waits for in-flight prepare before destroying
+00:02 +25: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/settings_store_test.dart: writes the complete settings snapshot atomically
+00:02 +26: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close tears down after in-flight prepare fails
+00:02 +27: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/settings_store_test.dart: serializes overlapping writes
+00:02 +28: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/settings_store_test.dart: serializes overlapping writes
+00:02 +29: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/settings_store_test.dart: serializes overlapping writes
+00:02 +30: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: calibrates outer minimum size from first-frame content size
+00:02 +31: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/settings_store_test.dart: quarantines corrupt settings and starts empty
+00:02 +32: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/settings_store_test.dart: quarantines corrupt settings and starts empty
+00:02 +33: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/settings_store_test.dart: quarantines corrupt settings and starts empty
+00:02 +34: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/settings_store_test.dart: quarantines corrupt settings and starts empty
+00:02 +35: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close drops queued calibration and runs after presentation
+00:02 +36: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close drops queued calibration and runs after presentation
+00:02 +37: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close drops queued calibration and runs after presentation
+00:02 +38: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close drops queued calibration and runs after presentation
+00:02 +39: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close drops queued calibration and runs after presentation
+00:02 +40: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/content_size_reporter_test.dart: reports bounded content size after the frame
+00:02 +41: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/content_size_reporter_test.dart: reports bounded content size after the frame
+00:02 +42: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/content_size_reporter_test.dart: reports bounded content size after the frame
+00:02 +43: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/content_size_reporter_test.dart: reports bounded content size after the frame
+00:02 +44: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close cancels the timer, awaits the final save, then destroys
+00:02 +45: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close cancels the timer, awaits the final save, then destroys
+00:02 +46: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close cancels the timer, awaits the final save, then destroys
+00:02 +47: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close cancels the timer, awaits the final save, then destroys
+00:02 +48: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/desktop_window_lifecycle_test.dart: close cancels the timer, awaits the final save, then destroys
+00:02 +49: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connection_status_panel_test.dart: awaiting the first status never flashes a failure
+00:02 +50: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connection_status_panel_test.dart: awaiting the first status never flashes a failure
+00:02 +51: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connection_status_panel_test.dart: awaiting the first status never flashes a failure
+00:02 +52: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connection_status_panel_test.dart: awaiting the first status never flashes a failure
+00:02 +53: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connection_status_panel_test.dart: awaiting the first status never flashes a failure
+00:02 +54: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connection_status_panel_test.dart: awaiting the first status never flashes a failure
+00:03 +55: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +56: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +57: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +58: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +59: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +60: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +61: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +62: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +63: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:03 +64: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:04 +65: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:04 +66: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/production_engine_wiring_test.dart: Connections surface consumes the production engine
+00:04 +67: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:04 +68: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:04 +69: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:04 +70: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:04 +71: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:04 +72: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:04 +73: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:04 +74: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:04 +75: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +76: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +77: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +78: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +79: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +80: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +81: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +82: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +83: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:04 +84: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:05 +85: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_dialog_test.dart: renders rows with dedupe and limitation verdicts
+00:05 +86: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_dialog_test.dart: renders rows with dedupe and limitation verdicts
+00:05 +87: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_dialog_test.dart: renders rows with dedupe and limitation verdicts
+00:05 +88: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_dialog_test.dart: renders rows with dedupe and limitation verdicts
+00:05 +89: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_dialog_test.dart: renders rows with dedupe and limitation verdicts
+00:05 +90: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_dialog_test.dart: renders rows with dedupe and limitation verdicts
+00:05 +91: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_command_test.dart: the import command renders only when wired
+00:05 +92: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_command_test.dart: the import command renders only when wired
+00:05 +93: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_command_test.dart: the import command renders only when wired
+00:05 +94: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_command_test.dart: the import command renders only when wired
+00:05 +95: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/import/ssh_config_import_command_test.dart: the import command renders only when wired
+00:05 +96: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/server_state_indicator_test.dart: the labeled indicator widget delegates to the probe dot without a second label
+00:05 +97: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/server_state_indicator_test.dart: the labeled indicator widget delegates to the probe dot without a second label
+00:05 +98: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/server_state_indicator_test.dart: the labeled indicator widget delegates to the probe dot without a second label
+00:05 +99: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:05 +100: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:05 +101: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:05 +102: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:05 +103: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:05 +104: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +105: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +106: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +107: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +108: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +109: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +110: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +111: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +112: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +113: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +114: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +115: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +116: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: password auth: endpoint, one field, no save offer
+00:06 +117: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/host_key_dialog_test.dart: first use shows the fingerprint with trust verbs
+00:06 +118: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/host_key_dialog_test.dart: first use shows the fingerprint with trust verbs
+00:06 +119: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/host_key_dialog_test.dart: first use shows the fingerprint with trust verbs
+00:06 +120: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +121: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +122: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +123: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +124: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +125: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +126: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +127: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +128: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:06 +129: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:07 +130: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:07 +131: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:07 +132: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:07 +133: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:07 +134: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:07 +135: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: renders name, instruction, and one field per prompt
+00:07 +136: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +137: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +138: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +139: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +140: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +141: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +142: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +143: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +144: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +145: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +146: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +147: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +148: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown
+00:07 +149: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter in the final prompt submits every answer
+00:08 +150: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter in the final prompt submits every answer
+00:08 +151: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter in the final prompt submits every answer
+00:08 +152: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter in the final prompt submits every answer
+00:08 +153: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter in the final prompt submits every answer
+00:08 +154: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter in the final prompt submits every answer
+00:08 +155: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter in the final prompt submits every answer
+00:08 +156: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter in the final prompt submits every answer
+00:08 +157: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: a replaced session cannot repaint from its delayed listing
+00:08 +158: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: a key read completing after cancel cannot pop the page below
+00:08 +159: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: Enter advances from a non-final prompt
+00:08 +160: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: cancel answers null — the resolution fails without a secret
+00:08 +161: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: a repeated submit cannot pop the route below the dialog
+00:08 +162: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/credential_dialog_test.dart: an unavailable vault explains itself without a save offer
+00:08 +163: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/prompts/keyboard_interactive_dialog_test.dart: cancel answers with an empty list (fails the auth step)
+00:08 +164: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:08 +165: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:08 +166: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:08 +167: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:08 +168: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +169: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +170: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +171: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +172: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +173: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +174: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +175: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +176: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +177: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +178: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +179: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +180: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +181: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +182: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +183: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +184: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +185: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +186: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +187: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +188: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +189: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +190: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +191: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +192: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:09 +193: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +194: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +195: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +196: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +197: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +198: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +199: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +200: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +201: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loss owns the overlay until a healed listing succeeds
+00:09 +202: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/adaptive_shell_test.dart: draws the accent outline while focused
+00:09 +203: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:09 +204: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:09 +205: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:09 +206: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:09 +207: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:09 +208: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:09 +209: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:09 +210: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:10 +211: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:10 +212: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar open follows cursor and active pane changes
+00:10 +213: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/adaptive_shell_test.dart: reverts the latest ratio when persistence fails
+00:10 +214: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +215: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +216: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +217: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +218: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +219: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +220: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +221: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +222: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +223: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:10 +224: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar parent tracks pending and completed listings
+00:10 +225: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: toolbar parent tracks pending and completed listings
+00:10 +226: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Esc cancels an in-flight navigation back to the old listing
+00:10 +227: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Esc cancels an in-flight navigation back to the old listing
+00:10 +228: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Esc cancels an in-flight navigation back to the old listing
+00:10 +229: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Esc cancels an in-flight navigation back to the old listing
+00:10 +230: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: startup spawn and seeding spawns the engine with pins and incidents seeded together
+00:10 +231: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: startup spawn and seeding spawns the engine with pins and incidents seeded together
+00:10 +232: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: startup spawn and seeding spawns the engine with pins and incidents seeded together
+00:10 +233: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: startup spawn and seeding spawns the engine with pins and incidents seeded together
+00:10 +234: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: startup spawn and seeding spawns the engine with pins and incidents seeded together
+00:10 +235: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: startup spawn and seeding spawns the engine with pins and incidents seeded together
+00:10 +236: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: startup spawn and seeding spawns the engine with pins and incidents seeded together
+00:10 +237: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: startup spawn and seeding spawns the engine with pins and incidents seeded together
+00:10 +238: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Tab swaps pane focus from inside a listing
+00:10 +239: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Tab swaps pane focus from inside a listing
+00:10 +240: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +241: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +242: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +243: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +244: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +245: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +246: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +247: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +248: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +249: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +250: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +251: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +252: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +253: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +254: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +255: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:10 +256: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:11 +257: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: trust mirrors applies scoped and bulk removals idempotently
+00:11 +258: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: trust mirrors applies scoped and bulk removals idempotently
+00:11 +259: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: trust mirrors applies scoped and bulk removals idempotently
+00:11 +260: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: trust mirrors applies scoped and bulk removals idempotently
+00:11 +261: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: trust mirrors applies scoped and bulk removals idempotently
+00:11 +262: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: trust mirrors applies scoped and bulk removals idempotently
+00:11 +263: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: trust mirrors applies scoped and bulk removals idempotently
+00:11 +264: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/engine_session_test.dart: trust mirrors applies scoped and bulk removals idempotently
+00:11 +265: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +266: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +267: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +268: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +269: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +270: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +271: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +272: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +273: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +274: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +275: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +276: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +277: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +278: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +279: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +280: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +281: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +282: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +283: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +284: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +285: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:11 +286: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_test.dart: ViewPreferences absent fields default and unknown extra fields are ignored
+00:11 +287: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +288: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +289: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +290: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +291: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +292: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +293: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +294: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +295: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:11 +296: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:11 +297: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:11 +298: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:11 +299: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:11 +300: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: a navigation from a scrolled listing reveals the top
+00:11 +301: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_file_reader_test.dart: IdentityFileReader expands ~, reads the key, and audits the success
+00:11 +302: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: the focused pane path renders in the accent color
+00:11 +303: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: the focused pane path renders in the accent color
+00:11 +304: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_file_reader_test.dart: IdentityFileReader a hanging audit write never blocks the read
+00:11 +305: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: rows announce name, size, and date to semantics
+00:11 +306: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: rows announce name, size, and date to semantics
+00:11 +307: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: a null lanes pane renders the no-engine state
+00:12 +308: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: subscribes before any target or activity command
+00:12 +309: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: showServer persists exposure and configures the engine
+00:12 +310: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: a persisted connection is supplied back to the controller
+00:12 +311: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: global opt-out clears targets and never runs probes
+00:12 +312: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: an unreadable store fails closed: no targets, no activity
+00:12 +313: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: a write failure alone does not disable a readable store
+00:12 +314: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: markConnected re-applies policy with the stored connection
+00:12 +315: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: hideServer clears targets and drops the record
+00:12 +316: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: a stale hideServer cannot drop a replacement server
+00:12 +317: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: forwardLifecycle pauses and resumes without store reloads
+00:12 +318: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: before any lifecycle event, targets are set but probes stay paused
+00:12 +319: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_coordinator_test.dart: a non-resumed lifecycle state pauses probes
+00:12 +320: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +321: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +322: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +323: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +324: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +325: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +326: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +327: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +328: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +329: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +330: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +331: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +332: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +333: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +334: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +335: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +336: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:12 +337: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +338: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +339: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +340: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +341: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +342: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +343: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +344: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +345: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +346: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +347: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +348: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: host-key first use renders and trusts
+00:13 +349: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_settings_store_test.dart: concurrent mutations cannot clobber each other
+00:13 +350: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/bookmark_store_test.dart: an unrecognized store version encoding fails closed
+00:13 +351: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/bookmark_store_test.dart: an unrecognized store version encoding fails closed
+00:13 +352: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_settings_store_test.dart: markSeen preserves an already-recorded connection
+00:13 +353: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: declining a changed key answers accepted:false
+00:13 +354: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: declining a changed key answers accepted:false
+00:13 +355: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: declining a changed key answers accepted:false
+00:13 +356: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/bookmark_store_test.dart: serializes concurrent writes so neither bookmark is lost
+00:13 +357: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: records and reads back events in order, with all fields
+00:13 +358: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: records and reads back events in order, with all fields
+00:13 +359: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: records and reads back events in order, with all fields
+00:13 +360: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +361: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +362: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +363: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +364: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +365: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +366: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +367: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +368: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +369: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +370: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +371: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +372: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +373: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +374: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +375: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +376: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: keyboard-interactive answers travel back
+00:13 +377: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: rotation keeps only the newest maxEntries
+00:13 +378: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: rotation keeps only the newest maxEntries
+00:13 +379: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: rotation keeps only the newest maxEntries
+00:13 +380: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: agent auth answers immediately without any dialog
+00:13 +381: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: agent auth answers immediately without any dialog
+00:13 +382: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: agent auth answers immediately without any dialog
+00:13 +383: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: agent auth answers immediately without any dialog
+00:13 +384: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: recording repairs a permissive existing log
+00:13 +385: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/probe_settings_store_test.dart: the file carries no probe results, only eligibility
+00:13 +386: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a closed bridge cannot break agent auto-answering
+00:13 +387: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a closed bridge cannot break agent auto-answering
+00:13 +388: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a closed bridge cannot break agent auto-answering
+00:14 +389: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a closed bridge cannot break agent auto-answering
+00:14 +390: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: audit storage stays owner-only on desktop POSIX
+00:14 +391: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: audit storage stays owner-only on desktop POSIX
+00:14 +392: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +393: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +394: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +395: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +396: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +397: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +398: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +399: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +400: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +401: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +402: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +403: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +404: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +405: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +406: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +407: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +408: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: an empty stored secret falls through to the dialog
+00:14 +409: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +410: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +411: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +412: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +413: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +414: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +415: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +416: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +417: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +418: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +419: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +420: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +421: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +422: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +423: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +424: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +425: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +426: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +427: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +428: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +429: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +430: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +431: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +431: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: a failing local open never rejects the future
+══╡ EXCEPTION CAUGHT BY FLUTTER FRAMEWORK ╞═════════════════════════════════════════════════════════
+The following StateError was thrown:
+Bad state: no local browse channel scripted
+
+When the exception was thrown, this was the stack:
+#0      FakePaneLanes.openLocalChannel (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart:31:26)
+#1      PaneController.openLocalHome.<anonymous closure> (package:poltergeist_app/services/pane_controller.dart:606:37)
+#2      PaneController._bind (package:poltergeist_app/services/pane_controller.dart:492:20)
+<asynchronous suspension>
+#3      PaneController.openLocalHome (package:poltergeist_app/services/pane_controller.dart:599:5)
+<asynchronous suspension>
+#4      main.<anonymous closure> (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart:754:5)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#6      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#7      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:14 +432: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +433: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +434: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +435: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +436: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +437: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +438: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +439: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +440: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +441: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +442: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +443: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +444: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +445: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:14 +446: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:15 +447: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/identity_audit_log_test.dart: concurrent records are serialized without interleaving
+00:15 +448: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a private-key prompt reads the identity file through the audited reader
+00:15 +449: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a private-key prompt reads the identity file through the audited reader
+00:15 +450: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: global defaults and folder snapshots survive restart
+00:15 +451: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: global defaults and folder snapshots survive restart
+00:15 +452: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: global defaults and folder snapshots survive restart
+00:15 +453: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: global defaults and folder snapshots survive restart
+00:15 +454: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: global defaults and folder snapshots survive restart
+00:15 +455: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: global defaults and folder snapshots survive restart
+00:15 +456: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: global defaults and folder snapshots survive restart
+00:15 +457: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a dismissal racing the vault read suppresses the dialog
+00:15 +458: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:15 +459: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:15 +460: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:15 +461: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:15 +462: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:15 +463: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:15 +464: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:15 +465: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:15 +466: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:16 +467: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:16 +468: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: location kind, identity, and full path remain isolated
+00:16 +469: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: prompts arriving after dispose are ignored
+00:16 +470: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: all view fields, column order, and widths round-trip
+00:16 +471: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +472: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +473: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +474: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +475: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +476: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +477: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +478: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +479: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +480: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +481: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +482: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +483: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: cancelling the credential prompt answers cancelled
+00:16 +484: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +485: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +486: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +487: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +488: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +489: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +490: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +491: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +492: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: a derived hidden reveal does not alter persisted preferences
+00:16 +493: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a failing vault save shows a transient notice, connect proceeds
+00:16 +494: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/prompt_coordinator_test.dart: a failing vault save shows a transient notice, connect proceeds
+00:16 +495: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: durable read recency determines the next LRU eviction
+00:16 +496: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: durable read recency determines the next LRU eviction
+00:16 +497: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: durable read recency determines the next LRU eviction
+00:16 +498: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: durable read recency determines the next LRU eviction
+00:16 +499: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: durable read recency determines the next LRU eviction
+00:16 +500: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/app_preferences_test.dart: uses default window placement while settings recover
+00:16 +501: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:16 +502: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +503: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +504: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +505: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +506: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +507: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +508: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +509: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +510: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +511: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +512: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +513: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +514: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +515: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +516: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +517: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +518: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +519: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +520: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +521: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +522: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: absent reads neither fill the LRU nor write recency
+00:17 +523: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: loading the most recent location avoids an unnecessary write
+00:17 +524: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: oversized snapshots discard the oldest locations on load
+00:17 +525: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: duplicate locations retain the latest preferences and recency
+00:17 +526: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: overlapping saves, reset, and defaults preserve call order
+00:17 +527: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: write failure propagates, rolls back, and permits retry
+00:17 +528: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: failed recency writes do not influence later eviction
+00:17 +529: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: server removal preserves local and other-server preferences
+00:17 +530: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: view mutations preserve unrelated settings
+00:17 +531: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: unknown fields preserve valid defaults and location records
+00:17 +532: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: null section inherits built-in defaults without writing
+00:17 +533: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: missing defaults inherits built-in defaults without writing
+00:17 +534: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: missing locations inherits built-in defaults without writing
+00:17 +535: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed non-map fails without replacing settings
+00:17 +536: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed missing version fails without replacing settings
+00:17 +537: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed unsupported version fails without replacing settings
+00:17 +538: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed non-integer version fails without replacing settings
+00:17 +539: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed null defaults fails without replacing settings
+00:17 +540: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed invalid defaults fails without replacing settings
+00:17 +541: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed null locations fails without replacing settings
+00:17 +542: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed invalid locations fails without replacing settings
+00:17 +543: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed invalid entry fails without replacing settings
+00:17 +544: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed missing location fails without replacing settings
+00:17 +545: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed invalid location fails without replacing settings
+00:17 +546: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed missing preferences fails without replacing settings
+00:17 +547: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/view_preferences_store_test.dart: malformed invalid preferences fails without replacing settings
+00:21 +548: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: rejects representative authored user-facing literals
+00:21 +549: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: detects user-facing literals nested in interpolation
+00:21 +550: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: does not let interpolation syntax hide following literals
+00:21 +551: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: limits technical exceptions to their reviewed file
+00:21 +552: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: keeps every technical exception live
+00:21 +553: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: keeps every technical exception live
+00:21 +554: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: keeps every technical exception live
+00:21 +555: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: keeps every technical exception live
+00:21 +556: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: keeps every technical exception live
+00:21 +557: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: keeps every technical exception live
+00:21 +558: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/toolchain_contract_test.dart: pins the documented Flutter checkout
+00:21 +559: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/toolchain_contract_test.dart: pins the documented Flutter checkout
+00:21 +560: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/toolchain_contract_test.dart: pins the documented Flutter checkout
+00:21 +561: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: rejects source with parser diagnostics
+00:21 +562: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: rejects source with parser diagnostics
+00:21 +563: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: authors user-facing strings only in ARB
+00:21 +564: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/localization_contract_test.dart: generated localization exclusions are present
+00:21 +565: All tests passed!

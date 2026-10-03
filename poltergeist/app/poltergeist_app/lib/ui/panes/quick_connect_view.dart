@@ -1,0 +1,261 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/material.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
+
+import '../../l10n/app_localizations.dart';
+import '../../services/quick_connect_address.dart';
+import '../../services/quick_connect_bookmark.dart';
+
+/// The launcher's Quick Connect form (02 §2.7): the address field with
+/// its visible parse interpretations, and the Connect action.
+///
+/// This slice lands Quick Connect as the launcher's initial content —
+/// the Servers and Recent tabs ride M5's sidebar/favorites work, so no
+/// tab scaffolding is built here.
+///
+/// Connect mints an ephemeral `adhoc:<uuid>` bookmark (03 §3.5) and
+/// hands it to [onConnect], which binds a fresh tab through the existing
+/// remote-connect seam (prompts, errors, and banner behavior stay owned
+/// by the connect flow). The field is a real [TextField], so 02 §8.2's
+/// suppression seams apply untouched: while it holds primary focus the
+/// pane's single keys and the command chords stay inert, and Enter
+/// submits.
+/// Where the form sits: centered in the launcher's empty pane, or
+/// shrink-wrapped inside the ⌘K Connect dialog (a centered form would
+/// stretch the dialog to the whole window).
+enum QuickConnectLayout { centered, inline }
+
+class QuickConnectView extends StatefulWidget {
+  const QuickConnectView({
+    super.key,
+    required this.onConnect,
+    required this.focusNode,
+    this.onImportSshConfig,
+    this.environment,
+    this.layout = QuickConnectLayout.centered,
+    this.onEdited,
+  });
+
+  final QuickConnectLayout layout;
+
+  /// Fires when the user edits the address — the Connect dialog drops
+  /// its server-row highlight so Return connects what was typed.
+  final VoidCallback? onEdited;
+
+  /// The process environment the `$USER@` prefill reads (D32 §6); null
+  /// reads the real one. Tests pass a fixed map.
+  final Map<String, String>? environment;
+
+  /// Binds [bookmark] on a fresh tab; [initialPath] overrides the
+  /// landing directory. Fire-and-forget safe: the connect flow owns all
+  /// failure surfaces.
+  final void Function(Bookmark bookmark, String? initialPath) onConnect;
+
+  /// The address field's focus node, owned by the launcher: the launcher
+  /// focuses the field (not the pane node) on mount when its pane is
+  /// active, and an inactive pane's field never steals focus.
+  final FocusNode focusNode;
+
+  /// D22's adoption affordance: the ssh_config import offer under the
+  /// connect form. Null (no import seam — Windows in v1, or a store-less
+  /// embedding) mounts nothing, same posture as the command's absence.
+  final VoidCallback? onImportSshConfig;
+
+  @override
+  State<QuickConnectView> createState() => _QuickConnectViewState();
+}
+
+/// D32 §6's launcher prefill: `$USER@` (`%USERNAME%` on Windows), so
+/// the common case is typing just the host. Empty when the environment
+/// names no user — the field then starts blank.
+String quickConnectUserPrefill(Map<String, String> environment) {
+  final user = environment['USER'] ?? environment['USERNAME'] ?? '';
+  return user.isEmpty ? '' : '$user@';
+}
+
+class _QuickConnectViewState extends State<QuickConnectView> {
+  late final String _prefill = quickConnectUserPrefill(
+    widget.environment ?? _processEnvironment(),
+  );
+  late final _field = TextEditingController.fromValue(
+    TextEditingValue(
+      text: _prefill,
+      selection: TextSelection.collapsed(offset: _prefill.length),
+    ),
+  );
+  late QuickConnectParse _parse = parseQuickConnectAddress(_prefill);
+
+  /// Whether the field still holds the untouched prefill: a bare
+  /// `user@` is not an address yet, so it raises no error until the
+  /// user types — it shows the `host[:port]` helper instead.
+  bool _pristine = true;
+
+  static Map<String, String> _processEnvironment() {
+    try {
+      return Platform.environment;
+    } on UnsupportedError {
+      return const {};
+    }
+  }
+
+  @override
+  void dispose() {
+    _field.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String value) {
+    _pristine = false;
+    widget.onEdited?.call();
+    var parse = parseQuickConnectAddress(value);
+    final sanitized = parse.sanitizedInput;
+    if (sanitized != null && sanitized != value) {
+      // A pasted password: echo the stripped address, never the secret
+      // (02 §2.7). Re-parsing the stripped form is stable — it carries
+      // no password, so no second rewrite follows.
+      _field.value = TextEditingValue(
+        text: sanitized,
+        selection: TextSelection.collapsed(offset: sanitized.length),
+      );
+      parse = parseQuickConnectAddress(sanitized);
+    }
+    setState(() {
+      _parse = parse;
+    });
+  }
+
+  void _submit() {
+    final target = _parse.target;
+    if (target == null) return;
+    widget.onConnect(buildQuickConnectBookmark(target), target.remotePath);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final parse = _parse;
+    final target = parse.target;
+    final form = ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              l10n.quickConnectTitle,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const ValueKey('quickConnect.field'),
+              controller: _field,
+              focusNode: widget.focusNode,
+              // An address is not prose: no autocorrect, no
+              // suggestions, and the URL keyboard where one exists.
+              autocorrect: false,
+              enableSuggestions: false,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                labelText: l10n.quickConnectAddressLabel,
+                hintText: l10n.quickConnectAddressHint,
+                helperText: _pristine && _prefill.isNotEmpty
+                    ? l10n.quickConnectAddressHostHint
+                    : null,
+                // The rejection hints carry an example; let them wrap
+                // instead of truncating it away.
+                errorMaxLines: 3,
+                errorText: _pristine ? null : _errorText(l10n, parse),
+              ),
+              textInputAction: TextInputAction.done,
+              onChanged: _onChanged,
+              onSubmitted: (_) => _submit(),
+            ),
+            for (final hint in _hintTexts(l10n, parse))
+              Padding(
+                padding: const EdgeInsetsDirectional.only(top: 6),
+                child: Text(
+                  hint,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 12),
+            // D22's adoption offer sits on its own line — the import
+            // button's natural width must never crowd the Connect
+            // button out of the row (a narrow pane overflows a
+            // shared Row).
+            if (widget.onImportSshConfig != null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  key: const ValueKey('quickConnect.importSshConfig'),
+                  onPressed: widget.onImportSshConfig,
+                  icon: const Icon(Icons.download_outlined, size: 16),
+                  label: Text(l10n.sshImportCommandLabel),
+                ),
+              ),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: FilledButton(
+                key: const ValueKey('quickConnect.connect'),
+                onPressed: target == null ? null : _submit,
+                child: Text(l10n.quickConnectConnect),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return switch (widget.layout) {
+      QuickConnectLayout.centered => Center(child: form),
+      QuickConnectLayout.inline => form,
+    };
+  }
+}
+
+/// The rejecting issues rendered as the field error; at most one shows —
+/// empty input reports nothing until the user types.
+String? _errorText(AppLocalizations l10n, QuickConnectParse parse) {
+  if (parse.ok) return null;
+  final issues = parse.issues;
+  if (issues.contains(QuickConnectIssue.ipv6NeedsBrackets)) {
+    return l10n.quickConnectHintIpv6;
+  }
+  if (issues.contains(QuickConnectIssue.invalidPort)) {
+    return l10n.quickConnectInvalidPortError;
+  }
+  if (issues.contains(QuickConnectIssue.unsupportedScheme)) {
+    return l10n.quickConnectUnsupportedSchemeError;
+  }
+  if (issues.contains(QuickConnectIssue.missingHost)) {
+    return l10n.quickConnectMissingHostError;
+  }
+  return null;
+}
+
+/// The visible interpretations rendered under the field: the port/path
+/// assumptions and the password-strip notice.
+List<String> _hintTexts(AppLocalizations l10n, QuickConnectParse parse) {
+  final target = parse.target;
+  final hints = <String>[];
+  if (target != null &&
+      parse.issues.contains(QuickConnectIssue.portAssumed)) {
+    hints.add(
+      l10n.quickConnectHintPort('${target.port}', target.host),
+    );
+  }
+  if (target != null &&
+      parse.issues.contains(QuickConnectIssue.pathAssumed)) {
+    hints.add(
+      l10n.quickConnectHintPath(target.remotePath ?? ''),
+    );
+  }
+  if (parse.issues.contains(QuickConnectIssue.passwordStripped)) {
+    hints.add(l10n.quickConnectPasswordStripped);
+  }
+  return hints;
+}

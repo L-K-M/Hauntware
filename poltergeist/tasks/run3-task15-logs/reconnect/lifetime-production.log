@@ -1,0 +1,61 @@
+00:00 +0: loading packages/poltergeist_core/test/connection/pool_reconnect_test.dart
+00:00 +0: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: rejects nonpositive reconnect caps instead of spinning on an outage
+00:00 +1: packages/poltergeist_core/test/connection/pool_recovery_home_test.dart: late home failure from a dead transport preserves the recovering pane
+00:00 +2: packages/poltergeist_core/test/connection/pool_recovery_home_test.dart: late home failure from a dead transport preserves the recovering pane
+00:00 +3: packages/poltergeist_core/test/connection/pool_recovery_home_test.dart: late home failure from a dead transport preserves the recovering pane
+00:00 +4: packages/poltergeist_core/test/connection/pool_recovery_home_test.dart: late home failure from a dead transport preserves the recovering pane
+00:00 +5: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +6: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +7: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +8: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +9: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +10: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +11: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +12: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +13: packages/poltergeist_core/test/engine/engine_client_test.dart: spawn answers connection queries over real isolates
+00:00 +14: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: changed-key reconnect blocks all siblings without prompting or retry
+00:00 +15: packages/poltergeist_core/test/engine/engine_client_test.dart: background recovery failures broadcast across real isolates
+00:00 +16: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: a failed recovery channel retries rather than waiting on itself
+00:00 +17: packages/poltergeist_core/test/engine/engine_client_test.dart: watchServer emits the current state first
+00:00 +18: packages/poltergeist_core/test/engine/engine_client_test.dart: watchServer emits the current state first
+00:00 +19: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: permanent home failure leaves healthy sibling bindings connected
+00:00 +20: packages/poltergeist_core/test/engine/engine_client_test.dart: watchServer re-subscribes after the last listener drops
+00:00 +21: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +22: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +23: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +24: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +25: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +26: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +27: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +28: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +29: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +30: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +31: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +32: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +33: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +34: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +35: packages/poltergeist_core/test/engine/engine_recovery_test.dart: background failure crosses the host port without a state watch
+00:00 +36: packages/poltergeist_core/test/engine/engine_client_test.dart: disconnect dismisses an open prompt across real isolates
+00:00 +37: packages/poltergeist_core/test/engine/engine_client_test.dart: disconnect dismisses an open prompt across real isolates
+00:00 +38: packages/poltergeist_core/test/engine/engine_recovery_test.dart: home recovery failure preserves its pane across the host port
+00:00 +39: packages/poltergeist_core/test/engine/engine_client_test.dart: shutdown terminates the client and fails later calls
+00:00 +40: packages/poltergeist_core/test/engine/engine_client_test.dart: shutdown closes the background recovery failure stream
+00:00 +41: packages/poltergeist_core/test/engine/engine_client_test.dart: incident changes broadcast and a removal closes its watch
+00:00 +42: packages/poltergeist_core/test/engine/engine_client_test.dart: shutdown closes the incident change stream
+00:00 +43: packages/poltergeist_core/test/engine/engine_client_test.dart: dead-engine surfaces: watch fails fast
+00:00 +44: packages/poltergeist_core/test/engine/engine_client_test.dart: local browse channels openLocalChannel browses a local root across real isolates
+00:00 +45: packages/poltergeist_core/test/engine/engine_client_test.dart: local browse channels local failures cross as the typed taxonomy
+00:00 +46: packages/poltergeist_core/test/engine/engine_client_test.dart: local browse channels closing a local channel is idempotent and retires it
+00:00 +47: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:02 +48: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches grandchild and sibling mutations make no noise
+00:04 +49: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches retarget switches the watched directory safely
+00:05 +50: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches deleting the watched directory signals lost immediately
+00:06 +51: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches deleting an empty watched directory signals lost
+00:07 +52: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches watch resolves linked directories before subscribing
+00:08 +53: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches deleting an already-emptied watched directory signals lost
+00:10 +54: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches renaming and recreating a watched path loses its old binding
+00:12 +55: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches unwatchDirectory releases the engine-side watch
+00:14 +56: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches closing the channel closes directoryChanges
+00:15 +57: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches engine death closes directoryChanges
+00:16 +58: packages/poltergeist_core/test/engine/engine_client_test.dart: invalid policy kills the engine and surfaces termination
+00:16 +59: All tests passed!

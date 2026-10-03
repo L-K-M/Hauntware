@@ -1,0 +1,829 @@
+00:00 +0: loading packages/poltergeist_core/test/vault_plumbing_test.dart
+00:00 +0: packages/poltergeist_core/test/vault_plumbing_test.dart: every vault/keystore barrel symbol resolves at this pin
+00:00 +1: packages/poltergeist_core/test/vault_plumbing_test.dart: seals, opens, and deletes secrets through the barrel
+00:00 +2: packages/poltergeist_core/test/fs/local_file_system_test.dart: canonicalize resolves an existing path through symlinks
+00:00 +3: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: validatePathComponent accepts a plain component and returns silently
+00:00 +4: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: validatePathComponent accepts a plain component and returns silently
+00:00 +5: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: validatePathComponent accepts a plain component and returns silently
+00:00 +6: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: validatePathComponent accepts a plain component and returns silently
+00:00 +7: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: validatePathComponent accepts a plain component and returns silently
+00:00 +8: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: validatePathComponent accepts a plain component and returns silently
+00:00 +9: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory reports files, directories, and dotfiles with metadata
+00:00 +10: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory reports files, directories, and dotfiles with metadata
+00:00 +11: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory reports files, directories, and dotfiles with metadata
+00:00 +12: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory reports files, directories, and dotfiles with metadata
+00:00 +13: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory reports files, directories, and dotfiles with metadata
+00:00 +14: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory reports files, directories, and dotfiles with metadata
+00:00 +15: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory reports files, directories, and dotfiles with metadata
+00:00 +16: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory reports files, directories, and dotfiles with metadata
+00:00 +17: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +18: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +19: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +20: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +21: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +22: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +23: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +24: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +25: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +26: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +27: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +28: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +29: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +30: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +31: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +32: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +33: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +34: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +35: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +36: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +37: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +38: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +39: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +40: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +41: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +42: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +43: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +44: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +45: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +46: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +47: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +48: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +49: packages/poltergeist_core/test/dependency_contracts/vault_contract_test.dart: Argon2id memory is KiB (RFC 9106 section 5.3)
+00:00 +50: packages/poltergeist_core/test/fs/local_file_system_test.dart: listDirectory an unreadable directory fails permissionDenied
+00:00 +51: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: ensureSafeLocalDirectory refuses to traverse through a symlink component
+00:00 +52: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +53: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +54: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +55: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +56: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +57: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +58: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +59: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +60: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +61: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +62: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +63: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +64: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +65: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +66: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +67: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: closure (null) rebinds the same pane and resolves home
+00:00 +68: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +69: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +70: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +71: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +72: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +73: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +74: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +75: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +76: packages/poltergeist_core/test/connection/pool_idle_test.dart: empty extra transport closes at the idle deadline
+00:00 +77: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +78: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +79: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +80: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +81: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +82: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +83: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +84: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +85: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +86: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +87: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +88: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +89: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +90: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +91: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +92: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +93: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +94: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +95: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +96: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +97: packages/poltergeist_core/test/connection/pool_teardown_test.dart: disconnect bounds all channels and still closes the transport
+00:00 +98: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode changes permissions
+00:00 +99: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode changes permissions
+00:00 +100: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode changes permissions
+00:00 +101: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode changes permissions
+00:00 +102: packages/poltergeist_core/test/connection/pool_keepalive_test.dart: an unanswered ping times out, closes the transport, and reconnects
+00:00 +103: packages/poltergeist_core/test/connection/pool_keepalive_test.dart: an unanswered ping times out, closes the transport, and reconnects
+00:00 +104: packages/poltergeist_core/test/connection/pool_keepalive_test.dart: an unanswered ping times out, closes the transport, and reconnects
+00:00 +105: packages/poltergeist_core/test/connection/pool_keepalive_test.dart: an unanswered ping times out, closes the transport, and reconnects
+00:00 +106: packages/poltergeist_core/test/connection/pool_teardown_test.dart: partial disconnect bounds cleanup and preserves the sibling
+00:00 +107: packages/poltergeist_core/test/connection/pool_teardown_test.dart: partial disconnect bounds cleanup and preserves the sibling
+00:00 +108: packages/poltergeist_core/test/connection/pool_teardown_test.dart: partial disconnect bounds cleanup and preserves the sibling
+00:00 +109: packages/poltergeist_core/test/connection/pool_teardown_test.dart: partial disconnect bounds cleanup and preserves the sibling
+00:00 +110: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: replaceLocalFile rejects a Windows-hazardous target name on every platform
+00:00 +111: packages/poltergeist_core/test/connection/pool_keepalive_test.dart: a ping-timeout verdict is never stacked onto while its close wedges
+00:00 +112: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: a healthy sibling supplies recovery without another TCP connect
+00:00 +113: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: a healthy sibling supplies recovery without another TCP connect
+00:00 +114: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode refuses symlinks (unsupported) — the target keeps its mode
+00:00 +115: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode refuses symlinks (unsupported) — the target keeps its mode
+00:00 +116: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode refuses symlinks (unsupported) — the target keeps its mode
+00:00 +117: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode refuses symlinks (unsupported) — the target keeps its mode
+00:00 +118: packages/poltergeist_core/test/connection/pool_teardown_test.dart: changed-key cleanup cannot stall the hard block
+00:00 +119: packages/poltergeist_core/test/connection/pool_teardown_test.dart: changed-key cleanup cannot stall the hard block
+00:00 +120: packages/poltergeist_core/test/connection/pool_teardown_test.dart: changed-key cleanup cannot stall the hard block
+00:00 +121: packages/poltergeist_core/test/connection/pool_teardown_test.dart: changed-key cleanup cannot stall the hard block
+00:00 +122: packages/poltergeist_core/test/connection/pool_teardown_test.dart: changed-key cleanup cannot stall the hard block
+00:00 +123: packages/poltergeist_core/test/connection/pool_teardown_test.dart: changed-key cleanup cannot stall the hard block
+00:00 +124: packages/poltergeist_core/test/connection/pool_teardown_test.dart: changed-key cleanup cannot stall the hard block
+00:00 +125: packages/poltergeist_core/test/connection/pool_teardown_test.dart: changed-key cleanup cannot stall the hard block
+00:00 +126: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +127: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +128: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +129: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +130: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +131: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +132: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +133: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +134: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +135: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod EPERM stderr line to permissionDenied
+00:00 +136: packages/poltergeist_core/test/connection/pool_reconnect_test.dart: backoff resets after a successful recovery
+00:00 +137: packages/poltergeist_core/test/fs/local_fs_safety_test.dart: restoreOrphanedLocalBackups ignores names outside the backup pattern
+00:00 +138: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:00 +139: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:00 +140: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:00 +141: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:00 +142: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:00 +143: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:01 +144: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:01 +145: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:01 +146: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:01 +147: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:01 +148: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:01 +149: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:01 +150: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode maps a chmod ENOENT stderr line to notFound
+00:01 +151: packages/poltergeist_core/test/connection/pool_idle_waiter_test.dart: extra channel retirement wakes a lease queued during its close
+00:01 +152: packages/poltergeist_core/test/connection/pool_idle_waiter_test.dart: extra channel retirement wakes a lease queued during its close
+00:01 +153: packages/poltergeist_core/test/connection/pool_idle_waiter_test.dart: extra channel retirement wakes a lease queued during its close
+00:01 +154: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode classifies by the trailing stderr segment, never a substring match
+00:01 +155: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode classifies by the trailing stderr segment, never a substring match
+00:01 +156: packages/poltergeist_core/test/connection/ssh_transport_test.dart: a channel-open timeout classifies as disconnected, not unsupported
+00:01 +157: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode a path swapped to a symlink mid-write fails with the landing site
+00:01 +158: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode a path swapped to a symlink mid-write fails with the landing site
+00:01 +159: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode a path swapped to a symlink mid-write fails with the landing site
+00:01 +160: packages/poltergeist_core/test/fs/local_file_system_test.dart: setMode a path swapped to a symlink mid-write fails with the landing site
+00:01 +161: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: the pinned key returning clears the block and its records
+00:01 +161: packages/poltergeist_core/test/fs/local_file_system_test.dart: Windows mode and owner writes fail unsupported without changing bytes
+  Skip: Windows-only unsupported contract
+00:01 +161 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: the pinned key returning clears the block and its records
+00:01 +162 ~1: packages/poltergeist_core/test/connection/pool_lifecycle_test.dart: disconnect rejects a browse binding completing home resolution
+00:01 +163 ~1: packages/poltergeist_core/test/connection/pool_lifecycle_test.dart: disconnect rejects a browse binding completing home resolution
+00:01 +164 ~1: packages/poltergeist_core/test/connection/pool_lifecycle_test.dart: disconnect rejects a browse binding completing home resolution
+00:01 +165 ~1: packages/poltergeist_core/test/connection/pool_lifecycle_test.dart: disconnect rejects a browse binding completing home resolution
+00:01 +166 ~1: packages/poltergeist_core/test/connection/pool_lifecycle_test.dart: disconnect rejects a browse binding completing home resolution
+00:01 +167 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setTimes sets the access time and preserves the modification time
+00:01 +168 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +169 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +170 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +171 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +172 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +173 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +174 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +175 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +176 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +177 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +178 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +179 ~1: packages/poltergeist_core/test/connection/pool_diagnostics_test.dart: a failed first connect reports the summarized failure as detail
+00:01 +180 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +181 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +182 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +183 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +184 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +185 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +186 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +187 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +188 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +189 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +190 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +191 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +192 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +193 ~1: packages/poltergeist_core/test/connection/pool_incident_lifecycle_test.dart: a declined incident survives a real store round-trip on disk
+00:01 +194 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +195 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +196 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +197 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +198 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +199 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +200 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +201 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +202 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +203 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +204 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +205 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +206 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +207 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +208 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +209 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +210 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: terminal background failure reaches every current pool reference
+00:01 +211 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner refuses symlinks before chown ever runs
+00:01 +212 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +213 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +214 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +215 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +216 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +217 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +218 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +219 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +220 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +221 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +222 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +223 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +224 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:01 +225 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:02 +226 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:02 +227 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:02 +228 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:02 +229 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: first browse binding wakes concurrent browse waiters
+00:02 +230 ~1: packages/poltergeist_core/test/connection/pool_idle_lifecycle_test.dart: growth landing after the last reference closes its transport
+00:02 +231 ~1: packages/poltergeist_core/test/connection/pool_recovery_diagnostics_test.dart: late home failure cannot diagnose a closed pane in a live pool
+00:02 +232 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +233 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +234 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +235 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +236 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +237 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +238 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +239 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +240 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +241 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: setOwner the utility argv is option-guarded before any operand
+00:02 +242 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: IncidentRecord rejects malformed records
+00:02 +243 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: stranded teardown forgets errors before the next connect
+00:02 +244 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: readSymbolicLink returns the target verbatim (absolute and relative)
+00:02 +245 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: readSymbolicLink returns the target verbatim (absolute and relative)
+00:02 +246 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: a release pump fails waiters when replacement SFTP is refused
+00:02 +247 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore an absent file loads empty
+00:02 +248 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore an absent file loads empty
+00:02 +249 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore an absent file loads empty
+00:02 +250 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore an absent file loads empty
+00:02 +251 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore an absent file loads empty
+00:02 +252 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore an absent file loads empty
+00:02 +253 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore an absent file loads empty
+00:02 +254 ~1: packages/poltergeist_core/test/connection/channel_waiters_test.dart: a dead refusal cannot classify a surviving pool disconnect
+00:02 +255 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: createDirectory an existing directory conflicts (dart:io create() is a no-op there)
+00:02 +256 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +257 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +258 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +259 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +260 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +261 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +262 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +263 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +264 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +265 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +266 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore persists across store instances
+00:02 +267 ~1: packages/poltergeist_core/test/connection/pool_resolution_dismissal_test.dart: abandoning the pool dismisses an in-flight resolution prompt
+00:02 +268 ~1: packages/poltergeist_core/test/connection/pool_resolution_dismissal_test.dart: abandoning the pool dismisses an in-flight resolution prompt
+00:02 +269 ~1: packages/poltergeist_core/test/connection/pool_resolution_dismissal_test.dart: abandoning the pool dismisses an in-flight resolution prompt
+00:02 +270 ~1: packages/poltergeist_core/test/connection/pool_resolution_dismissal_test.dart: abandoning the pool dismisses an in-flight resolution prompt
+00:02 +271 ~1: packages/poltergeist_core/test/connection/pool_resolution_dismissal_test.dart: abandoning the pool dismisses an in-flight resolution prompt
+00:02 +272 ~1: packages/poltergeist_core/test/connection/pool_growth_rules_test.dart: first connect is serialized: one connect, one TOFU prompt
+00:02 +273 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore removeFor skips a record of a different endpoint
+00:02 +274 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore removeFor skips a record of a different endpoint
+00:02 +275 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: rename a missing source fails notFound and the destination is untouched
+00:02 +276 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: rename a missing source fails notFound and the destination is untouched
+00:02 +277 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: rename a missing source fails notFound and the destination is untouched
+00:02 +278 ~1: packages/poltergeist_core/test/fs/local_file_system_test.dart: rename a missing source fails notFound and the destination is untouched
+00:02 +279 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +280 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +281 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +282 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +283 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +284 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +285 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +286 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +287 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +288 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +289 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +290 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +291 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +292 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +293 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +294 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +295 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +296 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +297 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +298 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +299 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +300 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:02 +301 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +302 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +303 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +304 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +305 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +306 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +307 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +308 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +309 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +310 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +311 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +312 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +313 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +314 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +315 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +316 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +317 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +318 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +319 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +320 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +321 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +322 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +323 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +324 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +325 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +326 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +327 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +328 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +329 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +330 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +331 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +332 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +333 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +334 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +335 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +336 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +337 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +338 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +339 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +340 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +341 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +342 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +343 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +344 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +345 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +346 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +347 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +348 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +349 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +350 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +351 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +352 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +353 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +354 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +355 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +356 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +357 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +358 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +359 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +360 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +361 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +362 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +363 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +364 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +365 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +366 ~1: packages/poltergeist_core/test/connection/incident_store_test.dart: FileIncidentStore serializes concurrent writes without interleaving
+00:03 +367 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +368 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +369 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +370 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +371 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +372 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +373 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +374 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +375 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +376 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +377 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:03 +378 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +379 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +380 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +381 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +382 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +383 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +384 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +385 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +386 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +387 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +388 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +389 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +390 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +391 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +392 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +393 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +394 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +395 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +396 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +397 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +398 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +399 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +400 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +401 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +402 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +403 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +404 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +405 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +406 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +407 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +408 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +409 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +410 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +411 ~1: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +411 ~1: packages/poltergeist_core/test/integration/pool_auth_tofu_sshd_test.dart: keyboard-interactive auth against real sshd answers one challenge, then caps the pool at one transport
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_AUTHMATRIX to enable.
+00:04 +411 ~2: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth oldKey respects the replacement connection
+00:04 +412 ~2: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +413 ~2: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +413 ~2: packages/poltergeist_core/test/integration/pool_auth_tofu_sshd_test.dart: TOFU against real sshd first use prompts once, pins, and verifies silently after
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +413 ~3: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +413 ~3: packages/poltergeist_core/test/integration/pool_auth_tofu_sshd_test.dart: changed key against real sshd hard-blocks every operation without re-pinning
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +413 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +414 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +415 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +416 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +417 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +418 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +419 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +420 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +421 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +422 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +423 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +424 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +425 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +426 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +427 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +428 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +429 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +430 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +431 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +432 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +433 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +434 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +435 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +436 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +437 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +438 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +439 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +440 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +441 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +442 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +443 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +444 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +445 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +446 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +447 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +448 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +449 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +450 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +451 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +452 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +453 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +454 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +455 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +456 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +457 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +458 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +459 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +460 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +461 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +462 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +463 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +464 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +465 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +466 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +467 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +468 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +469 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +470 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +471 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +472 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +473 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +474 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +475 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +476 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +477 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +478 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +479 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +480 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +481 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +482 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +483 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +484 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +485 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +486 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +487 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +488 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +489 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +490 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +491 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +492 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +493 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +494 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +495 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +496 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +497 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +498 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +499 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +500 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +501 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +502 ~4: packages/poltergeist_core/test/browse/unicode_simple_fold_test.dart: matches pinned C and S mappings and every unmapped scalar
+00:04 +503 ~4: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +504 ~4: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +505 ~4: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +506 ~4: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +507 ~4: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +507 ~4: packages/poltergeist_core/test/integration/tofu_sshd_test.dart: shared TOFU decisions against real sshd two bookmarks share one pending first-use decision
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +507 ~5: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +508 ~5: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +508 ~5: packages/poltergeist_core/test/integration/tofu_sshd_test.dart: shared TOFU decisions against real sshd declining first use stores no pin and retry asks again
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +508 ~6: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +508 ~6: packages/poltergeist_core/test/integration/tofu_sshd_test.dart: shared TOFU decisions against real sshd a swapped key blocks both bookmarks until explicit review
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +508 ~7: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +508 ~7: packages/poltergeist_core/test/integration/tofu_sshd_test.dart: shared TOFU decisions against real sshd subsequent tests see the original fixture host key
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +508 ~8: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +509 ~8: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +510 ~8: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +511 ~8: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +512 ~8: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +513 ~8: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +513 ~8: packages/poltergeist_core/test/integration/pool_sshd_test.dart: pool against real sshd privateKey grows to the transport cap and queues excess demand
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +513 ~9: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +513 ~9: packages/poltergeist_core/test/integration/pool_sshd_test.dart: pool against real sshd password grows to the transport cap and queues excess demand
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +513 ~10: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +513 ~10: packages/poltergeist_core/test/integration/pool_sshd_test.dart: pool against real sshd pool keepalive completes real ping round trips on both transports
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +513 ~11: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +514 ~11: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +514 ~11: packages/poltergeist_core/test/integration/pool_sshd_test.dart: pool against real sshd stop/start probes with backoff and rebinds the existing browse handle
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +514 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +515 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +516 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +517 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +518 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +519 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +520 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +521 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +522 ~12: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +522 ~12: packages/poltergeist_core/test/integration/sshd_fixture_test.dart: modern fixture completes an SSH banner exchange
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_MODERN to enable.
+00:04 +522 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +523 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +524 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +525 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +526 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +527 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +528 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:04 +529 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +530 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +531 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +532 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +533 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +534 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +535 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +536 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +537 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +538 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +539 ~13: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +539 ~13: packages/poltergeist_core/test/integration/pool_auth_failure_sshd_test.dart: auth failure summaries against real sshd a rejected key is named and points at authorized_keys
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_AUTHMATRIX to enable.
+00:05 +539 ~14: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +539 ~14: packages/poltergeist_core/test/integration/pool_auth_failure_sshd_test.dart: auth failure summaries against real sshd a method-not-accepted user is told to switch methods
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_AUTHMATRIX to enable.
+00:05 +539 ~15: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +539 ~15: packages/poltergeist_core/test/integration/pool_auth_failure_sshd_test.dart: auth failure summaries against real sshd a root password rejection explains prohibit-password
+  Skip: Set POLTERGEIST_SSHD and POLTERGEIST_SSHD_AUTHMATRIX to enable.
+00:05 +539 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +539 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: none/root
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"none","move":"root","watchedPaths":[],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +540 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +540 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: none/parent
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"none","move":"parent","watchedPaths":[],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +541 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +541 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: none/higherAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"none","move":"higherAncestor","watchedPaths":[],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +542 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +542 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: none/reparentAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"none","move":"reparentAncestor","watchedPaths":[],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +543 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +543 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: none/caseOnlyAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"none","move":"caseOnlyAncestor","watchedPaths":[],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +544 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +544 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: root/root
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"root","move":"root","watchedPaths":["/tmp/pg-rename-VXRFCV/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +545 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +545 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: root/parent
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"root","move":"parent","watchedPaths":["/tmp/pg-rename-PQDNGD/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +546 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +546 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: root/higherAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"root","move":"higherAncestor","watchedPaths":["/tmp/pg-rename-SUJZFK/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +547 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +547 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: root/reparentAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"root","move":"reparentAncestor","watchedPaths":["/tmp/pg-rename-FVAZUS/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +548 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +548 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: root/caseOnlyAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"root","move":"caseOnlyAncestor","watchedPaths":["/tmp/pg-rename-JSKRVL/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":["/tmp/pg-rename-JSKRVL/ancestor/parent/root: FileSystemModifyEvent('/tmp/pg-rename-JSKRVL/ancestor/parent/root/ready', isDirectory=false, contentChanged=true)"],"watchErrorsAfterMutation":[]}
+00:05 +549 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +549 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: rootAndParent/root
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"rootAndParent","move":"root","watchedPaths":["/tmp/pg-rename-YXQHMS/ancestor/parent","/tmp/pg-rename-YXQHMS/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +550 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +550 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: rootAndParent/parent
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"rootAndParent","move":"parent","watchedPaths":["/tmp/pg-rename-AKILZH/ancestor/parent","/tmp/pg-rename-AKILZH/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +551 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +551 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: rootAndParent/higherAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"rootAndParent","move":"higherAncestor","watchedPaths":["/tmp/pg-rename-VLMCIE/ancestor/parent","/tmp/pg-rename-VLMCIE/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +552 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +552 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: rootAndParent/reparentAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"rootAndParent","move":"reparentAncestor","watchedPaths":["/tmp/pg-rename-GXRBCJ/ancestor/parent","/tmp/pg-rename-GXRBCJ/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +553 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +553 ~16: packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart: native rename boundary: rootAndParent/caseOnlyAncestor
+{"os":"linux","osVersion":"Linux 7.0.0-31-generic #31-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug  1 04:26:38 UTC 2026","dart":"3.13.2 (stable) (Tue Aug 25 01:01:12 2026 -0700) on \"linux_x64\"","handles":"rootAndParent","move":"caseOnlyAncestor","watchedPaths":["/tmp/pg-rename-SQSUON/ancestor/parent","/tmp/pg-rename-SQSUON/ancestor/parent/root"],"liveRename":"permitted","error":null,"errorCode":null,"renameAfterRelease":"not needed","eventsBeforeRelease":[],"watchErrorsAfterMutation":[]}
+00:05 +554 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth authChallenge respects the replacement connection
+00:05 +555 ~16: packages/poltergeist_core/test/engine/engine_host_test.dart: retargeted bookmark cannot borrow its old live pool status
+00:05 +556 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +557 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +558 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +559 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +560 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +561 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +562 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +563 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +564 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +565 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +566 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +567 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +568 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +569 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +570 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +571 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +572 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +573 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +574 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +575 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +576 ~16: packages/poltergeist_core/test/engine/local_watch_permission_test.dart: a leaf watch works below a traverse-only ancestor
+00:05 +577 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +578 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +579 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +580 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +581 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +582 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +583 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +584 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +585 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +586 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +587 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +588 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +589 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +590 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +591 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +592 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +593 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +594 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +595 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +596 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +597 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +598 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +599 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +600 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +601 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +602 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +603 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +604 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +605 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +606 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +607 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +608 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +609 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +610 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +611 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +612 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +613 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +614 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +615 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +616 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +617 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +618 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +619 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +620 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +621 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +622 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +623 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +624 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +625 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +626 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +627 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +628 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +629 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +630 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +631 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +632 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +633 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +634 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +635 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +636 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +637 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +638 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +639 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +640 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +641 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +642 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +643 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +644 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +645 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +646 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +647 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +648 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +649 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +650 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +651 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +652 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +653 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +654 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +655 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +656 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +657 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +658 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +659 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +660 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +661 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +662 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +663 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +664 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +665 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +666 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +667 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +668 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +669 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +670 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +671 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +672 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +673 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +674 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +675 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +676 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +677 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +678 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +679 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +680 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +681 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +682 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:05 +683 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +684 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +685 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +686 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +687 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +688 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +689 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +690 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +691 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +692 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +693 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +694 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +695 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +696 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +697 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +698 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +699 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +700 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +701 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +702 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +703 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +704 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +705 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +706 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +707 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +708 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +709 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +710 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +711 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +712 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +713 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +714 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +715 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +716 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +717 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +718 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +719 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth delayedKey respects the replacement connection
+00:06 +720 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:06 +721 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:06 +722 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:06 +723 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:06 +724 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:06 +725 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:06 +726 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:07 +727 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:07 +728 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:07 +729 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:07 +730 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:07 +731 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:07 +732 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches a real local change crosses the engine boundary, debounced
+00:07 +733 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth interactiveRetry respects the replacement connection
+00:08 +734 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth interactiveRetry respects the replacement connection
+00:08 +735 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth interactiveRetry respects the replacement connection
+00:08 +736 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth interactiveRetry respects the replacement connection
+00:08 +737 ~16: packages/poltergeist_core/test/connection/pool_trust_test.dart: late growth interactiveRetry respects the replacement connection
+00:09 +738 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches grandchild and sibling mutations make no noise
+00:09 +739 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches retarget switches the watched directory safely
+00:11 +740 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches deleting the watched directory signals lost immediately
+00:12 +741 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches deleting an empty watched directory signals lost
+00:12 +742 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches watch resolves linked directories before subscribing
+00:14 +743 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches deleting an already-emptied watched directory signals lost
+00:15 +744 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches renaming and recreating a watched path loses its old binding
+00:17 +745 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches unwatchDirectory releases the engine-side watch
+00:19 +746 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches closing the channel closes directoryChanges
+00:20 +747 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: local directory watches engine death closes directoryChanges
+00:22 +748 ~16: packages/poltergeist_core/test/engine/engine_client_test.dart: invalid policy kills the engine and surfaces termination
+00:22 +749 ~16: All tests passed!

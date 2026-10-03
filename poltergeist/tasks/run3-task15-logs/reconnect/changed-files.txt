@@ -1,0 +1,12 @@
+app/poltergeist_app/lib/l10n/app_en.arb
+app/poltergeist_app/lib/l10n/app_localizations.dart
+app/poltergeist_app/lib/l10n/app_localizations_en.dart
+app/poltergeist_app/lib/services/pane_controller.dart
+app/poltergeist_app/lib/ui/panes/pane_commands.dart
+app/poltergeist_app/lib/ui/panes/pane_view.dart
+app/poltergeist_app/test/localization_contract_test.dart
+app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+app/poltergeist_app/test/services/pane_reconnect_test.dart
+app/poltergeist_app/test/ui/panes/pane_view_test.dart
+app/poltergeist_app/test/ui/panes/workspace_panes_test.dart
+docs/STATUS.md
