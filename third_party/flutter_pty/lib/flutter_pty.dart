@@ -66,7 +66,7 @@ class Pty {
       'LOGNAME',
       'USER',
       'DISPLAY',
-      'LC_TYPE',
+      'LC_CTYPE',
       'HOME',
       'PATH'
     };

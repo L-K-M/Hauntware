@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -425,61 +426,87 @@ void main() {
       expect(sent, isEmpty);
     });
 
-    test('a live child gets the hangup plus a SIGKILL after the grace',
-        () async {
-      PtyTermination(
-        hasExited: () => false,
-        send: recorder(),
-        hangup: hangupRecorder(),
-        grace: const Duration(milliseconds: 50),
-      ).run();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(hangups, 1);
-      expect(sent, [ProcessSignal.sigkill]);
+    // fakeAsync: PtyTermination's grace is a Timer, so the 50–300ms
+    // windows below would otherwise be wall-clock sleeps that a loaded
+    // CI runner can slip past.
+    test('a live child gets the hangup plus a SIGKILL after the grace', () {
+      fakeAsync((async) {
+        PtyTermination(
+          hasExited: () => false,
+          send: recorder(),
+          hangup: hangupRecorder(),
+          grace: const Duration(milliseconds: 50),
+        ).run();
+        async.elapse(const Duration(milliseconds: 300));
+        expect(hangups, 1);
+        expect(sent, [ProcessSignal.sigkill]);
+      });
     });
 
-    test('an exit inside the grace window cancels the escalation', () async {
-      var exited = false;
-      PtyTermination(
-        hasExited: () => exited,
-        send: recorder(),
-        hangup: hangupRecorder(),
-        grace: const Duration(milliseconds: 150),
-      ).run();
-      exited = true;
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(hangups, 1);
-      expect(sent, isEmpty);
+    test('an exit inside the grace window cancels the escalation', () {
+      fakeAsync((async) {
+        var exited = false;
+        PtyTermination(
+          hasExited: () => exited,
+          send: recorder(),
+          hangup: hangupRecorder(),
+          grace: const Duration(milliseconds: 150),
+        ).run();
+        exited = true;
+        async.elapse(const Duration(milliseconds: 300));
+        expect(hangups, 1);
+        expect(sent, isEmpty);
+      });
     });
 
-    test('run() is idempotent — hangup and watchdog fire once', () async {
-      final termination = PtyTermination(
-        hasExited: () => false,
-        send: recorder(),
-        hangup: hangupRecorder(),
-        grace: const Duration(milliseconds: 50),
-      )..run();
-      termination.run();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(hangups, 1);
-      expect(sent, [ProcessSignal.sigkill]);
+    test('run() is idempotent — hangup and watchdog fire once', () {
+      fakeAsync((async) {
+        final termination = PtyTermination(
+          hasExited: () => false,
+          send: recorder(),
+          hangup: hangupRecorder(),
+          grace: const Duration(milliseconds: 50),
+        )..run();
+        termination.run();
+        async.elapse(const Duration(milliseconds: 300));
+        expect(hangups, 1);
+        expect(sent, [ProcessSignal.sigkill]);
+      });
     });
 
-    test('a send that reports failure does not throw', () async {
-      PtyTermination(
-        hasExited: () => false,
-        send: (_) => false,
-        hangup: hangupRecorder(),
-        grace: const Duration(milliseconds: 50),
-      ).run();
-      PtyTermination(
-        hasExited: () => false,
-        send: (_) => throw StateError('no such process'),
-        hangup: hangupRecorder(),
-        grace: const Duration(milliseconds: 50),
-      ).run();
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(hangups, 2);
+    test('a hangup that throws still arms the watchdog', () {
+      fakeAsync((async) {
+        // If the native close ever throws, run() must not rethrow (the
+        // caller set _started already — there is no retry) and the child,
+        // unproven-dead, must still get the escalation.
+        PtyTermination(
+          hasExited: () => false,
+          send: recorder(),
+          hangup: () => throw StateError('native close blew up'),
+          grace: const Duration(milliseconds: 50),
+        ).run();
+        async.elapse(const Duration(milliseconds: 300));
+        expect(sent, [ProcessSignal.sigkill]);
+      });
+    });
+
+    test('a send that reports failure does not throw', () {
+      fakeAsync((async) {
+        PtyTermination(
+          hasExited: () => false,
+          send: (_) => false,
+          hangup: hangupRecorder(),
+          grace: const Duration(milliseconds: 50),
+        ).run();
+        PtyTermination(
+          hasExited: () => false,
+          send: (_) => throw StateError('no such process'),
+          hangup: hangupRecorder(),
+          grace: const Duration(milliseconds: 50),
+        ).run();
+        async.elapse(const Duration(milliseconds: 300));
+        expect(hangups, 2);
+      });
     });
   });
 

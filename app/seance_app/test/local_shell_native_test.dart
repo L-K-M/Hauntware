@@ -223,7 +223,11 @@ void main() {
       addTearDown(session.close);
 
       engine.type('sleep 30\n');
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      // The line discipline echoes input, so seeing the command back
+      // proves the shell read it — under a loaded runner, ^C sent before
+      // that interrupt would hit nothing and the test would time out.
+      await _waitFor(engine, 'sleep 30');
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       engine.type('\x03');
       // Queued right behind the interrupt: dash exits sleep with 130 and
       // runs this immediately — a real SIGINT through the pty line
@@ -308,9 +312,15 @@ void main() {
 
       // Replace the shell with a process that ignores SIGHUP — exec keeps
       // the pid, so close()'s HUP lands but cannot kill it. Only the grace
-      // -window SIGKILL can.
+      // -window SIGKILL can. Wait for the exec itself, not just the typed
+      // line: /proc/pid/cmdline changes when execve lands.
       engine.type("trap '' HUP; exec sleep 300\n");
-      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await _waitUntil(
+        () => File('/proc/$pid/cmdline')
+            .readAsStringSync()
+            .startsWith('sleep'),
+        what: 'child $pid to exec sleep',
+      );
 
       await session.close();
       await _waitUntil(
@@ -342,12 +352,23 @@ void main() {
       // foreground process group when the session leader dies, which is
       // what 'the terminal closed' must look like to it.
       engine.type('sleep 300\n');
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-      final children = File('/proc/$shellPid/task/$shellPid/children')
-          .readAsStringSync()
-          .trim();
-      expect(children, isNotEmpty, reason: 'sleep never started');
-      final sleepPid = int.parse(children.split(RegExp('\\s+')).first);
+      // Poll for the fork instead of sleeping — a fixed delay races the
+      // shell's read under load.
+      String childPids() {
+        try {
+          return File('/proc/$shellPid/task/$shellPid/children')
+              .readAsStringSync()
+              .trim();
+        } catch (_) {
+          return '';
+        }
+      }
+
+      await _waitUntil(
+        () => childPids().isNotEmpty,
+        what: 'foreground sleep to appear as shell child',
+      );
+      final sleepPid = int.parse(childPids().split(RegExp('\\s+')).first);
 
       await session.close();
       await _waitUntil(
@@ -370,9 +391,19 @@ void main() {
       int fdCount() => Directory('/proc/self/fd').listSync().length;
       int taskCount() => Directory('/proc/self/task').listSync().length;
 
-      Future<void> cycle() async {
+      // Both teardown paths must release the native side: explicit
+      // close() on a live shell, and the natural `exit` path where the
+      // child dies first and the session's own teardown runs the hangup.
+      Future<void> cycle({bool natural = false}) async {
         final engine = HeadlessTerminalEngine();
         final session = await _spawn(engine, home!);
+        if (natural) {
+          engine.type('exit\n');
+          await _waitUntil(
+            () => session.isClosed,
+            what: 'session teardown after natural exit',
+          );
+        }
         await session.close();
         await session.pty.exitCode.timeout(
           const Duration(seconds: 10),
@@ -391,14 +422,14 @@ void main() {
       final baseTasks = taskCount();
 
       for (var i = 0; i < 25; i++) {
-        await cycle();
+        await cycle(natural: i.isOdd);
       }
       await Future<void>.delayed(const Duration(seconds: 1));
 
       // Measured before the vendored lifecycle fix: +2 fds (master + a
       // leaked slave copy) and ~16 MB of thread stacks per session —
-      // 25 cycles was +50 fds, +25 tasks, +412 MB VmSize. Anything close
-      // to that means teardown is leaking again.
+      // 25 explicit-close cycles was +50 fds and +25 tasks. Anything
+      // close to that means teardown is leaking again.
       expect(fdCount() - baseFds, lessThanOrEqualTo(4),
           reason: 'master/slave fd leaked per session');
       expect(taskCount() - baseTasks, lessThanOrEqualTo(4),

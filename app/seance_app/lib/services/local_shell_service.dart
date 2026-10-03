@@ -216,7 +216,14 @@ class PtyTermination {
   void run() {
     if (_started) return;
     _started = true;
-    hangup();
+    // A throwing hangup must not disarm the watchdog — the child is
+    // unproven-dead and would otherwise outlive the failed close with no
+    // retry possible (_started is already set).
+    try {
+      hangup();
+    } catch (error) {
+      debugPrint('Local shell: closing the pty master failed: $error');
+    }
     if (hasExited()) return;
     Timer(grace, () {
       if (!hasExited()) _signal(ProcessSignal.sigkill);
