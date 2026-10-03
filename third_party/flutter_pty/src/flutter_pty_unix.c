@@ -67,9 +67,17 @@ typedef struct ReadLoopOptions
 
 char *error_message = NULL;
 
-/* Séance: joins the waitpid thread once the child is reaped — defined
-   below pty_create so its failure path can reuse it. */
-static void *reap_waiter(void *arg);
+/* Séance: synchronous reaps in the failure paths retry EINTR — an
+   interrupted waitpid would leave the killed child a zombie. */
+static void reap_child(pid_t pid)
+{
+    pid_t rc;
+    do
+    {
+        rc = waitpid(pid, NULL, 0);
+    } while (rc < 0 && errno == EINTR);
+    (void)rc;
+}
 
 static void *read_loop(void *arg)
 {
@@ -308,7 +316,7 @@ FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
     {
         error_message = "out of memory";
         kill(pid, SIGKILL);
-        waitpid(pid, NULL, 0);
+        reap_child(pid);
         close(ptm);
         return NULL;
     }
@@ -333,7 +341,7 @@ FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
     {
         error_message = "stop pipe failed";
         kill(pid, SIGKILL);
-        waitpid(pid, NULL, 0);
+        reap_child(pid);
         if (handle->stop_fd[0] >= 0)
         {
             close(handle->stop_fd[0]);
@@ -359,34 +367,23 @@ FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
 
         if (handle->reader_started)
         {
-            ssize_t ignored = write(handle->stop_fd[1], "x", 1);
-            (void)ignored;
+            /* Same EINTR retry as pty_close: a lost wake would leave the
+               join blocked on a reader parked in poll(). */
+            while (write(handle->stop_fd[1], "x", 1) < 0 && errno == EINTR)
+            {
+            }
             pthread_join(handle->reader, NULL);
         }
 
         kill(handle->pid, SIGKILL);
-        waitpid(handle->pid, NULL, 0);
+        reap_child(handle->pid);
         close(handle->ptm);
         close(handle->stop_fd[0]);
         close(handle->stop_fd[1]);
 
-        if (handle->waiter_started)
-        {
-            pthread_t *waiter = malloc(sizeof(pthread_t));
-            if (waiter != NULL)
-            {
-                *waiter = handle->waiter;
-                pthread_t reaper;
-                if (pthread_create(&reaper, NULL, reap_waiter, waiter) == 0)
-                {
-                    pthread_detach(reaper);
-                }
-                else
-                {
-                    free(waiter);
-                }
-            }
-        }
+        /* handle->waiter_started is always false here: reaching this
+           branch means one starter returned <0, so start_wait_exit_thread
+           either failed or never ran — there is no waiter to reap. */
 
         pthread_mutex_destroy(&handle->mutex);
         free(handle);

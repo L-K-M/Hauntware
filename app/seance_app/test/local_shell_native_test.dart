@@ -62,6 +62,27 @@ Future<void> _waitFor(
   );
 }
 
+/// [_waitFor] on a regex — required when the typed command's kernel echo
+/// contains the marker prefix itself: `echo PID_$$` echoes `PID_` to the
+/// terminal long before the shell prints `PID_<digits>`, so a plain
+/// prefix wait can complete on text the capture regex can't match.
+Future<RegExpMatch> _waitForMatch(
+  HeadlessTerminalEngine engine,
+  RegExp needle, {
+  Duration timeout = const Duration(seconds: 10),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    final match = needle.firstMatch(engine.receivedText);
+    if (match != null) return match;
+    await Future<void>.delayed(const Duration(milliseconds: 25));
+  }
+  fail(
+    'timed out waiting for /${needle.pattern}/. '
+    'received so far: ${engine.receivedText}',
+  );
+}
+
 Future<void> _waitUntil(
   bool Function() condition, {
   Duration timeout = const Duration(seconds: 10),
@@ -73,6 +94,29 @@ Future<void> _waitUntil(
     await Future<void>.delayed(const Duration(milliseconds: 25));
   }
   fail('timed out waiting for $what');
+}
+
+/// The pids currently listed as children of [pid]; empty while the
+/// kernel entry races the fork.
+String _childPids(int pid) {
+  try {
+    return File('/proc/$pid/task/$pid/children').readAsStringSync().trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+/// Whether [pid]'s process group is its terminal's foreground group —
+/// the one a ^C at the line discipline would signal.
+bool _isForegroundGroup(int pid) {
+  try {
+    final stat = File('/proc/$pid/stat').readAsStringSync();
+    // After ')' the fields are: state ppid pgrp session tty_nr tpgid …
+    final fields = stat.substring(stat.lastIndexOf(')') + 2).split(' ');
+    return fields[2] == fields[5];
+  } catch (_) {
+    return false;
+  }
 }
 
 /// The production spawn path: `LocalShellService` resolves the command and
@@ -116,7 +160,8 @@ void main() {
       expect(
         _ptyLibraryAvailable,
         isTrue,
-        reason: 'SEANCE_NATIVE_PTY_REQUIRED=1 but libflutter_pty.so could '
+        reason:
+            'SEANCE_NATIVE_PTY_REQUIRED=1 but libflutter_pty.so could '
             'not be opened. LD_LIBRARY_PATH='
             '${Platform.environment['LD_LIBRARY_PATH']}',
       );
@@ -222,12 +267,27 @@ void main() {
       final session = await _spawn(engine, home!);
       addTearDown(session.close);
 
+      engine.type('echo PID_\$\$\n');
+      // Wait for the digits, not the prefix: the kernel echoes
+      // 'echo PID_$$' back before the shell prints PID_<pid> — a prefix
+      // wait would parse the echo and find no capture.
+      final shellPid = int.parse(
+        (await _waitForMatch(engine, RegExp('PID_(\\d+)'))).group(1)!,
+      );
+
       engine.type('sleep 30\n');
-      // The line discipline echoes input, so seeing the command back
-      // proves the shell read it — under a loaded runner, ^C sent before
-      // that interrupt would hit nothing and the test would time out.
-      await _waitFor(engine, 'sleep 30');
-      await Future<void>.delayed(const Duration(milliseconds: 200));
+      // Gate on the sleep actually owning the tty foreground. Kernel
+      // echo only proves the line was *delivered* to the pty — the
+      // shell's read, fork/exec and tcsetpgrp all happen later, and the
+      // line discipline flushes the input queue when it generates the
+      // signal, so a ^C sent too early could hit the shell's own prompt
+      // and swallow the queued echo.
+      await _waitUntil(() {
+        final children = _childPids(shellPid);
+        if (children.isEmpty) return false;
+        final sleepPid = int.parse(children.split(RegExp('\\s+')).first);
+        return _isForegroundGroup(sleepPid);
+      }, what: 'sleep to own the tty foreground');
       engine.type('\x03');
       // Queued right behind the interrupt: dash exits sleep with 130 and
       // runs this immediately — a real SIGINT through the pty line
@@ -271,11 +331,8 @@ void main() {
 
       // The LocalPty seam exposes no pid, so the shell tells us its own.
       engine.type('echo SHELLPID_\$\$\n');
-      await _waitFor(engine, 'SHELLPID_');
       final pid = int.parse(
-        RegExp('SHELLPID_(\\d+)')
-            .firstMatch(engine.receivedText)!
-            .group(1)!,
+        (await _waitForMatch(engine, RegExp('SHELLPID_(\\d+)'))).group(1)!,
       );
 
       await session.close();
@@ -291,8 +348,10 @@ void main() {
         () => !File('/proc/$pid/stat').existsSync(),
         what: 'child pid $pid to exit after close()',
       );
-      final status = await session.pty.exitCode
-          .timeout(const Duration(seconds: 5), onTimeout: () => -999);
+      final status = await session.pty.exitCode.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => -999,
+      );
       expect(status, isNot(-999), reason: 'child never reaped after close()');
     },
   );
@@ -305,9 +364,8 @@ void main() {
       final session = await _spawn(engine, home!);
 
       engine.type('echo TRAP_PID_\$\$\n');
-      await _waitFor(engine, 'TRAP_PID_');
       final pid = int.parse(
-        RegExp('TRAP_PID_(\\d+)').firstMatch(engine.receivedText)!.group(1)!,
+        (await _waitForMatch(engine, RegExp('TRAP_PID_(\\d+)'))).group(1)!,
       );
 
       // Replace the shell with a process that ignores SIGHUP — exec keeps
@@ -316,9 +374,7 @@ void main() {
       // line: /proc/pid/cmdline changes when execve lands.
       engine.type("trap '' HUP; exec sleep 300\n");
       await _waitUntil(
-        () => File('/proc/$pid/cmdline')
-            .readAsStringSync()
-            .startsWith('sleep'),
+        () => File('/proc/$pid/cmdline').readAsStringSync().startsWith('sleep'),
         what: 'child $pid to exec sleep',
       );
 
@@ -327,8 +383,10 @@ void main() {
         () => !File('/proc/$pid/stat').existsSync(),
         what: 'HUP-ignoring child $pid to be killed',
       );
-      final status = await session.pty.exitCode
-          .timeout(const Duration(seconds: 5), onTimeout: () => -999);
+      final status = await session.pty.exitCode.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => -999,
+      );
       expect(status, -9, reason: 'expected SIGKILL (9), got $status');
     },
   );
@@ -341,11 +399,8 @@ void main() {
       final session = await _spawn(engine, home!);
 
       engine.type('echo SHELLPID_\$\$\n');
-      await _waitFor(engine, 'SHELLPID_');
       final shellPid = int.parse(
-        RegExp('SHELLPID_(\\d+)')
-            .firstMatch(engine.receivedText)!
-            .group(1)!,
+        (await _waitForMatch(engine, RegExp('SHELLPID_(\\d+)'))).group(1)!,
       );
 
       // A long-running foreground job: the kernel hangs up on the
@@ -354,21 +409,13 @@ void main() {
       engine.type('sleep 300\n');
       // Poll for the fork instead of sleeping — a fixed delay races the
       // shell's read under load.
-      String childPids() {
-        try {
-          return File('/proc/$shellPid/task/$shellPid/children')
-              .readAsStringSync()
-              .trim();
-        } catch (_) {
-          return '';
-        }
-      }
-
       await _waitUntil(
-        () => childPids().isNotEmpty,
+        () => _childPids(shellPid).isNotEmpty,
         what: 'foreground sleep to appear as shell child',
       );
-      final sleepPid = int.parse(childPids().split(RegExp('\\s+')).first);
+      final sleepPid = int.parse(
+        _childPids(shellPid).split(RegExp('\\s+')).first,
+      );
 
       await session.close();
       await _waitUntil(
@@ -430,10 +477,16 @@ void main() {
       // leaked slave copy) and ~16 MB of thread stacks per session —
       // 25 explicit-close cycles was +50 fds and +25 tasks. Anything
       // close to that means teardown is leaking again.
-      expect(fdCount() - baseFds, lessThanOrEqualTo(4),
-          reason: 'master/slave fd leaked per session');
-      expect(taskCount() - baseTasks, lessThanOrEqualTo(4),
-          reason: 'reader/waiter threads not reaped');
+      expect(
+        fdCount() - baseFds,
+        lessThanOrEqualTo(4),
+        reason: 'master/slave fd leaked per session',
+      );
+      expect(
+        taskCount() - baseTasks,
+        lessThanOrEqualTo(4),
+        reason: 'reader/waiter threads not reaped',
+      );
     },
   );
 }
