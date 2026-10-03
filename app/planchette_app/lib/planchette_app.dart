@@ -151,6 +151,11 @@ class _DocumentShellState extends State<_DocumentShell>
       binding.addPostFrameCallback((_) {
         if (mounted) setState(() {});
       });
+      // A callback added while post-frame callbacks already run only fires
+      // on the next frame — request it so the repaint cannot be dropped.
+      if (binding.schedulerPhase == SchedulerPhase.postFrameCallbacks) {
+        binding.scheduleFrame();
+      }
     }
   }
 
@@ -1360,11 +1365,11 @@ class _DocumentShellState extends State<_DocumentShell>
           child: DecoratedBox(
             key: const ValueKey('window-drop-highlight'),
             // The border sits over the shell — as a background decoration the
-            // Scaffold's opaque Material would cover it — and a lock taken
-            // mid-drag clears the hover the unregistered target never told us
-            // ended.
+            // Scaffold's opaque Material would cover it. Disabling the target
+            // makes desktop_drop report the drag's exit during the update, so
+            // the flag is already false before a locked frame ever paints.
             position: DecorationPosition.foreground,
-            decoration: _dropping && !workspace.interactionLocked
+            decoration: _dropping
                 ? BoxDecoration(
                     border: Border.all(color: scheme.primary, width: 2),
                   )

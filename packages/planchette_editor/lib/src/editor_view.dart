@@ -61,9 +61,9 @@ class PlanchetteEditor extends StatefulWidget {
   final bool showLineNumbers;
   final bool showStatus;
 
-  /// Whether the editor's scrollbar is always on. A document long enough to
-  /// lose the caret in it needs one; a host with its own scroll affordance
-  /// does not.
+  /// Whether the editor's scrollbar thumb is always visible. When false the
+  /// thumb still shows transiently while scrolling; a host with its own
+  /// scroll affordance can pass false to drop the permanent chrome.
   final bool showScrollbar;
   final Widget? banner;
   final Widget Function(BuildContext context, EditorController controller)?
@@ -1762,10 +1762,13 @@ final class _PasteAction extends ContextAction<PasteTextIntent> {
     if (locked()) return null;
     final state = context?.findAncestorStateOfType<EditableTextState>();
     if (state == null) return null;
-    // The clipboard answer is asynchronous; the latch holds pair completion
-    // off until the paste's write lands and consumes it.
-    controller.suppressNextCodeInput();
-    unawaited(state.pasteText(intent.cause));
+    // The clipboard answers after an event-loop gap, so the suppression mark
+    // rides on the paste's own write rather than arming for the next change:
+    // an empty clipboard leaves nothing behind, and a keystroke that lands
+    // while the paste is still out still pairs.
+    unawaited(
+      controller.runCodeInputSuppressed(() => state.pasteText(intent.cause)),
+    );
     return null;
   }
 }

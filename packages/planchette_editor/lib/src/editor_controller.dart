@@ -57,6 +57,11 @@ class EditorSaveResult {
   final bool hasUnsavedChanges;
 }
 
+/// Zone key [EditorController.runCodeInputSuppressed] sets and
+/// [EditorController._applyCodeInput] reads: a write delivered in that zone
+/// is a field action's result, not a keystroke.
+const _codeInputZone = Symbol('planchette.codeInputSuppressed');
+
 /// One buffer and its view state. Keep this controller alive while its document
 /// is in a background tab; dispose it only when the document actually closes.
 class EditorController extends ChangeNotifier {
@@ -376,11 +381,11 @@ class EditorController extends ChangeNotifier {
 
   /// While a command writes the buffer — a load, a tool result, find/replace,
   /// undo — its change is not a keystroke, and pair completion stays out.
-  /// [_setTextValue] holds this for the synchronous writes this class makes;
-  /// [_nextWriteArranged] carries the same meaning across an event-loop gap
-  /// for a write that has not landed yet (a paste awaiting the clipboard).
+  /// [_setTextValue] and [_suppressCodeInput] hold this for the synchronous
+  /// writes this class makes; [runCodeInputSuppressed] carries the same
+  /// meaning in a zone for a write that lands later — a paste awaiting the
+  /// clipboard.
   bool _arrangingEdit = false;
-  bool _nextWriteArranged = false;
   String? _lastQuery;
   String _languageProbe = '';
   String? _metricsText;
@@ -1586,10 +1591,13 @@ class EditorController extends ChangeNotifier {
     }
   }
 
-  /// Marks the next document change as arranged rather than typed. Unlike
-  /// [_setTextValue] this survives an event-loop gap, for writes that arrive
-  /// later; the first text change to land consumes it.
-  void suppressNextCodeInput() => _nextWriteArranged = true;
+  /// Runs [body] — a field action whose write resolves asynchronously, like a
+  /// paste awaiting the clipboard — in a zone that marks the write it ends in
+  /// as arranged rather than typed. The mark travels with the write itself,
+  /// so a clipboard that never answers arms nothing, and a keystroke landing
+  /// while the paste is still out still pairs.
+  T runCodeInputSuppressed<T>(T Function() body) =>
+      runZoned(body, zoneValues: const {_codeInputZone: true});
 
   /// Writes a value a command produced — never one the platform's text input
   /// made — so [_applyCodeInput] leaves it exactly as it came.
@@ -1667,14 +1675,15 @@ class EditorController extends ChangeNotifier {
   ///
   /// Only a single character inserted where the caret was counts, and only
   /// one that arrived by typing: a command's write goes through
-  /// [_setTextValue], undo and redo through [undo]/[redo], and a paste or
-  /// other write that lands asynchronously is marked by
-  /// [suppressNextCodeInput]. A composition or a replaced selection arrives
-  /// as more than a one-character insert and is left exactly as it came.
+  /// [_setTextValue], undo and redo through [undo]/[redo], and a write that
+  /// lands asynchronously runs in [runCodeInputSuppressed]. A composition or
+  /// a replaced selection arrives as more than a one-character insert and is
+  /// left exactly as it came.
   void _applyCodeInput(String previous) {
-    if (_editingLocked || isBusy || _arrangingEdit) return;
-    if (_nextWriteArranged) {
-      _nextWriteArranged = false;
+    if (_editingLocked ||
+        isBusy ||
+        _arrangingEdit ||
+        Zone.current[_codeInputZone] == true) {
       return;
     }
     final selection = text.selection;

@@ -1,25 +1,71 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
 
 EditorController editorFor(String text, {String path = 'a.txt'}) =>
     EditorController(displayPath: path, initialText: text);
 
-/// Type [typed] at the caret, the way the platform delivers a keystroke: the
-/// buffer changes and the caret lands after what was typed.
+/// Type [typed] the way the platform delivers a keystroke: any active
+/// selection is replaced, and the caret lands after what was typed.
 ///
 /// A raw key event cannot stand in for this. Enter and the bracket keys reach
 /// the buffer as a text-input update from the platform, not as a shortcut, so
 /// `sendKeyEvent` inserts nothing at all in a widget test.
 void type(EditorController c, String typed) {
   final value = c.text.value;
-  final at = value.selection.extentOffset.clamp(0, value.text.length);
+  final base = value.selection.baseOffset.clamp(0, value.text.length);
+  final extent = value.selection.extentOffset.clamp(0, value.text.length);
+  final at = base <= extent ? base : extent;
+  final end = base <= extent ? extent : base;
   c.text.value = value.copyWith(
-    text: value.text.replaceRange(at, at, typed),
+    text: value.text.replaceRange(at, end, typed),
     selection: TextSelection.collapsed(offset: at + typed.length),
   );
+}
+
+/// Mounts an editor holding [text] with the caret at its end and reports the
+/// platform answers [clipboard] should give until the returned reset runs.
+Future<EditorController> _editorWithClipboard(
+  WidgetTester tester,
+  String text,
+  Future<Object?> Function(MethodCall call) clipboard,
+) async {
+  final c = editorFor(text, path: 'a.json');
+  addTearDown(c.dispose);
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(body: PlanchetteEditor(controller: c)),
+    ),
+  );
+  c.editorFocus.requestFocus();
+  c.text.selection = TextSelection.collapsed(offset: c.text.text.length);
+  await tester.pump();
+  await tester.showKeyboard(find.byType(TextField));
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async => call.method == 'Clipboard.getData' ? clipboard(call) : null,
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
+  return c;
+}
+
+/// Invokes the field's paste intent from inside the editable, the way a real
+/// Ctrl+V reaches it from the focused context.
+void _paste(WidgetTester tester) {
+  BuildContext? inner;
+  tester
+      .element(find.byType(EditableText))
+      .visitChildElements((element) => inner ??= element);
+  Actions.invoke(inner!, const PasteTextIntent(SelectionChangedCause.keyboard));
 }
 
 void main() {
@@ -193,7 +239,7 @@ void main() {
       final c = EditorController(
         displayPath: 'a.json',
         loadDocument: () async => TextDocument(
-          file: File('/tmp/paired.json'),
+          file: File('${Directory.systemTemp.path}/paired.json'),
           text: '(',
           hasUtf8Bom: false,
           lineEnding: LineEnding.lf,
@@ -215,6 +261,58 @@ void main() {
       c.replacement.text = 'a(';
       expect(await c.replaceAll(), isTrue);
       expect(c.text.text, 'a(');
+    });
+  });
+
+  group('paste', () {
+    testWidgets('a one-character paste lands verbatim, never a pair', (
+      tester,
+    ) async {
+      final c = await _editorWithClipboard(
+        tester,
+        'x',
+        (_) async => <String, dynamic>{'text': '('},
+      );
+      _paste(tester);
+      await tester.pump();
+      expect(c.text.text, 'x(');
+    });
+
+    testWidgets('an empty clipboard leaves the next typed bracket pairing', (
+      tester,
+    ) async {
+      // Paste suppression marks the paste's own write, so a paste that never
+      // writes must not hold anything back: the next keystroke pairs as usual.
+      final c = await _editorWithClipboard(tester, 'x', (_) async => null);
+      _paste(tester);
+      await tester.pump();
+
+      type(c, '(');
+      await tester.pump();
+      expect(c.text.text, 'x()');
+    });
+
+    testWidgets('a bracket typed during a pending paste still pairs', (
+      tester,
+    ) async {
+      // The clipboard has not answered when the keystroke lands — the
+      // keystroke pairs, and the paste's own write still lands verbatim
+      // behind it rather than completing the pair the keystroke opened.
+      final clipboard = Completer<Object?>();
+      final c = await _editorWithClipboard(
+        tester,
+        'x',
+        (_) => clipboard.future,
+      );
+      _paste(tester);
+
+      type(c, '(');
+      await tester.pump();
+      expect(c.text.text, 'x()');
+
+      clipboard.complete(<String, dynamic>{'text': '('});
+      await tester.pump();
+      expect(c.text.text, 'x(()');
     });
   });
 

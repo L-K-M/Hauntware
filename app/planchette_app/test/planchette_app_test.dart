@@ -1324,6 +1324,9 @@ void main() {
     dialogs.openGate!.complete(const []);
     await tester.pumpAndSettle();
     expect(workspace.interactionLocked, isFalse);
+    // Disabling the target made desktop_drop report the exit, so the flag is
+    // really cleared — the border cannot resurface once the lock releases.
+    expect(decoration().border, isNull);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
