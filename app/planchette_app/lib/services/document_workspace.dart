@@ -390,49 +390,51 @@ final class DocumentWorkspace extends ChangeNotifier {
     if (interactionLocked) return;
     try {
       final selected = await _dialog(dialogs.pickOpenFiles);
-      final failures = <_OpenFailure>[];
-      final reported = <String>{};
-      for (final path in selected) {
-        try {
-          final failure = await _openDeduped(path);
-          if (failure != null && reported.add(_pathKey(path))) {
-            failures.add(failure);
-          }
-        } catch (error, stackTrace) {
-          // One exceptional path must not abort the rest of the batch, but a
-          // non-OS throwable is likely a bug — keep it diagnosable. The same
-          // `reported` set dedupes the diagnostic with the visible failure.
-          if (reported.add(_pathKey(path))) {
-            FlutterError.reportError(
-              FlutterErrorDetails(exception: error, stack: stackTrace),
-            );
-            failures.add((
-              path: path,
-              name: _paths.basename(path),
-              message: '$error',
-            ));
-          }
-        }
-      }
-      // A single failure belongs to its path, so opening that file again
-      // successfully retires it; a batch summary belongs to no one document.
-      if (failures.length == 1) {
-        _reportError(
-          _openFailureMessage(failures),
-          scope: _pathKey(failures.single.path),
-        );
-      } else if (failures.isNotEmpty) {
-        _reportError(_openFailureMessage(failures));
-      }
+      await openAll(selected);
     } catch (error) {
       _reportError('Could not open documents: $error');
     }
   }
 
-  Future<void> open(String path) async {
-    final failure = await _openDeduped(path);
-    if (failure != null) {
-      _reportError(_openFailureMessage([failure]), scope: _pathKey(path));
+  Future<void> open(String path) => openAll([path]);
+
+  /// Opens every path in one batch, so the failures it collects are reported
+  /// together: a drop or an argv list that half-fails names each file it
+  /// could not open instead of showing only the last.
+  Future<void> openAll(Iterable<String> paths) async {
+    final failures = <_OpenFailure>[];
+    final reported = <String>{};
+    for (final path in paths) {
+      try {
+        final failure = await _openDeduped(path);
+        if (failure != null && reported.add(_pathKey(path))) {
+          failures.add(failure);
+        }
+      } catch (error, stackTrace) {
+        // One exceptional path must not abort the rest of the batch, but a
+        // non-OS throwable is likely a bug — keep it diagnosable. The same
+        // `reported` set dedupes the diagnostic with the visible failure.
+        if (reported.add(_pathKey(path))) {
+          FlutterError.reportError(
+            FlutterErrorDetails(exception: error, stack: stackTrace),
+          );
+          failures.add((
+            path: path,
+            name: _paths.basename(path),
+            message: '$error',
+          ));
+        }
+      }
+    }
+    // A single failure belongs to its path, so opening that file again
+    // successfully retires it; a batch summary belongs to no one document.
+    if (failures.length == 1) {
+      _reportError(
+        _openFailureMessage(failures),
+        scope: _pathKey(failures.single.path),
+      );
+    } else if (failures.isNotEmpty) {
+      _reportError(_openFailureMessage(failures));
     }
   }
 

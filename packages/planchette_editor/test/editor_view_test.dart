@@ -6,6 +6,7 @@ Widget app(
   EditorController c, {
   bool active = true,
   bool locked = false,
+  bool scrollbar = true,
   EditorStrings strings = const EditorStrings(),
 }) => MaterialApp(
   home: Scaffold(
@@ -13,6 +14,7 @@ Widget app(
       controller: c,
       isActive: active,
       editingLocked: locked,
+      showScrollbar: scrollbar,
       strings: strings,
     ),
   ),
@@ -219,6 +221,52 @@ void main() {
     c.restoreFocus();
     await tester.pump();
     expect(c.editorFocus.hasFocus, isTrue);
+  });
+
+  testWidgets('the document sits inside a scrollbar a host can hide', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 't', initialText: 'x\n' * 500);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    Scrollbar documentScrollbar() => tester
+        .widgetList<Scrollbar>(find.byType(Scrollbar))
+        .firstWhere((s) => s.controller == c.scroll);
+    expect(documentScrollbar().thumbVisibility, isTrue);
+
+    await tester.pumpWidget(app(c, scrollbar: false));
+    await tester.pump();
+    expect(documentScrollbar().thumbVisibility, isFalse);
+  });
+
+  testWidgets('find and replace fields use the document monospace face', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 't', initialText: 'x');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    c.openSearch(replace: true);
+    await tester.pump();
+    final document = tester.widget<TextField>(
+      find.byKey(const ValueKey('planchette.document')),
+    );
+    final search = tester.widget<TextField>(
+      find.byWidgetPredicate((w) => w is TextField && w.controller == c.search),
+    );
+    final replacement = tester.widget<TextField>(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.controller == c.replacement,
+      ),
+    );
+    for (final field in [search, replacement]) {
+      expect(field.style?.fontFamily, document.style?.fontFamily);
+      expect(
+        field.style?.fontFamilyFallback,
+        document.style?.fontFamilyFallback,
+      );
+    }
   });
 
   testWidgets('restoreFocus is harmless once the editor is disposed', (

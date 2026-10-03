@@ -80,6 +80,12 @@ class EditorController extends ChangeNotifier {
        _patternSearchBudget = patternSearchBudget ?? core.patternSearchBudget,
        _toolHistory = toolHistory ?? TextToolHistory(),
        _now = now ?? clock.now {
+    if (initialText != null && loadDocument != null) {
+      throw ArgumentError(
+        'Pass either initialText or loadDocument, not both. initialText takes '
+        'precedence, so loadDocument would never run.',
+      );
+    }
     text = CodeEditingController(language: syntaxLanguageFor(displayPath));
     text.addListener(_textChanged);
     search.addListener(_queryChanged);
@@ -356,6 +362,17 @@ class EditorController extends ChangeNotifier {
   bool _barOverLimit = false;
   Timer? _barPreviewTimer;
   String _lastText = '';
+
+  /// The last caret offset [caretLineColumn] can stand behind while the
+  /// selection is invalid, and the text it was measured on. A selection goes
+  /// invalid when a host rewrites the buffer or a field detaches; reporting
+  /// (1, 1) then would teleport the status readout.
+  int _lastCaretOffset = 0;
+  String _lastCaretText = '';
+
+  /// While a typed character's pair is being written the change this
+  /// produces must not be mistaken for fresh typing and pair again.
+  bool _applyingCodeInput = false;
   String? _lastQuery;
   String _languageProbe = '';
   String? _metricsText;
@@ -642,11 +659,16 @@ class EditorController extends ChangeNotifier {
   }
 
   (int, int) get caretLineColumn {
+    // A valid selection is ground truth; an invalid one means the caret was
+    // elsewhere — report the last offset _textChanged observed instead of a
+    // plausible-looking (1, 1).
     final selection = text.selection;
-    if (!selection.isValid) return (1, 1);
-    final offset = selection.extentOffset.clamp(0, text.text.length);
+    final offset = (selection.isValid
+            ? selection.extentOffset
+            : _lastCaretOffset)
+        .clamp(0, text.text.length);
     final line = _lineIndexOf(offset);
-    return (line + 1, offset - lineStarts[line] + 1);
+    return (line + 1, displayColumnFor(text.text, lineStarts[line], offset));
   }
 
   /// The UTF-16 code units a selection covers and the lines it touches, in
@@ -1557,7 +1579,16 @@ class EditorController extends ChangeNotifier {
       _toolReport = null;
     }
     _seenValue = value;
-    if (_updatingSearch || _disposed) return;
+    if (text.selection.isValid) {
+      _lastCaretOffset = text.selection.extentOffset;
+      _lastCaretText = text.text;
+    } else if (text.text != _lastCaretText) {
+      // The document changed under an invalid selection (e.g. a wholesale
+      // replace) — the remembered offset is meaningless in the new text.
+      _lastCaretOffset = 0;
+      _lastCaretText = text.text;
+    }
+    if (_updatingSearch || _disposed || _applyingCodeInput) return;
     // An open tool bar dry-runs against where the caret lands; it reruns
     // when the selection or the text settles.
     if (_barTool != null) _markBarStale();
@@ -1565,11 +1596,63 @@ class EditorController extends ChangeNotifier {
       final before = _lastText;
       _lastText = text.text;
       _revision++;
+      _applyCodeInput(before);
       _refreshLanguage();
       _detectIndentation();
       if (_searchOpen) _followEdit(before);
     }
     _notify();
+  }
+
+  /// Bring in what a programmer expects typing to do on its own: a bracket
+  /// brings its closer with it, and a closer already under the caret is
+  /// stepped over instead of duplicated.
+  ///
+  /// This runs on the change the platform already made rather than by
+  /// intercepting keys, because the bracket keys reach the buffer through
+  /// the platform's text input and a shortcut would only be a second path
+  /// to the same edit.
+  ///
+  /// Only a single character inserted where the caret was counts. A paste, a
+  /// composition, an undo and a replaced selection all arrive as more than
+  /// that and are left exactly as they came, which is what keeps this from
+  /// rewriting someone else's text.
+  void _applyCodeInput(String previous) {
+    if (_editingLocked || isBusy) return;
+    final selection = text.selection;
+    final typed = text.text;
+    if (typed.length != previous.length + 1) return;
+    if (!selection.isValid || !selection.isCollapsed) return;
+    if (text.value.isComposingRangeValid) return;
+
+    final at = selection.extentOffset - 1;
+    if (at < 0 || at > previous.length) return;
+    if (!typed.startsWith(previous.substring(0, at), 0)) return;
+    if (!typed.endsWith(previous.substring(at))) return;
+
+    final character = typed[at];
+    _applyingCodeInput = true;
+    try {
+      // The platform has already inserted the character. Closing a pair
+      // means taking back that character and stepping over the one already
+      // there.
+      if (movesOverCloser(text.language, character, previous, at)) {
+        text.value = text.value.copyWith(
+          text: text.text.replaceRange(at, at + 1, ''),
+          selection: TextSelection.collapsed(offset: at + 1),
+        );
+        return;
+      }
+      if (!opensPair(text.language, character, previous, at)) return;
+      final closer = closerFor(character)!;
+      text.value = text.value.copyWith(
+        text: text.text.replaceRange(at, at + 1, '$character$closer'),
+        selection: TextSelection.collapsed(offset: at + 1),
+      );
+    } finally {
+      _applyingCodeInput = false;
+      _lastText = text.text;
+    }
   }
 
   // The indentation keys go through _applyLineEdit like the line commands:
@@ -2276,6 +2359,13 @@ class EditorController extends ChangeNotifier {
   /// document, focuses the editor and asks the view to scroll there.
   void goToLine(int line, {int column = 1}) {
     if (_loading || _error != null) return;
+    // A stale find match would keep the active highlight after the jump;
+    // the caret this command just placed is the selection now.
+    if (_activeMatch >= 0) {
+      _activeMatch = -1;
+      text.setSearchMatches(_matches, _activeMatch);
+      _schedulePreview();
+    }
     final starts = lineStarts;
     final index = (line - 1).clamp(0, starts.length - 1);
     final start = starts[index];

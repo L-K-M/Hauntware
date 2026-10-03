@@ -956,5 +956,50 @@ void main() {
         '\\ No newline at end of file',
       ]);
     });
+
+    test('case-insensitive keywords match in any ASCII case', () {
+      const text = 'SELECT select SeLeCt selection';
+      expect(slices(text, SyntaxLanguages.sql, SyntaxTokenType.keyword), [
+        'SELECT',
+        'select',
+        'SeLeCt',
+      ]);
+      expect(slices('On OFF yes', SyntaxLanguages.ini, SyntaxTokenType.keyword), [
+        'On',
+        'OFF',
+        'yes',
+      ]);
+    });
+
+    test('every case-insensitive keyword matches folded upper case', () {
+      // SQL, INI, CSS and Dockerfile fold case; folding must classify the
+      // same words as the previous toLowerCase lookup — no more, no less.
+      for (final language in [
+        SyntaxLanguages.sql,
+        SyntaxLanguages.ini,
+        SyntaxLanguages.css,
+        SyntaxLanguages.dockerfile,
+      ]) {
+        for (final keyword in language.keywords) {
+          final upper = keyword.toUpperCase();
+          expect(
+            slices(upper, language, SyntaxTokenType.keyword),
+            [upper],
+            reason: '${language.id} keyword $upper',
+          );
+        }
+      }
+    });
+
+    test('case-sensitive keywords keep their case', () {
+      expect(
+        slices('final Final', SyntaxLanguages.dart, SyntaxTokenType.keyword),
+        ['final'],
+      );
+      expect(
+        slices('if IF', SyntaxLanguages.go, SyntaxTokenType.keyword),
+        ['if'],
+      );
+    });
   });
 }

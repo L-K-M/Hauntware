@@ -161,6 +161,10 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
 /// a token keeps the token's color and adds the hit background. [scope],
 /// a stored find-in-selection range, washes the text inside it — under any
 /// match, whose own background stays on top.
+///
+/// One `TextStyle` per token type is built up front and shared by every
+/// span, because a highlighted document produces thousands of spans per
+/// frame and a fresh `TextStyle` for each one is pure garbage.
 List<InlineSpan> buildHighlightedSpans({
   required String text,
   required List<SyntaxToken> tokens,
@@ -169,6 +173,10 @@ List<InlineSpan> buildHighlightedSpans({
   required EditorSyntaxTheme theme,
   TextRange? scope,
 }) {
+  final tokenStyles = <SyntaxTokenType, TextStyle>{
+    for (final type in SyntaxTokenType.values)
+      type: TextStyle(color: theme.colorFor(type)),
+  };
   final spans = <InlineSpan>[];
   final n = text.length;
   final scopeStart = scope?.start.clamp(0, n) ?? 0;
@@ -196,8 +204,7 @@ List<InlineSpan> buildHighlightedSpans({
     } else if (position < scopeStart) {
       end = end.clamp(0, scopeStart);
     }
-    TextStyle? style;
-    if (inToken) style = TextStyle(color: theme.colorFor(token.type));
+    TextStyle? style = inToken ? tokenStyles[token.type] : null;
     if (inMatch) {
       final active = matchIndex == activeMatchIndex;
       style = (style ?? const TextStyle()).copyWith(

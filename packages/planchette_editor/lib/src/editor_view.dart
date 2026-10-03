@@ -38,6 +38,7 @@ class PlanchetteEditor extends StatefulWidget {
     this.editingLocked = false,
     this.showLineNumbers = true,
     this.showStatus = true,
+    this.showScrollbar = true,
     this.banner,
     this.statusBuilder,
     this.currentLineColor,
@@ -59,6 +60,11 @@ class PlanchetteEditor extends StatefulWidget {
   final bool editingLocked;
   final bool showLineNumbers;
   final bool showStatus;
+
+  /// Whether the editor's scrollbar is always on. A document long enough to
+  /// lose the caret in it needs one; a host with its own scroll affordance
+  /// does not.
+  final bool showScrollbar;
   final Widget? banner;
   final Widget Function(BuildContext context, EditorController controller)?
   statusBuilder;
@@ -135,6 +141,12 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         ? style.copyWith(fontFamily: base.fontFamily)
         : style;
   }
+
+  /// Find-bar fields show a pattern in the document's own face, shaped the
+  /// way it will match; the size stays the surrounding UI's.
+  TextStyle _patternStyle(BuildContext context) => _style.copyWith(
+    fontSize: Theme.of(context).textTheme.bodyMedium?.fontSize,
+  );
 
   bool get _locked => widget.editingLocked || c.editingLocked;
   bool get _apple => switch (Theme.of(context).platform) {
@@ -558,7 +570,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   autofocus: true,
                   autocorrect: false,
                   enableSuggestions: false,
-                  style: theme.textTheme.bodyMedium,
+                  style: _patternStyle(context),
                   decoration: InputDecoration(
                     hintText: c.useRegularExpression
                         ? strings.findPatternHint
@@ -740,6 +752,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                 focusNode: c.replacementFocus,
                 autocorrect: false,
                 enableSuggestions: false,
+                style: _patternStyle(context),
                 decoration: InputDecoration(
                   hintText: strings.replaceHint,
                   isDense: true,
@@ -897,7 +910,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
         focusNode: c.extractionFocus,
         autocorrect: false,
         enableSuggestions: false,
-        style: theme.textTheme.bodyMedium,
+        style: _patternStyle(context),
         decoration: InputDecoration(
           hintText: strings.extractTemplateHint,
           isDense: true,
@@ -1225,87 +1238,97 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   width: gutterWidth,
                 ),
               Expanded(
-                child: KeyedSubtree(
-                  // A new document field per installed buffer: the field's
-                  // undo history cannot be cleared, and must not reach back
-                  // past a load, reload or revert into the previous text.
-                  key: ValueKey(c.installGeneration),
-                  child: Actions(
-                    actions: {
-                      if (_locked) ...{
-                        UndoTextIntent: CallbackAction<UndoTextIntent>(
-                          onInvoke: (_) => null,
-                        ),
-                        RedoTextIntent: CallbackAction<RedoTextIntent>(
-                          onInvoke: (_) => null,
-                        ),
-                      },
-                      _IndentIntent: _EditAction<_IndentIntent>(
-                        enabled: () => !_locked,
-                        run: c.indent,
-                        heldWhileComposing: _composing,
-                        keepsKey: true,
-                      ),
-                      _OutdentIntent: _EditAction<_OutdentIntent>(
-                        enabled: () => !_locked,
-                        run: c.outdent,
-                        heldWhileComposing: _composing,
-                        keepsKey: true,
-                      ),
-                      _NewlineIntent: _EditAction<_NewlineIntent>(
-                        enabled: () => !_locked,
-                        run: c.insertNewline,
-                      ),
-                      _DeleteIndentIntent: _EditAction<_DeleteIndentIntent>(
-                        enabled: () => !_locked && c.canDeleteIndentBackward,
-                        run: c.deleteIndentBackward,
-                      ),
-                    },
-                    child: Shortcuts(
-                      shortcuts: {
-                        if (widget.tabKeyBehavior ==
-                            EditorTabKeyBehavior.indent) ...const {
-                          SingleActivator(LogicalKeyboardKey.tab):
-                              _IndentIntent(),
-                          SingleActivator(LogicalKeyboardKey.tab, shift: true):
-                              _OutdentIntent(),
+                // The field's own scrollable never gets a Scrollbar of its
+                // own, so without this a 10,000 line document gives no
+                // indication of where the caret is in it and nothing to
+                // drag.
+                child: Scrollbar(
+                  controller: c.scroll,
+                  thumbVisibility: widget.showScrollbar,
+                  child: KeyedSubtree(
+                    // A new document field per installed buffer: the field's
+                    // undo history cannot be cleared, and must not reach back
+                    // past a load, reload or revert into the previous text.
+                    key: ValueKey(c.installGeneration),
+                    child: Actions(
+                      actions: {
+                        if (_locked) ...{
+                          UndoTextIntent: CallbackAction<UndoTextIntent>(
+                            onInvoke: (_) => null,
+                          ),
+                          RedoTextIntent: CallbackAction<RedoTextIntent>(
+                            onInvoke: (_) => null,
+                          ),
                         },
-                        const SingleActivator(LogicalKeyboardKey.enter):
-                            const _NewlineIntent(),
-                        const SingleActivator(LogicalKeyboardKey.numpadEnter):
-                            const _NewlineIntent(),
-                        const SingleActivator(LogicalKeyboardKey.backspace):
-                            const _DeleteIndentIntent(),
+                        _IndentIntent: _EditAction<_IndentIntent>(
+                          enabled: () => !_locked,
+                          run: c.indent,
+                          heldWhileComposing: _composing,
+                          keepsKey: true,
+                        ),
+                        _OutdentIntent: _EditAction<_OutdentIntent>(
+                          enabled: () => !_locked,
+                          run: c.outdent,
+                          heldWhileComposing: _composing,
+                          keepsKey: true,
+                        ),
+                        _NewlineIntent: _EditAction<_NewlineIntent>(
+                          enabled: () => !_locked,
+                          run: c.insertNewline,
+                        ),
+                        _DeleteIndentIntent: _EditAction<_DeleteIndentIntent>(
+                          enabled: () => !_locked && c.canDeleteIndentBackward,
+                          run: c.deleteIndentBackward,
+                        ),
                       },
-                      child: TextField(
-                        key: const ValueKey('planchette.document'),
-                        contextMenuBuilder: ghostTextContextMenu,
-                        controller: c.text,
-                        undoController: c.undoController,
-                        readOnly: _locked,
-                        focusNode: c.editorFocus,
-                        scrollController: c.scroll,
-                        autofocus: widget.isActive && _routeIsCurrent,
-                        expands: true,
-                        maxLines: null,
-                        minLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textAlignVertical: TextAlignVertical.top,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        smartDashesType: SmartDashesType.disabled,
-                        smartQuotesType: SmartQuotesType.disabled,
-                        style: _style,
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.all(_padding),
-                          hintText: widget.placeholder,
-                          hintStyle: _style.copyWith(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant
-                                .withValues(alpha: 0.6),
-                            fontStyle: FontStyle.italic,
+                      child: Shortcuts(
+                        shortcuts: {
+                          if (widget.tabKeyBehavior ==
+                              EditorTabKeyBehavior.indent) ...const {
+                            SingleActivator(LogicalKeyboardKey.tab):
+                                _IndentIntent(),
+                            SingleActivator(
+                              LogicalKeyboardKey.tab,
+                              shift: true,
+                            ): _OutdentIntent(),
+                          },
+                          const SingleActivator(LogicalKeyboardKey.enter):
+                              const _NewlineIntent(),
+                          const SingleActivator(LogicalKeyboardKey.numpadEnter):
+                              const _NewlineIntent(),
+                          const SingleActivator(LogicalKeyboardKey.backspace):
+                              const _DeleteIndentIntent(),
+                        },
+                        child: TextField(
+                          key: const ValueKey('planchette.document'),
+                          contextMenuBuilder: ghostTextContextMenu,
+                          controller: c.text,
+                          undoController: c.undoController,
+                          readOnly: _locked,
+                          focusNode: c.editorFocus,
+                          scrollController: c.scroll,
+                          autofocus: widget.isActive && _routeIsCurrent,
+                          expands: true,
+                          maxLines: null,
+                          minLines: null,
+                          keyboardType: TextInputType.multiline,
+                          textAlignVertical: TextAlignVertical.top,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          smartDashesType: SmartDashesType.disabled,
+                          smartQuotesType: SmartQuotesType.disabled,
+                          style: _style,
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.all(_padding),
+                            hintText: widget.placeholder,
+                            hintStyle: _style.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant
+                                  .withValues(alpha: 0.6),
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                         ),
                       ),

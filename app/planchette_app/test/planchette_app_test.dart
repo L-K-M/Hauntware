@@ -1179,4 +1179,62 @@ void main() {
     expect(item('Edit', 'Duplicate Line').onSelected, isNotNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  testWidgets('the shell accepts dropped files', (tester) async {
+    workspace.newDocument();
+    await mount(tester);
+    // The drop gesture itself does not reach DragTarget under flutter_test;
+    // what can be proven is that the whole window is a target wired to the
+    // workspace's open path.
+    final target = tester.widget<DragTarget<String>>(
+      find.byType(DragTarget<String>),
+    );
+    expect(target.onWillAcceptWithDetails, isNotNull);
+    expect(target.onAcceptWithDetails, isNotNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  group('droppedPaths', () {
+    test('a bare path passes through', () {
+      expect(droppedPaths('/tmp/one.txt'), ['/tmp/one.txt']);
+      expect(droppedPaths('/tmp/one.txt\n/tmp/two.txt'), [
+        '/tmp/one.txt',
+        '/tmp/two.txt',
+      ]);
+    });
+
+    test('blank and comment lines are skipped', () {
+      expect(droppedPaths(''), isEmpty);
+      expect(droppedPaths('\n\n'), isEmpty);
+      expect(droppedPaths('   '), isEmpty);
+      // RFC 2483 marks comments in text/uri-list with a number sign; some
+      // file managers send // instead, and both appear in the wild.
+      expect(droppedPaths('# rfc comment\nfile:///tmp/one.txt'), [
+        '/tmp/one.txt',
+      ]);
+      expect(droppedPaths('// comment\nfile:///tmp/one.txt'), ['/tmp/one.txt']);
+      expect(droppedPaths('# a\n// b'), isEmpty);
+    });
+
+    test('file URIs decode to paths, CRLF and escapes included', () {
+      expect(
+        droppedPaths('file:///tmp/one.txt\r\nfile:///tmp/two%20words.txt\r\n'),
+        ['/tmp/one.txt', '/tmp/two words.txt'],
+      );
+      expect(droppedPaths('/tmp/a b.txt\n  /tmp/c.txt  '), [
+        '/tmp/a b.txt',
+        '/tmp/c.txt',
+      ]);
+    });
+
+    test('malformed or unsupported URIs are skipped, not thrown', () {
+      expect(() => droppedPaths('file://host/share/one.txt'), returnsNormally);
+      expect(() => droppedPaths('file:///a%2Fb'), returnsNormally);
+      // A UNC share or an escaped separator yields no usable path; the rest
+      // of the drop still opens.
+      expect(droppedPaths('file://host/share/one.txt\r\nfile:///tmp/ok.txt'), [
+        '/tmp/ok.txt',
+      ]);
+    });
+  });
 }

@@ -357,6 +357,41 @@ void main() {
     },
   );
 
+  test('a multi-file openAll reports every failure in one message', () async {
+    store.files[testPath('good.txt')] = document('good.txt', 'ok');
+    await workspace.openAll([
+      testPath('missing-a.txt'),
+      testPath('good.txt'),
+      testPath('missing-b.txt'),
+      testPath('missing-c.txt'),
+    ]);
+    expect(workspace.documents.map((tab) => tab.name), ['good.txt']);
+    final error = workspace.error!;
+    expect(error, contains('3 files'));
+    expect(error, contains('missing-a.txt'));
+    expect(error, contains('missing-b.txt'));
+    expect(error, contains('missing-c.txt'));
+    expect(error, isNot(contains('good.txt')));
+  });
+
+  test('a lone openAll failure retires once that file opens', () async {
+    await workspace.openAll([testPath('late.txt')]);
+    expect(workspace.error, startsWith('Could not open late.txt: '));
+
+    store.files[testPath('late.txt')] = document('late.txt', 'here now');
+    await workspace.open(testPath('late.txt'));
+    expect(workspace.error, isNull);
+  });
+
+  test('an openAll summary outlives one of its files opening', () async {
+    await workspace.openAll([testPath('late.txt'), testPath('gone.txt')]);
+    expect(workspace.error, contains('2 files'));
+
+    store.files[testPath('late.txt')] = document('late.txt', 'here now');
+    await workspace.open(testPath('late.txt'));
+    expect(workspace.error, contains('gone.txt'));
+  });
+
   test(
     'Save As during an in-flight save still writes the chosen path',
     () async {

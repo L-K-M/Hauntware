@@ -1314,131 +1314,161 @@ class _DocumentShellState extends State<_DocumentShell>
       // Keep focus below the shortcuts when the final editor is disposed.
       child: FocusScope(
         autofocus: true,
-        child: Scaffold(
-          body: Column(
-            // Chrome rows span the window and start at the leading edge;
-            // a centered column floated the menu bar mid-window.
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!mac) _menuBar(menus),
-              TabStrip(
-                tabs: [
-                  for (final tab in tabs)
-                    (
-                      id: tab.id,
-                      name: workspace.labelFor(tab),
-                      tooltip: tab.path ?? tab.name,
-                      dirty: tab.editor.isDirty,
-                      closable: !tab.busy,
-                      flashRequest: tab.flashRequest,
+        child: DragTarget<String>(
+          // While a dialog or quit review owns the workspace the file must
+          // not sneak in behind it, so the drop is refused outright.
+          onWillAcceptWithDetails: (_) => !workspace.interactionLocked,
+          onAcceptWithDetails: (details) {
+            final paths = droppedPaths(details.data);
+            if (paths.isEmpty) return;
+            final registry = window?.owner;
+            unawaited(
+              registry != null
+                  ? registry.openDocuments(paths)
+                  : workspace.openAll(paths),
+            );
+          },
+          builder: (context, candidate, rejected) => DecoratedBox(
+            // The only hint that a drop will land is a line around the
+            // window's own color while the file is over it.
+            decoration: candidate.isEmpty
+                ? const BoxDecoration()
+                : BoxDecoration(
+                    border: Border.all(color: scheme.primary, width: 2),
+                  ),
+            child: Scaffold(
+              body: Column(
+                // Chrome rows span the window and start at the leading edge;
+                // a centered column floated the menu bar mid-window.
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!mac) _menuBar(menus),
+                  TabStrip(
+                    tabs: [
+                      for (final tab in tabs)
+                        (
+                          id: tab.id,
+                          name: workspace.labelFor(tab),
+                          tooltip: tab.path ?? tab.name,
+                          dirty: tab.editor.isDirty,
+                          closable: !tab.busy,
+                          flashRequest: tab.flashRequest,
+                        ),
+                    ],
+                    activeId: active?.id,
+                    enabled: !workspace.interactionLocked,
+                    busy: active?.busy == true,
+                    onSelect: (id) =>
+                        _select(tabs.firstWhere((t) => t.id == id)),
+                    onClose: (id) => unawaited(
+                      workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
                     ),
-                ],
-                activeId: active?.id,
-                enabled: !workspace.interactionLocked,
-                busy: active?.busy == true,
-                onSelect: (id) => _select(tabs.firstWhere((t) => t.id == id)),
-                onClose: (id) => unawaited(
-                  workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
-                ),
-                onContextMenu: (id, position) =>
-                    _showTabMenu(position, tabs.firstWhere((t) => t.id == id)),
-                onNew: _new,
-                onOpen: () => unawaited(workspace.openDialog()),
-                onSave: _documentReady ? _save : null,
-                newTooltip: 'New (${_keyLabel(LogicalKeyboardKey.keyN)})',
-                openTooltip: 'Open… (${_keyLabel(LogicalKeyboardKey.keyO)})',
-                saveTooltip: 'Save (${_keyLabel(LogicalKeyboardKey.keyS)})',
-              ),
-              if (workspace.error case final error?)
-                _errorBanner(
-                  key: const ValueKey('workspace-error-banner'),
-                  message: error,
-                  onDismiss: workspace.clearError,
-                ),
-              if (settings.error case final error?)
-                _errorBanner(
-                  key: const ValueKey('settings-error-banner'),
-                  message: error,
-                  onDismiss: settings.clearError,
-                ),
-              Expanded(
-                child: tabs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.description_outlined,
-                              size: 48,
-                              color: scheme.primary,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Start with a blank page',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
+                    onContextMenu: (id, position) => _showTabMenu(
+                      position,
+                      tabs.firstWhere((t) => t.id == id),
+                    ),
+                    onNew: _new,
+                    onOpen: () => unawaited(workspace.openDialog()),
+                    onSave: _documentReady ? _save : null,
+                    newTooltip: 'New (${_keyLabel(LogicalKeyboardKey.keyN)})',
+                    openTooltip:
+                        'Open… (${_keyLabel(LogicalKeyboardKey.keyO)})',
+                    saveTooltip: 'Save (${_keyLabel(LogicalKeyboardKey.keyS)})',
+                  ),
+                  if (workspace.error case final error?)
+                    _errorBanner(
+                      key: const ValueKey('workspace-error-banner'),
+                      message: error,
+                      onDismiss: workspace.clearError,
+                    ),
+                  if (settings.error case final error?)
+                    _errorBanner(
+                      key: const ValueKey('settings-error-banner'),
+                      message: error,
+                      onDismiss: settings.clearError,
+                    ),
+                  Expanded(
+                    child: tabs.isEmpty
+                        ? Center(
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Offered only when they would act, like the
-                                // strip's buttons (from #36).
-                                FilledButton(
-                                  onPressed: workspace.interactionLocked
-                                      ? null
-                                      : _new,
-                                  child: const Text('New document'),
+                                Icon(
+                                  Icons.description_outlined,
+                                  size: 48,
+                                  color: scheme.primary,
                                 ),
-                                const SizedBox(width: 12),
-                                OutlinedButton(
-                                  onPressed: workspace.interactionLocked
-                                      ? null
-                                      : () => unawaited(workspace.openDialog()),
-                                  child: const Text('Open…'),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Start with a blank page',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 20),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Offered only when they would act, like the
+                                    // strip's buttons (from #36).
+                                    FilledButton(
+                                      onPressed: workspace.interactionLocked
+                                          ? null
+                                          : _new,
+                                      child: const Text('New document'),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    OutlinedButton(
+                                      onPressed: workspace.interactionLocked
+                                          ? null
+                                          : () => unawaited(
+                                              workspace.openDialog(),
+                                            ),
+                                      child: const Text('Open…'),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      )
-                    : IndexedStack(
-                        index: tabs.indexOf(active!),
-                        children: [
-                          for (final tab in tabs)
-                            PlanchetteEditor(
-                              key: ValueKey(tab.id),
-                              // Only what the user chose: the editor supplies
-                              // the platform's monospace stack and the line
-                              // height beneath it.
-                              textStyle: TextStyle(
-                                fontFamily: settings.value.fontFamily,
-                                fontSize: _fontSize.toDouble(),
-                              ),
-                              controller: tab.editor,
-                              isActive: tab == active,
-                              banner: _diskNotice(tab),
-                              // App-only clickable status; the shared
-                              // editor keeps its passive default.
-                              statusBuilder: (context, controller) =>
-                                  DocumentStatusBar(controller: controller),
-                              // No editingLocked here: the workspace locks
-                              // each controller the moment a dialog opens
-                              // and unlocks it the moment it closes. A view
-                              // lock would clear only on the next rebuild,
-                              // refusing a save made before it.
-                              //
-                              // A locked field cannot take the typing the
-                              // placeholder invites.
-                              placeholder:
-                                  tab.path == null &&
-                                      !workspace.interactionLocked
-                                  ? ghostLineFor(tab.id)
-                                  : null,
-                            ),
-                        ],
-                      ),
+                          )
+                        : IndexedStack(
+                            index: tabs.indexOf(active!),
+                            children: [
+                              for (final tab in tabs)
+                                PlanchetteEditor(
+                                  key: ValueKey(tab.id),
+                                  // Only what the user chose: the editor supplies
+                                  // the platform's monospace stack and the line
+                                  // height beneath it.
+                                  textStyle: TextStyle(
+                                    fontFamily: settings.value.fontFamily,
+                                    fontSize: _fontSize.toDouble(),
+                                  ),
+                                  controller: tab.editor,
+                                  isActive: tab == active,
+                                  banner: _diskNotice(tab),
+                                  // App-only clickable status; the shared
+                                  // editor keeps its passive default.
+                                  statusBuilder: (context, controller) =>
+                                      DocumentStatusBar(controller: controller),
+                                  // No editingLocked here: the workspace locks
+                                  // each controller the moment a dialog opens
+                                  // and unlocks it the moment it closes. A view
+                                  // lock would clear only on the next rebuild,
+                                  // refusing a save made before it.
+                                  //
+                                  // A locked field cannot take the typing the
+                                  // placeholder invites.
+                                  placeholder:
+                                      tab.path == null &&
+                                          !workspace.interactionLocked
+                                      ? ghostLineFor(tab.id)
+                                      : null,
+                                ),
+                            ],
+                          ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1538,6 +1568,43 @@ const _ghostLines = [
 /// created right after it.
 @visibleForTesting
 String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
+
+/// The paths a drop carried.
+///
+/// A desktop drop delivers `text/uri-list`: one `file:` URI per line, CRLF
+/// separated, with comment lines that mean nothing as a path. RFC 2483 marks
+/// those with `#`; some file managers send `//` instead, so both are skipped.
+/// Percent escapes are decoded, and a line that is already a plain path —
+/// which is what a test or a hand-made drop carries — is passed through. A
+/// URI is not the same thing as a path, so splitting on newlines alone
+/// produces names no file matches.
+List<String> droppedPaths(String data) {
+  final paths = <String>[];
+  for (final line in data.split('\n')) {
+    final entry = line.trim();
+    if (entry.isEmpty || entry.startsWith('#') || entry.startsWith('//')) {
+      continue;
+    }
+    if (!entry.startsWith('file:')) {
+      paths.add(entry);
+      continue;
+    }
+    // A URI with no usable path is skipped rather than allowed to throw out
+    // of a gesture handler, which would take the frame with it. Both
+    // failures are named: `parse` rejects malformed input, and `toFilePath`
+    // throws `UnsupportedError` for a UNC share (`file://host/share`) or an
+    // escaped separator, both of which a Windows drop can legitimately
+    // carry.
+    try {
+      paths.add(Uri.parse(entry).toFilePath());
+    } on FormatException {
+      continue;
+    } on UnsupportedError {
+      continue;
+    }
+  }
+  return paths;
+}
 
 const _digits = [
   LogicalKeyboardKey.digit0,

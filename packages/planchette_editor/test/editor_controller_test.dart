@@ -392,6 +392,73 @@ void main() {
     editor.toggleComment();
     expect(editor.text.text, '{"a": 1}');
   });
+  test('initialText and loadDocument together are rejected', () {
+    var loaded = false;
+    expect(
+      () => EditorController(
+        displayPath: 'test',
+        initialText: 'wins',
+        loadDocument: () async {
+          loaded = true;
+          return document('never loaded');
+        },
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(loaded, isFalse);
+  });
+
+  test('an invalid selection keeps the last caret position', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 5);
+    expect(editor.caretLineColumn, (2, 2));
+    editor.text.selection = const TextSelection.collapsed(offset: -1);
+    expect(editor.caretLineColumn, (2, 2));
+  });
+
+  test('an invalid selection before any valid one reports the start', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: -1);
+    expect(editor.caretLineColumn, (1, 1));
+  });
+
+  test('replaced text invalidates the remembered caret position', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: 'one\ntwo\n',
+    );
+    addTearDown(editor.dispose);
+    editor.text.selection = const TextSelection.collapsed(offset: 5);
+    expect(editor.caretLineColumn, (2, 2));
+    // Assigning `text` installs an invalid selection; the remembered offset
+    // must not leak into the new document.
+    editor.text.text = 'different\ncontent\nhere';
+    expect(editor.caretLineColumn, (1, 1));
+  });
+
+  test('caret column counts display width: tabs, CJK, emoji, marks', () {
+    final editor = EditorController(
+      displayPath: 'test',
+      initialText: '\tindented\n中x\n',
+    );
+    addTearDown(editor.dispose);
+    // After the tab and three letters the caret sits on column 8 under
+    // a 4-wide tab stop — not column 5.
+    editor.text.selection = const TextSelection.collapsed(offset: 4);
+    expect(editor.caretLineColumn, (1, 8));
+    // 中 takes two columns; past it and 'x' is column 4 on line 2.
+    editor.text.selection = const TextSelection.collapsed(offset: 12);
+    expect(editor.caretLineColumn, (2, 4));
+  });
+
   test('statistics count UTF-8 and trailing empty lines', () {
     final editor = EditorController(
       displayPath: 'test',
