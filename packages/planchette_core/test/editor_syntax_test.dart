@@ -964,11 +964,10 @@ void main() {
         'select',
         'SeLeCt',
       ]);
-      expect(slices('On OFF yes', SyntaxLanguages.ini, SyntaxTokenType.keyword), [
-        'On',
-        'OFF',
-        'yes',
-      ]);
+      expect(
+        slices('On OFF yes', SyntaxLanguages.ini, SyntaxTokenType.keyword),
+        ['On', 'OFF', 'yes'],
+      );
     });
 
     test('every case-insensitive keyword matches folded upper case', () {
@@ -982,11 +981,9 @@ void main() {
       ]) {
         for (final keyword in language.keywords) {
           final upper = keyword.toUpperCase();
-          expect(
-            slices(upper, language, SyntaxTokenType.keyword),
-            [upper],
-            reason: '${language.id} keyword $upper',
-          );
+          expect(slices(upper, language, SyntaxTokenType.keyword), [
+            upper,
+          ], reason: '${language.id} keyword $upper');
         }
       }
     });
@@ -996,10 +993,35 @@ void main() {
         slices('final Final', SyntaxLanguages.dart, SyntaxTokenType.keyword),
         ['final'],
       );
-      expect(
-        slices('if IF', SyntaxLanguages.go, SyntaxTokenType.keyword),
-        ['if'],
+      expect(slices('if IF', SyntaxLanguages.go, SyntaxTokenType.keyword), [
+        'if',
+      ]);
+    });
+
+    test('mutating a caller-owned keyword set re-highlights the next scan', () {
+      // SyntaxLanguage keeps the set it is given, so a caller that edits it
+      // after the first tokenize expects later scans to see the edits.
+      final keywords = <String>{'alpha', 'beta'};
+      final language = SyntaxLanguage(
+        id: 'custom',
+        keywords: keywords,
+        caseInsensitiveKeywords: true,
       );
+      expect(slices('ALPHA beta', language, SyntaxTokenType.keyword), [
+        'ALPHA',
+        'beta',
+      ]);
+
+      keywords.remove('alpha');
+      expect(slices('ALPHA beta', language, SyntaxTokenType.keyword), ['beta']);
+
+      // Same-length remove+add: the set's size is unchanged, so a cache
+      // keyed on length alone would still miss the swap.
+      keywords.remove('beta');
+      keywords.add('omega');
+      expect(slices('ALPHA beta OMEGA', language, SyntaxTokenType.keyword), [
+        'OMEGA',
+      ]);
     });
   });
 }
