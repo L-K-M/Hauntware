@@ -2,6 +2,8 @@ import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostChordBinding, dispatchGhostChord;
 
 import '../app_state.dart';
 import '../main.dart';
@@ -272,11 +274,6 @@ final class TabShortcut {
 
   /// The chord stands down while the right Alt is held (see [tabShortcuts]).
   final bool leftAltOnly;
-
-  bool _matches(KeyEvent event, HardwareKeyboard keys) =>
-      chord.accepts(event, keys) &&
-      !(leftAltOnly &&
-          keys.logicalKeysPressed.contains(LogicalKeyboardKey.altRight));
 }
 
 /// The tab shortcuts on [platform]: one table for both places that honour
@@ -374,17 +371,15 @@ KeyEventResult handleTabShortcut(
   BuildContext context,
   AppState state,
   KeyEvent event,
-) {
-  final keys = HardwareKeyboard.instance;
-  for (final shortcut in tabShortcuts(Theme.of(context).platform)) {
-    if (!shortcut._matches(event, keys)) continue;
-    if (event is KeyDownEvent || shortcut.command.repeats) {
-      _runTabCommand(context, state, shortcut.command);
-    }
-    return KeyEventResult.handled;
-  }
-  return KeyEventResult.ignored;
-}
+) => dispatchGhostChord([
+  for (final shortcut in tabShortcuts(Theme.of(context).platform))
+    GhostChordBinding(
+      activator: shortcut.chord,
+      repeats: shortcut.command.repeats,
+      leftAltOnly: shortcut.leftAltOnly,
+      onInvoke: () => _runTabCommand(context, state, shortcut.command),
+    ),
+], event);
 
 void _runTabCommand(BuildContext context, AppState state, TabCommand command) {
   final active = state.activeTab;

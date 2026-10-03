@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 
 import 'app_menus.dart';
 
@@ -18,7 +19,8 @@ typedef ShortcutSection = ({String title, List<ShortcutRow> rows});
 List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
   final apple =
       platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
-  String keys(SingleActivator chord) => _describe(chord, apple: apple);
+  String keys(SingleActivator chord) =>
+      formatShortcutActivator(chord, platform) ?? chord.trigger.keyLabel;
   String terminal(LogicalKeyboardKey key) => keys(
     apple
         ? SingleActivator(key, meta: true)
@@ -87,27 +89,6 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
       ],
     ),
   ];
-}
-
-/// [chord] as the platform writes it: modifier glyphs in Apple's order
-/// (⌃⌥⇧⌘) run together, or "Ctrl+Shift+W".
-String _describe(SingleActivator chord, {required bool apple}) {
-  final key = chord.trigger;
-  if (apple) {
-    return [
-      if (chord.control) '⌃',
-      if (chord.alt) '⌥',
-      if (chord.shift) '⇧',
-      if (chord.meta) '⌘',
-      key == LogicalKeyboardKey.tab ? '⇥' : key.keyLabel,
-    ].join();
-  }
-  return [
-    if (chord.control) 'Ctrl',
-    if (chord.alt) 'Alt',
-    if (chord.shift) 'Shift',
-    key.keyLabel,
-  ].join('+');
 }
 
 /// The shortcut list in a dialog, for this platform.
