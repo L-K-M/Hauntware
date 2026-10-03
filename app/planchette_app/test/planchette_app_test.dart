@@ -1225,27 +1225,28 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('a Linux uri-list drop decodes to real file paths', (
-    tester,
-  ) async {
-    final unix = testPath('dropped.txt');
-    if (!unix.startsWith('/')) {
-      // The uri-list form is POSIX-only; on Windows the performOperation
-      // test above already covers the channel.
-      return;
-    }
-    store.files[unix] = document('dropped.txt', 'dropped');
-    await mount(tester);
+  testWidgets(
+    'a Linux uri-list drop decodes to real file paths',
+    (tester) async {
+      final unix = testPath('dropped.txt');
+      store.files[unix] = document('dropped.txt', 'dropped');
+      await mount(tester);
 
-    await sendDropEvent(tester, 'performOperation_linux', [
-      'file://$unix\r\n',
-      [20.0, 20.0],
-    ]);
+      await sendDropEvent(tester, 'performOperation_linux', [
+        'file://$unix\r\n',
+        [20.0, 20.0],
+      ]);
 
-    expect(workspace.documents.map((tab) => tab.name), ['dropped.txt']);
-    expect(workspace.error, isNull);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+      expect(workspace.documents.map((tab) => tab.name), ['dropped.txt']);
+      expect(workspace.error, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    // GTK can notify exit before the drop lands, so desktop_drop accepts a
+    // bare performOperation_linux only on a Linux host; on macOS/Windows a
+    // done event without a preceding enter is ignored, which is what the
+    // performOperation test above proves end to end instead.
+    skip: !Platform.isLinux,
+  );
 
   testWidgets('a drop while the workspace is locked opens nothing', (
     tester,

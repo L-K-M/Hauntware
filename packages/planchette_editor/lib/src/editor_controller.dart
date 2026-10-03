@@ -663,10 +663,11 @@ class EditorController extends ChangeNotifier {
     // elsewhere — report the last offset _textChanged observed instead of a
     // plausible-looking (1, 1).
     final selection = text.selection;
-    final offset = (selection.isValid
-            ? selection.extentOffset
-            : _lastCaretOffset)
-        .clamp(0, text.text.length);
+    final offset =
+        (selection.isValid ? selection.extentOffset : _lastCaretOffset).clamp(
+          0,
+          text.text.length,
+        );
     final line = _lineIndexOf(offset);
     return (line + 1, displayColumnFor(text.text, lineStarts[line], offset));
   }

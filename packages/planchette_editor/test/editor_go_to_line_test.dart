@@ -370,10 +370,7 @@ void main() {
   });
 
   test('goToLine deactivates the active find match but keeps the results', () {
-    final c = EditorController(
-      displayPath: 'a.txt',
-      initialText: 'x\nx\nx\n',
-    );
+    final c = EditorController(displayPath: 'a.txt', initialText: 'x\nx\nx\n');
     addTearDown(c.dispose);
     c.openSearch();
     c.search.text = 'x';
