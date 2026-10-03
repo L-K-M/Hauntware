@@ -131,7 +131,11 @@ final class DesktopWindow with WindowListener {
       // mounts rather than dying on a blank window.
       try {
         await _lifecycle.show();
-      } catch (_) {}
+      } catch (_) {
+        // Restore failures were already reported through the lifecycle's
+        // onError; swallowed so runWidget still mounts. A show() path that
+        // throws without reporting is a lifecycle bug.
+      }
     }
   }
 

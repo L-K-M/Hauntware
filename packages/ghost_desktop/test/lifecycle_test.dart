@@ -181,10 +181,17 @@ void main() {
 
     test('show returns window presentation failures', () async {
       final window = FakeWindowAdapter()..failShow = true;
-      final lifecycle = _lifecycle(window: window);
+      final reports = <Object>[];
+      final lifecycle = _lifecycle(
+        window: window,
+        onError: (error, _) => reports.add(error),
+      );
 
       await lifecycle.prepare();
       await expectLater(lifecycle.show(), throwsA(isA<StateError>()));
+      // One show failure, one report — same once-only contract as
+      // prepare(), and rescue is inert off macOS.
+      expect(reports, hasLength(1));
     });
 
     test(
