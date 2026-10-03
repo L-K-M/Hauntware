@@ -1168,46 +1168,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The rename editor's stem-selection dot — name arithmetic, not copy.
     "'.'",
   },
-  // D32 §6's column header keys — plumbing keyed to the tab id and the
-  // sort key's enum name, never authored copy.
-  'lib/ui/panes/pane_column_header.dart': {
-    r"'$paneTabId.columns'",
-    r"'$paneTabId.column.${key.name}'",
-  },
   // The context menu's row keys — registry plumbing, never copy.
   'lib/ui/panes/pane_context_menu.dart': {r"'pane.context.${command.id}'"},
   // The missing-mirror cause's empty-name fallback — a null-safety
   // placeholder, never rendered as copy.
   'lib/ui/panes/sync_browse_chip.dart': {"''"},
-  // Byte-unit table, the unevaluated dash, and the trailing-".0" trim
-  // — technical formatting (02 §2.3 rendering rules).
-  'lib/ui/panes/pane_format.dart': {
-    "'B'",
-    "'KB'",
-    "'MB'",
-    "'GB'",
-    "'TB'",
-    "'—'",
-    "'.0'",
-    r"'$bytes ${_byteUnits[0]}'",
-    r"'$text ${_byteUnits[unit]}'",
-    // The octal pad's fill character — formatting mechanics, not copy.
-    "'0'",
-    // The kind-glyph classifier's extension tables, their separator,
-    // and the extension dot — file-name machine data, never rendered.
-    "'png jpg jpeg gif webp bmp tif tiff heic heif svg ico avif psd raw'",
-    "'txt md markdown rst log csv tsv rtf doc docx odt pages xls xlsx ods '",
-    "'numbers ppt pptx odp epub'",
-    "'json yaml yml toml xml html htm css scss js mjs ts jsx tsx dart py rb '",
-    "'go rs java kt swift c h cc cpp hpp'",
-    "'m mm cs php sh bash zsh fish ps1 bat sql ini conf cfg env lock'",
-    "'zip tar gz tgz bz2 xz 7z rar zst lz4 dmg iso deb rpm pkg jar apk'",
-    "'mp3 wav flac aac ogg m4a opus'",
-    "'mp4 mov mkv avi webm m4v wmv mpg'",
-    "' '",
-    "'pdf'",
-    "'.'",
-  },
   // D34's standard-folder table: lowercase folder names matched against
   // a path's last segment: file-name machine data, never rendered.
   'lib/ui/place_glyphs.dart': {
@@ -1306,6 +1271,43 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'sftp://${split.username}@${split.hostport}$suffix'",
     r"'/$path'",
   },
+  // Deep-link schemes, routes, query keys, path grammar, and display-safe
+  // endpoint composition. User-facing explanations live in ARB.
+  'lib/services/deep_links.dart': {
+    "'poltergeist'",
+    "'browse'",
+    r"r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'",
+    r"r'[.\u3002\uff0e\uff61]'",
+    "'unknown deep-link request'",
+    "'%'",
+    r"'${host.substring(0, zoneStart).toLowerCase()}'",
+    r"'${host.substring(zoneStart)}'",
+    "'/'",
+    "'serverId'",
+    "'path'",
+    "'port'",
+    "'host'",
+    "'username'",
+  },
+  // The outbound sibling-app URI grammar and programmer diagnostics.
+  'lib/services/seance_links.dart': {
+    "'seance'",
+    "'connect'",
+    "'A remote bookmark must carry a server reference.'",
+    "'serverId'",
+    "'A server reference must carry an id or identity.'",
+    "'host'",
+    "'port'",
+    r"'${identity.port}'",
+    "'username'",
+    "'The Séance link handler refused the request.'",
+  },
+  // Machine-derived ids and endpoint labels shared with Quick Connect.
+  'lib/services/quick_connect_bookmark.dart': {
+    r"'$quickConnectAdhocIdPrefix${uuidV4()}'",
+    r"'${target.host}:${target.port}'",
+    r"'${target.username}@$host'",
+  },
   // The Quick Connect form's widget keys, the adhoc-id mint, the tab
   // label compositions (username@host:port machine data beside
   // ARB-authored copy), and the empty-string fallbacks — plumbing, never
@@ -1316,9 +1318,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'quickConnect.importSshConfig'",
     "''",
     r"'${target.port}'",
-    r"'$quickConnectAdhocIdPrefix${uuidV4()}'",
-    r"'$username@${_hostLabel(target)}'",
-    r"'${target.host}:${target.port}'",
     // The `$USER@` prefill's environment keys and its user@ join (D32
     // §6) — process-environment machine data, never authored copy.
     "'USER'",
@@ -1485,21 +1484,22 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sidebar.catalog.menu.edit'",
     "'sidebar.catalog.menu.duplicate'",
     "'sidebar.catalog.menu.delete'",
+    "'sidebar.catalog.menu.openTerminalInSeance'",
     "'sidebar.adhoc.menu.save'",
+    "'sidebar.menu.openTerminalInSeance'",
   },
-  // The portable kit's empty query (the filter's clear button).
-  'lib/ui/sidebar/sidebar_kit.dart': {
-    "''",
-    // The first-verb, row button and header "+" focus nodes' debug
-    // labels: diagnostics, never shown.
-    "'SidebarRow first verb'",
-    "'SidebarRow action'",
-    "'SidebarRow menu button'",
-    "'SidebarSectionHeader add'",
-    // A header dot's words join its title and count on a line of their
-    // own, as a merged semantics node joins its parts: a separator, not
-    // copy (the words are the host's).
-    r"'\n'",
+  // Registered command identity, not its localized label.
+  'lib/ui/sidebar/seance_commands.dart': {"'connect.openTerminalInSeance'"},
+  // Widget keys and numeric endpoint formatting; all visible prose is ARB.
+  'lib/ui/deep_link_dialogs.dart': {
+    "'deepLink.failure'",
+    "'deepLink.failure.close'",
+    "'deepLink.review'",
+    "'deepLink.overflow'",
+    "'deepLink.cancel'",
+    "'deepLink.discardAll'",
+    "'deepLink.connect'",
+    r"'$port'",
   },
   // The sidebar filter's term split and the path-separator trimming of
   // the selection match — machinery, never rendered.
@@ -1524,13 +1524,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'view.toggleSidebarDensity'",
     "'favorite.add'",
     "'connect.saveToServers'",
-  },
-  // The ported middle-ellipsis glyph and its head/tail compositions —
-  // typography, not copy.
-  'lib/ui/middle_ellipsis_text.dart': {
-    "'…'",
-    r"'${graphemes.take(head).join()}$_ellipsis'",
-    r"'${graphemes.skip(graphemes.length - tail).join()}'",
   },
   // The collapse-key namespaces, the legacy keys they migrate, the
   // empty filter query, and the controller's ArgumentError/StateError

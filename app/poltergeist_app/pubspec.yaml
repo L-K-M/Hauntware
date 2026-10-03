@@ -8,6 +8,14 @@ environment:
   flutter: '>=3.47.2'
 
 dependencies:
+  # Cross-platform delivery for the desktop URL schemes in 04 §7.1.
+  app_links: 7.2.1
+  # Keep all Planchette Git dependencies on the same full revision.
+  ghost_ui:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      path: packages/ghost_ui
   # SHA-256 key identification for the vault re-key journal (the same use
   # Séance's FileVaultStore makes of it).
   crypto: 3.0.7
@@ -42,15 +50,20 @@ dependencies:
   planchette_editor:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: 7b833f34550c54b27a9f08783b5fd5711869253b
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
       path: packages/planchette_editor
   # The family's shared command/menu/shortcut layer: same repo and pin
   # discipline as planchette_editor — the two must resolve at one review.
   ghost_ui:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: 7b833f34550c54b27a9f08783b5fd5711869253b
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
       path: packages/ghost_ui
+  ghost_desktop:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      path: packages/ghost_desktop
   poltergeist_core:
     path: ../../packages/poltergeist_core
   poltergeist_sync:

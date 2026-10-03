@@ -5,7 +5,7 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/quick_connect_address.dart';
-import '../../services/uuid.dart';
+import '../../services/quick_connect_bookmark.dart';
 
 /// The launcher's Quick Connect form (02 §2.7): the address field with
 /// its visible parse interpretations, and the Connect action.
@@ -128,7 +128,7 @@ class _QuickConnectViewState extends State<QuickConnectView> {
   void _submit() {
     final target = _parse.target;
     if (target == null) return;
-    widget.onConnect(_adhocBookmark(target), target.remotePath);
+    widget.onConnect(buildQuickConnectBookmark(target), target.remotePath);
   }
 
   @override
@@ -259,36 +259,3 @@ List<String> _hintTexts(AppLocalizations l10n, QuickConnectParse parse) {
   }
   return hints;
 }
-
-/// Mints the ephemeral bookmark for [target] (03 §3.5's `adhoc:<uuid>`
-/// serverId). Username may be empty — the credential prompt resolves it
-/// at connect time, like an imported row without a `User`.
-Bookmark _adhocBookmark(QuickConnectTarget target) {
-  final id = '$quickConnectAdhocIdPrefix${uuidV4()}';
-  final now = DateTime.now();
-  final username = target.username;
-  final label = username.isEmpty
-      ? _hostLabel(target)
-      : '$username@${_hostLabel(target)}';
-  return Bookmark(
-    id: id,
-    kind: BookmarkKind.remotePath,
-    label: label,
-    server: BookmarkServerRef(
-      identity: EmbeddedHostIdentity(
-        host: target.host,
-        port: target.port,
-        username: username,
-        authMethod: AuthMethod.password,
-      ),
-    ),
-    remotePath: target.remotePath,
-    sortKey: id,
-    createdAt: now,
-    updatedAt: now,
-  );
-}
-
-String _hostLabel(QuickConnectTarget target) => target.port == 22
-    ? target.host
-    : '${target.host}:${target.port}';

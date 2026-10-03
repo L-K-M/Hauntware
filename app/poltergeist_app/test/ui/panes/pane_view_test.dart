@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostFileTheme;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/pane_location.dart';
@@ -100,33 +101,62 @@ void main() {
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: Row(
-            children: [
-              Expanded(
-                child: PaneView(
-                  controller: left,
-                  pane: leftStrip,
-                  workspace: workspace,
-                  focusNode: leftNode,
-                  onSwapFocus: () => rightNode.requestFocus(),
-                  onCancelRecovery: () => unawaited(left.cancelRecovery()),
-                  clock: clock,
+        // The rows now read GhostFileTheme — the app theme installs it
+        // from the resolved PoltergeistChrome. This harness runs the
+        // default theme, so it installs the extension from the same
+        // chrome fallback the assertions read through
+        // PoltergeistChrome.of.
+        home: Builder(
+          builder: (context) {
+            final chrome = PoltergeistChrome.of(context);
+            return Theme(
+              data: Theme.of(context).copyWith(
+                extensions: <ThemeExtension<dynamic>>[
+                  GhostFileTheme(
+                    paneBackground: chrome.paneBackground,
+                    separator: chrome.separator,
+                    hoverFill: chrome.hoverFill,
+                    selectionFill: chrome.selectionFill,
+                    onSelection: chrome.onSelection,
+                    inactiveSelectionFill: chrome.inactiveSelectionFill,
+                    activePaneIndicator: chrome.activePaneIndicator,
+                    secondaryText: chrome.secondaryText,
+                    rowExtent: chrome.rowExtent,
+                  ),
+                ],
+              ),
+              child: Scaffold(
+                body: Row(
+                  children: [
+                    Expanded(
+                      child: PaneView(
+                        controller: left,
+                        pane: leftStrip,
+                        workspace: workspace,
+                        focusNode: leftNode,
+                        onSwapFocus: () => rightNode.requestFocus(),
+                        onCancelRecovery: () =>
+                            unawaited(left.cancelRecovery()),
+                        clock: clock,
+                      ),
+                    ),
+                    Expanded(
+                      child: PaneView(
+                        controller: right,
+                        pane: rightStrip,
+                        workspace: workspace,
+                        focusNode: rightNode,
+                        onSwapFocus: () => leftNode.requestFocus(),
+                        onCancelRecovery: () =>
+                            unawaited(right.cancelRecovery()),
+                        clock: clock,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Expanded(
-                child: PaneView(
-                  controller: right,
-                  pane: rightStrip,
-                  workspace: workspace,
-                  focusNode: rightNode,
-                  onSwapFocus: () => leftNode.requestFocus(),
-                  onCancelRecovery: () => unawaited(right.cancelRecovery()),
-                  clock: clock,
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -992,6 +1022,10 @@ void main() {
       await pumpShell(tester);
       leftNode.requestFocus();
       await tester.pump();
+      final rowSemantics = tester.getSemantics(
+        find.bySemanticsLabel(RegExp(r'^report\.txt, file,')),
+      );
+      final rowLabel = rowSemantics.getSemanticsData().label;
 
       // A failing navigation shows the error overlay over the cached
       // listing.
@@ -1013,14 +1047,13 @@ void main() {
       // One extra frame: the semantics pipeline attaches to the next
       // build after the excluding flip, not the one that flipped it.
       await tester.pump();
-      final excluderOfRow = tester.widget<ExcludeSemantics>(
-        find.ancestor(
-          of: find.text('report.txt'),
-          matching: find.byType(ExcludeSemantics),
-        ),
+      // Label finders also see cached detached nodes. Check attachment to
+      // the published tree, not the shared row's text-leaf exclusions.
+      expect(
+        rowSemantics.attached,
+        isFalse,
+        reason: 'the error overlay must exclude row semantics',
       );
-      expect(excluderOfRow.excluding, isTrue,
-          reason: 'the error overlay must exclude row semantics');
 
       // Esc still reaches the overlay: it cancels back to the listing
       // the rows belong to.
@@ -1029,14 +1062,11 @@ void main() {
       expect(left.error, isNull, reason: 'Esc cancelled the failed navigation');
       expect(left.location, const LocalPaneLocation('/home/tester'));
       await tester.pump();
-      final restoredExcluder = tester.widget<ExcludeSemantics>(
-        find.ancestor(
-          of: find.text('report.txt'),
-          matching: find.byType(ExcludeSemantics),
-        ),
+      expect(
+        tester.getSemantics(find.bySemanticsLabel(rowLabel)).attached,
+        isTrue,
+        reason: 'the restored rows rejoin the semantics tree',
       );
-      expect(restoredExcluder.excluding, isFalse,
-          reason: 'the restored rows rejoin the semantics tree');
     } finally {
       semantics.dispose();
       debugDefaultTargetPlatformOverride = null;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show AppExitType;
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
@@ -21,6 +22,7 @@ import 'services/bookmark_backup_service.dart';
 import 'services/checkout_prompt_ledger.dart';
 import 'services/checkout_session.dart';
 import 'services/desktop_window_lifecycle.dart';
+import 'services/deep_links.dart';
 import 'services/dock_progress.dart';
 import 'services/drag_out_producer.dart';
 import 'services/dynamic_secret_vault.dart';
@@ -34,6 +36,7 @@ import 'services/os_drag_out.dart' show DragOutRouter, platformDragOutBackend;
 import 'services/probe_settings_store.dart';
 import 'services/quit_guard.dart';
 import 'services/recent_locations.dart';
+import 'services/seance_links.dart';
 import 'services/secure_master_key.dart';
 import 'services/server_config_source.dart';
 import 'services/server_editor_backend.dart';
@@ -78,10 +81,26 @@ Future<void> main(List<String> args) async {
         CheckedPlatformMenuDelegate(channelName: 'poltergeist/menu_checks');
   }
 
+  final errorReporter = ApplicationErrorReporter();
+  final deepLinks = DeepLinkCoordinator(onError: errorReporter.report);
+  final workspaceWindowsReady = Completer<WorkspaceWindows?>();
+  AppLinks().uriLinkStream.listen(
+    (uri) => unawaited(
+      _acceptDeepLink(
+        uri,
+        windows: workspaceWindowsReady.future,
+        coordinator: deepLinks,
+        errors: errorReporter,
+      ),
+    ),
+    onError: (Object error, StackTrace stackTrace) {
+      errorReporter.report(error, stackTrace);
+    },
+  );
+
   final supportDirectory = await getApplicationSupportDirectory();
   final settingsPath =
       '${supportDirectory.path}${Platform.pathSeparator}settings.json';
-  final errorReporter = ApplicationErrorReporter();
   final settingsStore = SettingsStore(
     path: settingsPath,
     onError: errorReporter.report,
@@ -249,6 +268,7 @@ Future<void> main(List<String> args) async {
           onError: errorReporter.report,
         )
       : null;
+  workspaceWindowsReady.complete(windows);
   // One navigator key for the app, the session's coordinator, and the
   // quit guard, so dialogs render above whatever surface raised them —
   // with several windows, a key that answers for the active window's.
@@ -552,6 +572,9 @@ Future<void> main(List<String> args) async {
       Platform.isMacOS || Platform.isLinux || Platform.isWindows
       ? SettingsWindowHost()
       : null;
+  final seanceLauncher = await SeanceLinkLauncher.probe(
+    onError: errorReporter.report,
+  );
   // The app for one window, or the single-window app. Built once per
   // window: its parameters must keep their identity across the root's
   // rebuilds.
@@ -643,6 +666,8 @@ Future<void> main(List<String> args) async {
       syncTasks: syncTasks,
       updateCheck: updateCheck,
       appearance: appearance,
+      deepLinks: deepLinks,
+      seanceLauncher: seanceLauncher,
       settingsWindow: settingsWindow,
       // An extra window's band is the workspace windows' host's
       // (WindowTitlebars): macos_window_utils serves the main window.
@@ -697,6 +722,22 @@ Future<void> main(List<String> args) async {
   // first is on screen.
   if (windows != null) {
     await errorReporter.guard(() => windows.restoreWindows(restoredWindows));
+  }
+}
+
+/// Keeps early OS activations queued until the desktop window model exists.
+Future<void> _acceptDeepLink(
+  Uri uri, {
+  required Future<WorkspaceWindows?> windows,
+  required DeepLinkCoordinator coordinator,
+  required ApplicationErrorReporter errors,
+}) async {
+  // Intake is durable before window activation, which is best-effort.
+  coordinator.add(uri);
+  try {
+    await (await windows)?.ensureWorkspaceForExternalRequest();
+  } on Object catch (error, stackTrace) {
+    errors.report(error, stackTrace);
   }
 }
 

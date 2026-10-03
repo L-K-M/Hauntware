@@ -7,6 +7,7 @@
 
 #include <flutter/standard_method_codec.h>
 
+#include "deep_link_scheme.h"
 #include "flutter/generated_plugin_registrant.h"
 
 namespace {
@@ -121,7 +122,11 @@ bool FlutterWindow::OnCreate() {
                               : nullptr;
   });
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
+  flutter_controller_->engine()->SetNextFrameCallback([this]() {
+    if (!MarkPrimaryDeepLinkWindow(GetHandle())) {
+      OutputDebugStringW(
+          L"Poltergeist could not mark its primary deep-link window.\n");
+    }
     this->Show();
   });
 

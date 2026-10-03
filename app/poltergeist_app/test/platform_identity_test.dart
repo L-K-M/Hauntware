@@ -128,6 +128,99 @@ void main() {
     );
   });
 
+  test('registers and forwards the Poltergeist URL scheme', () {
+    final macInfo = _read('macos/Runner/Info.plist');
+    expect(
+      macInfo,
+      allOf(
+        contains('<key>CFBundleURLTypes</key>'),
+        contains('<string>poltergeist</string>'),
+      ),
+    );
+
+    final packaging = _read('../../scripts/package-linux.sh');
+    expect(
+      packaging,
+      allOf(
+        contains('Exec=\$2 %u'),
+        contains('MimeType=x-scheme-handler/poltergeist;'),
+      ),
+    );
+    final linuxRunner = _read('linux/runner/my_application.cc');
+    expect(
+      linuxRunner,
+      allOf(
+        contains('G_APPLICATION_HANDLES_COMMAND_LINE'),
+        contains('G_APPLICATION_HANDLES_OPEN'),
+        contains('active_workspace_window'),
+        contains('gtk_window_get_transient_for'),
+        contains('gtk_window_present(workspace_window)'),
+        isNot(contains('G_APPLICATION_NON_UNIQUE')),
+      ),
+    );
+
+    final windowsMain = _read('windows/runner/main.cpp');
+    expect(
+      windowsMain,
+      allOf(
+        contains('RegisterDeepLinkScheme()'),
+        contains('ClaimOrForwardDeepLinkInstance(CurrentLaunchIntent())'),
+        isNot(contains('SendAppLinkToInstance()')),
+      ),
+    );
+    final windowsWindow = _read('windows/runner/flutter_window.cpp');
+    expect(
+      windowsWindow,
+      allOf(
+        contains('SetNextFrameCallback'),
+        contains('MarkPrimaryDeepLinkWindow(GetHandle())'),
+      ),
+    );
+    final windowsRegistration = _read('windows/runner/deep_link_scheme.cpp');
+    expect(
+      windowsRegistration,
+      allOf(
+        contains('HKEY_CURRENT_USER'),
+        contains(r'Software\\Classes\\poltergeist'),
+        contains('URL Protocol'),
+        contains(r'shell\\open\\command'),
+        contains('kArgumentPlaceholder[] = L"%1"'),
+        contains(r'L"\"" + executable'),
+      ),
+    );
+    expect(
+      windowsRegistration,
+      allOf([
+        contains('kPrimaryWindowProperty'),
+        contains('kInstanceMutexName'),
+        contains('CreateMutexW'),
+        contains('WaitForSingleObject'),
+        contains('GetPropW'),
+        contains('SendAppLink(primary_window)'),
+        contains('CurrentLaunchIntent()'),
+        contains('PresentVisibleApplicationWindow'),
+        isNot(contains('PresentPrimaryWindow')),
+      ]),
+    );
+  });
+
+  test('declares sibling-scheme visibility on mobile', () {
+    expect(
+      _read('android/app/src/main/AndroidManifest.xml'),
+      allOf(
+        contains('android.intent.action.VIEW'),
+        contains('android:scheme="seance"'),
+      ),
+    );
+    expect(
+      _read('ios/Runner/Info.plist'),
+      allOf(
+        contains('<key>LSApplicationQueriesSchemes</key>'),
+        contains('<string>seance</string>'),
+      ),
+    );
+  });
+
   test('defines the Linux window title once', () {
     final runner = _read('linux/runner/my_application.cc');
 

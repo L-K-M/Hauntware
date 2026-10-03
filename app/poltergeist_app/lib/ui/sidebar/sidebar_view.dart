@@ -13,6 +13,7 @@ import '../../services/pane_drop.dart';
 import '../../services/pane_location.dart';
 import '../../services/pane_tabs_controller.dart';
 import '../../services/quick_connect_address.dart';
+import '../../services/registered_command.dart';
 import '../../services/sidebar_controller.dart';
 import '../../services/sidebar_probe_owner.dart';
 import '../../services/workspace_controller.dart';
@@ -102,6 +103,9 @@ class SidebarView extends StatefulWidget {
     this.onReviewBlocked,
     this.onUpdateWorkspace,
     this.onLocalEdits,
+    this.bookmarkTerminalCommand,
+    this.catalogTerminalCommand,
+    this.onRunCommand,
     this.onImportSshConfig,
     this.catalog,
     this.catalogListenable,
@@ -153,6 +157,12 @@ class SidebarView extends StatefulWidget {
 
   /// A saved server's `Local Edits…` (06 §3.7); null hides it.
   final void Function(Bookmark bookmark)? onLocalEdits;
+
+  /// D21 command renderers for the cross-app terminal handoff. Null hides
+  /// the action when the OS has no `seance://` handler.
+  final RegisteredCommand Function(Bookmark bookmark)? bookmarkTerminalCommand;
+  final RegisteredCommand Function(ServerConfig server)? catalogTerminalCommand;
+  final Future<void> Function(RegisteredCommand command)? onRunCommand;
 
   /// D22's adoption affordance: the ssh_config import. Offered in the
   /// empty FAVORITES state (where the imported hosts land) and the +
