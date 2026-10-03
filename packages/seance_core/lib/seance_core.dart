@@ -17,7 +17,13 @@ export 'src/terminal/paste_sanitizer.dart';
 export 'src/terminal/shell_command.dart';
 
 export 'src/ssh/home_path.dart';
+export 'src/ssh/remote_command.dart';
+export 'src/ssh/remote_git.dart';
 export 'src/ssh/ssh_session.dart';
+// Named `test_connection` rather than `connection_test`: `dart test <package>`
+// globs `**_test.dart`, so the latter would be collected as a test file and
+// fail to load.
+export 'src/ssh/test_connection.dart';
 export 'src/ssh/remote_file_system.dart'
     show
         RemoteFileType,
@@ -35,6 +41,11 @@ export 'src/probe/probe_service.dart';
 
 export 'src/store/stores.dart';
 
+export 'src/inbox/inbox_api.dart';
+export 'src/inbox/inbox_service.dart';
+export 'src/inbox/inbox_staging.dart';
+export 'src/inbox/inbox_stores.dart';
+
 export 'src/sync/local_record_store.dart';
 export 'src/sync/sync_engine.dart';
 export 'src/sync/sync_coordinator.dart';
@@ -47,6 +58,7 @@ export 'src/llm/provider.dart';
 export 'src/llm/anthropic_provider.dart';
 export 'src/llm/openai_provider.dart';
 export 'src/llm/search.dart';
+export 'src/llm/zai_search.dart';
 export 'src/llm/chat_controller.dart';
 export 'src/llm/danger_linter.dart';
 export 'src/llm/redaction.dart';

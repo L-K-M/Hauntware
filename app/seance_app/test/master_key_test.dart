@@ -54,7 +54,7 @@ void main() {
       final keystore = FakeKeystore();
       final key = await MasterKeyManager(
         keystore,
-      ).loadOrCreateFromKeystore(hasExistingVault: false);
+      ).probeKeystore(hasExistingVault: false);
 
       expect(key, hasLength(32));
       expect(keystore.written, hasLength(1));
@@ -66,9 +66,7 @@ void main() {
       final keystore = FakeKeystore(readReturns: base64.encode(stored));
 
       expect(
-        await MasterKeyManager(keystore).loadOrCreateFromKeystore(
-          hasExistingVault: true,
-        ),
+        await MasterKeyManager(keystore).probeKeystore(hasExistingVault: true),
         stored,
       );
       expect(keystore.written, isEmpty, reason: 'nothing to write');
@@ -81,9 +79,7 @@ void main() {
       final keystore = FakeKeystore();
 
       await expectLater(
-        MasterKeyManager(keystore).loadOrCreateFromKeystore(
-          hasExistingVault: true,
-        ),
+        MasterKeyManager(keystore).probeKeystore(hasExistingVault: true),
         throwsA(isA<MasterKeyUnavailableException>()),
       );
       expect(
@@ -99,16 +95,21 @@ void main() {
       expect(message, contains('Always Allow'));
     });
 
-    test('a keystore that throws is left to propagate', () async {
-      // A platform that reports refusal as an error needs no guard: the throw
-      // already stops startup before anything can be overwritten.
-      final keystore = FakeKeystore(readThrows: StateError('keychain denied'));
+    test(
+      'a keystore that throws reads as unavailable and writes nothing',
+      () async {
+        // A platform that reports refusal as an error cannot distinguish that
+        // from a locked keyring — so it gets the locked-vault answer, not a
+        // crash, and crucially no fresh key written over the one it holds.
+        final keystore = FakeKeystore(
+          readThrows: StateError('keychain denied'),
+        );
+        final keys = MasterKeyManager(keystore);
 
-      await expectLater(
-        MasterKeyManager(keystore).loadOrCreateFromKeystore(),
-        throwsStateError,
-      );
-      expect(keystore.written, isEmpty);
-    });
+        expect(await keys.probeKeystore(hasExistingVault: true), isNull);
+        expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+        expect(keystore.written, isEmpty);
+      },
+    );
   });
 }

@@ -1,239 +1,171 @@
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:planchette_editor/planchette_editor.dart';
 import 'package:seance_core/seance_core.dart';
 
-import '../services/managed_remote_file_store.dart';
+import '../services/editor_document.dart';
+import '../services/remote_files_controller.dart';
+import '../theme.dart';
+import 'editor_syntax.dart' show seanceEditorSyntaxTheme;
+import 'top_toast.dart';
 
-const builtInEditorMaximumBytes = 4 * 1024 * 1024;
+export '../services/editor_document.dart';
+export 'package:planchette_core/planchette_core.dart'
+    show lineStartOffsets, utf8EncodedLength;
 
-class BuiltInTextDocument {
-  final String text;
-  final bool hasUtf8Bom;
-  final String lineEnding;
-  final String sha256;
-
-  const BuiltInTextDocument({
-    required this.text,
-    required this.hasUtf8Bom,
-    required this.lineEnding,
-    required this.sha256,
-  });
-}
-
-Future<String> loadBuiltInTextDocument(
-  File file, {
-  int maximumBytes = builtInEditorMaximumBytes,
-}) async => (await loadBuiltInTextDocumentDetails(
-  file,
-  maximumBytes: maximumBytes,
-)).text;
-
-Future<BuiltInTextDocument> loadBuiltInTextDocumentDetails(
-  File file, {
-  int maximumBytes = builtInEditorMaximumBytes,
-}) async {
-  final length = await file.length();
-  if (length > maximumBytes) {
-    throw StateError(
-      'The built-in editor supports text files up to '
-      '${(maximumBytes / (1024 * 1024)).toStringAsFixed(0)} MB.',
-    );
-  }
-  final before = await streamedFileSha256(file);
-  final bytes = await file.readAsBytes();
-  if (bytes.length > maximumBytes) {
-    throw StateError(
-      'The built-in editor supports text files up to '
-      '${(maximumBytes / (1024 * 1024)).toStringAsFixed(0)} MB.',
-    );
-  }
-  final after = await streamedFileSha256(file);
-  if (before != after) {
-    throw StateError('The local copy changed while it was being opened.');
-  }
-  late final String text;
-  try {
-    text = const Utf8Decoder(allowMalformed: false).convert(bytes);
-  } on FormatException {
-    throw StateError('This file is not valid UTF-8 text.');
-  }
-  if (text.contains('\u0000')) {
-    throw StateError('This file appears to be binary, not editable text.');
-  }
-  final crlfCount = RegExp(r'\r\n').allMatches(text).length;
-  final lfCount = RegExp(r'(?<!\r)\n').allMatches(text).length;
-  return BuiltInTextDocument(
-    text: text,
-    hasUtf8Bom:
-        bytes.length >= 3 &&
-        bytes[0] == 0xef &&
-        bytes[1] == 0xbb &&
-        bytes[2] == 0xbf,
-    lineEnding: crlfCount > lfCount ? '\r\n' : '\n',
-    sha256: after,
-  );
-}
-
-Future<String> saveBuiltInTextDocument(
-  File file,
-  String text, {
-  bool hasUtf8Bom = false,
-  String lineEnding = '\n',
-  String? expectedSha256,
-}) async {
-  final normalized = _normalizeLineEndings(text, lineEnding);
-  final bytes = <int>[
-    if (hasUtf8Bom) ...const [0xef, 0xbb, 0xbf],
-    ...utf8.encode(normalized),
-  ];
-  if (bytes.length > builtInEditorMaximumBytes) {
-    throw StateError('The edited file exceeds the 4 MB built-in editor limit.');
-  }
-  final temporary = File('${file.path}.seance-${uuidV4()}.edit');
-  final backup = File('${file.path}.seance-${uuidV4()}.backup');
-  RandomAccessFile? handle;
-  try {
-    await temporary.create(exclusive: true);
-    handle = await temporary.open(mode: FileMode.writeOnly);
-    await handle.writeFrom(bytes);
-    await handle.flush();
-    await handle.close();
-    handle = null;
-    final savedSha256 = await streamedFileSha256(temporary);
-
-    final type = await FileSystemEntity.type(file.path, followLinks: false);
-    if (type != FileSystemEntityType.file) {
-      throw FileSystemException(
-        'The local checkout is missing or no longer a regular file.',
-        file.path,
-      );
-    }
-    await file.rename(backup.path);
-    if (expectedSha256 != null &&
-        await streamedFileSha256(backup) != expectedSha256) {
-      await backup.rename(file.path);
-      throw StateError(
-        'The local copy changed in another editor. Reopen it before saving to '
-        'avoid losing those changes.',
-      );
-    }
-    try {
-      if (await FileSystemEntity.type(file.path, followLinks: false) !=
-          FileSystemEntityType.notFound) {
-        throw FileSystemException(
-          'The local copy changed while it was being saved.',
-          file.path,
-        );
-      }
-      await temporary.rename(file.path);
-    } catch (_) {
-      if (!await file.exists() && await backup.exists()) {
-        await backup.rename(file.path);
-      }
-      rethrow;
-    }
-    try {
-      await backup.delete();
-    } on FileSystemException {
-      // The new file is safely committed; retaining a backup is preferable to
-      // rolling back or reporting a false save failure.
-    }
-    return savedSha256;
-  } finally {
-    await handle?.close();
-    if (await temporary.exists()) await temporary.delete();
-  }
-}
-
-String _normalizeLineEndings(String text, String lineEnding) {
-  if (lineEnding != '\r\n') return text;
-  return text
-      .replaceAll('\r\n', '\n')
-      .replaceAll('\r', '\n')
-      .replaceAll('\n', '\r\n');
-}
+/// The managed save folds a CRLF-dominant document's breaks to CRLF and
+/// leaves an LF document's alone; the controller's byte preflight must
+/// agree with it, so both read this one policy.
+TextNormalization seanceSaveNormalization(LineEnding ending) =>
+    ending == LineEnding.crlf
+    ? TextNormalization.normalize
+    : TextNormalization.preserve;
 
 class BuiltInTextEditorScreen extends StatefulWidget {
   final File file;
   final String remotePath;
   final String? initialText;
+
+  /// When set, the editor watches this controller's drift flag for
+  /// [remotePath] and offers to reload the file once the server copy no
+  /// longer matches what the local checkout was taken from.
+  final RemoteFilesController? remoteFiles;
   final Future<void> Function(File file, String text)? saveDocument;
   final Future<void> Function()? onSaved;
   final Future<bool> Function()? onUpload;
+
+  /// Written with the buffer's dirty flag on every change — a hosting tab
+  /// strip draws its modified marker from it.
+  final ValueNotifier<bool>? dirtyNotifier;
+
+  /// False while another tab is front-most, so autofocus and
+  /// focus-on-activation never fight the tab that is actually showing.
+  final bool isActive;
 
   const BuiltInTextEditorScreen({
     super.key,
     required this.file,
     required this.remotePath,
     this.initialText,
+    this.remoteFiles,
     this.saveDocument,
     this.onSaved,
     this.onUpload,
+    this.dirtyNotifier,
+    this.isActive = true,
   });
 
   @override
   State<BuiltInTextEditorScreen> createState() =>
-      _BuiltInTextEditorScreenState();
+      BuiltInTextEditorScreenState();
 }
 
-class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
-  final TextEditingController _text = TextEditingController();
-  String _savedText = '';
-  String? _error;
-  String? _baselineSha256;
-  bool _hasUtf8Bom = false;
-  String _lineEnding = '\n';
-  bool _loading = true;
-  bool _saving = false;
+/// Séance owns the session, remote drift, tab chrome, and notifications. The
+/// buffer and editing surface are shared with Planchette and Poltergeist.
+class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
+    with WidgetsBindingObserver {
+  late final EditorController _editor;
+  bool _reloading = false;
+  bool _missingBannerDismissed = false;
 
-  bool get _dirty => !_loading && _text.text != _savedText;
+  bool get isDirty => _editor.isDirty;
+  bool? get _remoteChanged =>
+      widget.remoteFiles?.remoteChangedFor(widget.remotePath);
+  bool get _remoteMissing {
+    final files = widget.remoteFiles;
+    return files != null &&
+        files.latestRemoteSnapshots.containsKey(widget.remotePath) &&
+        files.latestRemoteSnapshots[widget.remotePath] == null;
+  }
 
   @override
   void initState() {
     super.initState();
-    _text.addListener(_changed);
-    final initialText = widget.initialText;
-    if (initialText == null) {
-      _load();
-    } else {
-      _savedText = initialText;
-      _text.text = initialText;
-      _loading = false;
-    }
-  }
-
-  Future<void> _load() async {
-    try {
-      final document = await loadBuiltInTextDocumentDetails(widget.file);
-      if (!mounted) return;
-      _savedText = document.text;
-      _text.text = document.text;
-      _baselineSha256 = document.sha256;
-      _hasUtf8Bom = document.hasUtf8Bom;
-      _lineEnding = document.lineEnding;
-    } catch (error) {
-      if (mounted) _error = error.toString();
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    WidgetsBinding.instance.addObserver(this);
+    _editor = EditorController(
+      displayPath: widget.remotePath,
+      initialText: widget.initialText,
+      // The buffer keeps line breaks as they are in the file; the byte
+      // preflight follows the managed save's conditional fold.
+      normalization: TextNormalization.preserve,
+      saveNormalizationForLineEnding: seanceSaveNormalization,
+      loadDocument: () => loadTextDocument(
+        widget.file,
+        normalization: TextNormalization.preserve,
+      ),
+      saveDocument: (text, baseline) async {
+        final customSave = widget.saveDocument;
+        if (customSave != null) {
+          await customSave(widget.file, text);
+          return baseline?.sha256 ?? '';
+        }
+        return saveBuiltInTextDocument(
+          baseline?.file ?? widget.file,
+          text,
+          hasUtf8Bom: baseline?.hasUtf8Bom ?? false,
+          lineEnding: baseline?.lineEnding == LineEnding.crlf ? '\r\n' : '\n',
+          expectedSha256: baseline?.sha256,
+        );
+      },
+      onSaved: widget.onSaved,
+      onPublish: widget.onUpload,
+    );
+    _editor.addListener(_changed);
+    unawaited(_editor.initialize());
+    // Initial text is installed before listeners attach. Prime the tab marker
+    // after its host finishes building, without invalidating an ancestor.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.dirtyNotifier?.value = _editor.isDirty;
+    });
+    _checkRemoteDrift();
   }
 
   void _changed() {
-    if (mounted && !_loading) setState(() {});
+    if (!mounted) return;
+    widget.dirtyNotifier?.value = _editor.isDirty;
+    setState(() {});
+  }
+
+  void _checkRemoteDrift() {
+    unawaited(
+      widget.remoteFiles?.checkRemoteSnapshot(widget.remotePath) ??
+          Future<void>.value(),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkRemoteDrift();
+  }
+
+  @override
+  void didUpdateWidget(BuiltInTextEditorScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _editor.onSaved = widget.onSaved;
+    _editor.onPublish = widget.onUpload;
+    if (!identical(widget.dirtyNotifier, oldWidget.dirtyNotifier)) {
+      widget.dirtyNotifier?.value = _editor.isDirty;
+    }
+    if (!identical(widget.remoteFiles, oldWidget.remoteFiles)) {
+      _checkRemoteDrift();
+    }
   }
 
   @override
   void dispose() {
-    _text.removeListener(_changed);
-    _text.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _editor.removeListener(_changed);
+    _editor.dispose();
     super.dispose();
   }
 
-  Future<bool> _confirmDiscard() async {
-    if (!_dirty) return true;
+  /// The tab host keeps this entry point so closing a tab uses the same shared
+  /// save/dirty guard as the other applications.
+  Future<bool> confirmDiscard() => _editor.confirmClose(() async {
+    if (!mounted) return false;
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
@@ -254,159 +186,311 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
           ),
         ) ??
         false;
-  }
+  });
 
   Future<void> _save({bool upload = false}) async {
-    if (_saving || _loading || _error != null) return;
-    setState(() => _saving = true);
-    final value = _text.text;
+    if (_reloading) return;
     try {
-      final customSave = widget.saveDocument;
-      if (customSave == null) {
-        _baselineSha256 = await saveBuiltInTextDocument(
-          widget.file,
-          value,
-          hasUtf8Bom: _hasUtf8Bom,
-          lineEnding: _lineEnding,
-          expectedSha256: _baselineSha256,
-        );
-      } else {
-        await customSave(widget.file, value);
-      }
-      if (!mounted) return;
-      setState(() => _savedText = value);
-      await widget.onSaved?.call();
-      final uploaded = upload && widget.onUpload != null
-          ? await widget.onUpload!()
-          : false;
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              upload
-                  ? uploaded
-                        ? _dirty
-                              ? 'Uploaded the saved version; newer edits remain unsaved.'
-                              : 'Saved and uploaded.'
-                        : 'Saved locally; not uploaded.'
-                  : 'Saved locally.',
-            ),
-          ),
-        );
-      }
+      final result = await _editor.save(
+        mode: upload ? EditorSaveMode.primary : EditorSaveMode.local,
+      );
+      if (!mounted || result == null) return;
+      showTopToastIn(
+        context,
+        message: result.publishRequested
+            ? result.published
+                  ? result.hasUnsavedChanges
+                        ? 'Uploaded the saved version; newer edits remain unsaved.'
+                        : 'Saved and uploaded.'
+                  : 'Saved locally; not uploaded.'
+            : 'Saved locally.',
+      );
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.toString())));
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) showTopToastIn(context, message: error.toString());
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final name = remoteBasename(widget.remotePath);
-    return PopScope(
-      canPop: !_dirty,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop || !await _confirmDiscard() || !context.mounted) return;
-        Navigator.of(context).pop();
-      },
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.keyS, meta: true): _save,
-          const SingleActivator(LogicalKeyboardKey.keyS, control: true): _save,
-        },
-        child: Scaffold(
-          appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(
-                  widget.remotePath,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-              ],
-            ),
-            actions: [
-              IconButton(
-                tooltip: 'Save locally',
-                onPressed: _dirty && !_saving ? _save : null,
-                icon: const Icon(Icons.save_outlined),
-              ),
-              if (widget.onUpload != null)
-                IconButton(
-                  tooltip: 'Save and upload',
-                  onPressed: !_saving ? () => _save(upload: true) : null,
-                  icon: const Icon(Icons.cloud_upload_outlined),
-                ),
-            ],
+  Future<void> _reloadFromServer() async {
+    final files = widget.remoteFiles;
+    if (files == null || _reloading || _editor.isBusy) return;
+    final revision = _editor.text.text;
+    final localEdits =
+        _editor.isDirty ||
+        (files.localCopies[widget.remotePath]?.dirty ?? false);
+    if (localEdits) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Discard local changes?'),
+          content: const Text(
+            'Reloading replaces the local copy with the server version. '
+            'Unsaved edits will be lost.',
           ),
-          body: _body(),
-          bottomNavigationBar: _loading || _error != null
-              ? null
-              : SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Discard and reload'),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    // A native action or another task may have edited or saved while the
+    // confirmation was pending. Consent covers only the snapshot shown.
+    if (_editor.isBusy ||
+        _editor.text.text != revision ||
+        !identical(files, widget.remoteFiles)) {
+      return;
+    }
+    setState(() => _reloading = true);
+    _editor.editingLocked = true;
+    try {
+      await files.refreshLocalCopy(
+        widget.remotePath,
+        maximumBytes: builtInEditorMaximumBytes,
+      );
+      if (!mounted || !identical(files, widget.remoteFiles)) return;
+      // Reload replaces the confirmed snapshot, and the controller refuses a
+      // reload while any lock holds. Release the host lock only; the load
+      // itself keeps the surface read-only until the new text is installed.
+      // The view is never locked for this, since its lock would refuse the
+      // reload too and the host cannot release it.
+      _editor.editingLocked = false;
+      await _editor.reload();
+    } catch (error) {
+      if (mounted) showTopToastIn(context, message: error.toString());
+    } finally {
+      if (mounted) {
+        _editor.editingLocked = false;
+        setState(() => _reloading = false);
+        widget.dirtyNotifier?.value = _editor.isDirty;
+      }
+    }
+  }
+
+  Widget _remoteBanner() => ListenableBuilder(
+    listenable: widget.remoteFiles!,
+    builder: (context, _) {
+      if (!_remoteMissing) _missingBannerDismissed = false;
+      if (_remoteChanged != true || _missingBannerDismissed) {
+        return const SizedBox.shrink();
+      }
+      return MaterialBanner(
+        leading: const Icon(Icons.sync_problem_outlined),
+        content: Text(
+          _remoteMissing
+              ? 'This file no longer exists on the server.'
+              : 'This file changed on the server.',
+        ),
+        actions: [
+          if (_remoteMissing)
+            TextButton(
+              onPressed: () => setState(() => _missingBannerDismissed = true),
+              child: const Text('Keep local copy'),
+            )
+          else
+            TextButton(
+              onPressed: _reloading || _editor.isBusy
+                  ? null
+                  : _reloadFromServer,
+              child: const Text('Reload'),
+            ),
+        ],
+      );
+    },
+  );
+
+  @override
+  Widget build(BuildContext context) => CallbackShortcuts(
+    bindings: {
+      const SingleActivator(LogicalKeyboardKey.keyS, meta: true): () =>
+          _save(upload: widget.onUpload != null),
+      const SingleActivator(LogicalKeyboardKey.keyS, control: true): () =>
+          _save(upload: widget.onUpload != null),
+      const SingleActivator(LogicalKeyboardKey.keyS, meta: true, shift: true):
+          _save,
+      const SingleActivator(
+        LogicalKeyboardKey.keyS,
+        control: true,
+        shift: true,
+      ): _save,
+    },
+    child: Scaffold(
+      body: Column(
+        children: [
+          _header(context),
+          Expanded(
+            child: PlanchetteEditor(
+              controller: _editor,
+              strings: const EditorStrings(),
+              isActive: widget.isActive,
+              syntaxTheme: seanceEditorSyntaxTheme(
+                Theme.of(context).brightness,
+              ),
+              textStyle: TextStyle(
+                fontFamily: SeanceTheme.monoFallback.first,
+                fontFamilyFallback: SeanceTheme.monoFallback,
+                fontSize: 14,
+                height: 1.35,
+              ),
+              banner: widget.remoteFiles == null ? null : _remoteBanner(),
+              statusBuilder: (context, controller) => widget.remoteFiles == null
+                  ? _statusBar(context)
+                  : ListenableBuilder(
+                      listenable: widget.remoteFiles!,
+                      builder: (context, _) => _statusBar(context),
                     ),
-                    child: Text(
-                      '${_text.text.split('\n').length} lines · '
-                      '${utf8.encode(_text.text).length} bytes'
-                      '${_dirty ? ' · Unsaved' : ''}',
-                      style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  /// The in-pane title row the route's AppBar used to provide: file name,
+  /// remote path, and the find/save actions. The tab strip above carries
+  /// the close affordance.
+  Widget _header(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final uploadOnSave = widget.onUpload != null;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
+      ),
+      padding: const EdgeInsets.only(left: 12, right: 4),
+      child: Row(
+        children: [
+          Icon(Icons.edit_document, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    remoteBasename(widget.remotePath),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  Text(
+                    widget.remotePath,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
-                ),
-        ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: const EditorStrings().browseTextTools,
+            visualDensity: VisualDensity.compact,
+            onPressed: _editor.isLoading || _editor.error != null
+                ? null
+                : _editor.openTextTools,
+            icon: const Icon(Icons.construction_outlined),
+          ),
+          IconButton(
+            tooltip: 'Find',
+            visualDensity: VisualDensity.compact,
+            onPressed: _editor.isLoading || _editor.error != null
+                ? null
+                : _editor.openSearch,
+            icon: const Icon(Icons.search),
+          ),
+          IconButton(
+            tooltip: 'Save locally',
+            visualDensity: VisualDensity.compact,
+            onPressed: _editor.isDirty && !_editor.isSaving ? _save : null,
+            icon: const Icon(Icons.save_outlined),
+          ),
+          if (uploadOnSave)
+            IconButton(
+              tooltip: 'Save and upload',
+              visualDensity: VisualDensity.compact,
+              onPressed: !_editor.isSaving ? () => _save(upload: true) : null,
+              icon: const Icon(Icons.cloud_upload_outlined),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _body() {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.text_snippet_outlined, size: 40),
-              const SizedBox(height: 12),
-              Text(_error!, textAlign: TextAlign.center),
-            ],
+  /// The shared status row plus the managed copy's remote state. The byte
+  /// count is [EditorController.byteCount], not `fileByteCount`: Séance
+  /// saves LF documents with their line breaks as they are.
+  Widget _statusBar(BuildContext context) {
+    const strings = EditorStrings();
+    final theme = Theme.of(context);
+    final (line, col) = _editor.caretLineColumn;
+    final selected = _editor.selectionStats;
+    final copy = widget.remoteFiles?.localCopies[widget.remotePath];
+    final status = [
+      if (selected.characters > 0)
+        strings.selectionSummary(selected.characters, selected.lines),
+      if (_editor.isSaving) strings.saving,
+      if (_remoteMissing)
+        'Deleted on server'
+      else if (_remoteChanged == true)
+        'Changed on server',
+      if (_editor.isDirty)
+        strings.unsaved
+      else if (copy?.dirty ?? false)
+        'Local changes'
+      else if (copy != null)
+        'In sync',
+      _editor.document?.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF',
+      (_editor.document?.hasUtf8Bom ?? false) ? 'UTF-8 BOM' : 'UTF-8',
+      strings.indentation(_editor.indentation),
+      strings.languageName(_editor.text.language),
+      if (!_editor.highlightingEnabled) strings.largeFile,
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Tooltip(
+                message: strings.goToLine,
+                child: InkWell(
+                  onTap: _editor.openGoToLine,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Text(
+                    strings.documentPosition(
+                      line,
+                      col,
+                      _editor.lineStarts.length,
+                      _editor.byteCount,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
-      );
-    }
-    return TextField(
-      controller: _text,
-      autofocus: true,
-      expands: true,
-      maxLines: null,
-      minLines: null,
-      keyboardType: TextInputType.multiline,
-      textAlignVertical: TextAlignVertical.top,
-      autocorrect: false,
-      enableSuggestions: false,
-      smartDashesType: SmartDashesType.disabled,
-      smartQuotesType: SmartQuotesType.disabled,
-      style: const TextStyle(
-        fontFamily: 'monospace',
-        fontSize: 14,
-        height: 1.35,
-      ),
-      decoration: const InputDecoration(
-        border: InputBorder.none,
-        contentPadding: EdgeInsets.all(14),
+          Flexible(
+            child: Text(
+              status.join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -13,6 +13,11 @@ class Secret {
   final SecretKind kind;
   final String value;
 
+  /// When the credential material last changed. Independent of server edits
+  /// so a rename on an offline device cannot republish a stale password as new.
+  /// Zero identifies a legacy entry whose edit time is not known locally.
+  final int updatedAt;
+
   /// Passphrase for an encrypted private key, if the user chose to store it.
   final String? keyPassphrase;
 
@@ -21,12 +26,42 @@ class Secret {
     required this.kind,
     required this.value,
     this.keyPassphrase,
+    this.updatedAt = 0,
   });
+
+  /// This secret with the given fields replaced; a null argument keeps the
+  /// current value — [id] included, so a caller re-keying a credential has to
+  /// pass a fresh one. Two secrets sharing an id collide in the vault and
+  /// across sync, where a record is keyed by the credential.
+  ///
+  /// Exists so duplicating a server can re-key a credential without listing
+  /// this class's fields at the call site. It is not itself a safety net: a
+  /// field added to [Secret] has to be wired in here too, and the guard that
+  /// actually catches a missed one is a JSON comparison — one in this
+  /// package's `records_test.dart`, so it cannot go missing with a client,
+  /// and one in the app's `server_duplication_test.dart` covering the call
+  /// site. And since a null argument means "keep",
+  /// [keyPassphrase] cannot be cleared through this.
+  Secret copyWith({
+    String? id,
+    SecretKind? kind,
+    String? value,
+    String? keyPassphrase,
+    int? updatedAt,
+  }) =>
+      Secret(
+        id: id ?? this.id,
+        kind: kind ?? this.kind,
+        value: value ?? this.value,
+        keyPassphrase: keyPassphrase ?? this.keyPassphrase,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'kind': kind.name,
         'value': value,
+        if (updatedAt != 0) 'updatedAt': updatedAt,
         if (keyPassphrase != null) 'keyPassphrase': keyPassphrase,
       };
 
@@ -35,6 +70,7 @@ class Secret {
         kind: _secretKindFromName(json['kind'] as String? ?? 'password'),
         value: json['value'] as String,
         keyPassphrase: json['keyPassphrase'] as String?,
+        updatedAt: json['updatedAt'] as int? ?? 0,
       );
 
   @override

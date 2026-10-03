@@ -96,6 +96,20 @@ abstract interface class RemoteFileSystem {
 
   Future<void> setMode(String path, int permissions);
 
+  /// Sets the access and/or modification time. At least one of
+  /// [accessedAt] and [modifiedAt] must be given; whichever is omitted keeps
+  /// its current server value.
+  Future<void> setTimes(
+    String path, {
+    DateTime? accessedAt,
+    DateTime? modifiedAt,
+  });
+
+  /// Sets the owner and/or group by numeric id. At least one of [uid] and
+  /// [gid] must be given; whichever is omitted keeps its current server
+  /// value.
+  Future<void> setOwner(String path, {int? uid, int? gid});
+
   Future<String> readSymbolicLink(String path);
 
   Future<void> createSymbolicLink(String linkPath, String targetPath);
@@ -113,11 +127,22 @@ abstract interface class RemoteFileSystem {
     StreamSink<List<int>> destination, {
     RemoteTransferProgress? onProgress,
     RemoteTransferCancellation? cancellation,
+
+    /// Skips the inline SHA-256 when false; the returned entry then carries
+    /// no content digest. Conflict detection is unaffected — it compares
+    /// size and timestamps, not content. Callers that rely on the digest as
+    /// a conflict authority (the managed-edit pipeline) keep the default.
+    bool computeHash = true,
   });
 
   /// Uploads through a sibling temporary file and renames only after every byte
   /// has reached the server. Existing targets are rejected unless [overwrite]
-  /// is explicitly true.
+  /// is explicitly true, and a symbolic link, FIFO, socket or device is
+  /// refused as a conflict even then: the rename would replace the node
+  /// itself. Only the permission bits of [preserveMode] (or of a replaced
+  /// regular file's mode) are applied.
+  ///
+  /// [computeHash] skips the inline SHA-256 when false; see [download].
   Future<RemoteFileEntry> upload(
     String path,
     Stream<List<int>> content, {
@@ -127,6 +152,7 @@ abstract interface class RemoteFileSystem {
     RemoteFileEntry? expectedTarget,
     RemoteTransferProgress? onProgress,
     RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
   });
 }
 
@@ -160,6 +186,12 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
   final SftpClient _client;
   final Duration operationTimeout;
   final Random _random = Random.secure();
+  int _activeOperations = 0;
+
+  /// Lets the transport owner skip keepalive while VFS calls are outstanding.
+  /// Includes nested calls, streaming and awaited cleanup, not wire requests
+  /// still settling after a call has timed out or been cancelled.
+  bool get hasActiveOperations => _activeOperations != 0;
 
   DartSshRemoteFileSystem(
     this._client, {
@@ -199,27 +231,81 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
       throw RangeError.range(permissions, 0, 0xFFF, 'permissions');
     }
     return _guard('change permissions for', path, () async {
-      final attrs = await _client
-          .stat(path, followLink: false)
+      await _lstatNonLink(path, 'permissions');
+      await _client
+          .setStat(path, SftpFileAttrs(mode: SftpFileMode.value(permissions)))
           .timeout(operationTimeout);
-      if (attrs.type == null || attrs.type == SftpFileType.unknown) {
+    });
+  }
+
+  @override
+  Future<void> setTimes(
+    String path, {
+    DateTime? accessedAt,
+    DateTime? modifiedAt,
+  }) {
+    if (accessedAt == null && modifiedAt == null) {
+      throw ArgumentError(
+        'at least one of accessedAt or modifiedAt must be given',
+      );
+    }
+    final accessSeconds = accessedAt == null
+        ? null
+        : _secondsFromTime(accessedAt);
+    final modifySeconds = modifiedAt == null
+        ? null
+        : _secondsFromTime(modifiedAt);
+    return _guard('change timestamps for', path, () async {
+      final attrs = await _lstatNonLink(path, 'timestamps');
+      // SFTP v3 carries access and modification times as one wire pair, so
+      // setting either alone would strand the other: fill the unspecified
+      // half from the lstat above rather than send a half-empty pair.
+      final accessTime = accessSeconds ?? attrs.accessTime;
+      final modifyTime = modifySeconds ?? attrs.modifyTime;
+      if (accessTime == null || modifyTime == null) {
         throw RemoteFileException(
           kind: RemoteFileErrorKind.unsupported,
-          operation: 'change permissions for',
+          operation: 'change timestamps for',
           path: path,
-          message: 'The server did not report the type of "$path".',
-        );
-      }
-      if (attrs.type == SftpFileType.symbolicLink) {
-        throw RemoteFileException(
-          kind: RemoteFileErrorKind.unsupported,
-          operation: 'change permissions for',
-          path: path,
-          message: 'Symbolic link permissions cannot be changed safely.',
+          message: 'The server did not report the current times of "$path".',
         );
       }
       await _client
-          .setStat(path, SftpFileAttrs(mode: SftpFileMode.value(permissions)))
+          .setStat(
+            path,
+            SftpFileAttrs(accessTime: accessTime, modifyTime: modifyTime),
+          )
+          .timeout(operationTimeout);
+    });
+  }
+
+  @override
+  Future<void> setOwner(String path, {int? uid, int? gid}) {
+    if (uid == null && gid == null) {
+      throw ArgumentError('at least one of uid or gid must be given');
+    }
+    if (uid != null) {
+      RangeError.checkValueInInterval(uid, 0, _maxUint32, 'uid');
+    }
+    if (gid != null) {
+      RangeError.checkValueInInterval(gid, 0, _maxUint32, 'gid');
+    }
+    return _guard('change owner for', path, () async {
+      final attrs = await _lstatNonLink(path, 'ownership');
+      // Like the timestamp pair, uid and gid travel as one wire pair; fill
+      // the unspecified half from the lstat above.
+      final userID = uid ?? attrs.userID;
+      final groupID = gid ?? attrs.groupID;
+      if (userID == null || groupID == null) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.unsupported,
+          operation: 'change owner for',
+          path: path,
+          message: 'The server did not report the current owner of "$path".',
+        );
+      }
+      await _client
+          .setStat(path, SftpFileAttrs(userID: userID, groupID: groupID))
           .timeout(operationTimeout);
     });
   }
@@ -290,6 +376,7 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
     StreamSink<List<int>> destination, {
     RemoteTransferProgress? onProgress,
     RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
   }) => _guard('download', path, () async {
     cancellation?.throwIfCancelled();
     final pathAttrs = await _client
@@ -329,8 +416,10 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
         );
       }
       var transferred = 0;
-      final digestSink = _DigestSink();
-      final hashInput = sha256.startChunkedConversion(digestSink);
+      final digestSink = computeHash ? _DigestSink() : null;
+      final hashInput = digestSink == null
+          ? null
+          : sha256.startChunkedConversion(digestSink);
       final source =
           _cancelWhenRequested(
             file.read(
@@ -342,11 +431,11 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
             ),
             cancellation,
           ).map((chunk) {
-            hashInput.add(chunk);
+            hashInput?.add(chunk);
             return chunk;
           });
       await destination.addStream(source.timeout(operationTimeout));
-      hashInput.close();
+      hashInput?.close();
       cancellation?.throwIfCancelled();
       if (transferred != length) {
         throw RemoteFileException(
@@ -367,7 +456,7 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
         path,
         remoteBasename(path),
         finalAttrs,
-        contentSha256: digestSink.value.toString(),
+        contentSha256: digestSink?.value.toString(),
       );
       if (!_sameSnapshot(initialEntry, finalEntry) ||
           !_sameSnapshot(
@@ -401,6 +490,7 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
     RemoteFileEntry? expectedTarget,
     RemoteTransferProgress? onProgress,
     RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
   }) => _guard('upload', path, () async {
     final existing = await _statOrNull(path);
     if (existing != null && !overwrite) {
@@ -412,6 +502,8 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
             'A remote item named "${remoteBasename(path)}" already exists.',
       );
     }
+    // Before the CAS below, whose content hash would read through a link.
+    if (existing != null) _checkReplaceable(path, existing);
     if (expectedTarget != null &&
         (existing == null ||
             !await _matchesExpectedTarget(
@@ -430,6 +522,17 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
       );
     }
 
+    // Only a regular file's mode describes what the upload replaces, and
+    // setstat takes permission bits, not the file-type field entry modes
+    // carry. setuid, setgid and sticky stay: the server's own
+    // `perm & 07777` applied them before, and Replace keeps doing so.
+    final inheritedMode =
+        existing != null && existing.type == RemoteFileType.file
+        ? existing.mode
+        : null;
+    final requestedMode = preserveMode ?? inheritedMode;
+    final mode = requestedMode == null ? null : requestedMode & _permissionBits;
+
     cancellation?.throwIfCancelled();
     final tempPath = _temporaryPath(path);
     SftpFile? file;
@@ -443,23 +546,43 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
                 SftpFileOpenMode.exclusive,
           )
           .timeout(operationTimeout);
+      // dartssh2 sends no attributes with the open, so the temp file starts
+      // at the server's default mode: world-readable, and group-writable
+      // under a collaborative umask such as 002. When the final mode
+      // withholds read or write from group or others, restrict the handle
+      // before the first byte; the final mode is applied after the last
+      // write. Otherwise another local user could read the bytes as they
+      // stream or, worse, write into them, and the rename would commit the
+      // result: the inline digest covers only what was sent. This narrows
+      // the exposure rather than closing it: a process that opens the empty
+      // file before this request lands keeps its descriptor.
+      if (mode != null &&
+          (mode & _groupAndOtherReadWrite) != _groupAndOtherReadWrite) {
+        await file
+            .setStat(
+              SftpFileAttrs(mode: const SftpFileMode.value(_ownerOnlyMode)),
+            )
+            .timeout(operationTimeout);
+      }
       var transferred = 0;
-      final digestSink = _DigestSink();
-      final hashInput = sha256.startChunkedConversion(digestSink);
+      final digestSink = computeHash ? _DigestSink() : null;
+      final hashInput = digestSink == null
+          ? null
+          : sha256.startChunkedConversion(digestSink);
       await for (final chunk in _cancelWhenRequested(
         content,
         cancellation,
       ).timeout(operationTimeout)) {
         cancellation?.throwIfCancelled();
         if (chunk.isEmpty) continue;
-        hashInput.add(chunk);
+        hashInput?.add(chunk);
         await file
             .writeBytes(Uint8List.fromList(chunk), offset: transferred)
             .timeout(operationTimeout);
         transferred += chunk.length;
         onProgress?.call(transferred, length);
       }
-      hashInput.close();
+      hashInput?.close();
       cancellation?.throwIfCancelled();
       if (length != null && transferred != length) {
         throw RemoteFileException(
@@ -472,7 +595,6 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
       await file.close().timeout(operationTimeout);
       file = null;
 
-      final mode = preserveMode ?? existing?.mode;
       if (mode != null) {
         await _client
             .setStat(tempPath, SftpFileAttrs(mode: SftpFileMode.value(mode)))
@@ -489,6 +611,7 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
               'while the upload was running.',
         );
       }
+      if (latest != null) _checkReplaceable(path, latest);
       if (expectedTarget != null &&
           (latest == null ||
               !await _matchesExpectedTarget(
@@ -508,7 +631,9 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
       }
       await _client.rename(tempPath, path).timeout(operationTimeout);
       final uploaded = await stat(path, followLinks: false);
-      return _copyEntryWithDigest(uploaded, digestSink.value.toString());
+      return digestSink == null
+          ? uploaded
+          : _copyEntryWithDigest(uploaded, digestSink.value.toString());
     } catch (_) {
       if (cancellation?.isCancelled ?? false) {
         await _cleanupTemporaryUpload(file, tempPath);
@@ -536,6 +661,84 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
     try {
       await _client.remove(tempPath).timeout(operationTimeout);
     } catch (_) {}
+  }
+
+  /// Shared guard for attribute writes: SFTP follows paths like a
+  /// dereferencing stat, so an attribute write aimed at a synced tree must
+  /// never be allowed to land on a link's target instead. Returns the
+  /// lstat attributes — callers that set only half of a wire pair (times,
+  /// owner) fill the other half from them.
+  Future<SftpFileAttrs> _lstatNonLink(String path, String subject) async {
+    final attrs = await _client
+        .stat(path, followLink: false)
+        .timeout(operationTimeout);
+    if (attrs.type == null || attrs.type == SftpFileType.unknown) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'change $subject for',
+        path: path,
+        message: 'The server did not report the type of "$path".',
+      );
+    }
+    if (attrs.type == SftpFileType.symbolicLink) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'change $subject for',
+        path: path,
+        message: 'Symbolic link $subject cannot be changed safely.',
+      );
+    }
+    return attrs;
+  }
+
+  /// SFTP v3 stores whole seconds as an unsigned 32-bit count, so a
+  /// pre-1970 or post-2106 timestamp cannot survive the wire — dartssh2
+  /// writes the two's-complement bytes without complaining, and the server
+  /// would read a wrapped far-future value. Floor fractional seconds, then
+  /// reject anything out of range, mirroring the early checks in setMode
+  /// and setOwner.
+  static int _secondsFromTime(DateTime time) {
+    final millis = time.millisecondsSinceEpoch;
+    final seconds = millis >= 0 ? millis ~/ 1000 : -((-millis + 999) ~/ 1000);
+    RangeError.checkValueInInterval(seconds, 0, _maxUint32, 'timestamp');
+    return seconds;
+  }
+
+  static const int _maxUint32 = 0xFFFFFFFF;
+
+  /// Permission plus setuid/setgid/sticky: what chmod can set. An entry's
+  /// mode also carries the file-type field above these bits.
+  static const int _permissionBits = 0xFFF;
+  static const int _groupAndOtherReadWrite = 0x36; // 0o066
+  static const int _ownerOnlyMode = 0x180; // 0o600
+
+  /// The commit rename replaces whatever node sits at [path]. Over a
+  /// symbolic link that swaps the link for a regular file and leaves its
+  /// target stale; over a FIFO, socket or device it destroys the node.
+  /// Neither is a replace, so both are refused. So is a directory: the
+  /// server's rename would refuse a file over one anyway, but only after
+  /// the whole transfer, and with an error that does not say why.
+  static void _checkReplaceable(String path, RemoteFileEntry target) {
+    final name = remoteBasename(path);
+    final message = switch (target.type) {
+      RemoteFileType.file => null,
+      RemoteFileType.directory =>
+        '"$name" is a folder; the upload will not replace it.',
+      RemoteFileType.symbolicLink =>
+        '"$name" is a symbolic link; replacing it would replace the link, '
+            'not its target.',
+      // Also a server that reported no type at all: nothing says it is safe.
+      RemoteFileType.other =>
+        '"$name" is not reported as a regular file, so the upload will not '
+            'replace it.',
+    };
+    if (message == null) return;
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.conflict,
+      operation: 'upload',
+      path: path,
+      message: message,
+    );
   }
 
   Future<RemoteFileEntry?> _statOrNull(String path) async {
@@ -648,6 +851,8 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
     String? path,
     Future<T> Function() action,
   ) async {
+    // Count rather than toggle: uploads call stat, and callers may overlap.
+    _activeOperations++;
     try {
       return await action();
     } on RemoteFileException {
@@ -700,6 +905,8 @@ class DartSshRemoteFileSystem implements RemoteFileSystem {
         message: _message(operation, path, e.toString()),
         cause: e,
       );
+    } finally {
+      _activeOperations--;
     }
   }
 
@@ -730,7 +937,8 @@ Stream<T> _cancelWhenRequested<T>(
       yield iterator.current;
     }
   } finally {
-    unawaited(iterator.cancel());
+    // Cancellation cleanup must not escape after the transfer has completed.
+    unawaited(iterator.cancel().catchError((_) {}));
   }
 }
 

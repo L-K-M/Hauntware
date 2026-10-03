@@ -1,24 +1,50 @@
 import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app_state.dart';
 import 'services/app_services.dart';
+import 'services/macos_titlebar.dart';
+import 'services/secure_master_key.dart';
+import 'services/settings_window.dart';
+import 'services/window_state.dart';
+import 'settings_window_app.dart';
 import 'theme.dart';
+import 'theme/app_appearance.dart';
 import 'ui/adaptive_shell.dart';
 import 'ui/app_menus.dart';
 import 'ui/host_key_dialog.dart';
 import 'ui/keyboard_interactive_dialog.dart';
+import 'ui/macos_toolbar_band.dart';
 import 'ui/top_toast.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+/// Opens Settings in its own window, on desktop once the app has started.
+/// Null on mobile, where Settings is a route, and before bootstrap finishes.
+SettingsWindowHost? settingsWindowHost;
+
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const SeanceApp());
+  // The settings window's engine runs this same entrypoint, and gets the
+  // Settings screen rather than a second copy of the app.
+  if (args.contains(settingsWindowArgument)) {
+    await runSettingsWindow();
+    return;
+  }
+  // macOS: the integrated titlebar goes in while the window is still
+  // hidden, so it never shows the standard one first.
+  final toolbarBand = !kIsWeb && Platform.isMacOS
+      ? await MacosTitlebar.install()
+      : null;
+  // Put the desktop window back where it was closed (size, monitor,
+  // maximized/full-screen) before the first frame, and keep tracking it.
+  // On macOS this is also what makes the hidden-at-launch window visible.
+  await WindowStateService.restoreAndTrack();
+  runApp(SeanceApp(toolbarBand: toolbarBand));
 }
 
 /// Exposes [AppState] to the widget tree. The instance itself never changes
@@ -40,21 +66,32 @@ class AppScope extends InheritedWidget {
 }
 
 class SeanceApp extends StatelessWidget {
-  const SeanceApp({super.key, @visibleForTesting this.initOverride});
+  const SeanceApp({
+    super.key,
+    @visibleForTesting this.initOverride,
+    this.toolbarBand,
+  });
 
   /// Test seam: replaces [_BootstrapState._init], whose platform-channel
   /// calls never complete in the widget-test environment.
   final Future<AppState> Function()? initOverride;
 
+  /// Whether the macOS unified toolbar band shows, when the window has the
+  /// integrated titlebar ([MacosTitlebar.install]); null everywhere else,
+  /// and then no surface reserves a band.
+  final ValueListenable<bool>? toolbarBand;
+
   @override
-  Widget build(BuildContext context) => _Bootstrap(initOverride: initOverride);
+  Widget build(BuildContext context) =>
+      _Bootstrap(initOverride: initOverride, toolbarBand: toolbarBand);
 }
 
 /// Initializes services asynchronously, then installs the app shell and wires
 /// the host-key / keyboard-interactive dialog hooks.
 class _Bootstrap extends StatefulWidget {
-  const _Bootstrap({this.initOverride});
+  const _Bootstrap({this.initOverride, this.toolbarBand});
   final Future<AppState> Function()? initOverride;
+  final ValueListenable<bool>? toolbarBand;
   @override
   State<_Bootstrap> createState() => _BootstrapState();
 }
@@ -62,6 +99,12 @@ class _Bootstrap extends StatefulWidget {
 class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   AppState? _state;
   Object? _error;
+
+  /// The theme until the state exists to say otherwise: the settings are
+  /// read during bootstrap, so the spinner is drawn in the default theme.
+  final ValueNotifier<AppAppearance> _bootAppearance = ValueNotifier(
+    AppAppearance.initial,
+  );
 
   @override
   void initState() {
@@ -73,6 +116,7 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _bootAppearance.dispose();
     super.dispose();
   }
 
@@ -101,18 +145,64 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
       if (ctx == null) return false;
       return showHostKeyDialog(ctx, decision);
     };
-    state.keyboardInteractiveResponder = (prompts, name, instruction) async {
+    state.keyboardInteractiveResponder = (challenge) async {
       final ctx = navigatorKey.currentContext;
       if (ctx == null) return const <String>[];
-      return showKeyboardInteractiveDialog(ctx, prompts, name, instruction);
+      return showKeyboardInteractiveDialog(ctx, challenge);
     };
 
     await state.load();
-    _installMacMenu(state);
+    if (Platform.isMacOS) installMacMenu(state);
+    if (!kIsWeb && (Platform.isMacOS || Platform.isLinux || Platform.isWindows)) {
+      settingsWindowHost = SettingsWindowHost(state);
+    }
     _warnIfSettingsWereRecovered(state);
+    _warnIfKeystoreUnavailable(state);
     // Fire-and-forget: don't let a slow/offline update check hold up startup.
     unawaited(_checkForUpdate(state));
     return state;
+  }
+
+  /// The OS keystore was down at bootstrap (locked login keyring, no Secret
+  /// Service daemon — the app still started, but saved passwords/keys/tokens
+  /// are unreachable). Tell the user, once, with a retry: a locked keyring on
+  /// an auto-login machine unlocks without any Séance change, and
+  /// gnome-keyring appears on minimal desktops after one install + relaunch.
+  void _warnIfKeystoreUnavailable(AppState state) {
+    final masterKeys = state.services.masterKeys;
+    if (masterKeys.keystoreStatus != KeystoreStatus.unavailable) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+      showTopToast(
+        Overlay.of(context, rootOverlay: true),
+        message: 'The OS keyring is locked or unavailable '
+            '(${masterKeys.lastKeystoreError ?? 'no details'}) — saved '
+            'passwords, keys, and tokens are unreachable. Unlock the login '
+            'keyring (or install gnome-keyring), then retry.',
+        duration: const Duration(seconds: 12),
+        actionLabel: 'Retry',
+        onAction: () => unawaited(_retryKeystoreUnlock(state)),
+      );
+    });
+  }
+
+  Future<void> _retryKeystoreUnlock(AppState state) async {
+    if (await state.services.unlockVaultFromKeystore()) {
+      await state.onVaultUnlocked();
+      final context = navigatorKey.currentContext;
+      if (context == null) return;
+      showTopToast(
+        // navigatorKey's context is the root Navigator's — it outlives the
+        // awaits above; the lint can't see that this isn't widget-local.
+        // ignore: use_build_context_synchronously
+        Overlay.of(context, rootOverlay: true),
+        message: 'Keyring unlocked — saved secrets are available again.',
+      );
+    } else {
+      // Still locked: re-show the warning with the (possibly newer) reason.
+      _warnIfKeystoreUnavailable(state);
+    }
   }
 
   /// Tell the user their settings file could not be read, once, after the shell
@@ -145,34 +235,6 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     }
   }
 
-  /// Wire the native macOS menu items (MainFlutterWindow.swift) to app actions.
-  void _installMacMenu(AppState state) {
-    if (!Platform.isMacOS) return;
-    const channel = MethodChannel('seance/menu');
-    channel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'newTab':
-          openNewTab(state);
-        case 'openSettings':
-          openSettings();
-        case 'generateCommand':
-          openCommandGenerator(state);
-        // Native Edit menu, forwarded only when a terminal is focused.
-        case 'editCopy':
-          if (state.activeSession != null) terminalCopy(state.activeSession!);
-        case 'editPaste':
-          if (state.activeSession != null) {
-            await terminalPaste(state.activeSession!);
-          }
-        case 'editSelectAll':
-          if (state.activeSession != null) {
-            terminalSelectAll(state.activeSession!);
-          }
-      }
-      return null;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     // ONE MaterialApp for every bootstrap phase — only `home:` changes as
@@ -198,14 +260,29 @@ class _BootstrapState extends State<_Bootstrap> with WidgetsBindingObserver {
     } else {
       home = const AppMenus(child: AdaptiveShell());
     }
-    return MaterialApp(
-      title: 'Séance',
-      navigatorKey: navigatorKey,
-      theme: SeanceTheme.light(),
-      darkTheme: SeanceTheme.dark(),
-      themeMode: ThemeMode.system,
-      builder: (context, child) => AppScope(state: _state, child: child!),
-      home: home,
+    // Rebuilt for a theme change and nothing else: AppState notifies for
+    // every connection, probe and tab change, and this widget never listens
+    // to it, only to the appearance notifier, which moves when the
+    // Appearance tab writes.
+    return ValueListenableBuilder<AppAppearance>(
+      valueListenable: _state?.appearance ?? _bootAppearance,
+      builder: (context, appearance, _) {
+        final themes = SeanceTheme.forAppearance(appearance);
+        return MaterialApp(
+          title: 'Séance',
+          navigatorKey: navigatorKey,
+          theme: themes.theme,
+          darkTheme: themes.darkTheme,
+          themeMode: themes.themeMode,
+          // The band is reserved above every route; the wide layout's
+          // header takes it back (ClaimMacosToolbarBand).
+          builder: (context, child) => AppScope(
+            state: _state,
+            child: withMacosToolbarBand(widget.toolbarBand, child: child!),
+          ),
+          home: home,
+        );
+      },
     );
   }
 }

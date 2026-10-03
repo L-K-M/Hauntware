@@ -6,10 +6,20 @@ import 'package:xterm/src/core/buffer/range_line.dart';
 import 'package:xterm/src/core/buffer/range.dart';
 import 'package:xterm/src/core/charset.dart';
 import 'package:xterm/src/core/cursor.dart';
+import 'package:xterm/src/core/hyperlinks.dart';
 import 'package:xterm/src/core/reflow.dart';
 import 'package:xterm/src/core/state.dart';
 import 'package:xterm/src/utils/circular_buffer.dart';
 import 'package:xterm/src/utils/unicode_v11.dart';
+
+// [seance fork] Only web URLs are actionable; terminal output is untrusted.
+final _webUrlPattern = RegExp(
+  r'''https?://[^\s<>"'`\x00-\x1f\x7f]+''',
+  caseSensitive: false,
+);
+const _trailingUrlPunctuation = '.,;:!?';
+const _urlBrackets = {')': '(', ']': '[', '}': '{'};
+const _maxLinkScanCells = 16 * 1024;
 
 class Buffer {
   final TerminalState terminal;
@@ -91,6 +101,90 @@ class Buffer {
 
   /// Absolute index of the last line in the scroll region.
   int get absoluteMarginBottom => _marginBottom + scrollBack;
+
+  /// [seance fork] Finds the HTTP(S) link at a buffer cell: the target of the
+  /// OSC 8 hyperlink the cell belongs to, or failing that a URL visible in the
+  /// text, including soft-wrapped continuations. Hard newlines never join two
+  /// URLs found in the text; only an OSC 8 target spans them, because it is
+  /// attached to the cells rather than read from them.
+  Uri? getLinkAt(CellOffset cell) {
+    if (cell.y < 0 || cell.y >= lines.length || cell.x < 0 || cell.x >= viewWidth) {
+      return null;
+    }
+
+    // An OSC 8 hyperlink is attached to the cell, so it beats reading the
+    // text: it is the only thing that resolves link text which is not a URL,
+    // or a URL the emitting program wrapped across its own hard newlines.
+    final hitLine = lines[cell.y];
+    if (cell.x < hitLine.length) {
+      final target = terminal.hyperlinks[hitLine.getHyperlinkId(cell.x)];
+      if (target != null) return target;
+    }
+
+    // Bound hover work even when a remote prints an enormous unbroken line.
+    var first = cell.y;
+    var last = cell.y;
+    var scanCells = lines[first].length;
+    if (scanCells > _maxLinkScanCells) return null;
+    while (first > 0 && lines[first].isWrapped) {
+      first--;
+      scanCells += lines[first].length;
+      if (scanCells > _maxLinkScanCells) return null;
+    }
+    while (last + 1 < lines.length && lines[last + 1].isWrapped) {
+      last++;
+      scanCells += lines[last].length;
+      if (scanCells > _maxLinkScanCells) return null;
+    }
+
+    // Map display cells to UTF-16 offsets, skipping wide-character fillers.
+    final text = StringBuffer();
+    int? hit;
+    for (var row = first; row <= last; row++) {
+      final line = lines[row];
+      for (var col = 0; col < line.length; col++) {
+        if (row == cell.y && col == cell.x) hit = text.length;
+        final codePoint = line.getCodePoint(col);
+        if (codePoint == 0 && col > 0 && line.getWidth(col - 1) == 2) {
+          if (row == cell.y && col == cell.x) hit = text.length - 1;
+          continue;
+        }
+        text.write(codePoint == 0 ? ' ' : String.fromCharCode(codePoint));
+      }
+    }
+    if (hit == null) return null;
+
+    final content = text.toString();
+    for (final match in _webUrlPattern.allMatches(content)) {
+      final candidate = match.group(0)!;
+      if (hit < match.start || hit >= match.end) continue;
+
+      // Strip prose punctuation, but retain balanced URL parentheses.
+      final unmatched = {
+        for (final pair in _urlBrackets.entries)
+          pair.key: pair.key.allMatches(candidate).length -
+              pair.value.allMatches(candidate).length,
+      };
+      var end = candidate.length;
+      while (end > 0) {
+        final char = candidate[end - 1];
+        if (_trailingUrlPunctuation.contains(char)) {
+          end--;
+          continue;
+        }
+        if ((unmatched[char] ?? 0) > 0) {
+          unmatched[char] = unmatched[char]! - 1;
+          end--;
+          continue;
+        }
+        break;
+      }
+      if (hit >= match.start + end) return null;
+
+      return parseWebUri(candidate.substring(0, end));
+    }
+    return null;
+  }
 
   /// Writes data to the _terminal. Terminal sequences or special characters are
   /// not interpreted and directly added to the buffer.
@@ -482,14 +576,59 @@ class Buffer {
   /// other buffer's height, and even in range it points at unrelated text.
   bool ownsAnchor(CellAnchor anchor) => anchor.line?.attachedTo(lines) ?? false;
 
-  /// Create a new [CellAnchor] at the specified [x] and [y] coordinates.
-  CellAnchor createAnchor(int x, int y) {
-    return lines[y].createAnchor(x);
+  /// [seance fork] One cell past the last cell in the buffer that holds
+  /// anything, or null when the whole buffer is blank.
+  ///
+  /// A terminal buffer is never short of rows: it is built with [viewHeight]
+  /// blank lines ([Buffer]'s constructor) and gains a blank line per newline,
+  /// so every row under the shell prompt is a real, addressable [BufferLine]
+  /// rather than past the end. That is why an unclamped drag below the prompt
+  /// used to paint a selection band across rows that hold nothing — and copy
+  /// the newlines those rows contribute. The selection paths in
+  /// `RenderTerminal` clamp to this; mouse reporting and link hit-testing
+  /// deliberately do not.
+  ///
+  /// Scanned from the end, so the ordinary case (content, then the blank rows
+  /// under the prompt) stops within a screen height: about 4us on a normal
+  /// buffer. Two or three times per pointer event of a drag, not once — each
+  /// endpoint clamps, and the end-inclusive bump re-clamps — so budget for
+  /// the multiple if the pathological case below ever matters. Hoisting one
+  /// lookup per gesture callback through the clamps would fix it.
+  ///
+  /// The scan is *not* bounded by [viewHeight], though: a program that prints
+  /// nothing but newlines pushes blank lines into the scrollback like any
+  /// other, so the worst case is a buffer that is blank all the way down and
+  /// the scan covers every line. Measured at 2.1ms for 9000 such lines, which
+  /// is a visible fraction of a frame while dragging. It stays uncached
+  /// because reaching that state takes a deliberately emptied scrollback and
+  /// the ordinary cost is three orders of magnitude lower; a mutation counter
+  /// on the buffer is the fix if a drag ever shows up in a profile.
+  CellOffset? get contentEnd {
+    for (var row = lines.length - 1; row >= 0; row--) {
+      final length = lines[row].getTrimmedLength(viewWidth);
+      if (length > 0) return CellOffset(length, row);
+    }
+    return null;
   }
 
   /// Create a new [CellAnchor] at the specified [x] and [y] coordinates.
-  CellAnchor createAnchorFromOffset(CellOffset offset) {
-    return lines[offset.y].createAnchor(offset.x);
+  ///
+  /// [seance fork] [onTrim] decides what the anchor does when its line is
+  /// trimmed off the scrollback; see [AnchorTrimBehavior].
+  CellAnchor createAnchor(
+    int x,
+    int y, {
+    AnchorTrimBehavior onTrim = AnchorTrimBehavior.migrate,
+  }) {
+    return lines[y].createAnchor(x, onTrim: onTrim);
+  }
+
+  /// Create a new [CellAnchor] at the specified [x] and [y] coordinates.
+  CellAnchor createAnchorFromOffset(
+    CellOffset offset, {
+    AnchorTrimBehavior onTrim = AnchorTrimBehavior.migrate,
+  }) {
+    return lines[offset.y].createAnchor(offset.x, onTrim: onTrim);
   }
 
   CellAnchor createAnchorFromCursor() {

@@ -1,13 +1,33 @@
 name: seance_app
 description: "Séance — a personal cross-platform SSH client."
 publish_to: none
-version: 0.5.0
+version: 0.9.2
 
 environment:
   sdk: ^3.12.0
   flutter: ">=3.24.0"
 
 dependencies:
+  ghost_ui:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
+      path: packages/ghost_ui
+  planchette_core:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
+      path: packages/planchette_core
+  planchette_editor:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
+      path: packages/planchette_editor
+  ghost_desktop:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
+      path: packages/ghost_desktop
   characters: ^1.4.0
   flutter:
     sdk: flutter
@@ -46,8 +66,30 @@ dependencies:
   share_plus: ^12.0.2
   # Opens the releases page in the browser when an update is available.
   url_launcher: ^6.3.0
+  # Persists/restores the desktop window's frame, monitor, and maximized/
+  # full-screen state across launches (lib/services/window_state.dart).
+  window_manager: ^0.5.2
+  # Enumerates connected displays so a frame saved on a now-disconnected
+  # monitor falls back to the default placement instead of opening off-screen.
+  screen_retriever: ^0.2.2
+  # The macOS integrated titlebar: a transparent titlebar over full-size
+  # content with an empty unified toolbar, and click passthrough for the
+  # header's buttons inside it (lib/services/macos_titlebar.dart). Pinned to
+  # the version Poltergeist runs, whose titlebar this one follows.
+  macos_window_utils: 1.9.1
+  # Owner-only mode bits for path-bearing local files (identity audit log);
+  # the calls are guarded to desktop POSIX, other platforms use storage ACLs.
+  posix: ^6.5.0
+  # Rasterizes an SVG picked as a server badge image; the engine's own codecs
+  # read only bitmaps (lib/services/badge_image.dart).
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
+  # Mock network lifetimes at the AppServices boundary.
+  http: ^1.6.0
+  # The errors a real handshake fails with, for tests that replay one at
+  # AppState's SSH boundary. Pinned to the version seance_core pins.
+  dartssh2: 3.0.2
   flutter_lints: ^5.0.0
   # Regenerates every platform's launcher icon from media-sources/seance-icon.png
   # (config in flutter_launcher_icons.yaml): dart run flutter_launcher_icons

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
+import '../family_hues.dart';
 import '../services/chat_session.dart';
 import '../main.dart';
 
@@ -19,8 +20,6 @@ class ChatSidebar extends StatefulWidget {
 class _ChatSidebarState extends State<ChatSidebar> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
-  TerminalSession? _pasteTarget;
-  bool _includeContext = true;
 
   @override
   void dispose() {
@@ -29,13 +28,17 @@ class _ChatSidebarState extends State<ChatSidebar> {
     super.dispose();
   }
 
-  Future<ChatController> _ensureController(AppState state) async {
+  Future<ChatController> _ensureController(AppState state, int turn) async {
     // Rebuild if the provider settings changed since we last built (new key,
     // model, or base URL) — otherwise edits in Settings wouldn't take effect.
-    final existing = state.chat.controllerFor(state.llmConfigVersion);
+    final version = state.llmConfigVersion;
+    final existing = state.chat.controllerFor(version);
     if (existing != null) return existing;
     final provider = await state.services.buildLlmProvider();
     final search = await state.services.buildSearchProvider();
+    if (!state.chat.isCurrentTurn(turn) || version != state.llmConfigVersion) {
+      throw StateError('The assistant settings or conversation changed. Retry.');
+    }
     final controller = ChatController(
       provider: provider,
       searchProvider: search,
@@ -43,19 +46,10 @@ class _ChatSidebarState extends State<ChatSidebar> {
       redactor: SecretRedactor(
         enabled: state.services.settings.redactionEnabled,
       ),
-      onPaste: (command) {
-        // Place the (newline-free) command into the session that originated the
-        // current chat turn, not whichever tab happens to be active later.
-        final session = _pasteTarget;
-        if (session == null ||
-            !identical(state.sessionById(session.id), session) ||
-            !session.isConnected) {
-          return;
-        }
-        session.engine.injectInput(command);
-      },
+      // The target is supplied per turn; this controller outlives the sidebar.
+      onPaste: (_) {},
     );
-    state.chat.adoptController(controller, state.llmConfigVersion);
+    state.chat.adoptController(controller, version);
     return controller;
   }
 
@@ -69,9 +63,9 @@ class _ChatSidebarState extends State<ChatSidebar> {
 
     try {
       final targetSession = state.activeSession;
-      _pasteTarget = targetSession;
-      final controller = await _ensureController(state);
-      final context = _includeContext
+      final controller = await _ensureController(state, turn);
+      if (!chat.isCurrentTurn(turn)) return;
+      final context = state.includeTerminalContext
           ? targetSession?.engine.recentText(maxLines: 200)
           : null;
       chat.addReply(
@@ -85,12 +79,20 @@ class _ChatSidebarState extends State<ChatSidebar> {
               : targetSession.isLocal
               ? 'a local shell — ${targetSession.displayTarget}'
               : targetSession.displayTarget,
+          onPaste: (command) {
+            if (!chat.isCurrentTurn(turn) ||
+                targetSession == null ||
+                !identical(state.tabById(targetSession.id), targetSession) ||
+                !targetSession.isConnected) {
+              return;
+            }
+            targetSession.engine.injectInput(command);
+          },
         ),
       );
     } catch (e) {
       chat.failed(turn, e);
     } finally {
-      _pasteTarget = null;
       chat.finishSending(turn);
       // The transcript outlives this widget by design, but the scroll
       // controller does not: the drawer may have closed during the await.
@@ -159,7 +161,11 @@ class _ChatSidebarState extends State<ChatSidebar> {
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
       child: Row(
         children: [
-          const Icon(Icons.auto_awesome_outlined, size: 20),
+          Icon(
+            Icons.auto_awesome,
+            size: 20,
+            color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+          ),
           const SizedBox(width: 8),
           Text('Assistant', style: Theme.of(context).textTheme.titleMedium),
           const Spacer(),
@@ -179,11 +185,17 @@ class _ChatSidebarState extends State<ChatSidebar> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FilterChip(
-            selected: _includeContext,
-            label: const Text('Include terminal output'),
-            avatar: const Icon(Icons.article_outlined, size: 16),
-            onSelected: (v) => setState(() => _includeContext = v),
+          // Listens itself: this widget is a const child, so the app's
+          // rebuilds stop above it, and the command generator can change the
+          // shared choice while the wide layout keeps this chip on screen.
+          ListenableBuilder(
+            listenable: state,
+            builder: (context, _) => FilterChip(
+              selected: state.includeTerminalContext,
+              label: const Text('Include terminal output'),
+              avatar: const Icon(Icons.article_outlined, size: 16),
+              onSelected: state.setIncludeTerminalContext,
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -356,7 +368,11 @@ class _ChatEmpty extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome_outlined, size: 36),
+            Icon(
+              Icons.auto_awesome,
+              size: 36,
+              color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+            ),
             const SizedBox(height: 12),
             Text(
               'Describe what you want to do',

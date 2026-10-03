@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:seance_core/seance_core.dart';
 
@@ -28,6 +29,36 @@ class MasterKeyUnavailableException implements Exception {
       'dismissed or denied — relaunch and choose "Always Allow".';
 }
 
+/// The OS keystore could not be read or written — on Linux that is usually a
+/// locked login keyring (auto-login leaves it locked) or a desktop without a
+/// Secret Service daemon (gnome-keyring/KWallet) at all. [message] is
+/// user-facing.
+class KeystoreException implements Exception {
+  final String message;
+  const KeystoreException(this.message);
+  @override
+  String toString() => message;
+}
+
+/// The vault has no key this session because the OS keystore is unavailable,
+/// so secrets can neither be read nor stored until it comes back.
+class VaultLockedException implements Exception {
+  final String message;
+  const VaultLockedException([
+    this.message =
+        'Saved secrets are unavailable: the OS keyring is locked '
+        'or missing. Unlock the login keyring (or install gnome-keyring), '
+        'then retry.',
+  ]);
+  @override
+  String toString() => message;
+}
+
+/// Whether the OS keystore is reachable right now. Tracked on every access so
+/// the app can say "secrets unavailable" and offer a retry instead of dying
+/// at bootstrap (the original `KeyringLocked` hard-fail).
+enum KeystoreStatus { unknown, available, unavailable }
+
 /// Obtains the 32-byte vault master key using the layered model from the
 /// proposal:
 ///   1. a random key stored in the OS keystore (macOS/iOS Keychain, Windows
@@ -38,46 +69,134 @@ class MasterKeyManager {
   final FlutterSecureStorage _storage;
   static const _keyName = 'seance.vault.masterKey.v1';
 
+  /// Last observed keystore health. The bootstrap toast keys off this.
+  KeystoreStatus keystoreStatus = KeystoreStatus.unknown;
+
+  /// One-line description of the most recent keystore failure
+  /// (e.g. `KeyringLocked`) for display in the retry toast.
+  String? lastKeystoreError;
+
   MasterKeyManager([FlutterSecureStorage? storage])
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              // macOS: use the legacy login keychain, not the iOS-style
-              // data-protection keychain. The latter requires a
-              // keychain-access-groups entitlement — a *restricted*
-              // entitlement that macOS only honors for team-signed builds, so
-              // an ad-hoc "sign to run locally" app either throws -34018 at
-              // the first read (entitlement absent) or refuses to launch at
-              // all (entitlement present but unvalidated).
-              mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-            );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            // macOS: use the legacy login keychain, not the iOS-style
+            // data-protection keychain. The latter requires a
+            // keychain-access-groups entitlement — a *restricted*
+            // entitlement that macOS only honors for team-signed builds, so
+            // an ad-hoc "sign to run locally" app either throws -34018 at
+            // the first read (entitlement absent) or refuses to launch at
+            // all (entitlement present but unvalidated).
+            mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+          );
 
-  Future<bool> hasKeystoreKey() async =>
-      (await _storage.read(key: _keyName)) != null;
-
-  /// Load the device master key from the OS keystore, creating one on first
-  /// run.
-  ///
-  /// [hasExistingVault] is what makes "first run" distinguishable from "the
-  /// keystore said no": pass true when an encrypted vault is already on disk,
-  /// and a missing key becomes a [MasterKeyUnavailableException] instead of a
-  /// brand-new key that would strand it. Depending on the platform a refused
-  /// read may throw instead of returning null — this guard holds either way,
-  /// which is why it does not try to tell those apart.
-  Future<List<int>> loadOrCreateFromKeystore({
-    bool hasExistingVault = false,
-  }) async {
-    final existing = await _storage.read(key: _keyName);
-    if (existing != null) return base64.decode(existing);
-    if (hasExistingVault) throw const MasterKeyUnavailableException();
-    final key = secureRandomBytes(32);
-    await _storage.write(key: _keyName, value: base64.encode(key));
-    return key;
+  void _markAvailable() {
+    keystoreStatus = KeystoreStatus.available;
+    lastKeystoreError = null;
   }
 
-  /// Replace the stored master key (used when sync enrolment switches the vault
-  /// to the passphrase-derived key that is shared across devices).
+  void _markUnavailable(Object e) {
+    keystoreStatus = KeystoreStatus.unavailable;
+    lastKeystoreError = _describe(e);
+  }
+
+  /// A compact description of a keystore failure. flutter_secure_storage on
+  /// Linux reports libsecret errors as PlatformException(code: message:), so
+  /// for the common case ("KeyringLocked"/"KeyringLocked") the code alone is
+  /// the whole story.
+  static String _describe(Object e) {
+    if (e is PlatformException) {
+      final msg = e.message;
+      return msg != null && msg != e.code ? '${e.code} — $msg' : e.code;
+    }
+    return e.toString();
+  }
+
+  /// Load the device master key from the OS keystore, creating one on first
+  /// run. Returns null when the keystore is unavailable right now —
+  /// [keystoreStatus]/[lastKeystoreError] say why. Deliberately does NOT
+  /// fabricate an ephemeral key: anything encrypted with a key that dies with
+  /// the process would be silently orphaned on the next launch, which is a
+  /// far worse failure than "secrets are temporarily unavailable".
+  ///
+  /// [hasExistingVault] is what makes "first run" distinguishable from "the
+  /// keystore said no": when an encrypted vault is already on disk, a keystore
+  /// that *answers* — reads fine, holds nothing — is one that will not hand
+  /// the key over, and minting a fresh one makes every stored password and
+  /// private key permanently undecryptable. The probe then throws
+  /// [MasterKeyUnavailableException] rather than guess. A read that throws
+  /// instead is a keystore that cannot answer at all — the locked-vault null
+  /// above, not a refusal: nothing is minted either way.
+  Future<List<int>?> probeKeystore({bool hasExistingVault = false}) async {
+    try {
+      final existing = await _storage.read(key: _keyName);
+      if (existing != null) {
+        _markAvailable();
+        return base64.decode(existing);
+      }
+      // The keystore answered: reachable, holding nothing.
+      _markAvailable();
+    } catch (e) {
+      _markUnavailable(e);
+      return null;
+    }
+    if (hasExistingVault) throw const MasterKeyUnavailableException();
+    try {
+      final key = secureRandomBytes(32);
+      await _storage.write(key: _keyName, value: base64.encode(key));
+      _markAvailable();
+      return key;
+    } catch (e) {
+      _markUnavailable(e);
+      return null;
+    }
+  }
+
+  /// The master key the OS keystore actually holds right now, or null when it
+  /// holds none, cannot be read, or holds something undecodable.
+  ///
+  /// Unlike [probeKeystore] this never *creates* one, which is what makes it
+  /// usable as a witness: a failed [setKeystoreKey] needs to know which key
+  /// survived, and a probe that mints a fresh key when it finds none would
+  /// answer with a key nothing has ever sealed anything with. Every failure
+  /// reads as null — "cannot tell" — which callers must treat as the
+  /// conservative case rather than as "empty".
+  ///
+  /// Deliberately the one read here that reports *nothing* about keystore
+  /// health. It is called from inside a catch handling a keystore failure
+  /// that has already recorded its own diagnosis, and [_markAvailable] clears
+  /// [lastKeystoreError]: a witness that marked would erase the
+  /// `KeyringLocked` the write just recorded — the very thing the retry
+  /// affordance keys off — because a *read* happened to work a moment later.
+  /// Marking unavailable is no better: a row that will not base64-decode is a
+  /// data problem, not an outage, and would be reported to every other
+  /// consumer as one.
+  Future<List<int>?> readKeystoreKey() async {
+    try {
+      final existing = await _storage.read(key: _keyName);
+      return existing == null ? null : base64.decode(existing);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Whether a master key is stored. Tolerant like [getApiKey]: a keystore
+  /// that throws reads as "no key", not as a crash.
+  Future<bool> hasKeystoreKey() async {
+    try {
+      final v = await _storage.read(key: _keyName);
+      _markAvailable();
+      return v != null;
+    } catch (e) {
+      _markUnavailable(e);
+      return false;
+    }
+  }
+
+  /// Replace the stored master key (used when sync enrolment switches the
+  /// vault to the passphrase-derived key that is shared across devices).
   Future<void> setKeystoreKey(List<int> key) =>
-      _storage.write(key: _keyName, value: base64.encode(key));
+      _write(_keyName, base64.encode(key), what: 'the vault master key');
 
   /// Derive the vault key from a master passphrase (fallback / sync enrolment).
   /// The returned [VaultKeys.vaultKey] unlocks the local vault; the
@@ -86,15 +205,41 @@ class MasterKeyManager {
     String passphrase,
     List<int> salt, {
     Argon2Params params = const Argon2Params(),
-  }) =>
-      VaultCrypto.deriveKeys(
-          passphrase: passphrase, salt: salt, params: params);
+  }) => VaultCrypto.deriveKeys(
+    passphrase: passphrase,
+    salt: salt,
+    params: params,
+  );
 
   /// Store an API key (LLM provider) in the OS keystore under [name]. Never
-  /// synced.
+  /// synced. Throws [KeystoreException] when the keystore is unavailable —
+  /// a caller saving user input must be able to say the save failed.
   Future<void> putApiKey(String name, String value) =>
-      _storage.write(key: 'seance.apikey.$name', value: value);
+      _write('seance.apikey.$name', value, what: 'the $name key');
 
-  Future<String?> getApiKey(String name) =>
-      _storage.read(key: 'seance.apikey.$name');
+  Future<void> _write(String key, String value, {required String what}) async {
+    try {
+      await _storage.write(key: key, value: value);
+      _markAvailable();
+    } catch (e) {
+      _markUnavailable(e);
+      throw KeystoreException(
+        'Could not save $what to the OS keyring (${_describe(e)}). Unlock '
+        'the login keyring or install gnome-keyring, then try again.',
+      );
+    }
+  }
+
+  /// Reads never crash the app on a locked/unavailable keystore; they behave
+  /// as "not set" (and update [keystoreStatus] for the UI's retry affordance).
+  Future<String?> getApiKey(String name) async {
+    try {
+      final v = await _storage.read(key: 'seance.apikey.$name');
+      _markAvailable();
+      return v;
+    } catch (e) {
+      _markUnavailable(e);
+      return null;
+    }
+  }
 }

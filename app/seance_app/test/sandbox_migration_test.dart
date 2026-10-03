@@ -25,7 +25,7 @@ void main() {
     });
     // Mirrors the real shape: staging is created beside the support directory,
     // so `support` must have a parent it can be renamed within.
-    support = Directory('${root.path}/Application Support/com.lkm.seanceApp')
+    support = Directory('${root.path}/Application Support/ch.lkmc.seanceApp')
       ..createSync(recursive: true);
     legacy = Directory('${root.path}/container')..createSync(recursive: true);
   });
@@ -43,55 +43,60 @@ void main() {
       File('${support.path}/$relativePath').readAsStringSync();
 
   group('the migration itself', () {
-    test('carries every store, and the checkout tree, out of the container',
-        () async {
-      writeLegacy('settings.json', '{"deviceId":"abc-123"}');
-      writeLegacy('servers.json', '[{"id":"s1"}]');
-      writeLegacy('vault.json', '{"secret-1":"blob"}');
-      writeLegacy('known_hosts.json', '{}');
-      writeLegacy('snippets.json', '[]');
-      writeLegacy('command_stats.json', '{}');
-      writeLegacy('managed_remote_files.json', '{"files":[]}');
-      writeLegacy('identity_reads.jsonl', '{"path":"~/.ssh/id_ed25519"}\n');
-      // Nested, because a managed edit lives under a per-session directory.
-      writeLegacy('sftp-checkouts/session-1/deep/notes.txt', 'hello');
+    test(
+      'carries every store, and the checkout tree, out of the container',
+      () async {
+        writeLegacy('settings.json', '{"deviceId":"abc-123"}');
+        writeLegacy('servers.json', '[{"id":"s1"}]');
+        writeLegacy('vault.json', '{"secret-1":"blob"}');
+        writeLegacy('known_hosts.json', '{}');
+        writeLegacy('snippets.json', '[]');
+        writeLegacy('command_stats.json', '{}');
+        writeLegacy('managed_remote_files.json', '{"files":[]}');
+        writeLegacy('identity_reads.jsonl', '{"path":"~/.ssh/id_ed25519"}\n');
+        // Nested, because a managed edit lives under a per-session directory.
+        writeLegacy('sftp-checkouts/session-1/deep/notes.txt', 'hello');
 
-      expect(await migration().run(), SandboxMigrationOutcome.migrated);
+        expect(await migration().run(), SandboxMigrationOutcome.migrated);
 
-      // deviceId is the one that matters most: it is the LWW tiebreaker, so
-      // losing it re-enters this device into sync as a stranger.
-      expect(
-        jsonDecode(readSupport('settings.json'))['deviceId'],
-        'abc-123',
-      );
-      expect(readSupport('vault.json'), '{"secret-1":"blob"}');
-      expect(readSupport('sftp-checkouts/session-1/deep/notes.txt'), 'hello');
-      for (final name in const [
-        'servers.json',
-        'known_hosts.json',
-        'snippets.json',
-        'command_stats.json',
-        'managed_remote_files.json',
-        'identity_reads.jsonl',
-      ]) {
-        expect(File('${support.path}/$name').existsSync(), isTrue,
-            reason: name);
-      }
-    });
+        // deviceId is the one that matters most: it is the LWW tiebreaker, so
+        // losing it re-enters this device into sync as a stranger.
+        expect(jsonDecode(readSupport('settings.json'))['deviceId'], 'abc-123');
+        expect(readSupport('vault.json'), '{"secret-1":"blob"}');
+        expect(readSupport('sftp-checkouts/session-1/deep/notes.txt'), 'hello');
+        for (final name in const [
+          'servers.json',
+          'known_hosts.json',
+          'snippets.json',
+          'command_stats.json',
+          'managed_remote_files.json',
+          'identity_reads.jsonl',
+        ]) {
+          expect(
+            File('${support.path}/$name').existsSync(),
+            isTrue,
+            reason: name,
+          );
+        }
+      },
+    );
 
-    test('copies rather than moves, so the container is still a fallback',
-        () async {
-      writeLegacy('settings.json', '{}');
-      await migration().run();
-      expect(File('${legacy.path}/settings.json').existsSync(), isTrue);
-    });
+    test(
+      'copies rather than moves, so the container is still a fallback',
+      () async {
+        writeLegacy('settings.json', '{}');
+        await migration().run();
+        expect(File('${legacy.path}/settings.json').existsSync(), isTrue);
+      },
+    );
 
     test('leaves no staging directory behind', () async {
       writeLegacy('settings.json', '{}');
       await migration().run();
       expect(
-        Directory('${support.parent.path}/${SandboxMigration.stagingName}')
-            .existsSync(),
+        Directory(
+          '${support.parent.path}/${SandboxMigration.stagingName}',
+        ).existsSync(),
         isFalse,
       );
     });
@@ -109,23 +114,28 @@ void main() {
       expect(await migration().run(), SandboxMigrationOutcome.migrated);
       expect(jsonDecode(readSupport('settings.json'))['deviceId'], 'abc');
       for (final name in const ['.DS_Store', '.Spotlight-V100', '.localized']) {
-        expect(File('${support.path}/$name').existsSync(), isTrue,
-            reason: name);
+        expect(
+          File('${support.path}/$name').existsSync(),
+          isTrue,
+          reason: name,
+        );
       }
     });
 
-    test('a destination that does not exist yet is created by the rename',
-        () async {
-      // path_provider documents that it creates the support directory, so this
-      // should not arise — but if it ever did, listing a missing directory
-      // would throw and turn a perfectly migratable install into a refused
-      // launch. The parent is what the rename actually needs.
-      await support.delete();
-      writeLegacy('settings.json', '{"deviceId":"abc"}');
+    test(
+      'a destination that does not exist yet is created by the rename',
+      () async {
+        // path_provider documents that it creates the support directory, so this
+        // should not arise — but if it ever did, listing a missing directory
+        // would throw and turn a perfectly migratable install into a refused
+        // launch. The parent is what the rename actually needs.
+        await support.delete();
+        writeLegacy('settings.json', '{"deviceId":"abc"}');
 
-      expect(await migration().run(), SandboxMigrationOutcome.migrated);
-      expect(jsonDecode(readSupport('settings.json'))['deviceId'], 'abc');
-    });
+        expect(await migration().run(), SandboxMigrationOutcome.migrated);
+        expect(jsonDecode(readSupport('settings.json'))['deviceId'], 'abc');
+      },
+    );
 
     test('a stray dot-file does not block it, and is not destroyed', () async {
       // Someone opened ~/Library/Application Support in Finder. That must
@@ -141,8 +151,9 @@ void main() {
 
   group('when it must not run', () {
     test('an install already using this location is left alone', () async {
-      File('${support.path}/settings.json')
-          .writeAsStringSync('{"deviceId":"current"}');
+      File(
+        '${support.path}/settings.json',
+      ).writeAsStringSync('{"deviceId":"current"}');
       writeLegacy('settings.json', '{"deviceId":"stale"}');
 
       expect(await migration().run(), SandboxMigrationOutcome.notNeeded);
@@ -193,32 +204,37 @@ void main() {
       expect(staging.existsSync(), isFalse);
     });
 
-    test('a container that vanished first reports noLegacyData, not failure',
-        () async {
-      await legacy.delete(recursive: true);
-      final run = SandboxMigration(support: support, legacySupport: legacy);
+    test(
+      'a container that vanished first reports noLegacyData, not failure',
+      () async {
+        await legacy.delete(recursive: true);
+        final run = SandboxMigration(support: support, legacySupport: legacy);
 
-      expect(await run.run(), SandboxMigrationOutcome.noLegacyData);
-      expect(run.error, isNull);
-      expect(support.listSync(), isEmpty);
-    });
+        expect(await run.run(), SandboxMigrationOutcome.noLegacyData);
+        expect(run.error, isNull);
+        expect(support.listSync(), isEmpty);
+      },
+    );
 
     test('a staging path that cannot be created reports failed', () async {
       writeLegacy('settings.json', '{}');
       // A file where the staging directory needs to go: create() throws, which
       // is the closest reliable stand-in for a full or read-only disk.
-      File('${support.parent.path}/${SandboxMigration.stagingName}')
-          .writeAsStringSync('not a directory');
+      File(
+        '${support.parent.path}/${SandboxMigration.stagingName}',
+      ).writeAsStringSync('not a directory');
       final run = SandboxMigration(support: support, legacySupport: legacy);
 
       expect(await run.run(), SandboxMigrationOutcome.failed);
       expect(run.error, isNotNull);
-      expect(File('${support.path}/settings.json').existsSync(), isFalse,
-          reason: 'a failed run must not leave a half-migrated install');
+      expect(
+        File('${support.path}/settings.json').existsSync(),
+        isFalse,
+        reason: 'a failed run must not leave a half-migrated install',
+      );
     });
 
-    test('a copy that dies partway leaves the destination untouched',
-        () async {
+    test('a copy that dies partway leaves the destination untouched', () async {
       // The real hazard, reproduced: several files copy, then one cannot.
       // Everything the app can see must still be exactly as it was, because a
       // destination holding half an install is indistinguishable from one
@@ -239,11 +255,15 @@ void main() {
       );
       expect(await run.run(), SandboxMigrationOutcome.failed);
       expect(run.error, isNotNull);
-      expect(support.listSync(), isEmpty,
-          reason: 'all-or-nothing: no partial install may become visible');
       expect(
-        Directory('${support.parent.path}/${SandboxMigration.stagingName}')
-            .existsSync(),
+        support.listSync(),
+        isEmpty,
+        reason: 'all-or-nothing: no partial install may become visible',
+      );
+      expect(
+        Directory(
+          '${support.parent.path}/${SandboxMigration.stagingName}',
+        ).existsSync(),
         isFalse,
       );
       // And the container is still whole, so the next launch can retry.
@@ -254,14 +274,14 @@ void main() {
   group('choosing where to migrate from', () {
     test('derives the container path from the support directory', () {
       final resolved = SandboxMigration.forSupportDirectory(
-        Directory('/Users/ada/Library/Application Support/com.lkm.seanceApp'),
+        Directory('/Users/ada/Library/Application Support/ch.lkmc.seanceApp'),
         home: '/Users/ada',
         isMacOS: true,
       );
       expect(
         resolved!.legacySupport.path,
-        '/Users/ada/Library/Containers/com.lkm.seanceApp/Data'
-        '/Library/Application Support/com.lkm.seanceApp',
+        '/Users/ada/Library/Containers/ch.lkmc.seanceApp/Data'
+        '/Library/Application Support/ch.lkmc.seanceApp',
       );
     });
 
@@ -269,7 +289,7 @@ void main() {
       // Inside would mean the destination is non-empty during the copy, which
       // both defeats the atomic rename and risks reading as "already in use".
       final resolved = SandboxMigration.forSupportDirectory(
-        Directory('/Users/ada/Library/Application Support/com.lkm.seanceApp'),
+        Directory('/Users/ada/Library/Application Support/ch.lkmc.seanceApp'),
         home: '/Users/ada',
         isMacOS: true,
       );
@@ -294,7 +314,7 @@ void main() {
     test('is skipped when there is no home to look under', () {
       expect(
         SandboxMigration.forSupportDirectory(
-          Directory('/Users/ada/Library/Application Support/com.lkm.seanceApp'),
+          Directory('/Users/ada/Library/Application Support/ch.lkmc.seanceApp'),
           home: '',
           isMacOS: true,
         ),
@@ -305,7 +325,7 @@ void main() {
 
   group('sandbox detection', () {
     test('reads the container variable, and only on macOS', () {
-      const inside = {'APP_SANDBOX_CONTAINER_ID': 'com.lkm.seanceApp'};
+      const inside = {'APP_SANDBOX_CONTAINER_ID': 'ch.lkmc.seanceApp'};
       expect(macOsSandboxed(environment: inside, isMacOS: true), isTrue);
       expect(macOsSandboxed(environment: const {}, isMacOS: true), isFalse);
       expect(macOsSandboxed(environment: inside, isMacOS: false), isFalse);

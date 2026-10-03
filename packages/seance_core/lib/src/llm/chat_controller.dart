@@ -107,6 +107,7 @@ class ChatController {
   final int maxToolIterations;
 
   final List<LlmMessage> _history = [];
+  int _generation = 0;
 
   ChatController({
     required this.provider,
@@ -131,11 +132,17 @@ class ChatController {
   /// `paste_to_prompt` puts commands into whatever session is focused, and
   /// advice that is fine for a remote box reads very differently when the
   /// prompt is the user's own machine.
+  ///
+  /// [onPaste] overrides the default stager for this turn, so a retained
+  /// conversation can target the session that originated each request.
   Future<ChatResult> send(
     String userText, {
     String? terminalContext,
     String? sessionTarget,
+    PasteStager? onPaste,
   }) async {
+    final generation = _generation;
+    final stage = onPaste ?? this.onPaste;
     final sent = <SentContext>[];
     final searches = <String>[];
     final staged = <String>[];
@@ -166,15 +173,23 @@ class ChatController {
     // Redact the user's own message too, in case they pasted a secret.
     userContent = redactor.redact(userContent);
     sent.add(SentContext('user message', userContent));
-    _history.add(LlmMessage.user(userContent));
+    // Keep the conversation, but attach terminal output only to this turn's
+    // requests. Otherwise disabling context still resends earlier snapshots.
+    final userIndex = _history.length;
+    _history.add(LlmMessage.user(redactor.redact(userText)));
 
     var iterations = 0;
     while (true) {
       final toolsEnabled = iterations < maxToolIterations;
       final turn = await provider.chat(
-        messages: List.unmodifiable(_history),
+        messages: List.unmodifiable([
+          ..._history.take(userIndex),
+          LlmMessage.user(userContent),
+          ..._history.skip(userIndex + 1),
+        ]),
         tools: toolsEnabled ? ChatTools.all : const [],
       );
+      _checkGeneration(generation);
       final hasText = turn.text.trim().isNotEmpty;
       if (hasText) {
         _history.add(LlmMessage.assistant(turn.text));
@@ -220,6 +235,7 @@ class ChatController {
       // Dispatch each tool call and feed results back for the next iteration.
       final toolResults = <String>[];
       for (final call in turn.toolCalls) {
+        _checkGeneration(generation);
         switch (call.name) {
           case 'web_search':
             final query = (call.arguments['query'] as String? ?? '').trim();
@@ -227,13 +243,14 @@ class ChatController {
             searches.add(redactedQuery);
             sent.add(SentContext('web_search query', redactedQuery));
             final results = await _runSearch(redactedQuery);
+            _checkGeneration(generation);
             toolResults.add('web_search("$redactedQuery") =>\n'
                 '${jsonEncode(results.map((r) => r.toJson()).toList())}');
           case 'paste_to_prompt':
             final raw = call.arguments['command'] as String? ?? '';
             // Guaranteed newline-free — the paste can never execute.
             final safe = PasteSanitizer.sanitizeFirstLine(raw);
-            onPaste(safe);
+            stage(safe);
             staged.add(safe);
             toolResults.add('paste_to_prompt => staged "$safe" '
                 '(awaiting the user to review and run)');
@@ -241,10 +258,62 @@ class ChatController {
             toolResults.add('Unknown tool "${call.name}" ignored.');
         }
       }
+      _checkGeneration(generation);
       _history.add(LlmMessage.user('Tool results:\n${toolResults.join('\n')}'));
       iterations++;
     }
   }
+
+  /// The longest snippet worth spending on a search result.
+  ///
+  /// Generous for a search excerpt and small next to a context window: a few
+  /// hundred tokens each.
+  static const int maxSnippetChars = 2000;
+
+  /// The cap on a result's title, for the reason the snippet has one: a
+  /// title is whatever text the search service put in the field, and a
+  /// gateway that answered with a megabyte of it would spend the token
+  /// budget the snippet cap exists to protect. Shorter than the snippet's,
+  /// because a title that needs two thousand characters is not one.
+  static const int maxTitleChars = 200;
+
+  /// The cap on a result's URL, the third field serialized into the same tool
+  /// result — and the one the other two caps left open.
+  ///
+  /// Long URLs need no malice: a query string with a page of tracking
+  /// parameters is ordinary on the open web, and SearXNG and Brave copy the
+  /// field through as they find it. The same constant `ZaiSearch` refuses a
+  /// link on, not a second number that happens to match it: set below the
+  /// reject threshold, every URL between the two would arrive here to be
+  /// clipped into a dead link, which is exactly what refusing one outright
+  /// exists to avoid. Clipped rather than dropped, and with the ellipsis
+  /// every other cap uses: a truncated link is visibly truncated, where a
+  /// silently shortened one reads as a citation that merely does not resolve.
+  static const int maxUrlChars = maxSearchUrlChars;
+
+  /// [results] with over-long fields clipped.
+  ///
+  /// Applied here rather than in any one backend because every backend is
+  /// unbounded in the same way and for the same reason: a snippet is whatever
+  /// text the search service put in the field. `ZaiSearch`'s prose fallback
+  /// can hand back a whole tool reply (its byte cap is 2 MiB, which protects
+  /// memory, not the token bill), and SearXNG and Brave copy their `content`
+  /// through verbatim. This is the one place they converge before being
+  /// serialized into a tool result and sent to the model, so it is the one
+  /// place a cap covers all of them.
+  static List<SearchResult> clipSearchSnippets(List<SearchResult> results) => [
+        for (final r in results)
+          if (r.snippet.length <= maxSnippetChars &&
+              r.title.length <= maxTitleChars &&
+              r.url.length <= maxUrlChars)
+            r
+          else
+            SearchResult(
+              title: clipText(r.title, maxTitleChars),
+              url: clipText(r.url, maxUrlChars),
+              snippet: clipText(r.snippet, maxSnippetChars),
+            ),
+      ];
 
   Future<List<SearchResult>> _runSearch(String query) async {
     final provider = searchProvider;
@@ -257,10 +326,21 @@ class ChatController {
         )
       ];
     }
-    return provider.search(query);
+    return clipSearchSnippets(await provider.search(query));
   }
 
-  void reset() => _history.clear();
+  void _checkGeneration(int generation) {
+    if (generation != _generation) {
+      throw StateError('The conversation was reset while this turn was running.');
+    }
+  }
+
+  /// Clear history and stop pending turns before their next tool or request.
+  /// An HTTP request already in flight may finish, but its result is discarded.
+  void reset() {
+    _generation++;
+    _history.clear();
+  }
 
   /// Exposes the running history length (for tests/telemetry).
   int get historyLength => _history.length;

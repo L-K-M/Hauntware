@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
+import '../family_hues.dart';
 import '../main.dart';
 import 'top_toast.dart';
 
@@ -48,7 +49,11 @@ class _SnippetsPaneState extends State<SnippetsPane> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
               child: Row(
                 children: [
-                  const Icon(Icons.bookmarks_outlined, size: 20),
+                  Icon(
+                    Icons.bookmarks,
+                    size: 20,
+                    color: FamilyPalette.of(context).glyph(FamilyHue.teal),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Snippets',
@@ -147,12 +152,9 @@ class _SnippetsPaneState extends State<SnippetsPane> {
     Snippet snippet,
   ) async {
     final session = state.activeSession;
-    final messenger = ScaffoldMessenger.of(context);
     final overlay = Overlay.of(context, rootOverlay: true);
     if (session == null || !session.isConnected) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Open a connected session first.')),
-      );
+      showTopToast(overlay, message: 'Open a connected session first.');
       return;
     }
     var text = snippet.body;
@@ -165,7 +167,7 @@ class _SnippetsPaneState extends State<SnippetsPane> {
     try {
       text = PasteSanitizer.sanitize(text);
     } on UnsafePasteException catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text(e.reason)));
+      showTopToast(overlay, message: e.reason);
       return;
     }
     session.engine.injectInput(text);
@@ -229,7 +231,11 @@ class _Suggestions extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 2),
             child: Row(
               children: [
-                Icon(Icons.lightbulb_outline, size: 16, color: scheme.primary),
+                Icon(
+                  Icons.lightbulb,
+                  size: 16,
+                  color: FamilyPalette.of(context).glyph(FamilyHue.yellow),
+                ),
                 const SizedBox(width: 6),
                 Text(
                   'Suggested from your history',
@@ -282,7 +288,11 @@ class _SnippetsEmpty extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.bookmarks_outlined, size: 36),
+            Icon(
+              Icons.bookmarks,
+              size: 36,
+              color: FamilyPalette.of(context).glyph(FamilyHue.teal),
+            ),
             const SizedBox(height: 12),
             Text(
               'No snippets yet',

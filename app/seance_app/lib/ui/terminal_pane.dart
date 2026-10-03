@@ -2,37 +2,52 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
+import 'package:planchette_editor/planchette_editor.dart'
+    show GhostMenuDivider, GhostMenuItem;
 import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart';
 
 import '../app_state.dart';
+import '../family_hues.dart';
 import '../main.dart';
+import '../services/terminal_search.dart';
+import '../services/web_links.dart';
 import '../services/xterm_engine.dart';
 import '../theme.dart';
 import 'app_menus.dart';
 import 'command_generator.dart';
+import 'connection_log_view.dart';
 import 'files_pane.dart';
+import 'keyboard_shortcuts_dialog.dart';
 import 'middle_ellipsis_text.dart';
 import 'server_appearance.dart';
+import 'server_list_pane.dart';
 import 'session_label.dart';
 import 'sidebar_panel.dart';
+import 'tab_close.dart';
 import 'terminal_appearance.dart';
+import 'terminal_find_bar.dart';
 import 'terminal_keyboard_bar.dart';
+import 'top_toast.dart';
 
 /// Touch platforms get the on-screen key row (Tab/Ctrl/arrows) and need the
 /// terminal to reflow above the soft keyboard; desktops use a hardware keyboard.
 final bool _isTouchPlatform = Platform.isAndroid || Platform.isIOS;
 
-/// Right pane / second screen: the active server's terminal.
+/// Right pane / second screen: the active server's terminal and editor tabs.
 ///
-/// A server can have several sessions, shown as a tab strip at the top of the
-/// pane. Tabs are one level *below* the server list: the strip only ever shows
-/// the active server's sessions, so adjacent tabs are always the same server.
+/// A server can have several tabs, shown as a tab strip at the top of the
+/// pane — terminal sessions and built-in text editors side by side. Tabs are
+/// one level *below* the server list: the strip only ever shows the active
+/// server's tabs, so adjacent tabs are always the same server.
 ///
-/// Every open session stays mounted in an [IndexedStack] so switching tabs (or
+/// Every open tab stays mounted in an [IndexedStack] so switching tabs (or
 /// servers) is instant — the previously-rendered terminal is shown immediately
-/// instead of being rebuilt (which flashed a blank pane for a few seconds).
+/// instead of being rebuilt (which flashed a blank pane for a few seconds),
+/// and an editor keeps its unsaved buffer, caret and scroll position.
 ///
 /// In the wide layout the server name and disconnect controls live in the
 /// sidebar, so the app bar is dropped ([showAppBar] false). The narrow layout
@@ -42,11 +57,16 @@ class TerminalPane extends StatelessWidget {
   final bool showAssistantAffordance;
   final bool showAppBar;
 
+  /// Whether the tab strip carries Generate command; false under the macOS
+  /// header ([HeaderToolbar]), which carries it instead.
+  final bool showGenerateCommandInStrip;
+
   const TerminalPane({
     super.key,
     this.onBack,
     this.showAssistantAffordance = false,
     this.showAppBar = true,
+    this.showGenerateCommandInStrip = true,
   });
 
   @override
@@ -55,9 +75,9 @@ class TerminalPane extends StatelessWidget {
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) {
-        final active = state.activeSession;
+        final active = state.activeTab;
         final showKeyRow =
-            _isTouchPlatform && active != null && active.isConnected;
+            _isTouchPlatform && active is TerminalSession && active.isConnected;
         // The stored config, not the session's connect-time snapshot: recolour
         // a server while you are on it and the strip should follow.
         final server = active == null
@@ -77,22 +97,31 @@ class TerminalPane extends StatelessWidget {
             children: [
               if (active != null)
                 TerminalTabStrip(
-                  tabs: state.sessionsForServer(active.serverId),
-                  activeSessionId: state.activeSessionId,
-                  onFocus: state.focusSession,
-                  onClose: (id) => _closeTab(context, state, id),
+                  tabs: state.tabsForServer(active.serverId),
+                  activeTabId: state.activeTabId,
+                  onFocus: state.focusTab,
+                  onClose: (id) => confirmAndCloseTab(context, state, id),
+                  // The tab in hand may be a local shell, with no server to
+                  // open a second one against — duplicateTab routes it.
                   onNewTab: () => state.duplicateTab(active),
-                  onGenerateCommand: () => openCommandGenerator(state),
+                  onGenerateCommand: showGenerateCommandInStrip
+                      ? () => openCommandGenerator(state)
+                      : null,
                   onRename: state.renameSession,
                   // In the wide layout the strip is the only chrome the
                   // terminal has, so it carries the server's colour: the
                   // "am I on prod?" question gets an answer at the edge of
                   // vision instead of one you have to read.
-                  accent: serverAccent(context, server?.color)?.line,
+                  accent: server == null
+                      ? null
+                      : serverAccent(context, ServerTint.of(server))?.line,
                 ),
               Expanded(child: _body(state)),
-              if (active != null) SessionStatusBar(session: active),
-              if (showKeyRow) TerminalKeyboardBar(engine: active.engine),
+              // The editor writes its own status row; this one is the
+              // terminal's (connection state, exit status, cwd).
+              if (active is TerminalSession) SessionStatusBar(session: active),
+              if (active is TerminalSession && showKeyRow)
+                TerminalKeyboardBar(engine: active.engine),
             ],
           ),
         );
@@ -100,51 +129,16 @@ class TerminalPane extends StatelessWidget {
     );
   }
 
-  Future<void> _closeTab(
-    BuildContext context,
-    AppState state,
-    String sessionId,
-  ) async {
-    final session = state.sessionById(sessionId);
-    if (session == null) return;
-    final localCopyCount =
-        (session.files?.localCopies.length ?? 0) +
-        session.retainedLocalCopies.length;
-    if (localCopyCount > 0) {
-      final close = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Close session and local edits?'),
-          content: Text(
-            '$localCopyCount downloaded ${localCopyCount == 1 ? 'file has' : 'files have'} '
-            'a managed local copy. Closing this tab deletes '
-            '${localCopyCount == 1 ? 'it' : 'them'}, including changes that '
-            'have not been uploaded.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Close and Delete'),
-            ),
-          ],
-        ),
-      );
-      if (close != true) return;
-    }
-    await state.closeTab(sessionId);
-  }
-
   PreferredSizeWidget _appBar(
     BuildContext context,
     AppState state,
     ServerConfig? server,
   ) {
-    final active = state.activeSession;
-    final status = active?.status;
+    final active = state.activeTab;
+    // For an editor tab this is the session that owns its checkout, so the
+    // Files button still opens the right tree.
+    final session = state.activeSession;
+    final status = active is TerminalSession ? active.status : null;
     return AppBar(
       leading: onBack != null
           ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack)
@@ -159,12 +153,24 @@ class TerminalPane extends StatelessWidget {
       title: Row(
         children: [
           if (server != null) ...[
-            ServerBadge(color: server.color, icon: server.icon, size: 24),
+            // Decorative: the title beside it is the server's label, so a
+            // label here would have a screen reader say the name twice.
+            ExcludeSemantics(
+              child: ServerBadge(
+                tint: ServerTint.of(server),
+                mark: server.mark,
+                size: 24,
+              ),
+            ),
             const SizedBox(width: 10),
           ],
           Flexible(
             child: Text(
-              server?.label ?? active?.displayLabel ?? 'Terminal',
+              server?.label ??
+                  (active is TerminalSession
+                      ? active.displayLabel
+                      : active?.config?.label) ??
+                  'Terminal',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -174,12 +180,12 @@ class TerminalPane extends StatelessWidget {
       actions: [
         // Not offered for a local shell: there is no remote side to browse,
         // and a permanently-disabled button reads as something being broken.
-        if (active != null && !active.isLocal)
+        if (session != null && !session.isLocal)
           IconButton(
             tooltip: 'Remote files',
             icon: const Icon(Icons.folder_outlined),
             onPressed:
-                active.isConnected || active.retainedLocalCopies.isNotEmpty
+                session.isConnected || session.retainedLocalCopies.isNotEmpty
                 ? () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (_) => const FilesScreen(),
@@ -189,11 +195,15 @@ class TerminalPane extends StatelessWidget {
           ),
         if (status == TerminalStatus.connected)
           IconButton(
-            tooltip: active!.isLocal ? 'End this shell' : 'Disconnect',
+            tooltip: active is TerminalSession && active.isLocal
+                ? 'End this shell'
+                : 'Disconnect',
             icon: Icon(
-              active.isLocal ? Icons.stop_circle_outlined : Icons.link_off,
+              active is TerminalSession && active.isLocal
+                  ? Icons.stop_circle_outlined
+                  : Icons.link_off,
             ),
-            onPressed: () => state.disconnect(active.id),
+            onPressed: () => state.disconnect(active!.id),
           ),
         if (status == TerminalStatus.error ||
             status == TerminalStatus.disconnected)
@@ -206,7 +216,10 @@ class TerminalPane extends StatelessWidget {
           Builder(
             builder: (context) => IconButton(
               tooltip: 'Assistant & snippets',
-              icon: const Icon(Icons.auto_awesome_outlined),
+              icon: Icon(
+                Icons.auto_awesome,
+                color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+              ),
               onPressed: () => Scaffold.of(context).openEndDrawer(),
             ),
           ),
@@ -215,39 +228,56 @@ class TerminalPane extends StatelessWidget {
   }
 
   Widget _body(AppState state) {
-    final entries = state.sessions;
+    final entries = state.tabs;
     if (entries.isEmpty) return const _NoSession();
-    final index = entries.indexWhere((t) => t.id == state.activeSessionId);
+    final index = entries.indexWhere((t) => t.id == state.activeTabId);
     if (index < 0) return const _NoSession();
     return IndexedStack(
       index: index,
       sizing: StackFit.expand,
       children: [
         for (var i = 0; i < entries.length; i++)
-          _SessionView(
-            // Keyed by session id (not server id): a reconnect swaps in a new
-            // session with a new id, so a fresh _SessionView mounts and binds
-            // its controller in initState — no didUpdateWidget rebind needed.
-            key: ValueKey(entries[i].id),
-            tab: entries[i],
-            state: state,
-            isActive: i == index,
-          ),
+          _tabChild(entries[i], state, isActive: i == index),
       ],
     );
   }
+
+  /// One entry's content in the stack. Keyed by tab id (not server id): a
+  /// reconnect swaps in a new session with a new id, so a fresh _SessionView
+  /// mounts and binds its controller in initState — no didUpdateWidget
+  /// rebind needed. The editor equivalent holds its key on [EditorTab] so
+  /// closing the tab can ask about unsaved changes.
+  Widget _tabChild(PaneTab tab, AppState state, {required bool isActive}) =>
+      switch (tab) {
+        TerminalSession() => _SessionView(
+          key: ValueKey(tab.id),
+          tab: tab,
+          state: state,
+          isActive: isActive,
+        ),
+        EditorTab() => EditorTabView(
+          key: ValueKey(tab.id),
+          tab: tab,
+          state: state,
+          isActive: isActive,
+        ),
+      };
 }
 
-/// The active server's tab strip, including actions to open another session and
-/// generate a command for the current one. It remains visible for a single
-/// session so those actions are always reachable.
+/// The active server's tab strip — terminal sessions and file editors side by
+/// side — including actions to open another session and generate a command
+/// for the current one. It remains visible for a single session so those
+/// actions are always reachable.
 class TerminalTabStrip extends StatelessWidget {
-  final List<TerminalSession> tabs;
-  final String? activeSessionId;
+  final List<PaneTab> tabs;
+  final String? activeTabId;
   final ValueChanged<String> onFocus;
   final ValueChanged<String> onClose;
   final VoidCallback onNewTab;
-  final VoidCallback onGenerateCommand;
+
+  /// Null leaves Generate command out of the strip, for a window whose
+  /// header carries it.
+  final VoidCallback? onGenerateCommand;
 
   /// Called with a tab's id and its new name, or null to clear it back to
   /// automatic naming. Optional so the strip can be built without one.
@@ -260,11 +290,11 @@ class TerminalTabStrip extends StatelessWidget {
   const TerminalTabStrip({
     super.key,
     required this.tabs,
-    required this.activeSessionId,
+    required this.activeTabId,
     required this.onFocus,
     required this.onClose,
     required this.onNewTab,
-    required this.onGenerateCommand,
+    this.onGenerateCommand,
     this.onRename,
     this.accent,
   });
@@ -272,13 +302,15 @@ class TerminalTabStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final chrome = SeanceChrome.of(context);
     return Container(
       height: 38,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
+        // The header's colour, as Poltergeist's pane tab bars take theirs.
+        color: chrome.headerBackground,
         border: Border(
           bottom: BorderSide(
-            color: accent ?? scheme.outlineVariant,
+            color: accent ?? chrome.separator,
             // Thickened as well as coloured: on a dim accent against a dark
             // theme, a hairline is a hairline whatever colour it is.
             width: accent == null ? 1 : 2,
@@ -297,36 +329,63 @@ class TerminalTabStrip extends StatelessWidget {
               // repaints the rest of the app.
               child: ListenableBuilder(
                 listenable: Listenable.merge([
-                  for (final tab in tabs) ...[tab.metadata, tab.customName],
+                  for (final tab in tabs)
+                    if (tab is TerminalSession) ...[
+                      tab.metadata,
+                      tab.customName,
+                    ] else if (tab is EditorTab)
+                      tab.dirty,
                 ]),
                 builder: (context, _) {
+                  // Editor tabs do not count for a terminal's "Session N"
+                  // fallback: the ordinal numbers the shell sessions. One
+                  // map keyed on the tab feeds both the label pass and the
+                  // chip, so the two can never disagree.
+                  final ordinals = <TerminalSession, int>{};
+                  for (final tab in tabs) {
+                    if (tab is TerminalSession) {
+                      ordinals[tab] = ordinals.length + 1;
+                    }
+                  }
                   final labels = disambiguateTabLabels([
-                    for (var i = 0; i < tabs.length; i++)
-                      sessionTabLabel(
-                        // 1-based ordinal within the server, used only as the
-                        // fallback name when the shell reports nothing.
-                        ordinal: i + 1,
-                        customName: tabs[i].customName.value,
-                        workingDirectory:
-                            tabs[i].metadata.value.workingDirectory,
-                        terminalTitle: tabs[i].metadata.value.terminalTitle,
-                        runningCommand: tabs[i].metadata.value.runningCommand,
-                      ),
+                    for (final tab in tabs)
+                      switch (tab) {
+                        TerminalSession() => sessionTabLabel(
+                          // 1-based ordinal within the server, used only as
+                          // the fallback name when the shell reports nothing.
+                          ordinal: ordinals[tab]!,
+                          customName: tab.customName.value,
+                          workingDirectory: tab.metadata.value.workingDirectory,
+                          terminalTitle: tab.metadata.value.terminalTitle,
+                          runningCommand: tab.metadata.value.runningCommand,
+                        ),
+                        EditorTab() => editorTabLabel(tab.remotePath),
+                      },
                   ]);
+                  Widget chip(PaneTab tab, String label) => switch (tab) {
+                    TerminalSession() => _TabChip(
+                      ordinal: ordinals[tab]!,
+                      label: label,
+                      session: tab,
+                      selected: tab.id == activeTabId,
+                      onTap: () => onFocus(tab.id),
+                      onClose: () => onClose(tab.id),
+                      onRename: onRename == null
+                          ? null
+                          : () => _rename(context, tab),
+                    ),
+                    EditorTab() => _EditorTabChip(
+                      tab: tab,
+                      label: label,
+                      selected: tab.id == activeTabId,
+                      onTap: () => onFocus(tab.id),
+                      onClose: () => onClose(tab.id),
+                    ),
+                  };
                   return Row(
                     children: [
                       for (var i = 0; i < tabs.length; i++)
-                        _TabChip(
-                          ordinal: i + 1,
-                          label: labels[i],
-                          session: tabs[i],
-                          selected: tabs[i].id == activeSessionId,
-                          onTap: () => onFocus(tabs[i].id),
-                          onClose: () => onClose(tabs[i].id),
-                          onRename: onRename == null
-                              ? null
-                              : () => _rename(context, tabs[i]),
-                        ),
+                        chip(tabs[i], labels[i]),
                     ],
                   );
                 },
@@ -342,21 +401,27 @@ class TerminalTabStrip extends StatelessWidget {
             icon: const Icon(Icons.add),
             onPressed: onNewTab,
           ),
-          VerticalDivider(
-            width: 1,
-            indent: 7,
-            endIndent: 7,
-            color: scheme.outlineVariant,
-          ),
-          IconButton(
-            tooltip: 'Generate command',
-            iconSize: 18,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
-            icon: const Icon(Icons.auto_fix_high),
-            onPressed: onGenerateCommand,
-          ),
+          if (onGenerateCommand case final generate?) ...[
+            VerticalDivider(
+              width: 1,
+              indent: 7,
+              endIndent: 7,
+              color: scheme.outlineVariant,
+            ),
+            IconButton(
+              tooltip: 'Generate command',
+              iconSize: 18,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
+              // The assistant's purple (Poltergeist's D34).
+              icon: Icon(
+                Icons.auto_fix_high,
+                color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+              ),
+              onPressed: generate,
+            ),
+          ],
         ],
       ),
     );
@@ -400,12 +465,12 @@ class _RenameTabDialog extends StatefulWidget {
 class _RenameTabDialogState extends State<_RenameTabDialog> {
   // `late` matters: the initializer reads `widget`, which the framework only
   // wires up after construction, so this must not be evaluated eagerly.
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.currentName ?? '',
-  )..selection = TextSelection(
-    baseOffset: 0,
-    extentOffset: (widget.currentName ?? '').length,
-  );
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.currentName ?? '')
+        ..selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: (widget.currentName ?? '').length,
+        );
 
   @override
   void dispose() {
@@ -448,6 +513,186 @@ class _RenameTabDialogState extends State<_RenameTabDialog> {
   }
 }
 
+/// The visual shell both tab kinds share, in Poltergeist's pane-tab shape
+/// (its 10 §6, the family's tab): a flat 38 px chip with a hairline after
+/// it, the label, a per-kind leading indicator, and a close button shown
+/// on hover, on focus and on the active tab, keeping its slot while hidden
+/// so a hover never reflows the strip. The active chip takes the pane's
+/// surface and a semibold label; a hovered one takes the hover fill.
+///
+/// Middle-click closes, matching browser/terminal tab conventions, and the
+/// context menu — right-click on a desktop, long-press on touch — carries the
+/// tooltip's content, since on touch there is no hover to show it any other
+/// way. The gestures sit on the shell rather than on tap/long-press:
+///
+///  * `onLongPress` never fired: [Tooltip] registers its own long-press
+///    recognizer and wins the arena, so the tip appeared and the menu did
+///    not.
+///  * `onDoubleTap` worked, but registering it made the InkWell's `onTap`
+///    wait out the double-tap timeout before resolving — a ~300 ms delay
+///    on *every tab switch* to pay for a rare action.
+///
+/// The tooltip uses manual trigger mode so its recognizer leaves the arena
+/// to the menu gestures; hover is unaffected — it is handled separately from
+/// the trigger mode — so a desktop still gets the tip by pointing at the
+/// tab.
+class _ChipShell extends StatefulWidget {
+  final String label;
+  final bool selected;
+  final String tooltip;
+  final Widget leading;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
+
+  /// Whether the tab has unsaved changes: its close button then shows a
+  /// dot at rest, and stays visible on an inactive tab.
+  final bool dirty;
+
+  /// Show the tab's context menu at the given global position; null leaves
+  /// the menu gestures unbound.
+  final void Function(BuildContext context, Offset globalPosition)? onMenu;
+
+  const _ChipShell({
+    required this.label,
+    required this.selected,
+    required this.tooltip,
+    required this.leading,
+    required this.onTap,
+    required this.onClose,
+    this.dirty = false,
+    this.onMenu,
+  });
+
+  @override
+  State<_ChipShell> createState() => _ChipShellState();
+}
+
+class _ChipShellState extends State<_ChipShell> {
+  bool _hovered = false;
+
+  /// True while the chip or its close button holds focus.
+  bool _focused = false;
+
+  /// Where to anchor a menu opened by long-press, which — unlike a
+  /// right-click — carries no position of its own.
+  Offset _chipCenter(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return Offset.zero;
+    return box.localToGlobal(box.size.center(Offset.zero));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final chrome = SeanceChrome.of(context);
+    final onMenu = widget.onMenu;
+    final pointedAt = _hovered || _focused;
+    final offerClose = pointedAt || widget.selected || widget.dirty;
+    final close = Visibility(
+      visible: offerClose,
+      maintainSize: true,
+      maintainAnimation: true,
+      maintainState: true,
+      child: _tabCloseButton(
+        // The dot says "unsaved" and still closes (the confirm dialog is
+        // what follows); pointing at it turns it into the cross.
+        icon: widget.dirty && !pointedAt
+            ? const Icon(Icons.circle, size: 9)
+            : const Icon(Icons.close),
+        onClose: widget.onClose,
+      ),
+    );
+    return GestureDetector(
+      onTertiaryTapUp: (_) => widget.onClose(),
+      onSecondaryTapUp: onMenu == null
+          ? null
+          : (details) => onMenu(context, details.globalPosition),
+      onLongPress: onMenu == null
+          ? null
+          : () => onMenu(context, _chipCenter(context)),
+      child: Tooltip(
+        // Manual mode yields the arena to the menu gestures above — but
+        // only when there is a menu to yield to. Without one, long-press
+        // must keep the default trigger or touch users get no tooltip.
+        triggerMode: onMenu == null
+            ? TooltipTriggerMode.longPress
+            : TooltipTriggerMode.manual,
+        message: widget.tooltip,
+        child: InkWell(
+          onTap: widget.onTap,
+          onHover: (hovered) => setState(() => _hovered = hovered),
+          // Reported for the close button too, a descendant, so moving
+          // focus onto it keeps it shown.
+          onFocusChange: (focused) => setState(() => _focused = focused),
+          // A hidden close button is out of the semantics tree, so the
+          // tab's own node, the one a screen reader focuses, carries the
+          // action; that cursor never hovers.
+          child: Semantics(
+            customSemanticsActions: offerClose
+                ? null
+                : {
+                    const CustomSemanticsAction(label: _closeTabLabel):
+                        widget.onClose,
+                  },
+            child: Container(
+              height: 38,
+              padding: const EdgeInsetsDirectional.only(start: 12, end: 4),
+              decoration: BoxDecoration(
+                color: widget.selected
+                    ? chrome.paneBackground
+                    : _hovered
+                    ? chrome.hoverFill
+                    : null,
+                border: BorderDirectional(
+                  end: BorderSide(color: chrome.separator),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  widget.leading,
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      color: widget.selected
+                          ? scheme.onSurface
+                          : chrome.secondaryText,
+                      fontWeight: widget.selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  close,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The close button's name, which a tab also gives its screen-reader
+/// action while the button is hidden, so both announce the same.
+const _closeTabLabel = 'Close tab';
+
+/// The strip's close affordance, shared so terminal and editor tabs can only
+/// differ in the icon it shows (the editor swaps in a dirty dot). The 28 px
+/// minimum is its footprint whichever icon it shows.
+Widget _tabCloseButton({required Widget icon, required VoidCallback onClose}) =>
+    IconButton(
+      tooltip: _closeTabLabel,
+      iconSize: 15,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      icon: icon,
+      onPressed: onClose,
+    );
+
 /// One tab in the strip. Its [label] is computed by the strip across all
 /// same-server tabs (the disambiguating suffix depends on its siblings), so
 /// the chip itself is display-only.
@@ -472,20 +717,13 @@ class _TabChip extends StatelessWidget {
     this.onRename,
   });
 
-  /// Where to anchor a menu opened by long-press, which — unlike a right-click
-  /// — carries no position of its own.
-  Offset _chipCenter(BuildContext context) {
-    final box = context.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return Offset.zero;
-    return box.localToGlobal(box.size.center(Offset.zero));
-  }
-
   Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
     // Positioning needs the overlay's box; give up rather than crash if the
     // chip is being torn down as the menu opens.
     final overlay = Overlay.of(context).context.findRenderObject();
     if (overlay is! RenderBox) return;
     final metadata = session.metadata.value;
+    final palette = FamilyPalette.of(context);
     final choice = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -516,11 +754,24 @@ class _TabChip extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(value: 'rename', child: Text('Rename tab…')),
-        const PopupMenuItem(value: 'close', child: Text('Close tab')),
+        const GhostMenuDivider(),
+        GhostMenuItem(
+          context: context,
+          value: 'rename',
+          label: 'Rename tab…',
+          icon: Icons.edit,
+          iconColor: palette.glyph(FamilyHue.graphite),
+        ),
+        GhostMenuItem(
+          context: context,
+          value: 'close',
+          label: 'Close tab',
+          icon: Icons.close,
+          iconColor: palette.glyph(FamilyHue.red),
+        ),
       ],
     );
+    if (!context.mounted) return;
     if (choice == 'rename') {
       onRename?.call();
     } else if (choice == 'close') {
@@ -530,90 +781,113 @@ class _TabChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final metadata = session.metadata.value;
-    // Middle-click closes, matching browser/terminal tab conventions.
-    //
-    // Rename is reached through a context menu — right-click on a desktop,
-    // long-press on touch — rather than through a tab gesture directly.
-    // Both alternatives were tried and measured:
-    //
-    //  * `onLongPress` never fired: [Tooltip] registers its own long-press
-    //    recognizer and wins the arena, so the tip appeared and rename did
-    //    not.
-    //  * `onDoubleTap` worked, but registering it made the InkWell's `onTap`
-    //    wait out the double-tap timeout before resolving — a ~300 ms delay
-    //    on *every tab switch* to pay for a rare action.
-    //
-    // A menu also gives the action a name, which no bare gesture does.
-    return GestureDetector(
-      onTertiaryTapUp: (_) => onClose(),
-      onSecondaryTapUp: onRename == null
-          ? null
-          : (details) => _showMenu(context, details.globalPosition),
-      onLongPress: onRename == null
-          ? null
-          : () => _showMenu(context, _chipCenter(context)),
-      child: Tooltip(
-          // No gesture trigger, so the long-press above reaches this widget.
-          // Hover is unaffected — it is handled separately from the trigger
-          // mode — so a desktop still gets the tip by pointing at the tab.
-          // Touch keeps the same information: the menu opened by long-press
-          // carries it as the header.
-          triggerMode: TooltipTriggerMode.manual,
-          message: sessionTabTooltip(
-            ordinal: ordinal,
-            target: session.displayTarget,
-            customName: session.customName.value,
-            workingDirectory: metadata.workingDirectory,
-            terminalTitle: metadata.terminalTitle,
-            runningCommand: metadata.runningCommand,
-          ),
-          child: InkWell(
-            onTap: onTap,
-            child: Container(
-              height: 38,
-              padding: const EdgeInsets.only(left: 12, right: 4),
-              decoration: BoxDecoration(
-                color: selected ? scheme.surface : Colors.transparent,
-                border: Border(
-                  bottom: BorderSide(
-                    color: selected ? scheme.primary : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _TabStatusDot(status: session.status),
-                  const SizedBox(width: 6),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontWeight: selected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  IconButton(
-                    tooltip: 'Close tab',
-                    iconSize: 15,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 28,
-                      minHeight: 28,
-                    ),
-                    icon: const Icon(Icons.close),
-                    onPressed: onClose,
-                  ),
-                ],
-              ),
-            ),
-          ),
+    return _ChipShell(
+      label: label,
+      selected: selected,
+      tooltip: sessionTabTooltip(
+        ordinal: ordinal,
+        // displayTarget, not the config's address: a local shell has no
+        // config, and says where it runs instead.
+        target: session.displayTarget,
+        customName: session.customName.value,
+        workingDirectory: metadata.workingDirectory,
+        terminalTitle: metadata.terminalTitle,
+        runningCommand: metadata.runningCommand,
       ),
+      onTap: onTap,
+      onClose: onClose,
+      onMenu: onRename == null ? null : _showMenu,
+      leading: _TabStatusDot(status: session.status),
+    );
+  }
+}
+
+/// One file-editing tab in the strip: a document icon, the file's basename,
+/// and a close button that doubles as the unsaved-changes marker — a filled
+/// dot while the buffer is dirty (the macOS convention). Like [_TabChip],
+/// middle-click closes and the context menu carries the tooltip's content.
+/// Editors are named by their path, so there is no rename action.
+class _EditorTabChip extends StatelessWidget {
+  final EditorTab tab;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
+
+  const _EditorTabChip({
+    required this.tab,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.onClose,
+  });
+
+  Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) return;
+    final config = tab.server;
+    final palette = FamilyPalette.of(context);
+    final choice = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        globalPosition.dx,
+        globalPosition.dy,
+        overlay.size.width - globalPosition.dx,
+        overlay.size.height - globalPosition.dy,
+      ),
+      items: [
+        // The tooltip's content, as a menu header: on touch there is no hover
+        // to show it any other way, and this is the gesture that used to.
+        PopupMenuItem(
+          enabled: false,
+          height: 0,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text(
+            editorTabTooltip(
+              remotePath: tab.remotePath,
+              target: '${config.username}@${config.host}:${config.port}',
+              dirty: tab.dirty.value,
+            ),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+        const GhostMenuDivider(),
+        GhostMenuItem(
+          context: context,
+          value: 'close',
+          label: 'Close tab',
+          icon: Icons.close,
+          iconColor: palette.glyph(FamilyHue.red),
+        ),
+      ],
+    );
+    if (!context.mounted) return;
+    if (choice == 'close') onClose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final config = tab.server;
+    final dirty = tab.dirty.value;
+    return _ChipShell(
+      label: label,
+      selected: selected,
+      tooltip: editorTabTooltip(
+        remotePath: tab.remotePath,
+        target: '${config.username}@${config.host}:${config.port}',
+        dirty: dirty,
+      ),
+      onTap: onTap,
+      onClose: onClose,
+      onMenu: _showMenu,
+      leading: Icon(
+        Icons.edit_document,
+        size: 13,
+        color: dirty ? scheme.primary : scheme.onSurfaceVariant,
+      ),
+      dirty: dirty,
     );
   }
 }
@@ -625,19 +899,37 @@ class _TabChip extends StatelessWidget {
 /// the only clue to *which host you are typing into* was the highlighted row
 /// in the server list.
 class SessionStatusBar extends StatelessWidget {
+  static const double _desktopFooterExtent = 30;
+  static const double _locationGap = 12;
+  static const double _maximumTargetShare = 0.5;
+
   final TerminalSession session;
   const SessionStatusBar({super.key, required this.session});
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // displayTarget, not the config's address: a local shell has no config,
+    // and names the machine the shell runs on instead.
+    final target = session.displayTarget;
+    final style = theme.textTheme.labelSmall?.copyWith(
       color: scheme.onSurfaceVariant,
       fontFamily: 'monospace',
     );
+    // Match SidebarBottomBar's desktop extent and accessibility scaling so
+    // their top borders stay aligned across the workspace.
+    final minimumHeight = switch (theme.platform) {
+      TargetPlatform.macOS || TargetPlatform.linux || TargetPlatform.windows =>
+        MediaQuery.textScalerOf(context)
+            .scale(_desktopFooterExtent)
+            .clamp(_desktopFooterExtent, 4 * _desktopFooterExtent),
+      _ => 24.0,
+    };
     return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      // Grow with accessibility text size instead of clipping the host identity.
+      constraints: BoxConstraints(minHeight: minimumHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHigh,
         border: Border(top: BorderSide(color: scheme.outlineVariant)),
@@ -646,18 +938,7 @@ class SessionStatusBar extends StatelessWidget {
         children: [
           _TabStatusDot(status: session.status),
           const SizedBox(width: 8),
-          Text(session.displayTarget, style: style),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ValueListenableBuilder<SessionMetadata>(
-              valueListenable: session.metadata,
-              builder: (context, metadata, _) {
-                final cwd = metadata.workingDirectory;
-                if (cwd == null) return const SizedBox.shrink();
-                return MiddleEllipsisText(sanitizeRemoteLabel(cwd), style: style);
-              },
-            ),
-          ),
+          Expanded(child: _location(target, style)),
           // The exit code comes from the live engine's OSC 133 state, so it is
           // only shown while the engine exists (a closed session disposes it).
           if (session.isConnected)
@@ -679,6 +960,44 @@ class SessionStatusBar extends StatelessWidget {
       ),
     );
   }
+
+  Widget _location(String target, TextStyle? style) =>
+      ValueListenableBuilder<SessionMetadata>(
+        valueListenable: session.metadata,
+        builder: (context, metadata, _) {
+          final identity = Tooltip(
+            message: target,
+            excludeFromSemantics: true,
+            child: MiddleEllipsisText(target, style: style),
+          );
+          final cwd = metadata.workingDirectory;
+          if (cwd == null) return identity;
+
+          // Cap long targets; let cwd reclaim unused space from short ones.
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth <= _locationGap) return identity;
+              final targetLimit =
+                  (constraints.maxWidth - _locationGap) * _maximumTargetShare;
+              return Row(
+                children: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: targetLimit),
+                    child: identity,
+                  ),
+                  const SizedBox(width: _locationGap),
+                  Expanded(
+                    child: MiddleEllipsisText(
+                      sanitizeRemoteLabel(cwd),
+                      style: style,
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
 }
 
 /// The small status dot on a tab chip (mirrors the server-list dot semantics
@@ -738,8 +1057,18 @@ class _SessionViewState extends State<_SessionView> {
   };
 
   final FocusNode _focus = FocusNode();
+  late bool _wasConnected;
   // Our own controller so the copy/paste menu can read (and set) the selection.
   final TerminalController _terminalController = TerminalController();
+
+  // Find in scrollback: the view's key and scroll position let a search
+  // reveal a hit; the session exists only while the find bar is open.
+  final GlobalKey<TerminalViewState> _viewKey = GlobalKey();
+  final ScrollController _scroll = ScrollController();
+  final GlobalKey<TerminalFindBarState> _findBarKey = GlobalKey();
+  TerminalSearchSession? _search;
+  String _lastFindQuery = '';
+  bool _lastFindCaseSensitive = false;
   @override
   void initState() {
     super.initState();
@@ -748,6 +1077,8 @@ class _SessionViewState extends State<_SessionView> {
     // to the terminal when a terminal (not a text field) is focused.
     widget.tab.controller = _terminalController;
     _focus.addListener(_reportTerminalFocus);
+    _wasConnected = widget.tab.status == TerminalStatus.connected;
+    if (_wasConnected && widget.isActive) _requestTerminalFocus();
   }
 
   @override
@@ -758,12 +1089,28 @@ class _SessionViewState extends State<_SessionView> {
     // new id instead of swapping the tab under this one, so no controller
     // rebind is needed (the old server-id keying required one).
     //
-    // Focus the terminal when this session becomes the active one.
-    if (widget.isActive && !oldWidget.isActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _focus.requestFocus();
-      });
+    // The session mutates in place, so oldWidget.tab cannot tell us whether
+    // the terminal just replaced its connecting placeholder. Autofocus alone
+    // leaves focus on the sidebar row that opened the connection.
+    final connected = widget.tab.status == TerminalStatus.connected;
+    if (widget.isActive &&
+        connected &&
+        (!oldWidget.isActive || !_wasConnected)) {
+      _requestTerminalFocus();
     }
+    _wasConnected = connected;
+  }
+
+  void _requestTerminalFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          !widget.isActive ||
+          widget.tab.status != TerminalStatus.connected ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      _focus.requestFocus();
+    });
   }
 
   @override
@@ -772,8 +1119,10 @@ class _SessionViewState extends State<_SessionView> {
     if (identical(widget.tab.controller, _terminalController)) {
       widget.tab.controller = null;
     }
+    _search?.dispose();
     _focus.dispose();
     _terminalController.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -807,17 +1156,40 @@ class _SessionViewState extends State<_SessionView> {
     // anchoring, edge autoscroll) live in the vendored xterm fork — one owner
     // in the gesture arena. The old app-side Listener machine raced xterm's
     // recognizers: its selections were force-cleared ~100ms later.
+    _search?.theme = appearance.theme;
+    final search = _search;
     return ColoredBox(
       // The padding around the grid is outside xterm's own painted area, so
       // without this the app surface would frame the terminal in a mismatched
       // color at every edge.
       color: appearance.theme.background,
-      child: TerminalView(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _terminalView(tab, appearance),
+          if (search != null)
+            TerminalFindBarOverlay(
+              child: TerminalFindBar(
+                key: _findBarKey,
+                session: search,
+                onClose: _closeFind,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _terminalView(TerminalSession tab, TerminalAppearance appearance) =>
+      TerminalView(
         tab.engine.terminal,
+        key: _viewKey,
+        scrollController: _scroll,
         controller: _terminalController,
         focusNode: _focus,
         autofocus: widget.isActive,
         onKeyEvent: _handleKeyEvent,
+        onLinkTap: _openLink,
         textStyle: appearance.style,
         theme: appearance.theme,
         keyboardAppearance: appearance.brightness,
@@ -829,20 +1201,82 @@ class _SessionViewState extends State<_SessionView> {
         onSecondaryTapDown: (details, _) =>
             _showContextMenu(context, details.globalPosition),
         padding: const EdgeInsets.all(6),
-      ),
-    );
+      );
+
+  /// Opens the find bar, or focuses it when it is already open. A one-line
+  /// selection becomes the query; otherwise the last query comes back.
+  void _openFind() {
+    if (_search != null) {
+      _findBarKey.currentState?.focusQuery();
+      return;
+    }
+    final terminal = widget.tab.engine.terminal;
+    final selection = _terminalController.selection;
+    final selected = selection == null
+        ? ''
+        : terminal.buffer.getText(selection).trim();
+    final query =
+        selected.isNotEmpty &&
+            !selected.contains('\n') &&
+            selected.length <= 200
+        ? selected
+        : _lastFindQuery;
+    setState(() {
+      _search =
+          TerminalSearchSession(
+              terminal: terminal,
+              controller: _terminalController,
+              viewport: TerminalViewSearchViewport(_viewKey, _scroll),
+              theme: TerminalAppearance.resolve(
+                widget.state.services.settings,
+                Theme.of(context).brightness,
+              ).theme,
+            )
+            ..caseSensitive = _lastFindCaseSensitive
+            ..search(query);
+    });
+  }
+
+  /// Closes the find bar, clearing its highlights, and hands the keyboard
+  /// back to the shell.
+  void _closeFind() {
+    final search = _search;
+    if (search == null) return;
+    _lastFindQuery = search.query;
+    _lastFindCaseSensitive = search.caseSensitive;
+    setState(() => _search = null);
+    search.dispose();
+    _focus.requestFocus();
+  }
+
+  Future<void> _openLink(Uri uri) async {
+    if (await openWebLink(uri) || !mounted) return;
+    showTopToastIn(context, message: 'Could not open link.');
   }
 
   /// Intercept a few shortcuts before the terminal consumes the keystroke: the
-  /// command generator, and copy/paste. Copy/paste use ⌘C/⌘V on macOS and
-  /// Ctrl+Shift+C/V elsewhere (leaving Ctrl+C as the shell interrupt). Plain
-  /// Ctrl+K is left alone because that's readline's "kill to end of line".
+  /// tab shortcuts, the command generator, and copy/paste. Copy/paste use
+  /// ⌘C/⌘V on macOS and Ctrl+Shift+C/V elsewhere (leaving Ctrl+C as the shell
+  /// interrupt). Plain Ctrl+K is left alone because that's readline's "kill
+  /// to end of line".
   ///
   /// Note: on macOS the native Edit menu claims ⌘C/⌘V/⌘A at the OS level, so
   /// those never reach here — the right-click menu is the reliable path there.
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final keys = HardwareKeyboard.instance;
+    // Off Apple platforms the terminal keeps the server filter's chord,
+    // repeats included (see the ⌥⌘F note below).
+    if (!(Platform.isMacOS || Platform.isIOS) &&
+        serverFilterActivator(
+          Theme.of(context).platform,
+        ).accepts(event, keys)) {
+      return KeyEventResult.skipRemainingHandlers;
+    }
+    // Held repeats included: xterm would send a tab shortcut on to the
+    // shell as the keys underneath.
+    final tabShortcut = handleTabShortcut(context, widget.state, event);
+    if (tabShortcut != KeyEventResult.ignored) return tabShortcut;
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
     if (event.logicalKey == LogicalKeyboardKey.keyK &&
         (keys.isMetaPressed ||
@@ -859,6 +1293,32 @@ class _SessionViewState extends State<_SessionView> {
     final clip = apple
         ? keys.isMetaPressed
         : (keys.isControlPressed && keys.isShiftPressed);
+    // The server filter's ⌥⌘F: ⌘ never reaches the shell, so it is safe to
+    // take here, where xterm would otherwise send the Alt+F underneath it.
+    // Off Apple platforms the chord is Ctrl+Alt+F, which a shell (or an
+    // editor running in it) may bind, so the terminal keeps it: xterm has
+    // no bytes for Ctrl+Alt+letter, and an ignored key would bubble on to
+    // AppMenus and pull focus out of the shell into the filter. Skipping
+    // the remaining handlers stops it here while leaving the key
+    // unhandled, so the platform still delivers any character it types:
+    // Windows reports AltGr as Ctrl+Alt, and AltGr+F is "[" on Czech,
+    // Slovak, Hungarian and other layouts.
+    if (apple &&
+        keys.isMetaPressed &&
+        keys.isAltPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyF &&
+        ServerListPane.revealFilter()) {
+      return KeyEventResult.handled;
+    }
+    // Find in scrollback: ⌘F / Ctrl+Shift+F. Plain Ctrl+F stays readline's
+    // forward-char, and a held Alt is the filter chord above or, on
+    // Windows, AltGr typing a character.
+    if (clip &&
+        !keys.isAltPressed &&
+        event.logicalKey == LogicalKeyboardKey.keyF) {
+      _openFind();
+      return KeyEventResult.handled;
+    }
     // Open another tab for this server: ⌘T / Ctrl+Shift+T.
     if (clip && event.logicalKey == LogicalKeyboardKey.keyT) {
       widget.state.duplicateTab(widget.tab);
@@ -895,13 +1355,27 @@ class _SessionViewState extends State<_SessionView> {
     return KeyEventResult.ignored;
   }
 
-  /// Right-click menu: Copy (when there's a selection), Paste, Select all.
+  /// Right-click menu: Copy (when there's a selection), Paste, Select all,
+  /// Find, and the keyboard shortcut list.
   Future<void> _showContextMenu(
     BuildContext context,
     Offset globalPosition,
   ) async {
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final hasSelection = _terminalController.selection != null;
+    final palette = FamilyPalette.of(context);
+    // The same chords _handleKeyEvent binds: ⌘ on Apple platforms,
+    // Ctrl+Shift elsewhere, where plain Ctrl belongs to the shell.
+    final apple = Platform.isMacOS || Platform.isIOS;
+    Text keys(LogicalKeyboardKey key) => Text(
+      formatShortcutActivator(
+            apple
+                ? SingleActivator(key, meta: true)
+                : SingleActivator(key, control: true, shift: true),
+            apple ? TargetPlatform.macOS : TargetPlatform.linux,
+          ) ??
+          key.keyLabel,
+    );
     final choice = await showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -911,14 +1385,49 @@ class _SessionViewState extends State<_SessionView> {
         overlay.size.height - globalPosition.dy,
       ),
       items: [
-        PopupMenuItem(
+        GhostMenuItem(
+          context: context,
           value: 'copy',
           enabled: hasSelection,
-          child: const Text('Copy'),
+          label: 'Copy',
+          icon: Icons.copy,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          shortcut: keys(LogicalKeyboardKey.keyC),
         ),
-        const PopupMenuItem(value: 'paste', child: Text('Paste')),
-        const PopupMenuDivider(),
-        const PopupMenuItem(value: 'selectAll', child: Text('Select all')),
+        GhostMenuItem(
+          context: context,
+          value: 'paste',
+          label: 'Paste',
+          icon: Icons.content_paste,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          shortcut: keys(LogicalKeyboardKey.keyV),
+        ),
+        const GhostMenuDivider(),
+        GhostMenuItem(
+          context: context,
+          value: 'selectAll',
+          label: 'Select all',
+          icon: Icons.select_all,
+          iconColor: palette.glyph(FamilyHue.graphite),
+          shortcut: keys(LogicalKeyboardKey.keyA),
+        ),
+        GhostMenuItem(
+          context: context,
+          value: 'find',
+          label: 'Find…',
+          icon: Icons.search,
+          iconColor: palette.glyph(FamilyHue.graphite),
+          shortcut: keys(LogicalKeyboardKey.keyF),
+        ),
+        const GhostMenuDivider(),
+        // No shortcut hint here: the item opens the list itself.
+        GhostMenuItem(
+          context: context,
+          value: 'shortcuts',
+          label: 'Keyboard shortcuts',
+          icon: Icons.keyboard,
+          iconColor: palette.glyph(FamilyHue.graphite),
+        ),
       ],
     );
     switch (choice) {
@@ -928,6 +1437,11 @@ class _SessionViewState extends State<_SessionView> {
         await terminalPaste(widget.tab);
       case 'selectAll':
         terminalSelectAll(widget.tab);
+      case 'find':
+        // The tab may have closed while the menu was open.
+        if (mounted) _openFind();
+      case 'shortcuts':
+        if (context.mounted) await showKeyboardShortcuts(context);
     }
   }
 }
@@ -1027,67 +1541,19 @@ class _Disconnected extends StatelessWidget {
   }
 }
 
-/// A collapsible view of the raw connection transcript, with a copy button.
+/// The failed tab's transcript. Wraps the shared [ConnectionLogView] with the
+/// session's own log notifier — not with AppState: a handshake appends a line
+/// per packet, and routing those through the app-wide notifier rebuilt the
+/// entire tree hundreds of times per connection.
 class _ConnectionLogView extends StatelessWidget {
   final TerminalSession session;
   const _ConnectionLogView({required this.session});
 
   @override
   Widget build(BuildContext context) {
-    // Listens to the session's own log notifier, not to AppState: a handshake
-    // appends a line per packet, and routing those through the app-wide
-    // notifier rebuilt the entire tree hundreds of times per connection.
     return ListenableBuilder(
       listenable: session.logNotifier,
-      builder: (context, _) => _log(context, session.log.toString()),
-    );
-  }
-
-  Widget _log(BuildContext context, String text) {
-    final scheme = Theme.of(context).colorScheme;
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        tilePadding: EdgeInsets.zero,
-        title: const Text('Connection log'),
-        childrenPadding: EdgeInsets.zero,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: text.isEmpty
-                  ? null
-                  : () {
-                      Clipboard.setData(ClipboardData(text: text));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Log copied')),
-                      );
-                    },
-              icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy'),
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxHeight: 260),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SingleChildScrollView(
-              child: SelectableText(
-                text.isEmpty ? '(no log captured)' : text,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      builder: (context, _) => ConnectionLogView(text: session.log.toString()),
     );
   }
 }

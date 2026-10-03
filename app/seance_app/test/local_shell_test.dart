@@ -1,12 +1,16 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/services/local_shell_service.dart';
 import 'package:seance_app/services/xterm_engine.dart';
-import 'package:seance_app/ui/server_appearance.dart';
+import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/server_list_pane.dart';
+import 'package:seance_app/ui/server_status_dot.dart';
+import 'package:seance_app/ui/server_tile.dart';
+import 'package:seance_app/ui/sidebar/sidebar_kit.dart';
 import 'package:seance_core/seance_core.dart';
 
 /// The app-side half of the local shell: which platforms offer it, what the
@@ -45,18 +49,21 @@ void main() {
       // A settings file is device-local but portable: enabling this on a
       // laptop must not put a dead row in a phone's list.
       expect(
-        service(platform: LocalShellPlatform.ios)
-            .availableWhen(enabledInSettings: true),
+        service(
+          platform: LocalShellPlatform.ios,
+        ).availableWhen(enabledInSettings: true),
         isFalse,
       );
       expect(
-        service(platform: LocalShellPlatform.linux)
-            .availableWhen(enabledInSettings: true),
+        service(
+          platform: LocalShellPlatform.linux,
+        ).availableWhen(enabledInSettings: true),
         isTrue,
       );
       expect(
-        service(platform: LocalShellPlatform.linux)
-            .availableWhen(enabledInSettings: false),
+        service(
+          platform: LocalShellPlatform.linux,
+        ).availableWhen(enabledInSettings: false),
         isFalse,
       );
     });
@@ -84,19 +91,20 @@ void main() {
     test('is detected from the container variable, and only on macOS', () {
       const sandboxEnv = {'APP_SANDBOX_CONTAINER_ID': 'com.lkm.seance-app'};
       expect(
-        service(platform: LocalShellPlatform.macos, environment: sandboxEnv)
-            .sandboxed,
+        service(
+          platform: LocalShellPlatform.macos,
+          environment: sandboxEnv,
+        ).sandboxed,
         isTrue,
       );
-      expect(
-        service(platform: LocalShellPlatform.macos).sandboxed,
-        isFalse,
-      );
+      expect(service(platform: LocalShellPlatform.macos).sandboxed, isFalse);
       // The variable can only mean something on macOS; a stray one elsewhere
       // must not produce a warning about a sandbox that isn't there.
       expect(
-        service(platform: LocalShellPlatform.linux, environment: sandboxEnv)
-            .sandboxed,
+        service(
+          platform: LocalShellPlatform.linux,
+          environment: sandboxEnv,
+        ).sandboxed,
         isFalse,
       );
     });
@@ -197,8 +205,7 @@ void main() {
         local(id: 'l2'),
       ];
       expect(
-        AppState.sessionsForServerIn(list, kLocalShellServerId)
-            .map((s) => s.id),
+        AppState.tabsForServerIn(list, kLocalShellServerId).map((s) => s.id),
         ['l1', 'l2'],
       );
       expect(AppState.insertIndexFor(list, kLocalShellServerId), 4);
@@ -213,7 +220,7 @@ void main() {
           closed: first,
           siblingsBefore: [first, second],
           remaining: [second, server],
-          lastSessionForServer: const {},
+          lastTabForServer: const {},
         )?.id,
         'l2',
       );
@@ -222,7 +229,7 @@ void main() {
           closed: second,
           siblingsBefore: [second],
           remaining: [server],
-          lastSessionForServer: const {},
+          lastTabForServer: const {},
         )?.id,
         'a1',
       );
@@ -238,45 +245,80 @@ void main() {
   group('the pinned list row', () {
     Future<void> pump(
       WidgetTester tester, {
-      required int tabCount,
-      TerminalStatus connection = TerminalStatus.disconnected,
+      int tabCount = 0,
+      ServerDot dot = ServerDot.none,
+      SidebarKitDensity density = SidebarKitDensity.comfortable,
       VoidCallback? onTap,
       VoidCallback? onNewTab,
       VoidCallback? onCloseAll,
     }) => tester.pumpWidget(
       MaterialApp(
+        theme: SeanceTheme.light(),
         home: Scaffold(
-          body: LocalShellTile(
-            connection: connection,
-            tabCount: tabCount,
-            shellName: 'zsh',
-            selected: false,
-            onTap: onTap ?? () {},
-            onNewTab: onNewTab ?? () {},
-            onCloseAll: onCloseAll ?? () {},
+          body: SidebarKitScope(
+            strings: serverSidebarStrings,
+            density: density,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 260,
+                child: LocalShellTile(
+                  dot: dot,
+                  tabCount: tabCount,
+                  shellName: 'zsh',
+                  selected: false,
+                  onTap: onTap ?? () {},
+                  onNewTab: onNewTab ?? () {},
+                  onCloseAll: onCloseAll ?? () {},
+                ),
+              ),
+            ),
           ),
         ),
       ),
     );
 
+    /// The row's kit verbs, the way a desktop right-click opens them.
+    Future<void> openMenu(WidgetTester tester) async {
+      await tester.tap(
+        find.byType(SidebarRow),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    SidebarRow row(WidgetTester tester) =>
+        tester.widget<SidebarRow>(find.byType(SidebarRow));
+
+    MenuItemButton verb(WidgetTester tester, String label) =>
+        tester.widget<MenuItemButton>(
+          find.ancestor(
+            of: find.text(label),
+            matching: find.byType(MenuItemButton),
+          ),
+        );
+
     testWidgets('names this machine and the shell it runs', (tester) async {
-      await pump(tester, tabCount: 0);
-      expect(find.text('Local shell'), findsOneWidget);
+      await pump(tester);
+      // Middle-ellipsized at rail width, so the row itself carries it.
+      expect(row(tester).title, 'Local shell');
       expect(find.text('zsh · this machine'), findsOneWidget);
       // No reachability dot: this machine is demonstrably here.
-      expect(find.byIcon(Icons.circle_outlined), findsNothing);
+      expect(row(tester).status, isNull);
     });
 
     testWidgets('wears the same badge shape as a server row', (tester) async {
-      // Structurally a server row — badge, corner status dot — so the list
-      // reads as one thing. The glyph is what says which kind it is.
-      await pump(tester, tabCount: 0);
-      expect(find.byType(ServerAvatar), findsOneWidget);
+      // Structurally a server row — the kit's mark in the mark's place — so
+      // the list reads as one thing. The glyph is what says which kind it is.
+      await pump(tester);
+      expect(find.byType(LocalShellRailMark), findsOneWidget);
       expect(find.byIcon(Icons.terminal), findsOneWidget);
     });
 
-    testWidgets('counts its tabs only once there is more than one',
-        (tester) async {
+    testWidgets('counts its tabs only once there is more than one', (
+      tester,
+    ) async {
       await pump(tester, tabCount: 1);
       expect(find.text('×1'), findsNothing);
       await pump(tester, tabCount: 3);
@@ -285,40 +327,46 @@ void main() {
 
     testWidgets('opens on tap', (tester) async {
       var opened = 0;
-      await pump(tester, tabCount: 0, onTap: () => opened++);
-      await tester.tap(find.text('Local shell'));
+      await pump(tester, onTap: () => opened++);
+      await tester.tap(find.byType(SidebarRow));
       expect(opened, 1);
     });
 
-    testWidgets('offers a new shell, but nothing to close, when idle',
-        (tester) async {
-      await pump(tester, tabCount: 0);
-      await tester.tap(find.byType(PopupMenuButton<String>));
-      await tester.pumpAndSettle();
+    testWidgets('offers a new shell, and a greyed close, when idle', (
+      tester,
+    ) async {
+      await pump(tester);
+      await openMenu(tester);
       expect(find.text('New shell'), findsOneWidget);
-      expect(find.textContaining('Close'), findsNothing);
+      // Nothing is open: Close stays, greyed, so the menu keeps its shape —
+      // the same courtesy the server rows give a dead Disconnect.
+      expect(verb(tester, 'Close').onPressed, isNull);
     });
 
     testWidgets('offers to close every open shell at once', (tester) async {
-      await pump(tester, tabCount: 2);
-      await tester.tap(find.byType(PopupMenuButton<String>));
+      var closed = 0;
+      await pump(tester, tabCount: 2, onCloseAll: () => closed++);
+      await openMenu(tester);
+      expect(verb(tester, 'Close all shells').onPressed, isNotNull);
+      await tester.tap(find.text('Close all shells'));
       await tester.pumpAndSettle();
-      expect(find.text('Close all shells'), findsOneWidget);
+      expect(closed, 1);
     });
 
-    testWidgets('a starting shell shows a spinner', (tester) async {
-      await pump(
-        tester,
-        tabCount: 1,
-        connection: TerminalStatus.connecting,
-      );
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    testWidgets('a starting shell wears the connecting dot', (tester) async {
+      await pump(tester, tabCount: 1, dot: ServerDot.connecting);
+      final context = tester.element(find.byType(SidebarRow));
+      expect(row(tester).status?.color, StatusColors.connecting(context));
+      expect(row(tester).markRing, isNull);
     });
 
-    testWidgets('a running shell shows the connected dot', (tester) async {
-      await pump(tester, tabCount: 1, connection: TerminalStatus.connected);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-      expect(find.byTooltip('connected'), findsOneWidget);
+    testWidgets('a running shell wears the connected dot and ring', (
+      tester,
+    ) async {
+      await pump(tester, tabCount: 1, dot: ServerDot.connected);
+      final context = tester.element(find.byType(SidebarRow));
+      expect(row(tester).status?.color, StatusColors.online(context));
+      expect(row(tester).markRing, StatusColors.online(context));
     });
   });
 
@@ -328,8 +376,9 @@ void main() {
       final on = AppSettings(localShell: true);
       expect(AppSettings.fromJson(on.toJson()).localShell, isTrue);
       expect(
-        AppSettings.fromJson(AppSettings(localShell: false).toJson())
-            .localShell,
+        AppSettings.fromJson(
+          AppSettings(localShell: false).toJson(),
+        ).localShell,
         isFalse,
       );
     });
