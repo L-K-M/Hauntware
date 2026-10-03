@@ -14,6 +14,12 @@ same change.
 
 ## How Poltergeist consumes Séance
 
+On 2026-10-02 the owner approved `ghost_ui` in Planchette as the shared
+owner of sidebars, menus, leaf UI primitives and file-list presentation.
+Both apps pin it alongside the shared editor/core; historical copy rules
+below remain provenance for these modules. App adapters retain their
+themes, strings, selection/gesture state and file-operation services.
+
 The owner approved [Planchette](https://github.com/L-K-M/Planchette) as the
 shared editor repository on 2026-09-27. Syntax, search, document I/O, editing
 state, and the Flutter surface now belong to `planchette_core` and

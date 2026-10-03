@@ -288,12 +288,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  ghost_desktop:
+  ghost_ui:
     dependency: "direct main"
     description:
-      path: "/home/paseo/workspace/Planchette/.worktrees/ghost-window-restoration/packages/ghost_desktop"
-      relative: false
-    source: path
+      path: "packages/ghost_ui"
+      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      url: "https://github.com/L-K-M/Planchette.git"
+    source: git
     version: "0.1.0"
   hooks:
     dependency: transitive
@@ -327,6 +329,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.9.2"
+  intl:
+    dependency: transitive
+    description:
+      name: intl
+      sha256: "1ca20c894b1717686a2319b8548763d812bc0aabdac580420a44c5178c57a867"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.20.3"
   jni:
     dependency: transitive
     description:
@@ -619,8 +629,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/planchette_core"
-      ref: "7b833f34550c54b27a9f08783b5fd5711869253b"
-      resolved-ref: "7b833f34550c54b27a9f08783b5fd5711869253b"
+      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"
@@ -628,8 +638,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/planchette_editor"
-      ref: "7b833f34550c54b27a9f08783b5fd5711869253b"
-      resolved-ref: "7b833f34550c54b27a9f08783b5fd5711869253b"
+      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"

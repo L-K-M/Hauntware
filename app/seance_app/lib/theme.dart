@@ -2,6 +2,7 @@ import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart' show SidebarThemeTokens, GhostFileTheme;
 import 'package:planchette_editor/planchette_editor.dart'
     show GhostMenuTheme;
 
@@ -578,6 +579,7 @@ class SeanceTheme {
     // with a rounded rectangle of its scaled radius.
     final scaled = scale != 1;
     final buttonShape = rounded(_buttonRadius);
+    final chrome = _chromeFor(n, resolvedPlatform, cornerScale: scale);
     final theme = base.copyWith(
       visualDensity: VisualDensity.comfortable,
       scaffoldBackgroundColor: scheme.surface,
@@ -653,9 +655,30 @@ class SeanceTheme {
           ? SnackBarThemeData(shape: rounded(_snackBarRadius))
           : null,
       extensions: [
-        _chromeFor(n, resolvedPlatform, cornerScale: scale),
+        chrome,
         _statusFor(palette, drawnAt),
         FamilyPalette.forBrightness(drawnAt),
+        SidebarThemeTokens(
+          sidebarBackground: chrome.sidebarBackground,
+          separator: chrome.separator,
+          hoverFill: chrome.hoverFill,
+          capsuleFill: chrome.capsuleFill,
+          inactiveSelectionFill: chrome.inactiveSelectionFill,
+          secondaryText: chrome.secondaryText,
+          sidebarRowExtent: chrome.sidebarRowExtent,
+          cornerScale: chrome.cornerScale,
+        ),
+        GhostFileTheme(
+          paneBackground: chrome.paneBackground,
+          separator: chrome.separator,
+          hoverFill: chrome.hoverFill,
+          selectionFill: chrome.selectionFill,
+          onSelection: chrome.onSelection,
+          inactiveSelectionFill: chrome.inactiveSelectionFill,
+          activePaneIndicator: chrome.activePaneIndicator,
+          secondaryText: chrome.secondaryText,
+          rowExtent: chrome.rowExtent,
+        ),
       ],
     );
     // The compact pointer-menu skin shared through planchette_editor: it

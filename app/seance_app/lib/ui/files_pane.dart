@@ -3,14 +3,15 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_state.dart';
-import '../family_hues.dart';
 import '../main.dart';
 import '../services/external_file_opener.dart';
 import '../services/file_export_service.dart';
@@ -19,7 +20,6 @@ import '../services/remote_files_controller.dart';
 import '../services/xterm_engine.dart';
 import 'built_in_text_editor.dart';
 import 'file_kinds.dart';
-import 'top_toast.dart';
 
 class FilesScreen extends StatelessWidget {
   const FilesScreen({super.key});
@@ -126,6 +126,19 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   final TextEditingController _filter = TextEditingController();
   final Set<String> _promptedDirtyCopies = {};
 
+  /// The desktop listing's keyboard cursor — the path the ring sits on.
+  String? _cursorPath;
+
+  /// The pane's double-click window (the pane state times it itself, as
+  /// Poltergeist's `_RowGestures` does): a second primary press on the
+  /// same row inside it opens the entry.
+  DateTime _lastPrimaryDownAt = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _lastPrimaryDownPath;
+
+  final FocusNode _listFocus = FocusNode();
+  final ScrollController _listScroll = ScrollController();
+  final GlobalKey _listViewportKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -135,6 +148,8 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   @override
   void dispose() {
     _filter.dispose();
+    _listFocus.dispose();
+    _listScroll.dispose();
     super.dispose();
   }
 
@@ -315,51 +330,496 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       );
     }
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final showDetails = constraints.maxWidth >= 430;
-        return ListView.builder(
-          itemCount: controller.entries.length,
-          itemBuilder: (context, index) {
-            final entry = controller.entries[index];
-            final localCopy = controller.localCopies[entry.path];
-            return _FileRow(
-              entry: entry,
-              showDetails: showDetails,
-              hasLocalCopy: localCopy != null,
-              selected: controller.selectedPaths.contains(entry.path),
-              selectionMode: controller.selectedPaths.isNotEmpty,
-              onSelect: () => controller.toggleSelection(entry.path),
-              onOpen: () => entry.isDirectory
-                  ? controller.navigate(entry.path)
-                  : _openRemoteFile(entry),
-              onRename: () => _rename(entry),
-              onDelete: () => _delete(entry),
-              onProperties: () => _showProperties(entry),
-              onCopyPath: () => _copyRemotePath(entry.path),
-              onOpenTerminalHere: entry.isDirectory
-                  ? () => _openTerminalHere(entry.path)
-                  : null,
-              onDownload: entry.type == RemoteFileType.file
-                  ? () => _exportRemoteFile(entry)
-                  : entry.isDirectory && _supportsDesktopDrop
-                  ? () => _downloadRemoteEntries([entry])
-                  : null,
-              onShare: entry.type == RemoteFileType.file && _supportsSharing
-                  ? () => _shareRemoteFile(entry)
-                  : null,
-              editorChoices: entry.type == RemoteFileType.file
-                  ? _editorChoices(entry.path)
-                  : const [],
-              onOpenWith: (editorId) =>
-                  _openRemoteFileWithEditor(entry, editorId),
-              onUploadChanges: localCopy == null
-                  ? null
-                  : () => _uploadLocalCopy(localCopy),
-            );
-          },
+      builder: (context, constraints) =>
+          ghostIsDesktopPlatform(Theme.of(context).platform)
+          ? _desktopListing(context, constraints.maxWidth, controller)
+          : _compactListing(controller),
+    );
+  }
+
+  /// The desktop listing (D32 §6): the shared column header over dense
+  /// [GhostFileRow]s — pointer-down selection with Ctrl/⌘-toggle and
+  /// Shift-range, pane-owned double-click timing, the keyboard cursor,
+  /// and the verbs' context menu on right-click, Menu, or Shift+F10.
+  Widget _desktopListing(
+    BuildContext context,
+    double width,
+    RemoteFilesController controller,
+  ) {
+    final metrics = GhostFileColumnMetrics.forWidth(
+      width,
+      MediaQuery.textScalerOf(context),
+      modifiedWidth: GhostFileColumnMetrics.modifiedWidthIn(
+        context,
+        today: (time) => 'Today at $time',
+        yesterday: (time) => 'Yesterday at $time',
+      ),
+    );
+    return GhostFileColumnMetricsScope(
+      metrics: metrics,
+      child: Column(
+        children: [
+          GhostFileColumnHeader(
+            listId: 'files',
+            sortColumn: switch (controller.sortField) {
+              RemoteSortField.name => GhostFileColumn.name,
+              RemoteSortField.size => GhostFileColumn.size,
+              RemoteSortField.modifiedAt => GhostFileColumn.modified,
+              // A type sort still lives in the ⋮ menu; no column claims
+              // its chevron.
+              RemoteSortField.type => null,
+            },
+            sortDirection:
+                controller.sortDirection == RemoteSortDirection.ascending
+                ? GhostFileSortDirection.ascending
+                : GhostFileSortDirection.descending,
+            onSort: (column) {
+              final field = switch (column) {
+                GhostFileColumn.name => RemoteSortField.name,
+                GhostFileColumn.size => RemoteSortField.size,
+                GhostFileColumn.modified => RemoteSortField.modifiedAt,
+              };
+              controller.setSort(
+                field,
+                controller.sortField == field &&
+                        controller.sortDirection ==
+                            RemoteSortDirection.ascending
+                    ? RemoteSortDirection.descending
+                    : RemoteSortDirection.ascending,
+              );
+            },
+          ),
+          Expanded(
+            child: Focus(
+              focusNode: _listFocus,
+              onKeyEvent: _onListingKey,
+              child: Listener(
+                // A press anywhere in the listing arms the keyboard
+                // focus; the rows' own Listeners see the same event.
+                onPointerDown: (_) => _listFocus.requestFocus(),
+                child: ListView.builder(
+                  key: _listViewportKey,
+                  controller: _listScroll,
+                  itemExtent: scaledGhostFileRowExtent(context),
+                  itemCount: controller.entries.length,
+                  itemBuilder: (context, index) =>
+                      _desktopRow(controller.entries[index]),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The touch listing (D32 §9): the shared 56 dp rows — tap opens (or
+  /// toggles while selecting), long-press extends the selection, ⋮ opens
+  /// the verb menu.
+  Widget _compactListing(RemoteFilesController controller) {
+    return ListView.builder(
+      itemExtent: scaledGhostCompactFileRowExtent(context),
+      itemCount: controller.entries.length,
+      itemBuilder: (context, index) {
+        final entry = controller.entries[index];
+        final localCopy = controller.localCopies[entry.path];
+        final selecting = controller.selectedPaths.isNotEmpty;
+        final selected = controller.selectedPaths.contains(entry.path);
+        return Builder(
+          builder: (itemContext) => GhostFileCompactRow(
+            item: ghostFileItemOf(entry),
+            selected: selected,
+            selecting: selecting,
+            onTap: () => selecting
+                ? controller.toggleSelection(entry.path)
+                : _openEntry(entry),
+            onLongPress: () => controller.toggleSelection(entry.path),
+            onActions: () {
+              final box = itemContext.findRenderObject() as RenderBox?;
+              unawaited(
+                _showEntryMenu(
+                  entry,
+                  box == null
+                      ? const Offset(32, 32)
+                      : box.localToGlobal(box.size.centerRight(Offset.zero)),
+                ),
+              );
+            },
+            onRename: ghostFileNameIsFlagged(entry.name)
+                ? null
+                : () => _rename(entry),
+            trailing: localCopy == null
+                ? null
+                : IconButton(
+                    tooltip: 'Upload local changes',
+                    iconSize: 20,
+                    onPressed: () => unawaited(_uploadLocalCopy(localCopy)),
+                    icon: const Icon(Icons.edit_note),
+                  ),
+          ),
         );
       },
     );
+  }
+
+  GhostFileRow _desktopRow(RemoteFileEntry entry) {
+    final controller = widget.controller;
+    final selected = controller.selectedPaths.contains(entry.path);
+    final cursor = _cursorPath == entry.path;
+    final localCopy = controller.localCopies[entry.path];
+    return GhostFileRow(
+      item: ghostFileItemOf(entry),
+      // The disclosure column stays reserved so names line up with the
+      // header's Name label; this listing never expands in place, so no
+      // row draws a triangle.
+      outline: true,
+      selected: selected,
+      active: true,
+      cursorRing: cursor,
+      onPointerDown: (event) => _rowPointerDown(entry, event),
+      onPointerMove: (_) {},
+      onPointerUp: (_) {},
+      onTap: () {},
+      onLongPress: () {},
+      onOpen: () => _openEntry(entry),
+      onRename: ghostFileNameIsFlagged(entry.name)
+          ? null
+          : () => _rename(entry),
+      trailing: _rowTrailing(entry, localCopy),
+    );
+  }
+
+  Widget _rowTrailing(RemoteFileEntry entry, ManagedRemoteFile? localCopy) =>
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (localCopy != null)
+            _DenseActionIcon(
+              tooltip: 'Upload local changes',
+              icon: Icons.edit_note,
+              onPressedAt: (_) => unawaited(_uploadLocalCopy(localCopy)),
+            ),
+          _DenseActionIcon(
+            tooltip: 'Actions',
+            icon: Icons.more_vert,
+            onPressedAt: (rect) =>
+                unawaited(_showEntryMenu(entry, rect.center)),
+          ),
+        ],
+      );
+
+  /// A desktop row's primary/secondary press. Selection lands on
+  /// pointer-down; the double-click window stays here, in pane state.
+  void _rowPointerDown(RemoteFileEntry entry, PointerDownEvent event) {
+    final controller = widget.controller;
+    _setCursor(entry.path);
+    if (event.buttons & kSecondaryMouseButton != 0) {
+      // A right-click on an unselected row selects it first, like the
+      // file managers: the menu then names what it acts on.
+      if (!controller.selectedPaths.contains(entry.path)) {
+        controller.selectOnly(entry.path);
+      }
+      unawaited(_showEntryMenu(entry, event.position));
+      return;
+    }
+    if (event.buttons & kPrimaryMouseButton == 0) return;
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final isApple = Theme.of(context).platform == TargetPlatform.macOS;
+    final toggle = isApple
+        ? pressed.contains(LogicalKeyboardKey.metaLeft) ||
+              pressed.contains(LogicalKeyboardKey.metaRight)
+        : pressed.contains(LogicalKeyboardKey.controlLeft) ||
+              pressed.contains(LogicalKeyboardKey.controlRight);
+    final shift =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight);
+    if (shift) {
+      controller.selectRangeTo(entry.path);
+      return;
+    }
+    if (toggle) {
+      controller.toggleSelection(entry.path);
+      return;
+    }
+    final now = DateTime.now();
+    final doubleClick =
+        _lastPrimaryDownPath == entry.path &&
+        now.difference(_lastPrimaryDownAt) <= kDoubleTapTimeout;
+    _lastPrimaryDownAt = now;
+    _lastPrimaryDownPath = entry.path;
+    controller.selectOnly(entry.path);
+    if (doubleClick) {
+      _lastPrimaryDownPath = null;
+      _openEntry(entry);
+    }
+  }
+
+  void _openEntry(RemoteFileEntry entry) {
+    if (entry.isDirectory) {
+      unawaited(widget.controller.navigate(entry.path));
+    } else {
+      unawaited(_openRemoteFile(entry));
+    }
+  }
+
+  void _setCursor(String path) {
+    if (_cursorPath == path) return;
+    setState(() => _cursorPath = path);
+  }
+
+  /// The listing's keyboard contract: arrows move the cursor (Shift
+  /// extends the range, a plain move single-selects), Enter opens,
+  /// Space toggles, Ctrl/⌘+A selects all, Escape clears, and the Menu
+  /// key or Shift+F10 opens the cursor row's verbs.
+  KeyEventResult _onListingKey(FocusNode node, KeyEvent event) {
+    // Key-down and the arrows' key-repeat run; a held Enter would keep
+    // re-opening rows and repeating Space/select-all is meaningless, so
+    // only cursor movement honours auto-repeat.
+    if (event is! KeyDownEvent &&
+        !(event is KeyRepeatEvent &&
+            (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+                event.logicalKey == LogicalKeyboardKey.arrowUp))) {
+      return KeyEventResult.ignored;
+    }
+    final controller = widget.controller;
+    final entries = controller.entries;
+    if (entries.isEmpty) return KeyEventResult.ignored;
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final isApple = Theme.of(context).platform == TargetPlatform.macOS;
+    final modifier = isApple
+        ? pressed.contains(LogicalKeyboardKey.metaLeft) ||
+              pressed.contains(LogicalKeyboardKey.metaRight)
+        : pressed.contains(LogicalKeyboardKey.controlLeft) ||
+              pressed.contains(LogicalKeyboardKey.controlRight);
+    final shift =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight);
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.keyA && modifier) {
+      controller.selectAll();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      controller.clearSelection();
+      return KeyEventResult.handled;
+    }
+    var index = entries.indexWhere((entry) => entry.path == _cursorPath);
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      final delta = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
+      index = index < 0
+          ? (delta > 0 ? 0 : entries.length - 1)
+          : (index + delta).clamp(0, entries.length - 1);
+      final target = entries[index];
+      _setCursor(target.path);
+      shift
+          ? controller.selectRangeTo(target.path)
+          : controller.selectOnly(target.path);
+      _scrollCursorIntoView(index);
+      return KeyEventResult.handled;
+    }
+    if (index < 0) return KeyEventResult.ignored;
+    final entry = entries[index];
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      _openEntry(entry);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.space) {
+      controller.toggleSelection(entry.path);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.contextMenu ||
+        (key == LogicalKeyboardKey.f10 && shift)) {
+      unawaited(_showEntryMenu(entry, _cursorMenuPosition(index)));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Keeps the cursor row inside the viewport on keyboard moves — the
+  /// rows are fixed-extent, so the target scroll offset is exact.
+  void _scrollCursorIntoView(int index) {
+    if (!_listScroll.hasClients) return;
+    final extent = scaledGhostFileRowExtent(context);
+    final position = _listScroll.position;
+    final top = index * extent;
+    final bottom = top + extent;
+    if (top < position.pixels) {
+      _listScroll.jumpTo(top);
+    } else if (bottom > position.pixels + position.viewportDimension) {
+      _listScroll.jumpTo(bottom - position.viewportDimension);
+    }
+  }
+
+  /// Where the cursor row's menu anchors for the Menu key/Shift+F10 —
+  /// the row's own rect inside the viewport, not the screen edge.
+  Offset _cursorMenuPosition(int index) {
+    final box =
+        _listViewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return const Offset(32, 32);
+    final origin = box.localToGlobal(Offset.zero);
+    final extent = scaledGhostFileRowExtent(context);
+    final offset = _listScroll.hasClients ? _listScroll.offset : 0.0;
+    final center = (index * extent) - offset + extent / 2;
+    return Offset(
+      origin.dx + box.size.width * 0.4,
+      (origin.dy + center).clamp(origin.dy, origin.dy + box.size.height),
+    );
+  }
+
+  /// The row's verb menu — the ⋮, a right-click, or the keyboard — all
+  /// in the shared ghost skin.
+  Future<void> _showEntryMenu(
+    RemoteFileEntry entry,
+    Offset globalPosition,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final value = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: _entryMenuItems(entry),
+    );
+    if (value == null || !mounted) return;
+    _dispatchEntryVerb(entry, value);
+  }
+
+  List<PopupMenuEntry<String>> _entryMenuItems(RemoteFileEntry entry) {
+    final palette = FamilyPalette.of(context);
+    final localCopy = widget.controller.localCopies[entry.path];
+    final editors = entry.type == RemoteFileType.file
+        ? _editorChoices(entry.path)
+        : const <_EditorChoice>[];
+    final selected = widget.controller.selectedPaths.contains(entry.path);
+    return [
+      GhostMenuItem(
+        context: context,
+        value: 'open',
+        icon: entry.isDirectory ? Icons.folder_open : Icons.open_in_new,
+        iconColor: palette.glyph(FamilyHue.blue),
+        label: entry.isDirectory ? 'Open' : 'Open locally',
+      ),
+      GhostMenuItem(
+        context: context,
+        value: 'select',
+        icon: selected ? Icons.check_box : Icons.check_box_outline_blank,
+        iconColor: palette.glyph(FamilyHue.graphite),
+        label: selected ? 'Deselect' : 'Select',
+      ),
+      for (final editor in editors)
+        GhostMenuItem(
+          context: context,
+          value: 'open_with:${editor.id}',
+          icon: Icons.edit_outlined,
+          iconColor: palette.glyph(FamilyHue.graphite),
+          label: 'Open with ${editor.label}',
+        ),
+      if (localCopy != null)
+        GhostMenuItem(
+          context: context,
+          value: 'upload',
+          icon: Icons.edit_note,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          label: 'Upload local changes',
+        ),
+      if (entry.type == RemoteFileType.file ||
+          (entry.isDirectory && _supportsDesktopDrop))
+        GhostMenuItem(
+          context: context,
+          value: 'download',
+          icon: Icons.download,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          label: 'Download / Save as…',
+        ),
+      if (entry.type == RemoteFileType.file && _supportsSharing)
+        GhostMenuItem(
+          context: context,
+          value: 'share',
+          icon: Icons.share,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          label: 'Share…',
+        ),
+      const GhostMenuDivider(),
+      GhostMenuItem(
+        context: context,
+        value: 'copy_path',
+        icon: Icons.link,
+        iconColor: palette.glyph(FamilyHue.graphite),
+        label: 'Copy remote path',
+      ),
+      if (entry.isDirectory)
+        GhostMenuItem(
+          context: context,
+          value: 'terminal_here',
+          icon: Icons.terminal,
+          iconColor: palette.glyph(FamilyHue.graphite),
+          label: 'Open terminal here',
+        ),
+      GhostMenuItem(
+        context: context,
+        value: 'rename',
+        icon: Icons.edit,
+        iconColor: palette.glyph(FamilyHue.graphite),
+        // A flagged (undecodable) name cannot build a valid wire path —
+        // rename stays visible but inert, matching the row's semantics.
+        enabled: !ghostFileNameIsFlagged(entry.name),
+        label: 'Rename…',
+      ),
+      GhostMenuItem(
+        context: context,
+        value: 'properties',
+        icon: Icons.info_outline,
+        iconColor: palette.glyph(FamilyHue.graphite),
+        label: 'Properties…',
+      ),
+      const GhostMenuDivider(),
+      GhostMenuItem(
+        context: context,
+        value: 'delete',
+        icon: Icons.delete_outline,
+        iconColor: palette.glyph(FamilyHue.red),
+        label: 'Delete…',
+      ),
+    ];
+  }
+
+  void _dispatchEntryVerb(RemoteFileEntry entry, String value) {
+    if (value.startsWith('open_with:')) {
+      unawaited(
+        _openRemoteFileWithEditor(entry, value.substring('open_with:'.length)),
+      );
+      return;
+    }
+    switch (value) {
+      case 'open':
+        _openEntry(entry);
+      case 'select':
+        widget.controller.toggleSelection(entry.path);
+      case 'upload':
+        final copy = widget.controller.localCopies[entry.path];
+        if (copy != null) unawaited(_uploadLocalCopy(copy));
+      case 'download':
+        if (entry.type == RemoteFileType.file) {
+          unawaited(_exportRemoteFile(entry));
+        } else {
+          unawaited(_downloadRemoteEntries([entry]));
+        }
+      case 'share':
+        unawaited(_shareRemoteFile(entry));
+      case 'copy_path':
+        unawaited(_copyRemotePath(entry.path));
+      case 'terminal_here':
+        unawaited(_openTerminalHere(entry.path));
+      case 'rename':
+        unawaited(_rename(entry));
+      case 'properties':
+        unawaited(_showProperties(entry));
+      case 'delete':
+        unawaited(_delete(entry));
+    }
   }
 
   Future<void> _pickUploads() async {
@@ -952,11 +1412,15 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                 const SizedBox(height: 12),
                 Text('Type: ${entry.type.name}'),
                 if (entry.size != null)
-                  Text('Size: ${_formatBytes(entry.size!)}'),
+                  Text(
+                    'Size: ${ghostFormatFileSize(entry.size, platform: Theme.of(context).platform)}',
+                  ),
                 if (entry.uid != null || entry.gid != null)
                   Text('Owner: ${entry.uid ?? '?'}:${entry.gid ?? '?'}'),
                 if (entry.modifiedAt != null)
-                  Text('Modified: ${_formatDate(entry.modifiedAt!.toLocal())}'),
+                  Text(
+                    'Modified: ${ghostFormatFileModified(entry.modifiedAt, now: DateTime.now(), localeName: Localizations.localeOf(context).toString(), today: (time) => 'Today at $time', yesterday: (time) => 'Yesterday at $time')}',
+                  ),
                 if (linkTarget != null) ...[
                   const SizedBox(height: 8),
                   const Text('Symbolic-link target'),
@@ -1555,144 +2019,40 @@ class _EditorChoice {
   const _EditorChoice(this.id, this.label);
 }
 
-class _FileRow extends StatelessWidget {
-  final RemoteFileEntry entry;
-  final bool showDetails;
-  final bool hasLocalCopy;
-  final bool selected;
-  final bool selectionMode;
-  final VoidCallback onSelect;
-  final VoidCallback onOpen;
-  final VoidCallback onRename;
-  final VoidCallback onDelete;
-  final VoidCallback onProperties;
-  final VoidCallback onCopyPath;
-  final VoidCallback? onOpenTerminalHere;
-  final VoidCallback? onDownload;
-  final VoidCallback? onShare;
-  final List<_EditorChoice> editorChoices;
-  final ValueChanged<String> onOpenWith;
-  final VoidCallback? onUploadChanges;
+/// A dense-row action icon (the ⋮ and the pending-edits badge): 16 px
+/// with a 24 px ink target, sized for the desktop row's 22 px extent —
+/// an [IconButton] would outgrow the row.
+class _DenseActionIcon extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final void Function(Rect bounds) onPressedAt;
 
-  const _FileRow({
-    required this.entry,
-    required this.showDetails,
-    required this.hasLocalCopy,
-    required this.selected,
-    required this.selectionMode,
-    required this.onSelect,
-    required this.onOpen,
-    required this.onRename,
-    required this.onDelete,
-    required this.onProperties,
-    required this.onCopyPath,
-    this.onOpenTerminalHere,
-    this.onDownload,
-    this.onShare,
-    required this.editorChoices,
-    required this.onOpenWith,
-    this.onUploadChanges,
+  const _DenseActionIcon({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressedAt,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final details = [
-      if (!entry.isDirectory && entry.size != null) _formatBytes(entry.size!),
-      if (entry.modifiedAt != null) _formatDate(entry.modifiedAt!.toLocal()),
-    ].join(' · ');
-    return ListTile(
-      dense: true,
-      selected: selected,
-      leading: selectionMode
-          ? Checkbox(value: selected, onChanged: (_) => onSelect())
-          : fileKindIcon(context, entry),
-      title: Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: !showDetails && details.isNotEmpty
-          ? Text(details, maxLines: 1, overflow: TextOverflow.ellipsis)
-          : null,
-      onTap: selectionMode ? onSelect : onOpen,
-      onLongPress: onSelect,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showDetails && details.isNotEmpty)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 150),
-              child: Text(
-                details,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          if (hasLocalCopy)
-            IconButton(
-              tooltip: 'Upload local changes',
-              iconSize: 18,
-              onPressed: onUploadChanges,
-              icon: const Icon(Icons.edit_note),
-            ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'open') onOpen();
-              if (value == 'select') onSelect();
-              if (value == 'upload') onUploadChanges?.call();
-              if (value.startsWith('open_with:')) {
-                onOpenWith(value.substring('open_with:'.length));
-              }
-              if (value == 'download') onDownload?.call();
-              if (value == 'share') onShare?.call();
-              if (value == 'copy_path') onCopyPath();
-              if (value == 'terminal_here') onOpenTerminalHere?.call();
-              if (value == 'rename') onRename();
-              if (value == 'delete') onDelete();
-              if (value == 'properties') onProperties();
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'open',
-                child: Text(entry.isDirectory ? 'Open' : 'Open locally'),
-              ),
-              const PopupMenuItem(value: 'select', child: Text('Select')),
-              for (final editor in editorChoices)
-                PopupMenuItem(
-                  value: 'open_with:${editor.id}',
-                  child: Text('Open with ${editor.label}'),
-                ),
-              if (onUploadChanges != null)
-                const PopupMenuItem(
-                  value: 'upload',
-                  child: Text('Upload local changes'),
-                ),
-              if (onDownload != null)
-                const PopupMenuItem(
-                  value: 'download',
-                  child: Text('Download / Save as…'),
-                ),
-              if (onShare != null)
-                const PopupMenuItem(value: 'share', child: Text('Share…')),
-              const PopupMenuItem(
-                value: 'copy_path',
-                child: Text('Copy remote path'),
-              ),
-              if (onOpenTerminalHere != null)
-                const PopupMenuItem(
-                  value: 'terminal_here',
-                  child: Text('Open terminal here'),
-                ),
-              const PopupMenuItem(value: 'rename', child: Text('Rename…')),
-              const PopupMenuItem(
-                value: 'properties',
-                child: Text('Properties…'),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: 'delete', child: Text('Delete…')),
-            ],
-          ),
-        ],
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(milliseconds: 500),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(3),
+      onTap: () {
+        final box = context.findRenderObject() as RenderBox;
+        onPressedAt(box.localToGlobal(Offset.zero) & box.size);
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Icon(
+          icon,
+          size: 15,
+          color: GhostFileTheme.of(context).secondaryText,
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _LocalCopiesPanel extends StatelessWidget {
@@ -2214,19 +2574,4 @@ class _RecoveredLocalEdits extends StatelessWidget {
       await state.discardRetainedLocalCopy(session.id, copy);
     }
   }
-}
-
-String _formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-}
-
-String _formatDate(DateTime date) {
-  String two(int value) => value.toString().padLeft(2, '0');
-  return '${date.year}-${two(date.month)}-${two(date.day)} '
-      '${two(date.hour)}:${two(date.minute)}';
 }
