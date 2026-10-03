@@ -159,7 +159,10 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
 
   @override
   void removeListener(GhostWindowListener listener) {
-    if (identical(_listener, listener)) _listener = null;
+    // Only the attached listener detaches — removing a stale one must not
+    // leave a live listener behind a flag claiming none is registered.
+    if (!identical(_listener, listener)) return;
+    _listener = null;
     callbacksRegistered = false;
   }
 
