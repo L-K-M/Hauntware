@@ -169,9 +169,11 @@ Intent? ghostEditingTextIntent(MenuSerializableShortcut shortcut) {
 
 // -- macOS native serialization ----------------------------------------
 
-/// Produces the native `onSelected` for a leaf row. Returning null keeps
-/// the item inert; [shortcut] is the bound key equivalent (null when the
-/// command has no native-safe chord), for Edit-menu retargeting.
+/// Produces the native `onSelected` for a leaf row. Returning null falls
+/// back to [GhostCommandSpec.onSelected] (the item is inert only when the
+/// spec has no callback either); [shortcut] is the bound key equivalent
+/// (null when the command has no native-safe chord), for Edit-menu
+/// retargeting.
 typedef GhostMenuActivator =
     VoidCallback? Function(
       GhostCommandSpec spec,

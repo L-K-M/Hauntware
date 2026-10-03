@@ -11,7 +11,10 @@ String? formatShortcutActivator(
   TargetPlatform platform,
 ) {
   if (activator is! SingleActivator) return null;
-  final mac = platform == TargetPlatform.macOS;
+  // iPadOS hardware keyboards use ⌘ too — glyph platforms, like the
+  // hosts' old formatters.
+  final mac =
+      platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
   final buffer = StringBuffer();
   void mod(bool flag, String macGlyph, String name) {
     if (!flag) return;

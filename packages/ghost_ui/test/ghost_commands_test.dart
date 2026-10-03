@@ -34,6 +34,12 @@ void main() {
       expect(formatShortcutActivator(tab, TargetPlatform.windows), 'Ctrl+Tab');
     });
 
+    test('iOS is a glyph platform like macOS', () {
+      const chord = SingleActivator(LogicalKeyboardKey.keyT, meta: true);
+      expect(formatShortcutActivator(chord, TargetPlatform.iOS), '⌘T');
+      expect(formatShortcutActivator(chord, TargetPlatform.macOS), '⌘T');
+    });
+
     test('has no spelling for non-SingleActivator chords', () {
       expect(
         formatShortcutActivator(
@@ -278,7 +284,12 @@ void main() {
           ),
         ),
         GhostCommandRow(
-          GhostCommandSpec(id: 'a.off', label: 'Off', enabled: false),
+          GhostCommandSpec(
+            id: 'a.off',
+            label: 'Off',
+            enabled: false,
+            onSelected: () {},
+          ),
         ),
       ],
       [
@@ -396,6 +407,7 @@ void main() {
       expect(menuAcceleratorLabel('Find', 'n'), 'Fi&nd');
       expect(menuAcceleratorLabel('R&B', 'x'), 'R&&B');
       expect(menuAcceleratorLabel('Résumé', 'z'), 'Résumé');
+      expect(menuAcceleratorLabel('İtem', 'i'), '&İtem');
     });
   });
 
