@@ -369,7 +369,12 @@ final class _CheckedMenuChannel extends OptionalMethodChannel {
       // Waiting for Flutter's reply guarantees that the new NSMenu exists.
       // IDs increase across pushes, so a delayed earlier reply cannot alter
       // the checkmarks in a newer menu or another workspace's menu.
-      await _checks.invokeMethod<void>('setChecked', states);
+      try {
+        await _checks.invokeMethod<void>('setChecked', states);
+      } on MissingPluginException {
+        // No checks peer (tests, or a host without the native side); the
+        // menu itself is already installed, so checks stay best-effort.
+      }
     }
     return result;
   }
@@ -446,7 +451,7 @@ class GhostShortcutHint extends StatelessWidget {
     if (text == null) return const SizedBox.shrink();
     final effective = enabled
         ? color ?? theme.colorScheme.onSurfaceVariant
-        : theme.colorScheme.onSurface.withValues(alpha: 0.38);
+        : (color ?? theme.colorScheme.onSurface).withValues(alpha: 0.38);
     return Text(
       text,
       style: TextStyle(

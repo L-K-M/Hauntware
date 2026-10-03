@@ -413,6 +413,75 @@ void main() {
     });
   });
 
+  group('CheckedPlatformMenuDelegate', () {
+    testWidgets('setMenus reports nothing when the checks peer is absent', (
+      tester,
+    ) async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const menu = MethodChannel('flutter/menu');
+      const checks = MethodChannel('test/menu_checks');
+      messenger.setMockMethodCallHandler(menu, (call) async => null);
+      messenger.setMockMethodCallHandler(
+        checks,
+        (call) async => throw MissingPluginException(),
+      );
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(menu, null);
+        messenger.setMockMethodCallHandler(checks, null);
+      });
+      final delegate = CheckedPlatformMenuDelegate(
+        channelName: 'test/menu_checks',
+      );
+      delegate.setMenus([
+        PlatformMenu(
+          label: 'File',
+          menus: [
+            PlatformMenuItemGroup(
+              members: [
+                CheckedPlatformMenuItem(
+                  label: 'Check',
+                  checked: true,
+                  onSelected: () {},
+                ),
+              ],
+            ),
+          ],
+        ),
+      ]);
+      await tester.pump();
+      // Without the swallow the missing peer surfaces a reported
+      // MissingPluginException on every push.
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('GhostShortcutHint', () {
+    Future<Text> pumpHint(WidgetTester tester, bool enabled) {
+      return tester
+          .pumpWidget(
+            MaterialApp(
+              home: GhostShortcutHint(
+                const SingleActivator(LogicalKeyboardKey.keyT, control: true),
+                enabled: enabled,
+                color: Colors.red,
+              ),
+            ),
+          )
+          .then((_) => tester.widget<Text>(find.byType(Text)));
+    }
+
+    testWidgets('a supplied color carries into the disabled dim', (
+      tester,
+    ) async {
+      expect((await pumpHint(tester, true)).style!.color, Colors.red);
+      expect(
+        (await pumpHint(tester, false)).style!.color,
+        Colors.red.withValues(alpha: 0.38),
+      );
+    });
+  });
+
   group('menuAcceleratorLabel', () {
     test('marks the mnemonic, preferring word starts and escaping &', () {
       expect(menuAcceleratorLabel('Save', 's'), '&Save');
