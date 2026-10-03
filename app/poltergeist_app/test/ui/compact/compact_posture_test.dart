@@ -321,7 +321,7 @@ void main() {
       await _openThisDevice(tester);
       final pane = harness.activePane(tester);
 
-      await tester.tap(_key((CompactKey.rowMore, '/home/deploy/notes.txt')));
+      await tester.tap(_key(('ghostFileRow.more', 'notes.txt')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('pane.context.file.rename')), findsOne);
       expect(find.byKey(const ValueKey('pane.context.file.getInfo')), findsOne);
@@ -439,7 +439,7 @@ void main() {
       await _openThisDevice(tester);
       final channel = harness.engine.localChannels[2];
 
-      await tester.tap(_key((CompactKey.rowMore, '/home/deploy/notes.txt')));
+      await tester.tap(_key(('ghostFileRow.more', 'notes.txt')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pane.context.file.rename')));
       await tester.pumpAndSettle();
@@ -465,7 +465,7 @@ void main() {
       await harness.pump(tester);
       await _openThisDevice(tester);
 
-      await tester.tap(_key((CompactKey.rowMore, '/home/deploy/notes.txt')));
+      await tester.tap(_key(('ghostFileRow.more', 'notes.txt')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pane.context.file.rename')));
       await tester.pumpAndSettle();
@@ -627,7 +627,7 @@ void main() {
       // The posture starts with the inspector closed.
       expect(workspace.inspectorHidden, isTrue);
 
-      await tester.tap(_key((CompactKey.rowMore, '/home/deploy/notes.txt')));
+      await tester.tap(_key(('ghostFileRow.more', 'notes.txt')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pane.context.file.getInfo')));
       await tester.pumpAndSettle();

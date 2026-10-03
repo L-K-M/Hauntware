@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart' show CustomSemanticsAction;
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -12,20 +12,13 @@ import '../../services/pane_permissions.dart' show nameIsFlagged;
 import '../../services/quick_connect_address.dart';
 import '../../services/quick_select_state.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/family_hues.dart';
 import '../local_edits_review.dart';
-import '../panes/kind_glyph.dart';
 import '../panes/pane_format.dart';
 import '../panes/save_favorite_bar.dart';
 import 'compact_pane_messages.dart';
 import 'compact_path_dialog.dart';
 import 'compact_posture.dart';
 import 'compact_rename_dialog.dart';
-
-/// D32 §9's row: 56 dp, two lines (name; size · date). Scaled with the
-/// text scale so larger type grows the row instead of clipping (D20),
-/// and fixed per build so the list keeps its fixed-extent layout.
-const double _rowExtent = 56;
 
 /// 02 §2.8's anti-flash grace: no spinner or dim before this, so a fast
 /// navigation never flashes.
@@ -490,7 +483,7 @@ class _CompactListingState extends State<CompactListing> {
         slivers: [SliverFillRemaining(hasScrollBody: false, child: empty)],
       );
     } else {
-      final extent = MediaQuery.textScalerOf(context).scale(_rowExtent);
+      final extent = scaledGhostCompactFileRowExtent(context);
       scrollable = ListView.builder(
         key: const ValueKey(CompactKey.listing),
         controller: _scroll,
@@ -498,12 +491,13 @@ class _CompactListingState extends State<CompactListing> {
         padding: padding,
         itemExtent: extent,
         itemCount: entries.length,
-        itemBuilder: (context, index) => _CompactRow(
+        itemBuilder: (context, index) => GhostFileCompactRow(
           key: ValueKey((CompactKey.row, entries[index].path)),
-          entry: entries[index],
+          item: paneFileItem(entries[index]),
           selected: controller.isRowSelected(index),
           selecting: widget.selecting,
           clock: widget.clock,
+          strings: paneRowStrings(l10n),
           onTap: () => widget.callbacks.onTap(controller, index),
           onLongPress: () => widget.callbacks.onLongPress(controller, index),
           onActions: () => widget.callbacks.onActions(controller, index),
@@ -535,226 +529,6 @@ Bookmark? _saveBarBookmark(PaneController controller) {
   if (!bookmark.id.startsWith(quickConnectAdhocIdPrefix)) return null;
   if (controller.phase != PanePhase.browsing) return null;
   return bookmark;
-}
-
-/// D32 §9's 56 dp two-line row: a 40 dp kind badge (a check while
-/// selected), the name over `size · date`, and a trailing ⋮ for the
-/// item's action sheet. Outside selection mode a tap opens; inside it a
-/// tap toggles and the ⋮ steps aside (the bottom bar owns the verbs).
-class _CompactRow extends StatelessWidget {
-  const _CompactRow({
-    super.key,
-    required this.entry,
-    required this.selected,
-    required this.selecting,
-    required this.clock,
-    required this.onTap,
-    required this.onLongPress,
-    required this.onActions,
-    required this.onRename,
-  });
-
-  final RemoteFileEntry entry;
-  final bool selected;
-  final bool selecting;
-  final DateTime Function() clock;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-  final VoidCallback onActions;
-  final VoidCallback? onRename;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final chrome = PoltergeistChrome.of(context);
-    final platform = theme.platform;
-    final directory = entry.type == RemoteFileType.directory;
-    final size = formatPaneSize(
-      directory ? null : entry.size,
-      platform: platform,
-    );
-    final modified = formatPaneModified(
-      entry.modifiedAt,
-      now: clock(),
-      localeName: Localizations.localeOf(context).toString(),
-      today: l10n.paneDateToday,
-      yesterday: l10n.paneDateYesterday,
-    );
-    final sizeSlot = switch (entry.type) {
-      RemoteFileType.directory => l10n.compactRowFolder,
-      RemoteFileType.symbolicLink => l10n.compactRowLink,
-      _ => size,
-    };
-    final kind = switch (entry.type) {
-      RemoteFileType.file => l10n.paneRowKindFile,
-      RemoteFileType.directory => l10n.paneRowKindDirectory,
-      RemoteFileType.symbolicLink => l10n.paneRowKindSymbolicLink,
-      RemoteFileType.other => l10n.paneRowKindOther,
-    };
-    final flagged = nameIsFlagged(entry.name);
-    final (glyph, hue) = kindGlyph(paneKindCategory(entry));
-    final tint = FamilyPalette.of(context).glyph(hue);
-
-    final label = flagged
-        ? l10n.paneRowSemanticsFlagged(entry.name, kind, size, modified)
-        : l10n.paneRowSemantics(entry.name, kind, size, modified);
-
-    final main = Semantics(
-      container: true,
-      button: true,
-      selected: selected,
-      label: label,
-      onTap: onTap,
-      onLongPress: onLongPress,
-      customSemanticsActions: {
-        CustomSemanticsAction(label: l10n.fileRenameLabel): ?onRename,
-      },
-      excludeSemantics: true,
-      child: Row(
-        children: [
-          _KindBadge(
-            glyph: glyph,
-            tint: tint,
-            selected: selected,
-            selecting: selecting,
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        entry.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: colors.onSurface,
-                        ),
-                      ),
-                    ),
-                    if (flagged)
-                      Padding(
-                        padding: const EdgeInsetsDirectional.only(start: 4),
-                        child: Icon(
-                          Icons.warning_amber_outlined,
-                          size: 16,
-                          color: colors.error,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l10n.compactRowDetails(sizeSlot, modified),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: chrome.secondaryText,
-                    fontFeatures: const [FontFeature.tabularFigures()],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
-    final fill = selected
-        ? Color.alphaBlend(
-            colors.primary.withValues(alpha: 0.14),
-            chrome.paneBackground,
-          )
-        : Colors.transparent;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      color: fill,
-      child: InkWell(
-        // The Semantics node above owns tap/long-press for assistive
-        // tech; the ink stays purely visual.
-        excludeFromSemantics: true,
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Padding(
-          padding: const EdgeInsetsDirectional.only(start: 16, end: 4),
-          child: Row(
-            children: [
-              Expanded(child: main),
-              // The ⋮ keeps its slot in selection mode (hidden, inert) so
-              // the text column never reflows when the mode flips.
-              Visibility.maintain(
-                visible: !selecting,
-                child: IconButton(
-                  key: ValueKey((CompactKey.rowMore, entry.path)),
-                  tooltip: l10n.compactRowActions(entry.name),
-                  onPressed: selecting ? null : onActions,
-                  icon: Icon(Icons.more_vert, color: chrome.secondaryText),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The row's 40 dp leading badge: the kind glyph on a tinted disc, which
-/// turns into the accent check while selected (Material's list-selection
-/// idiom) and into an empty ring for unselected rows in selection mode.
-class _KindBadge extends StatelessWidget {
-  const _KindBadge({
-    required this.glyph,
-    required this.tint,
-    required this.selected,
-    required this.selecting,
-  });
-
-  final IconData glyph;
-  final Color tint;
-  final bool selected;
-  final bool selecting;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final Widget face = selected
-        ? DecoratedBox(
-            key: const ValueKey(CompactKey.rowCheck),
-            decoration: BoxDecoration(
-              color: colors.primary,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.check, size: 22, color: colors.onPrimary),
-          )
-        : DecoratedBox(
-            key: ValueKey(glyph),
-            decoration: BoxDecoration(
-              color: tint.withValues(alpha: FamilyPalette.discWashAlpha),
-              shape: BoxShape.circle,
-              border: selecting
-                  ? Border.all(color: colors.outline, width: 1.5)
-                  : null,
-            ),
-            child: Icon(glyph, size: 22, color: tint),
-          );
-    return SizedBox.square(
-      dimension: 40,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 180),
-        switchInCurve: Curves.easeOutBack,
-        transitionBuilder: (child, animation) =>
-            ScaleTransition(scale: animation, child: child),
-        child: SizedBox.expand(key: face.key, child: face),
-      ),
-    );
-  }
 }
 
 /// 02 §2.5's Quick Select at touch size: the match field (a name

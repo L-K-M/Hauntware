@@ -100,6 +100,12 @@ ownership
     App wrappers retain localized chrome, windows, managed checkouts,
     upload/conflict routing, and native menu integration. The common surface
     includes Séance's line numbers and find/replace for all three apps.
+  - **Shared Ghost UI (2026-10-02, owner-directed).** Sidebar, menu and
+    leaf UI primitives, file-row rendering, columns and formatting move to
+    Planchette's `ghost_ui`, consumed at the same reviewed revision as the
+    shared editor/core. This supersedes copy-with-attribution for those
+    implementations. Hosts retain localization, theme resolution, selection,
+    gesture/drag payloads and file-operation services.
   - New pure-Dart packages in this repo: `poltergeist_core` (local VFS
     adapter, connection manager/pool, transfer queue, bookmark
     model/coordinator) and `poltergeist_sync` (scan/diff/plan/executor/
