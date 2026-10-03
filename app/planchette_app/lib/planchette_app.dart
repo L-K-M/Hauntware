@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:planchette_editor/planchette_editor.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostMenuDivider, GhostMenuItem;
+import 'package:planchette_editor/planchette_editor.dart'
+    hide GhostMenuDivider, GhostMenuItem;
 
 import 'services/app_settings.dart';
 import 'services/document_windows.dart';

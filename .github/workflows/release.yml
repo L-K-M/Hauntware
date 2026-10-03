@@ -46,7 +46,8 @@ env:
   FLUTTER_VERSION: '3.47.2'
 
 jobs:
-  # Gate every release on core, shared editor, and app analysis and tests.
+  # Gate every release on core, shared editor, shared UI, and app analysis
+  # and tests.
   # Platform builds below must all succeed before assets become public.
   test:
     name: Test (release gate)

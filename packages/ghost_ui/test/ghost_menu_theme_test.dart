@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:planchette_editor/planchette_editor.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 
 void main() {
   test('desktop menu panels remain rounded in square-corner themes', () {

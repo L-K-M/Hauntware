@@ -21,6 +21,8 @@ packages/
   ghost_desktop/          Flutter desktop window lifecycle (restore, track,
                           close) shared with Séance and Poltergeist; also
                           outside the workspace
+  ghost_ui/               shared leaf UI widgets/theme tokens; outside the
+                          workspace, no app or host dependencies
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).
@@ -46,8 +48,9 @@ dart pub get
 dart analyze packages/planchette_core
 dart test    packages/planchette_core
 
-# Shared Flutter package and standalone application
+# Shared Flutter packages and standalone application
 (cd packages/planchette_editor && flutter pub get && flutter analyze && flutter test)
+(cd packages/ghost_ui && flutter pub get && flutter analyze && flutter test)
 (cd app/planchette_app && flutter pub get && flutter analyze && flutter test)
 
 # Desktop app for this host, staged into dist/

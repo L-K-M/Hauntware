@@ -44,6 +44,34 @@ ownership boundaries and compatibility policies are documented in
 
 ## Verification
 
+### Shared ghost_ui package, 2026-10-02
+
+The leaf UI primitives Poltergeist and Séance forked are extracted into
+`packages/ghost_ui`: family hues, WCAG contrast math, middle-ellipsis text,
+top toasts, the sidebar kit, and the ghost menus that used to live in
+`planchette_editor` (re-exported there, so editor consumers are unchanged).
+The sidebar reads chrome through the new `SidebarThemeTokens`
+`ThemeExtension`; hosts install one on their `ThemeData` and the
+extension-less fallback keeps the old slate/Finder neutrals.
+
+Desktop and touch file rows, column headers/metrics, kind glyphs and file
+formatting share neutral `GhostFileItem` models. Host adapters retain their
+controllers, operation pipelines, localized strings and drag/drop payloads.
+
+Local Linux checks: `ghost_ui` analysis clean, 152 package tests passed:
+the Poltergeist sidebar widget suite ported wholesale (controls, semantics,
+keyboard traversal, control-click, touch sheets, densities) plus focused
+contrast, family-hue, toast, ellipsis, token and ghost-menu tests. Editor
+analysis clean and 402 tests passed through the compatibility export; app
+analysis clean, with 478 tests passed and two existing filesystem skips
+after integrating the reviewed multi-window changes.
+
+Review regressions failed first and now pass: host actions retain their
+semantics nodes without shifting metadata columns, ellipsis measures the
+inherited text style, keyboard-opened sidebar menus focus their first verb,
+column-header hover ink stays visible, and modified vertical arrows reach
+host shortcuts. Pointer-opened menus keep their existing focus behavior.
+
 ### Shared window lifecycle, 2026-10-02
 
 `packages/ghost_desktop` holds the desktop window lifecycle the three apps
@@ -55,7 +83,7 @@ adapters. Planchette's primary window persists its state through
 windows PR128 added keep their own placement and bypass the primary's
 intercepted close.
 
-Local Linux checks: `ghost_desktop` analysis clean and 65 tests passed;
+Local Linux checks: `ghost_desktop` analysis clean and 69 tests passed;
 app analysis clean with 491 tests passed and two existing
 case-sensitive-volume skips. Native launch, mixed-DPI and real-hardware
 restore smoke tests were not performed — the lifecycle is verified at the
