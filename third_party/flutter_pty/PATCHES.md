@@ -13,21 +13,24 @@ Séance needs `Pty.close()` for the local shell's tab teardown.
 All edits are marked `// Séance:` at the site.
 
 - `src/flutter_pty.h`, `src/flutter_pty_unix.c`, `src/flutter_pty_win.c`:
-  new `pty_close(PtyHandle *)` / `Pty.close()`. Unix: cancels and joins
-  the reader thread (its `read()` is a cancellation point — closing the
-  fd first would let a recycled fd number feed a stale read), closes the
-  master (the kernel hangs up the child's session — SIGHUP to the
-  foreground process group), destroys the mutex, frees the handle, and
-  joins the waitpid thread on a detached reaper so the calling isolate
-  never blocks on a still-running child. Windows mirrors it:
-  `ClosePseudoConsole` is the hangup, both pipe ends close, worker
-  threads are reaped on a helper thread.
+  new `pty_close(PtyHandle *)` / `Pty.close()`. Unix: writes a byte to a
+  per-handle self-pipe so the reader — which `poll()`s on the master and
+  the pipe together — exits on its own and is joined before the master
+  closes. That replaces `pthread_cancel`, which Bionic does not provide
+  (Android NDK compile failure), and keeps the ordering safe: closing
+  first could let a recycled fd number feed a stale read. Then the
+  master closes (the kernel hangs up the child's session — SIGHUP to the
+  foreground process group), both pipe ends close, the mutex is
+  destroyed, the handle is freed, and the waitpid thread is joined on a
+  detached reaper so the calling isolate never blocks on a still-running
+  child. Windows mirrors it: `ClosePseudoConsole` is the hangup, both
+  pipe ends close, worker threads are reaped on a helper thread.
 - `src/flutter_pty_unix.c`, `src/flutter_pty_win.c`: worker-thread
   `*Options` blocks are freed by the thread that owns them; worker
   threads/handles are stored on the handle so they can be reaped. On unix
-  the reader frees through `pthread_cleanup_push(free, …)` — a tail `free`
-  would be bypassed by `pthread_cancel` unwinding, which is exactly the
-  path `pty_close` takes.
+  the reader now exits its loop on the stop byte, an `EIO`/`EOF` from a
+  dead master, or any `POLLERR`/`POLLNVAL` — the tail `free` covers every
+  remaining exit path since no cancellation path exists.
 - `src/forkpty.c`: the parent's copy of the slave fd is closed when the
   caller doesn't ask for it — upstream leaked one fd per spawn.
 - `src/flutter_pty_unix.c`: a failed `execvp` in the child now `_exit(127)`s
@@ -56,9 +59,9 @@ All edits are marked `// Séance:` at the site.
 ## Deliberately not changed
 
 - `ackRead` mode teardown: an ack-mode reader can park on the shared
-  mutex outside any cancellation point, so `pty_close` under `ackRead`
-  hangs up but does not join/free. Séance never enables `ackRead`; doing
-  the right thing there needs a different protocol upstream.
+  mutex where `poll()` never runs, so `pty_close` under `ackRead` hangs
+  up but does not join/free. Séance never enables `ackRead`; doing the
+  right thing there needs a different protocol upstream.
 - The Windows child-process attributes/thread-handle bookkeeping is
   unchanged beyond what `pty_close` needs; the app refuses local shells
   on Windows regardless.
