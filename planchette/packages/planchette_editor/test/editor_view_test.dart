@@ -1,0 +1,237 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_editor/planchette_editor.dart';
+
+Widget app(
+  EditorController c, {
+  bool active = true,
+  bool locked = false,
+  EditorStrings strings = const EditorStrings(),
+}) => MaterialApp(
+  home: Scaffold(
+    body: PlanchetteEditor(
+      controller: c,
+      isActive: active,
+      editingLocked: locked,
+      strings: strings,
+    ),
+  ),
+);
+
+class TestStrings extends EditorStrings {
+  const TestStrings();
+  @override
+  String get replace => 'Remplacer';
+  @override
+  String get replaceAll => 'Tout remplacer';
+}
+
+void main() {
+  testWidgets(
+    'shared search, replacement, gutter and statistics work together',
+    (tester) async {
+      final c = EditorController(
+        displayPath: '.env',
+        initialText: 'A=cat\nB=CAT\n',
+      );
+      addTearDown(c.dispose);
+      await tester.pumpWidget(app(c, strings: const TestStrings()));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('editor-line-gutter')), findsOneWidget);
+      expect(find.textContaining('3 lines'), findsOneWidget);
+      c.openSearch(replace: true);
+      await tester.pump();
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (w) => w is TextField && w.controller == c.search,
+        ),
+        'cat',
+      );
+      await tester.pump();
+      expect(find.text('1/2'), findsOneWidget);
+      await tester.enterText(
+        find.byWidgetPredicate(
+          (w) => w is TextField && w.controller == c.replacement,
+        ),
+        'dog',
+      );
+      await tester.tap(find.text('Tout remplacer'));
+      await tester.pump();
+      expect(c.text.text, 'A=dog\nB=dog\n');
+      expect(find.text('Remplacer'), findsOneWidget);
+    },
+  );
+  testWidgets('replacement can be undone and redone in the document', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'test', initialText: 'cat cat');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump(const Duration(milliseconds: 600));
+    c.openSearch(replace: true);
+    c.search.text = 'cat';
+    c.replacement.text = 'dog';
+    await tester.pump();
+    c.replaceAll();
+    await tester.pump(const Duration(milliseconds: 600));
+    c.closeSearch();
+    await tester.pump();
+    c.undoController.undo();
+    await tester.pump();
+    expect(c.text.text, 'cat cat');
+    c.undoController.redo();
+    await tester.pump();
+    expect(c.text.text, 'dog dog');
+  });
+  testWidgets('IME composing text retains framework rendering', (tester) async {
+    final c = EditorController(displayPath: '.env', initialText: 'KEY=value');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    c.text.value = const TextEditingValue(
+      text: 'KEY=文字',
+      selection: TextSelection.collapsed(offset: 6),
+      composing: TextRange(start: 4, end: 6),
+    );
+    await tester.pump();
+    final context = tester.element(find.byType(PlanchetteEditor));
+    final span = c.text.buildTextSpan(context: context, withComposing: true);
+    expect(span.toPlainText(), 'KEY=文字');
+    expect(
+      span.children!.whereType<TextSpan>().any(
+        (s) => s.style?.decoration == TextDecoration.underline,
+      ),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('inactive editor releases focus', (tester) async {
+    final c = EditorController(displayPath: 'test', initialText: 'text');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    expect(c.editorFocus.hasFocus, isTrue);
+    await tester.pumpWidget(app(c, active: false));
+    await tester.pump();
+    expect(c.editorFocus.hasFocus, isFalse);
+  });
+  testWidgets('reparenting a controller between host layouts paints safely', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'test', initialText: 'one\ntwo\n');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              const Text('Host chrome'),
+              Expanded(child: PlanchetteEditor(controller: c)),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(c.scroll.positions.length, 1);
+    expect(c.text.text, 'one\ntwo\n');
+  });
+  testWidgets('locked editor blocks native undo', (tester) async {
+    final c = EditorController(displayPath: 'test', initialText: 'before');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.enterText(
+      find.byKey(const ValueKey('planchette.document')),
+      'after',
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpWidget(app(c, locked: true));
+    Actions.maybeInvoke(
+      c.editorFocus.context!,
+      const UndoTextIntent(SelectionChangedCause.keyboard),
+    );
+    await tester.pump();
+    expect(c.text.text, 'after');
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('planchette.document')))
+          .readOnly,
+      isTrue,
+    );
+  });
+  testWidgets('the find bar says when case folding limited the match', (
+    tester,
+  ) async {
+    final c = EditorController(
+      displayPath: 'notes.txt',
+      initialText: 'Die Stra\u00dfe ist breit',
+      caseFolder: (value) =>
+          value.replaceAll('\u00df', 'ss').replaceAll('\u1e9e', 'ss'),
+    );
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+
+    c.openSearch();
+    c.search.text = 'STRASSE';
+    await tester.pumpAndSettle();
+    expect(c.caseFoldingLimited, isTrue);
+    expect(find.byIcon(Icons.info_outline), findsOneWidget);
+    expect(
+      find.byTooltip(
+        'This text cannot be compared without case, so matching '
+        'was exact.',
+      ),
+      findsOneWidget,
+    );
+
+    // Match case is on, so the search is exact by request and the note goes.
+    c.toggleCaseSensitive();
+    await tester.pumpAndSettle();
+    expect(c.caseFoldingLimited, isFalse);
+    expect(find.byIcon(Icons.info_outline), findsNothing);
+  });
+
+  testWidgets('restoreFocus returns to the field that last had focus', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.txt', initialText: 'text');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+
+    c.openSearch();
+    await tester.pump();
+    c.searchFocus.unfocus();
+    await tester.pump();
+    c.restoreFocus();
+    await tester.pump();
+    expect(c.searchFocus.hasFocus, isTrue);
+
+    // Closing find forgets it, so the document is the target again.
+    c.closeSearch();
+    await tester.pump();
+    c.editorFocus.unfocus();
+    await tester.pump();
+    c.restoreFocus();
+    await tester.pump();
+    expect(c.editorFocus.hasFocus, isTrue);
+  });
+
+  testWidgets('restoreFocus is harmless once the editor is disposed', (
+    tester,
+  ) async {
+    final c = EditorController(displayPath: 'a.txt', initialText: 'text');
+    await tester.pumpWidget(app(c));
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    // The request is deferred a microtask, which can outlive the tab.
+    c.restoreFocus();
+    c.dispose();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
+}

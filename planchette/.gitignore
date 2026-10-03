@@ -1,0 +1,13 @@
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+dist/
+pubspec_overrides.yaml
+.DS_Store
+.idea/
+*.iml
+.vscode/
+app/planchette_app/.flutter-plugins
+app/planchette_app/.flutter-plugins-dependencies

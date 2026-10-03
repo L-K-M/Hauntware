@@ -1,0 +1,1241 @@
+import 'dart:math' as math;
+
+import 'package:planchette_core/planchette_core.dart';
+import 'package:test/test.dart';
+
+/// A changed run's new buffer with its selection marked: `[` is the base
+/// and `]` the extent, or `|` a caret. `a[bc]d` selects `bc` forwards.
+String marked(LineEdit edit) {
+  final marks = edit.selectionBase == edit.selectionExtent
+      ? {edit.selectionBase: '|'}
+      : {edit.selectionBase: '[', edit.selectionExtent: ']'};
+  final out = StringBuffer();
+  for (var i = 0; i <= edit.text.length; i++) {
+    out.write(marks[i] ?? '');
+    if (i < edit.text.length) out.write(edit.text[i]);
+  }
+  return out.toString();
+}
+
+/// A summary of a run's outcome: the marked buffer for a change, or the
+/// kind of non-result.
+String describe(TextToolOutcome outcome) => switch (outcome) {
+  TextToolChanged(:final edit, :final indentation) =>
+    '${marked(edit)}${indentation != null ? ' <$indentation>' : ''}',
+  TextToolUnchanged(:final indentation) =>
+    'unchanged${indentation != null ? ' <$indentation>' : ''}',
+  TextToolRefused(:final reason) => 'refused:${reason.name}',
+};
+
+/// Runs the catalog tool [id] on a marked buffer (see [marked]) and
+/// describes the outcome. Options not listed take their declared defaults;
+/// [indentation] and [preference] feed the document context as the
+/// controller would.
+String run(
+  String id,
+  String input, {
+  Map<String, Object?> options = const {},
+  String path = 'test.txt',
+  Indentation indentation = const Indentation.spaces(4),
+  Indentation? preference,
+  String Function(String) fold = _lowercase,
+  DateTime? now,
+  math.Random? random,
+}) {
+  final caretMark = input.indexOf('|');
+  final int base;
+  final int extent;
+  final String text;
+  if (caretMark >= 0) {
+    text = input.replaceFirst('|', '');
+    base = extent = caretMark;
+  } else {
+    final open = input.indexOf('[');
+    final close = input.indexOf(']');
+    text = input.replaceFirst('[', '').replaceFirst(']', '');
+    base = open < close ? open : open - 1;
+    extent = close < open ? close : close - 1;
+  }
+  final tool = textToolById(id)!;
+  final resolved = resolveTextToolRange(tool, text, base, extent);
+  if (resolved.refusal != null) {
+    return describe(TextToolRefused(resolved.refusal!));
+  }
+  for (final key in options.keys) {
+    assert(
+      tool.options.any((option) => option.id == key),
+      'unknown option "$key" for tool "$id"',
+    );
+  }
+  final merged = {
+    for (final option in tool.options)
+      option.id: options[option.id] ?? option.defaultValue,
+  };
+  return describe(
+    tool.run(
+      TextToolRun(
+        text: text,
+        base: resolved.base,
+        extent: resolved.extent,
+        caret: resolved.caret,
+        ranOn: resolved.ranOn,
+        options: merged,
+        context: TextToolContext(
+          fold: fold,
+          indentation: indentation,
+          indentationPreference: preference,
+          displayPath: path,
+          now: now == null ? null : () => now,
+          random: random,
+        ),
+      ),
+    ),
+  );
+}
+
+String _lowercase(String value) => value.toLowerCase();
+
+void main() {
+  group('sortLines', () {
+    test('sorts the caret document on code points', () {
+      // The caret keeps its offset: 'a' moved, the caret did not.
+      expect(run('sortLines', 'b\na|\nc'), 'a\nb|\nc');
+    });
+
+    test('keeps a caret inside the sorted block', () {
+      expect(run('sortLines', 'b|b\na'), 'a|\nbb');
+    });
+
+    test('sorts only the touched lines and reselects the result', () {
+      expect(run('sortLines', 'x[b\nd\nc]y\nz'), '[cy\nd\nxb]\nz');
+      expect(run('sortLines', 'x]b\nd\nc[y\nz'), ']cy\nd\nxb[\nz');
+    });
+
+    test('is case-insensitive by default and stable on folded ties', () {
+      expect(run('sortLines', 'B\nb\na|'), 'a\nB\nb|');
+    });
+
+    test('honours the order and case options', () {
+      expect(
+        run(
+          'sortLines',
+          'B\nb\na|',
+          options: {'order': 'descending', 'ignoreCase': false},
+        ),
+        'b\na\nB|',
+      );
+      // Folded ties keep the original order even descending.
+      expect(
+        run('sortLines', 'B\nb\na|', options: {'order': 'descending'}),
+        'unchanged',
+      );
+      expect(
+        run('sortLines', 'b\nA|', options: {'ignoreCase': false}),
+        'A\nb|',
+      );
+    });
+
+    test('compares digit runs by value when asked', () {
+      expect(
+        run('sortLines', 'file10\nfile2\nfile1|'),
+        'file1\nfile10\nfile2|',
+      );
+      expect(
+        run(
+          'sortLines',
+          'file10\nfile2\nfile1|',
+          options: {'numbersByValue': true},
+        ),
+        'file1\nfile2\nfile10|',
+      );
+    });
+
+    test('can lead with line length', () {
+      expect(
+        run('sortLines', 'ccc\na\nbb|', options: {'byLength': true}),
+        'a\nbb\nccc|',
+      );
+    });
+
+    test('ignores leading whitespace when asked', () {
+      expect(
+        run('sortLines', '  b\na|', options: {'ignoreLeadingWhitespace': true}),
+        'a\n  b|',
+      );
+      // Equal keys keep the original order — the indent stays.
+      expect(
+        run(
+          'sortLines',
+          '  b\n\tb\na|',
+          options: {'ignoreLeadingWhitespace': true},
+        ),
+        'a\n  b\n\tb|',
+      );
+    });
+
+    test('leaves the first line in place when asked', () {
+      expect(
+        run('sortLines', 'c\nb\na|', options: {'keepFirstLine': true}),
+        'c\na\nb|',
+      );
+    });
+
+    test('leaves separators in their slots', () {
+      expect(run('sortLines', 'b\r\na\r\nc|'), 'a\r\nb\r\nc|');
+      expect(run('sortLines', 'b\na|'), 'a\nb|');
+    });
+
+    test('reports nothing on a sorted or empty buffer', () {
+      expect(run('sortLines', 'a\nb|'), 'unchanged');
+      expect(run('sortLines', '|'), 'unchanged');
+      expect(run('sortLines', 'a\na|'), 'unchanged');
+    });
+  });
+
+  group('removeDuplicateLines', () {
+    test('drops later copies, keeping the first', () {
+      expect(run('removeDuplicateLines', 'a\nb\na|'), 'a\nb|');
+      expect(run('removeDuplicateLines', 'a\nb\na\n|'), 'a\nb\n|');
+    });
+
+    test('keeps blank lines by default', () {
+      expect(run('removeDuplicateLines', 'a\n\n\nb|'), 'unchanged');
+      expect(
+        run(
+          'removeDuplicateLines',
+          'a\n\n\nb|',
+          options: {'keepBlankLines': false},
+        ),
+        'a\n\nb|',
+      );
+    });
+
+    test('keeps CRLF endings', () {
+      expect(run('removeDuplicateLines', 'a\r\nb\r\na|'), 'a\r\nb|');
+    });
+
+    test('adjacent only collapses runs, not scattered copies', () {
+      expect(
+        run(
+          'removeDuplicateLines',
+          'a\na\nb\na|',
+          options: {'adjacentOnly': true},
+        ),
+        'a\nb\na|',
+      );
+      expect(run('removeDuplicateLines', 'a\na\nb\na|'), 'a\nb|');
+    });
+
+    test('compares case-insensitively and whitespace-free when asked', () {
+      expect(
+        run('removeDuplicateLines', 'A\na|', options: {'ignoreCase': true}),
+        'A|',
+      );
+      expect(
+        run(
+          'removeDuplicateLines',
+          'a\n  a \t|',
+          options: {'ignoreSurroundingWhitespace': true},
+        ),
+        'a|',
+      );
+    });
+
+    test('removeEveryCopy drops the first copy too', () {
+      expect(
+        run(
+          'removeDuplicateLines',
+          'a\nb\na|',
+          options: {'removeEveryCopy': true},
+        ),
+        'b|',
+      );
+    });
+
+    test('maps a caret through removed lines', () {
+      expect(run('removeDuplicateLines', 'a\nb\na|'), 'a\nb|');
+      expect(run('removeDuplicateLines', 'a|\nb\na'), 'a|\nb');
+    });
+  });
+
+  group('removeBlankLines', () {
+    test('drops empty and whitespace-only lines', () {
+      expect(run('removeBlankLines', 'a\n\nb|'), 'a\nb|');
+      expect(run('removeBlankLines', 'a\n  \t\nb|'), 'a\nb|');
+    });
+
+    test(
+      'a trailing newline ends the file rather than starting a blank line',
+      () {
+        expect(run('removeBlankLines', 'a\nb\n|'), 'unchanged');
+        expect(run('removeBlankLines', 'a\nb\n\n|'), 'a\nb\n|');
+      },
+    );
+
+    test('leading blank lines come off whole', () {
+      expect(run('removeBlankLines', '\n\na|'), 'a|');
+    });
+
+    test('an all-blank buffer empties; an empty one was already gone', () {
+      expect(run('removeBlankLines', '\n\n|'), '|');
+      expect(run('removeBlankLines', '|'), 'unchanged');
+    });
+
+    test('touches only the selected lines', () {
+      expect(run('removeBlankLines', 'x[a\n\nb]y\n\nz'), 'x[a\nb]y\n\nz');
+    });
+  });
+
+  group('trimTrailingWhitespace', () {
+    test('drops spaces and tabs at each line end', () {
+      expect(run('trimTrailingWhitespace', 'a  \nb\t\t\nc|'), 'a\nb\nc|');
+    });
+
+    test('keeps CRLF breaks', () {
+      expect(run('trimTrailingWhitespace', 'a \r\nb|'), 'a\r\nb|');
+    });
+
+    test('a caret inside trailing whitespace lands at the line end', () {
+      expect(run('trimTrailingWhitespace', 'a  |\nb'), 'a|\nb');
+    });
+
+    test('reports nothing when nothing trails', () {
+      expect(run('trimTrailingWhitespace', 'a\nb|'), 'unchanged');
+    });
+  });
+
+  group('convertIndentationToSpaces', () {
+    test('expands leading tabs to columns and adopts the setting', () {
+      expect(
+        run(
+          'convertIndentationToSpaces',
+          '\ta\n\t\tb|',
+          indentation: const Indentation.tabs(),
+        ),
+        '    a\n        b| <spaces(4)>',
+      );
+    });
+
+    test('prefers the host width for a tab-indented file', () {
+      expect(
+        run(
+          'convertIndentationToSpaces',
+          '\ta|',
+          indentation: const Indentation.tabs(),
+          preference: const Indentation.spaces(2),
+        ),
+        '  a| <spaces(2)>',
+      );
+    });
+
+    test('keeps a spaces file and still adopts the setting', () {
+      expect(
+        run('convertIndentationToSpaces', '  a|'),
+        'unchanged <spaces(4)>',
+      );
+    });
+
+    test('refuses where the format requires tabs', () {
+      expect(
+        run('convertIndentationToSpaces', '\ta|', path: 'Makefile'),
+        'refused:requiresTabs',
+      );
+      expect(
+        run('convertIndentationToSpaces', '\ta|', path: '/src/main.go'),
+        'refused:requiresTabs',
+      );
+    });
+
+    test('converts only the selected lines', () {
+      expect(
+        run(
+          'convertIndentationToSpaces',
+          '[\ta]\n\tb',
+          indentation: const Indentation.tabs(),
+        ),
+        '[    a]\n\tb <spaces(4)>',
+      );
+    });
+  });
+
+  group('convertIndentationToTabs', () {
+    test('converts level-width runs and keeps remainder spaces', () {
+      expect(
+        run('convertIndentationToTabs', '    a\n  b|'),
+        '\ta\n  b| <tabs>',
+      );
+    });
+
+    test('is a no-op on a tabs file', () {
+      expect(
+        run(
+          'convertIndentationToTabs',
+          '\ta|',
+          indentation: const Indentation.tabs(),
+        ),
+        'unchanged <tabs>',
+      );
+    });
+  });
+
+  group('uppercase/lowercase', () {
+    test('acts on the word the caret is in, keeping the caret', () {
+      expect(run('uppercase', 'he|llo'), 'HE|LLO');
+      expect(run('lowercase', 'HE|LLO'), 'he|llo');
+    });
+
+    test('the word before the caret wins over the one after', () {
+      expect(run('uppercase', 'hi| there'), 'HI| there');
+      expect(run('uppercase', 'a |b'), 'a |B');
+      expect(run('uppercase', '|hi there'), '|HI there');
+    });
+
+    test('refuses where no word touches the caret', () {
+      expect(run('uppercase', 'a | b'), 'refused:noWordAtCaret');
+      expect(run('uppercase', '|'), 'refused:noWordAtCaret');
+    });
+
+    test('acts on a selection and keeps it', () {
+      expect(run('uppercase', 'a [b c]d'), 'a [B C]d');
+      expect(run('lowercase', 'a ]B C[d'), 'a ]b c[d');
+    });
+
+    test('maps accented and astral text without changing length', () {
+      expect(run('uppercase', 'héllo| 😀'), 'HÉLLO| 😀');
+      // Dart's own mapping keeps ß lowercase-sharp — it does not grow to
+      // ẞ, and length never changes either way.
+      expect(run('uppercase', 'ß|'), 'unchanged');
+    });
+  });
+
+  group('straightenQuotes', () {
+    test('maps curly singles and doubles to ASCII', () {
+      expect(
+        run('straightenQuotes', '\u201cfoo\u201d \u2018bar\u2019|'),
+        '"foo" \'bar\'|',
+      );
+    });
+
+    test('covers the low primes too', () {
+      expect(
+        run('straightenQuotes', '\u201ax\u201b \u201ey\u201f|'),
+        '\'x\' "y"|',
+      );
+    });
+
+    test('touches only a selection when there is one', () {
+      expect(
+        run('straightenQuotes', '[\u201ca\u201d] \u201cb'),
+        '["a"] \u201cb',
+      );
+    });
+
+    test('reports nothing without curly quotes', () {
+      expect(run('straightenQuotes', '"already"|'), 'unchanged');
+    });
+  });
+
+  group('zapGremlins', () {
+    test('deletes C0 controls except the text whitespace', () {
+      expect(run('zapGremlins', 'a\x07b\tc\nd\re|'), 'ab\tc\nd\re|');
+    });
+
+    test('deletes DEL and C1 controls', () {
+      expect(run('zapGremlins', 'a\x7fb\x85c|'), 'abc|');
+    });
+
+    test('deletes invisible characters but keeps joiners', () {
+      expect(run('zapGremlins', 'a\xadb\u200bc\u2060d\ufeffe|'), 'abcde|');
+      expect(run('zapGremlins', 'a\u200cb\u200dc|'), 'unchanged');
+    });
+
+    test('deletes bidi controls', () {
+      expect(run('zapGremlins', 'a\u202eb\u2066c|'), 'abc|');
+    });
+
+    test('damaged characters are opt-in', () {
+      expect(run('zapGremlins', 'a\ufffdb|'), 'unchanged');
+      expect(
+        run('zapGremlins', 'a\ufffdb|', options: {'damaged': true}),
+        'ab|',
+      );
+      expect(
+        run('zapGremlins', 'a\ud800b|', options: {'damaged': true}),
+        'ab|',
+      );
+    });
+
+    test('non-ASCII is opt-in and covers gremlins too', () {
+      expect(run('zapGremlins', 'héllo|'), 'unchanged');
+      expect(
+        run('zapGremlins', 'héllo|', options: {'nonAscii': true}),
+        'hllo|',
+      );
+      expect(
+        run(
+          'zapGremlins',
+          'a\x85é|',
+          options: {'nonAscii': true, 'controls': false},
+        ),
+        'a|',
+      );
+    });
+
+    test('escapes, replaces, or entitizes on request', () {
+      expect(
+        run('zapGremlins', 'a\x07b|', options: {'action': 'escape'}),
+        'a\\u{7}b|',
+      );
+      expect(
+        run(
+          'zapGremlins',
+          'a\x07b|',
+          options: {'action': 'replace', 'character': '!'},
+        ),
+        'a!b|',
+      );
+      expect(
+        run('zapGremlins', 'a\x07b|', options: {'action': 'entity'}),
+        'a&#x7;b|',
+      );
+    });
+
+    test('leaves astral characters alone unless non-ASCII', () {
+      expect(run('zapGremlins', 'a😀b|'), 'unchanged');
+      expect(run('zapGremlins', 'a😀b|', options: {'nonAscii': true}), 'ab|');
+    });
+  });
+
+  group('prefixSuffixLines', () {
+    test('inserts a prefix on every line by default', () {
+      expect(
+        run('prefixSuffixLines', '|b\na', options: {'text': '> '}),
+        '|> b\n> a',
+      );
+    });
+
+    test('inserts a suffix, skipping blank lines by default', () {
+      expect(
+        run(
+          'prefixSuffixLines',
+          '|a\n\nb',
+          options: {'where': 'suffix', 'text': ';'},
+        ),
+        '|a;\n\nb;',
+      );
+      expect(
+        run(
+          'prefixSuffixLines',
+          '|a\n\nb',
+          options: {'where': 'suffix', 'text': ';', 'skipBlankLines': false},
+        ),
+        '|a;\n;\nb;',
+      );
+    });
+
+    test('remove strips the affix only where it appears', () {
+      expect(
+        run(
+          'prefixSuffixLines',
+          '|> a\nb\n> c',
+          options: {'mode': 'remove', 'text': '> '},
+        ),
+        '|a\nb\nc',
+      );
+      expect(
+        run(
+          'prefixSuffixLines',
+          '|a;\nb\nc;',
+          options: {'mode': 'remove', 'where': 'suffix', 'text': ';'},
+        ),
+        '|a\nb\nc',
+      );
+    });
+
+    test('an empty affix changes nothing', () {
+      expect(run('prefixSuffixLines', '|a\nb'), 'unchanged');
+    });
+  });
+
+  group('numberLines', () {
+    test('adds numbers with the default separator', () {
+      expect(run('numberLines', '|b\na'), '|1. b\n2. a');
+    });
+
+    test('honours start, step and padding', () {
+      expect(
+        run(
+          'numberLines',
+          '|a\nb\nc',
+          options: {'start': 8, 'step': 2, 'padding': 'zeros'},
+        ),
+        '|08. a\n10. b\n12. c',
+      );
+      expect(
+        run('numberLines', '|a\nb\nc', options: {'padding': 'spaces'}),
+        '|1. a\n2. b\n3. c',
+      );
+    });
+
+    test('pads to the widest number', () {
+      expect(
+        run(
+          'numberLines',
+          '|a\nb\nc\nd\ne\nf\ng\nh\ni\nj',
+          options: {'padding': 'spaces'},
+        ),
+        '| 1. a\n 2. b\n 3. c\n 4. d\n 5. e'
+        '\n 6. f\n 7. g\n 8. h\n 9. i\n10. j',
+      );
+    });
+
+    test('pads a negative start without wedging the sign', () {
+      // start's declared minimum keeps negatives out of the UI; a direct
+      // call still gets sane output.
+      expect(
+        run(
+          'numberLines',
+          '|a\nb\nc',
+          options: {'start': -10, 'padding': 'zeros'},
+        ),
+        '|-10. a\n-09. b\n-08. c',
+      );
+      expect(
+        run(
+          'numberLines',
+          '|a\nb\nc',
+          options: {'start': -1, 'padding': 'spaces'},
+        ),
+        '|-1. a\n 0. b\n 1. c',
+      );
+    });
+
+    test('removes numbers followed by the separator', () {
+      expect(
+        run('numberLines', '|1. a\n2. b\n3x', options: {'mode': 'remove'}),
+        '|a\nb\n3x',
+      );
+      expect(
+        run(
+          'numberLines',
+          '|  4) a\n2020 report',
+          options: {'mode': 'remove', 'separator': ') '},
+        ),
+        '|a\n2020 report',
+      );
+    });
+  });
+
+  group('joinLinesWith', () {
+    test('needs a selection', () {
+      expect(run('joinLinesWith', '|a\nb'), 'refused:nothingSelected');
+    });
+
+    test('joins the touched lines with the separator', () {
+      expect(run('joinLinesWith', '[a\nb\nc]'), '[a, b, c]');
+    });
+
+    test('trims and skips blanks by default', () {
+      expect(run('joinLinesWith', '[  a \n\n  b]'), '[a, b]');
+      expect(
+        run(
+          'joinLinesWith',
+          '[  a \n\n  b]',
+          options: {'trim': false, 'skipBlankLines': false},
+        ),
+        '[  a , ,   b]',
+      );
+    });
+
+    test('one line is nothing to join', () {
+      expect(run('joinLinesWith', '[a]b'), 'unchanged');
+    });
+  });
+
+  group('reverseLines', () {
+    test('reverses the caret document', () {
+      expect(run('reverseLines', 'c\nb\na|'), 'a\nb\nc|');
+    });
+
+    test('keeps each line ending in its slot', () {
+      expect(run('reverseLines', 'a\r\nb\nc|'), 'c\r\nb\na|');
+    });
+
+    test('reverses only the touched lines', () {
+      expect(run('reverseLines', 'x[c\na\nb]y\nz'), '[by\na\nxc]\nz');
+    });
+
+    test('a single line is unchanged', () {
+      expect(run('reverseLines', 'a|'), 'unchanged');
+    });
+  });
+
+  group('shuffleLines', () {
+    test('permutes the lines deterministically for a given seed', () {
+      const input = 'a\nb\nc\nd\ne\nf\ng\nh|';
+      final first = run('shuffleLines', input, random: math.Random(7));
+      final second = run('shuffleLines', input, random: math.Random(7));
+      expect(first, second);
+      expect(first, isNot(input));
+      // A permutation: the sorted lines are untouched.
+      final lines = first.replaceAll('|', '').split('\n')..sort();
+      expect(lines.join('\n'), 'a\nb\nc\nd\ne\nf\ng\nh');
+    });
+
+    test('a single line is unchanged', () {
+      expect(run('shuffleLines', 'a|', random: math.Random(1)), 'unchanged');
+    });
+  });
+
+  group('collapseBlankLines', () {
+    test('collapses a run to one blank line', () {
+      expect(run('collapseBlankLines', 'a\n\n\n\nb|'), 'a\n\nb|');
+    });
+
+    test('leaves single blank lines alone', () {
+      expect(run('collapseBlankLines', 'a\n\nb\nc|'), 'unchanged');
+    });
+
+    test('collapses whitespace-only lines too', () {
+      expect(run('collapseBlankLines', 'a\n\n  \n\t\nb|'), 'a\n\nb|');
+    });
+
+    test('collapses runs at the buffer edges', () {
+      expect(run('collapseBlankLines', '|\n\na\n\n\n'), '|\na\n\n');
+    });
+  });
+
+  group('titleCase', () {
+    test('capitalizes each whitespace word', () {
+      expect(run('titleCase', 'x[the quick BROWN]y'), 'x[The Quick Brown]y');
+    });
+
+    test('title-cases the word at the caret', () {
+      expect(run('titleCase', 'a hELLO| b'), 'a Hello| b');
+    });
+  });
+
+  group('sentenceCase', () {
+    test('capitalizes the first letter of each sentence', () {
+      expect(
+        run('sentenceCase', '[tHE qUICK. bROWN FOX! jUMPS]'),
+        '[The quick. Brown fox! Jumps]',
+      );
+    });
+  });
+
+  group('identifier cases', () {
+    test('camelCase splits separators and humps', () {
+      expect(run('camelCase', '[HELLO_WORLD foo-bar]'), '[helloWorldFooBar]');
+    });
+
+    test('pascalCase capitalizes every word', () {
+      expect(run('pascalCase', '[helloWorld foo]'), '[HelloWorldFoo]');
+    });
+
+    test('snakeCase splits camel humps and acronyms', () {
+      expect(run('snakeCase', '[XMLHttpRequest]'), '[xml_http_request]');
+      expect(run('snakeCase', '[hello-world foo]'), '[hello_world_foo]');
+    });
+
+    test('kebabCase joins with dashes', () {
+      expect(run('kebabCase', '[XMLHttpRequest]'), '[xml-http-request]');
+    });
+
+    test('constantCase shouts', () {
+      expect(run('constantCase', '[fooBar2 baz]'), '[FOO_BAR2_BAZ]');
+    });
+
+    test('converts the word at the caret', () {
+      expect(run('snakeCase', 'x sortLines| y'), 'x sort_lines| y');
+    });
+
+    test('already-cased text is unchanged', () {
+      expect(run('camelCase', '[fooBar]'), 'unchanged');
+    });
+  });
+
+  group('trimLeadingWhitespace', () {
+    test('strips spaces and tabs at line starts', () {
+      expect(run('trimLeadingWhitespace', '  a\n\tb\nc|'), 'a\nb\nc|');
+    });
+
+    test('a whitespace-only line becomes empty', () {
+      expect(run('trimLeadingWhitespace', 'a\n   \nb|'), 'a\n\nb|');
+    });
+
+    test('nothing to trim is unchanged', () {
+      expect(run('trimLeadingWhitespace', 'a\nb|'), 'unchanged');
+    });
+  });
+
+  group('normalizeSpaces', () {
+    test('folds Unicode spaces to plain spaces', () {
+      expect(run('normalizeSpaces', 'a b c d|'), 'a b c d|');
+    });
+
+    test('leaves tabs, newlines and ordinary spaces alone', () {
+      expect(run('normalizeSpaces', 'a\tb\nc|'), 'unchanged');
+    });
+
+    test('leaves line separators alone', () {
+      expect(run('normalizeSpaces', 'a b|c'), 'unchanged');
+    });
+  });
+
+  group('removeAnsiEscapes', () {
+    test('strips CSI color sequences', () {
+      expect(run('removeAnsiEscapes', 'a\x1B[31mb\x1B[0mc|'), 'abc|');
+    });
+
+    test('strips OSC hyperlinks', () {
+      expect(
+        run('removeAnsiEscapes', '\x1B]8;;https://x\x07link\x1B]8;;\x07|'),
+        'link|',
+      );
+    });
+
+    test('strips other escapes and keeps plain text', () {
+      expect(run('removeAnsiEscapes', 'a\x1B(B\x1Bcb|'), 'ab|');
+    });
+
+    test('no escapes is unchanged', () {
+      expect(run('removeAnsiEscapes', 'plain|'), 'unchanged');
+    });
+  });
+
+  group('unwrapParagraphs', () {
+    test('joins the paragraph at the caret', () {
+      expect(
+        run('unwrapParagraphs', 'one\ntwo| words\n\nthree\nfour'),
+        'one two| words\n\nthree\nfour',
+      );
+    });
+
+    test('a selection unwraps every touched paragraph', () {
+      expect(
+        run('unwrapParagraphs', '[one\ntwo\n\nthree\nfour]'),
+        '[one two\n\nthree four]',
+      );
+    });
+
+    test('trims each line when joining', () {
+      expect(run('unwrapParagraphs', 'one  |\n   two'), 'one t|wo');
+    });
+
+    test('a single-line paragraph is unchanged', () {
+      expect(run('unwrapParagraphs', 'one|\n\ntwo'), 'unchanged');
+    });
+  });
+
+  group('urlEncode', () {
+    test('percent-encodes reserved and non-ASCII characters', () {
+      expect(run('urlEncode', '[a b&c=é]'), '[a%20b%26c%3D%C3%A9]');
+    });
+
+    test('leaves unreserved characters', () {
+      expect(run('urlEncode', '[abc-_.~]'), 'unchanged');
+    });
+  });
+
+  group('urlDecode', () {
+    test('decodes percent escapes including UTF-8', () {
+      expect(run('urlDecode', '[a%20b%26c%3D%C3%A9]'), '[a b&c=é]');
+    });
+
+    test('leaves malformed escapes literal', () {
+      expect(run('urlDecode', '[a%zb%]'), 'unchanged');
+      expect(run('urlDecode', '[a%20%zzb]'), '[a %zzb]');
+    });
+
+    test('leaves escapes that are not UTF-8 literal', () {
+      expect(run('urlDecode', '[%FF]'), 'unchanged');
+    });
+
+    test('keeps + literal', () {
+      expect(run('urlDecode', '[a+b]'), 'unchanged');
+    });
+  });
+
+  group('base64Encode', () {
+    test('encodes the selection', () {
+      expect(run('base64Encode', '[Hi]'), '[SGk=]');
+      expect(run('base64Encode', '[é]'), '[w6k=]');
+    });
+  });
+
+  group('base64Decode', () {
+    test('decodes the selection', () {
+      expect(run('base64Decode', '[SGVsbG8=]'), '[Hello]');
+    });
+
+    test('ignores whitespace inside the selection', () {
+      expect(run('base64Decode', '[SGVs\nbG8=]'), '[Hello]');
+    });
+
+    test('invalid input is unchanged', () {
+      expect(run('base64Decode', '[not base64!]'), 'unchanged');
+    });
+
+    test('binary output is refused', () {
+      expect(run('base64Decode', '[AAE=]'), 'refused:resultNotText');
+      expect(run('base64Decode', '[gA==]'), 'refused:resultNotText');
+    });
+  });
+
+  group('htmlEntityEncode', () {
+    test('escapes specials and non-ASCII', () {
+      expect(
+        run('htmlEntityEncode', '[a<b>"é"]'),
+        '[a&lt;b&gt;&quot;&#233;&quot;]',
+      );
+    });
+
+    test('plain ASCII is unchanged', () {
+      expect(run('htmlEntityEncode', '[abc]'), 'unchanged');
+    });
+  });
+
+  group('htmlEntityDecode', () {
+    test('decodes named and numeric entities', () {
+      expect(
+        run('htmlEntityDecode', '[a&lt;b&gt;&quot;&#233;&#x41;]'),
+        '[a<b>"éA]',
+      );
+    });
+
+    test('leaves unknown and unusable entities literal', () {
+      expect(run('htmlEntityDecode', '[&nosuch;]'), 'unchanged');
+      expect(run('htmlEntityDecode', '[&#0;]'), 'unchanged');
+      expect(run('htmlEntityDecode', '[&amp; + &nosuch;]'), '[& + &nosuch;]');
+    });
+  });
+
+  group('escapeJsonString', () {
+    test('escapes quotes, backslashes and controls', () {
+      expect(
+        run('escapeJsonString', '[a"b\\c\nd\x01]'),
+        '[a\\"b\\\\c\\nd\\u0001]',
+      );
+    });
+
+    test('plain text is unchanged', () {
+      expect(run('escapeJsonString', '[abc]'), 'unchanged');
+    });
+  });
+
+  group('unescapeBackslashSequences', () {
+    test('decodes common escapes', () {
+      expect(
+        run('unescapeBackslashSequences', r'[a\nb\tc\\d]'),
+        '[a\nb\tc\\d]',
+      );
+      expect(run('unescapeBackslashSequences', r'[A\x42]'), '[AB]');
+    });
+
+    test('leaves unknown and NUL escapes literal', () {
+      expect(run('unescapeBackslashSequences', r'[a\qb\0]'), 'unchanged');
+      expect(run('unescapeBackslashSequences', r'[x\ny\0z]'), '[x\ny\\0z]');
+    });
+
+    test('no escapes is unchanged', () {
+      expect(run('unescapeBackslashSequences', '[abc]'), 'unchanged');
+    });
+  });
+
+  group('insert', () {
+    final now = DateTime.utc(2026, 1, 15, 14, 30, 5);
+
+    test('Date inserts YYYY-MM-DD', () {
+      expect(run('insertDate', 'abc|', now: now), 'abc2026-01-15|');
+    });
+
+    test('Date and Time inserts an ISO timestamp', () {
+      expect(
+        run('insertDateTime', 'abc|', now: now),
+        'abc2026-01-15T14:30:05|',
+      );
+    });
+
+    test('UTC Timestamp ends in Z', () {
+      expect(
+        run('insertUtcTimestamp', 'abc|', now: now),
+        'abc2026-01-15T14:30:05Z|',
+      );
+    });
+
+    test('UUID inserts a version-4 uuid', () {
+      final result = run('insertUuid', 'abc|');
+      expect(
+        RegExp(
+          r'^abc[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\|$',
+        ).hasMatch(result),
+        isTrue,
+      );
+    });
+
+    test('an insert replaces the selection', () {
+      expect(run('insertDate', 'a[bc]d', now: now), 'a2026-01-15|d');
+    });
+  });
+
+  group('keepLinesMatching', () {
+    test('keeps the lines that hold the pattern', () {
+      expect(
+        run('keepLinesMatching', 'one|\ntwo\nthree', options: {'pattern': 'o'}),
+        'one|\ntwo',
+      );
+    });
+
+    test('ignores the live selection: the document is the scope', () {
+      expect(
+        run(
+          'keepLinesMatching',
+          'one\n[t]wo\nthree',
+          options: {'pattern': 'three'},
+        ),
+        'three|',
+      );
+    });
+
+    test('matches literally until the regex option is on', () {
+      // The buffer ends with a break that belongs to the dropped line's
+      // kept sibling — 'a.b' keeps its own '\n'.
+      expect(
+        run('keepLinesMatching', 'a.b|\naxb\n', options: {'pattern': 'a.b'}),
+        'a.b|\n',
+      );
+      expect(
+        run(
+          'keepLinesMatching',
+          'a.b|\naxb\n',
+          options: {'pattern': 'a.b', 'regularExpression': true},
+        ),
+        'unchanged',
+      );
+    });
+
+    test('refuses an empty pattern rather than deleting nothing', () {
+      expect(
+        run('keepLinesMatching', 'a\nb|', options: {'pattern': ''}),
+        'refused:noPattern',
+      );
+    });
+
+    test('refuses a pattern that does not compile', () {
+      expect(
+        run(
+          'keepLinesMatching',
+          'a\nb|',
+          options: {'pattern': '(', 'regularExpression': true},
+        ),
+        'refused:invalidPattern',
+      );
+    });
+  });
+
+  group('deleteLinesMatching', () {
+    test('drops the matching lines', () {
+      expect(
+        run(
+          'deleteLinesMatching',
+          'one\ntwo|\nthree',
+          options: {'pattern': 'o'},
+        ),
+        'three|',
+      );
+    });
+
+    test('honours whole words and case', () {
+      expect(
+        run(
+          'deleteLinesMatching',
+          'cat\nconcat\nCAT|',
+          options: {'pattern': 'cat', 'wholeWord': true, 'caseSensitive': true},
+        ),
+        'concat\nCAT|',
+      );
+    });
+  });
+
+  group('extractMatches', () {
+    test('replaces the document with its matches, one per line', () {
+      expect(
+        run(
+          'extractMatches',
+          'a1 b22\nc333|',
+          options: {'pattern': r'\d+', 'regularExpression': true},
+        ),
+        '1\n22\n333|',
+      );
+    });
+
+    test('takes whole matching lines instead', () {
+      expect(
+        run(
+          'extractMatches',
+          'a1 b\nc2|',
+          options: {
+            'pattern': r'\d+',
+            'regularExpression': true,
+            'wholeLines': true,
+          },
+        ),
+        'a1 b\nc2|',
+      );
+    });
+
+    test('expands matches through the template', () {
+      expect(
+        run(
+          'extractMatches',
+          'a@b x c@d|',
+          options: {
+            'pattern': r'(\w+)@(\w+)',
+            'regularExpression': true,
+            'template': r'$2/$1',
+          },
+        ),
+        'b/a\nd/c|',
+      );
+    });
+
+    test('a pattern without matches leaves the buffer unchanged', () {
+      expect(
+        run('extractMatches', 'abc|', options: {'pattern': 'z'}),
+        'unchanged',
+      );
+    });
+  });
+
+  group('catalog invariants', () {
+    test('every choice option declares its default among its choices', () {
+      for (final tool in textToolCatalog) {
+        for (final option in tool.options) {
+          if (option is! ChoiceOption) continue;
+          expect(
+            option.choices,
+            contains(option.defaultValue),
+            reason: '${tool.id}.${option.id}',
+          );
+        }
+      }
+    });
+
+    test('a missing option fails naming the option', () {
+      final run = TextToolRun(
+        text: '',
+        base: 0,
+        extent: 0,
+        caret: 0,
+        ranOn: TextToolRanOn.document,
+        options: const {},
+        context: TextToolContext(
+          fold: _lowercase,
+          indentation: const Indentation.spaces(4),
+        ),
+      );
+      expect(
+        () => run.option<bool>('order'),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            contains('"order"'),
+          ),
+        ),
+      );
+    });
+  });
+
+  group('review fixes', () {
+    test('a caret on a blank line resolves to that blank line alone', () {
+      // Between paragraphs is not inside one — without the guard the
+      // paragraph range splices the neighbors together.
+      final r = paragraphRange('one\n\ntwo', 4);
+      expect(r.start, 4);
+      expect(r.end, 4);
+      // Either line of a blank run behaves the same.
+      expect((paragraphRange('a\n\n\nb', 2)), (start: 2, end: 2));
+      expect((paragraphRange('a\n\n\nb', 3)), (start: 3, end: 3));
+    });
+
+    test('case mapping is unit-preserving: no simple mapping, no change', () {
+      // Dart uppercases with simple (1:1) mappings — ß stays ß rather
+      // than expanding to SS — so _caseChange's equal-length shortcut is
+      // also the whole truth today.
+      expect(run('uppercase', 'ß|'), 'unchanged');
+      expect(run('uppercase', '[ab]c'), '[AB]c');
+    });
+
+    test('a palindromic line block reverses to unchanged', () {
+      expect(run('reverseLines', 'a\nb\na|'), 'unchanged');
+    });
+
+    test('sorting by length measures the stripped key', () {
+      expect(
+        run(
+          'sortLines',
+          '  bb\n    a|',
+          options: {'byLength': true, 'ignoreLeadingWhitespace': true},
+        ),
+        '    a\n  bb|',
+      );
+    });
+
+    test('a natural sort compares astral characters by code point', () {
+      // U+FFFD outranks U+1F600 by code point but not by lead unit.
+      expect(
+        run('sortLines', '\u{1F600}z\nz|', options: {'numbersByValue': true}),
+        'z\n\u{1F600}z|',
+      );
+    });
+
+    test('encoding an empty selection refuses before running', () {
+      expect(run('base64Encode', '|'), 'refused:nothingSelected');
+    });
+
+    test('a UUID is reproducible through a seeded random source', () {
+      final a = run('insertUuid', '|', random: math.Random(7));
+      final b = run('insertUuid', '|', random: math.Random(7));
+      expect(a, b);
+      expect(
+        a,
+        matches(
+          RegExp(
+            '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}'
+            '-[0-9a-f]{12}\\|\$',
+          ),
+        ),
+      );
+    });
+
+    test('a shuffle is reproducible through a seeded random source', () {
+      const input = 'a\nb\nc\nd\ne\nf|';
+      expect(
+        run('shuffleLines', input, random: math.Random(3)),
+        run('shuffleLines', input, random: math.Random(3)),
+      );
+    });
+
+    test('a surrogate-pair escape decodes to one character', () {
+      // JSON encoders emit astral characters as \uXXXX pairs.
+      expect(
+        run('unescapeBackslashSequences', r'[\uD83D\uDE00]'),
+        '[\u{1F600}]',
+      );
+    });
+
+    test('a backward selection keeps its direction through a run', () {
+      // A dragged-backwards selection reports base > extent; the resolved
+      // range carries anchor and caret un-ordered so a reselect keeps the
+      // drag direction, while the run still edits the covered text.
+      final tool = textToolById('uppercase')!;
+      final resolved = resolveTextToolRange(tool, 'abcd', 3, 1);
+      expect((resolved.base, resolved.extent), (3, 1));
+      expect(resolved.caret, 1);
+      expect(resolved.ranOn, TextToolRanOn.selection);
+      expect(run('uppercase', 'a]bc[d'), 'a]BC[d');
+    });
+  });
+}

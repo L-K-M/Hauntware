@@ -1,0 +1,21 @@
+name: ghost_ui
+description: >-
+  Shared Flutter UI for the Ghost app family: Planchette,
+  Poltergeist, and Seance: family hues, contrast math, middle-ellipsis text,
+  top toasts, menus, sidebars, and desktop/touch file-list rendering.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  intl: ^0.20.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
