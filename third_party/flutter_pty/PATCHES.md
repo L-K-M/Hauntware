@@ -32,10 +32,26 @@ All edits are marked `// Séance:` at the site.
   dead master, or any `POLLERR`/`POLLNVAL` — the tail `free` covers every
   remaining exit path since no cancellation path exists.
 - `src/forkpty.c`: the parent's copy of the slave fd is closed when the
-  caller doesn't ask for it — upstream leaked one fd per spawn.
+  caller doesn't ask for it — upstream leaked one fd per spawn. Every
+  error path now releases what it holds: `grantpt`/`unlockpt`/
+  `ptsname_r`/slave-`open`/`fork` failures close the master (and the
+  slave when already opened) instead of leaking both fds; `ptsname` was
+  swapped for the thread-safe `ptsname_r`; and the child closes its
+  inherited copy of the master before exec.
 - `src/flutter_pty_unix.c`: a failed `execvp` in the child now `_exit(127)`s
   instead of falling through and running a second copy of the host
   process.
+- `src/flutter_pty_unix.c`: the waitpid worker retries `EINTR` and only
+  posts a real status — upstream reported whatever garbage `waitpid`
+  left in `status` on error, which could fake a clean exit and suppress
+  kill escalation. Thread-start failures (malloc/`pthread_create`) now
+  kill and reap the child, close the master and pipe ends, free the
+  handle, and return NULL instead of handing back a live-but-broken
+  handle. The stop-byte write retries `EINTR` — a lost wake would leave
+  the join blocked on a reader still parked in `poll()`. `pty_error`
+  returns the recorded message instead of NULL (upstream never wired the
+  return), and the `winsize` passed to `pty_forkpty` is fully
+  initialized so garbage `ws_xpixel`/`ws_ypixel` can't reach `TIOCSWINSZ`.
 - `lib/flutter_pty.dart`: `Pty.close()`, `isClosed`, post-close guards on
   `write`/`resize`/`ackRead`, and `pid` captured at spawn so it stays
   valid after the native handle is released (`kill` still works).
@@ -62,9 +78,18 @@ All edits are marked `// Séance:` at the site.
   mutex where `poll()` never runs, so `pty_close` under `ackRead` hangs
   up but does not join/free. Séance never enables `ackRead`; doing the
   right thing there needs a different protocol upstream.
-- The Windows child-process attributes/thread-handle bookkeeping is
-  unchanged beyond what `pty_close` needs; the app refuses local shells
-  on Windows regardless.
+- The Windows backend is otherwise upstream-verbatim — including defects
+  a review would call out: `CreateProcessW`'s `processInfo.hThread` and
+  `startupInfo.lpAttributeList` leak per spawn (their frees are
+  commented out upstream), every `pty_create` error path leaks the pipe
+  handles/hPty it already created, and a hardcoded `Sleep(1000)` stalls
+  spawn. Known residual: the Windows reader parks in `ReadFile` on the
+  ConPTY output pipe — it relies on `ClosePseudoConsole` tearing down
+  the conhost side to unblock, and thread reaping happens on a helper
+  so a slow unblock never stalls the caller, but a truly stuck read
+  would leave that thread outstanding. None of it is runtime-verified;
+  the app refuses local shells on Windows, so these stay upstream bugs
+  to fix there, not Séance patches.
 - `waitpid` failure posts nothing to the exit port (upstream behaviour
   kept): a missing exit notification means "not proven dead", and
   callers must keep kill escalation armed — Séance's adapter does.

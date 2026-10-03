@@ -406,7 +406,7 @@ compiles the app for android/linux/macos/ios/windows on their native runners
 
 - **`flutter_pty` does not inherit the process environment.** `Pty.start`
   builds a fresh one from `TERM`, `LANG`, and exactly six copied names
-  (`LOGNAME`, `USER`, `DISPLAY`, `LC_TYPE` — its own typo for `LC_CTYPE` —
+  (`LOGNAME`, `USER`, `DISPLAY`, `LC_CTYPE`,
   `HOME`, `PATH`), then merges the caller's map over it. `LocalShellCommand`
   therefore returns the **whole** environment, not a delta; passing a delta
   silently drops `SSH_AUTH_SOCK`, `XDG_*`, and everything else.
@@ -418,7 +418,8 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   `localShellSupportedOn` refuses Windows; enabling it means vendoring the
   package under `third_party/` (as xterm is) and deleting six lines.
 - **`Pty.start` is a synchronous constructor that throws `StateError`** — not
-  a future. `await Pty.start(...)` is a type error.
+  a future. Call it directly inside `try`/`catch`; awaiting a non-Future is
+  legal Dart but adds nothing and triggers `await_only_futures`.
 
 ---
 

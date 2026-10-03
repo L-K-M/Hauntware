@@ -79,6 +79,18 @@ class _GatedEngine extends HeadlessTerminalEngine {
   void release() => _gate.complete();
 }
 
+/// An engine whose [dispose] always fails: the teardown reaches it and
+/// loses, so anything that waits on teardown sees the error.
+class _ThrowingDisposeEngine extends HeadlessTerminalEngine {
+  int disposeCalls = 0;
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
+    throw StateError('engine dispose failed');
+  }
+}
+
 void main() {
   group('localShellSupportedOn', () {
     test('only the two platforms with a usable shell say yes', () {
@@ -497,6 +509,37 @@ void main() {
       await pumpEventQueue();
       expect(calls, 1);
       expect(disposedWhenCalled, isTrue);
+    });
+
+    test('a failed teardown is reported once and never notifies', () async {
+      // Everything runs inside the recorded zone so unhandled async errors —
+      // including any leaked by a derived future — land in [unhandled].
+      final unhandled = <Object>[];
+      await runZonedGuarded(() async {
+        final pty = FakeLocalPty();
+        final engine = _ThrowingDisposeEngine();
+        final session = await startWith(pty, engine);
+
+        // The child exits; teardown reaches the engine and fails there. The
+        // failure propagates out of _childExited once — the one report the
+        // exit path makes — and is still visible to close()'s own awaiter.
+        await pty.exit(0);
+        for (var i = 0; i < 20 && engine.disposeCalls == 0; i++) {
+          await pumpEventQueue();
+        }
+        await expectLater(session.close(), throwsStateError);
+
+        var calls = 0;
+        session.onClosed = () => calls++;
+        await pumpEventQueue();
+        expect(calls, 0,
+            reason: 'the engine never finished disposing, so the callback '
+                'contract was never met');
+      }, (e, _) => unhandled.add(e));
+
+      expect(unhandled, hasLength(1),
+          reason: 'the exit-path propagation is the single report; a late '
+              'onClosed must not derive a second, unhandled copy');
     });
 
     test('a shell that cannot be spawned surfaces one readable line', () async {

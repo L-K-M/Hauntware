@@ -67,6 +67,10 @@ typedef struct ReadLoopOptions
 
 char *error_message = NULL;
 
+/* Séance: joins the waitpid thread once the child is reaped — defined
+   below pty_create so its failure path can reuse it. */
+static void *reap_waiter(void *arg);
+
 static void *read_loop(void *arg)
 {
     ReadLoopOptions *options = (ReadLoopOptions *)arg;
@@ -144,9 +148,16 @@ static void *read_loop(void *arg)
     return NULL;
 }
 
-static void start_read_thread(PtyHandle *handle, Dart_Port port)
+static int start_read_thread(PtyHandle *handle, Dart_Port port)
 {
     ReadLoopOptions *options = malloc(sizeof(ReadLoopOptions));
+
+    /* Séance: unchecked malloc used to NULL-deref, and a silent give-up
+       handed the caller a live handle that could never produce output. */
+    if (options == NULL)
+    {
+        return -1;
+    }
 
     options->fd = handle->ptm;
 
@@ -161,10 +172,11 @@ static void start_read_thread(PtyHandle *handle, Dart_Port port)
     if (pthread_create(&handle->reader, NULL, &read_loop, options) != 0)
     {
         free(options);
-        return;
+        return -1;
     }
 
     handle->reader_started = 1;
+    return 0;
 }
 
 typedef struct WaitExitOptions
@@ -179,17 +191,29 @@ static void *wait_exit_thread(void *arg)
 {
     WaitExitOptions *options = (WaitExitOptions *)arg;
 
-    int status;
+    int status = 0;
+    pid_t rc;
 
-    waitpid(options->pid, &status, 0);
+    /* Séance: upstream fed `status` into WIFEXITED/WIFSIGNALED even when
+       waitpid failed — an interrupted call read uninitialized stack and
+       could fabricate an exit code, which would disarm a caller's kill
+       escalation while the child still runs. Retry EINTR; on any other
+       failure post nothing — no exit event means "not proven dead". */
+    do
+    {
+        rc = waitpid(options->pid, &status, 0);
+    } while (rc < 0 && errno == EINTR);
 
-    if (WIFEXITED(status))
+    if (rc > 0)
     {
-        Dart_PostInteger_DL(options->port, WEXITSTATUS(status));
-    }
-    else if (WIFSIGNALED(status))
-    {
-        Dart_PostInteger_DL(options->port, -WTERMSIG(status));
+        if (WIFEXITED(status))
+        {
+            Dart_PostInteger_DL(options->port, WEXITSTATUS(status));
+        }
+        else if (WIFSIGNALED(status))
+        {
+            Dart_PostInteger_DL(options->port, -WTERMSIG(status));
+        }
     }
 
     /* Séance: thread-owned, freed here — upstream never released it. */
@@ -198,9 +222,14 @@ static void *wait_exit_thread(void *arg)
     return NULL;
 }
 
-static void start_wait_exit_thread(PtyHandle *handle, Dart_Port port)
+static int start_wait_exit_thread(PtyHandle *handle, Dart_Port port)
 {
     WaitExitOptions *options = malloc(sizeof(WaitExitOptions));
+
+    if (options == NULL)
+    {
+        return -1;
+    }
 
     options->pid = handle->pid;
 
@@ -209,10 +238,11 @@ static void start_wait_exit_thread(PtyHandle *handle, Dart_Port port)
     if (pthread_create(&handle->waiter, NULL, &wait_exit_thread, options) != 0)
     {
         free(options);
-        return;
+        return -1;
     }
 
     handle->waiter_started = 1;
+    return 0;
 }
 
 static void set_environment(char **environment)
@@ -231,10 +261,12 @@ static void set_environment(char **environment)
 
 FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
 {
-    struct winsize ws;
+    struct winsize ws = {0};
 
     ws.ws_row = options->rows;
     ws.ws_col = options->cols;
+
+    error_message = NULL;
 
     int ptm;
 
@@ -269,6 +301,17 @@ FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
     }
 
     PtyHandle *handle = (PtyHandle *)malloc(sizeof(PtyHandle));
+
+    /* Séance: unchecked malloc — a NULL handle must not dereference or
+       strand the forked child. */
+    if (handle == NULL)
+    {
+        error_message = "out of memory";
+        kill(pid, SIGKILL);
+        waitpid(pid, NULL, 0);
+        close(ptm);
+        return NULL;
+    }
 
     handle->ptm = ptm;
     handle->pid = pid;
@@ -305,9 +348,50 @@ FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
         return NULL;
     }
 
-    start_read_thread(handle, options->stdout_port);
+    /* Séance: a worker thread that never started used to hand Dart a
+       live handle that produces no output or no exit event — a broken
+       session indistinguishable from a hang. Both starters are fatal
+       now; the teardown mirrors pty_close's tail. */
+    if (start_read_thread(handle, options->stdout_port) < 0 ||
+        start_wait_exit_thread(handle, options->exit_port) < 0)
+    {
+        error_message = "failed to start pty worker threads";
 
-    start_wait_exit_thread(handle, options->exit_port);
+        if (handle->reader_started)
+        {
+            ssize_t ignored = write(handle->stop_fd[1], "x", 1);
+            (void)ignored;
+            pthread_join(handle->reader, NULL);
+        }
+
+        kill(handle->pid, SIGKILL);
+        waitpid(handle->pid, NULL, 0);
+        close(handle->ptm);
+        close(handle->stop_fd[0]);
+        close(handle->stop_fd[1]);
+
+        if (handle->waiter_started)
+        {
+            pthread_t *waiter = malloc(sizeof(pthread_t));
+            if (waiter != NULL)
+            {
+                *waiter = handle->waiter;
+                pthread_t reaper;
+                if (pthread_create(&reaper, NULL, reap_waiter, waiter) == 0)
+                {
+                    pthread_detach(reaper);
+                }
+                else
+                {
+                    free(waiter);
+                }
+            }
+        }
+
+        pthread_mutex_destroy(&handle->mutex);
+        free(handle);
+        return NULL;
+    }
 
     return handle;
 }
@@ -328,7 +412,7 @@ FFI_PLUGIN_EXPORT void pty_ack_read(PtyHandle *handle)
 
 FFI_PLUGIN_EXPORT int pty_resize(PtyHandle *handle, int rows, int cols)
 {
-    struct winsize ws;
+    struct winsize ws = {0};
 
     ws.ws_row = rows;
     ws.ws_col = cols;
@@ -364,12 +448,14 @@ FFI_PLUGIN_EXPORT void pty_close(PtyHandle *handle)
     {
         /* A byte on the stop pipe makes the reader exit poll() on its
            own and unwind — the portable replacement for pthread_cancel,
-           which Bionic does not declare. Both pipe ends are open until
-           the cleanup below, so a one-byte write always lands: a reader
-           that already exited simply never consumes it, and joins
-           instantly. */
-        ssize_t ignored = write(handle->stop_fd[1], "x", 1);
-        (void)ignored;
+           which Bionic does not declare. Both pipe ends stay open until
+           the cleanup below, so a one-byte write can only fail
+           transiently — retry EINTR or the join below would block on a
+           reader still parked in poll(). A reader that already exited
+           simply never consumes the byte, and joins instantly. */
+        while (write(handle->stop_fd[1], "x", 1) < 0 && errno == EINTR)
+        {
+        }
         if (!handle->ackRead)
         {
             /* Ack mode can park the reader on the shared mutex, which
@@ -424,5 +510,8 @@ FFI_PLUGIN_EXPORT void pty_close(PtyHandle *handle)
 
 FFI_PLUGIN_EXPORT char *pty_error(void)
 {
-    return NULL;
+    /* Séance: pty_create records the failure reason here; returning NULL
+       unconditionally made it write-only dead state. Cleared at the top
+       of each pty_create so a stale message is never reported. */
+    return error_message;
 }

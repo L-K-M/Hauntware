@@ -85,7 +85,7 @@ class LocalShellCommand {
   /// [environment] is returned *whole*, not as a delta. The pty package does
   /// not inherit the process environment: it builds a fresh one containing
   /// `TERM`, `LANG`, and six copied variables (`LOGNAME`, `USER`, `DISPLAY`,
-  /// `LC_TYPE` — its own typo for `LC_CTYPE` — `HOME`, and `PATH`), then
+  /// `LC_CTYPE`, `HOME`, and `PATH`), then
   /// merges the caller's map over it. Anything not passed here is silently
   /// missing from the child, so passing everything is the only way for the
   /// shell to start in the environment the app is actually running in.
@@ -272,7 +272,16 @@ class LocalShellSession implements SessionTransport {
     // _notifyClosed after _finish will find the callback; otherwise chain
     // the notify onto the shared teardown.
     final teardown = _finishFuture;
-    if (teardown != null) unawaited(teardown.then((_) => _notifyClosed()));
+    if (teardown != null) {
+      unawaited(teardown.then(
+        (_) => _notifyClosed(),
+        // The error already reaches whoever awaits close() — re-raising it
+        // on this derived future would make an unhandled copy, and firing
+        // the callback would report an exit notification whose contract
+        // ("the engine is gone") the failed teardown never satisfied.
+        onError: (_) {},
+      ));
+    }
   }
 
   @override
