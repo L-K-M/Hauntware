@@ -19,7 +19,8 @@ typedef ShortcutSection = ({String title, List<ShortcutRow> rows});
 List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
   final apple =
       platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
-  String keys(SingleActivator chord) => _describe(chord, apple: apple);
+  String keys(SingleActivator chord) =>
+      formatShortcutActivator(chord, platform) ?? chord.trigger.keyLabel;
   String terminal(LogicalKeyboardKey key) => keys(
     apple
         ? SingleActivator(key, meta: true)
@@ -89,16 +90,6 @@ List<ShortcutSection> keyboardShortcutSections(TargetPlatform platform) {
     ),
   ];
 }
-
-/// [chord] as the platform writes it: modifier glyphs in Apple's order
-/// (⌃⌥⇧⌘) run together, or "Ctrl+Shift+W". The shared formatter only
-/// knows macOS glyphs, so iPadOS spells them through it as macOS.
-String _describe(SingleActivator chord, {required bool apple}) =>
-    formatShortcutActivator(
-          chord,
-          apple ? TargetPlatform.macOS : TargetPlatform.linux,
-        ) ??
-        chord.trigger.keyLabel;
 
 /// The shortcut list in a dialog, for this platform.
 Future<void> showKeyboardShortcuts(BuildContext context) {
