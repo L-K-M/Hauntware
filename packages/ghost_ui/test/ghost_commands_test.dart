@@ -130,6 +130,20 @@ void main() {
       expect(result, KeyEventResult.handled);
       expect(ran, 0);
     });
+
+    test('the first accepting binding claims the keystroke', () {
+      var second = 0;
+      final result = dispatchGhostChord([
+        binding(LogicalKeyboardKey.keyA),
+        GhostChordBinding(
+          activator: const SingleActivator(LogicalKeyboardKey.keyA),
+          onInvoke: () => second++,
+        ),
+      ], down(LogicalKeyboardKey.keyA));
+      expect(result, KeyEventResult.handled);
+      expect(ran, 1);
+      expect(second, 0);
+    });
   });
 
   group('GhostChordScope', () {

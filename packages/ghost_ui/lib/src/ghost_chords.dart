@@ -104,7 +104,10 @@ final class GhostChordBinding {
 /// A match is always [KeyEventResult.handled], even a held repeat its
 /// binding does not act on or a binding whose [GhostChordBinding.mayRunFrom]
 /// refuses — ignored, the keys underneath would leak to the surface below.
-/// Non-down/repeat events and unmatched keys return ignored.
+/// The first accepting binding claims the keystroke (CallbackShortcuts and
+/// the hosts' old first-match dispatch behave the same); one press never
+/// runs two commands. Non-down/repeat events and unmatched keys return
+/// ignored.
 KeyEventResult dispatchGhostChord(
   List<GhostChordBinding> bindings,
   KeyEvent event,
@@ -126,6 +129,7 @@ KeyEventResult dispatchGhostChord(
       binding.onInvoke();
     }
     result = KeyEventResult.handled;
+    break;
   }
   return result;
 }
