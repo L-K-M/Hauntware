@@ -248,69 +248,89 @@ class ServerRailMark extends StatelessWidget {
   final ServerConfig server;
   const ServerRailMark({super.key, required this.server});
 
-  /// The Android list's glyph size inside its 40 dp disc — the same
-  /// proportions Poltergeist's Home uses.
-  static const double _discGlyphSize = 24;
+  @override
+  Widget build(BuildContext context) =>
+      _railMark(context, ServerTint.of(server), server.mark);
+}
 
-  /// The disc's fill behind an untinted glyph.
-  static const double _discTintAlpha = 0.16;
+/// The local shell's mark, drawn exactly as [ServerRailMark] draws an
+/// uncoloured server with a built-in glyph: the terminal glyph where a
+/// server's badge would be — bare on a compact rail, on the neutral tile
+/// comfortable, on the tertiary disc in the Android list.
+class LocalShellRailMark extends StatelessWidget {
+  const LocalShellRailMark({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final extent = sidebarMarkExtent(context);
-    final tint = ServerTint.of(server);
-    final accent = serverAccent(context, tint);
-    final mark = server.mark;
-    if (SidebarKitScope.layoutOf(context) == SidebarKitLayout.list) {
-      return ExcludeSemantics(child: _disc(context, extent, tint, accent));
-    }
-    final comfortable =
-        SidebarKitScope.densityOf(context) == SidebarKitDensity.comfortable;
-    // Decorative: the row announces the server's name itself.
-    if (!comfortable && mark is ServerGlyphMark && accent == null) {
-      return ExcludeSemantics(
+  Widget build(BuildContext context) => _railMark(
+    context,
+    ServerTint.none,
+    const ServerGlyphMark(ServerIcon.terminal),
+  );
+}
+
+/// One row mark at the kit's size for [tint]/[mark]: the shared shape of
+/// [ServerRailMark] and [LocalShellRailMark].
+Widget _railMark(BuildContext context, ServerTint tint, ServerMark mark) {
+  final extent = sidebarMarkExtent(context);
+  final accent = serverAccent(context, tint);
+  if (SidebarKitScope.layoutOf(context) == SidebarKitLayout.list) {
+    return ExcludeSemantics(
+      child: _railDisc(context, extent, tint, mark, accent),
+    );
+  }
+  final comfortable =
+      SidebarKitScope.densityOf(context) == SidebarKitDensity.comfortable;
+  // Decorative: the row announces the server's name itself.
+  if (!comfortable && mark is ServerGlyphMark && accent == null) {
+    return ExcludeSemantics(
+      child: Icon(
+        serverIconData(mark.icon),
+        size: sidebarGlyphSize(context),
+        color: SeanceChrome.of(context).secondaryText,
+      ),
+    );
+  }
+  return ExcludeSemantics(
+    child: ServerBadge(tint: tint, mark: mark, size: extent),
+  );
+}
+
+/// The Android list's glyph size inside its 40 dp disc — the same
+/// proportions Poltergeist's Home uses.
+const double _discGlyphSize = 24;
+
+/// The disc's fill behind an untinted glyph.
+const double _discTintAlpha = 0.16;
+
+/// The Android list's mark (sibling contract §10.6): an untinted glyph
+/// on a tertiary disc, so a plain server still reads as a server, and
+/// a server with its own colour, emoji or image as its badge clipped
+/// to a circle.
+Widget _railDisc(
+  BuildContext context,
+  double extent,
+  ServerTint tint,
+  ServerMark mark,
+  ServerAccent? accent,
+) {
+  if (mark is ServerGlyphMark && accent == null) {
+    final color = Theme.of(context).colorScheme.tertiary;
+    return SizedBox.square(
+      dimension: extent,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: _discTintAlpha),
+          shape: BoxShape.circle,
+        ),
         child: Icon(
           serverIconData(mark.icon),
-          size: sidebarGlyphSize(context),
-          color: SeanceChrome.of(context).secondaryText,
+          size: _discGlyphSize,
+          color: color,
         ),
-      );
-    }
-    return ExcludeSemantics(
-      child: ServerBadge(tint: tint, mark: mark, size: extent),
+      ),
     );
   }
-
-  /// The Android list's mark (sibling contract §10.6): an untinted glyph
-  /// on a tertiary disc, so a plain server still reads as a server, and
-  /// a server with its own colour, emoji or image as its badge clipped
-  /// to a circle.
-  Widget _disc(
-    BuildContext context,
-    double extent,
-    ServerTint tint,
-    ServerAccent? accent,
-  ) {
-    final mark = server.mark;
-    if (mark is ServerGlyphMark && accent == null) {
-      final color = Theme.of(context).colorScheme.tertiary;
-      return SizedBox.square(
-        dimension: extent,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: _discTintAlpha),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            serverIconData(mark.icon),
-            size: _discGlyphSize,
-            color: color,
-          ),
-        ),
-      );
-    }
-    return ClipOval(
-      child: ServerBadge(tint: tint, mark: mark, size: extent),
-    );
-  }
+  return ClipOval(
+    child: ServerBadge(tint: tint, mark: mark, size: extent),
+  );
 }

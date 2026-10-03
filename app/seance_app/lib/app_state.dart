@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -79,6 +80,15 @@ class ConnectionLogNotifier extends ChangeNotifier {
   void bump() => notifyListeners();
 }
 
+/// The [TerminalSession.serverId] every local shell tab shares.
+///
+/// A reserved, deliberately non-UUID value: real server ids come from
+/// [uuidV4], so this cannot collide with one, and it is never written to the
+/// config store — a local shell has nothing to configure and nothing to sync.
+/// Sharing one id is what makes local shells group into a tab strip and take
+/// the same "focus the row's last tab" path as any server.
+const String kLocalShellServerId = 'local-shell';
+
 /// One tab in a server's strip — a terminal session or a file editor.
 /// Sealed so the pane can switch exhaustively on the kind.
 sealed class PaneTab {
@@ -87,27 +97,41 @@ sealed class PaneTab {
 
   /// The server this tab belongs to. Its tabs stay contiguous in
   /// [AppState.tabs], so a per-server strip is an order-preserving filter.
+  /// [kLocalShellServerId] groups the local shells, which own no server.
   final String serverId;
 
   /// The config captured when the tab was opened; display reads prefer
   /// [AppState.configFor] so an edit made mid-session is reflected.
-  final ServerConfig config;
+  ///
+  /// Null for a local shell — deliberately, rather than a stand-in
+  /// [ServerConfig]: a synthetic config would render as `@:0` wherever
+  /// someone forgot a branch, and no compiler would object. Every display
+  /// site goes through [TerminalSession.displayLabel] and
+  /// [TerminalSession.displayTarget] so the null is handled once, not ten
+  /// times.
+  final ServerConfig? config;
 
-  PaneTab({required this.id, required this.serverId, required this.config});
+  PaneTab({required this.id, required this.serverId, this.config});
 
   /// Release what the tab owns. Overridden where there is something to free.
   void dispose() {}
 }
 
-/// One terminal session — a single SSH connection. A server can have several
-/// (shown as tabs inside its terminal pane), so a session has its own [id]
-/// distinct from its [serverId]; many sessions can share one [serverId].
+/// One terminal session — a single SSH connection, or a shell on this machine.
+/// A server can have several (shown as tabs inside its terminal pane), so a
+/// session has its own [id] distinct from its [serverId]; many sessions can
+/// share one [serverId].
 class TerminalSession extends PaneTab {
   /// Stable ownership identity for durable local edit checkouts. Unlike [id],
   /// this survives reconnects that replace the terminal engine and widget.
   final String editSessionId;
+
+  /// The shell a local session is running (`zsh`, `bash`), for its label.
+  /// Null for an SSH session, whose identity is its server.
+  final String? shellName;
+
   XtermTerminalEngine engine;
-  SshSession? session;
+  SessionTransport? session;
   RemoteFilesController? files;
 
   /// Git status/actions for the shell's reported directory, driven by the
@@ -179,7 +203,8 @@ class TerminalSession extends PaneTab {
     required super.id,
     String? editSessionId,
     required super.serverId,
-    required super.config,
+    super.config,
+    this.shellName,
     required this.engine,
     this.connecting = true,
     this.error,
@@ -262,6 +287,27 @@ class TerminalSession extends PaneTab {
 
   bool get isConnected => session != null && !session!.isClosed;
 
+  /// A shell on this machine rather than a connection to a server.
+  bool get isLocal => config == null;
+
+  /// What names this session in the app bar and the server list.
+  String get displayLabel => config?.label ?? 'Local shell';
+
+  /// Where this session's keystrokes go, in one monospace line: the SSH target
+  /// for a server, the shell and this machine for a local one.
+  String get displayTarget {
+    final server = config;
+    if (server != null) {
+      return '${server.username}@${server.host}:${server.port}';
+    }
+    return '${shellName ?? 'shell'} · this machine';
+  }
+
+  /// The status a finished local shell exited with, once it has. Null while it
+  /// runs, and always null for SSH — a remote shell's exit reaches the user as
+  /// the connection ending, and there is no local process to report on.
+  int? shellExitCode;
+
   TerminalStatus get status {
     if (connecting) return TerminalStatus.connecting;
     if (error != null) return TerminalStatus.error;
@@ -281,11 +327,15 @@ class EditorTab extends PaneTab {
   EditorTab({
     required super.id,
     required super.serverId,
-    required super.config,
+    required ServerConfig config,
     required this.remotePath,
     required this.localPath,
     required this.ownerEditSessionId,
-  });
+  }) : super(config: config);
+
+  /// The server whose file this tab edits — [PaneTab.config], narrowed. The
+  /// base's type is wider only because a local shell's tab carries none.
+  ServerConfig get server => config!;
 
   /// Absolute path on the server — the tab's name and its drift/upload key.
   final String remotePath;
@@ -542,9 +592,7 @@ class AppState extends ChangeNotifier {
     KeyboardInteractiveChallenge challenge,
   ) async {
     final responder = keyboardInteractiveResponder;
-    return responder == null
-        ? const <String>[]
-        : responder(challenge);
+    return responder == null ? const <String>[] : responder(challenge);
   }
 
   /// Try [config] the way a real connection would — the same host-key and
@@ -698,7 +746,10 @@ class AppState extends ChangeNotifier {
     // reachable, and probing them only adds an sshd log line every sweep.
     services.probe.connectedServerIds = () => {
       for (final session in tabs)
-        if (session is TerminalSession && session.isConnected) session.serverId,
+        if (session is TerminalSession &&
+            session.isConnected &&
+            !session.isLocal)
+          session.serverId,
     };
     _probeSub = services.probe.statuses.listen((s) {
       statuses = s;
@@ -1289,15 +1340,153 @@ class AppState extends ChangeNotifier {
     await _connect(tab);
   }
 
-  /// Establish the SSH session for an already-inserted [tab].
+  /// Open another terminal beside [tab], of whatever kind it is. The
+  /// "New tab" action is offered from the tab strip and the native menu,
+  /// where the tab in hand may be a local shell with no server to open a
+  /// second one against — or an editor tab, whose "another" is a terminal
+  /// on the server it edits.
+  Future<void> duplicateTab(PaneTab tab) {
+    final config = tab.config;
+    return config == null ? newLocalTab() : newTab(config);
+  }
+
+  /// Whether a local shell can be opened here: the user asked for one *and*
+  /// the platform can host it. Both halves are required — a settings file
+  /// carried to a phone must not put a row in the list that cannot open.
+  bool get localShellAvailable => services.localShell.availableWhen(
+    enabledInSettings: services.settings.localShell,
+  );
+
+  /// Open the local shell from the list: focus the last one used (restarting
+  /// it if it has exited), or start the first. Mirrors [openTerminal].
+  Future<void> openLocalShell() async {
+    final existing = tabsForServer(
+      kLocalShellServerId,
+    ).whereType<TerminalSession>().toList();
+    if (existing.isEmpty) {
+      await newLocalTab();
+      return;
+    }
+    final last = existing.firstWhere(
+      (t) => t.id == _lastTabForServer[kLocalShellServerId],
+      orElse: () => existing.last,
+    );
+    focusTab(last.id);
+    if (last.status == TerminalStatus.disconnected ||
+        last.status == TerminalStatus.error) {
+      await reconnect(last.id);
+    }
+  }
+
+  /// Open an additional local shell tab and start it.
+  Future<void> newLocalTab() async {
+    final id = uuidV4();
+    final tab = TerminalSession(
+      id: id,
+      editSessionId: id,
+      serverId: kLocalShellServerId,
+      shellName: services.localShell.shellName,
+      // Commands are captured the same way as a server's: the suggestion
+      // feature is one opt-in about the commands you run, and snippets are
+      // global rather than per-server, so a local command belongs in it too.
+      engine: XtermTerminalEngine(onCommand: _recordCommand),
+    );
+    tabs.insert(insertIndexFor(tabs, kLocalShellServerId), tab);
+    _setActive(tab.id);
+    notifyListeners();
+    await _startLocalShell(tab);
+  }
+
+  /// Spawn the shell for an already-inserted local [tab].
+  Future<void> _startLocalShell(TerminalSession tab) async {
+    final engine = tab.engine;
+    final local = services.localShell;
+    try {
+      // Written before the shell's own first byte so it sits above the prompt,
+      // and into the terminal rather than app chrome: it describes this shell,
+      // and it should still be in the scrollback when `cd ~` surprises you.
+      final notice = local.sandboxNotice;
+      if (notice != null) engine.feed(Uint8List.fromList(utf8.encode(notice)));
+      final session = await LocalShellSession.start(
+        launcher: local.launch,
+        command: local.command,
+        engine: engine,
+      );
+      // The tab may have been closed (or replaced by a restart) while we
+      // awaited; if so, drop the shell we just started.
+      if (!identical(tabById(tab.id), tab)) {
+        await session.close();
+        return;
+      }
+      tab.session = session;
+      tab.connecting = false;
+      tab.shellExitCode = null;
+      session.onClosed = () {
+        // The shell exited: flip to disconnected if this is still the tab, and
+        // keep the status so the pane can say whether it left cleanly.
+        if (identical(tabById(tab.id), tab)) {
+          tab.shellExitCode = session.exitCode;
+          tab.session = null;
+          tab.connecting = false;
+          notifyListeners();
+        }
+      };
+      // The widget drives resize; forward it to the pty.
+      engine.terminal.onResize = (w, h, pw, ph) {
+        if (!session.isClosed) session.resize(TerminalSize(w, h));
+      };
+    } catch (e) {
+      if (!identical(tabById(tab.id), tab)) return;
+      tab.connecting = false;
+      tab.error = e is LocalShellException ? e.message : e.toString();
+    }
+    notifyListeners();
+  }
+
+  /// Turn the local shell on or off, closing any open local tabs on the way
+  /// out — leaving live shells behind a hidden row would strand them with no
+  /// way back to the list. A failed save puts the switch back, unless a
+  /// newer toggle already overwrote this call's value, which then stands.
+  Future<void> setLocalShellEnabled(bool enabled) async {
+    if (services.settings.localShell == enabled) return;
+    services.settings.localShell = enabled;
+    notifyListeners();
+    try {
+      await services.saveSettings();
+    } catch (_) {
+      if (services.settings.localShell != enabled) return;
+      services.settings.localShell = !enabled;
+      notifyListeners();
+      rethrow;
+    }
+    // Tear the shells down only once the setting is durably off; closing
+    // them before the save means a failed save flips the switch back on
+    // while every local tab is already gone. A newer toggle that re-enabled
+    // while this save was in flight keeps its own shells.
+    if (!enabled && services.settings.localShell == enabled) {
+      await closeAllTabsForServer(kLocalShellServerId);
+      notifyListeners();
+    }
+  }
+
+  /// Establish the SSH session for an already-inserted [tab]. Never reached
+  /// for a local shell, whose tab carries no server to connect to.
   Future<void> _connect(TerminalSession tab) async {
     final engine = tab.engine;
     final log = tab.log;
+    final config = tab.config;
+    if (config == null) {
+      // Unreachable: a session with no server is a local shell, and
+      // openLocalShell/newLocalTab/reconnect all route those to
+      // _startLocalShell. Named rather than left to `!` so that if a future
+      // caller does route one here, it says which invariant broke.
+      throw StateError('_connect needs a server; a local shell has none');
+    }
     // The attempt's own record of the prompt, so two tabs opening one host
     // at once each keep their own answer.
     final hostKey = _HostKeyAttempt(_promptForHostKey);
     try {
-      final credentials = await services.resolveCredentials(tab.config);
+      final credentials = await services.resolveCredentials(config);
       final session = await _openSshSession(
         SshSessionManager(
           tofu: services.tofu,
@@ -1305,7 +1494,7 @@ class AppState extends ChangeNotifier {
           onKeyboardInteractive: _promptKeyboardInteractive,
           resolveJumpHost: services.resolveJumpHost,
         ),
-        config: tab.config,
+        config: config,
         credentials: credentials,
         engine: engine,
         log: log,
@@ -1391,19 +1580,22 @@ class AppState extends ChangeNotifier {
 
   /// Retry a session that failed or dropped: replace it in place with a fresh
   /// connection (new engine, new id) at the same tab position, disposing the
-  /// old one. A new id means a fresh `_SessionView` mounts cleanly.
+  /// old one. A new id means a fresh `_SessionView` mounts cleanly. For a
+  /// local shell this is "run another one" — the exited process cannot be
+  /// resumed, but the tab and its name survive.
   Future<void> reconnect(String sessionId) async {
     final index = tabs.indexWhere((s) => s.id == sessionId);
     if (index < 0) return;
     final old = tabs[index];
     if (old is! TerminalSession) return;
-    final config = _configFor(old.serverId) ?? old.config;
+    final config = old.isLocal ? null : _configFor(old.serverId) ?? old.config;
 
     final replacement = TerminalSession(
       id: uuidV4(),
       editSessionId: old.editSessionId,
       serverId: old.serverId,
       config: config,
+      shellName: old.isLocal ? services.localShell.shellName : null,
       engine: XtermTerminalEngine(onCommand: _recordCommand),
       // Carry the shell-reported identity across the reconnect so the tab
       // keeps its name instead of flickering back to "Session N". The running
@@ -1418,7 +1610,9 @@ class AppState extends ChangeNotifier {
     replacement.retainedLocalCopies.addAll(old.retainedLocalCopies);
     old.retainedLocalCopies.clear();
     notifyListeners();
-    await _connect(replacement);
+    await (replacement.isLocal
+        ? _startLocalShell(replacement)
+        : _connect(replacement));
   }
 
   /// The current config for [serverId], preferring the stored list over the
@@ -2392,9 +2586,9 @@ class AppState extends ChangeNotifier {
           await inbox.pruneStatuses();
           return pending;
         });
-        inboxFailures = await services.inboxCache
-            .load()
-            .then((cache) => cache.failures);
+        inboxFailures = await services.inboxCache.load().then(
+          (cache) => cache.failures,
+        );
       });
       inboxError = null;
     } catch (error) {
@@ -2514,11 +2708,11 @@ class AppState extends ChangeNotifier {
       }
     }
     final session = await _connectedSessionFor(server);
+    // Proposals only run against a configured server, whose transport is
+    // always SSH — a local shell can never reach this point.
     final ssh = session?.session;
-    if (session == null || ssh == null) {
-      return const ProposalRunResult.failed(
-        'Could not connect to the server.',
-      );
+    if (session == null || ssh is! SshSession) {
+      return const ProposalRunResult.failed('Could not connect to the server.');
     }
     final String line;
     final RemoteFileSystem fs;

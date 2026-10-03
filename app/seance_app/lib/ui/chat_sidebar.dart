@@ -73,6 +73,12 @@ class _ChatSidebarState extends State<ChatSidebar> {
         await controller.send(
           text,
           terminalContext: context,
+          // Which machine a pasted command would land on.
+          sessionTarget: targetSession == null
+              ? null
+              : targetSession.isLocal
+              ? 'a local shell — ${targetSession.displayTarget}'
+              : targetSession.displayTarget,
           onPaste: (command) {
             if (!chat.isCurrentTurn(turn) ||
                 targetSession == null ||

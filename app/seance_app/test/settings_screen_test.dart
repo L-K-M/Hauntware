@@ -39,9 +39,22 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
     if (failWrites != null) throw failWrites!;
   }
 
+  /// The platform's answer for the local-shell section, pinned per test.
+  @override
+  LocalShellInfo localShell = const LocalShellInfo(
+    supported: true,
+    sandboxed: false,
+    shellName: 'zsh',
+    unavailableReason: '',
+  );
+
   @override
   Future<void> setCheckForUpdates(bool enabled) =>
       _write('setCheckForUpdates($enabled)');
+
+  @override
+  Future<void> setLocalShellEnabled(bool enabled) =>
+      _write('setLocalShellEnabled($enabled)');
 
   @override
   Future<void> setKeepSessionsAlive(bool enabled) =>
@@ -882,10 +895,7 @@ void main() {
         findsOneWidget,
       );
       // The hash comes from Séance, not from the server it pins.
-      expect(
-        find.textContaining(kInboxReferenceClientSha256),
-        findsOneWidget,
-      );
+      expect(find.textContaining(kInboxReferenceClientSha256), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('inbox.pairing.done')));
       await tester.pumpAndSettle();
@@ -908,8 +918,10 @@ void main() {
         servers: [],
       );
       await pumpScreen(tester, tab: SettingsTab.inbox);
-      expect(find.textContaining('2 proposals could not be opened'),
-          findsOneWidget);
+      expect(
+        find.textContaining('2 proposals could not be opened'),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byTooltip('Remove'));
       await tester.pumpAndSettle();

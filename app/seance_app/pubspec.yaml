@@ -41,6 +41,15 @@ dependencies:
   # seance_core's TerminalEngine seam when it tags a release.
   xterm:
     path: ../../third_party/xterm
+  # Pseudo-terminals for the optional local shell, from the same publisher as
+  # xterm.dart. An FFI plugin: it adds a small native target to every platform
+  # it declares, but Séance only opens a local shell on Linux and macOS (see
+  # `localShellSupportedOn` in seance_core for why the others are refused).
+  # Vendored fork of flutter_pty 0.4.2 — upstream leaks the master fd and
+  # both worker threads per session and offers no close API; ours adds
+  # Pty.close() (see third_party/flutter_pty/PATCHES.md).
+  flutter_pty:
+    path: ../../third_party/flutter_pty
   # OS keystore for the vault master key and LLM API keys.
   flutter_secure_storage: ^10.0.0
   path_provider: ^2.1.0
@@ -85,6 +94,9 @@ dev_dependencies:
   # The errors a real handshake fails with, for tests that replay one at
   # AppState's SSH boundary. Pinned to the version seance_core pins.
   dartssh2: 3.0.2
+  # Deterministic timer control for the termination-watchdog tests —
+  # real-time waits race under a loaded CI runner.
+  fake_async: ^1.3.3
   flutter_lints: ^5.0.0
   # Regenerates every platform's launcher icon from media-sources/seance-icon.png
   # (config in flutter_launcher_icons.yaml): dart run flutter_launcher_icons

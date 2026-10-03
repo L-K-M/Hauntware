@@ -36,7 +36,7 @@ class FilesScreen extends StatelessWidget {
           // default arrow would ask the same PopScope, so pop outright.
           leading: BackButton(onPressed: () => Navigator.of(context).pop()),
           title: Text(
-            'Files · ${state.activeSession?.config.label ?? 'Session'}',
+            'Files · ${state.activeSession?.displayLabel ?? 'Session'}',
           ),
         ),
         body: const SafeArea(
@@ -66,6 +66,15 @@ class FilesPane extends StatelessWidget {
             message: 'Open a terminal session to browse its files.',
           );
         }
+        // A local shell has no SFTP subsystem and needs none — this pane
+        // exists to reach files that are not already on this device.
+        if (session.isLocal) {
+          return const _FilesUnavailable(
+            icon: Icons.folder_off_outlined,
+            message: 'This shell is already on this device — use the terminal, '
+                'or open a server session to browse its files.',
+          );
+        }
         if (!session.isConnected || session.files == null) {
           if (session.retainedLocalCopies.isNotEmpty) {
             return _RecoveredLocalEdits(
@@ -90,7 +99,7 @@ class FilesPane extends StatelessWidget {
         return _RemoteBrowser(
           key: ValueKey(session.id),
           controller: session.files!,
-          identity: '${session.config.label} · Session $ordinal',
+          identity: '${session.displayLabel} · Session $ordinal',
           session: session,
           popAfterTerminalStage: popAfterTerminalStage,
         );

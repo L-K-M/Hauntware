@@ -7,6 +7,7 @@ import '../ui/sync_enrollment_validation.dart';
 import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
 import 'external_file_opener.dart';
+import 'local_shell_service.dart';
 
 /// The Settings screen's tabs, in the order the screen shows them. Here
 /// rather than beside the screen because the settings window's opener names
@@ -43,6 +44,17 @@ abstract class SettingsBackend implements Listenable {
   SyncStatus get syncStatus;
 
   Future<void> setCheckForUpdates(bool enabled);
+
+  /// What the local-shell section shows: whether this platform can host a
+  /// shell, what it would run, or why it cannot — and, inside the macOS App
+  /// Sandbox, that it is confined. Static for the process's life, and the
+  /// settings window's engine runs in the same process, so each side reads
+  /// the same answer with no link round-trip.
+  LocalShellInfo get localShell;
+
+  /// Persists the local-shell opt-in and applies it: off closes every open
+  /// local tab, so a hidden row cannot strand live shells.
+  Future<void> setLocalShellEnabled(bool enabled);
 
   /// Persists and applies the Android keep-alive switch. Throws when the
   /// write fails, after putting the in-memory setting back — unless a newer
@@ -111,6 +123,43 @@ class SettingsBackendException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// The platform's answer for a local shell, as the Settings switch's section
+/// shows it: what would run, or the sentence that says why nothing can.
+///
+/// Crosses no boundary: a [LocalShellService] computes it from the platform
+/// and environment, which the settings window's second engine shares with
+/// the app.
+@immutable
+class LocalShellInfo {
+  const LocalShellInfo({
+    required this.supported,
+    required this.sandboxed,
+    required this.shellName,
+    required this.unavailableReason,
+  });
+
+  LocalShellInfo.of(LocalShellService service)
+    : supported = service.supported,
+      sandboxed = service.sandboxed,
+      shellName = service.shellName,
+      unavailableReason = service.unavailableReason;
+
+  /// A local shell can be opened here at all — Linux and macOS today.
+  final bool supported;
+
+  /// The shell would run inside the macOS App Sandbox: confined to Séance's
+  /// own container, without job control. Said before the switch is flipped,
+  /// not after.
+  final bool sandboxed;
+
+  /// What would run — `zsh`, `bash` — for the copy under the switch.
+  final String shellName;
+
+  /// One sentence saying why this platform has no local shell; empty when
+  /// [supported].
+  final String unavailableReason;
 }
 
 /// The sync status line's inputs.

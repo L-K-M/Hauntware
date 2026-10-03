@@ -74,6 +74,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
           listPane: ServerListPane(
             posture: ServerListPosture.rail,
             onOpen: (s) => _open(state, s),
+            onOpenLocal: () => _openLocal(state),
           ),
           header: unifiedToolbar ? const HeaderToolbar() : null,
           terminalPane: TerminalPane(
@@ -90,6 +91,8 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   }
 
   Widget _buildNarrow(AppState state) {
+    // activeServerId is the reserved local id for a local shell, so this guard
+    // needs no local-specific branch — it only asks "is anything open".
     final showTerminal = _viewingTerminal && state.activeServerId != null;
     // The terminal is a state flag here, not a pushed route, so an unhandled
     // system back would reach the root route and go to the platform. On
@@ -114,6 +117,7 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
                 key: const ValueKey('list'),
                 posture: ServerListPosture.home,
                 onOpen: (s) => _open(state, s),
+                onOpenLocal: () => _openLocal(state),
               ),
       ),
     );
@@ -133,6 +137,11 @@ class _AdaptiveShellState extends State<AdaptiveShell> {
   Future<void> _open(AppState state, ServerConfig server) async {
     if (mounted) setState(() => _viewingTerminal = true);
     await state.openTerminal(server);
+  }
+
+  Future<void> _openLocal(AppState state) async {
+    if (mounted) setState(() => _viewingTerminal = true);
+    await state.openLocalShell();
   }
 }
 

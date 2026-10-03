@@ -14,6 +14,7 @@ import 'file_stores.dart';
 import 'identity_audit_log.dart';
 import 'identity_bookmarks.dart';
 import 'inbox_stores.dart';
+import 'local_shell_service.dart';
 import 'managed_remote_file_store.dart';
 import 'secure_master_key.dart';
 
@@ -107,6 +108,8 @@ class AppServices {
   final InboxStatusStore inboxStatuses;
   final InboxCacheStore inboxCache;
   final IdentityAuditLog identityAudit;
+  final LocalShellService localShell;
+
   /// Null while the vault is locked (keystore unavailable at bootstrap — see
   /// [LockedSecretVault] and [unlockVaultFromKeystore]).
   List<int>? vaultKey;
@@ -153,6 +156,7 @@ class AppServices {
     required this.inboxStatuses,
     required this.inboxCache,
     required this.identityAudit,
+    required this.localShell,
     required this.vaultKey,
     required this.settings,
     required this._rekeyJournal,
@@ -247,6 +251,7 @@ class AppServices {
       inboxStatuses: FileInboxStatusStore(File(p('inbox_statuses.json'))),
       inboxCache: FileInboxCacheStore(File(p('inbox_cache.json'))),
       identityAudit: IdentityAuditLog(File(p('identity_reads.jsonl'))),
+      localShell: LocalShellService(),
       vaultKey: vaultKey,
       settings: settings,
       rekeyJournal: vaultStore,

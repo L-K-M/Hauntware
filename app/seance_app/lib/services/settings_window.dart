@@ -13,6 +13,7 @@ import '../ui/terminal_appearance.dart';
 import 'app_settings.dart';
 import 'external_file_opener.dart';
 import 'local_settings_backend.dart';
+import 'local_shell_service.dart';
 import 'settings_backend.dart';
 
 /// The desktop Settings window: a native window of its own, on a second
@@ -62,6 +63,7 @@ abstract final class _Link {
   // Window → app.
   static const hello = 'hello';
   static const setCheckForUpdates = 'setCheckForUpdates';
+  static const setLocalShellEnabled = 'setLocalShellEnabled';
   static const setKeepSessionsAlive = 'setKeepSessionsAlive';
   static const setCommandSuggestions = 'setCommandSuggestions';
   static const setTerminalAppearance = 'setTerminalAppearance';
@@ -262,6 +264,8 @@ class SettingsWindowHost {
         return {'snapshot': snapshot, 'tab': _tab.name};
       case _Link.setCheckForUpdates:
         await _backend.setCheckForUpdates(argument! as bool);
+      case _Link.setLocalShellEnabled:
+        await _backend.setLocalShellEnabled(argument! as bool);
       case _Link.setKeepSessionsAlive:
         await _backend.setKeepSessionsAlive(argument! as bool);
       case _Link.setCommandSuggestions:
@@ -466,6 +470,17 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
   @override
   Future<void> setCheckForUpdates(bool enabled) =>
       _call(_Link.setCheckForUpdates, enabled);
+
+  /// This engine shares the app's process — the platform and environment a
+  /// local shell reads are identical on both sides, so the answer is
+  /// computed here rather than carried over the link.
+  @override
+  LocalShellInfo get localShell =>
+      LocalShellInfo.of(LocalShellService());
+
+  @override
+  Future<void> setLocalShellEnabled(bool enabled) =>
+      _call(_Link.setLocalShellEnabled, enabled);
 
   @override
   Future<void> setKeepSessionsAlive(bool enabled) =>

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:macos_window_utils/widgets/macos_toolbar_passthrough.dart';
+import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
 import '../family_hues.dart';
@@ -98,8 +99,14 @@ class _HeaderTitle extends StatelessWidget {
     final server = state.configFor(active.serverId) ?? active.config;
     final theme = Theme.of(context);
     final chrome = SeanceChrome.of(context);
-    final port = server.port == 22 ? '' : ':${server.port}';
-    final address = server.username.isEmpty
+    // A local shell has no server to read colour, mark or address from:
+    // the terminal glyph on the neutral badge, and the session's own words
+    // for what it is and where it runs.
+    final local = server == null && active is TerminalSession ? active : null;
+    final port = server != null && server.port != 22 ? ':${server.port}' : '';
+    final address = server == null
+        ? local?.displayTarget ?? 'this machine'
+        : server.username.isEmpty
         ? '${server.host}$port'
         : '${server.username}@${server.host}$port';
     return Semantics(
@@ -110,8 +117,8 @@ class _HeaderTitle extends StatelessWidget {
           // here would have a screen reader say the name twice.
           ExcludeSemantics(
             child: ServerBadge(
-              tint: ServerTint.of(server),
-              mark: server.mark,
+              tint: server == null ? ServerTint.none : ServerTint.of(server),
+              mark: server?.mark ?? const ServerGlyphMark(ServerIcon.terminal),
               size: 24,
             ),
           ),
@@ -122,7 +129,7 @@ class _HeaderTitle extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  server.label,
+                  server?.label ?? local?.displayLabel ?? 'Local shell',
                   key: HeaderToolbar.titleKey,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
