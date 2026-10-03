@@ -284,7 +284,7 @@ void main() {
       records: records,
       resetRecords: () async => records = InMemorySyncRecordStore(),
       bookmarks: FakeSyncTrackingBookmarkStore(),
-      hostKeys: InMemoryHostKeyStore(),
+      hostKeys: InMemoryConflictAwareHostKeyStore(),
       pinVerdicts: InMemoryPinVerdictStore(),
       tripwires: InMemorySyncTripwireStore(),
       transportFactory: fakeTransportFactory(FakeSyncServer(), []),

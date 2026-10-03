@@ -16,6 +16,7 @@ import 'dart:math' show min;
 import 'package:seance_core/seance_core.dart';
 
 import '../sync/enrollment.dart';
+import '../sync/host_key_mutations.dart';
 import '../sync/persistent_record_store.dart';
 import '../sync/record_crypto.dart';
 import '../sync/seance_server_catalog.dart';
@@ -99,7 +100,8 @@ final class BookmarkCoordinator {
   BookmarkCoordinator({
     required SyncRecordStore records,
     required SyncTrackingBookmarkStore bookmarks,
-    required HostKeyStore hostKeys,
+    required ConflictAwareHostKeyStore hostKeys,
+    required HostKeyMutationGate hostKeyMutations,
     required RecordCrypto crypto,
     required String deviceId,
     required PinVerdictStore pinVerdicts,
@@ -118,6 +120,8 @@ final class BookmarkCoordinator {
         _bookmarks = bookmarks,
         // ignore: prefer_initializing_formals
         _hostKeys = hostKeys,
+        // ignore: prefer_initializing_formals
+        _hostKeyMutations = hostKeyMutations,
         // ignore: prefer_initializing_formals
         _crypto = crypto,
         // ignore: prefer_initializing_formals
@@ -147,7 +151,8 @@ final class BookmarkCoordinator {
 
   final SyncRecordStore _records;
   final SyncTrackingBookmarkStore _bookmarks;
-  final HostKeyStore _hostKeys;
+  final ConflictAwareHostKeyStore _hostKeys;
+  final HostKeyMutationGate _hostKeyMutations;
   final RecordCrypto _crypto;
   final String _deviceId;
   final PinVerdictStore _pinVerdicts;
@@ -439,16 +444,20 @@ final class BookmarkCoordinator {
   /// that lifts the untrust verdict (04 §3.2). The pin record lands
   /// first: lifting the verdict before the replacement is durable would
   /// leave a window where a pulled rival key auto-applies.
-  Future<void> onHostKeyPinned(HostKey pin) async {
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: pin.recordId,
-      kind: RecordKind.hostKey,
-      updatedAt: pin.pinnedAt,
-      deviceId: _deviceId,
-      data: pin.toJson(),
-    )));
+  Future<void> onHostKeyPinned(HostKey pin) => _hostKeyMutations.run(() async {
+    await _records.putLocal(
+      await _crypto.seal(
+        DecryptedRecord(
+          id: pin.recordId,
+          kind: RecordKind.hostKey,
+          updatedAt: pin.pinnedAt,
+          deviceId: _deviceId,
+          data: pin.toJson(),
+        ),
+      ),
+    );
     await _pinVerdicts.removeNegativePin(pin.locator);
-  }
+  });
 
   /// "Forget host": tombstone the pin's record AND record the durable
   /// negative pin. The tombstone alone cannot hold — a still-trusting peer
@@ -457,68 +466,104 @@ final class BookmarkCoordinator {
   /// under MITM suspicion. Local de-trust is the caller's side of the
   /// contract: [HostKeyStore] offers no removal, so the app drops the pin
   /// through its own store alongside this call.
-  Future<void> onHostKeyForgotten(String host, int port) async {
-    await _pinVerdicts.addNegativePin(hostKeyLocator(host, port));
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: '$_hostKeyPrefix${hostKeyLocator(host, port)}',
-      kind: RecordKind.hostKey,
-      updatedAt: _now().toUtc().millisecondsSinceEpoch,
-      deviceId: _deviceId,
-      deleted: true,
-    )));
-  }
+  Future<void> onHostKeyForgotten(String host, int port) =>
+      _hostKeyMutations.run(() async {
+        final locator = hostKeyLocator(host, port);
+        await _pinVerdicts.addNegativePin(locator);
+        await _records.putLocal(
+          await _crypto.seal(
+            DecryptedRecord(
+              id: '$_hostKeyPrefix$locator',
+              kind: RecordKind.hostKey,
+              updatedAt: _now().toUtc().millisecondsSinceEpoch,
+              deviceId: _deviceId,
+              deleted: true,
+            ),
+          ),
+        );
+      });
 
   /// Resolve a pin conflict by keeping the local pin: record the durable
   /// kept-verdict (the rejected fingerprint, so the *same* key returning
   /// stays resolved but a genuinely different one still warns) and re-push
-  /// the kept pin under a fresh LWW tuple.
-  Future<void> keepLocalPin(String host, int port) async {
-    final locator = hostKeyLocator(host, port);
-    final record = await _records.getRecord('$_hostKeyPrefix$locator');
-    if (record != null && !record.deleted) {
-      try {
-        final dec = await _crypto.open(record);
-        if (dec.kind == RecordKind.hostKey) {
-          await _pinVerdicts.recordKeptVerdict(
-              locator, HostKey.fromJson(dec.data).fingerprintSha256);
-        }
-      } catch (_) {
-        // An unreadable quarantined record is still out-voted by the
-        // re-push below; the verdict just cannot name it.
-      }
-    }
-    final local = await _hostKeys.get(host, port);
-    if (local == null) return;
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: local.recordId,
-      kind: RecordKind.hostKey,
-      updatedAt: _now().toUtc().millisecondsSinceEpoch,
-      deviceId: _deviceId,
-      data: local.toJson(),
-    )));
-  }
+  /// the kept pin under a fresh LWW tuple. A stale dialog decision is a
+  /// no-op: both fingerprints must still describe the current conflict.
+  Future<void> keepLocalPin(HostKeyConflict expected) =>
+      _hostKeyMutations.run(() async {
+        final current = await _matchingConflictPins(expected);
+        if (current == null) return;
+
+        await _pinVerdicts.recordKeptVerdict(
+          expected.locator,
+          current.pulled.fingerprintSha256,
+        );
+        await _records.putLocal(
+          await _crypto.seal(
+            DecryptedRecord(
+              id: current.local.recordId,
+              kind: RecordKind.hostKey,
+              updatedAt: _now().toUtc().millisecondsSinceEpoch,
+              deviceId: _deviceId,
+              data: current.local.toJson(),
+            ),
+          ),
+        );
+      });
 
   /// Resolve a pin conflict by accepting the pulled key: install the
   /// record store's copy — no re-push, it already won LWW — and clear any
-  /// negative pin, since accepting is explicit re-trust.
-  Future<void> acceptPulledPin(String host, int port) async {
-    final locator = hostKeyLocator(host, port);
-    final record = await _records.getRecord('$_hostKeyPrefix$locator');
-    if (record == null || record.deleted) return;
+  /// negative pin, since accepting is explicit re-trust. Stale decisions
+  /// cannot install a key the user was never shown.
+  Future<void> acceptPulledPin(HostKeyConflict expected) =>
+      _hostKeyMutations.run(() async {
+        final current = await _matchingConflictPins(expected);
+        if (current == null) return;
+
+        await _hostKeys.put(current.pulled);
+        await _pinVerdicts.removeNegativePin(expected.locator);
+      });
+
+  /// Re-read both sides while the shared mutation gate is held. This is the
+  /// compare step for conflict actions opened from a potentially stale UI.
+  Future<({HostKey local, HostKey pulled})?> _matchingConflictPins(
+    HostKeyConflict expected,
+  ) async {
+    if (expected.local.locator != expected.locator ||
+        expected.pulled.locator != expected.locator) {
+      return null;
+    }
+
+    final local = await _hostKeys.get(expected.local.host, expected.local.port);
+    if (local == null ||
+        local.fingerprintSha256 != expected.local.fingerprintSha256) {
+      return null;
+    }
+
+    final record = await _records.getRecord(
+      '$_hostKeyPrefix${expected.locator}',
+    );
+    if (record == null || record.deleted) return null;
+
     final DecryptedRecord dec;
     try {
       dec = await _crypto.open(record);
     } catch (_) {
-      // Quarantined/undecryptable record — nothing to accept. Mirrors the
-      // defensive read in keepLocalPin.
-      return;
+      return null;
     }
-    if (dec.kind != RecordKind.hostKey) {
-      throw FormatException('record ${record.id} is not a host key');
+    if (dec.kind != RecordKind.hostKey) return null;
+
+    final HostKey pulled;
+    try {
+      pulled = HostKey.fromJson(dec.data);
+    } catch (_) {
+      return null;
     }
-    final pin = HostKey.fromJson(dec.data);
-    await _pinVerdicts.removeNegativePin(locator);
-    await _hostKeys.put(pin);
+    if (pulled.locator != expected.locator ||
+        pulled.fingerprintSha256 != expected.pulled.fingerprintSha256) {
+      return null;
+    }
+
+    return (local: local, pulled: pulled);
   }
 
   /// The host-key quarantine diff (04 §3.2): every stored `hostkey:`
@@ -1157,19 +1202,22 @@ final class BookmarkCoordinator {
       return _ApplyOutcome.skipped;
     }
     await _tripwires.clear(record.id);
-    // Auto-apply requires no negative pin: the untrust verdict holds the
-    // record unapplied until the user explicitly re-trusts.
-    if ((await _pinVerdicts.negativePins()).contains(pin.locator)) {
-      return _ApplyOutcome.skipped;
-    }
-    final local = await _hostKeys.get(pin.host, pin.port);
-    if (local != null && local.conflictsWith(pin)) {
-      // A conflicting pin is quarantined unapplied — reported through the
-      // re-derived diff, never silently trusted.
-      return _ApplyOutcome.skipped;
-    }
-    await _hostKeys.put(pin);
-    return _ApplyOutcome.applied;
+    return _hostKeyMutations.run(() async {
+      // The gate makes the verdict and conditional store write one trust
+      // decision relative to forget/re-trust actions.
+      if ((await _pinVerdicts.negativePins()).contains(pin.locator)) {
+        return _ApplyOutcome.skipped;
+      }
+
+      final result = await _hostKeys.putIfNoConflict(pin);
+      if (result == HostKeyInstallResult.conflict) {
+        // A conflicting pin is quarantined unapplied — reported through the
+        // re-derived diff, never silently trusted.
+        return _ApplyOutcome.skipped;
+      }
+
+      return _ApplyOutcome.applied;
+    });
   }
 
   Future<_ApplyOutcome> _applyServerConfigRecord(EncryptedRecord record,

@@ -65,7 +65,7 @@ final class BookmarkBackupService extends ChangeNotifier
     required SyncRecordStore records,
     required Future<SyncRecordStore> Function() resetRecords,
     required SyncTrackingBookmarkStore bookmarks,
-    required HostKeyStore hostKeys,
+    required ConflictAwareHostKeyStore hostKeys,
     required PinVerdictStore pinVerdicts,
     required SyncTripwireStore tripwires,
     required SyncTransportFactory transportFactory,
@@ -117,7 +117,8 @@ final class BookmarkBackupService extends ChangeNotifier
   SyncRecordStore _records;
   final Future<SyncRecordStore> Function() _resetRecords;
   final SyncTrackingBookmarkStore _bookmarks;
-  final HostKeyStore _hostKeys;
+  final ConflictAwareHostKeyStore _hostKeys;
+  final HostKeyMutationGate _hostKeyMutations = HostKeyMutationGate();
   final PinVerdictStore _pinVerdicts;
   final SyncTripwireStore _tripwires;
   final SyncTransportFactory _transportFactory;
@@ -471,6 +472,7 @@ final class BookmarkBackupService extends ChangeNotifier
       records: _records,
       bookmarks: _bookmarks,
       hostKeys: _hostKeys,
+      hostKeyMutations: _hostKeyMutations,
       crypto: crypto,
       deviceId: deviceId!,
       pinVerdicts: _pinVerdicts,
@@ -821,11 +823,9 @@ final class BookmarkBackupService extends ChangeNotifier
       throw StateError('not enrolled — cannot resolve a pin conflict');
     }
     if (keepLocal) {
-      await coordinator.keepLocalPin(
-          conflict.local.host, conflict.local.port);
+      await coordinator.keepLocalPin(conflict);
     } else {
-      await coordinator.acceptPulledPin(
-          conflict.pulled.host, conflict.pulled.port);
+      await coordinator.acceptPulledPin(conflict);
     }
     await refresh();
   }

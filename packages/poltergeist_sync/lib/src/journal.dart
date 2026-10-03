@@ -19,6 +19,7 @@ import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'plan.dart';
+import 'trash_root.dart';
 
 /// Schema version stamped on every line; replay refuses any version
 /// other than this one rather than silently misreading it.
@@ -533,8 +534,11 @@ String _normalizeJournalTrashRoot(String path) {
 
 p.Context _journalTrashPathContext(String path) {
   final hasWindowsDrive = RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
+  final hasWindowsUncPrefix = path.startsWith(r'\\');
   final hasOnlyWindowsSeparators = path.contains(r'\') && !path.contains('/');
-  if (hasWindowsDrive || hasOnlyWindowsSeparators) return p.windows;
+  if (hasWindowsDrive || hasWindowsUncPrefix || hasOnlyWindowsSeparators) {
+    return p.windows;
+  }
 
   return p.posix;
 }
@@ -557,6 +561,156 @@ final class _TrashedEntry {
   final String? sha256;
   final String parentPath;
 }
+
+/// Resolves a journal source back through its owned root and real run
+/// directory. Repeating this check around restore mutations narrows the
+/// path-only VFS race without ever following a substituted parent link.
+Future<String> _verifiedRestoreTrashPath(
+  SyncRunJournal journal,
+  _TrashedEntry entry,
+  RemoteFileSystem fileSystem,
+) async {
+  final journalContext = _journalTrashPathContext(entry.trashLocation);
+  final journalPathStyle = journalContext.style == p.Style.windows
+      ? SyncTrashPathStyle.windows
+      : SyncTrashPathStyle.posix;
+  final normalizedLocation = journalContext.normalize(entry.trashLocation);
+  final runPath = journalContext.dirname(normalizedLocation);
+  final trashRoot = journalContext.dirname(runPath);
+  final runId = journalContext.basename(runPath);
+  final fileName = journalContext.basename(normalizedLocation);
+  if (runId != journal.record.runId || fileName.isEmpty) {
+    throw _unsafeRestoreTrashPath(entry.trashLocation);
+  }
+
+  final expectedScope = journal.trashScopeForSide(entry.side);
+  final String canonicalRoot;
+  final String? expectedRootId;
+  if (expectedScope == null) {
+    canonicalRoot = await _verifiedLegacyTrashRoot(
+      fileSystem,
+      trashRoot,
+      journalContext,
+      entry.trashLocation,
+    );
+    expectedRootId = null;
+  } else {
+    final identity = await resolveSyncTrashRoot(
+      fileSystem,
+      trashRoot,
+      pathStyle: journalPathStyle,
+      access: SyncTrashRootAccess.openExisting,
+    );
+    if (identity.scopeKey != expectedScope) {
+      throw _unsafeRestoreTrashPath(entry.trashLocation);
+    }
+
+    canonicalRoot = identity.canonicalRoot;
+    expectedRootId = identity.rootId;
+  }
+
+  // Relative legacy paths have no grammar signal. Once resolved, use the
+  // filesystem's canonical spelling for every containment check.
+  final canonicalContext = _journalTrashPathContext(canonicalRoot);
+  final canonicalPathStyle = canonicalContext.style == p.Style.windows
+      ? SyncTrashPathStyle.windows
+      : SyncTrashPathStyle.posix;
+  final normalizedCanonicalRoot = canonicalContext.normalize(canonicalRoot);
+  final canonicalRunPath = canonicalContext.join(
+    normalizedCanonicalRoot,
+    journal.record.runId,
+  );
+  final runEntry = await fileSystem.stat(canonicalRunPath, followLinks: false);
+  if (!runEntry.isDirectory) {
+    throw _unsafeRestoreTrashPath(entry.trashLocation);
+  }
+  final resolvedRunPath = canonicalContext.normalize(
+    await fileSystem.canonicalize(canonicalRunPath),
+  );
+  if (!_journalTrashPathsEqual(
+    canonicalContext,
+    resolvedRunPath,
+    canonicalRunPath,
+  )) {
+    throw _unsafeRestoreTrashPath(entry.trashLocation);
+  }
+
+  final verifiedLocation = canonicalContext.join(canonicalRunPath, fileName);
+  final resolvedLocation = canonicalContext.normalize(
+    await fileSystem.canonicalize(verifiedLocation),
+  );
+  if (!_journalTrashPathsEqual(
+    canonicalContext,
+    resolvedLocation,
+    verifiedLocation,
+  )) {
+    throw _unsafeRestoreTrashPath(entry.trashLocation);
+  }
+
+  if (expectedRootId == null) {
+    await _verifiedLegacyTrashRoot(
+      fileSystem,
+      normalizedCanonicalRoot,
+      canonicalContext,
+      entry.trashLocation,
+    );
+  } else {
+    final verifiedRoot = await resolveSyncTrashRoot(
+      fileSystem,
+      normalizedCanonicalRoot,
+      pathStyle: canonicalPathStyle,
+      access: SyncTrashRootAccess.openExisting,
+    );
+    if (verifiedRoot.rootId != expectedRootId ||
+        !_journalTrashPathsEqual(
+          canonicalContext,
+          verifiedRoot.canonicalRoot,
+          normalizedCanonicalRoot,
+        )) {
+      throw _unsafeRestoreTrashPath(entry.trashLocation);
+    }
+  }
+
+  return verifiedLocation;
+}
+
+Future<String> _verifiedLegacyTrashRoot(
+  RemoteFileSystem fileSystem,
+  String trashRoot,
+  p.Context context,
+  String unsafePath,
+) async {
+  final root = await fileSystem.stat(trashRoot, followLinks: false);
+  if (!root.isDirectory) throw _unsafeRestoreTrashPath(unsafePath);
+
+  final normalizedRoot = context.normalize(trashRoot);
+  final canonicalRoot = context.normalize(
+    await fileSystem.canonicalize(normalizedRoot),
+  );
+  if (context.isAbsolute(normalizedRoot) &&
+      !_journalTrashPathsEqual(context, canonicalRoot, normalizedRoot)) {
+    throw _unsafeRestoreTrashPath(unsafePath);
+  }
+
+  return canonicalRoot;
+}
+
+bool _journalTrashPathsEqual(p.Context context, String left, String right) {
+  final normalizedLeft = context.normalize(left);
+  final normalizedRight = context.normalize(right);
+  if (context.style == p.Style.windows) {
+    return normalizedLeft.toLowerCase() == normalizedRight.toLowerCase();
+  }
+
+  return normalizedLeft == normalizedRight;
+}
+
+RemoteFileException _unsafeRestoreTrashPath(String path) => RemoteFileException(
+  kind: RemoteFileErrorKind.conflict,
+  operation: 'restore sync trash',
+  path: path,
+  message: 'The trashed copy moved outside its owned run directory.',
+);
 
 /// One restore outcome line for a skipped entry — the path and why.
 final class SyncRestoreSkip {
@@ -727,28 +881,46 @@ Future<String?> _restoreOne({
     if (cached != null) return cached;
   }
 
+  var verifiedTrashPath = entry.trashLocation;
+  Future<String?> verifyTrashPath() async {
+    try {
+      verifiedTrashPath = await _verifiedRestoreTrashPath(journal, entry, fs);
+      return null;
+    } on RemoteFileException catch (error) {
+      return 'could not verify the trashed copy: ${error.message}';
+    }
+  }
+
   // Verify the trashed entry itself: size always; the recorded digest
   // for copy-fallback entries (05 §8 rail 9 — a rename cannot
   // truncate, an interrupted copy can, and Undo must never resurrect a
   // truncated "previous version" over a good file).
   final RemoteFileEntry trashedEntry;
   try {
-    trashedEntry = await fs.stat(entry.trashLocation, followLinks: false);
+    final pathError = await verifyTrashPath();
+    if (pathError != null) return pathError;
+    trashedEntry = await fs.stat(verifiedTrashPath, followLinks: false);
   } on RemoteFileException catch (error) {
     return error.kind == RemoteFileErrorKind.notFound
         ? 'the trashed copy is gone'
         : 'could not inspect the trashed copy: ${error.message}';
   }
-  if (trashedEntry.size != entry.bytes) {
+  if (trashedEntry.type != RemoteFileType.file ||
+      trashedEntry.size != entry.bytes) {
     return 'the trashed copy changed size since the run';
   }
   final expectedHash = entry.sha256;
   if (expectedHash != null) {
-    final digest = await _hashFile(fs, entry.trashLocation);
+    final pathError = await verifyTrashPath();
+    if (pathError != null) return pathError;
+    final digest = await _hashFile(fs, verifiedTrashPath);
     if (digest != expectedHash) {
       return 'the trashed copy is truncated or changed';
     }
   }
+
+  final mutationPathError = await verifyTrashPath();
+  if (mutationPathError != null) return mutationPathError;
 
   if (entry.parentPath != entry.relativePath) {
     // A file a rule-4 pre-delete removed: the run's replacement entry
@@ -794,7 +966,7 @@ Future<String?> _restoreOne({
   if (chainError != null) return chainError;
 
   try {
-    await fs.rename(entry.trashLocation, origin);
+    await fs.rename(verifiedTrashPath, origin);
   } on RemoteFileException catch (error) {
     return 'could not move the trashed copy back: ${error.message}';
   }

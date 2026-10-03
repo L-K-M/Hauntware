@@ -318,7 +318,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     }
     if (key == LogicalKeyboardKey.space && event is KeyDownEvent) {
       final row = _focusedRow;
-      if (row == null || _controller.isRunning) {
+      if (row == null || _controller.planMutationsBlocked) {
         return KeyEventResult.ignored;
       }
       final targets = _selected.contains(row) ? _selected.toList() : [row];
@@ -452,6 +452,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     _focusContextRow(item);
     final compare = _compareCommand;
     final actions = _controller.availableOverrides(item);
+    final mutationsBlocked = _controller.planMutationsBlocked;
     final entries = <PopupMenuEntry<Object>>[
       if (compare != null) ...[
         GhostMenuItem<Object>(
@@ -474,6 +475,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         GhostMenuItem<Object>(
           context: context,
           value: action,
+          enabled: !mutationsBlocked,
           label: _actionMenuLabel(l10n, action),
           icon: _actionIcon(action),
           iconColor: FamilyPalette.of(context).glyph(
@@ -487,7 +489,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
       GhostMenuItem<Object>(
         context: context,
         value: item.suggested,
-        enabled: item.userOverridden,
+        enabled: !mutationsBlocked && item.userOverridden,
         label: l10n.syncOverrideReset,
         icon: Icons.undo,
       ),
@@ -766,7 +768,7 @@ class _Header extends StatelessWidget {
                           ),
                         ],
                         selected: {mode},
-                        onSelectionChanged: controller.isRunning
+                        onSelectionChanged: controller.planMutationsBlocked
                             ? null
                             : (modes) => unawaited(_setMode(modes.first)),
                       ),
@@ -776,7 +778,7 @@ class _Header extends StatelessWidget {
                           tooltip:
                               '${l10n.syncSideLeft} ⇄ ${l10n.syncSideRight}',
                           icon: const Icon(Icons.swap_horiz, size: 18),
-                          onPressed: controller.isRunning
+                          onPressed: controller.planMutationsBlocked
                               ? null
                               : () => unawaited(_flipDirection()),
                         ),
@@ -787,7 +789,7 @@ class _Header extends StatelessWidget {
               IconButton(
                 tooltip: l10n.syncRescan,
                 icon: const Icon(Icons.refresh, size: 18),
-                onPressed: controller.isRunning
+                onPressed: controller.planMutationsBlocked
                     ? null
                     : () => unawaited(controller.rescan()),
               ),
@@ -1053,7 +1055,9 @@ class _SuggestionBanner extends StatelessWidget {
           child: Text(l10n.paneNoticeDismiss),
         ),
         FilledButton.tonal(
-          onPressed: () => unawaited(controller.acceptHeavySuggestion()),
+          onPressed: controller.planMutationsBlocked
+              ? null
+              : () => unawaited(controller.acceptHeavySuggestion()),
           child: Text(l10n.syncHeavySuggestionAccept),
         ),
       ],
@@ -1117,7 +1121,7 @@ class _RefusalBanner extends StatelessWidget {
             ),
             if (onEditRules != null)
               TextButton(
-                onPressed: onEditRules,
+                onPressed: controller.planMutationsBlocked ? null : onEditRules,
                 child: Text(l10n.syncMaxDeleteSaveAdjust),
               ),
           ],
@@ -1314,7 +1318,7 @@ class _ConflictBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final conflicts = controller.stats?.conflicts ?? 0;
-    if (conflicts == 0 || controller.isRunning) {
+    if (conflicts == 0 || controller.planMutationsBlocked) {
       return const SizedBox.shrink();
     }
     final theme = Theme.of(context);

@@ -5487,6 +5487,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'The sync endpoint changed while sync trash was being resolved.';
 
   @override
+  String get syncTrashHostKeyUnavailable =>
+      'The sync endpoint has no accepted host key.';
+
+  @override
+  String get syncTrashJumpRouteInvalid =>
+      'The sync endpoint jump route is invalid.';
+
+  @override
+  String get syncTrashJumpHostUnavailable =>
+      'The sync endpoint jump host is unavailable.';
+
+  @override
+  String get syncTrashAuthenticationUnavailable =>
+      'The sync endpoint has no authenticated lease.';
+
+  @override
   String get syncCopyReport => 'Copy Report';
 
   @override

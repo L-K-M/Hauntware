@@ -10,6 +10,11 @@ const _packageDeclaration = 'name: poltergeist_app';
 const _bookmarkBackupLoad = 'await errorReporter.guard(bookmarkBackup.load);';
 const _catalogLookupBinding = 'serverConfigs.catalogLookup =';
 const _checkoutSessionStart = 'final checkoutSession =';
+const _persistentSyncDeviceId = 'deviceId: syncEnrollmentState.deviceId,';
+const _sharedLocalSyncDeviceId =
+    "deviceId: () async => syncEnrollmentState.cachedDeviceId ?? 'local',";
+const _failureFreeCancellation =
+    'outcome.cancelled && outcome.failures.isEmpty';
 
 void main() {
   test('recognizes reserved filesystem declaration variants', () {
@@ -62,5 +67,20 @@ void main() {
     // resolve through the materialized catalog.
     expect(backupLoad, lessThan(checkoutStart));
     expect(lookupBinding, lessThan(checkoutStart));
+  });
+
+  test('sync trash uses the persisted per-install device id', () {
+    final source = File('lib/main.dart').readAsStringSync();
+
+    expect(source, contains(_persistentSyncDeviceId));
+    expect(source, isNot(contains(_sharedLocalSyncDeviceId)));
+  });
+
+  test('cancelled purge toast does not hide failures', () {
+    final source = File(
+      'lib/ui/sync/sync_trash_purge_dialog.dart',
+    ).readAsStringSync();
+
+    expect(source, contains(_failureFreeCancellation));
   });
 }

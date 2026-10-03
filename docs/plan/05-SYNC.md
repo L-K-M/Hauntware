@@ -894,6 +894,14 @@ class SyncRunRecord {                    // journal header, JSONL (§8)
    `changed since preview`, exactly like any other precondition
    mismatch (and therefore gates the delete phase per rule 3).
 
+   These checks have 03 §2.2's path-based VFS boundary. They reject links
+   present or observed during an operation, but do not create an atomic
+   namespace sandbox against another process or remote session using the
+   same account. Such a writer already has equivalent mutation authority;
+   `followLinks: false` end to end means no operation intentionally follows
+   an observed link, not that a check and later path mutation are one atomic
+   filesystem primitive.
+
 ## 7. Preview UX — the plan view
 
 Sync opens as a **plan view**: a first-class screen in the active pane's tab

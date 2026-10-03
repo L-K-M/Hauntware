@@ -215,13 +215,11 @@ final class _SyncTrashPurgeTarget {
   const _SyncTrashPurgeTarget({
     required this.location,
     required this.endpoint,
-    required this.fileSystem,
     required this.selection,
   });
 
   final SyncTrashLocation location;
   final SyncEndpoint endpoint;
-  final RemoteFileSystem fileSystem;
   final SyncTrashSelection selection;
 }
 
@@ -505,6 +503,7 @@ final class SyncPlanController extends ChangeNotifier {
   String? _rightRoot;
   bool _leftCaseSensitive = true;
   bool _rightCaseSensitive = true;
+  Map<SyncSide, SyncEndpointBinding> _endpointBindings = {};
 
   /// Actual scan keys for pairs whose case or Unicode form differs by side.
   Map<SyncItem, ({String left, String right})> _comparisonPaths =
@@ -551,8 +550,12 @@ final class SyncPlanController extends ChangeNotifier {
   bool get isRunning => _phase == SyncPlanPhase.running;
   bool get isPaused => _pause?.isPaused ?? false;
   bool get isPurgingTrash => _isPurgingTrash;
+
+  /// Whether an operation currently owns the reviewed pair and plan.
+  bool get planMutationsBlocked =>
+      _disposed || _activeOperation != null || isRunning || _isPurgingTrash;
   bool get trashPurgeBlocksActions =>
-      _activeOperation != null || _isPurgingTrash || _trashRootsPurging;
+      planMutationsBlocked || _trashRootsPurging;
 
   /// Plan-time aged-trash notices. Live listings are actionable; cache
   /// fallbacks retain their age label but never authorize deletion.
@@ -696,7 +699,6 @@ final class SyncPlanController extends ChangeNotifier {
       _SyncTrashPurgeTarget(
         location: target.location,
         endpoint: endpoint,
-        fileSystem: fileSystem,
         selection: selection,
       ),
     ], SyncTrashPurgeAdmission.excludeActiveRuns);
@@ -721,7 +723,6 @@ final class SyncPlanController extends ChangeNotifier {
         _SyncTrashPurgeTarget(
           location: target.location,
           endpoint: endpoint,
-          fileSystem: fileSystem,
           selection: selection,
         ),
       );
@@ -816,15 +817,15 @@ final class SyncPlanController extends ChangeNotifier {
       for (final target in request._targets) {
         final SyncTrashPurgeReport report;
         try {
-          await _environment.verifyTrashLocation(
+          report = await _environment.withVerifiedTrashLocation(
             target.endpoint,
             target.location,
-          );
-          report = await service.purge(
-            target.fileSystem,
-            target.selection,
-            purgeLease.activeRunIds(target.location),
-            _trashPurgeCancellation,
+            (fileSystem) => service.purge(
+              fileSystem,
+              target.selection,
+              purgeLease.activeRunIds(target.location),
+              _trashPurgeCancellation,
+            ),
           );
         } on RemoteFileException catch (error) {
           failures.addAll([
@@ -980,7 +981,7 @@ final class SyncPlanController extends ChangeNotifier {
   /// hidden, trash paths, direction): a fresh walk is the only honest
   /// answer to "the rules changed".
   Future<void> rescan() async {
-    if (_phase == SyncPlanPhase.running || _isPurgingTrash) return;
+    if (planMutationsBlocked) return;
     _scanCancellation?.cancel();
     await _scanAndDiff();
   }
@@ -992,7 +993,7 @@ final class SyncPlanController extends ChangeNotifier {
     SyncDirection? direction,
     DeletionPolicy? deletions,
   }) async {
-    if (_phase == SyncPlanPhase.running || _isPurgingTrash) return;
+    if (planMutationsBlocked) return;
     _pair = _pairWithRules(
       _rulesWith(
         direction: direction,
@@ -1005,7 +1006,7 @@ final class SyncPlanController extends ChangeNotifier {
   /// Options edits that change the walk (excludes, hidden files,
   /// comparison mode, conflict default, trash paths).
   Future<void> updateRules(SyncRuleSet rules) async {
-    if (_phase == SyncPlanPhase.running || _isPurgingTrash) return;
+    if (planMutationsBlocked) return;
     _pair = _pairWithRules(rules);
     await rescan();
   }
@@ -1014,23 +1015,26 @@ final class SyncPlanController extends ChangeNotifier {
   /// name, endpoints, rules — plus the per-side case-sensitivity
   /// overrides that live in pair state rather than the ruleset, then
   /// rescans. An endpoint edit re-keys `sync_state` by construction
-  /// (the canonical pairId is endpoint-derived).
-  Future<void> updatePairDefinition(
+  /// (the canonical pairId is endpoint-derived). Returns false when
+  /// an operation already owns the reviewed pair and plan.
+  Future<bool> updatePairDefinition(
     SyncPair pair, {
     SyncCaseOverrides? caseOverrides,
   }) async {
-    if (_phase == SyncPlanPhase.running || _isPurgingTrash) return;
+    if (planMutationsBlocked) return false;
     _pair = pair;
     // The overrides land on the state the rescan loads — saving under
     // the pre-edit pairId here would write a record the post-edit
     // pairId never sees, and the rescan's load() would discard it.
     _pendingCaseOverrides = caseOverrides;
     await rescan();
+    return true;
   }
 
   /// The heavy-dir suggestion's accept affordance: add `**/{name}/` to
   /// the pair's excludes and rescan (05 §6).
   Future<void> acceptHeavySuggestion() async {
+    if (planMutationsBlocked) return;
     final name = _heavySuggestion?.name;
     if (name == null) return;
     _heavySuggestion = null;
@@ -1108,7 +1112,7 @@ final class SyncPlanController extends ChangeNotifier {
   /// §6 rule 4's pre-delete is only reachable through the type-change
   /// row's own copy/update offer.
   void applyOverride(SyncItem item, SyncActionType action) {
-    if (_plan == null || isRunning) return;
+    if (_plan == null || planMutationsBlocked) return;
     if (action == item.suggested) {
       resetOverride(item);
       return;
@@ -1126,7 +1130,7 @@ final class SyncPlanController extends ChangeNotifier {
 
   /// Back to the differ's proposal.
   void resetOverride(SyncItem item) {
-    if (_plan == null || isRunning) return;
+    if (_plan == null || planMutationsBlocked) return;
     item.effective = item.suggested;
     item.userOverridden = false;
     _reassess();
@@ -1136,7 +1140,7 @@ final class SyncPlanController extends ChangeNotifier {
   /// review's re-check of a row or a whole section — with one
   /// reassessment.
   void resetOverrides(Iterable<SyncItem> items) {
-    if (_plan == null || isRunning) return;
+    if (_plan == null || planMutationsBlocked) return;
     var changed = false;
     for (final item in items) {
       if (!item.userOverridden && item.effective == item.suggested) continue;
@@ -1152,7 +1156,7 @@ final class SyncPlanController extends ChangeNotifier {
   /// bar hides it then), `keepLeft`/`keepRight` skip rows whose source
   /// side is absent.
   int resolveConflicts(SyncConflictChoice choice) {
-    if (_plan == null || isRunning) return 0;
+    if (_plan == null || planMutationsBlocked) return 0;
     var resolved = 0;
     for (final item in _plan!.items) {
       if (item.suggested != SyncActionType.conflict &&
@@ -1298,7 +1302,7 @@ final class SyncPlanController extends ChangeNotifier {
     Iterable<SyncItem> items,
     SyncActionType action,
   ) {
-    if (_plan == null || isRunning) return const [];
+    if (_plan == null || planMutationsBlocked) return const [];
     final skipped = <SyncItem>[];
     var changed = false;
     for (final item in items) {
@@ -1427,7 +1431,8 @@ final class SyncPlanController extends ChangeNotifier {
     final service = SyncTrashPurgeService(_environment.syncRunsDirectory);
     for (final target in targets.values) {
       final fileSystem = target.fileSystem;
-      if (fileSystem == null) continue;
+      final endpoint = target.endpoint;
+      if (fileSystem == null || endpoint == null) continue;
       SyncTrashPurgeLease? inventoryLease;
       try {
         // Inspection can release absent journals, so it shares the purge
@@ -1439,22 +1444,26 @@ final class SyncPlanController extends ChangeNotifier {
         if (inventoryLease == null) continue;
         final activeRunIds = inventoryLease.activeRunIds(target.location);
         target.activeRunIds = activeRunIds;
-        final inventory = await service.inspect(
-          fileSystem,
-          target.location.trashRoot,
-          prefix,
-          now,
-          trashScope: target.location.scopeKey,
-          pathStyle: target.location.pathStyle,
-          pathCase: target.location.pathCase,
-          isActiveRun: activeRunIds.contains,
-          isCancelled: () =>
-              _disposed ||
-              generation != _scanGeneration ||
-              (_scanCancellation?.isCancelled ?? false),
-          onPurgedRun: (runId) => _environment.trashActivity.recordPurged([
-            runId,
-          ], target.location.scopeKey),
+        final inventory = await _environment.withVerifiedTrashLocation(
+          endpoint,
+          target.location,
+          (verifiedFileSystem) => service.inspect(
+            verifiedFileSystem,
+            target.location.trashRoot,
+            prefix,
+            now,
+            trashScope: target.location.scopeKey,
+            pathStyle: target.location.pathStyle,
+            pathCase: target.location.pathCase,
+            isActiveRun: activeRunIds.contains,
+            isCancelled: () =>
+                _disposed ||
+                generation != _scanGeneration ||
+                (_scanCancellation?.isCancelled ?? false),
+            onPurgedRun: (runId) => _environment.trashActivity.recordPurged([
+              runId,
+            ], target.location.scopeKey),
+          ),
         );
         if (_disposed || generation != _scanGeneration) return;
         target.live = inventory;
@@ -1615,6 +1624,7 @@ final class SyncPlanController extends ChangeNotifier {
     _binding?.retry = null;
     _holdingForReview = false;
     _comparisonTarget = null;
+    _endpointBindings = {};
     _trashLocations = {};
     _trashTargets = {};
     _trashLocationFailures = {};
@@ -1626,9 +1636,11 @@ final class SyncPlanController extends ChangeNotifier {
     _rightScanned = 0;
     notifyListeners();
     try {
-      var left = await _scanSide(SyncSide.left, _scanCancellation!);
-      var right = await _scanSide(SyncSide.right, _scanCancellation!);
+      var leftScan = await _scanSide(SyncSide.left, _scanCancellation!);
+      var rightScan = await _scanSide(SyncSide.right, _scanCancellation!);
       if (_disposed || generation != _scanGeneration) return;
+      var left = leftScan.result;
+      var right = rightScan.result;
       _leftRoot = left.rootPath;
       _rightRoot = right.rootPath;
       _pairId = _computePairId(left, right);
@@ -1643,17 +1655,19 @@ final class SyncPlanController extends ChangeNotifier {
       final rightOverride = _pairState.caseSensitiveOverrideRight;
       if ((leftOverride != null && leftOverride != left.caseSensitive) ||
           (rightOverride != null && rightOverride != right.caseSensitive)) {
-        left = await _scanSide(
+        leftScan = await _scanSide(
           SyncSide.left,
           _scanCancellation!,
           caseSensitivityOverride: leftOverride,
         );
-        right = await _scanSide(
+        rightScan = await _scanSide(
           SyncSide.right,
           _scanCancellation!,
           caseSensitivityOverride: rightOverride,
         );
         if (_disposed || generation != _scanGeneration) return;
+        left = leftScan.result;
+        right = rightScan.result;
         _leftRoot = left.rootPath;
         _rightRoot = right.rootPath;
         _pairId = _computePairId(left, right);
@@ -1662,6 +1676,12 @@ final class SyncPlanController extends ChangeNotifier {
         // pending overrides so they persist under this pairId.
         _applyPendingCaseOverrides();
       }
+      _endpointBindings = {
+        if (leftScan.endpointBinding != null)
+          SyncSide.left: leftScan.endpointBinding!,
+        if (rightScan.endpointBinding != null)
+          SyncSide.right: rightScan.endpointBinding!,
+      };
       _leftCaseSensitive = left.caseSensitive;
       _rightCaseSensitive = right.caseSensitive;
       _pairState.touchedAt = DateTime.now().toUtc();
@@ -1746,13 +1766,13 @@ final class SyncPlanController extends ChangeNotifier {
     return paths;
   }
 
-  Future<ScanResult> _scanSide(
+  Future<({ScanResult result, SyncEndpointBinding? endpointBinding})> _scanSide(
     SyncSide side,
     ScanCancellation cancellation, {
     bool? caseSensitivityOverride,
-  }) {
+  }) async {
     final endpoint = side == SyncSide.left ? _pair.left : _pair.right;
-    return _scanner.scan(
+    final result = await _scanner.scan(
       endpoint,
       side,
       _pair.rules,
@@ -1767,6 +1787,11 @@ final class SyncPlanController extends ChangeNotifier {
         if (!_disposed) notifyListeners();
       },
     );
+    final endpointBinding = _environment.endpointAvailable(endpoint)
+        ? await _environment.endpointBindingAfterAccess(endpoint)
+        : null;
+
+    return (result: result, endpointBinding: endpointBinding);
   }
 
   /// §9: the pairId's fold flags settle from THIS scan's
@@ -1856,6 +1881,11 @@ final class SyncPlanController extends ChangeNotifier {
   /// calls [run] with [deleteConfirmed]; a call without it re-surfaces
   /// the gate rather than executing.
   Future<void> run({bool deleteConfirmed = false}) {
+    if (_phase == SyncPlanPhase.scanning ||
+        _phase == SyncPlanPhase.error ||
+        _phase == SyncPlanPhase.running) {
+      return Future.value();
+    }
     if (!_beginOperation(_SyncPlanOperation.run)) return Future.value();
 
     final operation = _run(
@@ -1865,13 +1895,14 @@ final class SyncPlanController extends ChangeNotifier {
   }
 
   Future<void> _run({required bool deleteConfirmed}) async {
-    await _trashInventoryRefresh;
+    final generation = _scanGeneration;
     final plan = _plan;
-    if (plan == null ||
-        isRunning ||
+    if (plan == null || _disposed) return;
+    await _trashInventoryRefresh;
+    if (!_operationCanContinue(_SyncPlanOperation.run, generation) ||
+        !identical(_plan, plan) ||
         _isPurgingTrash ||
-        _trashRootsPurging ||
-        _disposed) {
+        _trashRootsPurging) {
       return;
     }
     _reassess();
@@ -1892,46 +1923,61 @@ final class SyncPlanController extends ChangeNotifier {
     SyncTrashActivityLease? trashLease;
     try {
       await _ensureRunTrashLocations(plan);
-      if (_disposed) return;
+      if (!_operationCanContinue(_SyncPlanOperation.run, generation) ||
+          !identical(_plan, plan)) {
+        return;
+      }
 
-      final executor = _buildExecutor();
-      _executor = executor;
-      final runId = executor.mintRunId();
+      final runId = _buildExecutor().mintRunId();
       trashLease = await _environment.trashActivity.begin(
         runId,
         _runTrashLocations(),
       );
-      await _verifyRunTrashLocations();
-      _binding = syncTasks.beginTask(
-        spec: _taskSpec(),
-        plan: plan,
-        pause: _pause!,
-        cancellation: _runCancellation!,
-        retry: retryFailed,
+      if (!_operationCanContinue(_SyncPlanOperation.run, generation)) return;
+      final ran = await _environment.withVerifiedEndpointBindings(
+        _runEndpointBindings(),
+        (fileSystems) async {
+          if (!_operationCanContinue(_SyncPlanOperation.run, generation)) {
+            return false;
+          }
+          final executor = _buildExecutor(
+            leftFileSystem: fileSystems[0],
+            rightFileSystem: fileSystems[1],
+          );
+          _executor = executor;
+          _binding = syncTasks.beginTask(
+            spec: _taskSpec(),
+            plan: plan,
+            pause: _pause!,
+            cancellation: _runCancellation!,
+            retry: retryFailed,
+          );
+          final run = await executor.run(
+            plan,
+            pairId: _pairId ?? _pair.id,
+            runId: runId,
+            deleteConfirmationAcknowledged: deleteConfirmed,
+            cancellation: _runCancellation,
+            pause: _pause,
+            onEvent: _onRunEvent,
+          );
+          _lastRun = run;
+          // A cancelled run is not a sync — 'last synced', the heavy-dir
+          // suppression, and the 90-day ad-hoc prune key on real work.
+          if (!run.cancelled) {
+            _pairState.lastRunAt = DateTime.now().toUtc();
+          }
+          // Persist what write-back verification observed, not its inputs.
+          _pairState.mtimeUnreliableLeft = run.mtimeUnreliableLeft;
+          _pairState.mtimeUnreliableRight = run.mtimeUnreliableRight;
+          _pairState.touchedAt = DateTime.now().toUtc();
+          await _environment.states.save(_pairId ?? _pair.id, _pairState);
+          if (_disposed) return false;
+          _finishRunPhase(run);
+          return true;
+        },
       );
-      final run = await executor.run(
-        plan,
-        pairId: _pairId ?? _pair.id,
-        runId: runId,
-        deleteConfirmationAcknowledged: deleteConfirmed,
-        cancellation: _runCancellation,
-        pause: _pause,
-        onEvent: _onRunEvent,
-      );
-      _lastRun = run;
-      // A cancelled run is not a sync — 'last synced', the heavy-dir
-      // suppression, and the 90-day ad-hoc prune all key on real work.
-      if (!run.cancelled) {
-        _pairState.lastRunAt = DateTime.now().toUtc();
-      }
-      // §9: the executor's write-back verification refreshes the
-      // untrust flags — persist what the run observed, not the inputs.
-      _pairState.mtimeUnreliableLeft = run.mtimeUnreliableLeft;
-      _pairState.mtimeUnreliableRight = run.mtimeUnreliableRight;
-      _pairState.touchedAt = DateTime.now().toUtc();
-      await _environment.states.save(_pairId ?? _pair.id, _pairState);
-      if (_disposed) return;
-      _finishRunPhase(run);
+      if (!ran) return;
       await trashLease.close();
       trashLease = null;
       if (_disposed) return;
@@ -1988,9 +2034,9 @@ final class SyncPlanController extends ChangeNotifier {
   }
 
   Future<void> _retryFailed() async {
-    final executor = _executor;
+    final generation = _scanGeneration;
     var lastRun = _lastRun;
-    if (executor == null ||
+    if (_executor == null ||
         lastRun == null ||
         lastRun.journal.hasPurgeMarker ||
         isRunning ||
@@ -2008,42 +2054,55 @@ final class SyncPlanController extends ChangeNotifier {
         lastRun.journal.record.runId,
         _runTrashLocations(),
       );
-      await _verifyRunTrashLocations();
-      lastRun = await _reopenRun(lastRun);
-      if (_disposed) return;
-      if (lastRun.journal.hasPurgeMarker) {
-        if (!_disposed) notifyListeners();
-        return;
-      }
+      if (!_operationCanContinue(_SyncPlanOperation.retry, generation)) return;
+      final retried = await _environment.withVerifiedEndpointBindings(
+        _runEndpointBindings(),
+        (fileSystems) async {
+          if (!_operationCanContinue(_SyncPlanOperation.retry, generation)) {
+            return false;
+          }
+          lastRun = await _reopenRun(lastRun!);
+          if (!_operationCanContinue(_SyncPlanOperation.retry, generation)) {
+            return false;
+          }
+          if (lastRun!.journal.hasPurgeMarker) {
+            if (!_disposed) notifyListeners();
+            return false;
+          }
 
-      _phase = SyncPlanPhase.running;
-      _pause = SyncRunPause();
-      _runCancellation = RemoteTransferCancellation();
-      // The retry mints fresh run controls — rebind so the panel row's
-      // pause/cancel drive the live attempt, not the dead run's objects.
-      _binding?.rebind(
-        pause: _pause!,
-        cancellation: _runCancellation!,
-      );
-      _binding?.emitTaskState(TransferTaskState.running);
-      notifyListeners();
+          _phase = SyncPlanPhase.running;
+          _pause = SyncRunPause();
+          _runCancellation = RemoteTransferCancellation();
+          // Fresh controls make the panel drive this attempt, not the last.
+          _binding?.rebind(pause: _pause!, cancellation: _runCancellation!);
+          _binding?.emitTaskState(TransferTaskState.running);
+          notifyListeners();
 
-      final run = await executor.retryFailed(
-        lastRun,
-        pause: _pause,
-        cancellation: _runCancellation,
-        onEvent: _onRunEvent,
+          final executor = _buildExecutor(
+            leftFileSystem: fileSystems[0],
+            rightFileSystem: fileSystems[1],
+          );
+          _executor = executor;
+          final run = await executor.retryFailed(
+            lastRun!,
+            pause: _pause,
+            cancellation: _runCancellation,
+            onEvent: _onRunEvent,
+          );
+          _lastRun = run;
+          if (!run.cancelled) {
+            _pairState.lastRunAt = DateTime.now().toUtc();
+          }
+          _pairState.mtimeUnreliableLeft = run.mtimeUnreliableLeft;
+          _pairState.mtimeUnreliableRight = run.mtimeUnreliableRight;
+          _pairState.touchedAt = DateTime.now().toUtc();
+          await _environment.states.save(_pairId ?? _pair.id, _pairState);
+          if (_disposed) return false;
+          _finishRunPhase(run);
+          return true;
+        },
       );
-      _lastRun = run;
-      if (!run.cancelled) {
-        _pairState.lastRunAt = DateTime.now().toUtc();
-      }
-      _pairState.mtimeUnreliableLeft = run.mtimeUnreliableLeft;
-      _pairState.mtimeUnreliableRight = run.mtimeUnreliableRight;
-      _pairState.touchedAt = DateTime.now().toUtc();
-      await _environment.states.save(_pairId ?? _pair.id, _pairState);
-      if (_disposed) return;
-      _finishRunPhase(run);
+      if (!retried) return;
       await trashLease.close();
       trashLease = null;
       if (_disposed) return;
@@ -2115,7 +2174,12 @@ final class SyncPlanController extends ChangeNotifier {
   }
 
   Future<SyncRestoreReport> _restoreTrashed() async {
+    final generation = _scanGeneration;
     final run = _lastRun;
+    final leftEndpoint = _pair.left;
+    final rightEndpoint = _pair.right;
+    final leftRoot = _leftRoot;
+    final rightRoot = _rightRoot;
     if (run == null ||
         isRunning ||
         _isPurgingTrash ||
@@ -2133,26 +2197,45 @@ final class SyncPlanController extends ChangeNotifier {
       return const SyncRestoreReport(restored: [], skipped: []);
     }
     try {
-      await _verifyRunTrashLocations();
-      final reopened = await _reopenRun(run);
-      if (_disposed) {
+      if (!_operationCanContinue(_SyncPlanOperation.restore, generation)) {
         return const SyncRestoreReport(restored: [], skipped: []);
       }
-      if (!reopened.journal.hasUnpurgedTrash) {
-        notifyListeners();
-        return const SyncRestoreReport(restored: [], skipped: []);
-      }
+      return await _environment.withVerifiedEndpointBindings(
+        [
+          (
+            endpoint: leftEndpoint,
+            location: _resolvedTrashLocation(SyncSide.left),
+            endpointBinding: _endpointBindings[SyncSide.left],
+          ),
+          (
+            endpoint: rightEndpoint,
+            location: _resolvedTrashLocation(SyncSide.right),
+            endpointBinding: _endpointBindings[SyncSide.right],
+          ),
+        ],
+        (fileSystems) async {
+          if (!_operationCanContinue(_SyncPlanOperation.restore, generation)) {
+            return const SyncRestoreReport(restored: [], skipped: []);
+          }
+          final reopened = await _reopenRun(run);
+          if (!_operationCanContinue(_SyncPlanOperation.restore, generation)) {
+            return const SyncRestoreReport(restored: [], skipped: []);
+          }
+          if (!reopened.journal.hasUnpurgedTrash) {
+            notifyListeners();
+            return const SyncRestoreReport(restored: [], skipped: []);
+          }
 
-      return await restoreTrashedFiles(
-        reopened.journal,
-        fsFor: (side) => _environment.fileSystemFor(
-          side == SyncSide.left ? _pair.left : _pair.right,
-        ),
-        rootFor: (side) =>
-            (side == SyncSide.left ? _leftRoot : _rightRoot) ??
-            _environment.rootFor(
-              side == SyncSide.left ? _pair.left : _pair.right,
-            ),
+          return restoreTrashedFiles(
+            reopened.journal,
+            fsFor: (side) => fileSystems[side == SyncSide.left ? 0 : 1],
+            rootFor: (side) =>
+                (side == SyncSide.left ? leftRoot : rightRoot) ??
+                _environment.rootFor(
+                  side == SyncSide.left ? leftEndpoint : rightEndpoint,
+                ),
+          );
+        },
       );
     } finally {
       try {
@@ -2198,6 +2281,11 @@ final class SyncPlanController extends ChangeNotifier {
     return true;
   }
 
+  bool _operationCanContinue(_SyncPlanOperation operation, int generation) =>
+      !_disposed &&
+      _activeOperation == operation &&
+      _scanGeneration == generation;
+
   void _endOperation(_SyncPlanOperation operation) {
     if (_activeOperation != operation) return;
     _activeOperation = null;
@@ -2206,12 +2294,15 @@ final class SyncPlanController extends ChangeNotifier {
 
   // -- Executor wiring -----------------------------------------------------
 
-  SyncExecutor _buildExecutor() {
+  SyncExecutor _buildExecutor({
+    RemoteFileSystem? leftFileSystem,
+    RemoteFileSystem? rightFileSystem,
+  }) {
     // Remote endpoints throw the typed `unsupported` refusal inside
     // fileSystemFor — the run surfaces it as a failed state, never a
     // simulated transfer.
-    final leftFs = _environment.fileSystemFor(_pair.left);
-    final rightFs = _environment.fileSystemFor(_pair.right);
+    final leftFs = leftFileSystem ?? _environment.fileSystemFor(_pair.left);
+    final rightFs = rightFileSystem ?? _environment.fileSystemFor(_pair.right);
     final leftTrash = _resolvedTrashLocation(SyncSide.left);
     final rightTrash = _resolvedTrashLocation(SyncSide.right);
     return SyncExecutor(
@@ -2293,14 +2384,25 @@ final class SyncPlanController extends ChangeNotifier {
   Set<SyncTrashLocation> _runTrashLocations() =>
       _trashLocations.values.where((location) => location.isResolved).toSet();
 
-  Future<void> _verifyRunTrashLocations() async {
-    for (final side in SyncSide.values) {
-      final location = _trashLocations[side];
-      if (location == null || !location.isResolved) continue;
-      final endpoint = side == SyncSide.left ? _pair.left : _pair.right;
-      await _environment.verifyTrashLocation(endpoint, location);
-    }
-  }
+  List<
+    ({
+      SyncEndpoint endpoint,
+      SyncTrashLocation? location,
+      SyncEndpointBinding? endpointBinding,
+    })
+  >
+  _runEndpointBindings() => [
+    (
+      endpoint: _pair.left,
+      location: _resolvedTrashLocation(SyncSide.left),
+      endpointBinding: _endpointBindings[SyncSide.left],
+    ),
+    (
+      endpoint: _pair.right,
+      location: _resolvedTrashLocation(SyncSide.right),
+      endpointBinding: _endpointBindings[SyncSide.right],
+    ),
+  ];
 
   bool get _trashRootsPurging =>
       _runTrashLocations().any(_environment.trashActivity.hasPurge);

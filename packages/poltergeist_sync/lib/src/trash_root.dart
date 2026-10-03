@@ -33,9 +33,6 @@ final RegExp _syncRunPattern = RegExp(
   r'4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
 );
 final RegExp _rsyncRunPattern = RegExp(r'^rsync-[0-9]{8}-[0-9]{6}$');
-final RegExp _quarantinePattern = RegExp(
-  r'^(.*)\.purging-[0-9a-f]{8}-[0-9a-f]{24}$',
-);
 final RegExp _trashIdentityKeyPattern = RegExp(r'^[0-9a-f]{64}$');
 
 /// A validated marker and canonical directory identity.
@@ -56,9 +53,9 @@ final class SyncTrashRootIdentity {
 
 /// Opens an owned root, or safely claims a dedicated legacy/new directory.
 ///
-/// Adoption refuses filesystem roots and directories containing unknown
-/// subdirectories. This prevents a custom path such as `/` or `/tmp` from
-/// turning ordinary folders into explicit-purge candidates.
+/// Adoption refuses filesystem roots and non-empty directories unless their
+/// only occupants are valid interrupted marker claims. This prevents a custom
+/// path such as `/` or `/tmp` from becoming an explicit-purge candidate.
 Future<SyncTrashRootIdentity> resolveSyncTrashRoot(
   RemoteFileSystem fileSystem,
   String trashRoot, {
@@ -124,7 +121,7 @@ Future<SyncTrashRootIdentity> resolveSyncTrashRoot(
       );
     }
     if (!createdRoot) {
-      await _validateLegacyRoot(fileSystem, normalizedRoot);
+      await _validateLegacyRoot(fileSystem, context, normalizedRoot);
     }
     await _makePrivate(fileSystem, normalizedRoot, pathStyle);
     rootId = await _claimMarker(fileSystem, context, markerPath, pathStyle);
@@ -224,24 +221,20 @@ Future<bool> _createDirectoryChain(
 
 Future<void> _validateLegacyRoot(
   RemoteFileSystem fileSystem,
+  p.Context context,
   String trashRoot,
 ) async {
   final children = await fileSystem.listDirectory(trashRoot);
   for (final child in children) {
     if (!child.isDirectory) throw _unsafeRoot(trashRoot);
-    if (child.name.startsWith(
+    if (!child.name.startsWith(
       '$syncTrashRootMarkerName$_markerCandidateSeparator',
     )) {
-      continue;
-    }
-    if (isSyncTrashRunDirectoryName(child.name)) continue;
-    final quarantine = _quarantinePattern.firstMatch(child.name);
-    if (quarantine != null &&
-        isSyncTrashRunDirectoryName(quarantine.group(1)!)) {
-      continue;
+      throw _unsafeRoot(trashRoot);
     }
 
-    throw _unsafeRoot(trashRoot);
+    // A valid staged marker is evidence of an interrupted concurrent claim.
+    await _readMarker(fileSystem, context, context.join(trashRoot, child.name));
   }
 }
 

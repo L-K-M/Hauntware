@@ -122,7 +122,7 @@ Future<void> _pumpShell(WidgetTester tester) async {
     records: records,
     resetRecords: () async => records = InMemorySyncRecordStore(),
     bookmarks: FakeSyncTrackingBookmarkStore(),
-    hostKeys: InMemoryHostKeyStore(),
+    hostKeys: InMemoryConflictAwareHostKeyStore(),
     pinVerdicts: InMemoryPinVerdictStore(),
     tripwires: InMemorySyncTripwireStore(),
     transportFactory: fakeTransportFactory(FakeSyncServer(), []),

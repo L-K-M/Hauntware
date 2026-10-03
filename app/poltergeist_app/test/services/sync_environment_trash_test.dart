@@ -10,6 +10,42 @@ import 'package:poltergeist_app/services/sync_state_store.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
+final SyncTrashPathStyle _nativeTrashPathStyle = Platform.isWindows
+    ? SyncTrashPathStyle.windows
+    : SyncTrashPathStyle.posix;
+
+final class _CaseVariantRunListingFileSystem extends LocalFileSystem {
+  String? trashRoot;
+  String? runId;
+
+  @override
+  Future<List<RemoteFileEntry>> listDirectory(String path) async {
+    final entries = await super.listDirectory(path);
+    if (trashRoot == null || p.normalize(path) != p.normalize(trashRoot!)) {
+      return entries;
+    }
+
+    return [
+      for (final entry in entries)
+        if (entry.name == runId)
+          RemoteFileEntry(
+            path: p.join(path, entry.name.toUpperCase()),
+            name: entry.name.toUpperCase(),
+            type: entry.type,
+            size: entry.size,
+            uid: entry.uid,
+            gid: entry.gid,
+            accessedAt: entry.accessedAt,
+            modifiedAt: entry.modifiedAt,
+            contentSha256: entry.contentSha256,
+            mode: entry.mode,
+          )
+        else
+          entry,
+    ];
+  }
+}
+
 void main() {
   late Directory scratch;
   late SyncEnvironment environment;
@@ -42,6 +78,61 @@ void main() {
 
     expect(location.trashRoot, p.join(root.path, 'trash', 'custom'));
   });
+
+  test(
+    'custom trash paths preserve case across filesystem boundaries',
+    () async {
+      final root = Directory(p.join(scratch.path, 'root'))..createSync();
+      const remoteServer = BookmarkServerRef(serverConfigId: 'server-1');
+      final cases =
+          <({SyncEndpoint endpoint, String root, String upper, String lower})>[
+            (
+              endpoint: LocalEndpoint(root.path),
+              root: root.path,
+              upper: p.join(scratch.path, 'Trash'),
+              lower: p.join(scratch.path, 'trash'),
+            ),
+            (
+              endpoint: const RemoteEndpoint(
+                server: remoteServer,
+                path: '/sync',
+              ),
+              root: '/sync',
+              upper: '/Trash',
+              lower: '/trash',
+            ),
+          ];
+
+      for (final item in cases) {
+        final upper = await environment.trashLocationFor(
+          endpoint: item.endpoint,
+          canonicalRoot: item.root,
+          rules: SyncRuleSet(trashPathLeft: item.upper),
+          side: SyncSide.left,
+          pathCase: SyncTrashPathCase.insensitive,
+        );
+        final lower = await environment.trashLocationFor(
+          endpoint: item.endpoint,
+          canonicalRoot: item.root,
+          rules: SyncRuleSet(trashPathLeft: item.lower),
+          side: SyncSide.left,
+          pathCase: SyncTrashPathCase.insensitive,
+        );
+        final inRoot = await environment.trashLocationFor(
+          endpoint: item.endpoint,
+          canonicalRoot: item.root,
+          rules: const SyncRuleSet(),
+          side: SyncSide.left,
+          pathCase: SyncTrashPathCase.insensitive,
+        );
+
+        expect(upper.pathCase, SyncTrashPathCase.sensitive);
+        expect(lower.pathCase, SyncTrashPathCase.sensitive);
+        expect(upper.locationKey, isNot(lower.locationKey));
+        expect(inRoot.pathCase, SyncTrashPathCase.insensitive);
+      }
+    },
+  );
 
   test(
     'missing trash roots resolve through an existing symlink parent',
@@ -205,16 +296,17 @@ void main() {
         bytes: 3,
       ),
     );
-    await Directory(
-      p.join(first.trashRoot, syncTrashRootMarkerName),
-    ).delete(recursive: true);
+    final replacementRoot = p.join(scratch.path, 'replacement-trash');
     final replacement = await resolveSyncTrashRoot(
       LocalFileSystem(),
-      first.trashRoot,
-      pathStyle: SyncTrashPathStyle.posix,
+      replacementRoot,
+      pathStyle: _nativeTrashPathStyle,
       access: SyncTrashRootAccess.createOrClaim,
     );
     expect(replacement.scopeKey, isNot(first.scopeKey));
+    await File(
+      p.join(replacementRoot, syncTrashRootMarkerName, 'identity'),
+    ).copy(p.join(first.trashRoot, syncTrashRootMarkerName, 'identity'));
 
     await expectLater(
       environment.resolveTrashLocation(
@@ -236,4 +328,95 @@ void main() {
     expect(reopened.hasPurgeMarker, isFalse);
     expect(reopened.hasUnpurgedTrash, isTrue);
   });
+
+  test(
+    'case-insensitive stale-scope reconciliation preserves live trash',
+    () async {
+      final fileSystem = _CaseVariantRunListingFileSystem();
+      final caseEnvironment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: p.join(scratch.path, 'case_sync_runs'),
+        deviceId: () async => 'test-device',
+        localFileSystem: () => fileSystem,
+      );
+      final root = Directory(p.join(scratch.path, 'case-root'))..createSync();
+      final endpoint = LocalEndpoint(root.path);
+      const rules = SyncRuleSet();
+      final first = await caseEnvironment.resolveTrashLocation(
+        endpoint: endpoint,
+        canonicalRoot: root.path,
+        rules: rules,
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.insensitive,
+      );
+      final runId =
+          '${syncRunDevicePrefix('test-device')}-'
+          '12345678-1234-4123-a123-123456789abc';
+      final runDirectory = Directory(p.join(first.trashRoot, runId))
+        ..createSync();
+      final trashed = File(p.join(runDirectory.path, '000001-a.txt'))
+        ..writeAsStringSync('old');
+      final journal = await SyncRunJournal.create(
+        caseEnvironment.syncRunsDirectory,
+        SyncRunRecord(
+          runId: runId,
+          pairId: 'pair-1',
+          startedAt: DateTime.now(),
+          trashScopeLeft: first.scopeKey,
+          trashLocationKeyLeft: first.locationKey,
+          rules: rules,
+          totals: const PlanTotals(
+            counts: {},
+            bytes: {},
+            replacedFiles: 0,
+            replacedBytes: 0,
+          ),
+          warnings: const [],
+        ),
+      );
+      await journal.appendTrash(
+        SyncJournalTrashLine(
+          parentPath: 'a.txt',
+          relativePath: 'a.txt',
+          side: SyncSide.left,
+          trashLocation: trashed.path,
+          bytes: 3,
+        ),
+      );
+      fileSystem
+        ..trashRoot = first.trashRoot
+        ..runId = runId;
+      final replacementRoot = p.join(scratch.path, 'replacement-trash');
+      final replacement = await resolveSyncTrashRoot(
+        LocalFileSystem(),
+        replacementRoot,
+        pathStyle: _nativeTrashPathStyle,
+        access: SyncTrashRootAccess.createOrClaim,
+      );
+      expect(replacement.scopeKey, isNot(first.scopeKey));
+      await File(
+        p.join(replacementRoot, syncTrashRootMarkerName, 'identity'),
+      ).copy(p.join(first.trashRoot, syncTrashRootMarkerName, 'identity'));
+
+      await expectLater(
+        caseEnvironment.resolveTrashLocation(
+          endpoint: endpoint,
+          canonicalRoot: root.path,
+          rules: rules,
+          side: SyncSide.left,
+          pathCase: SyncTrashPathCase.insensitive,
+        ),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.conflict,
+          ),
+        ),
+      );
+      final reopened = await SyncRunJournal.open(journal.path);
+      expect(reopened.hasPurgeMarker, isFalse);
+      expect(reopened.hasUnpurgedTrash, isTrue);
+    },
+  );
 }

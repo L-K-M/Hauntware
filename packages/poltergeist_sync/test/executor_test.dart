@@ -9,6 +9,13 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 import 'package:test/test.dart';
 
+final SyncTrashPathStyle _nativeTrashPathStyle = Platform.isWindows
+    ? SyncTrashPathStyle.windows
+    : SyncTrashPathStyle.posix;
+
+String _trashJoin(String parent, String child) =>
+    syncTrashPathContext(_nativeTrashPathStyle).join(parent, child);
+
 /// A LocalFileSystem whose clock is scriptable: [reportedMtime] wins
 /// over the real file's stat, and setTimes records its request into
 /// [requestedMtime] (feeding reportedMtime so a verifying re-stat sees
@@ -183,6 +190,51 @@ final class _ExdevTrashFs extends LocalFileSystem {
   }
 }
 
+enum _TrashDirectorySwap { root, run }
+
+/// Swaps an owned trash directory for a symlink after the first move.
+final class _SwappingTrashFs extends LocalFileSystem {
+  _SwappingTrashFs(this.swap, this.outside);
+
+  final _TrashDirectorySwap swap;
+  final Directory outside;
+  Directory? redirectedRunDirectory;
+  var _swapped = false;
+
+  @override
+  Future<void> rename(
+    String oldPath,
+    String newPath, {
+    bool overwrite = false,
+  }) async {
+    await super.rename(oldPath, newPath, overwrite: overwrite);
+    final targetName = entityName(File(newPath));
+    if (_swapped ||
+        !newPath.contains(RemoteTrash.rootDirectoryName) ||
+        !targetName.startsWith('000001-')) {
+      return;
+    }
+
+    _swapped = true;
+    final runDirectory = File(newPath).parent;
+    final trashRoot = runDirectory.parent;
+    switch (swap) {
+      case _TrashDirectorySwap.root:
+        await trashRoot.rename('${trashRoot.path}.owned');
+        final redirected = Directory(
+          '${outside.path}${Platform.pathSeparator}${entityName(runDirectory)}',
+        );
+        await redirected.create(recursive: true);
+        await Link(trashRoot.path).create(outside.path);
+        redirectedRunDirectory = redirected;
+      case _TrashDirectorySwap.run:
+        await runDirectory.rename('${runDirectory.path}.owned');
+        await Link(runDirectory.path).create(outside.path);
+        redirectedRunDirectory = outside;
+    }
+  }
+}
+
 /// Fails after consuming the replacement, when its old destination has
 /// already moved to trash. The callback inspects the persisted recovery
 /// boundary without depending on the executor's in-memory journal.
@@ -264,6 +316,8 @@ void main() {
       rightRoot: rightRoot.path,
       syncRunsDirectory: runsDir.path,
       deviceId: deviceId,
+      trashPathStyleLeft: _nativeTrashPathStyle,
+      trashPathStyleRight: _nativeTrashPathStyle,
     );
   });
 
@@ -407,10 +461,7 @@ void main() {
   /// default in-root trash for [runId], if present.
   File? trashedFile(Directory root, String runId, String name) {
     final dir = Directory(
-      remoteJoin(
-        remoteJoin(root.path, RemoteTrash.rootDirectoryName),
-        runId,
-      ),
+      _trashJoin(_trashJoin(root.path, RemoteTrash.rootDirectoryName), runId),
     );
     if (!dir.existsSync()) return null;
     // Exact D15 match — a suffix match would also accept a foreign
@@ -469,13 +520,11 @@ void main() {
         (l) => l.relativePath == 'changed.txt',
       );
       expect(outcome.trashLocation, isNull);
-      // trashLocation is a VFS path — built with remoteJoin, so its
-      // separators match however the executor joined it.
       expect(
         line.trashLocation,
         remoteJoin(
-          remoteJoin(
-            remoteJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
+          _trashJoin(
+            _trashJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
             run.runId,
           ),
           '000001-changed.txt',
@@ -913,6 +962,8 @@ void main() {
         rightRoot: rightRoot.path,
         syncRunsDirectory: runsDir.path,
         deviceId: deviceId,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
       );
       await writeFile(leftRoot, 'f.txt', 'payload', mtimeSecs: 1600000000);
       fakeLeft.reportedMtime[remoteJoin(leftRoot.path, 'f.txt')] =
@@ -950,6 +1001,8 @@ void main() {
         rightRoot: rightRoot.path,
         syncRunsDirectory: runsDir.path,
         deviceId: deviceId,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
       );
       await writeFile(leftRoot, 'f.txt', 'payload', mtimeSecs: 1577936400);
       final plan = makePlan([
@@ -980,6 +1033,8 @@ void main() {
         rightRoot: rightRoot.path,
         syncRunsDirectory: runsDir.path,
         deviceId: deviceId,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
       );
       await writeFile(leftRoot, 'a.txt', 'payload-a', mtimeSecs: 1577936400);
       await writeFile(leftRoot, 'b.txt', 'payload-b', mtimeSecs: 1577936400);
@@ -1035,6 +1090,8 @@ void main() {
         rightRoot: rightRoot.path,
         syncRunsDirectory: runsDir.path,
         deviceId: deviceId,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
         flushLocalDestination: (path) async {
           trashFs.operations.add('flush:$path');
           await const TransferJournalIo().flushLocalFile(path);
@@ -1066,8 +1123,8 @@ void main() {
       expect(
         line.trashLocation,
         remoteJoin(
-          remoteJoin(
-            remoteJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
+          _trashJoin(
+            _trashJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
             run.runId,
           ),
           '000002-orphan.txt',
@@ -1096,6 +1153,8 @@ void main() {
         rightRoot: rightRoot.path,
         syncRunsDirectory: runsDir.path,
         deviceId: deviceId,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
         flushLocalDestination: (_) async => flushReached = true,
       );
       await writeFile(rightRoot, 'orphan.txt', 'original-content');
@@ -1141,6 +1200,8 @@ void main() {
             rightRoot: rightRoot.path,
             syncRunsDirectory: runsDir.path,
             deviceId: deviceId,
+            trashPathStyleLeft: _nativeTrashPathStyle,
+            trashPathStyleRight: _nativeTrashPathStyle,
             flushLocalDestination: (path) async {
               flushReached = true;
               if (cancelDuringFlush) {
@@ -1213,8 +1274,8 @@ void main() {
       expect(run.runId.startsWith('$prefix-'), isTrue);
 
       final trashDir = Directory(
-        remoteJoin(
-          remoteJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
+        _trashJoin(
+          _trashJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
           run.runId,
         ),
       );
@@ -1228,6 +1289,67 @@ void main() {
       expect(names, containsAll(<String>['000001-two.txt', '000002-one.txt']));
       expect(Directory('${trashDir.path}/sub').existsSync(), isFalse);
     });
+
+    for (final swap in _TrashDirectorySwap.values) {
+      test(
+        'trash refuses a ${swap.name} symlink swapped between moves',
+        () async {
+          if (Platform.isWindows) return;
+
+          final outside = await _createCanonicalTempDirectory(
+            'poltergeist-trash-swap-',
+          );
+          addTearDown(() async {
+            if (await outside.exists()) await outside.delete(recursive: true);
+          });
+          final swappingFs = _SwappingTrashFs(swap, outside);
+          rightFs = swappingFs;
+          executor = SyncExecutor(
+            leftFileSystem: leftFs,
+            rightFileSystem: rightFs,
+            leftRoot: leftRoot.path,
+            rightRoot: rightRoot.path,
+            syncRunsDirectory: runsDir.path,
+            deviceId: deviceId,
+            trashPathStyleLeft: _nativeTrashPathStyle,
+            trashPathStyleRight: _nativeTrashPathStyle,
+          );
+          await writeFile(rightRoot, 'nested/a.txt', 'first');
+          await writeFile(rightRoot, 'b.txt', 'second');
+          final plan = makePlan([
+            item(
+              'nested/a.txt',
+              right: await snapOf(rightRoot, 'nested/a.txt'),
+              suggested: SyncActionType.deleteRight,
+              reason: SyncReason.onlyOnRight,
+            ),
+            item(
+              'b.txt',
+              right: await snapOf(rightRoot, 'b.txt'),
+              suggested: SyncActionType.deleteRight,
+              reason: SyncReason.onlyOnRight,
+            ),
+          ], mirrorRules());
+
+          await executor.run(
+            plan,
+            pairId: pairId,
+            deleteConfirmationAcknowledged: true,
+          );
+
+          expect(find(plan, 'nested/a.txt')!.status, SyncItemStatus.done);
+          expect(find(plan, 'b.txt')!.status, SyncItemStatus.conflicted);
+          expect(await File('${rightRoot.path}/b.txt').readAsString(), 'second');
+          expect(
+            File(
+              '${swappingFs.redirectedRunDirectory!.path}'
+              '${Platform.pathSeparator}000002-b.txt',
+            ).existsSync(),
+            isFalse,
+          );
+        },
+      );
+    }
 
     test('out-of-root trashPath lands under <configured>/<runId>',
         () async {
@@ -1700,6 +1822,8 @@ void main() {
             rightRoot: rightRoot.path,
             syncRunsDirectory: runsDir.path,
             deviceId: deviceId,
+            trashPathStyleLeft: _nativeTrashPathStyle,
+            trashPathStyleRight: _nativeTrashPathStyle,
           );
 
           final run = await failing.run(
@@ -1750,6 +1874,8 @@ void main() {
         rightRoot: rightRoot.path,
         syncRunsDirectory: runsDir.path,
         deviceId: deviceId,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
       );
       final run = await failing.run(plan, pairId: pairId);
       await writeFile(rightRoot, 'f.txt', 'later-user-edit');
@@ -1809,6 +1935,53 @@ void main() {
         isNull,
       );
     });
+
+    test(
+      'a symlinked trash run cannot redirect restore outside the root',
+      () async {
+        await writeFile(rightRoot, 'd.txt', 'deleted-content');
+        final plan = makePlan([
+          item(
+            'd.txt',
+            right: await snapOf(rightRoot, 'd.txt'),
+            suggested: SyncActionType.deleteRight,
+            reason: SyncReason.onlyOnRight,
+          ),
+        ], mirrorRules());
+        final run = await executor.run(
+          plan,
+          pairId: pairId,
+          deleteConfirmationAcknowledged: true,
+        );
+        final trashPath = run.journal.items.single.trashLocation!;
+        final runDirectory = File(trashPath).parent;
+        final heldDirectory = Directory('${runDirectory.path}.held');
+        await runDirectory.rename(heldDirectory.path);
+        final outside = await _createCanonicalTempDirectory(
+          'poltergeist-restore-outside-',
+        );
+        addTearDown(() async {
+          if (await outside.exists()) await outside.delete(recursive: true);
+        });
+        final outsideFile = File(
+          '${outside.path}/${File(trashPath).uri.pathSegments.last}',
+        )..writeAsStringSync('outside-content');
+        await Link(runDirectory.path).create(outside.path);
+
+        final report = await restoreTrashedFiles(
+          run.journal,
+          fsFor: (side) => side == SyncSide.left ? leftFs : rightFs,
+          rootFor: (side) =>
+              side == SyncSide.left ? leftRoot.path : rightRoot.path,
+        );
+
+        expect(report.restored, isEmpty);
+        expect(report.skipped, hasLength(1));
+        expect(outsideFile.readAsStringSync(), 'outside-content');
+        expect(File('${rightRoot.path}/d.txt').existsSync(), isFalse);
+      },
+      skip: Platform.isWindows,
+    );
 
     test('an update backup restores the pre-run version', () async {
       await writeFile(leftRoot, 'f.txt', 'new-version', mtimeSecs: 1600000000);

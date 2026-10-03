@@ -43,7 +43,7 @@ final class _Harness {
   final bookmarks = FakeSyncTrackingBookmarkStore();
   final servers = FakeSyncTrackingServerStore();
   final vaultStore = InMemoryVaultStore();
-  final hostKeys = InMemoryHostKeyStore();
+  final hostKeys = InMemoryConflictAwareHostKeyStore();
   final pinVerdicts = InMemoryPinVerdictStore();
   final tripwires = InMemorySyncTripwireStore();
   var records = InMemorySyncRecordStore();

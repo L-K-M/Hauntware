@@ -276,6 +276,29 @@ void main() {
     expect(journal.hasUnpurgedTrash, isFalse);
   });
 
+  test('mixed-separator UNC trash paths derive their root scope', () async {
+    final journal = await SyncRunJournal.create(
+      runsDir.path,
+      record('run-windows-unc'),
+    );
+    const trashLocation =
+        r'\\server\share\Trash\run-windows-unc/000001-document.txt';
+    await journal.appendTrash(
+      const SyncJournalTrashLine(
+        parentPath: 'document.txt',
+        relativePath: 'document.txt',
+        side: SyncSide.right,
+        trashLocation: trashLocation,
+        bytes: 1,
+      ),
+    );
+
+    expect(
+      journal.trashScopeForEntry(SyncSide.right, trashLocation),
+      r'\\server\share\Trash',
+    );
+  });
+
   test('legacy relative trash skips rmdir only on purged side', () async {
     final leftRoot = Directory('${runsDir.path}/left')..createSync();
     final rightRoot = Directory('${runsDir.path}/right')..createSync();
@@ -350,9 +373,152 @@ void main() {
       rootFor: (side) => side == SyncSide.left ? leftRoot.path : rightRoot.path,
     );
 
-    expect(report.restored, ['right.txt']);
+    expect(
+      report.restored,
+      ['right.txt'],
+      reason: report.skipped
+          .map((entry) => '${entry.relativePath}: ${entry.reason}')
+          .join('\n'),
+    );
     expect(Directory('${leftRoot.path}/left-empty').existsSync(), isFalse);
     expect(Directory('${rightRoot.path}/right-empty').existsSync(), isTrue);
+  });
+
+  test('legacy relative trash restores through its canonical root', () async {
+    final previousCurrent = Directory.current;
+    final working = Directory('${runsDir.path}/working')..createSync();
+    final restoreRoot = Directory('${runsDir.path}/restored')..createSync();
+    const runId = 'run-relative-restore';
+    const trashLocation =
+        'legacy-trash/$runId/000001-old.txt';
+    final trashed = File('${working.path}/$trashLocation')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('legacy');
+    final journal = await SyncRunJournal.create(
+      runsDir.path,
+      SyncRunRecord(
+        runId: runId,
+        pairId: 'pair-1',
+        startedAt: DateTime.now(),
+        rules: const SyncRuleSet(trashPathRight: 'legacy-trash'),
+        totals: const PlanTotals(
+          counts: {},
+          bytes: {},
+          replacedFiles: 0,
+          replacedBytes: 0,
+        ),
+        warnings: const [],
+      ),
+    );
+    await journal.appendTrash(
+      const SyncJournalTrashLine(
+        parentPath: 'old.txt',
+        relativePath: 'old.txt',
+        side: SyncSide.right,
+        trashLocation: trashLocation,
+        bytes: 6,
+      ),
+    );
+
+    Directory.current = working;
+    try {
+      final report = await restoreTrashedFiles(
+        journal,
+        fsFor: (_) => LocalFileSystem(),
+        rootFor: (_) => restoreRoot.path,
+      );
+
+      expect(report.restored, ['old.txt'], reason: '${report.skipped}');
+      expect(
+        File('${restoreRoot.path}/old.txt').readAsStringSync(),
+        'legacy',
+      );
+      expect(await trashed.exists(), isFalse);
+    } finally {
+      Directory.current = previousCurrent;
+    }
+  });
+
+  test('restore does not verify trash after clearing post-state', () async {
+    final style = Platform.isWindows
+        ? SyncTrashPathStyle.windows
+        : SyncTrashPathStyle.posix;
+    final context = syncTrashPathContext(style);
+    final restoreRoot = Directory(context.join(runsDir.path, 'restore'))
+      ..createSync();
+    final trashRoot = context.join(runsDir.path, 'trash');
+    final localFs = LocalFileSystem();
+    final identity = await resolveSyncTrashRoot(
+      localFs,
+      trashRoot,
+      pathStyle: style,
+      access: SyncTrashRootAccess.createOrClaim,
+    );
+    final runId =
+        '${syncRunDevicePrefix('restore-order')}-'
+        '00000000-0000-4000-8000-000000000000';
+    final trashLocation = context.join(
+      identity.canonicalRoot,
+      runId,
+      '000001-document.txt',
+    );
+    File(trashLocation)
+      ..createSync(recursive: true)
+      ..writeAsStringSync('old');
+    final origin = File(context.join(restoreRoot.path, 'document.txt'))
+      ..writeAsStringSync('new');
+    final live = await localFs.stat(origin.path);
+    final observedMtime =
+        live.modifiedAt!.millisecondsSinceEpoch ~/
+        Duration.millisecondsPerSecond;
+    final journal = await SyncRunJournal.create(
+      runsDir.path,
+      SyncRunRecord(
+        runId: runId,
+        pairId: 'pair-1',
+        startedAt: DateTime.now(),
+        trashScopeRight: identity.scopeKey,
+        rules: rules,
+        totals: const PlanTotals(
+          counts: {SyncActionType.updateLeftToRight: 1},
+          bytes: {SyncActionType.updateLeftToRight: 3},
+          replacedFiles: 1,
+          replacedBytes: 3,
+        ),
+        warnings: const [],
+      ),
+    );
+    await journal.appendTrash(
+      SyncJournalTrashLine(
+        parentPath: 'document.txt',
+        relativePath: 'document.txt',
+        side: SyncSide.right,
+        trashLocation: trashLocation,
+        bytes: 3,
+      ),
+    );
+    await journal.appendItem(
+      SyncJournalItemLine(
+        relativePath: 'document.txt',
+        side: SyncSide.right,
+        action: SyncActionType.updateLeftToRight,
+        outcome: SyncItemStatus.done,
+        attempt: 1,
+        bytes: 3,
+        observedMtimeAfterWrite: observedMtime,
+      ),
+    );
+    final fs = _FailCanonicalizeAfterOriginRemovalFileSystem(origin.path);
+
+    final report = await restoreTrashedFiles(
+      journal,
+      fsFor: (_) => fs,
+      rootFor: (_) => restoreRoot.path,
+    );
+
+    expect(report.restored, ['document.txt'], reason: '${report.skipped}');
+    expect(origin.readAsStringSync(), 'old');
+    expect(File(trashLocation).existsSync(), isFalse);
   });
 
   test('lastAttempt drives attempt numbering', () async {
@@ -546,4 +712,25 @@ void main() {
       throwsA(isA<ArgumentError>()),
     );
   });
+}
+
+final class _FailCanonicalizeAfterOriginRemovalFileSystem
+    extends LocalFileSystem {
+  _FailCanonicalizeAfterOriginRemovalFileSystem(this.originPath);
+
+  final String originPath;
+
+  @override
+  Future<String> canonicalize(String path) async {
+    if (!File(originPath).existsSync()) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'canonicalize',
+        path: path,
+        message: 'Connection lost after destination removal.',
+      );
+    }
+
+    return super.canonicalize(path);
+  }
 }

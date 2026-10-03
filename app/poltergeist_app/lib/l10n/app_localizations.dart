@@ -7539,6 +7539,30 @@ abstract class AppLocalizations {
   /// **'The sync endpoint changed while sync trash was being resolved.'**
   String get syncTrashEndpointChanged;
 
+  /// Error shown when offline sync-trash metadata cannot be tied to an accepted remote host key.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync endpoint has no accepted host key.'**
+  String get syncTrashHostKeyUnavailable;
+
+  /// Error shown when a sync endpoint's jump-host route loops or exceeds its safety bound.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync endpoint jump route is invalid.'**
+  String get syncTrashJumpRouteInvalid;
+
+  /// Error shown when a sync endpoint's jump host is absent from the synchronized catalog.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync endpoint jump host is unavailable.'**
+  String get syncTrashJumpHostUnavailable;
+
+  /// Error shown when sync-trash identity verification has no authenticated remote lease.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync endpoint has no authenticated lease.'**
+  String get syncTrashAuthenticationUnavailable;
+
   /// Summary-bar verb (05 §7): copies the run's per-item outcome table to the clipboard.
   ///
   /// In en, this message translates to:

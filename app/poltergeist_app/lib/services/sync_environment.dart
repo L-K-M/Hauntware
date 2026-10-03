@@ -7,6 +7,7 @@
 // transfer lease (protocol v13, STATUS item 23) — and answer the honest
 // `unsupported` refusal only when the engine failed to spawn.
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
@@ -24,6 +25,14 @@ import 'sync_trash_activity.dart';
 /// home).
 const String kSyncRunsDirectoryName = 'sync_runs';
 const String kSyncTrashActivityDirectoryName = '.trash-activity';
+const int _maximumJumpHosts = 16;
+
+/// Opaque authenticated endpoint identity captured after a scan.
+final class SyncEndpointBinding {
+  const SyncEndpointBinding._(this._endpointIdentity);
+
+  final String _endpointIdentity;
+}
 
 /// Everything a sync session needs that is not the pair itself: the
 /// state store, the journal directory, the run-id device prefix, and
@@ -37,6 +46,7 @@ final class SyncEnvironment {
     RemoteFileSystem Function()? localFileSystem,
     this._connections,
     this._serverConfigs,
+    this._acceptedHostKeys,
     SyncTrashActivityRegistry? trashActivity,
   }) : _localFileSystem = localFileSystem ?? LocalFileSystem.new,
        trashActivity =
@@ -55,6 +65,7 @@ final class SyncEnvironment {
     required Future<String> Function() deviceId,
     ConnectionManager? connections,
     AppServerConfigSource? serverConfigs,
+    HostKeyStore? acceptedHostKeys,
   }) => SyncEnvironment(
     states: FileSyncStateStore(
       Directory(
@@ -68,6 +79,7 @@ final class SyncEnvironment {
     deviceId: deviceId,
     connections: connections,
     serverConfigs: serverConfigs,
+    acceptedHostKeys: acceptedHostKeys,
   );
 
   /// §9's per-pair local state (mtime-trust flags, probe cache, trash
@@ -88,6 +100,7 @@ final class SyncEnvironment {
   /// spawn — remote endpoints then refuse typed.
   final ConnectionManager? _connections;
   final AppServerConfigSource? _serverConfigs;
+  final HostKeyStore? _acceptedHostKeys;
 
   /// One lease-on-demand filesystem per remote server, shared by every
   /// scan, diff, and run of every pair naming that server.
@@ -128,6 +141,33 @@ final class SyncEnvironment {
     }
   }
 
+  /// Captures the exact authenticated endpoint used by the preceding scan.
+  Future<SyncEndpointBinding> endpointBindingAfterAccess(
+    SyncEndpoint endpoint,
+  ) async {
+    final path = rootFor(endpoint);
+    final initialBinding = _trashEndpointBinding(endpoint, path);
+    final fileSystem = fileSystemFor(endpoint);
+    if (fileSystem is LeasedRemoteFileSystem) {
+      return fileSystem.withAuthenticatedFileSystem((_, identity) async {
+        final endpointIdentity = await _trashEndpointIdentityAfterAccess(
+          endpoint,
+          initialBinding,
+          path,
+          authenticatedIdentity: identity,
+        );
+        return SyncEndpointBinding._(endpointIdentity);
+      });
+    }
+
+    final endpointIdentity = await _trashEndpointIdentityAfterAccess(
+      endpoint,
+      initialBinding,
+      path,
+    );
+    return SyncEndpointBinding._(endpointIdentity);
+  }
+
   /// Resolves a remote endpoint to the pooled identity used by queued
   /// preview production. Registration stays inside this environment boundary.
   String serverIdFor(RemoteEndpoint endpoint) {
@@ -153,15 +193,17 @@ final class SyncEnvironment {
     required SyncSide side,
     SyncTrashPathCase pathCase = SyncTrashPathCase.sensitive,
   }) async {
+    final configuredTrashPath = switch (side) {
+      SyncSide.left => rules.trashPathLeft,
+      SyncSide.right => rules.trashPathRight,
+    };
+    final effectivePathCase = _trashRootPathCase(configuredTrashPath, pathCase);
     final trashRoot = _resolveTrashPath(
       endpoint,
       canonicalRoot,
-      switch (side) {
-        SyncSide.left => rules.trashPathLeft,
-        SyncSide.right => rules.trashPathRight,
-      },
+      configuredTrashPath,
     );
-    String? endpointIdentity;
+    String endpointIdentity;
     try {
       endpointIdentity = await _trashEndpointIdentity(
         endpoint,
@@ -169,16 +211,17 @@ final class SyncEnvironment {
       );
     } on RemoteFileException {
       // An unresolved catalog cannot safely reuse a host-scoped cache.
+      endpointIdentity = _unverifiedTrashEndpointIdentity(endpoint);
     }
 
     return unresolvedSyncTrashLocation(
       endpoint: endpoint,
       trashRoot: trashRoot,
-      pathCase: pathCase,
+      pathCase: effectivePathCase,
       locationKey: syncTrashLocationKey(
         endpoint: endpoint,
         trashRoot: trashRoot,
-        pathCase: pathCase,
+        pathCase: effectivePathCase,
         endpointIdentity: endpointIdentity,
       ),
     );
@@ -210,18 +253,56 @@ final class SyncEnvironment {
     required SyncSide side,
     required SyncTrashPathCase pathCase,
   }) async {
-    final endpointIdentity = await _trashEndpointIdentity(
+    final initialEndpointBinding = _trashEndpointBinding(
       endpoint,
       canonicalRoot,
     );
     final fileSystem = fileSystemFor(endpoint);
+    if (fileSystem is LeasedRemoteFileSystem) {
+      return fileSystem.withAuthenticatedFileSystem(
+        (boundFileSystem, identity) => _resolveTrashLocationWithFileSystem(
+          endpoint: endpoint,
+          canonicalRoot: canonicalRoot,
+          rules: rules,
+          side: side,
+          pathCase: pathCase,
+          initialEndpointBinding: initialEndpointBinding,
+          fileSystem: boundFileSystem,
+          authenticatedIdentity: identity,
+        ),
+      );
+    }
+
+    return _resolveTrashLocationWithFileSystem(
+      endpoint: endpoint,
+      canonicalRoot: canonicalRoot,
+      rules: rules,
+      side: side,
+      pathCase: pathCase,
+      initialEndpointBinding: initialEndpointBinding,
+      fileSystem: fileSystem,
+    );
+  }
+
+  Future<SyncTrashLocation> _resolveTrashLocationWithFileSystem({
+    required SyncEndpoint endpoint,
+    required String canonicalRoot,
+    required SyncRuleSet rules,
+    required SyncSide side,
+    required SyncTrashPathCase pathCase,
+    required _TrashEndpointBinding initialEndpointBinding,
+    required RemoteFileSystem fileSystem,
+    AuthenticatedEndpointIdentity? authenticatedIdentity,
+  }) async {
+    final configuredTrashPath = switch (side) {
+      SyncSide.left => rules.trashPathLeft,
+      SyncSide.right => rules.trashPathRight,
+    };
+    final effectivePathCase = _trashRootPathCase(configuredTrashPath, pathCase);
     final configuredTrashRoot = _resolveTrashPath(
       endpoint,
       canonicalRoot,
-      switch (side) {
-        SyncSide.left => rules.trashPathLeft,
-        SyncSide.right => rules.trashPathRight,
-      },
+      configuredTrashPath,
     );
     final effectiveTrashRoot = await _expandTrashHome(
       fileSystem,
@@ -233,14 +314,26 @@ final class SyncEnvironment {
       endpoint,
       effectiveTrashRoot,
     );
+    final endpointIdentity = await _trashEndpointIdentityAfterAccess(
+      endpoint,
+      initialEndpointBinding,
+      resolved,
+      authenticatedIdentity: authenticatedIdentity,
+    );
     final pathStyle = endpoint is LocalEndpoint && Platform.isWindows
         ? SyncTrashPathStyle.windows
         : SyncTrashPathStyle.posix;
-    await _verifyTrashEndpointIdentity(endpoint, endpointIdentity, resolved);
+    Future<void> verifyEndpoint(String path) => _verifyTrashEndpointIdentity(
+      endpoint,
+      endpointIdentity,
+      path,
+      authenticatedIdentity: authenticatedIdentity,
+    );
+    await verifyEndpoint(resolved);
     final locationKey = syncTrashLocationKey(
       endpoint: endpoint,
       trashRoot: configuredTrashRoot,
-      pathCase: pathCase,
+      pathCase: effectivePathCase,
       endpointIdentity: endpointIdentity,
     );
     SyncTrashLocation locationFor(SyncTrashRootIdentity identity) =>
@@ -251,7 +344,7 @@ final class SyncEnvironment {
           side: side,
           rootId: identity.rootId,
           resolvedTrashRoot: identity.canonicalRoot,
-          pathCase: pathCase,
+          pathCase: effectivePathCase,
           locationKey: locationKey,
           locationKeyRoot: configuredTrashRoot,
         );
@@ -272,12 +365,12 @@ final class SyncEnvironment {
       }
       openError = error;
     }
-    await _verifyTrashEndpointIdentity(endpoint, endpointIdentity, resolved);
+    await verifyEndpoint(resolved);
 
     final pendingLocation = unresolvedSyncTrashLocation(
       endpoint: endpoint,
       trashRoot: resolved,
-      pathCase: pathCase,
+      pathCase: effectivePathCase,
       locationKey: locationKey,
       locationKeyRoot: configuredTrashRoot,
     );
@@ -288,7 +381,7 @@ final class SyncEnvironment {
     final currentScope = currentIdentity?.scopeKey;
     final staleScopes = priorScopes.where((scope) => scope != currentScope);
     if (currentIdentity != null && staleScopes.isEmpty) {
-      await _verifyTrashEndpointIdentity(endpoint, endpointIdentity, resolved);
+      await verifyEndpoint(resolved);
 
       return locationFor(currentIdentity);
     }
@@ -301,7 +394,7 @@ final class SyncEnvironment {
         knownSyncTrashLocation(
           endpoint: endpoint,
           trashRoot: resolved,
-          pathCase: pathCase,
+          pathCase: effectivePathCase,
           scopeKey: scope,
           locationKey: locationKey,
           locationKeyRoot: configuredTrashRoot,
@@ -341,15 +434,12 @@ final class SyncEnvironment {
           identity: verifiedIdentity,
           priorScopes: priorScopes,
           pathStyle: pathStyle,
-          pathCase: pathCase,
+          pathCase: effectivePathCase,
           endpointIdentity: endpointIdentity,
           endpoint: endpoint,
+          authenticatedIdentity: authenticatedIdentity,
         );
-        await _verifyTrashEndpointIdentity(
-          endpoint,
-          endpointIdentity,
-          resolved,
-        );
+        await verifyEndpoint(resolved);
 
         return locationFor(verifiedIdentity);
       }
@@ -359,12 +449,7 @@ final class SyncEnvironment {
       }
 
       if (verifiedError?.kind == RemoteFileErrorKind.notFound) {
-        await _verifyTrashEndpointIdentity(
-          endpoint,
-          endpointIdentity,
-          resolved,
-        );
-        await _markSupersededTrashScopes(service, locationKey);
+        await verifyEndpoint(resolved);
       }
       final identity = await resolveSyncTrashRoot(
         fileSystem,
@@ -372,7 +457,20 @@ final class SyncEnvironment {
         pathStyle: pathStyle,
         access: SyncTrashRootAccess.createOrClaim,
       );
-      await _verifyTrashEndpointIdentity(endpoint, endpointIdentity, resolved);
+      await verifyEndpoint(resolved);
+      await _retireAbsentTrashScopes(
+        fileSystem: fileSystem,
+        service: service,
+        trashRoot: resolved,
+        locationKey: locationKey,
+        identity: identity,
+        priorScopes: priorScopes,
+        pathStyle: pathStyle,
+        pathCase: effectivePathCase,
+        endpointIdentity: endpointIdentity,
+        endpoint: endpoint,
+        authenticatedIdentity: authenticatedIdentity,
+      );
 
       return locationFor(identity);
     } finally {
@@ -391,6 +489,7 @@ final class SyncEnvironment {
     required SyncTrashPathCase pathCase,
     required String endpointIdentity,
     required SyncEndpoint endpoint,
+    required AuthenticatedEndpointIdentity? authenticatedIdentity,
   }) async {
     final staleScopes = priorScopes
         .where((scope) => scope != identity.scopeKey)
@@ -399,11 +498,15 @@ final class SyncEnvironment {
 
     final runIdsByScope = await service.trashRunIdsByLocationScope(locationKey);
     final listing = await fileSystem.listDirectory(identity.canonicalRoot);
-    final listedNames = {for (final entry in listing) entry.name};
+    final listedNames = {
+      for (final entry in listing)
+        normalizeSyncTrashPath(entry.name, pathStyle, pathCase),
+    };
     for (final scope in staleScopes) {
       for (final runId in runIdsByScope[scope] ?? const <String>{}) {
+        final runName = normalizeSyncTrashPath(runId, pathStyle, pathCase);
         if (listedNames.any(
-          (name) => name == runId || name.startsWith('$runId.purging-'),
+          (name) => name == runName || name.startsWith('$runName.purging-'),
         )) {
           throw RemoteFileException(
             kind: RemoteFileErrorKind.conflict,
@@ -440,7 +543,12 @@ final class SyncEnvironment {
       );
     }
 
-    await _verifyTrashEndpointIdentity(endpoint, endpointIdentity, trashRoot);
+    await _verifyTrashEndpointIdentity(
+      endpoint,
+      endpointIdentity,
+      trashRoot,
+      authenticatedIdentity: authenticatedIdentity,
+    );
 
     await _markSupersededTrashScopes(
       service,
@@ -467,41 +575,240 @@ final class SyncEnvironment {
     SyncEndpoint endpoint,
     String path,
   ) async {
-    var endpointIdentity = 'local';
-    if (endpoint case RemoteEndpoint(:final server)) {
-      final configs = _serverConfigs;
-      if (configs == null) {
+    final binding = _trashEndpointBinding(endpoint, path);
+    try {
+      return await _requireTrashEndpointIdentity(binding, path);
+    } on RemoteFileException catch (error) {
+      if (error.kind != RemoteFileErrorKind.unsupported) rethrow;
+    }
+
+    final store = _acceptedHostKeys;
+    final host = binding.host;
+    final port = binding.port;
+    if (host == null || port == null) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'resolve sync trash',
+        path: path,
+        message: _syncEnvironmentLocalizations().syncTrashHostKeyUnavailable,
+      );
+    }
+    var pin = await store?.get(host, port);
+    if (pin == null && store != null) {
+      final normalizedHost = host.trim().toLowerCase();
+      final matches = (await store.all())
+          .where(
+            (candidate) =>
+                candidate.host.trim().toLowerCase() == normalizedHost &&
+                candidate.port == port,
+          )
+          .toList(growable: false);
+      final fingerprints = {
+        for (final candidate in matches) candidate.fingerprintSha256,
+      };
+      if (fingerprints.length == 1) pin = matches.first;
+    }
+    if (pin == null) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'resolve sync trash',
+        path: path,
+        message: _syncEnvironmentLocalizations().syncTrashHostKeyUnavailable,
+      );
+    }
+
+    return _remoteTrashEndpointIdentity(
+      AuthenticatedEndpointIdentity(
+        host: host,
+        port: port,
+        username: binding.username!,
+        fingerprintSha256: pin.fingerprintSha256,
+        jumpHostId: binding.jumpHostId,
+        routeContext: binding.routeContext,
+      ),
+    );
+  }
+
+  _TrashEndpointBinding _trashEndpointBinding(
+    SyncEndpoint endpoint,
+    String path,
+  ) {
+    if (endpoint is LocalEndpoint) {
+      return const _TrashEndpointBinding(
+        kind: _TrashEndpointKind.local,
+        addressIdentity: 'local',
+      );
+    }
+    final server = switch (endpoint) {
+      RemoteEndpoint(:final server) => server,
+      LocalEndpoint() => throw StateError('local endpoint already handled'),
+    };
+
+    final configs = _serverConfigs;
+    if (configs == null) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'resolve sync trash',
+        path: path,
+        message: 'remote sync endpoints are not available yet',
+      );
+    }
+    final resolved = configs.resolveEndpoint(server);
+    final serverId = resolved.serverId;
+    final config = resolved.config;
+    final routeContext = _trashRouteContext(config, path);
+    return _TrashEndpointBinding(
+      kind: _TrashEndpointKind.remote,
+      addressIdentity: _remoteTrashAddressIdentity(
+        host: config.host,
+        port: config.port,
+        username: config.username,
+        jumpHostId: config.jumpHostId,
+        routeContext: routeContext,
+      ),
+      serverId: serverId,
+      host: config.host,
+      port: config.port,
+      username: config.username.trim(),
+      jumpHostId: config.jumpHostId,
+      routeContext: routeContext,
+    );
+  }
+
+  String? _trashRouteContext(ServerConfig target, String path) {
+    if (target.jumpHostId == null) return null;
+    final configs = _serverConfigs!;
+    final route = <List<Object?>>[];
+    final visited = <String>{target.id};
+    var current = target;
+
+    while (current.jumpHostId != null) {
+      final jumpHostId = current.jumpHostId!;
+      if (!visited.add(jumpHostId) || route.length >= _maximumJumpHosts) {
         throw RemoteFileException(
-          kind: RemoteFileErrorKind.unsupported,
+          kind: RemoteFileErrorKind.conflict,
           operation: 'resolve sync trash',
           path: path,
-          message: 'remote sync endpoints are not available yet',
+          message: _syncEnvironmentLocalizations().syncTrashJumpRouteInvalid,
         );
       }
-      final serverId = configs.registerEndpoint(server);
-      final config = await configs.configFor(serverId);
-      if (config == null) {
+      final jump = configs.catalogConfigFor(jumpHostId);
+      if (jump == null) {
         throw RemoteFileException(
           kind: RemoteFileErrorKind.notFound,
           operation: 'resolve sync trash',
           path: path,
-          message: 'The sync endpoint is no longer available.',
+          message: _syncEnvironmentLocalizations().syncTrashJumpHostUnavailable,
         );
       }
-      endpointIdentity =
-          '${config.username}@${config.host.toLowerCase()}:'
-          '${config.port}';
+      route.add([
+        jump.id,
+        jump.host.trim().toLowerCase(),
+        jump.port,
+        jump.username.trim(),
+        jump.jumpHostId,
+      ]);
+      current = jump;
     }
 
-    return endpointIdentity;
+    return jsonEncode(route);
   }
+
+  Future<String> _trashEndpointIdentityAfterAccess(
+    SyncEndpoint endpoint,
+    _TrashEndpointBinding expected,
+    String path, {
+    AuthenticatedEndpointIdentity? authenticatedIdentity,
+  }) async {
+    final actual = _trashEndpointBinding(endpoint, path);
+    if (expected.addressIdentity != actual.addressIdentity) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'resolve sync trash',
+        path: path,
+        message: _syncEnvironmentLocalizations().syncTrashEndpointChanged,
+      );
+    }
+
+    return _requireTrashEndpointIdentity(
+      actual,
+      path,
+      authenticatedIdentity: authenticatedIdentity,
+    );
+  }
+
+  Future<String> _requireTrashEndpointIdentity(
+    _TrashEndpointBinding binding,
+    String path, {
+    AuthenticatedEndpointIdentity? authenticatedIdentity,
+  }) async {
+    if (binding.kind == _TrashEndpointKind.local) {
+      return binding.addressIdentity;
+    }
+
+    final remote = _remote[binding.serverId];
+    final identity =
+        authenticatedIdentity ?? await remote?.heldEndpointIdentity();
+    if (identity == null) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'resolve sync trash',
+        path: path,
+        message:
+            _syncEnvironmentLocalizations().syncTrashAuthenticationUnavailable,
+      );
+    }
+    return _requireAuthenticatedTrashEndpointIdentity(binding, path, identity);
+  }
+
+  String _requireAuthenticatedTrashEndpointIdentity(
+    _TrashEndpointBinding binding,
+    String path,
+    AuthenticatedEndpointIdentity identity,
+  ) {
+    final leaseAddress = _remoteTrashAddressIdentity(
+      host: identity.host,
+      port: identity.port,
+      username: identity.username,
+      jumpHostId: identity.jumpHostId,
+      routeContext: identity.routeContext,
+    );
+    if (leaseAddress != binding.addressIdentity) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'resolve sync trash',
+        path: path,
+        message: _syncEnvironmentLocalizations().syncTrashEndpointChanged,
+      );
+    }
+
+    return _remoteTrashEndpointIdentity(identity);
+  }
+
+  String _unverifiedTrashEndpointIdentity(SyncEndpoint endpoint) =>
+      switch (endpoint) {
+        LocalEndpoint() => 'unverified\u0000local',
+        RemoteEndpoint(:final server) =>
+          server.identity == null
+              ? 'unverified\u0000config\u0000${server.serverConfigId}'
+              : 'unverified\u0000embedded\u0000'
+                    '${server.identity!.username}\u0000'
+                    '${server.identity!.host.toLowerCase()}\u0000'
+                    '${server.identity!.port}',
+      };
 
   Future<void> _verifyTrashEndpointIdentity(
     SyncEndpoint endpoint,
     String expected,
-    String path,
-  ) async {
-    final actual = await _trashEndpointIdentity(endpoint, path);
+    String path, {
+    AuthenticatedEndpointIdentity? authenticatedIdentity,
+  }) async {
+    final binding = _trashEndpointBinding(endpoint, path);
+    final actual = await _requireTrashEndpointIdentity(
+      binding,
+      path,
+      authenticatedIdentity: authenticatedIdentity,
+    );
     if (actual == expected) return;
 
     throw RemoteFileException(
@@ -516,29 +823,217 @@ final class SyncEnvironment {
   Future<void> verifyTrashLocation(
     SyncEndpoint endpoint,
     SyncTrashLocation location,
-  ) async {
-    if (!location.isResolved) {
-      throw RemoteFileException(
-        kind: RemoteFileErrorKind.conflict,
-        operation: 'verify sync trash',
-        path: location.trashRoot,
-        message: 'The sync-trash root identity is unresolved.',
+  ) => withVerifiedTrashLocation(endpoint, location, (_) async {});
+
+  /// Keeps the authenticated lease fixed from verification through [body].
+  Future<T> withVerifiedTrashLocation<T>(
+    SyncEndpoint endpoint,
+    SyncTrashLocation location,
+    Future<T> Function(RemoteFileSystem fileSystem) body,
+  ) => withVerifiedTrashLocations([
+    (endpoint: endpoint, location: location),
+  ], (fileSystems) => body(fileSystems.single));
+
+  /// Binds every endpoint and verifies its optional trash location.
+  Future<T> withVerifiedTrashLocations<T>(
+    Iterable<({SyncEndpoint endpoint, SyncTrashLocation? location})> locations,
+    Future<T> Function(List<RemoteFileSystem> fileSystems) body, {
+    List<SyncEndpointBinding?> endpointBindings = const [],
+  }) {
+    final requested = locations.toList(growable: false);
+    if (endpointBindings.isNotEmpty &&
+        endpointBindings.length != requested.length) {
+      throw ArgumentError.value(
+        endpointBindings,
+        'endpointBindings',
+        'must match the endpoint count',
       );
     }
-    final endpointIdentity = await _trashEndpointIdentity(
-      endpoint,
-      location.trashRoot,
+    final pending = [
+      for (var index = 0; index < requested.length; index++)
+        (
+          endpoint: requested[index].endpoint,
+          location: requested[index].location,
+          endpointBinding: endpointBindings.isEmpty
+              ? null
+              : endpointBindings[index],
+        ),
+    ];
+    final bound = List<RemoteFileSystem?>.filled(pending.length, null);
+    final identities = List<AuthenticatedEndpointIdentity?>.filled(
+      pending.length,
+      null,
     );
+
+    Future<void> verify(
+      ({
+        SyncEndpoint endpoint,
+        SyncTrashLocation? location,
+        SyncEndpointBinding? endpointBinding,
+      })
+      current,
+      RemoteFileSystem fileSystem,
+      AuthenticatedEndpointIdentity? identity,
+    ) async {
+      final expectedEndpoint = current.endpointBinding;
+      if (expectedEndpoint != null) {
+        await _verifyTrashEndpointIdentity(
+          current.endpoint,
+          expectedEndpoint._endpointIdentity,
+          current.location?.trashRoot ?? rootFor(current.endpoint),
+          authenticatedIdentity: identity,
+        );
+      }
+
+      final location = current.location;
+      if (location != null) {
+        await _verifyTrashLocationWithFileSystem(
+          current.endpoint,
+          location,
+          fileSystem,
+          authenticatedIdentity: identity,
+        );
+        return;
+      }
+      if (identity == null) return;
+
+      final path = rootFor(current.endpoint);
+      final binding = _trashEndpointBinding(current.endpoint, path);
+      await _requireTrashEndpointIdentity(
+        binding,
+        path,
+        authenticatedIdentity: identity,
+      );
+    }
+
+    Future<T> hold(int index) async {
+      if (index == pending.length) {
+        // Later lease waits can outlive a catalog retarget. Recheck every
+        // endpoint while all exact transports remain held before mutating.
+        for (
+          var currentIndex = 0;
+          currentIndex < pending.length;
+          currentIndex++
+        ) {
+          await verify(
+            pending[currentIndex],
+            bound[currentIndex]!,
+            identities[currentIndex],
+          );
+        }
+
+        // Marker reads above may yield. This identity-only pass is fully
+        // synchronous, so a catalog retarget cannot land before [body].
+        for (
+          var currentIndex = 0;
+          currentIndex < pending.length;
+          currentIndex++
+        ) {
+          final identity = identities[currentIndex];
+          if (identity == null) continue;
+
+          final current = pending[currentIndex];
+          final path = current.location?.trashRoot ?? rootFor(current.endpoint);
+          final binding = _trashEndpointBinding(current.endpoint, path);
+          final endpointIdentity = _requireAuthenticatedTrashEndpointIdentity(
+            binding,
+            path,
+            identity,
+          );
+          final expectedEndpoint = current.endpointBinding;
+          if (expectedEndpoint == null ||
+              endpointIdentity == expectedEndpoint._endpointIdentity) {
+            continue;
+          }
+
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'resolve sync trash',
+            path: path,
+            message: _syncEnvironmentLocalizations().syncTrashEndpointChanged,
+          );
+        }
+
+        return body([for (final fileSystem in bound) fileSystem!]);
+      }
+      final current = pending[index];
+      final fileSystem = fileSystemFor(current.endpoint);
+
+      Future<T> continueWith(
+        RemoteFileSystem exactFileSystem,
+        AuthenticatedEndpointIdentity? identity,
+      ) async {
+        await verify(current, exactFileSystem, identity);
+
+        bound[index] = exactFileSystem;
+        identities[index] = identity;
+        try {
+          return await hold(index + 1);
+        } finally {
+          bound[index] = null;
+          identities[index] = null;
+        }
+      }
+
+      if (fileSystem is LeasedRemoteFileSystem) {
+        return fileSystem.withAuthenticatedFileSystem(continueWith);
+      }
+
+      return continueWith(fileSystem, null);
+    }
+
+    return hold(0);
+  }
+
+  /// Verifies optional trash roots and their independent scan identities.
+  Future<T> withVerifiedEndpointBindings<T>(
+    Iterable<
+      ({
+        SyncEndpoint endpoint,
+        SyncTrashLocation? location,
+        SyncEndpointBinding? endpointBinding,
+      })
+    >
+    bindings,
+    Future<T> Function(List<RemoteFileSystem> fileSystems) body,
+  ) {
+    final pending = bindings.toList(growable: false);
+    return withVerifiedTrashLocations(
+      [
+        for (final binding in pending)
+          (endpoint: binding.endpoint, location: binding.location),
+      ],
+      body,
+      endpointBindings: [
+        for (final binding in pending) binding.endpointBinding,
+      ],
+    );
+  }
+
+  Future<void> _verifyTrashLocationWithFileSystem(
+    SyncEndpoint endpoint,
+    SyncTrashLocation location,
+    RemoteFileSystem fileSystem, {
+    AuthenticatedEndpointIdentity? authenticatedIdentity,
+  }) async {
+    final endpointBinding = _trashEndpointBinding(endpoint, location.trashRoot);
     final identity = await resolveSyncTrashRoot(
-      fileSystemFor(endpoint),
+      fileSystem,
       location.trashRoot,
       pathStyle: location.pathStyle,
       access: SyncTrashRootAccess.openExisting,
+    );
+    final endpointIdentity = await _trashEndpointIdentityAfterAccess(
+      endpoint,
+      endpointBinding,
+      location.trashRoot,
+      authenticatedIdentity: authenticatedIdentity,
     );
     await _verifyTrashEndpointIdentity(
       endpoint,
       endpointIdentity,
       location.trashRoot,
+      authenticatedIdentity: authenticatedIdentity,
     );
     final expectedRoot = normalizeSyncTrashPath(
       location.trashRoot,
@@ -588,6 +1083,50 @@ AppLocalizations _syncEnvironmentLocalizations() => lookupAppLocalizations(
     AppLocalizations.supportedLocales,
   ),
 );
+
+enum _TrashEndpointKind { local, remote }
+
+final class _TrashEndpointBinding {
+  const _TrashEndpointBinding({
+    required this.kind,
+    required this.addressIdentity,
+    this.serverId,
+    this.host,
+    this.port,
+    this.username,
+    this.jumpHostId,
+    this.routeContext,
+  });
+
+  final _TrashEndpointKind kind;
+  final String addressIdentity;
+  final String? serverId;
+  final String? host;
+  final int? port;
+  final String? username;
+  final String? jumpHostId;
+  final String? routeContext;
+}
+
+String _remoteTrashAddressIdentity({
+  required String host,
+  required int port,
+  required String username,
+  required String? jumpHostId,
+  required String? routeContext,
+}) =>
+    'remote\u0000${username.trim()}\u0000${host.trim().toLowerCase()}'
+    '\u0000$port\u0000${jumpHostId ?? ''}\u0000${routeContext ?? ''}';
+
+String _remoteTrashEndpointIdentity(AuthenticatedEndpointIdentity identity) =>
+    '${_remoteTrashAddressIdentity(host: identity.host, port: identity.port, username: identity.username, jumpHostId: identity.jumpHostId, routeContext: identity.routeContext)}'
+    '\u0000${identity.fingerprintSha256}';
+
+/// Custom paths may cross onto a filesystem with different case rules.
+SyncTrashPathCase _trashRootPathCase(
+  String? configured,
+  SyncTrashPathCase scannedRootCase,
+) => configured == null ? scannedRootCase : SyncTrashPathCase.sensitive;
 
 String _resolveTrashPath(
   SyncEndpoint endpoint,

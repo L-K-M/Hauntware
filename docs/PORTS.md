@@ -299,16 +299,23 @@ port candidates.
   writers beyond it yet. `LockedSecretVault` also picked up upstream's
   `readableSecret`/`putSecrets` overrides in the same pass (still
   throw-on-touch; the pulled-`secret` apply path calls `readableSecret`).
+- 2026-10-03: Séance
+  [#172](https://github.com/L-K-M/Seance/pull/172), merge `ad2f3b4`,
+  serialized `FileHostKeyStore` loads and mutations and commits cache state
+  only after its atomic snapshot lands. Poltergeist adopts that ordering and
+  adds conflict-aware conditional installs for sync-versus-engine pin races.
 - Divergences: only `FileVaultStore` and `FileHostKeyStore` are ported —
   `FileConfigStore`/`FileSnippetStore` have no Poltergeist counterpart
   (bookmark identities carry connections per 04 §2.1–2.2; the synced record
   store lands in M6 per 04 §3.1); corrupt quarantine is store-owned and
   UTC-stamped per this repo's atomic-file port instead of the source's
-  shared `.corrupt` helper; types imported via the poltergeist_core barrel.
+  shared `.corrupt` helper; types imported via the poltergeist_core barrel;
+  `ConflictAwareHostKeyStore.putIfNoConflict` is Poltergeist's sync contract;
+  the optional `atomicWriter` constructor seam makes failed commits
+  deterministic in tests without changing production writes.
 - Port-back candidates: UTC-stamped quarantine names (shared with the
-  atomic_file entry); serialized load/flush (concurrent mutations can
-  interleave full-file flushes and lose one write — review round 1,
-  PR #32). Both upstream first per 04 §6.
+  atomic_file entry). Upstream #172 closes the serialized host-key
+  load/flush candidate from review round 1 of PR #32.
 
 ## app/poltergeist_app/lib/services/locked_secret_vault.dart
 
@@ -1404,8 +1411,8 @@ pair (conditional on Séance adopting 02 §5 ordering), the
 `local_fs_safety_test` suites (conditional on upstream exposing the
 statics — noted in #115). The mixed-EOL candidate is closed because both
 apps normalize to the dominant family. `file_stores`' serialized-flush
-candidate is closed: the v0.9.1 pin already carries upstream's mutation
-queue.
+candidate is closed: v0.9.1 carries the vault mutation queue and Séance
+#172 carries the host-key mutation queue.
 
 ## Pin findings
 

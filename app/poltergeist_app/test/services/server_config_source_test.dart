@@ -4,6 +4,7 @@
 // ids → null (the engine reuses its browse-open config), and a sync
 // endpoint leasing under its registered id and releasing on demand.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -36,6 +37,22 @@ const _identity = EmbeddedHostIdentity(
   secretRef: 'secret-1',
 );
 
+AuthenticatedEndpointIdentity _endpointIdentity({
+  String host = 'web.example.com',
+  int port = 2222,
+  String username = 'deploy',
+  String fingerprint = 'SHA256:test-host',
+  String? jumpHostId,
+  String? routeContext,
+}) => AuthenticatedEndpointIdentity(
+  host: host,
+  port: port,
+  username: username,
+  fingerprintSha256: fingerprint,
+  jumpHostId: jumpHostId,
+  routeContext: routeContext,
+);
+
 final class _Bookmarks implements BookmarkRepository {
   _Bookmarks(this.bookmarks);
 
@@ -49,17 +66,36 @@ final class _Bookmarks implements BookmarkRepository {
 }
 
 final class _Connections implements ConnectionManager {
-  _Connections({RemoteFileSystem? fileSystem})
-    : _fileSystem = fileSystem ?? _Canonical();
+  _Connections({
+    RemoteFileSystem? fileSystem,
+    AuthenticatedEndpointIdentity? endpointIdentity,
+    this.endpointIdentityFor,
+    this.leaseGates = const {},
+  }) : _fileSystem = fileSystem ?? _Canonical(),
+       endpointIdentity = endpointIdentity ?? _endpointIdentity();
 
   final RemoteFileSystem _fileSystem;
+  AuthenticatedEndpointIdentity endpointIdentity;
+  final AuthenticatedEndpointIdentity Function(String serverId)?
+  endpointIdentityFor;
+  final Map<String, Completer<void>> leaseGates;
+  Object? leaseFailure;
   final leases = <String>[];
   int released = 0;
 
   @override
   Future<TransferChannelLease> leaseTransferChannel(String serverId) async {
     leases.add(serverId);
-    return _Lease(_fileSystem, () => released++);
+    await leaseGates[serverId]?.future;
+
+    final failure = leaseFailure;
+    if (failure != null) throw failure;
+
+    return _Lease(
+      _fileSystem,
+      endpointIdentityFor?.call(serverId) ?? endpointIdentity,
+      () => released++,
+    );
   }
 
   @override
@@ -68,10 +104,12 @@ final class _Connections implements ConnectionManager {
 }
 
 final class _Lease implements TransferChannelLease {
-  _Lease(this.fs, this._onRelease);
+  _Lease(this.fs, this.endpointIdentity, this._onRelease);
 
   @override
   final RemoteFileSystem fs;
+  @override
+  final AuthenticatedEndpointIdentity endpointIdentity;
   final void Function() _onRelease;
 
   @override
@@ -122,6 +160,31 @@ final class _ToggleTrashResolutionFileSystem extends LocalFileSystem {
     }
 
     return super.stat(path, followLinks: followLinks);
+  }
+}
+
+final class _GatedCanonicalFileSystem extends LocalFileSystem {
+  final reached = Completer<void>();
+  final release = Completer<void>();
+  String? _path;
+  var _visits = 0;
+
+  void gateSecondVisit(String path) {
+    _path = path;
+    _visits = 0;
+  }
+
+  @override
+  Future<String> canonicalize(String path) async {
+    if (path == _path) {
+      _visits++;
+      if (_visits == 2) {
+        reached.complete();
+        await release.future;
+      }
+    }
+
+    return super.canonicalize(path);
   }
 }
 
@@ -226,6 +289,36 @@ void main() {
       expect(await source.configFor('adhoc:1234'), isNull);
     });
 
+    test('jump lookup ignores colliding bookmark and ad-hoc ids', () {
+      const catalogJump = ServerConfig(
+        id: 'bastion',
+        label: 'Catalog bastion',
+        host: 'catalog.example.com',
+        username: 'catalog',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final source = AppServerConfigSource(
+        bookmarks: _Bookmarks([
+          _bookmark('bastion', const BookmarkServerRef(identity: _identity)),
+        ]),
+        catalogLookup: (id) => id == 'bastion' ? catalogJump : null,
+      );
+      source.register(
+        'bastion',
+        const ServerConfig(
+          id: 'bastion',
+          label: 'Ad hoc',
+          host: 'adhoc.example.com',
+          username: 'adhoc',
+          createdAt: 0,
+          updatedAt: 0,
+        ),
+      );
+
+      expect(source.catalogConfigFor('bastion')?.host, 'catalog.example.com');
+    });
+
     test('registrations win and endpoints share one id per server', () async {
       final source = AppServerConfigSource(bookmarks: _Bookmarks(const []));
       final first = source.registerEndpoint(
@@ -250,6 +343,7 @@ void main() {
     SyncEnvironment environment({
       ConnectionManager? connections,
       AppServerConfigSource? serverConfigs,
+      HostKeyStore? acceptedHostKeys,
     }) => SyncEnvironment(
       states: FileSyncStateStore(Directory('${temp.path}/state')),
       syncRunsDirectory: '${temp.path}/runs',
@@ -258,6 +352,7 @@ void main() {
       serverConfigs:
           serverConfigs ??
           AppServerConfigSource(bookmarks: _Bookmarks(const [])),
+      acceptedHostKeys: acceptedHostKeys,
     );
 
     const remote = RemoteEndpoint(
@@ -278,6 +373,65 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('display cache lookup normalizes accepted host-key casing', () async {
+      const config = ServerConfig(
+        id: 'cfg-live',
+        label: 'live',
+        host: 'example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final configs = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (_) => config,
+      );
+      const endpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'cfg-live'),
+        path: '/srv',
+      );
+      final upper = InMemoryHostKeyStore();
+      final lower = InMemoryHostKeyStore();
+      for (final (store, host) in [
+        (upper, 'Example.com'),
+        (lower, 'example.com'),
+      ]) {
+        await store.put(
+          HostKey(
+            host: host,
+            port: 22,
+            type: 'ssh-ed25519',
+            fingerprintSha256: 'SHA256:same',
+            pinnedAt: 0,
+          ),
+        );
+      }
+      final rules = SyncRuleSet(trashPathLeft: '${temp.path}/trash');
+
+      final upperLocation =
+          await environment(
+            serverConfigs: configs,
+            acceptedHostKeys: upper,
+          ).trashLocationFor(
+            endpoint: endpoint,
+            canonicalRoot: temp.path,
+            rules: rules,
+            side: SyncSide.left,
+          );
+      final lowerLocation =
+          await environment(
+            serverConfigs: configs,
+            acceptedHostKeys: lower,
+          ).trashLocationFor(
+            endpoint: endpoint,
+            canonicalRoot: temp.path,
+            rules: rules,
+            side: SyncSide.left,
+          );
+
+      expect(upperLocation.locationKey, lowerLocation.locationKey);
     });
 
     test('with the bridge it leases on demand and releases', () async {
@@ -310,10 +464,11 @@ void main() {
         bookmarks: _Bookmarks(const []),
         catalogLookup: (_) => config,
       );
-      final env = environment(
-        connections: _Connections(fileSystem: LocalFileSystem()),
-        serverConfigs: configs,
+      final connections = _Connections(
+        fileSystem: LocalFileSystem(),
+        endpointIdentity: _endpointIdentity(host: 'one.example.com', port: 22),
       );
+      final env = environment(connections: connections, serverConfigs: configs);
       final root = Directory('${temp.path}/remote')..createSync();
       const endpoint = RemoteEndpoint(
         server: BookmarkServerRef(serverConfigId: 'cfg-live'),
@@ -336,6 +491,11 @@ void main() {
         createdAt: 0,
         updatedAt: 0,
       );
+      await env.releaseRemoteLeases();
+      connections.endpointIdentity = _endpointIdentity(
+        host: 'two.example.com',
+        port: 22,
+      );
       final second = await env.resolveTrashLocation(
         endpoint: endpoint,
         canonicalRoot: root.path,
@@ -346,6 +506,224 @@ void main() {
 
       expect(second.scopeKey, first.scopeKey);
       expect(second.locationKey, isNot(first.locationKey));
+    });
+
+    test('host-key rotation cannot retire the prior host journal', () async {
+      const config = ServerConfig(
+        id: 'cfg-live',
+        label: 'live',
+        host: 'shared.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final configs = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (_) => config,
+      );
+      final connections = _Connections(
+        fileSystem: LocalFileSystem(),
+        endpointIdentity: _endpointIdentity(
+          host: 'shared.example.com',
+          port: 22,
+          fingerprint: 'SHA256:host-a',
+        ),
+      );
+      final env = environment(connections: connections, serverConfigs: configs);
+      final root = Directory('${temp.path}/remote')..createSync();
+      const endpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'cfg-live'),
+        path: '/srv',
+      );
+      final rules = SyncRuleSet(trashPathLeft: '${root.path}/trash');
+      final first = await env.resolveTrashLocation(
+        endpoint: endpoint,
+        canonicalRoot: root.path,
+        rules: rules,
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      const runId = '12345678-12345678-1234-4123-a123-123456789abc';
+      final trashed = File('${first.trashRoot}/$runId/000001-a.txt')
+        ..createSync(recursive: true)
+        ..writeAsStringSync('host-a');
+      final journal = await SyncRunJournal.create(
+        env.syncRunsDirectory,
+        SyncRunRecord(
+          runId: runId,
+          pairId: 'pair-1',
+          startedAt: DateTime.now(),
+          trashScopeLeft: first.scopeKey,
+          trashLocationKeyLeft: first.locationKey,
+          rules: rules,
+          totals: const PlanTotals(
+            counts: {},
+            bytes: {},
+            replacedFiles: 0,
+            replacedBytes: 0,
+          ),
+          warnings: const [],
+        ),
+      );
+      await journal.appendTrash(
+        SyncJournalTrashLine(
+          parentPath: 'a.txt',
+          relativePath: 'a.txt',
+          side: SyncSide.left,
+          trashLocation: trashed.path,
+          bytes: trashed.lengthSync(),
+        ),
+      );
+      final preservedRoot = Directory('${root.path}/trash-host-a');
+      Directory(first.trashRoot).renameSync(preservedRoot.path);
+      await env.releaseRemoteLeases();
+      connections.endpointIdentity = _endpointIdentity(
+        host: 'shared.example.com',
+        port: 22,
+        fingerprint: 'SHA256:host-b',
+      );
+
+      final second = await env.resolveTrashLocation(
+        endpoint: endpoint,
+        canonicalRoot: root.path,
+        rules: rules,
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+
+      expect(second.locationKey, isNot(first.locationKey));
+      expect(
+        (await SyncRunJournal.open(journal.path)).hasUnpurgedTrash,
+        isTrue,
+      );
+      expect(
+        File('${preservedRoot.path}/$runId/000001-a.txt').existsSync(),
+        isTrue,
+      );
+    });
+
+    test('an unaccepted host key cannot reuse trusted trash state', () async {
+      const config = ServerConfig(
+        id: 'cfg-live',
+        label: 'live',
+        host: 'shared.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final configs = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (_) => config,
+      );
+      final trustedKeys = InMemoryHostKeyStore();
+      await trustedKeys.put(
+        const HostKey(
+          host: 'shared.example.com',
+          port: 22,
+          type: 'ssh-ed25519',
+          fingerprintSha256: 'SHA256:trusted',
+          pinnedAt: 0,
+        ),
+      );
+      final trustedEnv = environment(
+        serverConfigs: configs,
+        acceptedHostKeys: trustedKeys,
+      );
+      final root = Directory('${temp.path}/remote')..createSync();
+      const endpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'cfg-live'),
+        path: '/srv',
+      );
+      final rules = SyncRuleSet(trashPathLeft: '${root.path}/trash');
+      final trusted = await trustedEnv.trashLocationFor(
+        endpoint: endpoint,
+        canonicalRoot: root.path,
+        rules: rules,
+        side: SyncSide.left,
+      );
+      final untrustedConnections =
+          _Connections(
+              fileSystem: LocalFileSystem(),
+              endpointIdentity: _endpointIdentity(
+                host: 'shared.example.com',
+                port: 22,
+              ),
+            )
+            ..leaseFailure = const RemoteFileException(
+              kind: RemoteFileErrorKind.disconnected,
+              operation: 'connect',
+              message: 'host key not accepted',
+            );
+      final untrustedEnv = environment(
+        connections: untrustedConnections,
+        serverConfigs: configs,
+        acceptedHostKeys: InMemoryHostKeyStore(),
+      );
+      final untrusted = await untrustedEnv.trashLocationFor(
+        endpoint: endpoint,
+        canonicalRoot: root.path,
+        rules: rules,
+        side: SyncSide.left,
+      );
+
+      expect(untrusted.locationKey, isNot(trusted.locationKey));
+      await expectLater(
+        untrustedEnv.resolveTrashLocation(
+          endpoint: endpoint,
+          canonicalRoot: root.path,
+          rules: rules,
+          side: SyncSide.left,
+          pathCase: SyncTrashPathCase.sensitive,
+        ),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.disconnected,
+          ),
+        ),
+      );
+    });
+
+    test('trash resolution can establish a first-use host key', () async {
+      const config = ServerConfig(
+        id: 'cfg-live',
+        label: 'live',
+        host: 'first-use.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final configs = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (_) => config,
+      );
+      final env = environment(
+        connections: _Connections(
+          fileSystem: LocalFileSystem(),
+          endpointIdentity: _endpointIdentity(
+            host: 'first-use.example.com',
+            port: 22,
+            fingerprint: 'SHA256:first-use',
+          ),
+        ),
+        serverConfigs: configs,
+      );
+      final root = Directory('${temp.path}/remote')..createSync();
+      const endpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'cfg-live'),
+        path: '/srv',
+      );
+
+      final location = await env.resolveTrashLocation(
+        endpoint: endpoint,
+        canonicalRoot: root.path,
+        rules: SyncRuleSet(trashPathLeft: '${root.path}/trash'),
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+
+      expect(location.isResolved, isTrue);
     });
 
     test(
@@ -363,10 +741,27 @@ void main() {
           bookmarks: _Bookmarks(const []),
           catalogLookup: (_) => config,
         );
+        final acceptedHostKeys = InMemoryHostKeyStore();
+        await acceptedHostKeys.put(
+          const HostKey(
+            host: 'one.example.com',
+            port: 22,
+            type: 'ssh-ed25519',
+            fingerprintSha256: 'SHA256:test-host',
+            pinnedAt: 0,
+          ),
+        );
         final fileSystem = _ToggleTrashResolutionFileSystem();
         final env = environment(
-          connections: _Connections(fileSystem: fileSystem),
+          connections: _Connections(
+            fileSystem: fileSystem,
+            endpointIdentity: _endpointIdentity(
+              host: 'one.example.com',
+              port: 22,
+            ),
+          ),
           serverConfigs: configs,
+          acceptedHostKeys: acceptedHostKeys,
         );
         final remoteRoot = Directory('${temp.path}/remote')..createSync();
         final localRoot = Directory('${temp.path}/local')..createSync();
@@ -439,9 +834,21 @@ void main() {
         final cachedLocationKey = first.pairState.trashCacheLeft?.locationKey;
         expect(cachedLocationKey, isNotNull);
         first.dispose();
+        await env.releaseRemoteLeases();
 
         fileSystem.failTrashResolution = true;
-        final fallback = await env.trashLocationFor(
+        final freshEnv = environment(
+          connections: _Connections(
+            fileSystem: fileSystem,
+            endpointIdentity: _endpointIdentity(
+              host: 'one.example.com',
+              port: 22,
+            ),
+          ),
+          serverConfigs: configs,
+          acceptedHostKeys: acceptedHostKeys,
+        );
+        final fallback = await freshEnv.trashLocationFor(
           endpoint: endpoint,
           canonicalRoot: remoteRoot.path,
           rules: pair.rules,
@@ -453,7 +860,7 @@ void main() {
           pair: pair,
           scanner: scanner,
           differ: FakeSyncDiffer(testPlan(pair, const [])),
-          environment: env,
+          environment: freshEnv,
         );
         addTearDown(second.dispose);
         second.start();
@@ -493,7 +900,13 @@ void main() {
         );
       });
       final env = environment(
-        connections: _Connections(fileSystem: fileSystem),
+        connections: _Connections(
+          fileSystem: fileSystem,
+          endpointIdentity: _endpointIdentity(
+            host: 'one.example.com',
+            port: 22,
+          ),
+        ),
         serverConfigs: configs,
       );
       final root = Directory('${temp.path}/remote')..createSync();
@@ -520,6 +933,283 @@ void main() {
       );
     });
 
+    test('a held lease cannot cross a retarget without trash', () async {
+      var config = const ServerConfig(
+        id: 'cfg-live',
+        label: 'live',
+        host: 'one.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final configs = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (_) => config,
+      );
+      final connections = _Connections(
+        endpointIdentity: _endpointIdentity(host: 'one.example.com', port: 22),
+      );
+      final env = environment(connections: connections, serverConfigs: configs);
+      const endpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'cfg-live'),
+        path: '/srv',
+      );
+      await env.fileSystemFor(endpoint).canonicalize('/srv');
+      config = const ServerConfig(
+        id: 'cfg-live',
+        label: 'live',
+        host: 'two.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+
+      await expectLater(
+        env.withVerifiedTrashLocations(const [
+          (endpoint: endpoint, location: null),
+        ], (_) async => fail('stale lease reached the action')),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.conflict,
+          ),
+        ),
+      );
+    });
+
+    test('revalidates earlier endpoints after later leases resolve', () async {
+      var firstConfig = const ServerConfig(
+        id: 'first',
+        label: 'first',
+        host: 'one.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      const secondConfig = ServerConfig(
+        id: 'second',
+        label: 'second',
+        host: 'second.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final configs = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (id) => switch (id) {
+          'first' => firstConfig,
+          'second' => secondConfig,
+          _ => null,
+        },
+      );
+      final secondLeaseGate = Completer<void>();
+      final connections = _Connections(
+        endpointIdentityFor: (serverId) => switch (serverId) {
+          'sync-endpoint:first' => _endpointIdentity(
+            host: 'one.example.com',
+            port: 22,
+          ),
+          'sync-endpoint:second' => _endpointIdentity(
+            host: 'second.example.com',
+            port: 22,
+          ),
+          _ => throw StateError('Unexpected server: $serverId'),
+        },
+        leaseGates: {'sync-endpoint:second': secondLeaseGate},
+      );
+      final env = environment(connections: connections, serverConfigs: configs);
+      const firstEndpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'first'),
+        path: '/first',
+      );
+      const secondEndpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'second'),
+        path: '/second',
+      );
+      var bodyReached = false;
+
+      final operation = env.withVerifiedTrashLocations(const [
+        (endpoint: firstEndpoint, location: null),
+        (endpoint: secondEndpoint, location: null),
+      ], (_) async => bodyReached = true);
+      await pumpUntil(
+        () => connections.leases.contains('sync-endpoint:second'),
+      );
+      firstConfig = const ServerConfig(
+        id: 'first',
+        label: 'first',
+        host: 'retargeted.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      secondLeaseGate.complete();
+
+      await expectLater(
+        operation,
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.conflict,
+          ),
+        ),
+      );
+      expect(bodyReached, isFalse);
+    });
+
+    test('rechecks identities after all marker reads finish', () async {
+      var firstConfig = const ServerConfig(
+        id: 'first',
+        label: 'first',
+        host: 'one.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      const secondConfig = ServerConfig(
+        id: 'second',
+        label: 'second',
+        host: 'second.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final configs = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (id) => switch (id) {
+          'first' => firstConfig,
+          'second' => secondConfig,
+          _ => null,
+        },
+      );
+      final fileSystem = _GatedCanonicalFileSystem();
+      final connections = _Connections(
+        fileSystem: fileSystem,
+        endpointIdentityFor: (serverId) => switch (serverId) {
+          'sync-endpoint:first' => _endpointIdentity(
+            host: 'one.example.com',
+            port: 22,
+          ),
+          'sync-endpoint:second' => _endpointIdentity(
+            host: 'second.example.com',
+            port: 22,
+          ),
+          _ => throw StateError('Unexpected server: $serverId'),
+        },
+      );
+      final env = environment(connections: connections, serverConfigs: configs);
+      final firstRoot = Directory('${temp.path}/first')..createSync();
+      final secondRoot = Directory('${temp.path}/second')..createSync();
+      const firstEndpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'first'),
+        path: '/first',
+      );
+      const secondEndpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'second'),
+        path: '/second',
+      );
+      final firstLocation = await env.resolveTrashLocation(
+        endpoint: firstEndpoint,
+        canonicalRoot: firstRoot.path,
+        rules: SyncRuleSet(trashPathLeft: '${firstRoot.path}/trash'),
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final secondLocation = await env.resolveTrashLocation(
+        endpoint: secondEndpoint,
+        canonicalRoot: secondRoot.path,
+        rules: SyncRuleSet(trashPathLeft: '${secondRoot.path}/trash'),
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      fileSystem.gateSecondVisit(secondLocation.trashRoot);
+      var bodyReached = false;
+
+      final operation = env.withVerifiedTrashLocations([
+        (endpoint: firstEndpoint, location: firstLocation),
+        (endpoint: secondEndpoint, location: secondLocation),
+      ], (_) async => bodyReached = true);
+      await fileSystem.reached.future;
+      firstConfig = const ServerConfig(
+        id: 'first',
+        label: 'first',
+        host: 'retargeted.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      fileSystem.release.complete();
+
+      await expectLater(
+        operation,
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.conflict,
+          ),
+        ),
+      );
+      expect(bodyReached, isFalse);
+    });
+
+    test('trash resolution stays bound to its authenticated key', () async {
+      const config = ServerConfig(
+        id: 'cfg-live',
+        label: 'live',
+        host: 'shared.example.com',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final configs = AppServerConfigSource(
+        bookmarks: _Bookmarks(const []),
+        catalogLookup: (_) => config,
+      );
+      late final _Connections connections;
+      final fileSystem = _RetargetingLocalFileSystem(() {
+        connections.endpointIdentity = _endpointIdentity(
+          host: 'shared.example.com',
+          port: 22,
+          fingerprint: 'SHA256:host-b',
+        );
+      });
+      connections = _Connections(
+        fileSystem: fileSystem,
+        endpointIdentity: _endpointIdentity(
+          host: 'shared.example.com',
+          port: 22,
+          fingerprint: 'SHA256:host-a',
+        ),
+      );
+      final env = environment(connections: connections, serverConfigs: configs);
+      final root = Directory('${temp.path}/remote')..createSync();
+      const endpoint = RemoteEndpoint(
+        server: BookmarkServerRef(serverConfigId: 'cfg-live'),
+        path: '/srv',
+      );
+
+      final first = await env.resolveTrashLocation(
+        endpoint: endpoint,
+        canonicalRoot: root.path,
+        rules: SyncRuleSet(trashPathLeft: '${root.path}/trash'),
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      await env.releaseRemoteLeases();
+      final second = await env.resolveTrashLocation(
+        endpoint: endpoint,
+        canonicalRoot: root.path,
+        rules: SyncRuleSet(trashPathLeft: '${root.path}/trash'),
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+
+      expect(second.locationKey, isNot(first.locationKey));
+    });
+
     test('trash verification rejects a retargeted endpoint', () async {
       var config = const ServerConfig(
         id: 'cfg-live',
@@ -533,10 +1223,11 @@ void main() {
         bookmarks: _Bookmarks(const []),
         catalogLookup: (_) => config,
       );
-      final env = environment(
-        connections: _Connections(fileSystem: LocalFileSystem()),
-        serverConfigs: configs,
+      final connections = _Connections(
+        fileSystem: LocalFileSystem(),
+        endpointIdentity: _endpointIdentity(host: 'one.example.com', port: 22),
       );
+      final env = environment(connections: connections, serverConfigs: configs);
       final root = Directory('${temp.path}/remote')..createSync();
       const endpoint = RemoteEndpoint(
         server: BookmarkServerRef(serverConfigId: 'cfg-live'),

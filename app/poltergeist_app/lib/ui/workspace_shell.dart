@@ -4277,10 +4277,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       ),
     );
     if (result == null || !mounted) return;
-    await session.updatePairDefinition(
+    final accepted = await session.updatePairDefinition(
       result.pair,
       caseOverrides: result.caseOverrides,
     );
+    if (!accepted || !mounted) return;
     final existing = store == null ? null : await store.byId(result.pair.id);
     if (existing?.kind == BookmarkKind.savedSync) {
       try {

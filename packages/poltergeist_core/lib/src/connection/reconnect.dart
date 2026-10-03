@@ -278,12 +278,20 @@ extension _PoolRecovery on PooledConnectionManager {
     final attempt = cycle._authAttempt = Object();
     final reconnectResponder = _reconnectResponder(pool, cycle, attempt);
     var routeChallenged = false;
+    String? targetFingerprint;
+    final observation = _TrustObservation(
+      onChecked: (decision) {
+        if (!_namesEndpoint(decision.presented, config)) return;
+        targetFingerprint = decision.presented.fingerprintSha256;
+      },
+      onTrusted: (_) {},
+    );
     final SshTransport transport;
     try {
       transport = await _openTransport(
         config: config,
         credentials: credentials,
-        tofu: _tofu,
+        tofu: _observingTofu(observation),
         // Even an auth-prompting reconnect cannot approve an unknown key.
         onHostKey: (decision) async =>
             _isCurrentAuth(pool, cycle, attempt) ? hostKey(decision) : false,
@@ -307,6 +315,14 @@ extension _PoolRecovery on PooledConnectionManager {
       if (identical(cycle._authAttempt, attempt)) cycle._authAttempt = null;
     }
 
+    final acceptedFingerprint = targetFingerprint;
+    if (acceptedFingerprint == null) {
+      await closeSshResource(transport.close);
+      throw StateError(
+        'The authenticated transport did not verify the target host key.',
+      );
+    }
+
     if (!_isCurrentReconnect(pool, cycle)) {
       await closeSshResource(transport.close);
       _checkReconnect(pool, cycle);
@@ -327,7 +343,11 @@ extension _PoolRecovery on PooledConnectionManager {
         transport.authKind == AuthKind.keyboardInteractive ||
         transport.authKind == AuthKind.promptedPassword;
     // The first transport's cache role never migrates after failure (§3.3).
-    final slot = _TransportSlot(transport, _TransportRole.extra);
+    final slot = _TransportSlot(
+      transport,
+      _TransportRole.extra,
+      _authenticatedEndpoint(pool.key, acceptedFingerprint),
+    );
     pool.transports.add(slot);
     _watchTransport(pool, slot);
     _updateIdleTimer(pool, slot);

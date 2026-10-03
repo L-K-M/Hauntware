@@ -348,12 +348,17 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
 }
 
 /// JSON-file [HostKeyStore] for pinned TOFU keys.
-class FileHostKeyStore implements HostKeyStore {
+class FileHostKeyStore implements ConflictAwareHostKeyStore {
   final File file;
+  final Future<void> Function(File target, String contents) _atomicWriter;
   final Map<String, HostKey> _keys = {};
   bool _loaded = false;
+  Future<void> _pending = Future<void>.value();
 
-  FileHostKeyStore(this.file);
+  FileHostKeyStore(
+    this.file, {
+    Future<void> Function(File target, String contents)? atomicWriter,
+  }) : _atomicWriter = atomicWriter ?? writeStringAtomically;
 
   Future<void> _load() async {
     if (_loaded) return;
@@ -372,27 +377,56 @@ class FileHostKeyStore implements HostKeyStore {
     _loaded = true;
   }
 
-  Future<void> _flush() async {
-    await writeStringAtomically(
-        file, jsonEncode(_keys.values.map((k) => k.toJson()).toList()));
+  Future<void> _flush(Map<String, HostKey> keys) async {
+    await _atomicWriter(
+      file,
+      jsonEncode(keys.values.map((key) => key.toJson()).toList()),
+    );
+  }
+
+  Future<T> _serialize<T>(Future<T> Function() body) {
+    final operation = _pending.then((_) async {
+      await _load();
+      return body();
+    });
+    _pending = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
   }
 
   @override
-  Future<List<HostKey>> all() async {
-    await _load();
-    return _keys.values.toList();
-  }
+  Future<List<HostKey>> all() => _serialize(() async => _keys.values.toList());
 
   @override
-  Future<HostKey?> get(String host, int port) async {
-    await _load();
-    return _keys['$host:$port'];
-  }
+  Future<HostKey?> get(String host, int port) =>
+      _serialize(() async => _keys['$host:$port']);
 
   @override
-  Future<void> put(HostKey key) async {
-    await _load();
-    _keys[key.locator] = key;
-    await _flush();
-  }
+  Future<void> put(HostKey key) => _serialize(() async {
+    final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
+    await _flush(next);
+
+    _keys
+      ..clear()
+      ..addAll(next);
+  });
+
+  @override
+  Future<HostKeyInstallResult> putIfNoConflict(HostKey key) =>
+      _serialize(() async {
+        final current = _keys[key.locator];
+        if (current != null && current.conflictsWith(key)) {
+          return HostKeyInstallResult.conflict;
+        }
+
+        final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
+        await _flush(next);
+
+        _keys
+          ..clear()
+          ..addAll(next);
+        return HostKeyInstallResult.installed;
+      });
 }

@@ -308,8 +308,9 @@ final class SyncTrashPurgeReport {
     required this.cancelled,
   });
 
-  /// Run ids whose directory is gone (deleted, or already absent) and
-  /// whose matching journals were marked purged.
+  /// Run ids whose directory is gone (deleted, or already absent).
+  /// Identity-backed matching journals are also marked purged; ambiguous
+  /// legacy path-only journals stay retained.
   final List<String> purgedRunIds;
 
   /// One entry per run directory that resisted removal.
@@ -359,8 +360,9 @@ final class SyncTrashPurgeService {
     final purgedRunIds = <String>[];
     for (final covered in coverage.entries) {
       if (activeRunIds.contains(covered.key)) continue;
-      await _markPurged(covered.value);
-      purgedRunIds.add(covered.key);
+      if (await _markPurged(covered.value)) {
+        purgedRunIds.add(covered.key);
+      }
     }
 
     return purgedRunIds;
@@ -453,12 +455,10 @@ final class SyncTrashPurgeService {
   }
 
   /// Reads one trash root: exactly one non-recursive listing, then the
-  /// local journals. A missing root is an empty live listing (its trash
-  /// is already gone); any other listing error propagates. Journals
-  /// whose run directory is absent from the listing are marked `purged`
-  /// on the spot — their trash is gone (a sibling machine's purge, or
-  /// hand cleanup), so rail 9's retention releases them instead of
-  /// holding them forever.
+  /// local journals. A missing root fails closed until its caller owns a
+  /// replacement generation; every listing error propagates. Under an
+  /// opened root, journals whose run directory is absent from the listing
+  /// are marked `purged` on the spot.
   Future<SyncTrashInventory> inspect(
     RemoteFileSystem fileSystem,
     String trashRoot,
@@ -471,44 +471,12 @@ final class SyncTrashPurgeService {
     bool Function()? isCancelled,
     void Function(String runId)? onPurgedRun,
   }) async {
-    final SyncTrashRootIdentity rootIdentity;
-    try {
-      rootIdentity = await resolveSyncTrashRoot(
-        fileSystem,
-        trashRoot,
-        pathStyle: pathStyle,
-        access: SyncTrashRootAccess.openExisting,
-      );
-    } on RemoteFileException catch (error) {
-      if (error.kind != RemoteFileErrorKind.notFound) rethrow;
-      final effectiveTrashScope = trashScope ?? '';
-      if (effectiveTrashScope.isNotEmpty) {
-        final coverage = await _loadCoverage(
-          trashRoot,
-          effectiveTrashScope,
-          pathStyle,
-          pathCase,
-          isCancelled: isCancelled,
-        );
-        for (final covered in coverage.entries) {
-          if (isActiveRun?.call(covered.key) == true) continue;
-          await _markPurged(covered.value);
-          onPurgedRun?.call(covered.key);
-        }
-      }
-
-      return SyncTrashInventory(
-        trashRoot: trashRoot,
-        canonicalRoot: normalizeSyncTrashPath(trashRoot, pathStyle, pathCase),
-        rootId: '',
-        trashScope: effectiveTrashScope,
-        devicePrefix: devicePrefix,
-        pathStyle: pathStyle,
-        pathCase: pathCase,
-        listedAt: now,
-        runs: const [],
-      );
-    }
+    final rootIdentity = await resolveSyncTrashRoot(
+      fileSystem,
+      trashRoot,
+      pathStyle: pathStyle,
+      access: SyncTrashRootAccess.openExisting,
+    );
     if (trashScope != null && trashScope != rootIdentity.scopeKey) {
       throw RemoteFileException(
         kind: RemoteFileErrorKind.conflict,
@@ -523,9 +491,8 @@ final class SyncTrashPurgeService {
     try {
       listing = await fileSystem.listDirectory(operationalRoot);
     } on RemoteFileException catch (error) {
-      // Only absence reads as empty — anything else (permission,
-      // disconnect) must reach the caller, never masquerade as "no
-      // trash".
+      // Absence is reported below as a root change. Other failures propagate
+      // unchanged, never masquerading as "no trash".
       if (error.kind != RemoteFileErrorKind.notFound) rethrow;
       rootMissing = true;
       listing = const <RemoteFileEntry>[];
@@ -546,12 +513,15 @@ final class SyncTrashPurgeService {
       pathCase,
     );
     final effectiveTrashScope = rootIdentity.scopeKey;
-    final listedNames = {for (final entry in listing) entry.name};
+    final listedNames = {
+      for (final entry in listing) _trashNameKey(entry.name, pathCase),
+    };
     final protectedRunIds = <String>{};
     final foreignQuarantines = <String, String>{};
     final recoveredListing = <RemoteFileEntry>[];
     for (final entry in listing) {
-      final quarantine = _quarantinedRun(entry.name, pathStyle);
+      final entryNameKey = _trashNameKey(entry.name, pathCase);
+      final quarantine = _quarantinedRun(entry.name, pathStyle, pathCase);
       final originalName = quarantine?.runId;
       if (originalName == null) {
         recoveredListing.add(entry);
@@ -564,23 +534,30 @@ final class SyncTrashPurgeService {
       }
       if (quarantine!.ownerPrefix != devicePrefix) {
         protectedRunIds.add(originalName);
-        foreignQuarantines[entry.name] = originalName;
+        foreignQuarantines[entryNameKey] = originalName;
         recoveredListing.add(entry);
         continue;
       }
 
       final originalPath = _joinPath(pathStyle, operationalRoot, originalName);
+      final quarantinePath = _joinPath(pathStyle, operationalRoot, entry.name);
       try {
         // A prior purge died after its atomic rename. Put the surviving
-        // tree back before journal matching so Restore keeps its path.
-        await fileSystem.rename(
-          _joinPath(pathStyle, operationalRoot, entry.name),
+        // tree back only while it remains under the owned root.
+        final recovered = await _recoverQuarantinedRun(
+          fileSystem,
+          quarantinePath,
           originalPath,
+          originalName,
+          rootIdentity,
+          pathStyle,
+          pathCase,
         );
-        recoveredListing.add(_entryAtPath(entry, originalPath, originalName));
-      } on RemoteFileException {
+        recoveredListing.add(recovered);
+      } on RemoteFileException catch (error) {
         // Never release the journal while a quarantine still guards it.
         protectedRunIds.add(originalName);
+        if (error.kind == RemoteFileErrorKind.conflict) rethrow;
         recoveredListing.add(entry);
       }
     }
@@ -594,15 +571,21 @@ final class SyncTrashPurgeService {
     final runs = <SyncTrashRun>[];
     final observed = <String>{};
     for (final entry in recoveredListing) {
-      // Non-directory children (stray files, links at the root) are
-      // neither inventoried nor purged — the trash root itself is never
-      // a removal candidate either.
-      if (!entry.isDirectory) continue;
-      final foreignRunId = foreignQuarantines[entry.name];
-      if (foreignRunId == null && !isSyncTrashRunDirectoryName(entry.name)) {
+      final entryNameKey = _trashNameKey(entry.name, pathCase);
+      // Non-directory children are never inventoried or purged. A valid
+      // run-name occupant still protects its journal: it is present but
+      // unsafe, not evidence that the trash disappeared.
+      if (!entry.isDirectory) {
+        if (isSyncTrashRunDirectoryName(entryNameKey)) {
+          protectedRunIds.add(entryNameKey);
+        }
         continue;
       }
-      final runId = foreignRunId ?? entry.name;
+      final foreignRunId = foreignQuarantines[entryNameKey];
+      if (foreignRunId == null && !isSyncTrashRunDirectoryName(entryNameKey)) {
+        continue;
+      }
+      final runId = foreignRunId ?? entryNameKey;
       if (!observed.add(runId)) continue;
       final cover = coverage[runId];
       if (foreignRunId != null) {
@@ -624,6 +607,7 @@ final class SyncTrashPurgeService {
         runs.add(
           SyncTrashRun(
             runId: runId,
+            directoryName: entry.name,
             ownership: SyncTrashOwnership.journaled,
             ageBasis: cover.startedAt!,
             fileCount: cover.locations.length,
@@ -635,6 +619,7 @@ final class SyncTrashPurgeService {
       runs.add(
         SyncTrashRun(
           runId: runId,
+          directoryName: entry.name,
           ownership: _classify(runId, devicePrefix),
           // A missing mtime falls back to now so the directory can
           // never read as immediately old.
@@ -651,8 +636,9 @@ final class SyncTrashPurgeService {
       if (observed.contains(covered.key)) continue;
       if (protectedRunIds.contains(covered.key)) continue;
       if (isActiveRun?.call(covered.key) == true) continue;
-      await _markPurged(covered.value);
-      onPurgedRun?.call(covered.key);
+      if (await _markPurged(covered.value)) {
+        onPurgedRun?.call(covered.key);
+      }
     }
     return SyncTrashInventory(
       trashRoot: trashRoot,
@@ -759,14 +745,23 @@ final class SyncTrashPurgeService {
         if (activeRunIds.contains(runId)) continue;
         _throwIfPurgeCancelled(cancellation, selection.trashRoot);
         final directoryName = selection.directoryNames[runId] ?? runId;
-        final quarantine = _quarantinedRun(directoryName, selection.pathStyle);
+        final runIdKey = _trashNameKey(runId, selection.pathCase);
+        final directoryNameKey = _trashNameKey(
+          directoryName,
+          selection.pathCase,
+        );
+        final quarantine = _quarantinedRun(
+          directoryName,
+          selection.pathStyle,
+          selection.pathCase,
+        );
         final validQuarantine =
             quarantine != null &&
-            quarantine.runId == runId &&
+            quarantine.runId == runIdKey &&
             quarantine.ownerPrefix != selection.devicePrefix;
         if (!isSyncTrashRunDirectoryName(runId) ||
             !_isPlainDirectoryName(runId, selection.pathStyle) ||
-            (directoryName != runId && !validQuarantine)) {
+            (directoryNameKey != runIdKey && !validQuarantine)) {
           failures.add(
             SyncTrashPurgeFailure(
               runId: runId,
@@ -781,8 +776,14 @@ final class SyncTrashPurgeService {
           final candidateQuarantine = _quarantinedRun(
             candidate.name,
             selection.pathStyle,
+            selection.pathCase,
           );
-          if (candidate.name == runId || candidateQuarantine?.runId == runId) {
+          final candidateNameKey = _trashNameKey(
+            candidate.name,
+            selection.pathCase,
+          );
+          if (candidateNameKey == runIdKey ||
+              candidateQuarantine?.runId == runIdKey) {
             representations.add(candidate);
           }
         }
@@ -808,7 +809,8 @@ final class SyncTrashPurgeService {
           continue;
         }
         if (representations.length != 1 ||
-            representations.single.name != directoryName) {
+            _trashNameKey(representations.single.name, selection.pathCase) !=
+                directoryNameKey) {
           failures.add(
             SyncTrashPurgeFailure(
               runId: runId,
@@ -831,7 +833,7 @@ final class SyncTrashPurgeService {
         final runPath = _joinPath(
           selection.pathStyle,
           operationalRoot,
-          directoryName,
+          entry.name,
         );
         try {
           _throwIfPurgeCancelled(cancellation, runPath);
@@ -844,6 +846,9 @@ final class SyncTrashPurgeService {
             selection.pathStyle,
             selection.pathCase,
             _QuarantineNameKind.run,
+            () async {
+              await _openSelectionRoot(fileSystem, selection);
+            },
           );
           if (quarantined == null) {
             if (!await _confirmLogicalRunAbsent(
@@ -871,6 +876,9 @@ final class SyncTrashPurgeService {
               selection.pathStyle,
               selection.pathCase,
               cancellation,
+              () async {
+                await _openSelectionRoot(fileSystem, selection);
+              },
             );
             await _markPurged(coverage[runId]);
             purged.add(runId);
@@ -879,12 +887,26 @@ final class SyncTrashPurgeService {
               fileSystem,
               quarantined.path,
               runPath,
+              expectedParentCanonical: operationalRoot,
+              pathStyle: selection.pathStyle,
+              pathCase: selection.pathCase,
+              verifyRoot: () async {
+                await _openSelectionRoot(fileSystem, selection);
+              },
             );
             rethrow;
           }
         } on Object catch (error) {
+          final cancelledError =
+              error is RemoteFileException &&
+              error.kind == RemoteFileErrorKind.cancelled;
+          if (!cancelledError) {
+            failures.add(
+              SyncTrashPurgeFailure(runId: runId, message: '$error'),
+            );
+          }
           _throwIfPurgeCancelled(cancellation, selection.trashRoot);
-          failures.add(SyncTrashPurgeFailure(runId: runId, message: '$error'));
+          if (cancelledError) rethrow;
         }
       }
     } on RemoteFileException catch (error) {
@@ -915,9 +937,17 @@ final class SyncTrashPurgeService {
     String runId,
   ) async {
     final listing = await fileSystem.listDirectory(operationalRoot);
+    final runIdKey = _trashNameKey(runId, selection.pathCase);
     for (final entry in listing) {
-      final quarantine = _quarantinedRun(entry.name, selection.pathStyle);
-      if (entry.name == runId || quarantine?.runId == runId) return false;
+      final quarantine = _quarantinedRun(
+        entry.name,
+        selection.pathStyle,
+        selection.pathCase,
+      );
+      if (_trashNameKey(entry.name, selection.pathCase) == runIdKey ||
+          quarantine?.runId == runIdKey) {
+        return false;
+      }
     }
 
     await _openSelectionRoot(fileSystem, selection);
@@ -985,6 +1015,107 @@ final class SyncTrashPurgeService {
       operation: 'inspect sync trash',
       path: trashRoot,
       message: 'The sync-trash root changed during inspection.',
+    );
+  }
+
+  Future<RemoteFileEntry> _recoverQuarantinedRun(
+    RemoteFileSystem fileSystem,
+    String quarantinePath,
+    String originalPath,
+    String originalName,
+    SyncTrashRootIdentity rootIdentity,
+    SyncTrashPathStyle pathStyle,
+    SyncTrashPathCase pathCase,
+  ) async {
+    await _verifyRootIdentity(
+      fileSystem,
+      rootIdentity.canonicalRoot,
+      rootIdentity,
+      pathStyle,
+      pathCase,
+    );
+    await _verifyRecoveryDirectory(
+      fileSystem,
+      quarantinePath,
+      rootIdentity.canonicalRoot,
+      pathStyle,
+      pathCase,
+    );
+    await _verifyRootIdentity(
+      fileSystem,
+      rootIdentity.canonicalRoot,
+      rootIdentity,
+      pathStyle,
+      pathCase,
+    );
+
+    await fileSystem.rename(quarantinePath, originalPath);
+    try {
+      await _verifyRootIdentity(
+        fileSystem,
+        rootIdentity.canonicalRoot,
+        rootIdentity,
+        pathStyle,
+        pathCase,
+      );
+      final recovered = await _verifyRecoveryDirectory(
+        fileSystem,
+        originalPath,
+        rootIdentity.canonicalRoot,
+        pathStyle,
+        pathCase,
+      );
+      return _entryAtPath(recovered, originalPath, originalName);
+    } on Object {
+      // Keep a failed recovery recognizable and restorable on the next scan.
+      try {
+        await _verifyRootIdentity(
+          fileSystem,
+          rootIdentity.canonicalRoot,
+          rootIdentity,
+          pathStyle,
+          pathCase,
+        );
+        await _verifyRecoveryDirectory(
+          fileSystem,
+          originalPath,
+          rootIdentity.canonicalRoot,
+          pathStyle,
+          pathCase,
+        );
+        await fileSystem.rename(originalPath, quarantinePath);
+      } on Object {
+        // The original validation error remains the actionable failure.
+      }
+      rethrow;
+    }
+  }
+
+  Future<RemoteFileEntry> _verifyRecoveryDirectory(
+    RemoteFileSystem fileSystem,
+    String path,
+    String expectedParent,
+    SyncTrashPathStyle pathStyle,
+    SyncTrashPathCase pathCase,
+  ) async {
+    final entry = await fileSystem.stat(path, followLinks: false);
+    final context = syncTrashPathContext(pathStyle);
+    final canonical = await fileSystem.canonicalize(path);
+    if (entry.isDirectory &&
+        _pathsEqual(
+          context.dirname(canonical),
+          expectedParent,
+          pathStyle,
+          pathCase,
+        )) {
+      return entry;
+    }
+
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.conflict,
+      operation: 'recover sync trash',
+      path: path,
+      message: 'The quarantined sync-trash run changed during recovery.',
     );
   }
 
@@ -1063,13 +1194,9 @@ final class SyncTrashPurgeService {
         );
         cover.locations.add(location);
         cover.pairIds.add(journal.record.pairId);
-        cover.journalScopes[journal] =
-            journalScope ??
-            normalizeSyncTrashPath(
-              context.dirname(parent),
-              pathStyle,
-              pathCase,
-            );
+        if (journalScope != null) {
+          cover.journalScopes[journal] = journalScope;
+        }
         final startedAt = journal.record.startedAt;
         if (cover.startedAt == null || startedAt.isBefore(cover.startedAt!)) {
           cover.startedAt = startedAt;
@@ -1174,13 +1301,14 @@ final class SyncTrashPurgeService {
   /// Stamps `purged` into every unpurged journal guarding [cover]'s run
   /// — the marker rail 9's retention reads. Callers invoke this only
   /// after the run directory is gone or confirmed absent.
-  Future<void> _markPurged(_RunCoverage? cover) async {
-    if (cover == null) return;
+  Future<bool> _markPurged(_RunCoverage? cover) async {
+    if (cover == null || cover.journalScopes.isEmpty) return false;
     for (final entry in cover.journalScopes.entries) {
       if (!entry.key.isTrashScopePurged(entry.value)) {
         await entry.key.markPurged(trashScope: entry.value);
       }
     }
+    return true;
   }
 
   /// Atomically moves a directory away from its listed name before
@@ -1195,6 +1323,7 @@ final class SyncTrashPurgeService {
     SyncTrashPathStyle pathStyle,
     SyncTrashPathCase pathCase,
     _QuarantineNameKind nameKind,
+    Future<void> Function() verifyRoot,
   ) async {
     final context = syncTrashPathContext(pathStyle);
     final RemoteFileEntry entry;
@@ -1258,6 +1387,10 @@ final class SyncTrashPurgeService {
         fileSystem,
         quarantinePath,
         directoryPath,
+        expectedParentCanonical: expectedParentCanonical,
+        pathStyle: pathStyle,
+        pathCase: pathCase,
+        verifyRoot: verifyRoot,
       );
       throw RemoteFileException(
         kind: RemoteFileErrorKind.conflict,
@@ -1280,8 +1413,65 @@ final class SyncTrashPurgeService {
   Future<void> _restoreQuarantinedDirectory(
     RemoteFileSystem fileSystem,
     String quarantinePath,
-    String runPath,
-  ) async {
+    String runPath, {
+    required String expectedParentCanonical,
+    required SyncTrashPathStyle pathStyle,
+    required SyncTrashPathCase pathCase,
+    required Future<void> Function() verifyRoot,
+  }) async {
+    final context = syncTrashPathContext(pathStyle);
+    final quarantineParent = context.dirname(quarantinePath);
+    final runParent = context.dirname(runPath);
+    if (!_pathsEqual(quarantineParent, runParent, pathStyle, pathCase)) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'purge rollback',
+        path: quarantinePath,
+        message: 'The sync-trash directory changed during rollback.',
+      );
+    }
+
+    await verifyRoot();
+    await _verifyCanonicalPath(
+      fileSystem,
+      quarantineParent,
+      expectedParentCanonical,
+      pathStyle,
+      pathCase,
+    );
+    final source = await fileSystem.stat(quarantinePath, followLinks: false);
+    if (!source.isDirectory) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'purge rollback',
+        path: quarantinePath,
+        message: 'The quarantined directory changed during rollback.',
+      );
+    }
+    final canonicalSource = await fileSystem.canonicalize(quarantinePath);
+    if (!_pathsEqual(
+      context.dirname(canonicalSource),
+      expectedParentCanonical,
+      pathStyle,
+      pathCase,
+    )) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'purge rollback',
+        path: quarantinePath,
+        message: 'The quarantined directory moved during rollback.',
+      );
+    }
+
+    // Validation yields. Repeat ownership immediately before the rename.
+    await verifyRoot();
+    await _verifyCanonicalPath(
+      fileSystem,
+      quarantineParent,
+      expectedParentCanonical,
+      pathStyle,
+      pathCase,
+    );
     try {
       await fileSystem.rename(quarantinePath, runPath);
     } on RemoteFileException catch (error) {
@@ -1302,6 +1492,7 @@ final class SyncTrashPurgeService {
     SyncTrashPathStyle pathStyle,
     SyncTrashPathCase pathCase,
     RemoteTransferCancellation? cancellation,
+    Future<void> Function() verifyRoot,
   ) async {
     final context = syncTrashPathContext(pathStyle);
     try {
@@ -1370,6 +1561,7 @@ final class SyncTrashPurgeService {
           pathStyle,
           pathCase,
           _QuarantineNameKind.nested,
+          verifyRoot,
         );
         if (quarantinedChild == null) continue;
 
@@ -1382,12 +1574,17 @@ final class SyncTrashPurgeService {
             pathStyle,
             pathCase,
             cancellation,
+            verifyRoot,
           );
         } on Object {
           await _restoreQuarantinedDirectory(
             fileSystem,
             quarantinedChild.path,
             childPath,
+            expectedParentCanonical: expectedCanonical,
+            pathStyle: pathStyle,
+            pathCase: pathCase,
+            verifyRoot: verifyRoot,
           );
           rethrow;
         }
@@ -1474,16 +1671,21 @@ String _purgeQuarantineSuffix() => secureRandomBytes(
 ({String runId, String ownerPrefix})? _quarantinedRun(
   String name,
   SyncTrashPathStyle pathStyle,
+  SyncTrashPathCase pathCase,
 ) {
-  final match = _purgeQuarantinePattern.firstMatch(name);
+  final nameKey = _trashNameKey(name, pathCase);
+  final match = _purgeQuarantinePattern.firstMatch(nameKey);
   if (match == null) return null;
-  final runId = name.substring(0, match.start);
+  final runId = nameKey.substring(0, match.start);
   if (!isSyncTrashRunDirectoryName(runId) ||
       !_isPlainDirectoryName(runId, pathStyle)) {
     return null;
   }
   return (runId: runId, ownerPrefix: match.group(1)!);
 }
+
+String _trashNameKey(String name, SyncTrashPathCase pathCase) =>
+    pathCase == SyncTrashPathCase.sensitive ? name : name.toLowerCase();
 
 RemoteFileEntry _entryAtPath(RemoteFileEntry entry, String path, String name) =>
     RemoteFileEntry(

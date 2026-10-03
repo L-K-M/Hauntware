@@ -134,6 +134,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$supportDirectoryPath$separator$_identityAuditLogFileName'",
     "'bookmark.id'",
     "'bookmark has no embedded server identity'",
+    // Exact host-key map locator, never rendered.
+    r"'$host:$port'",
     // The setPermissions assert's mode-range diagnostic — a programming-
     // error message, never rendered.
     "'permissions must be a twelve-bit mode (0x000-0xFFF)'",
@@ -1003,12 +1005,22 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'The sync-trash root changed during reconciliation.'",
     "'local'",
     "'resolve sync trash'",
-    "'The sync endpoint is no longer available.'",
-    r"'${config.username}@${config.host.toLowerCase()}:'",
-    r"'${config.port}'",
     "'verify sync trash'",
-    "'The sync-trash root identity is unresolved.'",
     "'The sync-trash root changed after planning.'",
+    // Endpoint identity serialization and programmer diagnostics, never
+    // rendered. User-visible failures above come from ARB.
+    "'local endpoint already handled'",
+    r"'unverified\u0000local'",
+    r"'unverified\u0000config\u0000${server.serverConfigId}'",
+    r"'unverified\u0000embedded\u0000'",
+    r"'${server.identity!.username}\u0000'",
+    r"'${server.identity!.host.toLowerCase()}\u0000'",
+    r"'${server.identity!.port}'",
+    r"'remote\u0000${username.trim()}\u0000${host.trim().toLowerCase()}'",
+    r"'\u0000$port\u0000${jumpHostId ?? ''}\u0000${routeContext ?? ''}'",
+    "''",
+    r"'${_remoteTrashAddressIdentity(host: identity.host, port: identity.port, username: identity.username, jumpHostId: identity.jumpHostId, routeContext: identity.routeContext)}'",
+    r"'\u0000${identity.fingerprintSha256}'",
   },
   // The plan controller's machine literals: the 'local' device-id
   // default, §9's heavy-suggestion noise names + glob join, the

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -9,6 +10,7 @@ import 'fake_sync_api.dart';
 final _key = List<int>.unmodifiable(List<int>.generate(32, (i) => i));
 final _epoch = DateTime.utc(2026, 9, 20, 12);
 final _epochMs = _epoch.millisecondsSinceEpoch;
+const _raceObservationWindow = Duration(milliseconds: 100);
 
 /// A controllable wall clock shared by a "device"'s store and coordinator.
 final class _Clock {
@@ -24,8 +26,9 @@ final class _Device {
   late final Directory dir;
   late PersistentLocalRecordStore records;
   late final FileBookmarkStore bookmarks;
-  late final InMemoryHostKeyStore hostKeys;
-  late final InMemoryPinVerdictStore verdicts;
+  late final ConflictAwareHostKeyStore hostKeys;
+  late final PinVerdictStore verdicts;
+  late final HostKeyMutationGate hostKeyMutations;
   late final InMemorySyncTripwireStore tripwires;
   late final RecordCrypto crypto;
   late BookmarkCoordinator coordinator;
@@ -45,6 +48,8 @@ final class _Device {
     String name, {
     bool shared = false,
     bool syncSecrets = false,
+    ConflictAwareHostKeyStore? hostKeys,
+    PinVerdictStore? pinVerdicts,
   }) async {
     final device = _Device._()
       ..deviceId = 'device-$name'
@@ -60,8 +65,9 @@ final class _Device {
       now: device.clock.call,
       syncDeviceId: () => device.deviceId,
     );
-    device.hostKeys = InMemoryHostKeyStore();
-    device.verdicts = InMemoryPinVerdictStore();
+    device.hostKeys = hostKeys ?? InMemoryConflictAwareHostKeyStore();
+    device.verdicts = pinVerdicts ?? InMemoryPinVerdictStore();
+    device.hostKeyMutations = HostKeyMutationGate();
     device.tripwires = InMemorySyncTripwireStore();
     device.crypto = RecordCrypto(RecordCodec(_key));
     device.catalog = shared ? SeanceServerCatalog() : null;
@@ -88,6 +94,7 @@ final class _Device {
       records: records,
       bookmarks: bookmarks,
       hostKeys: hostKeys,
+      hostKeyMutations: hostKeyMutations,
       crypto: crypto,
       deviceId: deviceId,
       pinVerdicts: verdicts,
@@ -100,6 +107,85 @@ final class _Device {
       now: clock.call,
     );
   }
+}
+
+/// Returns a stale read after a concurrent engine pin lands.
+final class _RacingHostKeyStore implements ConflictAwareHostKeyStore {
+  final _keys = <String, HostKey>{};
+  final readStarted = Completer<void>();
+  final releaseRead = Completer<void>();
+  var _gateNextRead = true;
+
+  @override
+  Future<List<HostKey>> all() async => _keys.values.toList();
+
+  @override
+  Future<HostKey?> get(String host, int port) async {
+    final snapshot = _keys['$host:$port'];
+    if (!_gateNextRead) return snapshot;
+
+    _gateNextRead = false;
+    readStarted.complete();
+    await releaseRead.future;
+    return snapshot;
+  }
+
+  @override
+  Future<void> put(HostKey key) async => _keys[key.locator] = key;
+
+  @override
+  Future<HostKeyInstallResult> putIfNoConflict(HostKey key) async {
+    final snapshot = _keys[key.locator];
+    if (_gateNextRead) {
+      _gateNextRead = false;
+      readStarted.complete();
+      await releaseRead.future;
+    }
+
+    final current = _keys[key.locator] ?? snapshot;
+    if (current != null && current.conflictsWith(key)) {
+      return HostKeyInstallResult.conflict;
+    }
+
+    _keys[key.locator] = key;
+    return HostKeyInstallResult.installed;
+  }
+
+  void pinFromEngine(HostKey key) => _keys[key.locator] = key;
+}
+
+/// Holds a forget mutation so a competing pull can enter concurrently.
+final class _RacingPinVerdictStore implements PinVerdictStore {
+  final _delegate = InMemoryPinVerdictStore();
+  final addStarted = Completer<void>();
+  final negativeReadStarted = Completer<void>();
+  final releaseAdd = Completer<void>();
+
+  @override
+  Future<void> addNegativePin(String locator) async {
+    addStarted.complete();
+    await releaseAdd.future;
+    await _delegate.addNegativePin(locator);
+  }
+
+  @override
+  Future<Set<String>> negativePins() async {
+    final snapshot = await _delegate.negativePins();
+    if (!negativeReadStarted.isCompleted) negativeReadStarted.complete();
+    return snapshot;
+  }
+
+  @override
+  Future<void> removeNegativePin(String locator) =>
+      _delegate.removeNegativePin(locator);
+
+  @override
+  Future<void> recordKeptVerdict(String locator, String rejectedFingerprint) =>
+      _delegate.recordKeptVerdict(locator, rejectedFingerprint);
+
+  @override
+  Future<String?> rejectedFingerprintFor(String locator) =>
+      _delegate.rejectedFingerprintFor(locator);
 }
 
 /// A vault store that can fail every read and write, like a locked
@@ -560,6 +646,7 @@ void main() {
         records: restarted,
         bookmarks: device.bookmarks,
         hostKeys: device.hostKeys,
+          hostKeyMutations: device.hostKeyMutations,
         crypto: device.crypto,
         deviceId: device.deviceId,
         pinVerdicts: device.verdicts,
@@ -653,6 +740,44 @@ void main() {
           result.report.pinConflicts.single.locator, 'h.example.com:22');
     });
 
+    test('a pin landing during auto-apply is not overwritten', () async {
+      final hostKeys = _RacingHostKeyStore();
+      final device = await _Device.create(tempDir, 'a', hostKeys: hostKeys);
+      final enginePin = pin('h.example.com', 'SHA256:ENGINE');
+      server.seed(await pinRecord(pin('h.example.com', 'SHA256:PULLED')));
+
+      final round = device.coordinator.runRound(server);
+      await hostKeys.readStarted.future;
+      hostKeys.pinFromEngine(enginePin);
+      hostKeys.releaseRead.complete();
+      await round;
+
+      expect(
+        (await hostKeys.get('h.example.com', 22))!.fingerprintSha256,
+        'SHA256:ENGINE',
+      );
+    });
+
+    test('a forget already in progress prevents auto-apply', () async {
+      final verdicts = _RacingPinVerdictStore();
+      final device = await _Device.create(tempDir, 'a', pinVerdicts: verdicts);
+      server.seed(await pinRecord(pin('h.example.com', 'SHA256:PULLED')));
+
+      final forget = device.coordinator.onHostKeyForgotten('h.example.com', 22);
+      await verdicts.addStarted.future;
+      final round = device.coordinator.runRound(server);
+
+      // An unguarded pull reads the old verdict while forget is held.
+      await Future.any([
+        verdicts.negativeReadStarted.future,
+        Future<void>.delayed(_raceObservationWindow),
+      ]);
+      verdicts.releaseAdd.complete();
+      await Future.wait([forget, round]);
+
+      expect(await device.hostKeys.get('h.example.com', 22), isNull);
+    });
+
     test('a negative pin holds the pulled record unapplied', () async {
       final device = await _Device.create(tempDir, 'a');
       await device.verdicts.addNegativePin('h.example.com:22');
@@ -667,9 +792,9 @@ void main() {
       final device = await _Device.create(tempDir, 'a');
       await device.hostKeys.put(pin('h.example.com', 'SHA256:LOCAL'));
       server.seed(await pinRecord(pin('h.example.com', 'SHA256:PULLED')));
-      await device.coordinator.runRound(server);
+      final first = await device.coordinator.runRound(server);
 
-      await device.coordinator.keepLocalPin('h.example.com', 22);
+      await device.coordinator.keepLocalPin(first.report.pinConflicts.single);
       final result = await device.coordinator.runRound(server);
       expect(result.report.pinConflicts, isEmpty);
       expect(
@@ -813,6 +938,7 @@ void main() {
         records: restored,
         bookmarks: a.bookmarks,
         hostKeys: a.hostKeys,
+          hostKeyMutations: a.hostKeyMutations,
         crypto: a.crypto,
         deviceId: a.deviceId,
         pinVerdicts: a.verdicts,
@@ -1078,6 +1204,7 @@ void main() {
         records: device.records,
         bookmarks: device.bookmarks,
         hostKeys: device.hostKeys,
+          hostKeyMutations: device.hostKeyMutations,
         crypto: device.crypto,
         deviceId: device.deviceId,
         pinVerdicts: device.verdicts,

@@ -21,6 +21,9 @@ import '../support/sync_harness.dart';
 
 const _mismatchedLocationKey =
     '0000000000000000000000000000000000000000000000000000000000000000';
+final SyncTrashPathStyle _nativeTrashPathStyle = Platform.isWindows
+    ? SyncTrashPathStyle.windows
+    : SyncTrashPathStyle.posix;
 
 void main() {
   late Directory scratch;
@@ -39,6 +42,14 @@ void main() {
     states = MemorySyncStateStore();
     activity = SyncTrashActivityRegistry();
     pair = testSyncPair(left: leftRoot.path, right: rightRoot.path);
+    for (final root in [leftRoot, rightRoot]) {
+      await resolveSyncTrashRoot(
+        LocalFileSystem(),
+        '${root.path}${Platform.pathSeparator}.poltergeist-trash',
+        pathStyle: _nativeTrashPathStyle,
+        access: SyncTrashRootAccess.createOrClaim,
+      );
+    }
   });
 
   tearDown(() async {
@@ -119,7 +130,7 @@ void main() {
     final identity = await resolveSyncTrashRoot(
       LocalFileSystem(),
       trashRoot.path,
-      pathStyle: SyncTrashPathStyle.posix,
+      pathStyle: _nativeTrashPathStyle,
       access: SyncTrashRootAccess.createOrClaim,
     );
     final runId = _runId(syncRunDevicePrefix('test-device'), 'deleted-root');
@@ -177,6 +188,12 @@ void main() {
       final runId = _runId(syncRunDevicePrefix('test-device'), 'old-purge');
       final trashRoot = Directory('${leftRoot.path}/.poltergeist-trash')
         ..createSync();
+      final identity = await resolveSyncTrashRoot(
+        LocalFileSystem(),
+        trashRoot.path,
+        pathStyle: _nativeTrashPathStyle,
+        access: SyncTrashRootAccess.createOrClaim,
+      );
       final runDirectory = Directory('${trashRoot.path}/$runId')..createSync();
       final trashed = File('${runDirectory.path}/000001-a.txt')
         ..writeAsStringSync('old');
@@ -185,6 +202,7 @@ void main() {
         runId: runId,
         pairId: 'pair-1',
         trashLocation: trashed.path,
+        trashScopeLeft: identity.scopeKey,
         startedAt: DateTime.now().subtract(const Duration(days: 31)),
       );
       final controller = _controller(
@@ -452,7 +470,7 @@ void main() {
     final identity = await resolveSyncTrashRoot(
       LocalFileSystem(),
       trashRoot.path,
-      pathStyle: SyncTrashPathStyle.posix,
+      pathStyle: _nativeTrashPathStyle,
       access: SyncTrashRootAccess.createOrClaim,
     );
     final location = syncTrashLocation(
@@ -539,7 +557,7 @@ void main() {
       final identity = await resolveSyncTrashRoot(
         LocalFileSystem(),
         trashRoot,
-        pathStyle: SyncTrashPathStyle.posix,
+        pathStyle: _nativeTrashPathStyle,
         access: SyncTrashRootAccess.createOrClaim,
       );
       final runDirectory = Directory('$trashRoot/$runId')..createSync();

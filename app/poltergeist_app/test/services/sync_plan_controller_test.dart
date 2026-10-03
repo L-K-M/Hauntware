@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/services/rsync_endpoints.dart';
+import 'package:poltergeist_app/services/server_config_source.dart';
 import 'package:poltergeist_app/services/sync_compare_controller.dart';
 import 'package:poltergeist_app/services/sync_environment.dart';
 import 'package:poltergeist_app/services/sync_plan_controller.dart';
@@ -19,6 +20,7 @@ import 'package:poltergeist_app/services/sync_trash_activity.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
+import '../support/fake_bookmark_store.dart';
 import '../support/sync_harness.dart';
 
 SyncPlanController _controller({
@@ -849,6 +851,39 @@ void main() {
       expect(controller.pairId, isNotEmpty);
     });
 
+    test('run preflight freezes the reviewed pair and plan', () async {
+      File('${left.path}/a.txt').writeAsStringSync('alpha');
+      final controller = realController(const SyncRuleSet());
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      final reviewedPair = controller.pair;
+      final reviewedItem = controller.plan!.items.single;
+      final reviewedAction = reviewedItem.effective;
+
+      final run = controller.run();
+      final modeUpdate = controller.setMode(
+        direction: SyncDirection.rightToLeft,
+      );
+      final pairUpdate = controller.updatePairDefinition(
+        testSyncPair(
+          left: left.path,
+          right: right.path,
+          rules: const SyncRuleSet(direction: SyncDirection.rightToLeft),
+        ),
+      );
+      controller.applyOverride(reviewedItem, SyncActionType.skip);
+
+      expect(controller.planMutationsBlocked, isTrue);
+      expect(controller.pair, same(reviewedPair));
+      expect(reviewedItem.effective, reviewedAction);
+      expect(await pairUpdate, isFalse);
+      await modeUpdate;
+      await run;
+
+      expect(File('${right.path}/a.txt').readAsStringSync(), 'alpha');
+    });
+
     test('a changed trash marker blocks the reviewed run', () async {
       File('${left.path}/a.txt').writeAsStringSync('alpha');
       final controller = realController(const SyncRuleSet());
@@ -869,6 +904,74 @@ void main() {
 
       expect(controller.phase, SyncPlanPhase.failed);
       expect(File('${right.path}/a.txt').existsSync(), isFalse);
+    });
+
+    test('permanent delete rejects a host changed after its scan', () async {
+      final remoteFileSystem = _UnavailableTrashFileSystem();
+      final connections = _RetargetableConnections(remoteFileSystem);
+      var config = _serverConfig('one.example.com');
+      final bookmarks = FakeBookmarkStore();
+      addTearDown(bookmarks.close);
+      final serverConfigs = AppServerConfigSource(
+        bookmarks: bookmarks,
+        catalogLookup: (_) => config,
+      );
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: p.join(scratch.path, 'sync_runs'),
+        deviceId: () async => 'test-device',
+        connections: connections,
+        serverConfigs: serverConfigs,
+      );
+      final remote = RemoteEndpoint(
+        server: const BookmarkServerRef(serverConfigId: 'target'),
+        path: left.path,
+      );
+      final pair = SyncPair(
+        id: 'retargeted-delete',
+        name: 'Retargeted delete',
+        left: remote,
+        right: LocalEndpoint(right.path),
+        rules: const SyncRuleSet(
+          deletions: DeletionPolicy.permanent,
+          backups: BackupPolicy.none,
+        ),
+      );
+      final oldFile = File(p.join(left.path, 'old.txt'))
+        ..writeAsStringSync('old');
+      final plan = testPlan(
+        pair,
+        [
+          testItem(
+            'old.txt',
+            left: testFile(size: 3),
+            suggested: SyncActionType.deleteLeft,
+            reason: SyncReason.onlyOnLeft,
+          ),
+        ],
+        leftFileCount: 1,
+      );
+      final controller = SyncPlanController(
+        pair: pair,
+        environment: environment,
+        syncTasks: SyncQueueTasks(),
+        scanner: _EndpointTouchingScanner(environment),
+        differ: FakeSyncDiffer(plan),
+        deviceId: 'test-device',
+        rsyncEndpoints: resolveRsyncEndpoints,
+      );
+      addTearDown(controller.dispose);
+
+      await _ready(controller);
+      await pumpUntil(() => connections.releaseCount > 0);
+      config = _serverConfig('two.example.com');
+      connections.endpointIdentity = _endpointIdentity('two.example.com');
+
+      await controller.run(deleteConfirmed: true);
+
+      expect(controller.phase, SyncPlanPhase.failed);
+      expect(controller.syncTasks.tasks, isEmpty);
+      expect(oldFile.existsSync(), isTrue);
     });
 
     test('a failed item surfaces failed phase and retries to done',
@@ -1020,6 +1123,49 @@ void main() {
 
       expect(report.restored, isEmpty);
       expect(File('${right.path}/old.txt').existsSync(), isFalse);
+    });
+
+    test('restore preflight blocks pair and plan mutations', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final fileSystem = _TrashVerificationGateFileSystem();
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: testSyncEnvironment(
+          scratch,
+          localFileSystem: () => fileSystem,
+        ),
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+      final reviewedPair = controller.pair;
+      final reviewedPlan = controller.plan!;
+      final reviewedItem = reviewedPlan.items.first;
+      final reviewedAction = reviewedItem.effective;
+      fileSystem.armVerification();
+
+      final restore = controller.restoreTrashed();
+      await fileSystem.verificationStarted.future;
+      final rulesUpdate = controller.updateRules(
+        const SyncRuleSet(direction: SyncDirection.rightToLeft),
+      );
+      final rescan = controller.rescan();
+      controller.applyOverride(reviewedItem, SyncActionType.skip);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.pair, same(reviewedPair));
+      expect(controller.plan, same(reviewedPlan));
+      expect(reviewedItem.effective, reviewedAction);
+      expect(controller.phase, SyncPlanPhase.completed);
+
+      fileSystem.releaseVerification();
+      final report = await restore;
+      await Future.wait([rulesUpdate, rescan]);
+
+      expect(report.restored, isNotEmpty);
+      expect(File('${right.path}/old.txt').readAsStringSync(), 'old');
     });
 
     test('purging the last run disables restore immediately', () async {
@@ -1626,5 +1772,97 @@ final class _TrashVerificationGateFileSystem extends LocalFileSystem {
       cancellation: cancellation,
       computeHash: computeHash,
     );
+  }
+}
+
+ServerConfig _serverConfig(String host) => ServerConfig(
+  id: 'target',
+  label: 'Target',
+  host: host,
+  username: 'deploy',
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+AuthenticatedEndpointIdentity _endpointIdentity(String host) =>
+    AuthenticatedEndpointIdentity(
+      host: host,
+      port: 22,
+      username: 'deploy',
+      fingerprintSha256: 'SHA256:$host',
+    );
+
+final class _RetargetableConnections implements ConnectionManager {
+  _RetargetableConnections(this.fileSystem)
+    : endpointIdentity = _endpointIdentity('one.example.com');
+
+  final RemoteFileSystem fileSystem;
+  AuthenticatedEndpointIdentity endpointIdentity;
+  int releaseCount = 0;
+
+  @override
+  Future<TransferChannelLease> leaseTransferChannel(String serverId) async =>
+      _RetargetableLease(fileSystem, endpointIdentity, () => releaseCount++);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName}');
+}
+
+final class _RetargetableLease implements TransferChannelLease {
+  _RetargetableLease(this.fs, this.endpointIdentity, this._onRelease);
+
+  @override
+  final RemoteFileSystem fs;
+  @override
+  final AuthenticatedEndpointIdentity endpointIdentity;
+  final void Function() _onRelease;
+
+  @override
+  Future<void> release() async => _onRelease();
+
+  @override
+  void reportFailure(RemoteFileSystem source, RemoteFileException error) {}
+}
+
+final class _UnavailableTrashFileSystem extends LocalFileSystem {
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) {
+    if (path.contains(RemoteTrash.rootDirectoryName)) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'stat',
+        path: path,
+        message: 'trash unavailable',
+      );
+    }
+
+    return super.stat(path, followLinks: followLinks);
+  }
+}
+
+final class _EndpointTouchingScanner implements SyncPairScanner {
+  const _EndpointTouchingScanner(this.environment);
+
+  final SyncEnvironment environment;
+
+  @override
+  Future<ScanResult> scan(
+    SyncEndpoint endpoint,
+    SyncSide side,
+    SyncRuleSet rules, {
+    bool? caseSensitivityOverride,
+    ScanCancellation? cancellation,
+    void Function(int entriesScanned)? onProgress,
+  }) async {
+    final root = await environment.fileSystemFor(endpoint).canonicalize(
+      environment.rootFor(endpoint),
+    );
+    final entries = side == SyncSide.left
+        ? {'old.txt': testFile(size: 3)}
+        : const <String, EntrySnapshot>{};
+    onProgress?.call(entries.length);
+
+    return testScanResult(root, entries);
   }
 }

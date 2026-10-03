@@ -25,7 +25,7 @@ Future<void> confirmSyncTrashPurge(
     if (!context.mounted) return;
     showTopToastIn(
       context,
-      message: outcome.cancelled
+      message: outcome.cancelled && outcome.failures.isEmpty
           ? l10n.syncTrashPurgeCancelled(outcome.purgedRunCount)
           : l10n.syncTrashPurgeResult(
               outcome.purgedRunCount,

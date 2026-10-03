@@ -19,6 +19,20 @@ import 'plan.dart';
 import 'trash_purge.dart';
 import 'trash_root.dart';
 
+final class _RunTrashDirectory {
+  const _RunTrashDirectory({
+    required this.requestedRoot,
+    required this.runDirectory,
+    required this.rootId,
+    required this.pathStyle,
+  });
+
+  final String requestedRoot;
+  final String runDirectory;
+  final String rootId;
+  final SyncTrashPathStyle pathStyle;
+}
+
 /// Which clause of the >50 % rail (05 §8 rail 3) tripped — the typed
 /// confirmation's copy differs per clause.
 enum DeleteRailClause {
@@ -619,7 +633,7 @@ final class _RunSession {
 
   /// The run's trash directories per side (lazy — a run that trashes
   /// nothing never creates them).
-  final Map<SyncSide, String> _trashDirs = {};
+  final Map<SyncSide, _RunTrashDirectory> _trashDirs = {};
 
   /// Sides whose server refused an upload's mode stamp this run —
   /// subsequent items skip `preserveMode` instead of paying a doomed
@@ -1414,7 +1428,10 @@ final class _RunSession {
       if (entry.type != RemoteFileType.file) rethrow;
       final name =
           '${_nextSequence().toString().padLeft(6, '0')}-${entry.name}';
-      final target = remoteJoin(runDir, name);
+      // Rename failure can yield before copy fallback starts. Reopen the
+      // owned root and run directory before writing through that path.
+      final fallbackRunDir = await _runTrashDir(fs, side);
+      final target = remoteJoin(fallbackRunDir, name);
       final uploaded = await _transfer(
         fs,
         entry.path,
@@ -1457,7 +1474,7 @@ final class _RunSession {
   /// `trashPath*` (§8 rail 5), created 0700 by the RemoteTrash seam.
   Future<String> _runTrashDir(RemoteFileSystem fs, SyncSide side) async {
     final cached = _trashDirs[side];
-    if (cached != null) return cached;
+    if (cached != null) return _verifyRunTrashDir(fs, cached);
     final pathStyle = side == SyncSide.left
         ? executor.trashPathStyleLeft
         : executor.trashPathStyleRight;
@@ -1511,10 +1528,98 @@ final class _RunSession {
           error.kind != RemoteFileErrorKind.unsupported) {
         rethrow;
       }
-      await _ensureDir(fs, remoteParent(runDir));
+      await _ensureDir(fs, context.dirname(runDir));
       await _ensureDir(fs, runDir);
     }
-    return _trashDirs[side] = runDir;
+    final cachedDirectory = _RunTrashDirectory(
+      requestedRoot: trashRoot,
+      runDirectory: runDir,
+      rootId: identity.rootId,
+      pathStyle: pathStyle,
+    );
+    _trashDirs[side] = cachedDirectory;
+    return _verifyRunTrashDir(fs, cachedDirectory);
+  }
+
+  Future<String> _verifyRunTrashDir(
+    RemoteFileSystem fs,
+    _RunTrashDirectory cached,
+  ) async {
+    final context = syncTrashPathContext(cached.pathStyle);
+    final first = await resolveSyncTrashRoot(
+      fs,
+      cached.requestedRoot,
+      pathStyle: cached.pathStyle,
+      access: SyncTrashRootAccess.openExisting,
+    );
+    _requireCachedTrashRoot(first, cached);
+
+    final expectedRunDirectory = context.join(
+      first.canonicalRoot,
+      journal.record.runId,
+    );
+    final runEntry = await fs.stat(cached.runDirectory, followLinks: false);
+    final canonicalRunDirectory = context.normalize(
+      await fs.canonicalize(cached.runDirectory),
+    );
+    if (!runEntry.isDirectory ||
+        !_sameTrashPath(
+          canonicalRunDirectory,
+          expectedRunDirectory,
+          cached.pathStyle,
+        )) {
+      throw _changedTrashRoot(cached.requestedRoot);
+    }
+
+    // The run-directory checks yield. Repeat the root identity before the
+    // caller mutates through the cached path.
+    final second = await resolveSyncTrashRoot(
+      fs,
+      cached.requestedRoot,
+      pathStyle: cached.pathStyle,
+      access: SyncTrashRootAccess.openExisting,
+    );
+    _requireCachedTrashRoot(second, cached);
+    return cached.runDirectory;
+  }
+
+  void _requireCachedTrashRoot(
+    SyncTrashRootIdentity actual,
+    _RunTrashDirectory cached,
+  ) {
+    final context = syncTrashPathContext(cached.pathStyle);
+    if (actual.rootId == cached.rootId &&
+        _sameTrashPath(
+          actual.canonicalRoot,
+          context.dirname(cached.runDirectory),
+          cached.pathStyle,
+        )) {
+      return;
+    }
+
+    throw _changedTrashRoot(cached.requestedRoot);
+  }
+
+  RemoteFileException _changedTrashRoot(String path) => RemoteFileException(
+    kind: RemoteFileErrorKind.conflict,
+    operation: 'trash',
+    path: path,
+    message: 'The sync-trash root changed after planning.',
+  );
+
+  bool _sameTrashPath(
+    String first,
+    String second,
+    SyncTrashPathStyle pathStyle,
+  ) {
+    final context = syncTrashPathContext(pathStyle);
+    final normalizedFirst = context.normalize(first);
+    final normalizedSecond = context.normalize(second);
+    if (pathStyle == SyncTrashPathStyle.windows) {
+      return normalizedFirst.toLowerCase() == normalizedSecond.toLowerCase();
+    }
+
+    return normalizedFirst == normalizedSecond;
   }
 
   /// Creates [path] when absent, tolerating the create race; a

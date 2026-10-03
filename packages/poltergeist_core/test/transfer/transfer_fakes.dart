@@ -6,6 +6,13 @@ import 'package:crypto/crypto.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
+const _testEndpointIdentity = AuthenticatedEndpointIdentity(
+  host: 'example.com',
+  port: 22,
+  username: 'test',
+  fingerprintSha256: 'SHA256:test',
+);
+
 enum FakeNameProbeOperation { upload, stat, delete }
 
 /// Deterministic pump for the real-async transfer tests: every fake
@@ -985,7 +992,11 @@ class RecordingPersistence implements TransferPersistence {
 /// A transfer-channel lease over [FakeTreeFileSystem]; [releaseCount]
 /// makes the deterministic-release contract observable.
 class FakeTransferLease implements TransferChannelLease {
-  FakeTransferLease(this.fs, this._onRelease);
+  FakeTransferLease(
+    this.fs,
+    this._onRelease, {
+    this.endpointIdentity = _testEndpointIdentity,
+  });
 
   final void Function() _onRelease;
   int releaseCount = 0;
@@ -993,6 +1004,9 @@ class FakeTransferLease implements TransferChannelLease {
 
   @override
   final FakeTreeFileSystem fs;
+
+  @override
+  final AuthenticatedEndpointIdentity endpointIdentity;
 
   @override
   Future<void> release() async {
@@ -1015,9 +1029,11 @@ class FakeTransferLease implements TransferChannelLease {
 /// pool would block and releases deterministically. Every other member
 /// fails loudly.
 class FakeQueueConnectionManager implements ConnectionManager {
-  FakeQueueConnectionManager(this.filesystems);
+  FakeQueueConnectionManager(this.filesystems, {this.endpointIdentityFor});
 
   final Map<String, FakeTreeFileSystem> filesystems;
+  final AuthenticatedEndpointIdentity Function(String serverId)?
+  endpointIdentityFor;
 
   /// Per-server cap on simultaneously held leases — models the pool's
   /// `effectiveTransports × maxTransferChannelsPerTransport` bound.
@@ -1081,13 +1097,18 @@ class FakeQueueConnectionManager implements ConnectionManager {
     if (_active[serverId]! > (_peak[serverId] ?? 0)) {
       _peak[serverId] = _active[serverId]!;
     }
-    final lease = FakeTransferLease(fs, () {
-      _active[serverId] = (_active[serverId] ?? 1) - 1;
-      final queue = _waiters[serverId];
-      if (queue != null && queue.isNotEmpty) {
-        queue.removeFirst().complete();
-      }
-    });
+    final lease = FakeTransferLease(
+      fs,
+      () {
+        _active[serverId] = (_active[serverId] ?? 1) - 1;
+        final queue = _waiters[serverId];
+        if (queue != null && queue.isNotEmpty) {
+          queue.removeFirst().complete();
+        }
+      },
+      endpointIdentity:
+          endpointIdentityFor?.call(serverId) ?? _testEndpointIdentity,
+    );
     allLeases.add(lease);
     return lease;
   }

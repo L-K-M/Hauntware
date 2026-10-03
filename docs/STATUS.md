@@ -14,18 +14,17 @@ partial-failure report; active local runs block explicit purge.
 
 Trash roots carry a random ownership marker. Its identity scopes journals
 and host-local activity locks across endpoint aliases, while unowned paths,
-filesystem roots, malformed run directories, symlink swaps, and foreign
-quarantines fail closed. Purges re-list before acting, rename each selected
+filesystem roots, malformed run directories, observed symlink swaps, and
+foreign quarantines fail closed. Purges re-list before acting, rename each selected
 run to an owner-tagged quarantine, delete without following links, and mark
 only the affected journal scope. Retry and restore use the same device-local
 leases, so a local purge cannot race a local undo or live run. There is no
 distributed cross-machine lease; sibling-machine or manual removal is
 reconciled from the next live listing.
 
-Sync-package analysis is clean; 321 tests pass with five SSH-fixture skips.
-Flutter analysis is clean; 3,258 app tests pass together. One unrelated
-recent-locations full-suite flake passes in isolation (3,259 total). Native
-Linux before/after captures and provenance are in
+Sync-package analysis is clean; 324 tests pass with five SSH-fixture skips.
+Flutter analysis is clean; all 3,263 app tests pass together. Native Linux
+before/after captures and provenance are in
 `tasks/sync-trash-purge/screenshots/`. No Séance source or pin changed.
 
 ## Shared Ghost UI and file lists (2026-10-02)
@@ -10657,9 +10656,8 @@ unverified.
     cross-process activity locks, owner-tagged quarantine, live re-listing,
     no-follow deletion, foreign-device handling, and scoped restore/prune
     markers close the safety and concurrency boundaries. Analysis is clean;
-    321 sync tests pass with five SSH-fixture skips. The app passes 3,258
-    tests together; one unrelated recent-locations full-suite flake passes
-    in isolation (3,259 total). Captures are in
+    324 sync tests pass with five SSH-fixture skips. All 3,263 app tests pass
+    together. Captures are in
     `tasks/sync-trash-purge/screenshots/`.
 28. **2026-09-22: M8 — the rail-5 docroot warning chip is unbuilt.**
     05 §8 (1083–1095) requires a warning — in the pair editor AND as a

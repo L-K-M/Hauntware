@@ -107,5 +107,57 @@ void main() {
         hasLength(1),
       );
     });
+
+    test('a failed write cannot leak into a later snapshot', () async {
+      final file = File('${temporaryDirectory.path}/known_hosts.json');
+      var failNextWrite = true;
+      final store = FileHostKeyStore(
+        file,
+        atomicWriter: (target, contents) async {
+          if (failNextWrite) {
+            failNextWrite = false;
+            throw StateError('write failed');
+          }
+
+          await target.parent.create(recursive: true);
+          await target.writeAsString(contents);
+        },
+      );
+      const failed = HostKey(
+        host: 'failed.example.com',
+        port: 22,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:failed',
+        pinnedAt: 1700000001,
+      );
+
+      await expectLater(store.put(failed), throwsStateError);
+      await store.put(key);
+
+      final reloaded = await FileHostKeyStore(file).all();
+      expect(reloaded.map((entry) => entry.locator), [key.locator]);
+      expect(await store.get(failed.host, failed.port), isNull);
+    });
+
+    test('a conflicting conditional pin leaves storage unchanged', () async {
+      final file = File('${temporaryDirectory.path}/known_hosts.json');
+      final store = FileHostKeyStore(file);
+      await store.put(key);
+      final before = await file.readAsString();
+      const conflicting = HostKey(
+        host: 'nas.local',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedAt: 1700000001,
+      );
+
+      final result = await store.putIfNoConflict(conflicting);
+
+      expect(result, HostKeyInstallResult.conflict);
+      expect((await store.get(key.host, key.port))!.fingerprintSha256,
+          key.fingerprintSha256);
+      expect(await file.readAsString(), before);
+    });
   });
 }
