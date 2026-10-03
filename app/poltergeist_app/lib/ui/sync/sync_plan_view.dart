@@ -820,9 +820,9 @@ class _Header extends StatelessWidget {
               IconButton(
                 tooltip: l10n.syncRescan,
                 icon: const Icon(Icons.refresh, size: 18),
-                onPressed: controller.planMutationsBlocked
-                    ? null
-                    : () => unawaited(controller.rescan()),
+                onPressed: controller.canRescan
+                    ? () => unawaited(controller.rescan())
+                    : null,
               ),
             ],
           ),

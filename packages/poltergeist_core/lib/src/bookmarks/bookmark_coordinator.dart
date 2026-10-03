@@ -535,7 +535,10 @@ final class BookmarkCoordinator {
             DecryptedRecord(
               id: current.local.recordId,
               kind: RecordKind.hostKey,
-              updatedAt: _now().toUtc().millisecondsSinceEpoch,
+              updatedAt: deletionStamp(
+                now: _now(),
+                prior: [current.pulledStamp],
+              ),
               deviceId: _deviceId,
               data: current.local.toJson(),
             ),
@@ -563,7 +566,8 @@ final class BookmarkCoordinator {
 
   /// Re-read both sides while the shared mutation gate is held. This is the
   /// compare step for conflict actions opened from a potentially stale UI.
-  Future<({HostKey local, HostKey pulled})?> _matchingConflictPins(
+  Future<({HostKey local, HostKey pulled, int pulledStamp})?>
+  _matchingConflictPins(
     HostKeyConflict expected,
   ) async {
     if (expected.local.locator != expected.locator ||
@@ -601,7 +605,7 @@ final class BookmarkCoordinator {
       return null;
     }
 
-    return (local: local, pulled: pulled);
+    return (local: local, pulled: pulled, pulledStamp: record.updatedAt);
   }
 
   /// The host-key quarantine diff (04 §3.2): every stored `hostkey:`

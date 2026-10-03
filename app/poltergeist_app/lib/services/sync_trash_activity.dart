@@ -433,7 +433,11 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
           try {
             await _releaseLocks(gates);
           } catch (_) {
-            if (operationError == null) rethrow;
+            if (operationError == null) {
+              // Admission is committed. Give cleanup ownership to the lease
+              // instead of throwing after no caller can release the run.
+              retainScopeGates = true;
+            }
           }
         }
       } finally {
@@ -1326,11 +1330,14 @@ final class _HeldLocationGate {
 }
 
 final class _HeldFileLock {
-  const _HeldFileLock(this.file);
+  _HeldFileLock(this.file);
 
   final RandomAccessFile file;
+  bool _closed = false;
 
   Future<void> release() async {
+    if (_closed) return;
+
     Object? firstError;
     try {
       await file.unlock();
@@ -1340,6 +1347,7 @@ final class _HeldFileLock {
 
     try {
       await file.close();
+      _closed = true;
     } catch (error) {
       firstError ??= error;
     }

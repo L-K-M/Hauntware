@@ -529,6 +529,7 @@ final class SyncPlanController extends ChangeNotifier {
   Future<void>? _startup;
   int _recoveryGeneration = 0;
   bool _recoveryLookupPending = false;
+  bool _recoveryDiscoveryFailed = false;
   bool _startupRequested = false;
 
   // -- Trash purge state -------------------------------------------------
@@ -576,9 +577,20 @@ final class SyncPlanController extends ChangeNotifier {
       isRunning ||
       _isPurgingTrash ||
       _recoveryLookupPending ||
+      _recoveryDiscoveryFailed ||
       _recoveryBlocked ||
       _phase == SyncPlanPhase.recovery ||
       _hasIncompleteRestore;
+
+  /// Whether refresh may scan or retry a failed recovery lookup.
+  bool get canRescan =>
+      !planMutationsBlocked ||
+      (_recoveryDiscoveryFailed &&
+          !_disposed &&
+          _activeOperation == null &&
+          !isRunning &&
+          !_isPurgingTrash &&
+          !_recoveryLookupPending);
   bool get trashPurgeBlocksActions =>
       planMutationsBlocked || _trashRootsPurging;
 
@@ -1025,6 +1037,7 @@ final class SyncPlanController extends ChangeNotifier {
     final pair = _pair;
     var scanOwnsRemoteLeases = false;
     _recoveryLookupPending = true;
+    _recoveryDiscoveryFailed = false;
     try {
       final lookup = await SyncRunJournal.findIncompleteRestoreForPairs(
         _environment.syncRunsDirectory,
@@ -1074,7 +1087,8 @@ final class SyncPlanController extends ChangeNotifier {
       _recoveryJournal = null;
       _recoveryContext = null;
       _recoveryBlocker = null;
-      _phase = SyncPlanPhase.recovery;
+      _recoveryDiscoveryFailed = true;
+      _phase = SyncPlanPhase.error;
       _errorMessage = error is RemoteFileException
           ? error.message
           : error.toString();
@@ -1117,6 +1131,14 @@ final class SyncPlanController extends ChangeNotifier {
       // The recovery gate still precedes tree access. The pending first scan
       // is already fresh, but an explicit rescan consumes auto-run intent.
       _autoRunPending = false;
+      return;
+    }
+    if (_recoveryDiscoveryFailed) {
+      _autoRunPending = false;
+      _phase = SyncPlanPhase.scanning;
+      _errorMessage = null;
+      _errorKind = null;
+      await _discoverRestoreRecoveryAndMaybeScan();
       return;
     }
     if (planMutationsBlocked) return;
@@ -2341,6 +2363,16 @@ final class SyncPlanController extends ChangeNotifier {
       );
     } on SyncTrashPurgeInProgressException {
       return report;
+    } catch (error, stackTrace) {
+      if (!_recoveryRestoreCanContinue(
+        generation,
+        pair,
+        journal.path,
+        context,
+      )) {
+        return report;
+      }
+      _throwRecoveryRestoreFailure(error, stackTrace, journal.path);
     }
 
     try {
@@ -2438,6 +2470,17 @@ final class SyncPlanController extends ChangeNotifier {
       )) {
         return report;
       }
+    } catch (error, stackTrace) {
+      if (!_recoveryRestoreCanContinue(
+        generation,
+        pair,
+        journal.path,
+        context,
+      )) {
+        return report;
+      }
+
+      _throwRecoveryRestoreFailure(error, stackTrace, journal.path);
     } finally {
       try {
         await _releaseTrashLease(trashLease.close);
@@ -2468,6 +2511,27 @@ final class SyncPlanController extends ChangeNotifier {
       identical(_recoveryContext, context) &&
       _recoveryJournal?.path == journalPath &&
       _activeOperation == _SyncPlanOperation.restore;
+
+  /// Normalizes journal and lock failures so the view can report them.
+  Never _throwRecoveryRestoreFailure(
+    Object error,
+    StackTrace stackTrace,
+    String journalPath,
+  ) {
+    final failure = error is RemoteFileException
+        ? error
+        : RemoteFileException(
+            kind: RemoteFileErrorKind.other,
+            operation: 'restore',
+            path: journalPath,
+            message: error.toString(),
+            cause: error,
+          );
+    _errorMessage = failure.message;
+    _errorKind = failure.kind;
+    notifyListeners();
+    Error.throwWithStackTrace(failure, stackTrace);
+  }
 
   Future<SyncRestoreReport> _restoreLastRun(
     RemoteTransferCancellation cancellation,

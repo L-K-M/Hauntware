@@ -562,6 +562,68 @@ void main() {
   });
 
   test(
+    'successful begin transfers failed scope release to its lease',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('trash-locks-');
+      addTearDown(() => directory.delete(recursive: true));
+      final location = _localLocation('/one');
+      const runId = 'admitted-run';
+      final currentKey = base64Url.encode(utf8.encode(runId));
+      final legacyKey = sha256.convert(utf8.encode(runId));
+      final locationGatePath = p.join(
+        directory.path,
+        '${location.locationKey}.location.gate.lock',
+      );
+      final scopeGatePath = p.join(
+        directory.path,
+        '${location.scopeKey}.gate.lock',
+      );
+      final legacyPath = p.join(
+        directory.path,
+        '${location.scopeKey}.active.$legacyKey.lock',
+      );
+      final currentPath = p.join(
+        directory.path,
+        '${location.scopeKey}.active.v2.$currentKey.lock',
+      );
+      final locationGate = _LockProbe();
+      final scopeGate = _LockProbe(failUnlock: true);
+      final legacyMarker = _LockProbe();
+      final currentMarker = _LockProbe();
+      addTearDown(locationGate.forceClose);
+      addTearDown(scopeGate.forceClose);
+      addTearDown(legacyMarker.forceClose);
+      addTearDown(currentMarker.forceClose);
+      final files = {
+        locationGatePath: _TrackedLockFile(
+          File(locationGatePath),
+          locationGate,
+        ),
+        scopeGatePath: _TrackedLockFile(File(scopeGatePath), scopeGate),
+        legacyPath: _TrackedLockFile(File(legacyPath), legacyMarker),
+        currentPath: _TrackedLockFile(File(currentPath), currentMarker),
+      };
+      final registry = SyncTrashActivityRegistry(lockDirectory: directory.path);
+
+      final lease = await IOOverrides.runZoned(
+        () =>
+            registry.begin(runId, [location], mode: SyncTrashActivityMode.run),
+        createFile: (path) => files[path]!,
+      );
+
+      expect(registry.activeRunIds(location), {runId});
+      expect(scopeGate.closed, isTrue);
+
+      await lease.close();
+
+      expect(registry.activeRunIds(location), isEmpty);
+      expect(locationGate.closed, isTrue);
+      expect(legacyMarker.closed, isTrue);
+      expect(currentMarker.closed, isTrue);
+    },
+  );
+
+  test(
     'failed purge scan releases every gate and preserves its error',
     () async {
       final directory = await Directory.systemTemp.createTemp('trash-locks-');

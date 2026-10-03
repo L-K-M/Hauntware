@@ -938,6 +938,30 @@ void main() {
       },
     );
 
+    test('keep-local re-push outranks a peer clock', () async {
+      final device = await _Device.create(tempDir, 'a');
+      final local = pin('h.example.com', 'SHA256:LOCAL');
+      final pulledStamp =
+          device.clock.ms + const Duration(hours: 1).inMilliseconds;
+      final pulled = pin(
+        'h.example.com',
+        'SHA256:PULLED',
+        pinnedAt: pulledStamp,
+      );
+      await device.hostKeys.put(local);
+      await device.records.putRemote((await pinRecord(pulled)).withSeq(1));
+
+      await device.coordinator.keepLocalPin(
+        HostKeyConflict(locator: local.locator, local: local, pulled: pulled),
+      );
+
+      final record = await device.records.getRecord(local.recordId);
+      expect(record, isNotNull);
+      expect(record!.updatedAt, greaterThan(pulledStamp));
+      final decoded = await device.crypto.open(record);
+      expect(HostKey.fromJson(decoded.data).fingerprintSha256, 'SHA256:LOCAL');
+    });
+
     test('a hostkey tombstone never deletes a local pin', () async {
       final device = await _Device.create(tempDir, 'a');
       await device.hostKeys.put(pin('h.example.com', 'SHA256:LOCAL'));

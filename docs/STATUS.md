@@ -38,11 +38,17 @@ Normal runs retain shared location gates across processes and app instances.
 Lease cleanup remains fail-closed without masking the operation result.
 Package-default executors bind marker scopes before journal creation, so a
 later purge releases their journals without weakening legacy path-only safety.
+Recovery lookup failures remain blocked but retryable; recovered-journal and
+lease failures become typed restore errors while retaining controller state.
+Retry rechecks identity and legacy-path restore overlaps, run admission retains
+cleanup ownership after lock-release errors, and kept host-key decisions
+outstamp the pulled record under clock skew.
 
-Core and sync analysis are clean; 1,929 core tests pass with 27 environment
-skips, and 389 sync tests pass with five SSH-fixture skips. Flutter analysis is
-clean; all 3,338 app tests pass together. All 140 benchmark tests pass. Light-
-theme captures and provenance are in
+Core and sync analysis are clean; 1,930 core tests pass with 27 environment
+skips, and 390 sync tests pass with five SSH-fixture skips. Flutter analysis is
+clean, and all 130 affected app tests pass. Two pre-final full-suite runs hit
+the unrelated editor CRLF/BOM I/O timing case; its isolated rerun passes. All
+140 benchmark tests pass. Light-theme captures and provenance are in
 `tasks/sync-trash-purge/screenshots/`. Local native builds remain
 environment-gated by missing CMake and Java; the native matrix runs in CI. No
 Séance source or dependency pin changed in this PR.

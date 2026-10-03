@@ -1160,8 +1160,19 @@ void main() {
 
         await expectLater(
           controller.restoreTrashed(),
-          throwsA(isA<RemoteFileException>()),
+          throwsA(
+            isA<RemoteFileException>().having(
+              (error) => error.kind,
+              'kind',
+              RemoteFileErrorKind.disconnected,
+            ),
+          ),
         );
+        expect(
+          controller.errorMessage,
+          'connection lost during restore cleanup',
+        );
+        expect(controller.errorKind, RemoteFileErrorKind.disconnected);
         expect(controller.phase, SyncPlanPhase.recovery);
         expect(controller.recoveryPending, isTrue);
         expect(controller.canRestore, isTrue);
@@ -1209,6 +1220,108 @@ void main() {
       expect(scanner.calls, 0);
     });
 
+    test('recovery discovery failure retries before scanning', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(fileSystem);
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+      fileSystem.failTrashVerification = true;
+
+      controller.start();
+      await pumpUntil(() => controller.phase != SyncPlanPhase.scanning);
+
+      expect(controller.phase, SyncPlanPhase.error);
+      expect(controller.errorMessage, 'restore transport unavailable');
+      expect(controller.recoveryPending, isFalse);
+      expect(controller.planMutationsBlocked, isTrue);
+      expect(controller.canRescan, isTrue);
+      expect(scanner.calls, 0);
+
+      fileSystem.failTrashVerification = false;
+      await controller.rescan();
+
+      expect(controller.phase, SyncPlanPhase.recovery);
+      expect(controller.recoveryPending, isTrue);
+      expect(scanner.calls, 0);
+    });
+
+    test('recovery journal reopen failure is reported in state', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(fileSystem);
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+      fileSystem.failStageDelete = false;
+      controller.start();
+      await pumpUntil(() => controller.canRestore);
+      await File(
+        interrupted.journalPath,
+      ).writeAsString('not a sync journal\n', flush: true);
+
+      await expectLater(
+        controller.restoreTrashed(),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.other,
+          ),
+        ),
+      );
+      expect(controller.phase, SyncPlanPhase.recovery);
+      expect(controller.recoveryPending, isTrue);
+      expect(controller.errorMessage, isNotEmpty);
+      expect(controller.errorKind, RemoteFileErrorKind.other);
+      expect(scanner.calls, 0);
+    });
+
+    test('recovery lease failure is reported as a restore error', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(fileSystem);
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+      fileSystem.failStageDelete = false;
+      controller.start();
+      await pumpUntil(() => controller.canRestore);
+      final lockPath = p.join(
+        interrupted.environment.syncRunsDirectory,
+        kSyncTrashActivityDirectoryName,
+      );
+      final lockDirectory = Directory(lockPath);
+      if (lockDirectory.existsSync()) lockDirectory.deleteSync(recursive: true);
+      File(lockPath).writeAsStringSync('occupied');
+
+      await expectLater(
+        controller.restoreTrashed(),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.other,
+          ),
+        ),
+      );
+      expect(controller.phase, SyncPlanPhase.recovery);
+      expect(controller.recoveryPending, isTrue);
+      expect(controller.errorMessage, isNotEmpty);
+      expect(controller.errorKind, RemoteFileErrorKind.other);
+      expect(scanner.calls, 0);
+    });
+
     test('recovery rebinds roots before external-trash mutation', () async {
       final fileSystem = _RestoreCleanupFailureFileSystem();
       final interrupted = await leaveInterruptedRestore(
@@ -1247,7 +1360,7 @@ void main() {
           ),
         ),
       );
-
+      expect(controller.errorKind, RemoteFileErrorKind.conflict);
       expect(controller.phase, SyncPlanPhase.recovery);
       expect(controller.recoveryPending, isTrue);
       expect(controller.canRestore, isTrue);

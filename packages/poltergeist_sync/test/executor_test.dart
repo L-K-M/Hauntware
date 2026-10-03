@@ -2158,6 +2158,96 @@ void main() {
       expect(second.runId, first.runId);
     });
 
+    test('refuses another incomplete restore on the retry trash scope', () async {
+      await writeFile(leftRoot, 'retry.txt', 'new-version');
+      await writeFile(rightRoot, 'retry.txt', 'old-version');
+      final plan = makePlan([
+        item(
+          'retry.txt',
+          left: await snapOf(leftRoot, 'retry.txt'),
+          right: await snapOf(rightRoot, 'retry.txt'),
+          suggested: SyncActionType.updateLeftToRight,
+          reason: SyncReason.contentDiffers,
+        )..status = SyncItemStatus.failed,
+      ], updateRules);
+      final trashRoot = _trashJoin(
+        rightRoot.path,
+        RemoteTrash.rootDirectoryName,
+      );
+      final trashScope = (await resolveSyncTrashRoot(
+        rightFs,
+        trashRoot,
+        pathStyle: _nativeTrashPathStyle,
+        access: SyncTrashRootAccess.createOrClaim,
+      )).scopeKey;
+      final scopedExecutor = SyncExecutor(
+        leftFileSystem: leftFs,
+        rightFileSystem: rightFs,
+        leftRoot: leftRoot.path,
+        rightRoot: rightRoot.path,
+        syncRunsDirectory: runsDir.path,
+        deviceId: deviceId,
+        trashScopeRight: trashScope,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
+      );
+      final retryJournal = await SyncRunJournal.create(
+        runsDir.path,
+        SyncRunRecord(
+          runId: scopedExecutor.mintRunId(),
+          pairId: pairId,
+          startedAt: DateTime.fromMillisecondsSinceEpoch(1700000000000),
+          rules: updateRules,
+          totals: plan.totals,
+          warnings: const [],
+        ),
+      );
+      final previous = SyncRun(
+        journal: retryJournal,
+        plan: plan,
+        mtimeUnreliableLeft: false,
+        mtimeUnreliableRight: false,
+        cancelled: false,
+      );
+
+      for (final blockingScope in [trashScope, trashRoot]) {
+        final incompleteRunId = scopedExecutor.mintRunId();
+        final incomplete = await SyncRunJournal.create(
+          runsDir.path,
+          SyncRunRecord(
+            runId: incompleteRunId,
+            pairId: 'other-pair',
+            startedAt: DateTime.fromMillisecondsSinceEpoch(1700000001000),
+            trashScopeRight: blockingScope,
+            rules: updateRules,
+            totals: plan.totals,
+            warnings: const [],
+          ),
+        );
+        await File(incomplete.path).writeAsString(
+          '\n${jsonEncode(const <String, Object?>{'v': 2, 'type': 'replaceRestoreStarted', 'transactionId': '0123456789abcdef0123456789abcdef', 'side': 'right', 'parent': 'retry.txt'})}\n',
+          mode: FileMode.append,
+          flush: true,
+        );
+
+        await expectLater(
+          scopedExecutor.retryFailed(previous),
+          throwsA(
+            isA<SyncRestoreRecoveryRequiredException>().having(
+              (error) => error.runId,
+              'runId',
+              incompleteRunId,
+            ),
+          ),
+        );
+        await File(incomplete.path).delete();
+      }
+      expect(
+        await File('${rightRoot.path}/retry.txt').readAsString(),
+        'old-version',
+      );
+    });
+
     test('concurrent retry claims the executor before journal I/O', () async {
       final blocking = _BlockingRetryFs();
       leftFs = blocking;

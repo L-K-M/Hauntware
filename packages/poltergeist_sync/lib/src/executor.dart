@@ -746,6 +746,18 @@ final class SyncExecutor {
       if (journal.hasPurgeMarker) {
         throw StateError('cannot retry after sync trash was purged');
       }
+      final leftTrashScope =
+          journal.trashScopeForSide(SyncSide.left) ?? trashScopeLeft;
+      final rightTrashScope =
+          journal.trashScopeForSide(SyncSide.right) ?? trashScopeRight;
+
+      // A restore may have claimed either root since the original attempt.
+      await _requireNoIncompleteRestore(journal.record.pairId, [
+        leftTrashScope,
+        rightTrashScope,
+        _effectiveTrashRoot(previous.plan.pair.rules, SyncSide.left),
+        _effectiveTrashRoot(previous.plan.pair.rules, SyncSide.right),
+      ]);
       previous.plan.pair.rules.ensureSupported();
       final session = _RunSession(
         executor: this,
