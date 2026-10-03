@@ -308,6 +308,9 @@ void main() {
     window.emitMove();
     await pending.single();
     window.maximized = true;
+    // Report the maximized frame too: without it the bounds assertion
+    // cannot tell "kept the normal frame" from "saved the live frame".
+    window.bounds = const Rect.fromLTWH(0, 0, 2560, 1440);
     await desktop.requestQuit();
 
     expect(persistence.stored?.isMaximized, isTrue);
