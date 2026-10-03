@@ -23,7 +23,7 @@ Rect? resolveRestorableFrame(Rect? saved, Iterable<Rect> workAreas) {
   }
   for (final area in workAreas) {
     final overlap = saved.intersect(area);
-    if (overlap.width < 100 || overlap.height < 50) continue;
+    if (overlap.width < minimumWindowSize || overlap.height < 50) continue;
     // The title bar sits at the frame's top edge, so that edge must be on
     // this display (1px of tolerance for rounding), or the visible chunk is
     // un-draggable.
