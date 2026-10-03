@@ -3,6 +3,24 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## macOS migration reconciliation (2026-10-03)
+
+PR #45 follows the merged local-shell implementation (`ab7f7b8`). The
+same-namespace container is copied before any store opens; existing live
+data is not replaced. Staging holds only disposable copies. Destination
+strays retain originals in a separate backup, survive failed publication
+and relaunch, and keep nested links as links without following them.
+
+A keystore answering "no key" cannot mint a replacement over a nonempty
+or unrecognizable vault. A thrown keystore read still opens the existing
+locked-vault retry flow.
+
+After parent integration, Flutter analysis is clean and the full app suite
+passes 1,294 tests with ten native-environment skips. Real-directory tests
+cover interrupted copies, failed publication, newcomer collisions, retry
+and link preservation. Native macOS container/keychain behavior remains
+unverified; the existing device checklist applies before release.
+
 ## Local shell reconciliation (2026-10-03)
 
 PR #44's optional local shell now uses the current shared pane/tab strip,
