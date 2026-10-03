@@ -373,6 +373,14 @@ class EditorController extends ChangeNotifier {
   /// While a typed character's pair is being written the change this
   /// produces must not be mistaken for fresh typing and pair again.
   bool _applyingCodeInput = false;
+
+  /// While a command writes the buffer — a load, a tool result, find/replace,
+  /// undo — its change is not a keystroke, and pair completion stays out.
+  /// [_setTextValue] holds this for the synchronous writes this class makes;
+  /// [_nextWriteArranged] carries the same meaning across an event-loop gap
+  /// for a write that has not landed yet (a paste awaiting the clipboard).
+  bool _arrangingEdit = false;
+  bool _nextWriteArranged = false;
   String? _lastQuery;
   String _languageProbe = '';
   String? _metricsText;
@@ -943,11 +951,13 @@ class EditorController extends ChangeNotifier {
     }
     if (_disposed || !canEditText || text.text != source) return false;
     _requestCaretReveal(CaretReveal.nearest);
-    text.value = TextEditingValue(
-      text: removed.text,
-      selection: TextSelection(
-        baseOffset: removed.selectionBase,
-        extentOffset: removed.selectionExtent,
+    _setTextValue(
+      TextEditingValue(
+        text: removed.text,
+        selection: TextSelection(
+          baseOffset: removed.selectionBase,
+          extentOffset: removed.selectionExtent,
+        ),
       ),
     );
     return true;
@@ -983,9 +993,11 @@ class EditorController extends ChangeNotifier {
       separator: bufferLineEnding == LineEnding.crlf ? '\r\n' : '\n',
     );
     _requestCaretReveal(CaretReveal.nearest);
-    text.value = TextEditingValue(
-      text: edit.text,
-      selection: TextSelection.collapsed(offset: edit.selectionBase),
+    _setTextValue(
+      TextEditingValue(
+        text: edit.text,
+        selection: TextSelection.collapsed(offset: edit.selectionBase),
+      ),
     );
     return true;
   }
@@ -1002,11 +1014,13 @@ class EditorController extends ChangeNotifier {
     );
     if (edit == null) return false;
     _requestCaretReveal(CaretReveal.nearest);
-    text.value = TextEditingValue(
-      text: edit.text,
-      selection: TextSelection(
-        baseOffset: edit.selectionBase,
-        extentOffset: edit.selectionExtent,
+    _setTextValue(
+      TextEditingValue(
+        text: edit.text,
+        selection: TextSelection(
+          baseOffset: edit.selectionBase,
+          extentOffset: edit.selectionExtent,
+        ),
       ),
     );
     return true;
@@ -1085,11 +1099,13 @@ class EditorController extends ChangeNotifier {
       }
       if (outcome case TextToolChanged(:final edit, :final indentation)) {
         _requestCaretReveal(CaretReveal.nearest);
-        text.value = TextEditingValue(
-          text: edit.text,
-          selection: TextSelection(
-            baseOffset: edit.selectionBase,
-            extentOffset: edit.selectionExtent,
+        _setTextValue(
+          TextEditingValue(
+            text: edit.text,
+            selection: TextSelection(
+              baseOffset: edit.selectionBase,
+              extentOffset: edit.selectionExtent,
+            ),
           ),
         );
         if (indentation != null) this.indentation = indentation;
@@ -1499,9 +1515,11 @@ class EditorController extends ChangeNotifier {
         _isHighSurrogate(value.codeUnitAt(caret - 1))) {
       caret--;
     }
-    text.value = TextEditingValue(
-      text: value,
-      selection: TextSelection.collapsed(offset: caret),
+    _setTextValue(
+      TextEditingValue(
+        text: value,
+        selection: TextSelection.collapsed(offset: caret),
+      ),
     );
     _detectLanguage();
     _detectIndentation(reset: true);
@@ -1568,6 +1586,39 @@ class EditorController extends ChangeNotifier {
     }
   }
 
+  /// Marks the next document change as arranged rather than typed. Unlike
+  /// [_setTextValue] this survives an event-loop gap, for writes that arrive
+  /// later; the first text change to land consumes it.
+  void suppressNextCodeInput() => _nextWriteArranged = true;
+
+  /// Writes a value a command produced — never one the platform's text input
+  /// made — so [_applyCodeInput] leaves it exactly as it came.
+  void _setTextValue(TextEditingValue value) {
+    _arrangingEdit = true;
+    try {
+      text.value = value;
+    } finally {
+      _arrangingEdit = false;
+    }
+  }
+
+  /// Undo and redo deliver a stored value as one buffer write; a restored
+  /// bracket is not the user typing it, so the command layer suppresses pair
+  /// completion for the delivery.
+  void undo() => _suppressCodeInput(undoController.undo);
+
+  void redo() => _suppressCodeInput(undoController.redo);
+
+  /// Holds code-input suppression across [body] and its synchronous writes.
+  T _suppressCodeInput<T>(T Function() body) {
+    _arrangingEdit = true;
+    try {
+      return body();
+    } finally {
+      _arrangingEdit = false;
+    }
+  }
+
   void _textChanged() {
     // A tool run waits out this stamp so its result is a step of its own.
     // EditableText's shouldChangeUndoStack pushes only text and composing
@@ -1614,12 +1665,18 @@ class EditorController extends ChangeNotifier {
   /// the platform's text input and a shortcut would only be a second path
   /// to the same edit.
   ///
-  /// Only a single character inserted where the caret was counts. A paste, a
-  /// composition, an undo and a replaced selection all arrive as more than
-  /// that and are left exactly as they came, which is what keeps this from
-  /// rewriting someone else's text.
+  /// Only a single character inserted where the caret was counts, and only
+  /// one that arrived by typing: a command's write goes through
+  /// [_setTextValue], undo and redo through [undo]/[redo], and a paste or
+  /// other write that lands asynchronously is marked by
+  /// [suppressNextCodeInput]. A composition or a replaced selection arrives
+  /// as more than a one-character insert and is left exactly as it came.
   void _applyCodeInput(String previous) {
-    if (_editingLocked || isBusy) return;
+    if (_editingLocked || isBusy || _arrangingEdit) return;
+    if (_nextWriteArranged) {
+      _nextWriteArranged = false;
+      return;
+    }
     final selection = text.selection;
     final typed = text.text;
     if (typed.length != previous.length + 1) return;
@@ -1738,11 +1795,13 @@ class EditorController extends ChangeNotifier {
         }
         cleanup = _saveCleanup();
         if (cleanup != null) {
-          text.value = TextEditingValue(
-            text: cleanup.text,
-            selection: TextSelection(
-              baseOffset: cleanup.selectionBase,
-              extentOffset: cleanup.selectionExtent,
+          _setTextValue(
+            TextEditingValue(
+              text: cleanup.text,
+              selection: TextSelection(
+                baseOffset: cleanup.selectionBase,
+                extentOffset: cleanup.selectionExtent,
+              ),
             ),
           );
           _requestCaretReveal(CaretReveal.nearest);
@@ -2134,9 +2193,11 @@ class EditorController extends ChangeNotifier {
         final caret = (text.selection.isValid ? text.selection.extentOffset : 0)
             .clamp(0, filtered.text.length);
         _requestCaretReveal(CaretReveal.nearest);
-        text.value = TextEditingValue(
-          text: filtered.text,
-          selection: TextSelection.collapsed(offset: caret),
+        _setTextValue(
+          TextEditingValue(
+            text: filtered.text,
+            selection: TextSelection.collapsed(offset: caret),
+          ),
         );
         return TextToolChanged(
           LineEdit(filtered.text, caret, caret),
@@ -2236,9 +2297,11 @@ class EditorController extends ChangeNotifier {
             }
             final caret = splice.start + joined.length;
             _requestCaretReveal(CaretReveal.nearest);
-            text.value = TextEditingValue(
-              text: extracted,
-              selection: TextSelection.collapsed(offset: caret),
+            _setTextValue(
+              TextEditingValue(
+                text: extracted,
+                selection: TextSelection.collapsed(offset: caret),
+              ),
             );
             return TextToolChanged(
               LineEdit(text.text, caret, caret),
@@ -2379,15 +2442,10 @@ class EditorController extends ChangeNotifier {
         text.text.codeUnitAt(end - 1) == 0x0d) {
       end--;
     }
-    var offset = (start + column - 1).clamp(start, end);
-    // Columns count UTF-16 code units, like the status bar's; one that
-    // falls between the halves of a surrogate pair lands before the pair.
-    if (offset > start &&
-        offset < text.text.length &&
-        _isLowSurrogate(text.text.codeUnitAt(offset)) &&
-        _isHighSurrogate(text.text.codeUnitAt(offset - 1))) {
-      offset--;
-    }
+    // The column the status bar reports is a display column: tabs, wide and
+    // zero-width code points all read the same way going in as they did
+    // coming out, and a surrogate pair is never split.
+    final offset = offsetForDisplayColumn(text.text, start, end, column);
     text.selection = TextSelection.collapsed(offset: offset);
     _requestCaretReveal(CaretReveal.upperThird);
     editorFocus.requestFocus();
@@ -2860,9 +2918,13 @@ class EditorController extends ChangeNotifier {
       replaced = expandPatternReplacement(replacement.text, found);
     }
     final value = text.text.replaceRange(match.start, match.end, replaced);
-    text.value = TextEditingValue(
-      text: value,
-      selection: TextSelection.collapsed(offset: match.start + replaced.length),
+    _setTextValue(
+      TextEditingValue(
+        text: value,
+        selection: TextSelection.collapsed(
+          offset: match.start + replaced.length,
+        ),
+      ),
     );
     _updateMatches(resetActive: true);
     _revealRequest++;
@@ -2904,9 +2966,11 @@ class EditorController extends ChangeNotifier {
     buffer.write(source.substring(offset));
     final value = buffer.toString();
     final caret = matches.first.start + replacement.text.length;
-    text.value = TextEditingValue(
-      text: value,
-      selection: TextSelection.collapsed(offset: caret),
+    _setTextValue(
+      TextEditingValue(
+        text: value,
+        selection: TextSelection.collapsed(offset: caret),
+      ),
     );
     _updateMatches(resetActive: true);
     _revealRequest++;
@@ -2940,9 +3004,11 @@ class EditorController extends ChangeNotifier {
       return false;
     }
     if (outcome case PatternCompleted(value: final replaced?)) {
-      text.value = TextEditingValue(
-        text: replaced.text,
-        selection: TextSelection.collapsed(offset: replaced.firstEnd),
+      _setTextValue(
+        TextEditingValue(
+          text: replaced.text,
+          selection: TextSelection.collapsed(offset: replaced.firstEnd),
+        ),
       );
       _updateMatches(resetActive: true);
       _revealRequest++;

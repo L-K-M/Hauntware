@@ -221,6 +221,25 @@ void main() {
     expect(c.text.selection, const TextSelection.collapsed(offset: 3));
   });
 
+  testWidgets('a column is the display column the status bar shows', (
+    tester,
+  ) async {
+    final c = await mount(tester, text: '\tx\n中x');
+    // The tab spans columns 1–4, so the caret after it reads column 5 —
+    // and feeding that column back must land on the same offset.
+    c.goToLine(1, column: 5);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 1));
+    expect(c.caretLineColumn, (1, 5));
+    // The CJK rune spans columns 1–2; column 3 is the caret after it.
+    c.goToLine(2, column: 3);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 4));
+    expect(c.caretLineColumn, (2, 3));
+    // A column inside a wide unit still lands before it, as the emoji case
+    // above already pinned.
+    c.goToLine(2, column: 2);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 3));
+  });
+
   test('submitting while the document reloads keeps the field', () async {
     final loading = Completer<TextDocument>();
     var loads = 0;

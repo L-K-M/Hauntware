@@ -32,6 +32,11 @@ bool opensPair(
 ) {
   if (!pairsBrackets(language)) return false;
   if (!_bracketPairs.containsKey(character)) return false;
+  // A quote typed straight after a word character is an apostrophe or a
+  // possessive, never an opening quote — "don'" gains no stray second quote.
+  if (_isSelfPair(character) && offset > 0 && _isWordChar(text[offset - 1])) {
+    return false;
+  }
   return offset >= text.length || text[offset] != character;
 }
 
@@ -56,12 +61,22 @@ bool movesOverCloser(
 bool _isOpenerFor(String closer, String text, int offset) {
   for (final pair in _bracketPairs.entries) {
     if (pair.value != closer) continue;
-    // Either an opener sits directly before the pair, or the pair is a quote,
-    // whose closing half is its own.
-    if (offset == 0 || text[offset - 1] == pair.key) return true;
+    // A quote's closing half is its own: typing it over its twin always steps
+    // over. Offset 0 can hold no opener, yet the same-twin rule still applies,
+    // so a quote at the buffer's edge is covered here too.
+    if (_isSelfPair(closer)) return true;
+    if (offset > 0 && text[offset - 1] == pair.key) return true;
   }
   return false;
 }
+
+bool _isSelfPair(String character) => _bracketPairs[character] == character;
+
+/// A letter, digit, or underscore — what a closing quote leans on when it is
+/// really an apostrophe.
+final _wordChar = RegExp(r'[\p{L}\p{N}_]', unicode: true);
+
+bool _isWordChar(String character) => _wordChar.hasMatch(character);
 
 /// The closer that completes [opener], or null.
 String? closerFor(String opener) => _bracketPairs[opener];

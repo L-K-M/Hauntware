@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
@@ -57,6 +59,17 @@ void main() {
       expect(c.text.selection.extentOffset, 2);
     });
 
+    test('a closer at the buffer start is a real bracket', () {
+      // No opener can sit before offset 0, so the ) before ) inserts.
+      final c = editorFor(')', path: 'a.json');
+      addTearDown(c.dispose);
+      c.text.selection = const TextSelection.collapsed(offset: 0);
+
+      type(c, ')');
+      expect(c.text.text, '))');
+      expect(c.text.selection.extentOffset, 1);
+    });
+
     test('a closer in prose is a character, not a skip request', () {
       // Markdown brackets are content. Stepping over one would delete what
       // the user typed for no reason.
@@ -90,6 +103,28 @@ void main() {
       type(c, "'");
       expect(c.text.text, "''");
       expect(c.text.selection.extentOffset, 2);
+    });
+
+    test('an apostrophe mid-word does not pair', () {
+      // don| typed ' grows the contraction don't, not a stranded don''.
+      final c = editorFor('don', path: 'a.yaml');
+      addTearDown(c.dispose);
+      c.text.selection = const TextSelection.collapsed(offset: 3);
+
+      type(c, "'");
+      expect(c.text.text, "don'");
+      expect(c.text.selection.extentOffset, 4);
+    });
+
+    test('a quote before the same quote steps over it', () {
+      // Typing " before '"x"' closes 'log"' — inserting would strand one.
+      final c = editorFor('"x"', path: 'a.json');
+      addTearDown(c.dispose);
+      c.text.selection = const TextSelection.collapsed(offset: 0);
+
+      type(c, '"');
+      expect(c.text.text, '"x"');
+      expect(c.text.selection.extentOffset, 1);
     });
   });
 
@@ -147,6 +182,42 @@ void main() {
     });
   });
 
+  group('programmatic writes are verbatim', () {
+    test('an initial buffer of a single opener stays one character', () {
+      final c = editorFor('(', path: 'a.json');
+      addTearDown(c.dispose);
+      expect(c.text.text, '(');
+    });
+
+    test('a loaded document is installed exactly as it arrived', () async {
+      final c = EditorController(
+        displayPath: 'a.json',
+        loadDocument: () async => TextDocument(
+          file: File('/tmp/paired.json'),
+          text: '(',
+          hasUtf8Bom: false,
+          lineEnding: LineEnding.lf,
+          sha256: 'one',
+        ),
+      );
+      addTearDown(c.dispose);
+      await c.initialize();
+      expect(c.text.text, '(');
+    });
+
+    test('a replace that lands a bracket stays verbatim', () async {
+      // 'a' -> 'a(' is a one-character growth at a collapsed caret — the
+      // same shape a keystroke has — but a command result is not typing.
+      final c = editorFor('a', path: 'a.json');
+      addTearDown(c.dispose);
+      c.openSearch();
+      c.search.text = 'a';
+      c.replacement.text = 'a(';
+      expect(await c.replaceAll(), isTrue);
+      expect(c.text.text, 'a(');
+    });
+  });
+
   testWidgets('pairing works through the mounted editor', (tester) async {
     final c = editorFor('void f', path: 'a.dart');
     addTearDown(c.dispose);
@@ -164,5 +235,33 @@ void main() {
     expect(c.text.text, 'void f()');
     expect(c.text.selection.extentOffset, 7);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('one undo removes the whole auto-pair', (tester) async {
+    // The closer lands microseconds after the platform's keystroke, inside
+    // the undo merge window — a single undo must take the pair away rather
+    // than strand the closer.
+    final c = editorFor('x', path: 'a.json');
+    addTearDown(c.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: PlanchetteEditor(controller: c)),
+      ),
+    );
+    c.editorFocus.requestFocus();
+    c.text.selection = TextSelection.collapsed(offset: c.text.text.length);
+    await tester.pump();
+    // Let the undo history's merge window close so the mounted buffer is a
+    // step of its own before the keystroke arrives.
+    await tester.pump(const Duration(milliseconds: 600));
+
+    type(c, '{');
+    await tester.pump();
+    expect(c.text.text, 'x{}');
+    await tester.pump(const Duration(milliseconds: 600));
+
+    c.undo();
+    await tester.pump();
+    expect(c.text.text, 'x');
   });
 }

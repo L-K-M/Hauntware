@@ -1160,7 +1160,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                   if (report.outcome is TextToolChanged &&
                       c.undoController.value.canUndo)
                     TextButton(
-                      onPressed: c.undoController.undo,
+                      onPressed: c.undo,
                       // inverseSurface pairs with inversePrimary — the
                       // default primary falls below readable contrast.
                       style: TextButton.styleFrom(
@@ -1252,14 +1252,27 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
                     key: ValueKey(c.installGeneration),
                     child: Actions(
                       actions: {
-                        if (_locked) ...{
-                          UndoTextIntent: CallbackAction<UndoTextIntent>(
-                            onInvoke: (_) => null,
-                          ),
-                          RedoTextIntent: CallbackAction<RedoTextIntent>(
-                            onInvoke: (_) => null,
-                          ),
-                        },
+                        // Undo, redo and paste deliver a stored or clipboard
+                        // write that the buffer must not read as a keystroke:
+                        // they run under code-input suppression so a restored
+                        // or pasted bracket never pairs. Locked, they are
+                        // swallowed as before.
+                        UndoTextIntent: CallbackAction<UndoTextIntent>(
+                          onInvoke: (_) {
+                            if (!_locked) c.undo();
+                            return null;
+                          },
+                        ),
+                        RedoTextIntent: CallbackAction<RedoTextIntent>(
+                          onInvoke: (_) {
+                            if (!_locked) c.redo();
+                            return null;
+                          },
+                        ),
+                        PasteTextIntent: _PasteAction(
+                          locked: () => _locked,
+                          controller: c,
+                        ),
                         _IndentIntent: _EditAction<_IndentIntent>(
                           enabled: () => !_locked,
                           run: c.indent,
@@ -1732,6 +1745,29 @@ final class _NewlineIntent extends Intent {
 
 final class _DeleteIndentIntent extends Intent {
   const _DeleteIndentIntent();
+}
+
+/// Paste runs the field's own [EditableTextState.pasteText], so clipboard
+/// reporting, toolbar handling and the selection replace stay exactly the
+/// platform's — only the buffer write it ends in is marked as arranged,
+/// keeping a pasted bracket from completing a pair as if it were typed.
+final class _PasteAction extends ContextAction<PasteTextIntent> {
+  _PasteAction({required this.locked, required this.controller});
+
+  final bool Function() locked;
+  final EditorController controller;
+
+  @override
+  Object? invoke(PasteTextIntent intent, [BuildContext? context]) {
+    if (locked()) return null;
+    final state = context?.findAncestorStateOfType<EditableTextState>();
+    if (state == null) return null;
+    // The clipboard answer is asynchronous; the latch holds pair completion
+    // off until the paste's write lands and consumes it.
+    controller.suppressNextCodeInput();
+    unawaited(state.pasteText(intent.cause));
+    return null;
+  }
 }
 
 /// A disabled or declined edit lets its key fall through to Flutter's default

@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show
@@ -135,6 +136,23 @@ class _DocumentShellState extends State<_DocumentShell>
       Platform.isLinux || Platform.isMacOS || Platform.isWindows;
   bool _dropping = false;
   FocusNode? _lastTextFocus;
+
+  /// desktop_drop reports a drag's exit from inside the widget update that
+  /// disabled the target, where setState is illegal — and a platform drag
+  /// event can land mid-frame regardless — so the flag writes first and a
+  /// repaint is scheduled only when no build is running.
+  void _dropHover(bool hovering) {
+    if (_dropping == hovering) return;
+    _dropping = hovering;
+    final binding = WidgetsBinding.instance;
+    if (binding.schedulerPhase == SchedulerPhase.idle) {
+      setState(() {});
+    } else {
+      binding.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
 
   /// The one readiness rule behind every document command and the toolbar.
   /// [DocumentWorkspace] refuses edits and saves for a tab that is still
@@ -1326,10 +1344,10 @@ class _DocumentShellState extends State<_DocumentShell>
           // While a dialog or quit review owns the workspace the file must
           // not sneak in behind it, so the target unregisters outright.
           enable: _supportsDrop && !workspace.interactionLocked,
-          onDragEntered: (_) => setState(() => _dropping = true),
-          onDragExited: (_) => setState(() => _dropping = false),
+          onDragEntered: (_) => _dropHover(true),
+          onDragExited: (_) => _dropHover(false),
           onDragDone: (details) {
-            setState(() => _dropping = false);
+            _dropHover(false);
             final paths = [for (final item in details.files) item.path];
             if (paths.isEmpty) return;
             final registry = window?.owner;
@@ -1341,9 +1359,12 @@ class _DocumentShellState extends State<_DocumentShell>
           },
           child: DecoratedBox(
             key: const ValueKey('window-drop-highlight'),
-            // The only hint that a drop will land is a line around the
-            // window's own color while the file is over it.
-            decoration: _dropping
+            // The border sits over the shell — as a background decoration the
+            // Scaffold's opaque Material would cover it — and a lock taken
+            // mid-drag clears the hover the unregistered target never told us
+            // ended.
+            position: DecorationPosition.foreground,
+            decoration: _dropping && !workspace.interactionLocked
                 ? BoxDecoration(
                     border: Border.all(color: scheme.primary, width: 2),
                   )

@@ -1286,10 +1286,76 @@ void main() {
 
     expect(highlight, findsOneWidget);
     expect(decoration().border, isNull);
+    // The border is drawn over the shell — the Scaffold's opaque Material
+    // would cover a background decoration and the hint would never show.
+    expect(
+      tester.widget<DecoratedBox>(highlight).position,
+      DecorationPosition.foreground,
+    );
     await sendDropEvent(tester, 'entered', [10.0, 10.0]);
     expect(decoration().border, isNotNull);
     await sendDropEvent(tester, 'exited', null);
     expect(decoration().border, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('locking mid-drag clears the highlight and refuses the drop', (
+    tester,
+  ) async {
+    store.files[testPath('dropped.txt')] = document('dropped.txt', 'dropped');
+    await mount(tester);
+    final highlight = find.byKey(const ValueKey('window-drop-highlight'));
+    BoxDecoration decoration() =>
+        tester.widget<DecoratedBox>(highlight).decoration as BoxDecoration;
+
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    expect(decoration().border, isNotNull);
+
+    // A picker opens while the file hovers: the target unregisters, so no
+    // exit event arrives — the highlight must not linger on the rebuild.
+    dialogs.openGate = Completer<List<String>>();
+    unawaited(workspace.openDialog());
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isTrue);
+    expect(decoration().border, isNull);
+
+    // And a done event squeezed in before the listener unregisters must not
+    // land a file behind the dialog either.
+    dialogs.openGate!.complete(const []);
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a drop caught between the lock and the rebuild defers', (
+    tester,
+  ) async {
+    store.files[testPath('dropped.txt')] = document('dropped.txt', 'dropped');
+    await mount(tester);
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+
+    // The lock is set but the frame that would unregister the target has
+    // not run — the done event still reaches the mounted listener. Open calls
+    // queue behind the lock (`_openDeduped` waits on `_unlocked`), so the
+    // file lands the moment the dialog releases instead of being refused or
+    // opened behind the dialog.
+    dialogs.openGate = Completer<List<String>>();
+    unawaited(workspace.openDialog());
+    expect(workspace.interactionLocked, isTrue);
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'desktop_drop',
+      const StandardMethodCodec().encodeMethodCall(
+        MethodCall('performOperation', [testPath('dropped.txt')]),
+      ),
+      (_) {},
+    );
+    await tester.pump();
+    expect(workspace.documents, isEmpty);
+    expect(workspace.error, isNull);
+
+    dialogs.openGate!.complete(const []);
+    await tester.pumpAndSettle();
+    expect(workspace.documents.map((tab) => tab.name), ['dropped.txt']);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

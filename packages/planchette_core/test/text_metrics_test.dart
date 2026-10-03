@@ -61,6 +61,9 @@ void main() {
       // 'e' + combining acute (U+0301): the mark adds no column.
       expect(displayColumnFor('é', 0, 2), 2);
       expect(displayColumnFor('🇫🇷x', 0, 5), 4);
+      // ZWNJ (U+200C) is as invisible as ZWJ — a Persian-style sequence
+      // must not gain a phantom column.
+      expect(displayColumnFor('a‌b', 0, 3), 3);
     });
 
     test('columns count from the line start, not the buffer start', () {
