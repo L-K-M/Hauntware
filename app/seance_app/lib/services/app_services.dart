@@ -373,11 +373,13 @@ class AppServices {
   /// Whether [file] is a vault that actually holds something. An absent or
   /// empty vault is a first run; an unreadable one is treated as holding
   /// secrets, because the safe reading of "cannot tell" is "do not overwrite".
+  /// A file that parses into a shape no vault can be — a list, a scalar —
+  /// reads the same way: only a well-formed object can prove it is empty.
   static Future<bool> _holdsSecrets(File file) async {
     if (!await file.exists()) return false;
     try {
       final decoded = jsonDecode(await file.readAsString());
-      return decoded is Map && decoded.isNotEmpty;
+      return decoded is! Map || decoded.isNotEmpty;
     } catch (_) {
       return true;
     }

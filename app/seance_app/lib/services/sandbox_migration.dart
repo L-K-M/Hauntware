@@ -90,18 +90,32 @@ class SandboxMigration {
   @visibleForTesting
   final Future<void> Function(File from, String to) copyFile;
 
+  /// How the finished staging tree is put in place.
+  ///
+  /// Injectable for the same reason [copyFile] is: a rename that fails after
+  /// the destination's strays were moved is the recoverable fault the stray
+  /// carry exists around, and nothing provokes it deterministically as root.
+  @visibleForTesting
+  final Future<Directory> Function(Directory staging, String to) publish;
+
   SandboxMigration({
     required this.support,
     required this.legacySupport,
     @visibleForTesting Future<void> Function(File from, String to)? copyFile,
-  })  : staging = Directory(
-          '${support.parent.path}${Platform.pathSeparator}$stagingName',
-        ),
-        copyFile = copyFile ?? _copyOneFile;
+    @visibleForTesting
+    Future<Directory> Function(Directory staging, String to)? publish,
+  }) : staging = Directory(
+         '${support.parent.path}${Platform.pathSeparator}$stagingName',
+       ),
+       copyFile = copyFile ?? _copyOneFile,
+       publish = publish ?? _publish;
 
   static Future<void> _copyOneFile(File from, String to) async {
     await from.copy(to);
   }
+
+  static Future<Directory> _publish(Directory staging, String to) =>
+      staging.rename(to);
 
   static const String stagingName = '.seance-sandbox-migration';
 
@@ -136,6 +150,10 @@ class SandboxMigration {
   Object? _error;
 
   Future<SandboxMigrationOutcome> run() async {
+    // The strays carried out of the destination: moved, not copied, so a
+    // failure must give them back rather than let the staging delete take
+    // them. Recording them is cheap enough to do unconditionally.
+    final movedStrays = <FileSystemEntity>[];
     try {
       // A leftover staging directory means a previous run died before its
       // rename. Its contents are a partial copy of the container, so they are
@@ -169,7 +187,9 @@ class SandboxMigration {
         final strays = await support.list(followLinks: false).toList();
         for (final entry in strays) {
           final name = entry.path.split(Platform.pathSeparator).last;
-          await entry.rename('${staging.path}${Platform.pathSeparator}$name');
+          movedStrays.add(
+            await entry.rename('${staging.path}${Platform.pathSeparator}$name'),
+          );
         }
       }
       // The one step that changes what the app can see. POSIX `rename` over an
@@ -181,11 +201,34 @@ class SandboxMigration {
       // fails it with ENOTEMPTY. That is caught below and reported as a
       // failure, and the next launch treats the newcomer as one more stray and
       // carries it across, so the race costs a relaunch rather than the data.
-      await staging.rename(support.path);
+      await publish(staging, support.path);
       return SandboxMigrationOutcome.migrated;
     } catch (error, stackTrace) {
       _error = error;
       debugPrint('Sandbox-container migration failed: $error\n$stackTrace');
+      // The strays were moved, not copied, so the staging delete would take
+      // them with it. Send each one home first; if home refuses, park staging
+      // under a name the next run's cleanup does not own rather than delete
+      // the user's files with our own scratch.
+      for (final stray in movedStrays) {
+        try {
+          if (!await support.exists()) {
+            await support.create(recursive: true);
+          }
+          final name = stray.path.split(Platform.pathSeparator).last;
+          await stray.rename('${support.path}${Platform.pathSeparator}$name');
+        } catch (_) {
+          try {
+            await staging.rename(
+              '${staging.path}-strays-${DateTime.now().millisecondsSinceEpoch}',
+            );
+          } catch (_) {
+            // Best effort — staging left in place still keeps the strays on
+            // disk for whoever comes to look.
+          }
+          return SandboxMigrationOutcome.failed;
+        }
+      }
       // Leave nothing half-done behind; the container still holds everything.
       try {
         if (await staging.exists()) await staging.delete(recursive: true);

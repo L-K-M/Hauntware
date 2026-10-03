@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/secure_master_key.dart';
 
 /// A keystore whose answers the test chooses. Overrides only the two methods
@@ -49,6 +52,8 @@ class FakeKeystore extends FlutterSecureStorage {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('the vault master key', () {
     test('is minted once on a genuine first run', () async {
       final keystore = FakeKeystore();
@@ -111,5 +116,84 @@ void main() {
         expect(keystore.written, isEmpty);
       },
     );
+  });
+
+  /// [AppServices.initialize] decides "a vault already exists" by reading
+  /// `vault.json` itself — the file, not the keystore, is the evidence. These
+  /// run the real initialize path against a real support directory; only the
+  /// keystore's answers are faked.
+  group('the vault-file guard at startup', () {
+    const pathChannel = MethodChannel('plugins.flutter.io/path_provider');
+    late Directory directory;
+
+    setUp(() async {
+      directory = await Directory.systemTemp.createTemp('seance-master-key-');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            pathChannel,
+            (call) async => directory.path,
+          );
+      FlutterSecureStorage.setMockInitialValues({});
+    });
+
+    tearDown(() async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(pathChannel, null);
+      await directory.delete(recursive: true);
+    });
+
+    File vault() => File('${directory.path}/vault.json');
+
+    test(
+      'that parses into a shape no vault can be still refuses a new key',
+      () async {
+        // Well-formed JSON, wrong shape. "Cannot read this as a vault" is the
+        // same conservative answer as "cannot parse it": only an absent vault
+        // or a provably empty one is a first run.
+        for (final shape in const ['[]', '5', '"x"', 'null']) {
+          vault().writeAsStringSync(shape);
+          final keystore = FakeKeystore();
+
+          await expectLater(
+            AppServices.initialize(
+              masterKeyManager: MasterKeyManager(keystore),
+            ),
+            throwsA(isA<MasterKeyUnavailableException>()),
+            reason: 'vault.json = $shape',
+          );
+          expect(
+            keystore.written,
+            isEmpty,
+            reason: 'no key may be minted over vault.json = $shape',
+          );
+          expect(
+            vault().readAsStringSync(),
+            shape,
+            reason: 'the unreadable vault must survive the refusal',
+          );
+        }
+      },
+    );
+
+    test('that is a well-formed empty object is a real first run', () async {
+      vault().writeAsStringSync('{}');
+      final keystore = FakeKeystore();
+
+      final services = await AppServices.initialize(
+        masterKeyManager: MasterKeyManager(keystore),
+      );
+      try {
+        expect(services.vaultKey, isNotNull);
+        expect(
+          keystore.written,
+          hasLength(1),
+          reason:
+              'an empty vault holds nothing to strand — mint is the '
+              'right answer',
+        );
+      } finally {
+        await services.probe.dispose();
+      }
+    });
   });
 }

@@ -269,6 +269,60 @@ void main() {
       // And the container is still whole, so the next launch can retry.
       expect(File('${legacy.path}/settings.json').existsSync(), isTrue);
     });
+
+    test(
+      'a failed publish gives the moved strays back instead of deleting them',
+      () async {
+        // The strays are moved into staging, not copied: if the rename that
+        // would publish the staged tree then fails, the catch's cleanup must
+        // not take them with it — they are the user's, and the run promised
+        // to carry rather than delete.
+        File('${support.path}/.DS_Store').writeAsStringSync('finder');
+        Directory('${support.path}/.Spotlight-V100').createSync();
+        File(
+          '${support.path}/.Spotlight-V100/index.db',
+        ).writeAsStringSync('spotlight');
+        writeLegacy('settings.json', '{"deviceId":"abc"}');
+
+        final run = SandboxMigration(
+          support: support,
+          legacySupport: legacy,
+          publish: (_, __) => throw const FileSystemException('ENOTEMPTY'),
+        );
+        expect(await run.run(), SandboxMigrationOutcome.failed);
+        expect(
+          File('${support.path}/.DS_Store').readAsStringSync(),
+          'finder',
+          reason: 'a stray that was already moved must come home',
+        );
+        expect(
+          File('${support.path}/.Spotlight-V100/index.db').readAsStringSync(),
+          'spotlight',
+          reason: 'a stray directory restores whole',
+        );
+        expect(
+          Directory(
+            '${support.parent.path}/${SandboxMigration.stagingName}',
+          ).existsSync(),
+          isFalse,
+          reason: 'no staging left to misread on the next launch',
+        );
+        expect(
+          File('${legacy.path}/settings.json').existsSync(),
+          isTrue,
+          reason: 'the container is still the fallback it promised to be',
+        );
+
+        // The retry then carries the same strays across with the data.
+        expect(await migration().run(), SandboxMigrationOutcome.migrated);
+        expect(jsonDecode(readSupport('settings.json'))['deviceId'], 'abc');
+        expect(File('${support.path}/.DS_Store').existsSync(), isTrue);
+        expect(
+          File('${support.path}/.Spotlight-V100/index.db').existsSync(),
+          isTrue,
+        );
+      },
+    );
   });
 
   group('choosing where to migrate from', () {
