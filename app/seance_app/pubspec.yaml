@@ -11,18 +11,23 @@ dependencies:
   ghost_ui:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
       path: packages/ghost_ui
   planchette_core:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
       path: packages/planchette_core
   planchette_editor:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
       path: packages/planchette_editor
+  ghost_desktop:
+    git:
+      url: https://github.com/L-K-M/Planchette.git
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      path: packages/ghost_desktop
   characters: ^1.4.0
   flutter:
     sdk: flutter
