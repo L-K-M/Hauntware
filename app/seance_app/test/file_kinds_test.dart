@@ -58,4 +58,24 @@ void main() {
     );
     expect(fileKindGlyph(FileKind.folder).$1, Icons.folder);
   });
+
+  testWidgets(
+    'fileKindIcon defers to the ambient IconTheme when size is omitted',
+    (tester) async {
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: IconTheme(
+            data: const IconThemeData(size: 18),
+            child: Center(
+              child: Builder(
+                builder: (context) => fileKindIcon(context, entry('a.txt')),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(tester.getSize(find.byType(Icon)), const Size(18, 18));
+    },
+  );
 }

@@ -3,6 +3,23 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Shared Ghost UI and file lists (2026-10-02)
+
+Sidebars, hues, contrast/brightness helpers, ellipsis and top notices now
+come from Planchette's `ghost_ui`. Theme adapters preserve existing chrome;
+old import paths remain compatibility exports. Core/editor/UI pins match
+Planchette #129.
+
+Desktop Files uses the same dense rows, columns, glyphs and metadata
+formatting as Poltergeist; touch uses shared comfortable rows. Desktop
+adds pointer/range selection, double-click open, keyboard navigation and
+row context menus. Existing file operations, pending-edit handling and
+upload/drop services retain their owners.
+
+Local Linux validation against the Git pin: analysis clean; 124 focused
+sidebar, theme, primitive, file/controller and desktop interaction tests
+passed, including the new 10-test desktop/touch listing suite.
+
 ## Ghost desktop context menus (2026-10-02)
 
 The app pins core/editor to Planchette #127's reviewed revision `7b833f3`,

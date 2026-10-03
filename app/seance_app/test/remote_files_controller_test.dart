@@ -670,6 +670,85 @@ void main() {
       shellDirectory.dispose();
     },
   );
+
+  test(
+    'selectRangeTo re-anchors on the target when a filter hides the anchor',
+    () async {
+      final remote = _FakeRemoteFileSystem();
+      remote.directories['/home/test']!.addAll(const [
+        RemoteFileEntry(
+          path: '/home/test/b.txt',
+          name: 'b.txt',
+          type: RemoteFileType.file,
+          size: 2,
+        ),
+        RemoteFileEntry(
+          path: '/home/test/c.txt',
+          name: 'c.txt',
+          type: RemoteFileType.file,
+          size: 3,
+        ),
+      ]);
+      final shellDirectory = ValueNotifier<String?>(null);
+      final controller = RemoteFilesController(
+        () async => remote,
+        shellDirectory: shellDirectory,
+        managedFileStore: _store(),
+        serverId: 'server',
+        editSessionId: 'session',
+      );
+      await controller.initialize();
+
+      // Anchor on the folder, then filter it out of the visible list:
+      // the anchor is stale the moment '.txt' applies.
+      controller.toggleSelection('/home/test/folder');
+      controller.setFilterQuery('.txt');
+      expect(controller.entries.map((entry) => entry.path), [
+        '/home/test/a.txt',
+        '/home/test/b.txt',
+        '/home/test/c.txt',
+      ]);
+
+      // The hidden anchor cannot stand, so the target re-anchors: only
+      // c.txt selects, and no filtered-out path ever joins the range.
+      controller.selectRangeTo('/home/test/c.txt');
+      expect(controller.selectedPaths, {'/home/test/c.txt'});
+
+      // The re-anchored state then extends a normal visible range.
+      controller.selectRangeTo('/home/test/a.txt');
+      expect(controller.selectedPaths, {
+        '/home/test/a.txt',
+        '/home/test/b.txt',
+        '/home/test/c.txt',
+      });
+
+      controller.dispose();
+      shellDirectory.dispose();
+    },
+  );
+
+  test('selectAll anchors the next range at the first visible row', () async {
+    final remote = _FakeRemoteFileSystem();
+    final shellDirectory = ValueNotifier<String?>(null);
+    final controller = RemoteFilesController(
+      () async => remote,
+      shellDirectory: shellDirectory,
+      managedFileStore: _store(),
+      serverId: 'server',
+      editSessionId: 'session',
+    );
+    await controller.initialize();
+
+    // Entries sort the directory first; a range after select-all must
+    // run from the top, not collapse onto the pressed row.
+    controller.selectAll();
+    expect(controller.selectedPaths, hasLength(2));
+    controller.selectRangeTo('/home/test/a.txt');
+    expect(controller.selectedPaths, {'/home/test/folder', '/home/test/a.txt'});
+
+    controller.dispose();
+    shellDirectory.dispose();
+  });
 }
 
 ManagedRemoteFileStore _store() {
