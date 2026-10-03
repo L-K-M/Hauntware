@@ -11,7 +11,7 @@ Native desktop drops use `desktop_drop` and the same batch-open route;
 locked workspaces refuse drops. Platform-channel regressions failed before
 replacing the ineffective framework-only drag target.
 
-Local analysis is clean. Core: 606 tests pass; shared editor: 422; app: 501
+Local analysis is clean. Core: 608 tests pass; shared editor: 430; app: 503
 with two existing skips. Native desktop builds remain CI-gated. Wrap-off
 layout requires separate viewport work; current wrap/highlight defaults
 stay intact. The rejected age-based temporary-file sweep is not revived.
@@ -20,6 +20,12 @@ The keyword cache also retains caller-owned mutable-set behavior: a
 failing regression proved stale entries after removal and equal-size
 replacement; per-scan snapshot validation fixes both without freezing the
 public input or adding per-identifier allocation.
+
+Review regressions also preserve programmatic buffer writes, apostrophes,
+literal leading closers, display-column navigation and visible drop hover.
+The typing policy skips controller-arranged edits and keyboard paste/undo;
+a single-character context-menu paste retains the documented input-provenance
+limitation. Opens racing a workspace lock use the existing deferred route.
 
 The initial desktop app and shared editor extraction are implemented. The
 ownership boundaries and compatibility policies are documented in
