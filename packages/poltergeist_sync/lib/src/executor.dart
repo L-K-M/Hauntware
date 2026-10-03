@@ -265,6 +265,48 @@ bool _carriesPreDelete(SyncItem item) {
   };
 }
 
+bool _preDeleteCanTrash(SyncItem item, EntrySnapshot destination) {
+  if (destination.kind != EntryKind.directory) return true;
+
+  final subtree = item.destinationSubtree;
+  return subtree == null ||
+      subtree.values.any((entry) => entry.kind != EntryKind.directory);
+}
+
+/// Sides whose planned actions can create recoverable trash entries.
+Set<SyncSide> _trashSidesForPlan(SyncPlan plan) {
+  final sides = <SyncSide>{};
+  for (final item in plan.items) {
+    final side = _destinationSide(item.effective);
+    if (side == null) continue;
+    final destination = side == SyncSide.left ? item.left : item.right;
+
+    if (_carriesPreDelete(item)) {
+      if (plan.pair.rules.deletions != DeletionPolicy.permanent &&
+          destination != null &&
+          _preDeleteCanTrash(item, destination)) {
+        sides.add(side);
+      }
+      continue;
+    }
+
+    switch (item.effective) {
+      case SyncActionType.deleteLeft || SyncActionType.deleteRight:
+        if (plan.pair.rules.deletions == DeletionPolicy.trash &&
+            destination != null &&
+            destination.kind != EntryKind.directory) {
+          sides.add(side);
+        }
+      case SyncActionType.updateLeftToRight || SyncActionType.updateRightToLeft:
+        if (plan.pair.rules.backups == BackupPolicy.trash) sides.add(side);
+      default:
+        break;
+    }
+  }
+
+  return sides;
+}
+
 /// Removal weight of a delete-phase item's destination entry — files
 /// and links count, directories are zero-count cleanup items.
 int _removalWeight(EntrySnapshot? destination) =>
@@ -481,6 +523,60 @@ final class SyncExecutor {
   /// interleave journal appends and share mutable plan state.
   var _runInProgress = false;
 
+  String _effectiveTrashRoot(SyncRuleSet rules, SyncSide side) {
+    final pathStyle = side == SyncSide.left
+        ? trashPathStyleLeft
+        : trashPathStyleRight;
+    final context = syncTrashPathContext(pathStyle);
+    final resolved = side == SyncSide.left ? trashRootLeft : trashRootRight;
+    if (resolved != null) return resolved;
+
+    final configured = side == SyncSide.left
+        ? rules.trashPathLeft
+        : rules.trashPathRight;
+    final syncRoot = side == SyncSide.left ? leftRoot : rightRoot;
+    if (configured == null) {
+      return context.join(syncRoot, RemoteTrash.rootDirectoryName);
+    }
+    if (context.isAbsolute(configured)) return configured;
+
+    return context.join(syncRoot, configured);
+  }
+
+  Future<String> _resolveTrashScope(SyncRuleSet rules, SyncSide side) async {
+    final fileSystem = side == SyncSide.left ? leftFileSystem : rightFileSystem;
+    final pathStyle = side == SyncSide.left
+        ? trashPathStyleLeft
+        : trashPathStyleRight;
+    final identity = await resolveSyncTrashRoot(
+      fileSystem,
+      _effectiveTrashRoot(rules, side),
+      pathStyle: pathStyle,
+      access: SyncTrashRootAccess.createOrClaim,
+    );
+
+    return identity.scopeKey;
+  }
+
+  Future<void> _requireNoIncompleteRestore(
+    String pairId,
+    Iterable<String?> trashScopes,
+  ) async {
+    final incomplete = await SyncRunJournal.findIncompleteRestoreOverlap(
+      syncRunsDirectory,
+      pairId: pairId,
+      trashScopes: trashScopes,
+    );
+    if (incomplete == null) return;
+
+    throw SyncRestoreRecoveryRequiredException(
+      runId: incomplete.runId,
+      pairId: incomplete.pairId,
+      journalPath: incomplete.journalPath,
+      journalState: incomplete.journalState,
+    );
+  }
+
   /// `<first 8 hex of sha256(deviceId)>-<uuidV4>` (05 §6) — the uuid
   /// half comes from the RemoteTrash seam's minter so one injected
   /// instance controls run-id shape for trash and journal alike. The
@@ -545,19 +641,38 @@ final class SyncExecutor {
         );
       }
 
-      final incomplete = await SyncRunJournal.findIncompleteRestoreOverlap(
-        syncRunsDirectory,
-        pairId: pairId,
-        trashScopes: [trashScopeLeft, trashScopeRight],
-      );
-      if (incomplete != null) {
-        throw SyncRestoreRecoveryRequiredException(
-          runId: incomplete.runId,
-          pairId: incomplete.pairId,
-          journalPath: incomplete.journalPath,
-          journalState: incomplete.journalState,
-        );
-      }
+      final trashSides = _trashSidesForPlan(plan);
+
+      // Recovery admission precedes every trash-root mutation. Path candidates
+      // also catch legacy journals that predate marker identities.
+      await _requireNoIncompleteRestore(pairId, [
+        trashScopeLeft,
+        trashScopeRight,
+        if (trashSides.contains(SyncSide.left))
+          _effectiveTrashRoot(plan.pair.rules, SyncSide.left),
+        if (trashSides.contains(SyncSide.right))
+          _effectiveTrashRoot(plan.pair.rules, SyncSide.right),
+      ]);
+
+      // Package callers may omit pre-resolved scopes. Bind every side that can
+      // write trash before the header so later purge markers remain exact.
+      final effectiveTrashScopeLeft =
+          trashScopeLeft ??
+          (trashSides.contains(SyncSide.left)
+              ? await _resolveTrashScope(plan.pair.rules, SyncSide.left)
+              : null);
+      final effectiveTrashScopeRight =
+          trashScopeRight ??
+          (trashSides.contains(SyncSide.right)
+              ? await _resolveTrashScope(plan.pair.rules, SyncSide.right)
+              : null);
+
+      // Recheck with physical identities after claiming them. Another pair's
+      // recovery can overlap the same root through a different path alias.
+      await _requireNoIncompleteRestore(pairId, [
+        effectiveTrashScopeLeft,
+        effectiveTrashScopeRight,
+      ]);
 
       final journal = await SyncRunJournal.create(
         syncRunsDirectory,
@@ -567,8 +682,8 @@ final class SyncExecutor {
           startedAt: startedAt ?? DateTime.now(),
           canonicalRootLeft: leftRoot,
           canonicalRootRight: rightRoot,
-          trashScopeLeft: trashScopeLeft,
-          trashScopeRight: trashScopeRight,
+          trashScopeLeft: effectiveTrashScopeLeft,
+          trashScopeRight: effectiveTrashScopeRight,
           trashLocationKeyLeft: trashLocationKeyLeft,
           trashLocationKeyRight: trashLocationKeyRight,
           rules: plan.pair.rules,
@@ -614,22 +729,28 @@ final class SyncExecutor {
     }
     _runInProgress = true;
     try {
-      final restoreState = previous.journal.hasIncompleteRestore
+      // Purge may append through another journal instance. Reopen before
+      // retry so no new trash lands behind an already-effective marker.
+      final journal = await SyncRunJournal.open(previous.journal.path);
+      final restoreState = journal.hasIncompleteRestore
           ? SyncRestoreJournalState.incomplete
-          : await SyncRunJournal.inspectRestoreRecovery(previous.journal.path);
+          : await SyncRunJournal.inspectRestoreRecovery(journal.path);
       if (restoreState != SyncRestoreJournalState.none) {
         throw SyncRestoreRecoveryRequiredException(
-          runId: previous.journal.record.runId,
-          pairId: previous.journal.record.pairId,
-          journalPath: previous.journal.path,
+          runId: journal.record.runId,
+          pairId: journal.record.pairId,
+          journalPath: journal.path,
           journalState: restoreState,
         );
+      }
+      if (journal.hasPurgeMarker) {
+        throw StateError('cannot retry after sync trash was purged');
       }
       previous.plan.pair.rules.ensureSupported();
       final session = _RunSession(
         executor: this,
         plan: previous.plan,
-        journal: previous.journal,
+        journal: journal,
         cancellation: cancellation,
         pause: pause,
         onEvent: onEvent,
@@ -637,7 +758,7 @@ final class SyncExecutor {
       );
       await session.execute();
       return SyncRun(
-        journal: previous.journal,
+        journal: journal,
         plan: previous.plan,
         mtimeUnreliableLeft: mtimeUnreliableLeft,
         mtimeUnreliableRight: mtimeUnreliableRight,
@@ -1534,28 +1655,18 @@ final class _RunSession {
         ? executor.trashPathStyleLeft
         : executor.trashPathStyleRight;
     final context = syncTrashPathContext(pathStyle);
-    final resolved = side == SyncSide.left
-        ? executor.trashRootLeft
-        : executor.trashRootRight;
-    final configured = side == SyncSide.left
-        ? rules.trashPathLeft
-        : rules.trashPathRight;
-    final trashRoot =
-        resolved ??
-        (configured == null
-            ? context.join(_root(side), RemoteTrash.rootDirectoryName)
-            : context.isAbsolute(configured)
-            ? configured
-            : context.join(_root(side), configured));
+    final trashRoot = executor._effectiveTrashRoot(rules, side);
     final identity = await resolveSyncTrashRoot(
       fs,
       trashRoot,
       pathStyle: pathStyle,
       access: SyncTrashRootAccess.createOrClaim,
     );
-    final expectedScope = side == SyncSide.left
-        ? executor.trashScopeLeft
-        : executor.trashScopeRight;
+    final expectedScope =
+        journal.trashScopeForSide(side) ??
+        (side == SyncSide.left
+            ? executor.trashScopeLeft
+            : executor.trashScopeRight);
     if (expectedScope != null && expectedScope != identity.scopeKey) {
       throw RemoteFileException(
         kind: RemoteFileErrorKind.conflict,

@@ -757,6 +757,78 @@ void main() {
       expect(find(plan, 'orphan.txt')!.status, SyncItemStatus.done);
     });
 
+    test('default trash identity releases its journal after purge', () async {
+      await writeFile(rightRoot, 'orphan.txt', 'orphan');
+      final plan = makePlan([
+        item(
+          'orphan.txt',
+          right: await snapOf(rightRoot, 'orphan.txt'),
+          suggested: SyncActionType.deleteRight,
+          reason: SyncReason.onlyOnRight,
+        ),
+      ], mirrorRules());
+
+      final run = await executor.run(
+        plan,
+        pairId: pairId,
+        deleteConfirmationAcknowledged: true,
+      );
+      final trashRoot = _trashJoin(
+        rightRoot.path,
+        RemoteTrash.rootDirectoryName,
+      );
+      final service = SyncTrashPurgeService(runsDir.path);
+      final now = DateTime.now();
+      final inventory = await service.inspect(
+        rightFs,
+        trashRoot,
+        syncRunDevicePrefix(deviceId),
+        now,
+        pathStyle: _nativeTrashPathStyle,
+      );
+
+      expect(run.journal.record.trashScopeLeft, isNull);
+      expect(run.journal.record.trashScopeRight, inventory.trashScope);
+
+      final report = await service.purge(
+        rightFs,
+        inventory.select(SyncTrashPurgeScope.all, now, const {}),
+        const {},
+      );
+      final reopened = await SyncRunJournal.open(run.journal.path);
+
+      expect(report.failures, isEmpty);
+      expect(report.purgedRunIds, [run.runId]);
+      expect(reopened.hasUnpurgedTrash, isFalse);
+      expect(reopened.purged, isTrue);
+    });
+
+    test('empty directory replacement does not claim a trash root', () async {
+      await writeFile(leftRoot, 'entry', 'new-file');
+      await Directory('${rightRoot.path}/entry').create();
+      final plan = makePlan([
+        item(
+          'entry',
+          left: await snapOf(leftRoot, 'entry'),
+          right: await snapOf(rightRoot, 'entry'),
+          suggested: SyncActionType.copyLeftToRight,
+          reason: SyncReason.typeDiffers,
+          destinationSubtree: const <String, EntrySnapshot>{},
+        ),
+      ], updateRules);
+
+      final run = await executor.run(plan, pairId: pairId);
+
+      expect(await File('${rightRoot.path}/entry').readAsString(), 'new-file');
+      expect(run.journal.record.trashScopeRight, isNull);
+      expect(
+        Directory(
+          _trashJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
+        ).existsSync(),
+        isFalse,
+      );
+    });
+
     test('Mirror with permanent deletion removes without trash', () async {
       await writeFile(rightRoot, 'orphan.txt', 'orphan');
 
@@ -838,6 +910,60 @@ void main() {
   // ── Safety rails ─────────────────────────────────────────────────────
 
   group('safety rails', () {
+    test('incomplete restore blocks before claiming a trash root', () async {
+      const incompleteRunId = 'incomplete-current-pair';
+      final incomplete = await SyncRunJournal.create(
+        runsDir.path,
+        SyncRunRecord(
+          runId: incompleteRunId,
+          pairId: pairId,
+          startedAt: DateTime.fromMillisecondsSinceEpoch(1700000000000),
+          rules: updateRules,
+          totals: const PlanTotals(
+            counts: {},
+            bytes: {},
+            replacedFiles: 0,
+            replacedBytes: 0,
+          ),
+          warnings: const [],
+        ),
+      );
+      await File(incomplete.path).writeAsString(
+        '\n${jsonEncode(const <String, Object?>{'v': 2, 'type': 'replaceRestoreStarted', 'transactionId': '0123456789abcdef0123456789abcdef', 'side': 'right', 'parent': 'entry'})}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+      await writeFile(leftRoot, 'entry.txt', 'new');
+      await writeFile(rightRoot, 'entry.txt', 'old');
+      final plan = makePlan([
+        item(
+          'entry.txt',
+          left: await snapOf(leftRoot, 'entry.txt'),
+          right: await snapOf(rightRoot, 'entry.txt'),
+          suggested: SyncActionType.updateLeftToRight,
+          reason: SyncReason.contentDiffers,
+        ),
+      ], updateRules);
+
+      await expectLater(
+        executor.run(plan, pairId: pairId),
+        throwsA(
+          isA<SyncRestoreRecoveryRequiredException>().having(
+            (error) => error.runId,
+            'runId',
+            incompleteRunId,
+          ),
+        ),
+      );
+
+      expect(
+        Directory(
+          _trashJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
+        ).existsSync(),
+        isFalse,
+      );
+    });
+
     test(
       'incomplete restore blocks shared scopes but not unrelated ones',
       () async {
@@ -1043,7 +1169,7 @@ void main() {
       // Foreign change after the preview.
       await writeFile(rightRoot, 'f.txt', 'foreign-write');
 
-      await executor.run(plan, pairId: pairId);
+      final run = await executor.run(plan, pairId: pairId);
 
       final i = find(plan, 'f.txt')!;
       expect(i.status, SyncItemStatus.conflicted);
@@ -1051,13 +1177,18 @@ void main() {
         await File('${rightRoot.path}/f.txt').readAsString(),
         'foreign-write',
       );
-      // Nothing was backed up — the item never executed.
+      // The identity root is preclaimed, but no run directory or trash entry
+      // is created when the item fails its precondition.
       expect(
         Directory(
-          '${rightRoot.path}/${RemoteTrash.rootDirectoryName}',
+          _trashJoin(
+            _trashJoin(rightRoot.path, RemoteTrash.rootDirectoryName),
+            run.runId,
+          ),
         ).existsSync(),
         isFalse,
       );
+      expect(run.journal.hasUnpurgedTrash, isFalse);
     });
 
     test('copy-new target that appeared since preview conflicts', () async {
@@ -2040,6 +2171,133 @@ void main() {
       await executor.retryFailed(first);
 
       expect(find(plan, 'f.txt')!.status, SyncItemStatus.conflicted);
+    });
+
+    test('legacy retry keeps its executor-provided trash scope', () async {
+      await writeFile(leftRoot, 'f.txt', 'new-version');
+      await writeFile(rightRoot, 'f.txt', 'old-version');
+      final plan = makePlan([
+        item(
+          'f.txt',
+          left: await snapOf(leftRoot, 'f.txt'),
+          right: await snapOf(rightRoot, 'f.txt'),
+          suggested: SyncActionType.updateLeftToRight,
+          reason: SyncReason.contentDiffers,
+        )..status = SyncItemStatus.failed,
+      ], updateRules);
+      final trashRoot = _trashJoin(rightRoot.path, 'legacy-retry-trash');
+      final firstIdentity = await resolveSyncTrashRoot(
+        rightFs,
+        trashRoot,
+        pathStyle: _nativeTrashPathStyle,
+        access: SyncTrashRootAccess.createOrClaim,
+      );
+      final legacyExecutor = SyncExecutor(
+        leftFileSystem: leftFs,
+        rightFileSystem: rightFs,
+        leftRoot: leftRoot.path,
+        rightRoot: rightRoot.path,
+        syncRunsDirectory: runsDir.path,
+        deviceId: deviceId,
+        trashRootRight: trashRoot,
+        trashScopeRight: firstIdentity.scopeKey,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
+      );
+      final journal = await SyncRunJournal.create(
+        runsDir.path,
+        SyncRunRecord(
+          runId: legacyExecutor.mintRunId(),
+          pairId: pairId,
+          startedAt: DateTime.now(),
+          rules: updateRules,
+          totals: plan.totals,
+          warnings: const [],
+        ),
+      );
+      await Directory(trashRoot).delete(recursive: true);
+      final replacement = await resolveSyncTrashRoot(
+        rightFs,
+        trashRoot,
+        pathStyle: _nativeTrashPathStyle,
+        access: SyncTrashRootAccess.createOrClaim,
+      );
+      expect(replacement.scopeKey, isNot(firstIdentity.scopeKey));
+
+      await legacyExecutor.retryFailed(
+        SyncRun(
+          journal: journal,
+          plan: plan,
+          mtimeUnreliableLeft: false,
+          mtimeUnreliableRight: false,
+          cancelled: false,
+        ),
+      );
+
+      expect(plan.items.single.status, SyncItemStatus.conflicted);
+      expect(
+        await File('${rightRoot.path}/f.txt').readAsString(),
+        'old-version',
+      );
+    });
+
+    test('retry refuses a purge marker appended after the run', () async {
+      const mtimeSecs = 1600000000;
+      await writeFile(leftRoot, 'first.txt', 'new-first', mtimeSecs: mtimeSecs);
+      await writeFile(leftRoot, 'retry.txt', 'new-retry', mtimeSecs: mtimeSecs);
+      await writeFile(rightRoot, 'first.txt', 'old-first');
+      await writeFile(rightRoot, 'retry.txt', 'old-retry');
+      final plan = makePlan([
+        item(
+          'first.txt',
+          left: await snapOf(leftRoot, 'first.txt'),
+          right: await snapOf(rightRoot, 'first.txt'),
+          suggested: SyncActionType.updateLeftToRight,
+          reason: SyncReason.contentDiffers,
+        ),
+        item(
+          'retry.txt',
+          left: await snapOf(leftRoot, 'retry.txt'),
+          right: await snapOf(rightRoot, 'retry.txt'),
+          suggested: SyncActionType.updateLeftToRight,
+          reason: SyncReason.contentDiffers,
+        ),
+      ], updateRules);
+      await File('${leftRoot.path}/retry.txt').delete();
+      final first = await executor.run(plan, pairId: pairId);
+      expect(find(plan, 'retry.txt')!.status, SyncItemStatus.failed);
+
+      final trashRoot = _trashJoin(
+        rightRoot.path,
+        RemoteTrash.rootDirectoryName,
+      );
+      final service = SyncTrashPurgeService(runsDir.path);
+      final now = DateTime.now();
+      final inventory = await service.inspect(
+        rightFs,
+        trashRoot,
+        syncRunDevicePrefix(deviceId),
+        now,
+        pathStyle: _nativeTrashPathStyle,
+      );
+      final purge = await service.purge(
+        rightFs,
+        inventory.select(SyncTrashPurgeScope.all, now, const {}),
+        const {},
+      );
+      expect(purge.failures, isEmpty);
+      expect(first.journal.hasPurgeMarker, isFalse);
+      expect(
+        (await SyncRunJournal.open(first.journal.path)).hasPurgeMarker,
+        isTrue,
+      );
+      await writeFile(leftRoot, 'retry.txt', 'new-retry', mtimeSecs: mtimeSecs);
+
+      await expectLater(executor.retryFailed(first), throwsStateError);
+      expect(
+        await File('${rightRoot.path}/retry.txt').readAsString(),
+        'old-retry',
+      );
     });
   });
 
