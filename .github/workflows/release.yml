@@ -189,14 +189,20 @@ jobs:
         run: dart analyze packages/planchette_core
       - name: Test core
         run: dart test packages/planchette_core
+      - name: Analyze and test shared UI primitives
+        working-directory: packages/ghost_ui
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
       - name: Analyze and test shared editor
         working-directory: packages/planchette_editor
         run: |
           flutter pub get
           flutter analyze --no-pub
           flutter test --no-pub
-      - name: Analyze and test shared UI primitives
-        working-directory: packages/ghost_ui
+      - name: Analyze and test shared desktop window lifecycle
+        working-directory: packages/ghost_desktop
         run: |
           flutter pub get
           flutter analyze --no-pub

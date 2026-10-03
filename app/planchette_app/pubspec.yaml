@@ -11,6 +11,8 @@ dependencies:
   file_selector: 1.1.0
   flutter:
     sdk: flutter
+  ghost_desktop:
+    path: ../../packages/ghost_desktop
   ghost_ui:
     path: ../../packages/ghost_ui
   path: 1.9.1

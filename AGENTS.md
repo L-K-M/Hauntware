@@ -18,6 +18,9 @@ pubspec.yaml              pub WORKSPACE root — members are the pure-Dart packa
 packages/
   planchette_core/        pure Dart syntax, search, metadata, guarded file I/O
   planchette_editor/      Flutter controller and surface; outside the workspace
+  ghost_desktop/          Flutter desktop window lifecycle (restore, track,
+                          close) shared with Séance and Poltergeist; also
+                          outside the workspace
   ghost_ui/               shared leaf UI widgets/theme tokens; outside the
                           workspace, no app or host dependencies
 app/
