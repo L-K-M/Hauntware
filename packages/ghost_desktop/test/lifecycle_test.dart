@@ -158,9 +158,13 @@ void main() {
       expect(ready, isTrue);
     });
 
-    test('windowReady never resolves when prepare failed', () async {
+    test('windowReady stays unresolved when prepare failed', () async {
       final window = FakeWindowAdapter()..failEnsureInitialized = true;
-      final lifecycle = _lifecycle(window: window);
+      final reports = <Object>[];
+      final lifecycle = _lifecycle(
+        window: window,
+        onError: (error, _) => reports.add(error),
+      );
       var ready = false;
       unawaited(lifecycle.windowReady.then((_) => ready = true));
 
@@ -170,14 +174,24 @@ void main() {
 
       expect(window.events, isNot(contains('ready')));
       expect(ready, isFalse);
+      // One prepare failure, one report — no double onError from the
+      // throw being both caught and rethrown.
+      expect(reports, hasLength(1));
     });
 
     test('show returns window presentation failures', () async {
       final window = FakeWindowAdapter()..failShow = true;
-      final lifecycle = _lifecycle(window: window);
+      final reports = <Object>[];
+      final lifecycle = _lifecycle(
+        window: window,
+        onError: (error, _) => reports.add(error),
+      );
 
       await lifecycle.prepare();
       await expectLater(lifecycle.show(), throwsA(isA<StateError>()));
+      // One show failure, one report — same once-only contract as
+      // prepare(), and rescue is inert off macOS.
+      expect(reports, hasLength(1));
     });
 
     test(
@@ -211,6 +225,23 @@ void main() {
       await lifecycle.show();
 
       expect(window.events, containsAllInOrder(['show', 'focus']));
+    });
+
+    test('a repeated show does not replay the launch restore', () async {
+      final window = FakeWindowAdapter();
+      final lifecycle = _lifecycle(
+        window: window,
+        platform: GhostDesktopPlatform.macos,
+      );
+
+      await lifecycle.prepare();
+      await lifecycle.show();
+      window.events.clear();
+
+      // A host calling show() as a generic "bring to front" must not
+      // re-assert the launch frame or re-run the native show sequence.
+      await lifecycle.show();
+      expect(window.events, isEmpty);
     });
 
     test(
@@ -302,6 +333,37 @@ void main() {
 
       expect(window.events, contains('maximize'));
       expect(window.maximized, isTrue);
+    });
+
+    test('the flags backstop queues behind an in-flight operation', () async {
+      final window = FakeWindowAdapter();
+      final debounce = FakeDebounceScheduler();
+      final persistence = MemoryPersistence(
+        const GhostWindowSnapshot(isFullScreen: true),
+      )..blockWrites = true;
+      final lifecycle = _lifecycle(
+        window: window,
+        platform: GhostDesktopPlatform.windows,
+        debounce: debounce,
+        persistence: persistence,
+      );
+
+      await lifecycle.prepare();
+      await lifecycle.show();
+
+      final saving = lifecycle.saveBounds();
+      await persistence.writeStarted.future;
+
+      // The backstop fires while a capture is still blocked on its write;
+      // the flag apply must queue behind it, not write concurrently.
+      unawaited(debounce.fire());
+      await pumpEventQueue();
+      expect(window.events, isNot(contains('fullScreen')));
+
+      persistence.releaseWrites();
+      await saving;
+      await pumpEventQueue();
+      expect(window.fullScreen, isTrue);
     });
 
     test('windows deferred flags also fire on the backstop', () async {
@@ -865,6 +927,25 @@ void main() {
         persistence.writes.single.bounds,
         const Rect.fromLTWH(80, 60, 1180, 760),
       );
+    });
+
+    test('saveBounds reports a write failure instead of throwing', () async {
+      final window = FakeWindowAdapter();
+      final persistence = MemoryPersistence()..failWrites = true;
+      Object? reported;
+      final lifecycle = _lifecycle(
+        window: window,
+        persistence: persistence,
+        onError: (error, _) => reported = error,
+      );
+
+      await lifecycle.prepare();
+      // A confirmed quit awaits this call; a throw there would strand the
+      // exit. Failures surface through onError instead.
+      await lifecycle.saveBounds();
+
+      expect(persistence.writes, hasLength(1));
+      expect(reported, isA<StateError>());
     });
   });
 

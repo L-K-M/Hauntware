@@ -243,12 +243,19 @@ base class GhostWindowLifecycle extends GhostWindowListener {
       }
 
       _prepared = true;
-    } catch (_) {
+    } catch (error, stack) {
       _window.removeListener(this);
+      // Reported here as well as rethrown: hosts may swallow the throw so
+      // their UI still mounts, and the error must not vanish with it.
+      _report(error, stack);
       rethrow;
     }
   }
 
+  /// The once-per-launch reveal: prepares the frame off-screen, applies the
+  /// restored geometry, then shows. Repeated calls are no-ops — a host that
+  /// only wants to re-focus a window must use its own channel, because
+  /// replaying this would re-assert the launch frame.
   Future<void> show() async {
     if (!_prepared || _closing) {
       // macOS runners hide the window at launch for this service to place
@@ -260,7 +267,7 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     }
 
     await _enqueueWindowOperation(() async {
-      if (_closing) return;
+      if (_closing || _didInitialShow) return;
 
       try {
         // The rescue covers readiness too: a plugin failure here would
@@ -269,7 +276,13 @@ base class GhostWindowLifecycle extends GhostWindowListener {
         if (!_windowReady.isCompleted) _windowReady.complete();
         if (_closing) return;
         await _applyRestored();
-      } catch (_) {
+        // Restore replays the launch frame; a later show() meant as a
+        // generic "bring to front" must not re-assert it.
+        _didInitialShow = true;
+      } catch (error, stack) {
+        // Reported here so hosts that swallow the rethrow (to keep
+        // mounting their UI) still see the failure.
+        _report(error, stack);
         await _rescueHiddenWindow();
         rethrow;
       }
@@ -342,7 +355,9 @@ base class GhostWindowLifecycle extends GhostWindowListener {
           _pendingWindowsFlags = (maximized: maximized, fullScreen: fullScreen);
           _cancelFlagsBackstop = _scheduleDebounce(
             _windowsFlagsBackstop,
-            _applyPendingWindowsFlags,
+            // Queued like every other native write: the flags apply can
+            // otherwise overlap a queued close or capture.
+            () => _enqueueWindowOperation(_applyPendingWindowsFlags),
           );
         }
         if (_showTrigger == GhostShowTrigger.service) {
@@ -364,6 +379,10 @@ base class GhostWindowLifecycle extends GhostWindowListener {
         break;
     }
   }
+
+  /// Latch after the first successful show: restore runs once per launch,
+  /// so a repeated show() is a no-op rather than a geometry jump.
+  var _didInitialShow = false;
 
   /// Windows-only: maximize/full-screen waiting for the runner to show the
   /// window (see the Windows branch of [_applyRestored]).
