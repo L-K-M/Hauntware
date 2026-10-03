@@ -276,6 +276,13 @@ String _runId(String prefix, String label) {
       '${hex.substring(20, 32)}';
 }
 
+/// Uses the physical path expected by trash-root ownership checks.
+/// macOS aliases `/var` to `/private/var`.
+Future<Directory> _createCanonicalTempDirectory(String prefix) async {
+  final directory = await Directory.systemTemp.createTemp(prefix);
+  return Directory(await directory.resolveSymbolicLinks());
+}
+
 final class _InspectAfterQuarantineFs extends LocalFileSystem {
   _InspectAfterQuarantineFs({required this.onQuarantined});
 
@@ -626,7 +633,7 @@ void main() {
   }
 
   setUp(() async {
-    scratch = await Directory.systemTemp.createTemp('poltergeist-purge-');
+    scratch = await _createCanonicalTempDirectory('poltergeist-purge-');
     runsDir = Directory(remoteJoin(scratch.path, 'runs'));
     await runsDir.create();
     trashRootDir = Directory(remoteJoin(scratch.path, 'trash'));

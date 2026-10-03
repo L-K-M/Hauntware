@@ -233,6 +233,13 @@ final class _FailingUpdateFs extends LocalFileSystem {
 String entityName(FileSystemEntity entity) =>
     entity.uri.pathSegments.lastWhere((s) => s.isNotEmpty);
 
+/// Uses the physical path expected by trash-root ownership checks.
+/// macOS aliases `/var` to `/private/var`.
+Future<Directory> _createCanonicalTempDirectory(String prefix) async {
+  final directory = await Directory.systemTemp.createTemp(prefix);
+  return Directory(await directory.resolveSymbolicLinks());
+}
+
 void main() {
   const deviceId = 'test-device';
   const pairId = 'pair-under-test';
@@ -247,9 +254,9 @@ void main() {
   setUp(() async {
     leftFs = LocalFileSystem();
     rightFs = LocalFileSystem();
-    leftRoot = await Directory.systemTemp.createTemp('poltergeist-exec-l-');
-    rightRoot = await Directory.systemTemp.createTemp('poltergeist-exec-r-');
-    runsDir = await Directory.systemTemp.createTemp('poltergeist-runs-');
+    leftRoot = await _createCanonicalTempDirectory('poltergeist-exec-l-');
+    rightRoot = await _createCanonicalTempDirectory('poltergeist-exec-r-');
+    runsDir = await _createCanonicalTempDirectory('poltergeist-runs-');
     executor = SyncExecutor(
       leftFileSystem: leftFs,
       rightFileSystem: rightFs,
