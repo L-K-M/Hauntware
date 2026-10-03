@@ -142,4 +142,32 @@ void main() {
     expect(restored.map((key) => key.fingerprintSha256),
         unorderedEquals(keys.map((key) => key.fingerprintSha256)));
   });
+
+  test('a failed host-key write cannot leak into a later snapshot', () async {
+    final file = File('${dir.path}/known_hosts.json');
+    final blocked = Directory('${file.path}.tmp')..createSync();
+    final store = FileHostKeyStore(file);
+    const failed = HostKey(
+      host: 'failed.example.com',
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:failed',
+      pinnedAt: 1,
+    );
+    const saved = HostKey(
+      host: 'saved.example.com',
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:saved',
+      pinnedAt: 2,
+    );
+
+    await expectLater(store.put(failed), throwsA(isA<FileSystemException>()));
+    await blocked.delete();
+    await store.put(saved);
+
+    final restored = await FileHostKeyStore(file).all();
+    expect(restored.map((key) => key.locator), [saved.locator]);
+    expect(await store.get(failed.host, failed.port), isNull);
+  });
 }

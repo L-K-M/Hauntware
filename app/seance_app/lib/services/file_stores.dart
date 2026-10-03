@@ -544,6 +544,7 @@ class FileHostKeyStore implements HostKeyStore {
   final File file;
   final Map<String, HostKey> _keys = {};
   bool _loaded = false;
+  Future<void> _pending = Future<void>.value();
 
   FileHostKeyStore(this.file);
 
@@ -564,27 +565,39 @@ class FileHostKeyStore implements HostKeyStore {
     _loaded = true;
   }
 
-  Future<void> _flush() async {
+  Future<void> _flush(Map<String, HostKey> keys) async {
     await writeStringAtomically(
-        file, jsonEncode(_keys.values.map((k) => k.toJson()).toList()));
+        file, jsonEncode(keys.values.map((k) => k.toJson()).toList()));
+  }
+
+  /// Keep the cache and each atomic snapshot in one operation order.
+  Future<T> _serialize<T>(Future<T> Function() body) {
+    final operation = _pending.then((_) async {
+      await _load();
+      return body();
+    });
+    _pending = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
   }
 
   @override
-  Future<List<HostKey>> all() async {
-    await _load();
-    return _keys.values.toList();
-  }
+  Future<List<HostKey>> all() =>
+      _serialize(() async => _keys.values.toList());
 
   @override
-  Future<HostKey?> get(String host, int port) async {
-    await _load();
-    return _keys['$host:$port'];
-  }
+  Future<HostKey?> get(String host, int port) =>
+      _serialize(() async => _keys['$host:$port']);
 
   @override
-  Future<void> put(HostKey key) async {
-    await _load();
-    _keys[key.locator] = key;
-    await _flush();
-  }
+  Future<void> put(HostKey key) => _serialize(() async {
+        final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
+        await _flush(next);
+
+        _keys
+          ..clear()
+          ..addAll(next);
+      });
 }
