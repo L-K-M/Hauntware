@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -185,6 +186,40 @@ void main() {
       );
       expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
       expect(find.byIcon(Icons.keyboard_arrow_up), findsNothing);
+    });
+
+    testWidgets('a hovered cell paints its hover ink', (tester) async {
+      await tester.pumpWidget(header(onSort: (_) {}));
+      // The cells' InkWells paint on the nearest ancestor Material; a
+      // background painted on an opaque Container between them and that
+      // Material covers the ink. The header's pane colour must sit on
+      // the Material layer itself.
+      final material = find.byWidgetPredicate(
+        (widget) => widget is Material && widget.color == _theme.paneBackground,
+      );
+      expect(material, findsOneWidget);
+      expect(material, isNot(paints..rect(color: _theme.hoverFill)));
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(
+        tester.getCenter(find.byKey(const ValueKey('list.column.size'))),
+      );
+      await tester.pumpAndSettle();
+      expect(material, paints..rect(color: _theme.hoverFill));
+
+      // Geometry and the separator are unchanged: height stays 22 at
+      // unit text scale, and the bottom border is still painted.
+      final headerBox = find.byKey(const ValueKey('list.columns'));
+      expect(tester.getSize(headerBox).height, 22);
+      final decoration =
+          tester.widget<Container>(headerBox).decoration as BoxDecoration;
+      expect(
+        decoration.border,
+        Border(bottom: BorderSide(color: _theme.separator)),
+      );
+      expect(decoration.color, isNull);
     });
 
     testWidgets('a disabled header ignores clicks', (tester) async {

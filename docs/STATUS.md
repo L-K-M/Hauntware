@@ -58,13 +58,19 @@ Desktop and touch file rows, column headers/metrics, kind glyphs and file
 formatting share neutral `GhostFileItem` models. Host adapters retain their
 controllers, operation pipelines, localized strings and drag/drop payloads.
 
-Local Linux checks: `ghost_ui` analysis clean, 145 package tests passed:
+Local Linux checks: `ghost_ui` analysis clean, 152 package tests passed:
 the Poltergeist sidebar widget suite ported wholesale (controls, semantics,
 keyboard traversal, control-click, touch sheets, densities) plus focused
 contrast, family-hue, toast, ellipsis, token and ghost-menu tests. Editor
 analysis clean and 402 tests passed through the compatibility export; app
 analysis clean, with 478 tests passed and two existing filesystem skips
 after integrating the reviewed multi-window changes.
+
+Review regressions failed first and now pass: host actions retain their
+semantics nodes without shifting metadata columns, ellipsis measures the
+inherited text style, keyboard-opened sidebar menus focus their first verb,
+column-header hover ink stays visible, and modified vertical arrows reach
+host shortcuts. Pointer-opened menus keep their existing focus behavior.
 
 ### Shared command/shortcut/menu infrastructure (ghost-commands)
 

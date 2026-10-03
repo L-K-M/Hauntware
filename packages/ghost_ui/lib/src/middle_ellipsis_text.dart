@@ -16,7 +16,11 @@ class MiddleEllipsisText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveStyle = style ?? DefaultTextStyle.of(context).style;
+    // Merge onto the ambient style exactly as Text does, so the painter
+    // measures the metrics the text actually renders with. (merge
+    // returns the incoming style untouched when it has inherit: false,
+    // matching Text's own resolution.)
+    final effectiveStyle = DefaultTextStyle.of(context).style.merge(style);
     final scaler = MediaQuery.textScalerOf(context);
     final dir = Directionality.of(context);
     final graphemes = Characters(text).toList(growable: false);

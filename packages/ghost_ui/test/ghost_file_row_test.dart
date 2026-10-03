@@ -44,6 +44,7 @@ GhostFileRow row(
   VoidCallback? onLongPress,
   ValueChanged<PointerDownEvent>? onPointerDown,
   ValueChanged<PointerUpEvent>? onPointerUp,
+  Widget? trailing,
 }) => GhostFileRow(
   item: item,
   outline: outline,
@@ -66,6 +67,7 @@ GhostFileRow row(
   onLongPress: onLongPress ?? () {},
   onOpen: () {},
   onRename: onRename,
+  trailing: trailing,
 );
 
 Widget host(Widget child) => MaterialApp(
@@ -133,6 +135,34 @@ void main() {
     expect(find.byIcon(Icons.folder), findsOneWidget);
     // Directory size and the absent date both render the dash.
     expect(find.text('—'), findsNWidgets(2));
+  });
+
+  testWidgets('row actions do not shift size and date columns', (tester) async {
+    await tester.pumpWidget(
+      host(
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            row(file('plain.txt', modified: DateTime(2026, 3, 5, 9))),
+            row(
+              file('actions.txt', modified: DateTime(2026, 3, 5, 9)),
+              trailing: const SizedBox(width: 38, height: 20),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final sizes = find.text('1.5 KB');
+    final dates = find.textContaining('Today at ');
+    expect(
+      tester.getTopLeft(sizes.at(0)).dx,
+      tester.getTopLeft(sizes.at(1)).dx,
+    );
+    expect(
+      tester.getTopLeft(dates.at(0)).dx,
+      tester.getTopLeft(dates.at(1)).dx,
+    );
   });
 
   testWidgets('active selection paints the accent fill', (tester) async {
@@ -334,6 +364,35 @@ void main() {
     expect(node.flagsCollection.isSelected, ui.Tristate.isTrue);
     expect(node.label, contains('folder'));
     expect(node.getSemanticsData().customSemanticsActionIds, isNotEmpty);
+    handle.dispose();
+  });
+
+  testWidgets('a host trailing control stays reachable in the '
+      'semantics tree', (tester) async {
+    final handle = tester.ensureSemantics();
+    var pressed = 0;
+    await tester.pumpWidget(
+      host(
+        row(
+          file('report.txt', modified: DateTime(2026, 3, 5, 9)),
+          trailing: IconButton(
+            tooltip: 'Actions for report.txt',
+            onPressed: () => pressed++,
+            icon: const Icon(Icons.more_vert, size: 15),
+          ),
+        ),
+      ),
+    );
+    // A blanket excludeSemantics on the row's root would drop this
+    // node — the host's per-row actions must stay reachable and
+    // activatable.
+    final button = tester.getSemantics(find.byType(IconButton));
+    expect(button.getSemanticsData().tooltip, 'Actions for report.txt');
+    expect(button.getSemanticsData().hasAction(ui.SemanticsAction.tap), isTrue);
+    // The composed label still announces the row, and the name's own
+    // text node stays excluded — the announcement must not double.
+    expect(find.bySemanticsLabel(RegExp('report\\.txt, file')), findsOneWidget);
+    expect(find.bySemanticsLabel('report.txt'), findsNothing);
     handle.dispose();
   });
 

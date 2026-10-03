@@ -804,6 +804,13 @@ class _SidebarSectionHeaderState extends State<SidebarSectionHeader>
       _addFocus.requestFocus();
       return KeyEventResult.handled;
     }
+    // ↑/↓ under a chord are the app's binding (pane focus, Move Line),
+    // as ←/→ already are — pass them on, don't step.
+    if (_appChordHeld() &&
+        (key == LogicalKeyboardKey.arrowDown ||
+            key == LogicalKeyboardKey.arrowUp)) {
+      return KeyEventResult.ignored;
+    }
     if (key == LogicalKeyboardKey.arrowDown) {
       node.nextFocus();
       return KeyEventResult.handled;
@@ -847,12 +854,16 @@ class _SidebarSectionHeaderState extends State<SidebarSectionHeader>
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.arrowUp) {
-      focusNode.requestFocus();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowDown) {
-      _addFocus.nextFocus();
+    if (key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowDown) {
+      // Under a chord the arrow is the app's, not a step back to the
+      // header or past the "+".
+      if (_appChordHeld()) return KeyEventResult.ignored;
+      if (key == LogicalKeyboardKey.arrowUp) {
+        focusNode.requestFocus();
+      } else {
+        _addFocus.nextFocus();
+      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -1383,12 +1394,16 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.arrowUp) {
-      focusNode.requestFocus();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.arrowDown) {
-      node.nextFocus();
+    if (key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowDown) {
+      // Under a chord the arrow is the app's, not a step onto the row
+      // or past the button.
+      if (_appChordHeld()) return KeyEventResult.ignored;
+      if (key == LogicalKeyboardKey.arrowUp) {
+        focusNode.requestFocus();
+      } else {
+        node.nextFocus();
+      }
       return KeyEventResult.handled;
     }
     if (_actionFocus.hasPrimaryFocus &&
@@ -1438,15 +1453,24 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
       _openSheet();
       return;
     }
-    // The menu hands focus to the row; a click asked for no ring.
-    focusFromPointer();
+    // A pointer press never gives the button primary focus, so holding
+    // it here means a key (Tab then Enter/Space) got in: the menu opens
+    // focused on its first verb, or its arrows would walk the rows
+    // behind it. Reporting pointer origin for a key press would also
+    // hide the focus ring the activation deserves.
+    final keyboard = _menuButtonFocus.hasPrimaryFocus;
+    if (!keyboard) {
+      // The menu hands focus to the row; a click asked for no ring.
+      focusFromPointer();
+    }
     final button = buttonContext.findRenderObject() as RenderBox?;
     final row = _contentKey.currentContext?.findRenderObject() as RenderBox?;
     if (button == null || row == null) {
-      _openMenu();
+      _openMenu(focusFirst: keyboard);
       return;
     }
     _openMenu(
+      focusFirst: keyboard,
       position: row.globalToLocal(
         button.localToGlobal(button.size.bottomLeft(Offset.zero)),
       ),
@@ -1517,6 +1541,13 @@ class _SidebarRowState extends State<SidebarRow> with _KeyboardFocusRing {
         button.requestFocus();
         return KeyEventResult.handled;
       }
+    }
+    // ↑/↓ under a chord are the app's binding (pane focus, Move Line),
+    // as ←/→ already are — pass them on, don't step.
+    if (_appChordHeld() &&
+        (key == LogicalKeyboardKey.arrowDown ||
+            key == LogicalKeyboardKey.arrowUp)) {
+      return KeyEventResult.ignored;
     }
     if (key == LogicalKeyboardKey.arrowDown) {
       node.nextFocus();

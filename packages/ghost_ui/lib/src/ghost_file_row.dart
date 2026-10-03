@@ -231,9 +231,8 @@ class GhostFileRow extends StatefulWidget {
   /// gated off or a flagged name.
   final VoidCallback? onRename;
 
-  /// An optional host widget after the date column (a pending-changes
-  /// badge, a per-row ⋮ — whatever the listing still shows that the
-  /// shared columns do not cover).
+  /// Host actions trail the name, before metadata, so variable-width
+  /// badges and menus never shift the columns away from their headers.
   final Widget? trailing;
 
   @override
@@ -352,12 +351,16 @@ class _GhostFileRowState extends State<GhostFileRow> {
               Expanded(
                 child: widget.renaming
                     ? const SizedBox.shrink()
-                    : Text(
-                        widget.item.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: foreground,
+                    : ExcludeSemantics(
+                        // The row's root announces the composed label;
+                        // the text itself must not double it.
+                        child: Text(
+                          widget.item.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: foreground,
+                          ),
                         ),
                       ),
               ),
@@ -366,6 +369,8 @@ class _GhostFileRowState extends State<GhostFileRow> {
               if (flagged)
                 Tooltip(
                   message: strings.flaggedTooltip,
+                  // The row label already spells the reason out.
+                  excludeFromSemantics: true,
                   child: Padding(
                     padding: const EdgeInsetsDirectional.only(start: 4),
                     child: Icon(
@@ -377,31 +382,35 @@ class _GhostFileRowState extends State<GhostFileRow> {
                     ),
                   ),
                 ),
+              ?widget.trailing,
               if (metrics.showsSize) ...[
                 const SizedBox(width: GhostFileColumnMetrics.columnGap),
                 SizedBox(
                   width: metrics.sizeWidth,
-                  child: Text(
-                    size,
-                    textAlign: TextAlign.end,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: captionStyle,
+                  child: ExcludeSemantics(
+                    child: Text(
+                      size,
+                      textAlign: TextAlign.end,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: captionStyle,
+                    ),
                   ),
                 ),
               ],
               const SizedBox(width: GhostFileColumnMetrics.columnGap),
               SizedBox(
                 width: metrics.modifiedWidth,
-                child: Text(
-                  modified,
-                  textAlign: TextAlign.end,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: captionStyle,
+                child: ExcludeSemantics(
+                  child: Text(
+                    modified,
+                    textAlign: TextAlign.end,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: captionStyle,
+                  ),
                 ),
               ),
-              ?widget.trailing,
             ],
           ),
         ),
@@ -411,6 +420,9 @@ class _GhostFileRowState extends State<GhostFileRow> {
     content = widget.touch
         ? GestureDetector(
             behavior: HitTestBehavior.opaque,
+            // The row's own node exposes onTap and the long-press menu;
+            // the recognizer's would double them.
+            excludeFromSemantics: true,
             onTap: widget.onTap,
             onLongPress: widget.onLongPress,
             child: content,
@@ -439,11 +451,12 @@ class _GhostFileRowState extends State<GhostFileRow> {
               modified,
             )
           : strings.semanticsLabel(widget.item.name, kind, size, modified),
-      // The composed label replaces the child text's own semantics —
-      // without this, screen readers announce the name twice. The
-      // excluded child no longer provides the tap action either, so
+      // The composed label replaces the child texts' own semantics,
+      // which are excluded individually above — the texts are covered
+      // by the label while host trailing controls keep their own nodes
+      // and stay reachable.
+      // The texts no longer provide the tap action either, so
       // activation is exposed here.
-      excludeSemantics: true,
       // AT activation opens the row: a screen reader's activate gesture
       // is the row's primary verb here (the cursor-set single click is
       // a sighted-user convention; Enter covers it for keyboards).

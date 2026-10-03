@@ -259,50 +259,57 @@ class GhostFileColumnHeader extends StatelessWidget {
     final height = MediaQuery.textScalerOf(context).scale(22);
     return IgnorePointer(
       ignoring: !enabled,
-      child: Container(
-        key: ValueKey('$listId.columns'),
-        height: height,
-        decoration: BoxDecoration(
-          color: fileTheme.paneBackground,
-          border: Border(bottom: BorderSide(color: fileTheme.separator)),
-        ),
-        padding: const EdgeInsetsDirectional.only(
-          start: GhostFileColumnMetrics.startPadding,
-          end: GhostFileColumnMetrics.endPadding,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _cell(
-                context,
-                GhostFileColumn.name,
-                strings.nameLabel,
-                TextAlign.start,
-              ),
-            ),
-            if (metrics.showsSize) ...[
-              const SizedBox(width: GhostFileColumnMetrics.columnGap),
-              SizedBox(
-                width: metrics.sizeWidth,
+      // The pane colour lives on the Material: the cells' InkWells paint
+      // their hover and splash on the nearest ancestor Material, and an
+      // opaque Container between them and it would cover every ink
+      // feature. The Container keeps the border, the padding and the
+      // height only.
+      child: Material(
+        color: fileTheme.paneBackground,
+        child: Container(
+          key: ValueKey('$listId.columns'),
+          height: height,
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: fileTheme.separator)),
+          ),
+          padding: const EdgeInsetsDirectional.only(
+            start: GhostFileColumnMetrics.startPadding,
+            end: GhostFileColumnMetrics.endPadding,
+          ),
+          child: Row(
+            children: [
+              Expanded(
                 child: _cell(
                   context,
-                  GhostFileColumn.size,
-                  strings.sizeLabel,
+                  GhostFileColumn.name,
+                  strings.nameLabel,
+                  TextAlign.start,
+                ),
+              ),
+              if (metrics.showsSize) ...[
+                const SizedBox(width: GhostFileColumnMetrics.columnGap),
+                SizedBox(
+                  width: metrics.sizeWidth,
+                  child: _cell(
+                    context,
+                    GhostFileColumn.size,
+                    strings.sizeLabel,
+                    TextAlign.end,
+                  ),
+                ),
+              ],
+              const SizedBox(width: GhostFileColumnMetrics.columnGap),
+              SizedBox(
+                width: metrics.modifiedWidth,
+                child: _cell(
+                  context,
+                  GhostFileColumn.modified,
+                  strings.modifiedLabel,
                   TextAlign.end,
                 ),
               ),
             ],
-            const SizedBox(width: GhostFileColumnMetrics.columnGap),
-            SizedBox(
-              width: metrics.modifiedWidth,
-              child: _cell(
-                context,
-                GhostFileColumn.modified,
-                strings.modifiedLabel,
-                TextAlign.end,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
