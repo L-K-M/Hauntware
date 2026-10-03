@@ -83,6 +83,11 @@ final class GhostChordBinding {
   /// Set false for one-shot commands (a held close would take out a row
   /// of tabs before the key came back up); a repeat still counts as
   /// handled, so nothing under the layer sees the keys underneath.
+  ///
+  /// That guarantee only holds while [activator] itself accepts repeats:
+  /// a `SingleActivator(..., repeats: false)` makes repeats return
+  /// ignored again, leaking them past the layer. Keep the activator's
+  /// repeats at its default and let this flag decide.
   final bool repeats;
 
   /// The chord stands down while the right Alt is held: Windows reports
@@ -157,6 +162,11 @@ bool _isUnmodified(ShortcutActivator activator) => switch (activator) {
 /// otherwise swallow ⌘A mid-typing. Hosts whose fields leave those keys
 /// unhandled (a document editor's shell chords) pass false.
 class GhostChordScope extends StatelessWidget {
+  // Warn-once-per-activator for the duplicate diagnostic below: build()
+  // reruns on every rebuild, so the release-mode print would otherwise
+  // flood the log.
+  static final Set<ShortcutActivator> _dupWarned = <ShortcutActivator>{};
+
   const GhostChordScope({
     super.key,
     required this.bindings,
@@ -214,7 +224,9 @@ class GhostChordScope extends StatelessWidget {
       );
       // Release builds keep later-binding-wins silently by design; the
       // print keeps user-reported "shortcut does nothing" diagnosable.
-      if (!fresh) {
+      // build() reruns on every rebuild, so warn once per activator
+      // instead of flooding the log.
+      if (!fresh && _dupWarned.add(activator)) {
         debugPrint(
           'Duplicate shortcut activator $activator: later binding wins',
         );

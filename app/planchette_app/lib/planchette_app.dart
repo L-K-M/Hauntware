@@ -1142,6 +1142,13 @@ class _DocumentShellState extends State<_DocumentShell>
         case _Submenu():
           // A submenu is one item to its parent; it shares the current
           // group so adjacent submenus are not separated by dividers.
+          // The shared model's submenu items are leaf rows only — a
+          // separator or nested menu inside one would drop silently.
+          assert(
+            entry.items.every((item) => item is _Command),
+            'Submenu "${entry.label}" carries non-command entries the '
+            'shared menu model cannot render',
+          );
           group.add(
             GhostSubmenuRow(
               title: entry.label,
