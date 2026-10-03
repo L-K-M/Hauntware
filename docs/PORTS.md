@@ -1,5 +1,36 @@
 # Séance ports and pin audits
 
+## Current-core compatibility audit (2026-10-03)
+
+Both live declarations, all four lockfiles and the benchmark identity move
+from `4c0a960289c919379d016507fa7ebae6b14b2e7c` to
+`76e466fbcbfe5dc90b4fa399e5dfac990b23c30d` (Séance main, #171).
+No release tag contains this revision; D2's revision bridge continues.
+
+- SSH authentication, agent, ProxyJump, TOFU, stores, vault crypto and
+  record-codec implementations are unchanged. Package manifests and
+  `dartssh2` 3.0.2 are unchanged; no data migration is required.
+- Uploads refuse non-regular replacement targets, mask permission bits,
+  and restrict the open temporary file before streaming protected content.
+  Poltergeist's SFTP fake now implements handle `setStat`; contracts cover
+  early permission refusal, intact originals, streaming mode and symlinks.
+  The three old fake-backed failures were observed before updating it.
+- Inbox kinds and HTTP methods are additive. Poltergeist skips inbox ids
+  before decryption; both new kinds survive backup and reopen byte-identical.
+  Its coordinator remains separate from Séance's oversized-record handling.
+- Shell quoting and redaction fixes introduce no consumed API break.
+
+Local proof: 797 upstream core/protocol tests, 2,177 Poltergeist core/sync
+tests, 86 benchmark tests, 3,212 app tests and three real HTTP convergence
+tests pass; analysis is clean. Environment-gated skips: 6 upstream, 32
+core/sync and one benchmark. Docker SSH fixtures remain CI-gated.
+Frozen M0 evidence validates at its original measured revisions. Rollback
+is a revert of this pin-update commit; existing vault/store encodings stand.
+
+The regenerated ancestor/tree audit retains the Unlicense and vendored
+xterm MIT notices, with no gitlinks. Its two orphan attribution lines are
+OpenCode automation metadata, not additional human contributors.
+
 ## Shared Ghost UI ownership (2026-10-02)
 
 The sidebar kit, family hues, contrast/brightness helpers, ellipsis, top
@@ -1794,13 +1825,13 @@ Full, non-shallow ancestor and tree audit. Raw streams are
 content-addressed by SHA-256; line counts aid review. Use
 `--print-findings` to reproduce them without adding names to docs.
 
-- Pin: `4c0a960289c919379d016507fa7ebae6b14b2e7c` from `https://github.com/L-K-M/Seance.git`
-- Identity: 81 lines; `sha256:699238d590dcb565524ad5cd1c3d02148857c8e19f7ac42f04f24202b6d2f4ef`
-- Companion: 580 lines; `sha256:3b8f2c1a42d816cda28bb3f75bcac7e681ce110919fad72599aacfb78efe7e5d`
-- Companion orphans: 0 lines; `sha256:018475ca8d7fddbb752fe0a62744a610ace2ead7185fb01488b9814602fe5273`
-- Pinpoints: 1010 lines; `sha256:6f6a7ad32e18fe8f39ad129447044ac84e41f3e38951ca07d51e23a127a409bd`
-- License scan: 32 lines; `sha256:b4732b0bb7b4af0614a7061ac6a07850c219c3a1365e9d647a724d71272d0950`
-- Vendored paths: 228 lines; `sha256:c3eb0bf74b9e4c1e603be69a7294a6742a7a36d51a8480ca22f06cf2583f8846`
-- Gitlinks: 0 lines; `sha256:018475ca8d7fddbb752fe0a62744a610ace2ead7185fb01488b9814602fe5273`
-- Tree: 582 lines; `sha256:33a141320ee86046c330c3005b650516ee6725d14d93305f533c6394bcdd2625`
+- Pin: `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d` from `https://github.com/L-K-M/Seance.git`
+- Identity: 98 lines; `sha256:700ba96e534ce7fa27677ab76e36c854b233fb49b798b9a4d70d59fa0a70df34`
+- Companion: 697 lines; `sha256:e464b644c6bb8ac06588a65c902dd2964bda72af6add8693535e90fef2f8680c`
+- Companion orphans: 2 lines; `sha256:ca27552aa9e845c3e204322fb910499296f92013133a843ed144bbf62e1496cb`
+- Pinpoints: 1289 lines; `sha256:0640cfbd3b731b98821fc9bb4695f700559f560840e9f7ee46da9d90b6580007`
+- License scan: 40 lines; `sha256:ebe2060489c73a14330b6d77b4e298ace808ac0c71759c6fa4760dbccb9c25c2`
+- Vendored paths: 244 lines; `sha256:f88780ae9f7fedfccf34d6ba5dbc3a0dbd2ca583845ee8e717f097e12dee8d98`
+- Gitlinks: 0 lines; `sha256:c612a2c16ba3f9066203b8bc4af6ebe67beffa1ac2d7340230cd7af7533dc173`
+- Tree: 637 lines; `sha256:9c6a7cadb72ba08c238c1fe0e62f54004b9b797a1886306e61f1f78a35b639e4`
 <!-- SEANCE_PIN_AUDIT_V1:END -->

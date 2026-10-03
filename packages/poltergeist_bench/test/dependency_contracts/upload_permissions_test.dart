@@ -7,6 +7,10 @@ import 'package:test/test.dart';
 const _target = '/uploads/gh';
 const _serverMode = 0x81A4; // Regular file, 0644.
 const _executableMode = 0x81ED; // Regular file, 0755.
+const _symbolicLinkMode = 0xA1FF; // Symbolic link, 0777.
+const _permissionBits = 0xFFF;
+const _ownerOnlyMode = 0x180; // 0600.
+const _executablePermissions = _executableMode & _permissionBits;
 const _content = [1, 2, 3];
 
 void main() {
@@ -23,25 +27,28 @@ void main() {
     expect(client.renames, 1);
   });
 
-  test('source mode preservation can fail after all bytes were sent', () async {
-    final client = _UploadClient(denyModeChanges: true);
+  test(
+    'denied initial permissions refuse uploads before writing bytes',
+    () async {
+      final client = _UploadClient(denyModeChanges: true);
 
-    await expectLater(
-      DartSshRemoteFileSystem(client).upload(
-        _target,
-        Stream.value(_content),
-        length: _content.length,
-        preserveMode: _executableMode,
-      ),
-      throwsA(_deniedUpload),
-    );
+      await expectLater(
+        DartSshRemoteFileSystem(client).upload(
+          _target,
+          Stream.value(_content),
+          length: _content.length,
+          preserveMode: _executableMode,
+        ),
+        throwsA(_deniedUpload),
+      );
 
-    expect(client.writtenBytes, _content.length);
-    expect(client.modeRequests, [_executableMode]);
-    expect(client.files, isEmpty);
-    expect(client.removedPaths, [client.openedPath]);
-    expect(client.renames, 0);
-  });
+      expect(client.writtenBytes, 0);
+      expect(client.modeRequests, [_ownerOnlyMode]);
+      expect(client.files, isEmpty);
+      expect(client.removedPaths, [client.openedPath]);
+      expect(client.renames, 0);
+    },
+  );
 
   test(
     'replacement inherits destination permissions without source mode',
@@ -58,7 +65,8 @@ void main() {
 
       expect(uploaded.mode, _executableMode);
       expect(client.files[_target]!.bytes, _content);
-      expect(client.modeRequests, [_executableMode]);
+      expect(client.modeRequests, [_ownerOnlyMode, _executablePermissions]);
+      expect(client.writeModes, [_ownerOnlyMode]);
       expect(client.files.keys, [_target]);
     },
   );
@@ -81,12 +89,59 @@ void main() {
 
       expect(client.files[_target]!.bytes, [9]);
       expect(client.files[_target]!.mode, _executableMode);
-      expect(client.modeRequests, [_executableMode]);
+      expect(client.writtenBytes, 0);
+      expect(client.modeRequests, [_ownerOnlyMode]);
       expect(client.files.keys, [_target]);
       expect(client.removedPaths, [client.openedPath]);
       expect(client.renames, 0);
     },
   );
+
+  test('source mode restricts streaming and keeps final permissions', () async {
+    final client = _UploadClient();
+
+    final uploaded = await DartSshRemoteFileSystem(client).upload(
+      _target,
+      Stream.value(_content),
+      length: _content.length,
+      preserveMode: _executableMode,
+    );
+
+    expect(uploaded.mode, _executableMode);
+    expect(client.files[_target]!.bytes, _content);
+    expect(client.modeRequests, [_ownerOnlyMode, _executablePermissions]);
+    expect(client.writeModes, [_ownerOnlyMode]);
+    expect(client.files.keys, [_target]);
+  });
+
+  test('replace refuses a symbolic link before writing bytes', () async {
+    final client = _UploadClient();
+    client.files[_target] = _StoredFile([9], _symbolicLinkMode);
+
+    await expectLater(
+      DartSshRemoteFileSystem(client).upload(
+        _target,
+        Stream.value(_content),
+        length: _content.length,
+        overwrite: true,
+      ),
+      throwsA(
+        isA<RemoteFileException>().having(
+          (error) => error.kind,
+          'kind',
+          RemoteFileErrorKind.conflict,
+        ),
+      ),
+    );
+
+    expect(client.files[_target]!.bytes, [9]);
+    expect(client.files[_target]!.mode, _symbolicLinkMode);
+    expect(client.files.keys, [_target]);
+    expect(client.openedPath, isNull);
+    expect(client.writtenBytes, 0);
+    expect(client.modeRequests, isEmpty);
+    expect(client.renames, 0);
+  });
 
   test('server defaults do not conceal denied content writes', () async {
     final client = _UploadClient(denyWrites: true);
@@ -133,6 +188,7 @@ class _UploadClient implements SftpClient {
   final bool denyWrites;
   final files = <String, _StoredFile>{};
   final modeRequests = <int>[];
+  final writeModes = <int>[];
   final removedPaths = <String>[];
   String? openedPath;
   int writtenBytes = 0;
@@ -177,9 +233,9 @@ class _UploadClient implements SftpClient {
     final mode = attrs.mode!.value;
     modeRequests.add(mode);
     if (denyModeChanges) _deny();
-    // Like OpenSSH, the server accepts permission bits independently of the
-    // file-type field supplied by the pinned adapter.
-    files[path]!.mode = (files[path]!.mode & ~0xFFF) | (mode & 0xFFF);
+    // Like OpenSSH, chmod preserves the file type while changing permissions.
+    files[path]!.mode =
+        (files[path]!.mode & ~_permissionBits) | (mode & _permissionBits);
   }
 
   @override
@@ -209,9 +265,15 @@ class _UploadHandle extends SftpFile {
   final _UploadClient owner;
   final String path;
 
+  // The shared adapter restricts the open handle before streaming content.
+  @override
+  Future<void> setStat(SftpFileAttrs attrs) => owner.setStat(path, attrs);
+
   @override
   Future<void> writeBytes(Uint8List data, {int offset = 0}) async {
     if (owner.denyWrites) owner._deny();
+
+    owner.writeModes.add(owner.files[path]!.mode & _permissionBits);
     final bytes = owner.files[path]!.bytes;
     expect(offset, bytes.length);
     bytes.addAll(data);

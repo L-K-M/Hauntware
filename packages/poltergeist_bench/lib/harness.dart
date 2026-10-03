@@ -5,10 +5,9 @@ import 'throughput_attempt.dart';
 const resolvedDartssh2Version = '3.0.2';
 
 /// Live harness pin; frozen M0 evidence retains its measured revisions.
-/// The harness test keeps this aligned with tool/bench/pubspec.yaml and its
-/// resolved lock. This temporary revision bridge returns to a tag when the
-/// next Séance release contains PR-S4.
-const pinnedSeanceRevision = '4c0a960289c919379d016507fa7ebae6b14b2e7c';
+/// The harness test keeps this aligned with its manifest and resolved lock.
+/// This revision bridge returns to a containing Séance release tag.
+const pinnedSeanceRevision = '76e466fbcbfe5dc90b4fa399e5dfac990b23c30d';
 
 /// One attributable measurement row. Rates stay derived from raw values.
 class BenchResult {
