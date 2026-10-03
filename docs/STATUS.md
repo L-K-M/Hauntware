@@ -11,7 +11,7 @@ Native desktop drops use `desktop_drop` and the same batch-open route;
 locked workspaces refuse drops. Platform-channel regressions failed before
 replacing the ineffective framework-only drag target.
 
-Local analysis is clean. Core: 608 tests pass; shared editor: 430; app: 503
+Local analysis is clean. Core: 608 tests pass; shared editor: 433; app: 503
 with two existing skips. Native desktop builds remain CI-gated. Wrap-off
 layout requires separate viewport work; current wrap/highlight defaults
 stay intact. The rejected age-based temporary-file sweep is not revived.
@@ -26,6 +26,11 @@ literal leading closers, display-column navigation and visible drop hover.
 The typing policy skips controller-arranged edits and keyboard paste/undo;
 a single-character context-menu paste retains the documented input-provenance
 limitation. Opens racing a workspace lock use the existing deferred route.
+
+Keyboard paste suppression now follows its asynchronous write's zone,
+rather than a one-shot latch: an empty clipboard or concurrent typing
+cannot steal suppression or rewrite the later paste. Failing regressions
+cover both interleavings and verbatim one-character paste.
 
 The initial desktop app and shared editor extraction are implemented. The
 ownership boundaries and compatibility policies are documented in
