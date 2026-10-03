@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1180,61 +1181,114 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
 
-  testWidgets('the shell accepts dropped files', (tester) async {
-    workspace.newDocument();
-    await mount(tester);
-    // The drop gesture itself does not reach DragTarget under flutter_test;
-    // what can be proven is that the whole window is a target wired to the
-    // workspace's open path.
-    final target = tester.widget<DragTarget<String>>(
-      find.byType(DragTarget<String>),
+  // The desktop_drop channel the platform runner calls into; the messages
+  // here are exactly what macOS/Windows (`performOperation` with a path
+  // list) and Linux (`performOperation_linux` with text/uri-list plus a
+  // drop point) deliver.
+  Future<void> sendDropEvent(
+    WidgetTester tester,
+    String method,
+    Object? arguments,
+  ) async {
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'desktop_drop',
+      const StandardMethodCodec().encodeMethodCall(
+        MethodCall(method, arguments),
+      ),
+      (_) {},
     );
-    expect(target.onWillAcceptWithDetails, isNotNull);
-    expect(target.onAcceptWithDetails, isNotNull);
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a native file drop opens its files in this window', (
+    tester,
+  ) async {
+    store.files[testPath('dropped.txt')] = document('dropped.txt', 'dropped');
+    store.files[testPath('second.txt')] = document('second.txt', 'two');
+    await mount(tester);
+
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    await sendDropEvent(tester, 'performOperation', [
+      testPath('dropped.txt'),
+      testPath('missing.txt'),
+      testPath('second.txt'),
+    ]);
+
+    expect(workspace.documents.map((tab) => tab.name), [
+      'dropped.txt',
+      'second.txt',
+    ]);
+    // A partial drop reports every lost file, not only the last.
+    final error = workspace.error!;
+    expect(error, contains('missing.txt'));
+    expect(error, isNot(contains('dropped.txt')));
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  group('droppedPaths', () {
-    test('a bare path passes through', () {
-      expect(droppedPaths('/tmp/one.txt'), ['/tmp/one.txt']);
-      expect(droppedPaths('/tmp/one.txt\n/tmp/two.txt'), [
-        '/tmp/one.txt',
-        '/tmp/two.txt',
-      ]);
-    });
+  testWidgets('a Linux uri-list drop decodes to real file paths', (
+    tester,
+  ) async {
+    final unix = testPath('dropped.txt');
+    if (!unix.startsWith('/')) {
+      // The uri-list form is POSIX-only; on Windows the performOperation
+      // test above already covers the channel.
+      return;
+    }
+    store.files[unix] = document('dropped.txt', 'dropped');
+    await mount(tester);
 
-    test('blank and comment lines are skipped', () {
-      expect(droppedPaths(''), isEmpty);
-      expect(droppedPaths('\n\n'), isEmpty);
-      expect(droppedPaths('   '), isEmpty);
-      // RFC 2483 marks comments in text/uri-list with a number sign; some
-      // file managers send // instead, and both appear in the wild.
-      expect(droppedPaths('# rfc comment\nfile:///tmp/one.txt'), [
-        '/tmp/one.txt',
-      ]);
-      expect(droppedPaths('// comment\nfile:///tmp/one.txt'), ['/tmp/one.txt']);
-      expect(droppedPaths('# a\n// b'), isEmpty);
-    });
+    await sendDropEvent(tester, 'performOperation_linux', [
+      'file://$unix\r\n',
+      [20.0, 20.0],
+    ]);
 
-    test('file URIs decode to paths, CRLF and escapes included', () {
-      expect(
-        droppedPaths('file:///tmp/one.txt\r\nfile:///tmp/two%20words.txt\r\n'),
-        ['/tmp/one.txt', '/tmp/two words.txt'],
-      );
-      expect(droppedPaths('/tmp/a b.txt\n  /tmp/c.txt  '), [
-        '/tmp/a b.txt',
-        '/tmp/c.txt',
-      ]);
-    });
+    expect(workspace.documents.map((tab) => tab.name), ['dropped.txt']);
+    expect(workspace.error, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
-    test('malformed or unsupported URIs are skipped, not thrown', () {
-      expect(() => droppedPaths('file://host/share/one.txt'), returnsNormally);
-      expect(() => droppedPaths('file:///a%2Fb'), returnsNormally);
-      // A UNC share or an escaped separator yields no usable path; the rest
-      // of the drop still opens.
-      expect(droppedPaths('file://host/share/one.txt\r\nfile:///tmp/ok.txt'), [
-        '/tmp/ok.txt',
-      ]);
-    });
+  testWidgets('a drop while the workspace is locked opens nothing', (
+    tester,
+  ) async {
+    store.files[testPath('dropped.txt')] = document('dropped.txt', 'dropped');
+    await mount(tester);
+
+    // A pending picker owns the workspace; the drop target unregisters so
+    // the file cannot slip in behind it.
+    dialogs.openGate = Completer<List<String>>();
+    unawaited(workspace.openDialog());
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isTrue);
+    expect(tester.widget<DropTarget>(find.byType(DropTarget)).enable, isFalse);
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    await sendDropEvent(tester, 'performOperation', [testPath('dropped.txt')]);
+    expect(workspace.documents, isEmpty);
+    expect(workspace.error, isNull);
+
+    dialogs.openGate!.complete(const []);
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isFalse);
+
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    await sendDropEvent(tester, 'performOperation', [testPath('dropped.txt')]);
+    expect(workspace.documents.map((tab) => tab.name), ['dropped.txt']);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a hovering file highlights the window until it leaves', (
+    tester,
+  ) async {
+    await mount(tester);
+    final highlight = find.byKey(const ValueKey('window-drop-highlight'));
+    BoxDecoration decoration() =>
+        tester.widget<DecoratedBox>(highlight).decoration as BoxDecoration;
+
+    expect(highlight, findsOneWidget);
+    expect(decoration().border, isNull);
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    expect(decoration().border, isNotNull);
+    await sendDropEvent(tester, 'exited', null);
+    expect(decoration().border, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

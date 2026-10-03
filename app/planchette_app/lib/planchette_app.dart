@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -126,6 +128,12 @@ class _DocumentShellState extends State<_DocumentShell>
   DocumentWorkspace get workspace => widget.workspace;
   DocumentWindow? get window => widget.window;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
+
+  /// Native file drops are wired on the desktops; the mobile runners have
+  /// no drop bridge, so the target stays unregistered there.
+  static final bool _supportsDrop =
+      Platform.isLinux || Platform.isMacOS || Platform.isWindows;
+  bool _dropping = false;
   FocusNode? _lastTextFocus;
 
   /// The one readiness rule behind every document command and the toolbar.
@@ -1314,12 +1322,15 @@ class _DocumentShellState extends State<_DocumentShell>
       // Keep focus below the shortcuts when the final editor is disposed.
       child: FocusScope(
         autofocus: true,
-        child: DragTarget<String>(
+        child: DropTarget(
           // While a dialog or quit review owns the workspace the file must
-          // not sneak in behind it, so the drop is refused outright.
-          onWillAcceptWithDetails: (_) => !workspace.interactionLocked,
-          onAcceptWithDetails: (details) {
-            final paths = droppedPaths(details.data);
+          // not sneak in behind it, so the target unregisters outright.
+          enable: _supportsDrop && !workspace.interactionLocked,
+          onDragEntered: (_) => setState(() => _dropping = true),
+          onDragExited: (_) => setState(() => _dropping = false),
+          onDragDone: (details) {
+            setState(() => _dropping = false);
+            final paths = [for (final item in details.files) item.path];
             if (paths.isEmpty) return;
             final registry = window?.owner;
             unawaited(
@@ -1328,14 +1339,15 @@ class _DocumentShellState extends State<_DocumentShell>
                   : workspace.openAll(paths),
             );
           },
-          builder: (context, candidate, rejected) => DecoratedBox(
+          child: DecoratedBox(
+            key: const ValueKey('window-drop-highlight'),
             // The only hint that a drop will land is a line around the
             // window's own color while the file is over it.
-            decoration: candidate.isEmpty
-                ? const BoxDecoration()
-                : BoxDecoration(
+            decoration: _dropping
+                ? BoxDecoration(
                     border: Border.all(color: scheme.primary, width: 2),
-                  ),
+                  )
+                : const BoxDecoration(),
             child: Scaffold(
               body: Column(
                 // Chrome rows span the window and start at the leading edge;
@@ -1568,43 +1580,6 @@ const _ghostLines = [
 /// created right after it.
 @visibleForTesting
 String ghostLineFor(int tabId) => _ghostLines[tabId % _ghostLines.length];
-
-/// The paths a drop carried.
-///
-/// A desktop drop delivers `text/uri-list`: one `file:` URI per line, CRLF
-/// separated, with comment lines that mean nothing as a path. RFC 2483 marks
-/// those with `#`; some file managers send `//` instead, so both are skipped.
-/// Percent escapes are decoded, and a line that is already a plain path —
-/// which is what a test or a hand-made drop carries — is passed through. A
-/// URI is not the same thing as a path, so splitting on newlines alone
-/// produces names no file matches.
-List<String> droppedPaths(String data) {
-  final paths = <String>[];
-  for (final line in data.split('\n')) {
-    final entry = line.trim();
-    if (entry.isEmpty || entry.startsWith('#') || entry.startsWith('//')) {
-      continue;
-    }
-    if (!entry.startsWith('file:')) {
-      paths.add(entry);
-      continue;
-    }
-    // A URI with no usable path is skipped rather than allowed to throw out
-    // of a gesture handler, which would take the frame with it. Both
-    // failures are named: `parse` rejects malformed input, and `toFilePath`
-    // throws `UnsupportedError` for a UNC share (`file://host/share`) or an
-    // escaped separator, both of which a Windows drop can legitimately
-    // carry.
-    try {
-      paths.add(Uri.parse(entry).toFilePath());
-    } on FormatException {
-      continue;
-    } on UnsupportedError {
-      continue;
-    }
-  }
-  return paths;
-}
 
 const _digits = [
   LogicalKeyboardKey.digit0,
