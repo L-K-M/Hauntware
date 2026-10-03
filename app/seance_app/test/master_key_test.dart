@@ -97,7 +97,7 @@ void main() {
     test('says what happened, and what to do about it', () async {
       final message = const MasterKeyUnavailableException().toString();
       expect(message, contains('vault'));
-      expect(message, contains('Always Allow'));
+      expect(message, contains('keychain backup'));
     });
 
     test(

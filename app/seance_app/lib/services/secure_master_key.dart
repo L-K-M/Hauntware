@@ -14,9 +14,10 @@ import 'package:seance_core/seance_core.dart';
 /// undecryptable. So the vault itself is the tiebreaker, and this refuses to
 /// start rather than guess.
 ///
-/// On macOS the realistic cause is the login-keychain prompt being dismissed
-/// or denied. Séance is ad-hoc signed, so its keychain ACL is bound to an
-/// exact code hash and every rebuild you install asks again.
+/// On macOS, missing items return no value; permission and interaction
+/// errors reach the locked-vault retry path instead. The plugin can also
+/// return no value for an unusable payload, so null alone does not prove
+/// why the key is unavailable.
 class MasterKeyUnavailableException implements Exception {
   const MasterKeyUnavailableException();
 
@@ -25,8 +26,9 @@ class MasterKeyUnavailableException implements Exception {
       'The vault master key could not be read from the system keystore, but '
       'an encrypted vault already exists. Séance stopped rather than create a '
       'new key, which would make your saved passwords and private keys '
-      'unreadable. On macOS this is usually a keychain prompt that was '
-      'dismissed or denied — relaunch and choose "Always Allow".';
+      'unreadable. The keystore returned no master key. Restore the matching '
+      'key from a backup (a keychain backup on macOS) before reopening this '
+      'vault.';
 }
 
 /// The OS keystore could not be read or written — on Linux that is usually a

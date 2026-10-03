@@ -139,9 +139,10 @@ Everything security- or correctness-critical is covered by tests that run in CI
   outside the Mac App Store, so nothing requires the sandbox. The cost is
   real and permanent: a compromise of the app or any dependency reaches
   everything the user can, not one container. Putting
-  `com.apple.security.app-sandbox` back is one line in
-  `macos/Runner/*.entitlements`; `SandboxMigration` handles installs whose
-  data is still behind a container either way.
+  `com.apple.security.app-sandbox` back changes the store location again.
+  The container is a pre-migration snapshot, not a reverse migration:
+  reconcile both support trees and the vault/key pairing from backups
+  before rolling back. See `docs/STATUS.md`, "macOS: no App Sandbox".
 
 See [PROPOSAL.md §7](PROPOSAL.md) for the full checklist and open questions.
 
@@ -352,21 +353,27 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   any of this. Before releasing an unsandboxed build, verify by hand on a Mac
   with an existing sandboxed install: data appears after the first launch
   (servers, snippets, sync still enrolled, **same `deviceId`**); the keychain
-  prompt appears once and "Always Allow" sticks; denying it fails to launch
-  with the `MasterKeyUnavailableException` message rather than starting with an
-  empty vault; a Browse…-picked identity file outside `~/.ssh` still connects;
-  and the local shell opens in the real `$HOME` with `^C` interrupting a
-  `sleep 30`.
-- The local shell's *wiring* is covered by fakes; the pty itself cannot be in
-  CI (no native library under `flutter test`). To re-verify it for real on
-  Linux, build the plugin's unity target and run a throwaway test against it:
+  prompt appears once and "Always Allow" sticks; denying it leaves the vault
+  locked without replacing its key, and restored access can be retried;
+  a missing keystore entry with an existing vault stops startup with
+  `MasterKeyUnavailableException`; a Browse…-picked identity file outside
+  `~/.ssh` still connects;
+  the local shell opens in the real `$HOME` with `^C` interrupting a
+  `sleep 30`; and killing the app mid-copy leaves the destination untouched —
+  the next launch either retries the migration or stops with the explanation,
+  never starts looking empty.
+- Local-shell wiring uses fakes. CI and release Linux builds also run the
+  real PTY tests after compiling the plugin; normal `flutter test` skips
+  them when the native library is unavailable. To verify them locally:
 
   ```bash
-  # unpack flutter_pty 0.4.2 somewhere, then:
-  clang -shared -fPIC -DDART_SHARED_LIB -o /tmp/libflutter_pty.so \
-    src/flutter_pty.c -I src -I src/include
-  # a test that drives LocalShellSession with the real launcher:
-  LD_LIBRARY_PATH=/tmp flutter test test/<scratch>_test.dart
+  # From the repository root, compile the vendored unity target:
+  clang -shared -fPIC -pthread -DDART_SHARED_LIB -o /tmp/libflutter_pty.so \
+    third_party/flutter_pty/src/flutter_pty.c \
+    -I third_party/flutter_pty/src -I third_party/flutter_pty/src/include
+  # From app/seance_app; a missing native library is a failure:
+  LD_LIBRARY_PATH=/tmp SEANCE_NATIVE_PTY_REQUIRED=1 \
+    flutter test test/local_shell_native_test.dart
   ```
 
   What was checked this way (Linux, `/bin/sh`): the shell starts and echoes

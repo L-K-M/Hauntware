@@ -10,6 +10,11 @@ import 'package:seance_app/services/sandbox_migration.dart';
 /// and a fake would prove nothing about the case that matters (an interrupted
 /// copy leaving an install that looks migrated but isn't).
 void main() {
+  const linkSkipReason = 'Requires POSIX symbolic links';
+  final linkTestSkip = Platform.isMacOS || Platform.isLinux
+      ? false
+      : linkSkipReason;
+
   late Directory root;
   late Directory support;
   late Directory legacy;
@@ -85,14 +90,14 @@ void main() {
       'copies rather than moves, so the container is still a fallback',
       () async {
         writeLegacy('settings.json', '{}');
-        await migration().run();
+        expect(await migration().run(), SandboxMigrationOutcome.migrated);
         expect(File('${legacy.path}/settings.json').existsSync(), isTrue);
       },
     );
 
     test('leaves no staging directory behind', () async {
       writeLegacy('settings.json', '{}');
-      await migration().run();
+      expect(await migration().run(), SandboxMigrationOutcome.migrated);
       expect(
         Directory(
           '${support.parent.path}/${SandboxMigration.stagingName}',
@@ -147,6 +152,36 @@ void main() {
       expect(jsonDecode(readSupport('settings.json'))['deviceId'], 'abc');
       expect(File('${support.path}/.DS_Store').existsSync(), isTrue);
     });
+
+    test('a link inside the container is skipped, never followed', () async {
+      // The container copy's documented rule: nothing in this tree creates
+      // a link, so an unexpected one is not ours and is not followed —
+      // chasing it could drag outside content into the published support
+      // directory. The stray copy carries links instead; see 'a stray
+      // directory keeps its links as links' for why the rules differ.
+      File('${root.path}/outside.txt').writeAsStringSync('outside');
+      writeLegacy('settings.json', '{"deviceId":"abc"}');
+      Link('${legacy.path}/vault.json').createSync('${root.path}/outside.txt');
+
+      expect(await migration().run(), SandboxMigrationOutcome.migrated);
+      expect(
+        FileSystemEntity.typeSync(
+          '${support.path}/vault.json',
+          followLinks: false,
+        ),
+        FileSystemEntityType.notFound,
+        reason: 'the destination gets neither the link nor its target',
+      );
+      expect(File('${root.path}/outside.txt').readAsStringSync(), 'outside');
+      // And the container is untouched, link included.
+      expect(
+        FileSystemEntity.typeSync(
+          '${legacy.path}/vault.json',
+          followLinks: false,
+        ),
+        FileSystemEntityType.link,
+      );
+    }, skip: linkTestSkip);
   });
 
   group('when it must not run', () {
@@ -231,6 +266,15 @@ void main() {
         File('${support.path}/settings.json').existsSync(),
         isFalse,
         reason: 'a failed run must not leave a half-migrated install',
+      );
+      expect(
+        File(
+          '${support.parent.path}/${SandboxMigration.stagingName}',
+        ).readAsStringSync(),
+        'not a directory',
+        reason:
+            'the run aborted — whatever occupies the staging name is '
+            'unknown data, never something to delete',
       );
     });
 
@@ -385,14 +429,15 @@ void main() {
         // As a previous run left it when the process died mid-move: the
         // staged copy under the staging name, and the original inside a
         // uniquely-named backup. The next launch owns the staging name —
-        // the backup is never its cleanup's business.
+        // the backup is never its cleanup's business. The backup path comes
+        // from a sibling run's own field, so a rename upstream breaks this
+        // test loudly instead of letting it pass against a name nothing
+        // writes anymore.
         final staleStaging = Directory(
           '${support.parent.path}/${SandboxMigration.stagingName}',
         )..createSync();
         File('${staleStaging.path}/.DS_Store').writeAsStringSync('stale copy');
-        final abandoned = Directory(
-          '${support.parent.path}/.seance-sandbox-migration-strays-1-1',
-        )..createSync();
+        final abandoned = migration().backup..createSync();
         File('${abandoned.path}/.DS_Store').writeAsStringSync('original');
         writeLegacy('settings.json', '{"deviceId":"abc"}');
 
@@ -439,7 +484,7 @@ void main() {
         File('${support.path}/.Spotlight-V100/index.db').readAsStringSync(),
         'spotlight',
       );
-    });
+    }, skip: linkTestSkip);
   });
 
   group('choosing where to migrate from', () {

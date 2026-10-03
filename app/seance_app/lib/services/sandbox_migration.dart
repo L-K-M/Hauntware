@@ -71,6 +71,14 @@ class SandboxMigrationFailure implements Exception {
 ///
 /// The container is copied, never moved. If any of this is wrong, the original
 /// is still exactly where a sandboxed build would look for it.
+///
+/// Application Support is deliberately the only container state carried —
+/// an audit of the dependency tree found nothing else to migrate: no
+/// `shared_preferences` or other `NSUserDefaults` writer (the keystore is
+/// `flutter_secure_storage`, which is the Keychain, not defaults), nothing
+/// calls `getApplicationDocumentsDirectory`, and no window-frame autosave is
+/// set. macOS system state like the window manager's own records is left
+/// alone on purpose.
 class SandboxMigration {
   /// Where the app reads its data now.
   final Directory support;

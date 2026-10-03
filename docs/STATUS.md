@@ -12,11 +12,12 @@ strays retain originals in a separate backup, survive failed publication
 and relaunch, and keep nested links as links without following them.
 
 A keystore answering "no key" cannot mint a replacement over a nonempty
-or unrecognizable vault. A thrown keystore read still opens the existing
-locked-vault retry flow.
+or unrecognizable vault; that refusal stops startup with an explanation
+instead, because minting over secrets strands them permanently. A thrown
+keystore read still opens the existing locked-vault retry flow.
 
 After parent integration, Flutter analysis is clean and the full app suite
-passes 1,294 tests with ten native-environment skips. Real-directory tests
+passes 1,295 tests with ten native-environment skips. Real-directory tests
 cover interrupted copies, failed publication, newcomer collisions, retry
 and link preservation. Native macOS container/keychain behavior remains
 unverified; the existing device checklist applies before release.
@@ -1489,11 +1490,17 @@ The local shell is why, and the trade is deliberate rather than incidental.
 - **What it costs, permanently.** A compromise of Séance — or of any package
   it depends on — now reaches everything the user can reach, and the SSH keys
   and vault this app holds are precisely the target. Reverting is one line in
-  both entitlements files.
+  both entitlements files — but it is not data-neutral: `SandboxMigration`
+  copies rather than moves and never copies back, so a re-sandboxed launch
+  reopens the pre-migration container snapshot, and anything written since
+  the migration is silently forked rather than restored. Rolling back
+  deliberately means reconciling the two trees by hand from a backup.
 - **What existing installs see.** `SandboxMigration` copies the whole support
   tree out of `~/Library/Containers/<bundle id>/…` on the first unsandboxed
-  launch, before any store is opened. It copies rather than moves, and lands
-  the copy with a single directory rename so the result is all-or-nothing —
+  launch, before any store is opened. It copies rather than moves (the old
+  container copy stays as rollback insurance, at the cost of doubled disk
+  use — deleting it is a separate, deliberate decision), and lands the copy
+  with a single directory rename so the result is all-or-nothing —
   a half-filled directory would read as "already in use" next launch and
   strand the remainder for good. A failure **stops startup** with an
   explanation rather than starting empty, because everything after that point

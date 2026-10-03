@@ -324,7 +324,13 @@ class AppServices {
       key = await masterKeys.probeKeystore(
         hasExistingVault: vaultFile != null && await _holdsSecrets(vaultFile),
       );
-    } on MasterKeyUnavailableException {
+    } on MasterKeyUnavailableException catch (error) {
+      // Distinguish a missing key from a temporarily unavailable keystore.
+      // Retrying after key restoration remains valid.
+      developer.log(
+        'Refused a replacement key for an existing vault: $error',
+        name: 'seance.app',
+      );
       return false;
     }
     if (key == null) return false;
@@ -375,6 +381,8 @@ class AppServices {
   /// secrets, because the safe reading of "cannot tell" is "do not overwrite".
   /// A file that parses into a shape no vault can be — a list, a scalar —
   /// reads the same way: only a well-formed object can prove it is empty.
+  /// Zero-length or whitespace-only files remain unrecognized. Atomic vault
+  /// writes produce valid JSON; do not mint over foreign or corrupt states.
   static Future<bool> _holdsSecrets(File file) async {
     if (!await file.exists()) return false;
     try {

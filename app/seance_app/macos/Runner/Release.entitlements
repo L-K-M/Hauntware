@@ -2,7 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Deliberately NOT sandboxed, and deliberately empty.
+	<!-- Deliberately NOT sandboxed, and deliberately empty. The decision and
+	     its cost are written up in docs/STATUS.md, "macOS: no App Sandbox".
 
 	     The App Sandbox is inherited by child processes, so with it on the
 	     local shell opens inside Séance's own container: $HOME is the
@@ -19,7 +20,11 @@
 	     rather than one container, and the SSH keys and vault this app holds
 	     are exactly what such a compromise would be after. Putting
 	     com.apple.security.app-sandbox back is a one-line change, and
-	     SandboxMigration keeps working either way.
+	     SandboxMigration keeps working either way — but it copies rather
+	     than moves and never copies back, so a re-sandboxed launch reopens
+	     the pre-migration snapshot and anything written since lives only
+	     in the shadowed real-home copy. Reverting is a reconciliation,
+	     not a toggle.
 
 	     Everything that used to be here went with it, because all of it is
 	     sandbox-only and inert without it: network.client, network.server,
