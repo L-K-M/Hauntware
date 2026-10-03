@@ -22,7 +22,7 @@ leases, so a local purge cannot race a local undo or live run. There is no
 distributed cross-machine lease; sibling-machine or manual removal is
 reconciled from the next live listing.
 
-Sync-package analysis is clean; 320 tests pass with five SSH-fixture skips.
+Sync-package analysis is clean; 321 tests pass with five SSH-fixture skips.
 Flutter analysis is clean; 3,258 app tests pass together. One unrelated
 recent-locations full-suite flake passes in isolation (3,259 total). Native
 Linux before/after captures and provenance are in
@@ -10657,7 +10657,7 @@ unverified.
     cross-process activity locks, owner-tagged quarantine, live re-listing,
     no-follow deletion, foreign-device handling, and scoped restore/prune
     markers close the safety and concurrency boundaries. Analysis is clean;
-    320 sync tests pass with five SSH-fixture skips. The app passes 3,258
+    321 sync tests pass with five SSH-fixture skips. The app passes 3,258
     tests together; one unrelated recent-locations full-suite flake passes
     in isolation (3,259 total). Captures are in
     `tasks/sync-trash-purge/screenshots/`.

@@ -92,6 +92,19 @@ final class _FailingListFs extends LocalFileSystem {
   );
 }
 
+/// Models a local platform whose filesystem cannot express POSIX modes.
+final class _UnsupportedModeFs extends LocalFileSystem {
+  @override
+  Future<void> setMode(String path, int permissions) => Future.error(
+    RemoteFileException(
+      kind: RemoteFileErrorKind.unsupported,
+      operation: 'change permissions for',
+      path: path,
+      message: 'unsupported for test',
+    ),
+  );
+}
+
 /// A LocalFileSystem that refuses to delete anything under [failName] —
 /// one bad run dir must fail in the report while its siblings purge.
 final class _FailingDeleteFs extends LocalFileSystem {
@@ -734,6 +747,19 @@ void main() {
   });
 
   group('inspect', () {
+    test('local roots tolerate unsupported POSIX modes', () async {
+      final root = remoteJoin(scratch.path, 'unsupported-mode-trash');
+
+      final identity = await resolveSyncTrashRoot(
+        _UnsupportedModeFs(),
+        root,
+        pathStyle: SyncTrashPathStyle.posix,
+        access: SyncTrashRootAccess.createOrClaim,
+      );
+
+      expect(isSyncTrashIdentityKey(identity.scopeKey), isTrue);
+    });
+
     test('missing-scope release rejects path-shaped identities', () async {
       await expectLater(
         SyncTrashPurgeService(

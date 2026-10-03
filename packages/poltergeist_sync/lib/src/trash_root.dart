@@ -347,8 +347,12 @@ Future<void> _makePrivate(
   try {
     await fileSystem.setMode(trashRoot, _privateDirectoryMode);
   } on RemoteFileException catch (error) {
-    if (pathStyle == SyncTrashPathStyle.windows &&
-        error.kind == RemoteFileErrorKind.unsupported) {
+    // Local VFS implementations may not express POSIX modes (notably on
+    // Windows); Windows-style remotes have the same contract.
+    final modeIsMeaningless =
+        fileSystem is LocalFileSystem ||
+        pathStyle == SyncTrashPathStyle.windows;
+    if (modeIsMeaningless && error.kind == RemoteFileErrorKind.unsupported) {
       return;
     }
     rethrow;
