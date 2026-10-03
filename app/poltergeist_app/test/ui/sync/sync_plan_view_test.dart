@@ -19,8 +19,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/rsync_endpoints.dart';
+import 'package:poltergeist_app/services/sync_environment.dart';
 import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
+import 'package:poltergeist_app/services/sync_state_store.dart';
+import 'package:poltergeist_app/services/sync_trash_activity.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/compare_view.dart';
 import 'package:poltergeist_app/ui/sync/sync_commands.dart';
@@ -36,6 +39,18 @@ import '../../support/sync_harness.dart';
 final _captureDir =
     Platform.environment['POLTERGEIST_CAPTURE_DIR'] ??
     '../../tasks/run3-task90/captures';
+
+enum _ControllerStartZone { runAsync, current }
+
+bool _usesExistingLocalRoots(SyncPlanController controller) {
+  for (final endpoint in [controller.pair.left, controller.pair.right]) {
+    if (endpoint is! LocalEndpoint || !Directory(endpoint.path).existsSync()) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 Future<ByteData> _fontBytes(String path) async =>
     ByteData.view(File(path).readAsBytesSync().buffer);
@@ -84,13 +99,49 @@ Future<void> pumpSyncPlanView(
   Future<void> Function(RegisteredCommand command)? onRunCommand,
   DateTime Function()? clock,
   Size size = const Size(1200, 720),
-}) {
+}) => _pumpSyncPlanView(
+  tester,
+  controller,
+  onSaveAsFavorite: onSaveAsFavorite,
+  onEditRules: onEditRules,
+  onRunCommand: onRunCommand,
+  clock: clock,
+  size: size,
+);
+
+Future<void> _pumpSyncPlanView(
+  WidgetTester tester,
+  SyncPlanController controller, {
+  VoidCallback? onSaveAsFavorite,
+  VoidCallback? onEditRules,
+  Future<void> Function(RegisteredCommand command)? onRunCommand,
+  DateTime Function()? clock,
+  Size size = const Size(1200, 720),
+  _ControllerStartZone startZone = _ControllerStartZone.runAsync,
+}) async {
+  if (controller.phase == SyncPlanPhase.scanning) {
+    Future<void> start() async {
+      controller.start();
+      await pumpUntil(() => controller.phase != SyncPlanPhase.scanning);
+      if (_usesExistingLocalRoots(controller)) {
+        await pumpUntil(() => !controller.trashPurgeBlocksActions);
+      }
+    }
+
+    if (startZone == _ControllerStartZone.current) {
+      await start();
+    } else {
+      await tester.runAsync(start);
+    }
+  }
+
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final capture = Platform.environment['POLTERGEIST_CAPTURE'] == '1';
   final base = buildPoltergeistTheme(
-    capture ? Brightness.light : Brightness.dark);
+    capture ? Brightness.light : Brightness.dark,
+  );
   // The house capture convention: the loaded family must be requested
   // by the theme — FontLoader alone cannot reach default-styled text.
   final theme = capture
@@ -118,7 +169,7 @@ Future<void> pumpSyncPlanView(
       );
     },
   );
-  return tester.pumpWidget(
+  await tester.pumpWidget(
     // The boundary wraps MaterialApp so overlay surfaces (the typed
     // DELETE dialog, the override popup) land inside the capture.
     RepaintBoundary(
@@ -145,15 +196,11 @@ Future<void> pumpSyncPlanView(
   );
 }
 
-/// The fake scanner/differ resolve on microtasks — a pump loop reaches
-/// `ready` without runAsync.
+/// The scan also canonicalizes trash roots through real filesystem I/O.
 Future<void> pumpToReady(
   WidgetTester tester,
   SyncPlanController controller,
 ) async {
-  for (var i = 0; i < 20 && controller.phase != SyncPlanPhase.ready; i++) {
-    await tester.pump();
-  }
   expect(controller.phase, SyncPlanPhase.ready);
   // The phase flips inside a pump's microtask drain; the rebuild that
   // paints it lands on the next frame.
@@ -261,6 +308,22 @@ final class _SetTimesRefusingFs extends LocalFileSystem {
     path: path,
     message: 'this server refuses setstat',
   );
+}
+
+final class _TrashListingFailureFs extends LocalFileSystem {
+  @override
+  Future<List<RemoteFileEntry>> listDirectory(String path) {
+    if (!path.endsWith('.poltergeist-trash')) {
+      return super.listDirectory(path);
+    }
+
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.disconnected,
+      operation: 'list',
+      path: path,
+      message: 'offline',
+    );
+  }
 }
 
 void main() {
@@ -872,7 +935,11 @@ void main() {
         );
         addTearDown(controller.dispose);
 
-        await pumpSyncPlanView(tester, controller);
+        await _pumpSyncPlanView(
+          tester,
+          controller,
+          startZone: _ControllerStartZone.current,
+        );
         await pumpUntil(
           () => controller.phase == SyncPlanPhase.ready,
         );
@@ -918,6 +985,7 @@ void main() {
         await pumpUntil(
           () => controller.phase == SyncPlanPhase.completed,
         );
+        await pumpUntil(() => !controller.trashPurgeBlocksActions);
         await tester.pump();
         expect(File('${right.path}/gone0.txt').existsSync(), isFalse);
         // The journal exposes the restore affordance.
@@ -949,7 +1017,11 @@ void main() {
         );
         addTearDown(controller.dispose);
 
-        await pumpSyncPlanView(tester, controller);
+        await _pumpSyncPlanView(
+          tester,
+          controller,
+          startZone: _ControllerStartZone.current,
+        );
         await pumpUntil(
           () => controller.phase == SyncPlanPhase.ready,
         );
@@ -1011,7 +1083,11 @@ void main() {
         );
         addTearDown(controller.dispose);
 
-        await pumpSyncPlanView(tester, controller);
+        await _pumpSyncPlanView(
+          tester,
+          controller,
+          startZone: _ControllerStartZone.current,
+        );
         await pumpUntil(
           () => controller.phase == SyncPlanPhase.ready,
         );
@@ -1073,7 +1149,11 @@ void main() {
         );
         addTearDown(controller.dispose);
 
-        await pumpSyncPlanView(tester, controller);
+        await _pumpSyncPlanView(
+          tester,
+          controller,
+          startZone: _ControllerStartZone.current,
+        );
         await pumpUntil(
           () => controller.phase == SyncPlanPhase.ready,
         );
@@ -1349,6 +1429,215 @@ void main() {
       await pumpAndCopy(tester, controller);
       expect(clipboardText, contains("'deploy@example.com:/srv/site'"));
       expect(clipboardText, contains('ssh -p 2222'));
+    });
+  });
+
+  group('sync trash purge', () {
+    testWidgets('stale notice uses the view clock and disables deletion', (
+      tester,
+    ) async {
+      final scratch = Directory.systemTemp.createTempSync('pg-trash-view-');
+      addTearDown(() => scratch.deleteSync(recursive: true));
+      final leftRoot = Directory('${scratch.path}/left')..createSync();
+      final rightRoot = Directory('${scratch.path}/right')..createSync();
+      final pair = testSyncPair(left: leftRoot.path, right: rightRoot.path);
+      final states = MemorySyncStateStore();
+      final pairId = syncPairId(
+        pair,
+        leftCaseInsensitive: false,
+        rightCaseInsensitive: false,
+      );
+      await states.save(
+        pairId,
+        SyncPairState(
+          trashCacheLeft: TrashCacheEntry(
+            lastListedAt: DateTime.utc(2026, 10, 8),
+            runs: [
+              TrashCacheRun(
+                runId: '${syncRunDevicePrefix('test-device')}-cached',
+                ageBasis: DateTime.utc(2026, 8),
+                fileCount: 3,
+              ),
+            ],
+          ),
+        ),
+      );
+      final environment = SyncEnvironment(
+        states: states,
+        syncRunsDirectory: '${scratch.path}/sync_runs',
+        deviceId: () async => 'test-device',
+        localFileSystem: _TrashListingFailureFs.new,
+      );
+      final controller = testController(
+        pair: pair,
+        scanner: FakeSyncScanner(
+          left: testScanResult(leftRoot.path, const {}),
+          right: testScanResult(rightRoot.path, const {}),
+        ),
+        differ: FakeSyncDiffer(testPlan(pair, const [])),
+        environment: environment,
+      );
+      addTearDown(controller.dispose);
+
+      await _pumpSyncPlanView(
+        tester,
+        controller,
+        clock: () => DateTime.utc(2026, 10, 10),
+      );
+      await pumpToReady(tester, controller);
+
+      expect(
+        find.text('As of 2 days ago; reconnect to delete.'),
+        findsOneWidget,
+      );
+      final delete = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Delete…'),
+      );
+      expect(delete.onPressed, isNull);
+    });
+
+    testWidgets('another plan purge disables Run', (tester) async {
+      final scratch = Directory.systemTemp.createTempSync('pg-trash-view-');
+      addTearDown(() => scratch.deleteSync(recursive: true));
+      final leftRoot = Directory('${scratch.path}/left')..createSync();
+      final rightRoot = Directory('${scratch.path}/right')..createSync();
+      final pair = testSyncPair(left: leftRoot.path, right: rightRoot.path);
+      final activity = SyncTrashActivityRegistry();
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: '${scratch.path}/sync_runs',
+        deviceId: () async => 'test-device',
+        trashActivity: activity,
+      );
+      final controller = testController(
+        pair: pair,
+        scanner: FakeSyncScanner(
+          left: testScanResult(leftRoot.path, const {}),
+          right: testScanResult(rightRoot.path, const {}),
+        ),
+        differ: FakeSyncDiffer(
+          testPlan(pair, [
+            testItem(
+              'a.txt',
+              left: testFile(),
+              suggested: SyncActionType.copyLeftToRight,
+              reason: SyncReason.onlyOnLeft,
+            ),
+          ]),
+        ),
+        environment: environment,
+      );
+      addTearDown(controller.dispose);
+      await _pumpSyncPlanView(tester, controller);
+      await pumpToReady(tester, controller);
+
+      final purge = (await tester.runAsync(() async {
+        final location = await environment.resolveTrashLocation(
+          endpoint: pair.left,
+          canonicalRoot: leftRoot.path,
+          rules: pair.rules,
+          side: SyncSide.left,
+          pathCase: SyncTrashPathCase.sensitive,
+        );
+        return activity.tryBeginPurge([
+          location,
+        ], SyncTrashPurgeAdmission.requireIdle);
+      }))!;
+      addTearDown(purge.close);
+      await tester.pump();
+
+      final run = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Copy 1'),
+      );
+      expect(run.onPressed, isNull);
+    });
+
+    testWidgets('aged notice opens the shared scope-and-forfeit dialog', (
+      tester,
+    ) async {
+      final scratch = Directory.systemTemp.createTempSync('pg-trash-view-');
+      addTearDown(() => scratch.deleteSync(recursive: true));
+      final leftRoot = Directory('${scratch.path}/left')..createSync();
+      final rightRoot = Directory('${scratch.path}/right')..createSync();
+      final pair = testSyncPair(left: leftRoot.path, right: rightRoot.path);
+      final runId =
+          '${syncRunDevicePrefix('test-device')}-00000000-0000-4000-'
+          '8000-000000000001';
+      final runDirectory = Directory(
+        '${leftRoot.path}/.poltergeist-trash/$runId',
+      )..createSync(recursive: true);
+      final trashed = File('${runDirectory.path}/000001-a.txt')
+        ..writeAsStringSync('old');
+      Directory('${scratch.path}/sync_runs').createSync();
+      await tester.runAsync(() async {
+        final journal = await SyncRunJournal.create(
+          '${scratch.path}/sync_runs',
+          SyncRunRecord(
+            runId: runId,
+            pairId: 'another-pair',
+            startedAt: DateTime.now().subtract(const Duration(days: 31)),
+            rules: const SyncRuleSet(),
+            totals: const PlanTotals(
+              counts: {},
+              bytes: {},
+              replacedFiles: 0,
+              replacedBytes: 0,
+            ),
+            warnings: const [],
+          ),
+        );
+        await journal.appendItem(
+          SyncJournalItemLine(
+            relativePath: 'a.txt',
+            side: SyncSide.left,
+            action: SyncActionType.deleteLeft,
+            outcome: SyncItemStatus.done,
+            attempt: 1,
+            trashLocation: trashed.path,
+            trashBytes: 3,
+          ),
+        );
+      });
+      final controller = fakeController(
+        scratch,
+        pair: pair,
+        plan: testPlan(pair, const []),
+      );
+      addTearDown(controller.dispose);
+
+      await tester.runAsync(() async {
+        controller.start();
+        await pumpUntil(() => controller.trashNotices.isNotEmpty);
+        await pumpUntil(() => controller.trashNotices.single.canPurge);
+      });
+      await _pumpSyncPlanView(tester, controller);
+      await pumpToReady(tester, controller);
+      expect(controller.trashNotices, isNotEmpty);
+
+      expect(
+        find.text(
+          '1 trashed file from 1 run older than 30 days — delete them?',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Delete…'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Purge sync trash?'), findsOneWidget);
+      expect(
+        find.text('Sync trash is shared by host and root.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'This includes trash from other sync pairs that use the same host and root.',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text('These files can no longer be restored.'),
+        findsOneWidget,
+      );
     });
   });
 }

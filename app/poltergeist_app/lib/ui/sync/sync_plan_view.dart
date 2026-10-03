@@ -25,6 +25,7 @@ import 'rsync_copy.dart';
 import 'sync_commands.dart';
 import 'sync_plan_format.dart';
 import 'sync_plan_table.dart';
+import 'sync_trash_purge_dialog.dart';
 
 /// One filter chip's bucket over effective actions.
 enum SyncFilter { all, newFiles, updates, deletes, conflicts, skipped }
@@ -132,6 +133,11 @@ class _SyncPlanViewState extends State<SyncPlanView> {
               expanded: _warningsExpanded,
               onToggle: () =>
                   setState(() => _warningsExpanded = !_warningsExpanded),
+            ),
+            _TrashNotices(
+              controller: _controller,
+              l10n: l10n,
+              clock: widget.clock,
             ),
             _SuggestionBanner(controller: _controller, l10n: l10n),
             _RefusalBanner(
@@ -590,8 +596,17 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     final journal = _controller.lastRun?.journal;
     if (journal == null) return;
     final count =
-        journal.trashLines.length +
-        journal.items.where((line) => line.trashLocation != null).length;
+        journal.trashLines
+            .where(
+              (line) =>
+                  !journal.isTrashEntryPurged(line.side, line.trashLocation),
+            )
+            .length +
+        journal.items.where((line) {
+          final location = line.trashLocation;
+          return location != null &&
+              !journal.isTrashEntryPurged(line.side, location);
+        }).length;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -896,6 +911,123 @@ class _WarningsStrip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Rail 5's persistent aged-trash notices and cancellable purge state.
+final class _TrashNotices extends StatelessWidget {
+  const _TrashNotices({
+    required this.controller,
+    required this.l10n,
+    this.clock,
+  });
+
+  final SyncPlanController controller;
+  final AppLocalizations l10n;
+  final DateTime Function()? clock;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller.isPurgingTrash) {
+      return MaterialBanner(
+        leading: const SizedBox.square(
+          dimension: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        content: Text(l10n.syncTrashPurging),
+        actions: [
+          TextButton(
+            onPressed: controller.cancelTrashPurge,
+            child: Text(l10n.syncCancel),
+          ),
+        ],
+      );
+    }
+
+    final notices = controller.trashNotices;
+    if (notices.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final notice in notices)
+          Material(
+            color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_sweep_outlined,
+                    size: 18,
+                    color: theme.colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l10n.syncTrashNotice(
+                            notice.knownFileCount,
+                            notice.runCount,
+                          ),
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        if (notice.unjournaledRunCount > 0)
+                          Text(
+                            l10n.syncTrashUnjournaled(
+                              notice.unjournaledRunCount,
+                            ),
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        if (notice.isStale)
+                          Text(
+                            _staleLabel(context, notice.listedAt),
+                            style: theme.textTheme.labelSmall,
+                          ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: notice.canPurge
+                        ? () {
+                            final request = controller.prepareTrashPurge(
+                              notice,
+                            );
+                            if (request == null) return;
+                            unawaited(
+                              confirmSyncTrashPurge(
+                                context,
+                                controller,
+                                request,
+                              ),
+                            );
+                          }
+                        : null,
+                    child: Text(l10n.syncTrashDelete),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _staleLabel(BuildContext context, DateTime listedAt) {
+    final age = (clock?.call() ?? DateTime.now()).difference(listedAt);
+    if (age < const Duration(hours: 1)) return l10n.syncTrashAsOfRecent;
+    if (age < const Duration(days: 1)) {
+      return l10n.syncTrashAsOfHours(age.inHours);
+    }
+    if (age < const Duration(days: 30)) {
+      return l10n.syncTrashAsOfDays(age.inDays);
+    }
+    final date = MaterialLocalizations.of(
+      context,
+    ).formatMediumDate(listedAt.toLocal());
+    return l10n.syncTrashAsOf(date);
   }
 }
 
@@ -1380,6 +1512,7 @@ class _ActionBar extends StatelessWidget {
 
   bool get _runEnabled =>
       !controller.isRunning &&
+      !controller.trashPurgeBlocksActions &&
       controller.phase == SyncPlanPhase.ready &&
       controller.refusal == null &&
       (controller.stats?.hasWork ?? false) &&

@@ -157,7 +157,9 @@ final class _ExdevTrashFs extends LocalFileSystem {
       cancellation: cancellation,
       computeHash: computeHash,
     );
-    onUploadCompleted?.call();
+    if (!path.contains(syncTrashRootMarkerName)) {
+      onUploadCompleted?.call();
+    }
     return uploaded;
   }
 
@@ -167,11 +169,9 @@ final class _ExdevTrashFs extends LocalFileSystem {
     String newPath, {
     bool overwrite = false,
   }) {
-    if (newPath.contains(RemoteTrash.rootDirectoryName)) {
-      throw LocalCrossDeviceRenameException(
-        path: oldPath,
-        newPath: newPath,
-      );
+    if (newPath.contains(RemoteTrash.rootDirectoryName) &&
+        !newPath.contains(syncTrashRootMarkerName)) {
+      throw LocalCrossDeviceRenameException(path: oldPath, newPath: newPath);
     }
     return super.rename(oldPath, newPath, overwrite: overwrite);
   }
@@ -203,6 +203,19 @@ final class _FailingUpdateFs extends LocalFileSystem {
     RemoteTransferCancellation? cancellation,
     bool computeHash = true,
   }) async {
+    if (path.contains(syncTrashRootMarkerName)) {
+      return super.upload(
+        path,
+        content,
+        length: length,
+        overwrite: overwrite,
+        preserveMode: preserveMode,
+        expectedTarget: expectedTarget,
+        onProgress: onProgress,
+        cancellation: cancellation,
+        computeHash: computeHash,
+      );
+    }
     await content.drain<void>();
     await beforeFailure();
     throw RemoteFileException(

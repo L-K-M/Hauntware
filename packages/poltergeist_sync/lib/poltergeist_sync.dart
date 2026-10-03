@@ -16,3 +16,5 @@ export 'src/rsync_export.dart';
 export 'src/saved_sync_codec.dart';
 export 'src/scan.dart';
 export 'src/sync_state.dart';
+export 'src/trash_purge.dart';
+export 'src/trash_root.dart';

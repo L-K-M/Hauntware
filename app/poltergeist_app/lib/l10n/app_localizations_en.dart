@@ -5333,6 +5333,160 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncRestoreTrashed => 'Restore Trashed Files…';
 
   @override
+  String get syncPurgeTrash => 'Purge Sync Trash…';
+
+  @override
+  String syncTrashNotice(int files, int runs) {
+    String _temp0 = intl.Intl.pluralLogic(
+      files,
+      locale: localeName,
+      other: '$files trashed files',
+      one: '$files trashed file',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      runs,
+      locale: localeName,
+      other: '$runs runs',
+      one: '$runs run',
+    );
+    return '$_temp0 from $_temp1 older than 30 days — delete them?';
+  }
+
+  @override
+  String syncTrashUnjournaled(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Plus $count unjournaled runs.',
+      one: 'Plus 1 unjournaled run.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncTrashAsOf(String time) {
+    return 'As of $time; reconnect to delete.';
+  }
+
+  @override
+  String get syncTrashAsOfRecent =>
+      'As of less than an hour ago; reconnect to delete.';
+
+  @override
+  String syncTrashAsOfHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'As of $count hours ago; reconnect to delete.',
+      one: 'As of 1 hour ago; reconnect to delete.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncTrashAsOfDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'As of $count days ago; reconnect to delete.',
+      one: 'As of 1 day ago; reconnect to delete.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncTrashDelete => 'Delete…';
+
+  @override
+  String get syncTrashPurgeTitle => 'Purge sync trash?';
+
+  @override
+  String syncTrashPurgeSummary(int files, int runs) {
+    String _temp0 = intl.Intl.pluralLogic(
+      files,
+      locale: localeName,
+      other: '$files journaled files',
+      one: '$files journaled file',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      runs,
+      locale: localeName,
+      other: '$runs runs',
+      one: '$runs run',
+    );
+    return '$_temp0 from $_temp1 will be permanently deleted.';
+  }
+
+  @override
+  String get syncTrashPurgeScope => 'Sync trash is shared by host and root.';
+
+  @override
+  String get syncTrashPurgeOtherPairs =>
+      'This includes trash from other sync pairs that use the same host and root.';
+
+  @override
+  String syncTrashPurgeForeign(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This includes $count runs created by other machines.',
+      one: 'This includes 1 run created by another machine.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncTrashPurgeForfeit => 'These files can no longer be restored.';
+
+  @override
+  String get syncTrashPurgeConfirm => 'Purge';
+
+  @override
+  String get syncTrashPurging => 'Purging sync trash…';
+
+  @override
+  String syncTrashPurgeResult(int purged, int failed) {
+    String _temp0 = intl.Intl.pluralLogic(
+      purged,
+      locale: localeName,
+      other: 'Purged $purged runs',
+      one: 'Purged 1 run',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      failed,
+      locale: localeName,
+      other: ' — $failed failed',
+      one: ' — 1 failed',
+      zero: '',
+    );
+    return '$_temp0$_temp1';
+  }
+
+  @override
+  String syncTrashPurgeCancelled(int purged) {
+    String _temp0 = intl.Intl.pluralLogic(
+      purged,
+      locale: localeName,
+      other: '$purged runs',
+      one: '1 run',
+    );
+    return 'Purge cancelled after $_temp0.';
+  }
+
+  @override
+  String get syncTrashPurgeActive =>
+      'Wait for active syncs to finish, then try again.';
+
+  @override
+  String syncTrashPurgeFailed(String message) {
+    return 'Couldn’t purge sync trash: $message';
+  }
+
+  @override
+  String get syncTrashEndpointChanged =>
+      'The sync endpoint changed while sync trash was being resolved.';
+
+  @override
   String get syncCopyReport => 'Copy Report';
 
   @override
@@ -5647,6 +5801,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commandDisabledNoPlan => 'Requires an open sync plan';
+
+  @override
+  String get commandDisabledNoSyncTrash =>
+      'Requires live sync trash with no active run';
 
   @override
   String get commandDisabledNoComparableItem =>

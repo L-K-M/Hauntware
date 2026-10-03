@@ -7413,6 +7413,132 @@ abstract class AppLocalizations {
   /// **'Restore Trashed Files…'**
   String get syncRestoreTrashed;
 
+  /// Server-menu command (05 §8 rail 5): empties the active plan's live sync-trash roots after confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Purge Sync Trash…'**
+  String get syncPurgeTrash;
+
+  /// Persistent plan notice for aged sync trash. File counts are journal-derived; run counts include unjournaled directories.
+  ///
+  /// In en, this message translates to:
+  /// **'{files, plural, =1{{files} trashed file} other{{files} trashed files}} from {runs, plural, =1{{runs} run} other{{runs} runs}} older than 30 days — delete them?'**
+  String syncTrashNotice(int files, int runs);
+
+  /// Trash notice and confirmation tail for run directories whose file count cannot be derived locally.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Plus 1 unjournaled run.} other{Plus {count} unjournaled runs.}}'**
+  String syncTrashUnjournaled(int count);
+
+  /// Stale trash-cache label. Its purge action is disabled because deletion requires a live listing.
+  ///
+  /// In en, this message translates to:
+  /// **'As of {time}; reconnect to delete.'**
+  String syncTrashAsOf(String time);
+
+  /// Stale trash-cache label for a listing less than one hour old.
+  ///
+  /// In en, this message translates to:
+  /// **'As of less than an hour ago; reconnect to delete.'**
+  String get syncTrashAsOfRecent;
+
+  /// Stale trash-cache label for a listing less than one day old.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{As of 1 hour ago; reconnect to delete.} other{As of {count} hours ago; reconnect to delete.}}'**
+  String syncTrashAsOfHours(int count);
+
+  /// Stale trash-cache label for a listing less than one month old.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{As of 1 day ago; reconnect to delete.} other{As of {count} days ago; reconnect to delete.}}'**
+  String syncTrashAsOfDays(int count);
+
+  /// Aged-trash notice action opening the shared purge confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete…'**
+  String get syncTrashDelete;
+
+  /// Shared confirmation title for aged and explicit sync-trash purges.
+  ///
+  /// In en, this message translates to:
+  /// **'Purge sync trash?'**
+  String get syncTrashPurgeTitle;
+
+  /// Purge confirmation count. Journal-less runs are disclosed separately instead of inventing file counts.
+  ///
+  /// In en, this message translates to:
+  /// **'{files, plural, =1{{files} journaled file} other{{files} journaled files}} from {runs, plural, =1{{runs} run} other{{runs} runs}} will be permanently deleted.'**
+  String syncTrashPurgeSummary(int files, int runs);
+
+  /// Always-visible rail-5 confirmation scope statement.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync trash is shared by host and root.'**
+  String get syncTrashPurgeScope;
+
+  /// Rail-5 confirmation scope warning when matched journals span beyond the current pair.
+  ///
+  /// In en, this message translates to:
+  /// **'This includes trash from other sync pairs that use the same host and root.'**
+  String get syncTrashPurgeOtherPairs;
+
+  /// Explicit-purge warning for foreign device-prefix run directories.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{This includes 1 run created by another machine.} other{This includes {count} runs created by other machines.}}'**
+  String syncTrashPurgeForeign(int count);
+
+  /// Rail-5 warning that purge permanently forfeits Restore Trashed Files.
+  ///
+  /// In en, this message translates to:
+  /// **'These files can no longer be restored.'**
+  String get syncTrashPurgeForfeit;
+
+  /// Destructive confirm verb in the sync-trash purge dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Purge'**
+  String get syncTrashPurgeConfirm;
+
+  /// Plan-view progress line while a confirmed trash purge runs.
+  ///
+  /// In en, this message translates to:
+  /// **'Purging sync trash…'**
+  String get syncTrashPurging;
+
+  /// Toast after a sync-trash purge, including per-run failures.
+  ///
+  /// In en, this message translates to:
+  /// **'{purged, plural, =1{Purged 1 run} other{Purged {purged} runs}}{failed, plural, =0{} =1{ — 1 failed} other{ — {failed} failed}}'**
+  String syncTrashPurgeResult(int purged, int failed);
+
+  /// Toast after cancelling a trash purge with a partial result.
+  ///
+  /// In en, this message translates to:
+  /// **'Purge cancelled after {purged, plural, =1{1 run} other{{purged} runs}}.'**
+  String syncTrashPurgeCancelled(int purged);
+
+  /// Feedback when a purge cannot atomically reserve every target root.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for active syncs to finish, then try again.'**
+  String get syncTrashPurgeActive;
+
+  /// Feedback when the purge fails before it can return a per-run report.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t purge sync trash: {message}'**
+  String syncTrashPurgeFailed(String message);
+
+  /// Error shown when a saved remote endpoint is retargeted during sync-trash resolution.
+  ///
+  /// In en, this message translates to:
+  /// **'The sync endpoint changed while sync trash was being resolved.'**
+  String get syncTrashEndpointChanged;
+
   /// Summary-bar verb (05 §7): copies the run's per-item outcome table to the clipboard.
   ///
   /// In en, this message translates to:
@@ -7916,6 +8042,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requires an open sync plan'**
   String get commandDisabledNoPlan;
+
+  /// Palette reason under sync.purgeTrash. Cached listings never authorize purge.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires live sync trash with no active run'**
+  String get commandDisabledNoSyncTrash;
 
   /// Palette reason under Compare Selected Item while no comparable sync-plan row is focused.
   ///

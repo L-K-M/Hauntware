@@ -14,6 +14,7 @@
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'ignore.dart';
@@ -315,14 +316,14 @@ final class TreeScanner {
   /// sits outside the scanned root (then nothing extra is excluded).
   Future<String?> _trashRelative(String root, String? trashPath) async {
     if (trashPath == null) return null;
-    final String resolved;
+    late final String resolved;
     try {
       resolved = await _fileSystem.canonicalize(trashPath);
     } on RemoteFileException catch (e) {
       if (e.kind != RemoteFileErrorKind.notFound) rethrow;
-      // Trash commonly does not exist yet on a first run (the executor
-      // creates it on the first delete); nothing to exclude until then.
-      return null;
+      // Resolve the nearest existing ancestor. A lexical alias can differ
+      // from the already-canonical scan root before the first trash write.
+      resolved = await _resolveMissingTrashPath(trashPath);
     }
     final normalizedRoot = _stripTrailingSeparator(root);
     final normalizedTrash = _stripTrailingSeparator(resolved);
@@ -365,6 +366,34 @@ final class TreeScanner {
       relative = relative.replaceAll('\\', '/');
     }
     return relative.isEmpty ? null : relative;
+  }
+
+  Future<String> _resolveMissingTrashPath(String trashPath) async {
+    final context = p.Context(
+      style: _windowsVolumeShape.hasMatch(trashPath)
+          ? p.Style.windows
+          : p.Style.posix,
+    );
+    final missingNames = <String>[];
+    var ancestor = context.normalize(trashPath);
+
+    while (true) {
+      try {
+        final canonicalAncestor = await _fileSystem.canonicalize(ancestor);
+        return context.joinAll([
+          canonicalAncestor,
+          ...missingNames.reversed,
+        ]);
+      } on RemoteFileException catch (error) {
+        if (error.kind != RemoteFileErrorKind.notFound) rethrow;
+      }
+
+      final parent = context.dirname(ancestor);
+      if (parent == ancestor) return trashPath;
+
+      missingNames.add(context.basename(ancestor));
+      ancestor = parent;
+    }
   }
 
   /// Windows volume shapes: `C:\`, `C:/`, a bare `C:` drive root, or a

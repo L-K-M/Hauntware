@@ -6659,6 +6659,123 @@
   "@syncRestoreTrashed": {
     "description": "Summary-bar verb (05 §7/§8 rail 9): puts the run's trashed entries back."
   },
+  "syncPurgeTrash": "Purge Sync Trash…",
+  "@syncPurgeTrash": {
+    "description": "Server-menu command (05 §8 rail 5): empties the active plan's live sync-trash roots after confirmation."
+  },
+  "syncTrashNotice": "{files, plural, =1{{files} trashed file} other{{files} trashed files}} from {runs, plural, =1{{runs} run} other{{runs} runs}} older than 30 days — delete them?",
+  "@syncTrashNotice": {
+    "description": "Persistent plan notice for aged sync trash. File counts are journal-derived; run counts include unjournaled directories.",
+    "placeholders": {
+      "files": {"type": "int"},
+      "runs": {"type": "int"}
+    }
+  },
+  "syncTrashUnjournaled": "{count, plural, =1{Plus 1 unjournaled run.} other{Plus {count} unjournaled runs.}}",
+  "@syncTrashUnjournaled": {
+    "description": "Trash notice and confirmation tail for run directories whose file count cannot be derived locally.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "syncTrashAsOf": "As of {time}; reconnect to delete.",
+  "@syncTrashAsOf": {
+    "description": "Stale trash-cache label. Its purge action is disabled because deletion requires a live listing.",
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+  "syncTrashAsOfRecent": "As of less than an hour ago; reconnect to delete.",
+  "@syncTrashAsOfRecent": {
+    "description": "Stale trash-cache label for a listing less than one hour old."
+  },
+  "syncTrashAsOfHours": "{count, plural, =1{As of 1 hour ago; reconnect to delete.} other{As of {count} hours ago; reconnect to delete.}}",
+  "@syncTrashAsOfHours": {
+    "description": "Stale trash-cache label for a listing less than one day old.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "syncTrashAsOfDays": "{count, plural, =1{As of 1 day ago; reconnect to delete.} other{As of {count} days ago; reconnect to delete.}}",
+  "@syncTrashAsOfDays": {
+    "description": "Stale trash-cache label for a listing less than one month old.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "syncTrashDelete": "Delete…",
+  "@syncTrashDelete": {
+    "description": "Aged-trash notice action opening the shared purge confirmation."
+  },
+  "syncTrashPurgeTitle": "Purge sync trash?",
+  "@syncTrashPurgeTitle": {
+    "description": "Shared confirmation title for aged and explicit sync-trash purges."
+  },
+  "syncTrashPurgeSummary": "{files, plural, =1{{files} journaled file} other{{files} journaled files}} from {runs, plural, =1{{runs} run} other{{runs} runs}} will be permanently deleted.",
+  "@syncTrashPurgeSummary": {
+    "description": "Purge confirmation count. Journal-less runs are disclosed separately instead of inventing file counts.",
+    "placeholders": {
+      "files": {"type": "int"},
+      "runs": {"type": "int"}
+    }
+  },
+  "syncTrashPurgeScope": "Sync trash is shared by host and root.",
+  "@syncTrashPurgeScope": {
+    "description": "Always-visible rail-5 confirmation scope statement."
+  },
+  "syncTrashPurgeOtherPairs": "This includes trash from other sync pairs that use the same host and root.",
+  "@syncTrashPurgeOtherPairs": {
+    "description": "Rail-5 confirmation scope warning when matched journals span beyond the current pair."
+  },
+  "syncTrashPurgeForeign": "{count, plural, =1{This includes 1 run created by another machine.} other{This includes {count} runs created by other machines.}}",
+  "@syncTrashPurgeForeign": {
+    "description": "Explicit-purge warning for foreign device-prefix run directories.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "syncTrashPurgeForfeit": "These files can no longer be restored.",
+  "@syncTrashPurgeForfeit": {
+    "description": "Rail-5 warning that purge permanently forfeits Restore Trashed Files."
+  },
+  "syncTrashPurgeConfirm": "Purge",
+  "@syncTrashPurgeConfirm": {
+    "description": "Destructive confirm verb in the sync-trash purge dialog."
+  },
+  "syncTrashPurging": "Purging sync trash…",
+  "@syncTrashPurging": {
+    "description": "Plan-view progress line while a confirmed trash purge runs."
+  },
+  "syncTrashPurgeResult": "{purged, plural, =1{Purged 1 run} other{Purged {purged} runs}}{failed, plural, =0{} =1{ — 1 failed} other{ — {failed} failed}}",
+  "@syncTrashPurgeResult": {
+    "description": "Toast after a sync-trash purge, including per-run failures.",
+    "placeholders": {
+      "purged": {"type": "int"},
+      "failed": {"type": "int"}
+    }
+  },
+  "syncTrashPurgeCancelled": "Purge cancelled after {purged, plural, =1{1 run} other{{purged} runs}}.",
+  "@syncTrashPurgeCancelled": {
+    "description": "Toast after cancelling a trash purge with a partial result.",
+    "placeholders": {
+      "purged": {"type": "int"}
+    }
+  },
+  "syncTrashPurgeActive": "Wait for active syncs to finish, then try again.",
+  "@syncTrashPurgeActive": {
+    "description": "Feedback when a purge cannot atomically reserve every target root."
+  },
+  "syncTrashPurgeFailed": "Couldn’t purge sync trash: {message}",
+  "@syncTrashPurgeFailed": {
+    "description": "Feedback when the purge fails before it can return a per-run report.",
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "syncTrashEndpointChanged": "The sync endpoint changed while sync trash was being resolved.",
+  "@syncTrashEndpointChanged": {
+    "description": "Error shown when a saved remote endpoint is retargeted during sync-trash resolution."
+  },
   "syncCopyReport": "Copy Report",
   "@syncCopyReport": {
     "description": "Summary-bar verb (05 §7): copies the run's per-item outcome table to the clipboard."
@@ -7030,6 +7147,10 @@
   "commandDisabledNoPlan": "Requires an open sync plan",
   "@commandDisabledNoPlan": {
     "description": "Palette reason under Copy rsync Command while the active tab is not a sync plan."
+  },
+  "commandDisabledNoSyncTrash": "Requires live sync trash with no active run",
+  "@commandDisabledNoSyncTrash": {
+    "description": "Palette reason under sync.purgeTrash. Cached listings never authorize purge."
   },
   "commandDisabledNoComparableItem": "Requires a selected file present on both sides",
   "@commandDisabledNoComparableItem": {

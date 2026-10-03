@@ -15,6 +15,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'plan.dart';
@@ -181,20 +182,73 @@ final class SyncRunJournal {
   final List<SyncJournalRmdirLine> rmdirLines = [];
   SyncJournalSummary? summary;
 
-  /// Set by a `purged` marker line — rail 5's purge stamps it into every
-  /// journal it matched, and it is what releases the journal for
-  /// pruning (05 §8 rail 9).
-  var purged = false;
+  var _legacyPurged = false;
+  final Set<String> _purgedTrashScopes = {};
+
+  /// Whether every root carrying this journal's trash has been purged.
+  /// Legacy markers without a root retain their original run-wide meaning.
+  bool get purged {
+    if (_legacyPurged) return true;
+    final scopes = _recordedTrashScopes;
+    return scopes.isNotEmpty && scopes.every(_purgedTrashScopes.contains);
+  }
+
+  /// Any purge marker forbids retry from appending new trash behind an
+  /// already-purged root marker in the same journal.
+  bool get hasPurgeMarker => _legacyPurged || _purgedTrashScopes.isNotEmpty;
 
   File get _file => File(path);
 
   /// Whether any recorded trash entry is still unrestored — the
   /// live-trash retention exception (05 §8 rail 9). Evaluated locally,
   /// no existence probe of the trash itself.
-  bool get hasUnpurgedTrash =>
-      !purged &&
-      (trashLines.isNotEmpty ||
-          items.any((line) => line.trashLocation != null));
+  bool get hasUnpurgedTrash {
+    if (_legacyPurged) return false;
+    return _recordedTrashScopes.any(
+      (scope) => !_purgedTrashScopes.contains(scope),
+    );
+  }
+
+  Set<String> get _recordedTrashScopes => {
+    for (final line in items)
+      if (line.trashLocation != null)
+        trashScopeForEntry(line.side, line.trashLocation!),
+    for (final line in trashLines)
+      trashScopeForEntry(line.side, line.trashLocation),
+  };
+
+  String trashScopeForEntry(SyncSide side, String trashLocation) =>
+      trashScopeForSide(side) ?? _trashRootFromLocation(trashLocation);
+
+  String? trashScopeForSide(SyncSide side) => switch (side) {
+    SyncSide.left => record.trashScopeLeft,
+    SyncSide.right => record.trashScopeRight,
+  };
+
+  String? _legacyTrashScopeForSide(SyncSide side) {
+    for (final line in items) {
+      if (line.side == side && line.trashLocation != null) {
+        return _trashRootFromLocation(line.trashLocation!);
+      }
+    }
+    for (final line in trashLines) {
+      if (line.side == side) return _trashRootFromLocation(line.trashLocation);
+    }
+
+    return null;
+  }
+
+  bool isTrashEntryPurged(SyncSide side, String trashLocation) =>
+      _legacyPurged ||
+      _purgedTrashScopes.contains(trashScopeForEntry(side, trashLocation));
+
+  bool isTrashScopePurged(String trashScope) =>
+      _legacyPurged || _purgedTrashScopes.contains(trashScope);
+
+  /// Mirrors a marker appended through another journal instance.
+  void noteTrashScopePurged(String trashScope) {
+    _purgedTrashScopes.add(trashScope);
+  }
 
   /// Creates the journal file for a run and writes its header line.
   static Future<SyncRunJournal> create(
@@ -275,7 +329,12 @@ final class SyncRunJournal {
         case 'summary':
           journal?.summary = _summaryFromJson(decoded);
         case 'purged':
-          journal?.purged = true;
+          journal?._legacyPurged = true;
+        case 'trashScopePurged':
+          final trashScope = decoded['trashScope'];
+          if (trashScope is String && trashScope.isNotEmpty) {
+            journal?.noteTrashScopePurged(trashScope);
+          }
         default:
           // Unknown line kinds are skipped so a newer writer never
           // wedges an older reader's restore path.
@@ -379,11 +438,18 @@ final class SyncRunJournal {
     summary = value;
   }
 
-  /// Rail 5's purge marker — releases the journal for pruning and makes
-  /// the retention exception locally evaluable.
-  Future<void> markPurged() async {
-    await _append(const <String, Object?>{'type': 'purged'});
-    purged = true;
+  /// Rail 5's purge marker. New writers scope it to one physical
+  /// host/root identity; null preserves the legacy run-wide marker.
+  Future<void> markPurged({String? trashScope}) async {
+    await _append(<String, Object?>{
+      'type': trashScope == null ? 'purged' : 'trashScopePurged',
+      if (trashScope != null) 'trashScope': trashScope,
+    });
+    if (trashScope == null) {
+      _legacyPurged = true;
+    } else {
+      _purgedTrashScopes.add(trashScope);
+    }
   }
 
   /// Appends one complete line with an immediate flush. A fresh open
@@ -447,6 +513,30 @@ final class SyncRunJournal {
       }
     }
   }
+}
+
+String _trashRootFromLocation(String trashLocation) {
+  final context = _journalTrashPathContext(trashLocation);
+  return _normalizeJournalTrashRoot(
+    context.dirname(context.dirname(trashLocation)),
+  );
+}
+
+String _normalizeJournalTrashRoot(String path) {
+  final context = _journalTrashPathContext(path);
+  final normalized = context.normalize(path);
+  if (normalized == context.rootPrefix(normalized)) return normalized;
+
+  final trailingSeparators = RegExp('${RegExp.escape(context.separator)}+\$');
+  return normalized.replaceFirst(trailingSeparators, '');
+}
+
+p.Context _journalTrashPathContext(String path) {
+  final hasWindowsDrive = RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
+  final hasOnlyWindowsSeparators = path.contains(r'\') && !path.contains('/');
+  if (hasWindowsDrive || hasOnlyWindowsSeparators) return p.windows;
+
+  return p.posix;
 }
 
 /// One entry the restore path must put back.
@@ -521,7 +611,8 @@ Future<SyncRestoreReport> restoreTrashedFiles(
 
   final trashed = <_TrashedEntry>[
     for (final line in journal.items)
-      if (line.trashLocation != null)
+      if (line.trashLocation != null &&
+          !journal.isTrashEntryPurged(line.side, line.trashLocation!))
         _TrashedEntry(
           relativePath: line.relativePath,
           side: line.side,
@@ -531,14 +622,15 @@ Future<SyncRestoreReport> restoreTrashedFiles(
           parentPath: line.relativePath,
         ),
     for (final line in journal.trashLines)
-      _TrashedEntry(
-        relativePath: line.relativePath,
-        side: line.side,
-        trashLocation: line.trashLocation,
-        bytes: line.bytes,
-        sha256: line.trashContentSha256,
-        parentPath: line.parentPath,
-      ),
+      if (!journal.isTrashEntryPurged(line.side, line.trashLocation))
+        _TrashedEntry(
+          relativePath: line.relativePath,
+          side: line.side,
+          trashLocation: line.trashLocation,
+          bytes: line.bytes,
+          sha256: line.trashContentSha256,
+          parentPath: line.parentPath,
+        ),
   ];
 
   final restored = <String>[];
@@ -581,6 +673,13 @@ Future<SyncRestoreReport> restoreTrashedFiles(
           b.relativePath.split('/').length,
     );
   for (final line in emptiedDirs) {
+    final trashScope =
+        journal.trashScopeForSide(line.side) ??
+        journal._legacyTrashScopeForSide(line.side) ??
+        _normalizeJournalTrashRoot(
+          _journalTrashRootForSide(journal, line.side, rootFor(line.side)),
+        );
+    if (journal.isTrashScopePurged(trashScope)) continue;
     final fs = fsFor(line.side);
     final abs = remoteJoin(rootFor(line.side), line.relativePath);
     if (await _statOrNull(fs, abs) != null) continue;
@@ -594,6 +693,18 @@ Future<SyncRestoreReport> restoreTrashedFiles(
     restored: List.unmodifiable(restored),
     skipped: List.unmodifiable(skipped),
   );
+}
+
+String _journalTrashRootForSide(
+  SyncRunJournal journal,
+  SyncSide side,
+  String syncRoot,
+) {
+  final configured = switch (side) {
+    SyncSide.left => journal.record.rules.trashPathLeft,
+    SyncSide.right => journal.record.rules.trashPathRight,
+  };
+  return configured ?? remoteJoin(syncRoot, RemoteTrash.rootDirectoryName);
 }
 
 /// Restores one trashed entry; returns null on success or the skip
@@ -986,6 +1097,14 @@ Map<String, Object?> _recordToJson(SyncRunRecord record) =>
       'runId': record.runId,
       'pairId': record.pairId,
       'startedAt': record.startedAt.toIso8601String(),
+      if (record.trashScopeLeft != null)
+        'trashScopeLeft': record.trashScopeLeft,
+      if (record.trashScopeRight != null)
+        'trashScopeRight': record.trashScopeRight,
+      if (record.trashLocationKeyLeft != null)
+        'trashLocationKeyLeft': record.trashLocationKeyLeft,
+      if (record.trashLocationKeyRight != null)
+        'trashLocationKeyRight': record.trashLocationKeyRight,
       'rules': _rulesToJson(record.rules),
       'totals': _totalsToJson(record.totals),
       'warnings': [
@@ -1003,6 +1122,10 @@ SyncRunRecord _recordFromJson(Map<String, Object?> json) => SyncRunRecord(
   runId: json['runId']! as String,
   pairId: json['pairId']! as String,
   startedAt: DateTime.parse(json['startedAt']! as String),
+  trashScopeLeft: json['trashScopeLeft'] as String?,
+  trashScopeRight: json['trashScopeRight'] as String?,
+  trashLocationKeyLeft: json['trashLocationKeyLeft'] as String?,
+  trashLocationKeyRight: json['trashLocationKeyRight'] as String?,
   rules: _rulesFromJson(json['rules']! as Map<String, Object?>),
   totals: _totalsFromJson(json['totals']! as Map<String, Object?>),
   warnings: [

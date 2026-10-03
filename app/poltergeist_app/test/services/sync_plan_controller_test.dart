@@ -15,6 +15,7 @@ import 'package:poltergeist_app/services/sync_environment.dart';
 import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
 import 'package:poltergeist_app/services/sync_state_store.dart';
+import 'package:poltergeist_app/services/sync_trash_activity.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
@@ -170,6 +171,79 @@ void main() {
       expect(controller.comparisonAvailableFor(comparable), isFalse);
       expect(controller.comparisonFor(comparable), isNull);
       await rescan;
+    });
+
+    test('relative trash stays excluded and receives update backups', () async {
+      final scratch = Directory.systemTemp.createTempSync(
+        'poltergeist-relative-trash-',
+      );
+      addTearDown(() => scratch.deleteSync(recursive: true));
+      final leftRoot = Directory(p.join(scratch.path, 'left'))..createSync();
+      final rightRoot = Directory(p.join(scratch.path, 'right'))..createSync();
+      File(
+        p.join(leftRoot.path, 'document.txt'),
+      ).writeAsStringSync('new content');
+      File(p.join(rightRoot.path, 'document.txt')).writeAsStringSync('old');
+      final trashRoot = Directory(p.join(rightRoot.path, 'trash', 'custom'))
+        ..createSync(recursive: true);
+      await resolveSyncTrashRoot(
+        LocalFileSystem(),
+        trashRoot.path,
+        pathStyle: SyncTrashPathStyle.posix,
+        access: SyncTrashRootAccess.createOrClaim,
+      );
+      const priorRunId = '12345678-12345678-1234-4123-a123-123456789abc';
+      final priorRun = Directory(p.join(trashRoot.path, priorRunId))
+        ..createSync();
+      File(p.join(priorRun.path, '000001-old.txt')).writeAsStringSync('old');
+      final pair = SyncPair(
+        id: 'relative-trash',
+        name: 'relative trash',
+        left: LocalEndpoint(leftRoot.path),
+        right: LocalEndpoint(rightRoot.path),
+        rules: const SyncRuleSet(
+          direction: SyncDirection.leftToRight,
+          backups: BackupPolicy.trash,
+          trashPathRight: 'trash/custom',
+        ),
+      );
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: p.join(scratch.path, 'sync_runs'),
+        deviceId: () async => 'test-device',
+      );
+      final controller = SyncPlanController(
+        pair: pair,
+        environment: environment,
+        syncTasks: SyncQueueTasks(),
+        rsyncEndpoints: resolveRsyncEndpoints,
+      );
+      addTearDown(controller.dispose);
+
+      await _ready(controller);
+
+      final plannedPaths = controller.plan!.items
+          .map((item) => item.relativePath)
+          .toList();
+      expect(plannedPaths, contains('document.txt'));
+      expect(
+        plannedPaths.where(
+          (path) => path == 'trash/custom' || path.startsWith('trash/custom/'),
+        ),
+        isEmpty,
+      );
+      await controller.run();
+      expect(controller.phase, SyncPlanPhase.completed);
+      expect(
+        File(p.join(rightRoot.path, 'document.txt')).readAsStringSync(),
+        'new content',
+      );
+      final runDirectories = trashRoot
+          .listSync()
+          .whereType<Directory>()
+          .where((directory) => isSyncTrashRunId(p.basename(directory.path)))
+          .toList();
+      expect(runDirectories, hasLength(2));
     });
 
     for (final variant in [
@@ -735,6 +809,30 @@ void main() {
       controller.start();
       await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
       expect(controller.stats!.newFilesTo(SyncSide.right), 2);
+      expect(
+        File(
+          p.join(
+            left.path,
+            RemoteTrash.rootDirectoryName,
+            syncTrashRootMarkerName,
+            'identity',
+          ),
+        ).existsSync(),
+        isTrue,
+      );
+      expect(
+        File(
+          p.join(
+            right.path,
+            RemoteTrash.rootDirectoryName,
+            syncTrashRootMarkerName,
+            'identity',
+          ),
+        ).existsSync(),
+        isTrue,
+      );
+      await pumpUntil(() => !controller.trashPurgeBlocksActions);
+      expect(controller.trashPurgeBlocksActions, isFalse);
 
       await controller.run();
       expect(controller.phase, SyncPlanPhase.completed);
@@ -749,6 +847,28 @@ void main() {
       expect(task.items.length, 2);
       // sync_state landed under the canonical pair id.
       expect(controller.pairId, isNotEmpty);
+    });
+
+    test('a changed trash marker blocks the reviewed run', () async {
+      File('${left.path}/a.txt').writeAsStringSync('alpha');
+      final controller = realController(const SyncRuleSet());
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      final marker = File(
+        p.join(
+          right.path,
+          RemoteTrash.rootDirectoryName,
+          syncTrashRootMarkerName,
+          'identity',
+        ),
+      );
+      marker.writeAsStringSync('changed');
+
+      await controller.run();
+
+      expect(controller.phase, SyncPlanPhase.failed);
+      expect(File('${right.path}/a.txt').existsSync(), isFalse);
     });
 
     test('a failed item surfaces failed phase and retries to done',
@@ -807,6 +927,143 @@ void main() {
       final report = await controller.restoreTrashed();
       expect(report.restored, isNotEmpty);
       expect(File('${right.path}/old.txt').readAsStringSync(), 'old');
+    });
+
+    test('restore reserves its trash roots against purge', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final fileSystem = _RestoreGateFileSystem();
+      final activity = SyncTrashActivityRegistry();
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: '${scratch.path}/sync_runs',
+        deviceId: () async => 'test-device',
+        localFileSystem: () => fileSystem,
+        trashActivity: activity,
+      );
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+
+      final restore = controller.restoreTrashed();
+      await fileSystem.restoreStarted.future;
+      final location = await environment.resolveTrashLocation(
+        endpoint: controller.pair.right,
+        canonicalRoot: right.path,
+        rules: controller.pair.rules,
+        side: SyncSide.right,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final purge = await activity.tryBeginPurge([
+        location,
+      ], SyncTrashPurgeAdmission.requireIdle);
+      final restoreHeldLease = purge == null;
+      await purge?.close();
+      fileSystem.releaseRestore();
+      await restore;
+
+      expect(restoreHeldLease, isTrue);
+    });
+
+    test('restore blocks another run on the same controller', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final fileSystem = _RestoreGateFileSystem();
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: testSyncEnvironment(
+          scratch,
+          localFileSystem: () => fileSystem,
+        ),
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+
+      final restore = controller.restoreTrashed();
+      await fileSystem.restoreStarted.future;
+      final restoringRun = controller.lastRun;
+      await controller.run(deleteConfirmed: true);
+
+      expect(controller.lastRun, same(restoringRun));
+      fileSystem.releaseRestore();
+      await restore;
+    });
+
+    test('dispose during restore preflight prevents restoration', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final fileSystem = _TrashVerificationGateFileSystem();
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: testSyncEnvironment(
+          scratch,
+          localFileSystem: () => fileSystem,
+        ),
+      );
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+      fileSystem.armVerification();
+
+      final restore = controller.restoreTrashed();
+      await fileSystem.verificationStarted.future;
+      controller.dispose();
+      fileSystem.releaseVerification();
+      final report = await restore;
+
+      expect(report.restored, isEmpty);
+      expect(File('${right.path}/old.txt').existsSync(), isFalse);
+    });
+
+    test('purging the last run disables restore immediately', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+      expect(controller.canRestore, isTrue);
+
+      final request = await controller.prepareFullTrashPurgeLive();
+      expect(request, isNotNull);
+      await controller.purgeTrash(request!);
+
+      expect(controller.canRestore, isFalse);
+    });
+
+    test('restore reopens a journal purged by another process', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+      expect(controller.canRestore, isTrue);
+
+      final staleRun = controller.lastRun!;
+      final scope = staleRun.journal.record.trashScopeRight!;
+      final external = await SyncRunJournal.open(staleRun.journal.path);
+      await external.markPurged(trashScope: scope);
+      expect(controller.canRestore, isTrue);
+
+      final report = await controller.restoreTrashed();
+
+      expect(report.restored, isEmpty);
+      expect(File('${right.path}/old.txt').existsSync(), isFalse);
+      expect(controller.canRestore, isFalse);
     });
 
     test('the typed confirmation carries through to a real run',
@@ -872,6 +1129,61 @@ void main() {
       expect(tasks.cancel(task.id), isTrue);
       await pumpUntil(() => !controller.isRunning);
       expect(controller.phase, SyncPlanPhase.cancelled);
+    });
+
+    test('retry reopens a journal purged by another process', () async {
+      File('${left.path}/a.txt').writeAsStringSync('x');
+      final gateFs = _CancelAwareGateFs()..failUploads = true;
+      final controller = realController(
+        const SyncRuleSet(),
+        environment: testSyncEnvironment(
+          scratch,
+          localFileSystem: () => gateFs,
+        ),
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run();
+      expect(controller.canRetryFailed, isTrue);
+
+      final staleRun = controller.lastRun!;
+      final external = await SyncRunJournal.open(staleRun.journal.path);
+      await external.markPurged(trashScope: external.record.trashScopeRight);
+      gateFs.failUploads = false;
+      expect(controller.canRetryFailed, isTrue);
+
+      await controller.retryFailed();
+
+      expect(staleRun.plan.items.single.status, SyncItemStatus.failed);
+      expect(controller.canRetryFailed, isFalse);
+    });
+
+    test('dispose during retry preflight does not start the retry', () async {
+      File('${left.path}/a.txt').writeAsStringSync('x');
+      final fileSystem = _TrashVerificationGateFileSystem()..failUploads = true;
+      final controller = realController(
+        const SyncRuleSet(),
+        environment: testSyncEnvironment(
+          scratch,
+          localFileSystem: () => fileSystem,
+        ),
+      );
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run();
+      expect(controller.phase, SyncPlanPhase.failed);
+      fileSystem.failUploads = false;
+      fileSystem.armVerification();
+
+      final retry = controller.retryFailed();
+      await fileSystem.verificationStarted.future;
+      controller.dispose();
+      fileSystem.releaseVerification();
+      await retry;
+
+      expect(controller.phase, SyncPlanPhase.failed);
+      expect(File('${right.path}/a.txt').existsSync(), isFalse);
     });
 
     test('a fresh run retires the previous task row\u2019s retry', () async {
@@ -1215,7 +1527,9 @@ final class _CancelAwareGateFs extends LocalFileSystem {
     // the item is `failed`, which is the status `retryFailed` re-runs
     // (a vanished source reads `conflicted` and is deliberately not
     // retryable).
-    if (failUploads) throw StateError('injected upload failure');
+    if (failUploads && !path.contains(syncTrashRootMarkerName)) {
+      throw StateError('injected upload failure');
+    }
     final gate = _gate;
     if (gate != null) {
       await Future.any([
@@ -1224,6 +1538,83 @@ final class _CancelAwareGateFs extends LocalFileSystem {
       ]);
       cancellation?.throwIfCancelled();
     }
+    return super.upload(
+      path,
+      content,
+      length: length,
+      overwrite: overwrite,
+      preserveMode: preserveMode,
+      expectedTarget: expectedTarget,
+      onProgress: onProgress,
+      cancellation: cancellation,
+      computeHash: computeHash,
+    );
+  }
+}
+
+final class _RestoreGateFileSystem extends LocalFileSystem {
+  final Completer<void> restoreStarted = Completer<void>();
+  final Completer<void> _restoreRelease = Completer<void>();
+
+  void releaseRestore() {
+    if (!_restoreRelease.isCompleted) _restoreRelease.complete();
+  }
+
+  @override
+  Future<void> rename(
+    String oldPath,
+    String newPath, {
+    bool overwrite = false,
+  }) async {
+    if (oldPath.contains(RemoteTrash.rootDirectoryName) &&
+        !oldPath.contains(syncTrashRootMarkerName)) {
+      if (!restoreStarted.isCompleted) restoreStarted.complete();
+      await _restoreRelease.future;
+    }
+
+    return super.rename(oldPath, newPath, overwrite: overwrite);
+  }
+}
+
+final class _TrashVerificationGateFileSystem extends LocalFileSystem {
+  final Completer<void> verificationStarted = Completer<void>();
+  final Completer<void> _verificationRelease = Completer<void>();
+  var _gateVerification = false;
+  var failUploads = false;
+
+  void armVerification() => _gateVerification = true;
+
+  void releaseVerification() {
+    if (!_verificationRelease.isCompleted) _verificationRelease.complete();
+  }
+
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
+    if (_gateVerification && path.contains(syncTrashRootMarkerName)) {
+      _gateVerification = false;
+      if (!verificationStarted.isCompleted) verificationStarted.complete();
+      await _verificationRelease.future;
+    }
+
+    return super.stat(path, followLinks: followLinks);
+  }
+
+  @override
+  Future<RemoteFileEntry> upload(
+    String path,
+    Stream<List<int>> content, {
+    int? length,
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) {
+    if (failUploads && !path.contains(syncTrashRootMarkerName)) {
+      throw StateError('injected upload failure');
+    }
+
     return super.upload(
       path,
       content,

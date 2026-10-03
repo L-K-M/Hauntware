@@ -116,6 +116,7 @@ import 'sync/sync_commands.dart';
 import 'sync/sync_pair_editor.dart';
 import 'sync/sync_plan_format.dart' show syncEndpointLabel;
 import 'sync/sync_setup_sheet.dart';
+import 'sync/sync_trash_purge_dialog.dart';
 import 'top_toast.dart';
 import 'workspace/workspace_commands.dart';
 
@@ -1816,12 +1817,16 @@ class _WorkspaceShellState extends State<WorkspaceShell>
           copyRsyncEnabled: () =>
               !_commandSessionActive &&
               _activeSyncSession?.canExportRsync == true,
+          purgeTrashEnabled: () =>
+              !_commandSessionActive &&
+              _activeSyncSession?.canPurgeTrash == true,
           compareEnabled: () =>
               !_commandSessionActive &&
               _activeSyncSession?.canCompareSelection == true,
           synchronizePanes: (context) => _synchronizePanes(),
           newSavedSync: (context) => _newSavedSync(),
           copyRsync: (context) => _copyRsyncCommand(context),
+          purgeTrash: _purgeSyncTrash,
           compareSelected: _openSyncComparison,
         ),
       // `queue.togglePause` registers unconditionally (D21): its menu
@@ -4006,6 +4011,16 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     final session = _activeSyncSession;
     if (session == null) return;
     await copyRsyncCommand(context, session);
+  }
+
+  /// Rail 5's explicit escape hatch: select all live trash roots, then
+  /// use the same scope-and-forfeit confirmation as the aged notice.
+  Future<void> _purgeSyncTrash(BuildContext context) async {
+    final session = _activeSyncSession;
+    if (session == null) return;
+    final request = await session.prepareFullTrashPurgeLive();
+    if (!context.mounted || request == null) return;
+    await confirmSyncTrashPurge(context, session, request);
   }
 
   /// Opens 06 §6 from the focused row resolved by the active plan.

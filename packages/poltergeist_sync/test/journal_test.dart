@@ -3,6 +3,7 @@ library;
 
 import 'dart:io';
 
+import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 import 'package:test/test.dart';
 
@@ -166,6 +167,192 @@ void main() {
     final replayed = await SyncRunJournal.open(written.path);
     expect(replayed.purged, isTrue);
     expect(replayed.hasUnpurgedTrash, isFalse);
+  });
+
+  test('root-scoped markers release only their own trash', () async {
+    const leftScope = 'left-host:/trash';
+    const rightScope = 'right-host:/trash';
+    final journal = await SyncRunJournal.create(
+      runsDir.path,
+      SyncRunRecord(
+        runId: 'run-scopes',
+        pairId: 'pair-1',
+        startedAt: DateTime.now(),
+        trashScopeLeft: leftScope,
+        trashScopeRight: rightScope,
+        rules: rules,
+        totals: const PlanTotals(
+          counts: {},
+          bytes: {},
+          replacedFiles: 0,
+          replacedBytes: 0,
+        ),
+        warnings: const [],
+      ),
+    );
+    await journal.appendTrash(
+      const SyncJournalTrashLine(
+        parentPath: 'left.txt',
+        relativePath: 'left.txt',
+        side: SyncSide.left,
+        trashLocation: '/trash/run-scopes/000001-left.txt',
+        bytes: 1,
+      ),
+    );
+    await journal.appendTrash(
+      const SyncJournalTrashLine(
+        parentPath: 'right.txt',
+        relativePath: 'right.txt',
+        side: SyncSide.right,
+        trashLocation: '/trash/run-scopes/000002-right.txt',
+        bytes: 1,
+      ),
+    );
+
+    await journal.markPurged(trashScope: leftScope);
+    var replayed = await SyncRunJournal.open(journal.path);
+    expect(replayed.record.trashScopeLeft, leftScope);
+    expect(replayed.record.trashScopeRight, rightScope);
+    expect(replayed.hasPurgeMarker, isTrue);
+    expect(replayed.purged, isFalse);
+    expect(replayed.hasUnpurgedTrash, isTrue);
+    expect(
+      replayed.isTrashEntryPurged(
+        SyncSide.left,
+        '/trash/run-scopes/000001-left.txt',
+      ),
+      isTrue,
+    );
+    expect(
+      replayed.isTrashEntryPurged(
+        SyncSide.right,
+        '/trash/run-scopes/000002-right.txt',
+      ),
+      isFalse,
+    );
+
+    await replayed.markPurged(trashScope: rightScope);
+    replayed = await SyncRunJournal.open(journal.path);
+    expect(replayed.purged, isTrue);
+    expect(replayed.hasUnpurgedTrash, isFalse);
+  });
+
+  test('legacy run-wide marker remains compatible', () async {
+    final journal = await writeRun('run-legacy-purge');
+    await File(
+      journal.path,
+    ).writeAsString('{"v":1,"type":"purged"}\n', mode: FileMode.append);
+
+    final replayed = await SyncRunJournal.open(journal.path);
+    expect(replayed.hasPurgeMarker, isTrue);
+    expect(replayed.purged, isTrue);
+    expect(replayed.hasUnpurgedTrash, isFalse);
+  });
+
+  test('legacy Windows trash paths derive their root scope', () async {
+    final journal = await SyncRunJournal.create(
+      runsDir.path,
+      record('run-windows-trash'),
+    );
+    const trashLocation = r'C:\Trash\run-windows-trash\000001-document.txt';
+    await journal.appendTrash(
+      const SyncJournalTrashLine(
+        parentPath: 'document.txt',
+        relativePath: 'document.txt',
+        side: SyncSide.right,
+        trashLocation: trashLocation,
+        bytes: 1,
+      ),
+    );
+
+    expect(
+      journal.trashScopeForEntry(SyncSide.right, trashLocation),
+      r'C:\Trash',
+    );
+
+    await journal.markPurged(trashScope: r'C:\Trash');
+
+    expect(journal.purged, isTrue);
+    expect(journal.hasUnpurgedTrash, isFalse);
+  });
+
+  test('legacy relative trash skips rmdir only on purged side', () async {
+    final leftRoot = Directory('${runsDir.path}/left')..createSync();
+    final rightRoot = Directory('${runsDir.path}/right')..createSync();
+    const runId = 'run-relative-trash';
+    final leftTrashRoot = '${leftRoot.path}/trash-left';
+    final rightTrashRoot = '${rightRoot.path}/trash-right';
+    final leftTrash = '$leftTrashRoot/$runId/000001-left.txt';
+    final rightTrash = '$rightTrashRoot/$runId/000002-right.txt';
+    File(leftTrash)
+      ..createSync(recursive: true)
+      ..writeAsStringSync('l');
+    File(rightTrash)
+      ..createSync(recursive: true)
+      ..writeAsStringSync('r');
+    final journal = await SyncRunJournal.create(
+      runsDir.path,
+      SyncRunRecord(
+        runId: runId,
+        pairId: 'pair-1',
+        startedAt: DateTime.now(),
+        rules: const SyncRuleSet(
+          trashPathLeft: 'trash-left',
+          trashPathRight: 'trash-right',
+        ),
+        totals: const PlanTotals(
+          counts: {},
+          bytes: {},
+          replacedFiles: 0,
+          replacedBytes: 0,
+        ),
+        warnings: const [],
+      ),
+    );
+    await journal.appendTrash(
+      SyncJournalTrashLine(
+        parentPath: 'left.txt',
+        relativePath: 'left.txt',
+        side: SyncSide.left,
+        trashLocation: leftTrash,
+        bytes: 1,
+      ),
+    );
+    await journal.appendTrash(
+      SyncJournalTrashLine(
+        parentPath: 'right.txt',
+        relativePath: 'right.txt',
+        side: SyncSide.right,
+        trashLocation: rightTrash,
+        bytes: 1,
+      ),
+    );
+    await journal.appendRmdir(
+      const SyncJournalRmdirLine(
+        relativePath: 'left-empty',
+        side: SyncSide.left,
+        parentPath: 'left-empty',
+      ),
+    );
+    await journal.appendRmdir(
+      const SyncJournalRmdirLine(
+        relativePath: 'right-empty',
+        side: SyncSide.right,
+        parentPath: 'right-empty',
+      ),
+    );
+    await journal.markPurged(trashScope: leftTrashRoot);
+    await Directory(leftTrashRoot).delete(recursive: true);
+
+    final report = await restoreTrashedFiles(
+      journal,
+      fsFor: (_) => LocalFileSystem(),
+      rootFor: (side) => side == SyncSide.left ? leftRoot.path : rightRoot.path,
+    );
+
+    expect(report.restored, ['right.txt']);
+    expect(Directory('${leftRoot.path}/left-empty').existsSync(), isFalse);
+    expect(Directory('${rightRoot.path}/right-empty').existsSync(), isTrue);
   });
 
   test('lastAttempt drives attempt numbering', () async {

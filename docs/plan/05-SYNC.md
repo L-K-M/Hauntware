@@ -790,6 +790,11 @@ class SyncRunRecord {                    // journal header, JSONL (§8)
                                          // rest of sync_state persist
                                          // across ⌥⌘Y invocations
   final DateTime startedAt;
+  final String? trashScopeLeft;          // marker-derived physical-root
+  final String? trashScopeRight;         // identity for scoped restore,
+                                         // purge, and local activity locks
+  final String? trashLocationKeyLeft;    // stable endpoint/path slot used
+  final String? trashLocationKeyRight;   // to reconcile marker replacement
   final SyncRuleSet rules;               // snapshot at run time
   final PlanTotals totals;               // §8 rail 9's header contents —
   final List<ScanWarning> warnings;      // the post-run report reads these
@@ -1171,8 +1176,14 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    other pairs' included, so rail 9's retention stays correct for all
    of them, and confirming
    which `<runId>` directories still exist takes one `listDirectory` of
-   the trash root per side — the check's only remote access, never a
-   recursive walk. File counts therefore come from journals (or the
+   the trash root per side, plus a bounded read of the fixed
+   `.poltergeist-root/identity` ownership marker — never a recursive
+   walk. The marker's random id is the physical-root scope used by
+   journals and local activity locks, so endpoint aliases converge; an
+   unmarked non-trash directory is never adopted or purged. Only valid
+   §6 run ids and `rsync-<ts>` directories enter inventory; the marker,
+   claim remnants, and unrelated directories never do. File counts
+   therefore come from journals (or the
    §9 `trashCache`) **only**: a journal-less directory — a crash
    orphan or an `rsync-<ts>` export dir — contributes to the notice's
    `M` (runs) but never to `N` (files), and the notice says so
@@ -1338,7 +1349,9 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    entries, and load-bearing for this rail's hash-verified restore, so
    it belongs in the schema enumeration, not only §6's model comment),
    one
-   summary line. Every line is appended with an immediate flush — no
+   summary line. A purge appends `trashScopePurged` for each affected
+   physical-root scope; the legacy unscoped `purged` line remains a
+   run-wide compatibility marker. Every line is appended with an immediate flush — no
    userspace buffering — so a killed process loses at most the line it
    was mid-writing (a torn final line is dropped on replay — 03 §4.6's
    journal-recovery pattern, applied here too) and rail 8's
@@ -1431,7 +1444,8 @@ ride in the pair itself.
 Local, non-synced pair state lives at `<app-support>/sync_state/
 <pairId>.json`: `lastRunAt`, `mtimeUnreliable` (§4), `trashCache` —
 the per-side newest-known trash summary that §8 rail 5's
-unreachable-side fallback reads: `lastListedAt` plus one
+unreachable-side fallback reads: `lastListedAt`, the marker-derived
+`trashScope`, the stable endpoint/path `locationKey`, plus one
 `{runId, ageBasis, fileCount}` entry per observed `<runId>` directory,
 written after every successful plan-time trash-root listing — and, in
 v2, the

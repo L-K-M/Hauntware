@@ -11,13 +11,13 @@
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 
-import 'package:crypto/crypto.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'journal.dart';
 import 'plan.dart';
+import 'trash_purge.dart';
+import 'trash_root.dart';
 
 /// Which clause of the >50 % rail (05 §8 rail 3) tripped — the typed
 /// confirmation's copy differs per clause.
@@ -383,6 +383,14 @@ final class SyncExecutor {
     required this.rightRoot,
     required this.syncRunsDirectory,
     required this.deviceId,
+    this.trashRootLeft,
+    this.trashRootRight,
+    this.trashScopeLeft,
+    this.trashScopeRight,
+    this.trashLocationKeyLeft,
+    this.trashLocationKeyRight,
+    this.trashPathStyleLeft = SyncTrashPathStyle.posix,
+    this.trashPathStyleRight = SyncTrashPathStyle.posix,
     this.mtimeUnreliableLeft = false,
     this.mtimeUnreliableRight = false,
     Future<void> Function(String destinationPath)? flushLocalDestination,
@@ -407,6 +415,17 @@ final class SyncExecutor {
   /// slice of the raw id).
   final String deviceId;
 
+  /// App-resolved physical trash roots and their stable host/root keys.
+  /// Null preserves the pure-package default derivation.
+  final String? trashRootLeft;
+  final String? trashRootRight;
+  final String? trashScopeLeft;
+  final String? trashScopeRight;
+  final String? trashLocationKeyLeft;
+  final String? trashLocationKeyRight;
+  final SyncTrashPathStyle trashPathStyleLeft;
+  final SyncTrashPathStyle trashPathStyleRight;
+
   /// The §4 per-side flags at run start — either flag (or
   /// `preserveMtime: false`, or `sizeOnly`) puts precondition checks
   /// and conflict defaults on the distrusted-clock path.
@@ -426,14 +445,10 @@ final class SyncExecutor {
 
   /// `<first 8 hex of sha256(deviceId)>-<uuidV4>` (05 §6) — the uuid
   /// half comes from the RemoteTrash seam's minter so one injected
-  /// instance controls run-id shape for trash and journal alike.
-  String mintRunId() {
-    final prefix = sha256
-        .convert(utf8.encode(deviceId))
-        .toString()
-        .substring(0, 8);
-    return '$prefix-${_trash.newRunId()}';
-  }
+  /// instance controls run-id shape for trash and journal alike. The
+  /// prefix half is [syncRunDevicePrefix], shared with the trash purge's
+  /// orphan classification so the two can never disagree.
+  String mintRunId() => '${syncRunDevicePrefix(deviceId)}-${_trash.newRunId()}';
 
   /// Whether the pair's clocks are untrusted for precondition
   /// comparisons — §4's flags, the size-only fallback, or
@@ -450,6 +465,9 @@ final class SyncExecutor {
   ///
   /// [pairId] is §9's canonical state key (endpoint-derived), supplied
   /// by the caller — never the favorite's bookmark id.
+  /// [runId] lets app code reserve and register the run's identity
+  /// before execution (the trash notice keys in-flight runs by it);
+  /// null mints a fresh id exactly as before.
   /// [deleteConfirmationAcknowledged] is the typed-`DELETE` result when
   /// rail 3 trips; without it a tripping plan throws
   /// [SyncConfirmationRequiredException]. Rail 4 always throws
@@ -457,6 +475,7 @@ final class SyncExecutor {
   Future<SyncRun> run(
     SyncPlan plan, {
     required String pairId,
+    String? runId,
     bool deleteConfirmationAcknowledged = false,
     RemoteTransferCancellation? cancellation,
     SyncRunPause? pause,
@@ -473,17 +492,31 @@ final class SyncExecutor {
       if (gate is SyncRunRefused) {
         throw SyncRunRefusedException(gate);
       }
-      if (gate is SyncRunNeedsConfirmation &&
-          !deleteConfirmationAcknowledged) {
+      if (gate is SyncRunNeedsConfirmation && !deleteConfirmationAcknowledged) {
         throw SyncConfirmationRequiredException(gate);
+      }
+
+      final effectiveRunId = runId ?? mintRunId();
+      final expectedPrefix = '${syncRunDevicePrefix(deviceId)}-';
+      if (!isSyncTrashRunId(effectiveRunId) ||
+          !effectiveRunId.startsWith(expectedPrefix)) {
+        throw ArgumentError.value(
+          effectiveRunId,
+          'runId',
+          'must use this device prefix and a UUID v4',
+        );
       }
 
       final journal = await SyncRunJournal.create(
         syncRunsDirectory,
         SyncRunRecord(
-          runId: mintRunId(),
+          runId: effectiveRunId,
           pairId: pairId,
           startedAt: startedAt ?? DateTime.now(),
+          trashScopeLeft: trashScopeLeft,
+          trashScopeRight: trashScopeRight,
+          trashLocationKeyLeft: trashLocationKeyLeft,
+          trashLocationKeyRight: trashLocationKeyRight,
           rules: plan.pair.rules,
           totals: plan.totals,
           warnings: plan.warnings,
@@ -1425,16 +1458,48 @@ final class _RunSession {
   Future<String> _runTrashDir(RemoteFileSystem fs, SyncSide side) async {
     final cached = _trashDirs[side];
     if (cached != null) return cached;
-    final configured =
-        side == SyncSide.left ? rules.trashPathLeft : rules.trashPathRight;
-    final runDir = configured == null
-        ? remoteJoin(
-            remoteJoin(_root(side), RemoteTrash.rootDirectoryName),
-            journal.record.runId,
-          )
-        : remoteJoin(configured, journal.record.runId);
+    final pathStyle = side == SyncSide.left
+        ? executor.trashPathStyleLeft
+        : executor.trashPathStyleRight;
+    final context = syncTrashPathContext(pathStyle);
+    final resolved = side == SyncSide.left
+        ? executor.trashRootLeft
+        : executor.trashRootRight;
+    final configured = side == SyncSide.left
+        ? rules.trashPathLeft
+        : rules.trashPathRight;
+    final trashRoot =
+        resolved ??
+        (configured == null
+            ? context.join(_root(side), RemoteTrash.rootDirectoryName)
+            : context.isAbsolute(configured)
+            ? configured
+            : context.join(_root(side), configured));
+    final identity = await resolveSyncTrashRoot(
+      fs,
+      trashRoot,
+      pathStyle: pathStyle,
+      access: SyncTrashRootAccess.createOrClaim,
+    );
+    final expectedScope = side == SyncSide.left
+        ? executor.trashScopeLeft
+        : executor.trashScopeRight;
+    if (expectedScope != null && expectedScope != identity.scopeKey) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'trash',
+        path: trashRoot,
+        message: 'The sync-trash root changed after planning.',
+      );
+    }
+    final runDir = context.join(identity.canonicalRoot, journal.record.runId);
     try {
-      await executor._trash.ensureExistingRunDirectory(fs, runDir);
+      if (pathStyle == SyncTrashPathStyle.windows) {
+        await _ensureDir(fs, identity.canonicalRoot);
+        await _ensureDir(fs, runDir);
+      } else {
+        await executor._trash.ensureExistingRunDirectory(fs, runDir);
+      }
     } on RemoteFileException catch (error) {
       // The 0700 rule guards server-side exposure; a Windows local
       // filesystem cannot express POSIX modes at all (setMode is
