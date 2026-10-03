@@ -221,14 +221,42 @@ void main() {
     expect(c.text.selection, const TextSelection.collapsed(offset: 3));
   });
 
+  testWidgets('a column is the display column the status bar shows', (
+    tester,
+  ) async {
+    final c = await mount(tester, text: '\tx\n中x');
+    // The tab spans columns 1–4, so the caret after it reads column 5 —
+    // and feeding that column back must land on the same offset.
+    c.goToLine(1, column: 5);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 1));
+    expect(c.caretLineColumn, (1, 5));
+    // The CJK rune spans columns 1–2; column 3 is the caret after it.
+    c.goToLine(2, column: 3);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 4));
+    expect(c.caretLineColumn, (2, 3));
+    // A column inside a wide unit still lands before it, as the emoji case
+    // above already pinned.
+    c.goToLine(2, column: 2);
+    expect(c.text.selection, const TextSelection.collapsed(offset: 3));
+  });
+
   test('submitting while the document reloads keeps the field', () async {
     final loading = Completer<TextDocument>();
+    var loads = 0;
     final c = EditorController(
       displayPath: 'notes.txt',
-      initialText: 'a\nb',
-      loadDocument: () => loading.future,
+      loadDocument: () async => ++loads == 1
+          ? TextDocument(
+              file: File('notes.txt'),
+              text: 'a\nb',
+              hasUtf8Bom: false,
+              lineEnding: LineEnding.lf,
+              sha256: 'x',
+            )
+          : loading.future,
     );
     addTearDown(c.dispose);
+    await c.initialize();
     c.openGoToLine();
     c.goToLineInput.text = '2';
     final reload = c.reload();
@@ -358,6 +386,24 @@ void main() {
     await tester.tap(find.byTooltip('Close go to line'));
     await tester.pump();
     expect(c.searchFocus.hasFocus, isTrue);
+  });
+
+  test('goToLine deactivates the active find match but keeps the results', () {
+    final c = EditorController(displayPath: 'a.txt', initialText: 'x\nx\nx\n');
+    addTearDown(c.dispose);
+    c.openSearch();
+    c.search.text = 'x';
+    expect(c.matches, hasLength(3));
+    expect(c.activeMatch, greaterThanOrEqualTo(0));
+
+    c.goToLine(3);
+    // The jumped-to caret is revealed; the match is no longer the selected
+    // one, but the query and its results survive the jump.
+    expect(c.activeMatch, -1);
+    expect(c.text.activeMatchIndex, -1);
+    expect(c.matches, hasLength(3));
+    expect(c.search.text, 'x');
+    expect(c.caretLineColumn, (3, 1));
   });
 
   test('review fix: a column past a CRLF line ends before its CR', () {

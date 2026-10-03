@@ -85,7 +85,7 @@ Future<void> main(List<String> arguments) async {
 
   // Finder/argv opens route through the windows: to whoever holds the file,
   // the active window, or a fresh one.
-  final intake = OpenDocuments(open: windows.openDocument);
+  final intake = OpenDocuments(open: windows.openDocuments);
   await intake.start(arguments, macOS: Platform.isMacOS);
 
   // The launch window gets the blank page; windows opened later start

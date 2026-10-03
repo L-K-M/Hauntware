@@ -20,7 +20,7 @@ void main() {
         expect(call.method, 'ready');
         return ['/cold launch/one.txt'];
       });
-      final intake = OpenDocuments(open: (path) async => seen.add(path));
+      final intake = OpenDocuments(open: (paths) async => seen.addAll(paths));
       await intake.start(['/command line/two.txt'], macOS: true);
       expect(seen, ['/cold launch/one.txt', '/command line/two.txt']);
       intake.dispose();
@@ -30,21 +30,24 @@ void main() {
   test(
     'batches wait for preceding documents and ignore malformed entries',
     () async {
-      final seen = <String>[];
       final gate = Completer<void>();
+      final seen = <List<String>>[];
       final intake = OpenDocuments(
-        open: (path) async {
-          seen.add(path);
-          if (path == 'one') await gate.future;
+        open: (paths) async {
+          if (paths.contains('one')) await gate.future;
+          seen.add(paths);
         },
       );
       final first = intake.accept(['one', 42, '', 'two']);
       final second = intake.accept(['three']);
       await Future<void>.delayed(Duration.zero);
-      expect(seen, ['one']);
+      expect(seen, isEmpty);
       gate.complete();
       await Future.wait([first, second]);
-      expect(seen, ['one', 'two', 'three']);
+      expect(seen, [
+        ['one', 'two'],
+        ['three'],
+      ]);
       intake.dispose();
     },
   );
@@ -56,7 +59,7 @@ void main() {
   test('non-macOS argv does not require the native document channel', () async {
     final seen = <String>[];
     final intake = OpenDocuments(
-      open: (path) async => seen.add(path),
+      open: (paths) async => seen.addAll(paths),
       pathExists: existing({'-draft.txt', '/document.txt'}),
     );
     // A dash-named file that exists is a document, not an option.
@@ -68,7 +71,7 @@ void main() {
   test('options are not opened as documents', () async {
     final seen = <String>[];
     final intake = OpenDocuments(
-      open: (path) async => seen.add(path),
+      open: (paths) async => seen.addAll(paths),
       pathExists: existing({'/document.txt'}),
     );
     await intake.start(['--help', '/document.txt', '--version'], macOS: false);
@@ -79,7 +82,7 @@ void main() {
   test('everything after a bare -- is a document', () async {
     final seen = <String>[];
     final intake = OpenDocuments(
-      open: (path) async => seen.add(path),
+      open: (paths) async => seen.addAll(paths),
       pathExists: existing({}),
     );
     await intake.start(['--', '-new.txt', '--help'], macOS: false);
@@ -91,7 +94,7 @@ void main() {
     final seen = <String>[];
     messenger.setMockMethodCallHandler(channel, (call) async => null);
     final intake = OpenDocuments(
-      open: (path) async => seen.add(path),
+      open: (paths) async => seen.addAll(paths),
       pathExists: existing({'-draft.txt'}),
     );
     await intake.start(['-psn_0_12345', '-draft.txt'], macOS: true);
@@ -103,7 +106,7 @@ void main() {
     final seen = <String>[];
     messenger.setMockMethodCallHandler(channel, (call) async => null);
     final intake = OpenDocuments(
-      open: (path) async => seen.add(path),
+      open: (paths) async => seen.addAll(paths),
       pathExists: existing({'-psn_notes.txt'}),
     );
     await intake.start(['-psn_notes.txt'], macOS: true);
@@ -115,7 +118,7 @@ void main() {
     final seen = <String>[];
     messenger.setMockMethodCallHandler(channel, (call) async => null);
     final intake = OpenDocuments(
-      open: (path) async => seen.add(path),
+      open: (paths) async => seen.addAll(paths),
       pathExists: existing({'/document.txt', '-draft.txt'}),
     );
     // Xcode's Document Versions option, a scheme's language override and
@@ -138,7 +141,7 @@ void main() {
     final seen = <String>[];
     messenger.setMockMethodCallHandler(channel, (call) async => null);
     final intake = OpenDocuments(
-      open: (path) async => seen.add(path),
+      open: (paths) async => seen.addAll(paths),
       pathExists: existing({'-draft.txt', 'notes.txt'}),
     );
     // Neither a dash-led entry nor an existing file is taken as a value.
@@ -156,7 +159,7 @@ void main() {
     final seen = <String>[];
     messenger.setMockMethodCallHandler(channel, (call) async => null);
     final intake = OpenDocuments(
-      open: (path) async => seen.add(path),
+      open: (paths) async => seen.addAll(paths),
       pathExists: existing({'/document.txt'}),
     );
     await intake.start([
@@ -172,9 +175,9 @@ void main() {
     () async {
       final seen = <String>[];
       final intake = OpenDocuments(
-        open: (path) async {
-          if (path == 'bad') throw StateError('unexpected failure');
-          seen.add(path);
+        open: (paths) async {
+          if (paths.contains('bad')) throw StateError('unexpected failure');
+          seen.addAll(paths);
         },
       );
       await expectLater(intake.accept(['bad']), throwsStateError);

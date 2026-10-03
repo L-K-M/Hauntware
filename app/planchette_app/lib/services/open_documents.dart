@@ -12,7 +12,10 @@ final class OpenDocuments {
     this.pathExists = _existsOnDisk,
   });
 
-  final Future<void> Function(String path) open;
+  /// Opens one accepted batch together: several files in a Finder event,
+  /// an argv list, or a drop reach the windows as a unit so a partial
+  /// failure names every file it lost.
+  final Future<void> Function(List<String> paths) open;
   final MethodChannel channel;
 
   /// Whether a launch argument names an existing file or folder, which is
@@ -79,10 +82,8 @@ final class OpenDocuments {
         .where((path) => path.isNotEmpty)
         .toList();
     final operation = _tail.then((_) async {
-      for (final path in valid) {
-        if (_disposed) return;
-        await open(path);
-      }
+      if (_disposed || valid.isEmpty) return;
+      await open(valid);
     });
     // The caller still receives this batch's failure, while the next native
     // event gets a fresh chance to open its documents.

@@ -294,29 +294,41 @@ final class DocumentWindows extends ChangeNotifier
   }
 
   /// A native file-open request — Finder, `open -a`, a second invocation's
-  /// argv, the window's own Open dialog settling elsewhere — lands in the
-  /// active window, in a fresh one when none is open, or focuses the window
-  /// already holding the file.
-  Future<void> openDocument(String path) => _serialized(() async {
+  /// argv, a drop, the window's own Open dialog settling elsewhere — lands
+  /// in the active window, in a fresh one when none is open, or focuses the
+  /// window already holding the file.
+  Future<void> openDocument(String path) => openDocuments([path]);
+
+  /// The batch form of [openDocument]: each file already open anywhere
+  /// reveals its own window, and the rest open together so the target
+  /// window reports their failures as one message rather than the last.
+  Future<void> openDocuments(List<String> paths) => _serialized(() async {
     // Wait out a quit review already under way: a cancelled quit still
-    // opens the file; an accepted one exits before this can run.
+    // opens the files; an accepted one exits before this can run.
     await _quitReview;
     if (_disposed || _quitPending || _quitGranted) return;
-    for (final window in _windows) {
-      final tab = window.workspace.tabForPath(path);
-      if (tab != null) {
-        window.workspace.revealTab(tab);
-        await _host.activate(window.viewId);
-        return;
+    final pending = <String>[];
+    for (final path in paths) {
+      var held = false;
+      for (final window in _windows) {
+        final tab = window.workspace.tabForPath(path);
+        if (tab != null) {
+          window.workspace.revealTab(tab);
+          await _host.activate(window.viewId);
+          held = true;
+          break;
+        }
       }
+      if (!held) pending.add(path);
     }
+    if (pending.isEmpty) return;
     final target = activeWindow ?? await _openWindow();
     if (target == null) return;
-    // The raise is the open's, not the runner's: whoever holds the file —
-    // or takes it — comes forward, never the main window on principle
+    // The raise is the open's, not the runner's: whoever holds the files —
+    // or takes them — comes forward, never the main window on principle
     // (it may be hidden while other windows are open).
     await _host.activate(target.viewId);
-    await target.workspace.open(path);
+    await target.workspace.openAll(pending);
   });
 
   /// The app-wide quit review: every open window consents to its own

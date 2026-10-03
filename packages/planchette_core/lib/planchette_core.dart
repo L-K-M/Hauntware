@@ -2,6 +2,7 @@
 library;
 
 export 'src/bracket_matching.dart';
+export 'src/code_input.dart';
 export 'src/edit_commands.dart';
 export 'src/editor_syntax.dart';
 export 'src/html_export.dart';
