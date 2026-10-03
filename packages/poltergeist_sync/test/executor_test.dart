@@ -13,10 +13,11 @@ import 'package:test/test.dart';
 final SyncTrashPathStyle _nativeTrashPathStyle = Platform.isWindows
     ? SyncTrashPathStyle.windows
     : SyncTrashPathStyle.posix;
+final _nativePathContext = syncTrashPathContext(_nativeTrashPathStyle);
 const String _restoreStageNamePrefix = '.poltergeist-restore-';
 
 String _trashJoin(String parent, String child) =>
-    syncTrashPathContext(_nativeTrashPathStyle).join(parent, child);
+    _nativePathContext.join(parent, child);
 
 /// A LocalFileSystem whose clock is scriptable: [reportedMtime] wins
 /// over the real file's stat, and setTimes records its request into
@@ -285,7 +286,10 @@ final class _BlockingRetryFs extends LocalFileSystem {
 
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
-    if (path == blockedPath) {
+    final blocked = blockedPath;
+    // Executor paths use SFTP separators; LocalFileSystem accepts them on
+    // Windows, so the gate compares native path identity rather than spelling.
+    if (blocked != null && _nativePathContext.equals(path, blocked)) {
       if (!entered.isCompleted) entered.complete();
       await release.future;
     }

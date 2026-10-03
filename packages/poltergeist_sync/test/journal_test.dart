@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 import 'package:test/test.dart';
@@ -101,6 +102,16 @@ void main() {
     mode: FileMode.append,
     flush: true,
   );
+
+  test('create returns a normalized platform journal path', () async {
+    const runId = 'run-native-path';
+    final journal = await SyncRunJournal.create(
+      '${runsDir.path}${p.separator}',
+      record(runId),
+    );
+
+    expect(journal.path, p.join(runsDir.path, '$runId.jsonl'));
+  });
 
   test('replay round-trips every line kind', () async {
     final written = await writeRun('run-1');
@@ -394,11 +405,14 @@ void main() {
   test('legacy relative trash skips rmdir only on purged side', () async {
     final leftRoot = Directory('${runsDir.path}/left')..createSync();
     final rightRoot = Directory('${runsDir.path}/right')..createSync();
+    final fs = LocalFileSystem();
+    final leftRootPath = await fs.canonicalize(leftRoot.path);
+    final rightRootPath = await fs.canonicalize(rightRoot.path);
     const runId = 'run-relative-trash';
-    final leftTrashRoot = '${leftRoot.path}/trash-left';
-    final rightTrashRoot = '${rightRoot.path}/trash-right';
-    final leftTrash = '$leftTrashRoot/$runId/000001-left.txt';
-    final rightTrash = '$rightTrashRoot/$runId/000002-right.txt';
+    final leftTrashRoot = p.join(leftRootPath, 'trash-left');
+    final rightTrashRoot = p.join(rightRootPath, 'trash-right');
+    final leftTrash = p.join(leftTrashRoot, runId, '000001-left.txt');
+    final rightTrash = p.join(rightTrashRoot, runId, '000002-right.txt');
     File(leftTrash)
       ..createSync(recursive: true)
       ..writeAsStringSync('l');
@@ -461,8 +475,8 @@ void main() {
 
     final report = await restoreTrashedFiles(
       journal,
-      fsFor: (_) => LocalFileSystem(),
-      rootFor: (side) => side == SyncSide.left ? leftRoot.path : rightRoot.path,
+      fsFor: (_) => fs,
+      rootFor: (side) => side == SyncSide.left ? leftRootPath : rightRootPath,
     );
 
     expect(
@@ -480,6 +494,8 @@ void main() {
     final previousCurrent = Directory.current;
     final working = Directory('${runsDir.path}/working')..createSync();
     final restoreRoot = Directory('${runsDir.path}/restored')..createSync();
+    final fs = LocalFileSystem();
+    final restoreRootPath = await fs.canonicalize(restoreRoot.path);
     const runId = 'run-relative-restore';
     const trashLocation = 'legacy-trash/$runId/000001-old.txt';
     final trashed = File('${working.path}/$trashLocation')
@@ -515,8 +531,8 @@ void main() {
     try {
       final report = await restoreTrashedFiles(
         journal,
-        fsFor: (_) => LocalFileSystem(),
-        rootFor: (_) => restoreRoot.path,
+        fsFor: (_) => fs,
+        rootFor: (_) => restoreRootPath,
       );
 
       expect(report.restored, ['old.txt'], reason: '${report.skipped}');
@@ -537,6 +553,8 @@ void main() {
     final switchedRoot = Directory(context.join(runsDir.path, 'switched-root'))
       ..createSync();
     final fs = LocalFileSystem();
+    final restoreRootPath = await fs.canonicalize(restoreRoot.path);
+    final switchedRootPath = await fs.canonicalize(switchedRoot.path);
     final identity = await resolveSyncTrashRoot(
       fs,
       context.join(runsDir.path, 'stable-trash'),
@@ -558,7 +576,7 @@ void main() {
         runId: runId,
         pairId: 'pair-stable-bindings',
         startedAt: DateTime.now(),
-        canonicalRootRight: restoreRoot.path,
+        canonicalRootRight: restoreRootPath,
         trashScopeRight: identity.scopeKey,
         rules: rules,
         totals: const PlanTotals(
@@ -590,7 +608,7 @@ void main() {
       },
       rootFor: (_) {
         rootCalls++;
-        return rootCalls == 1 ? restoreRoot.path : switchedRoot.path;
+        return rootCalls == 1 ? restoreRootPath : switchedRootPath;
       },
     );
 
@@ -855,6 +873,7 @@ void main() {
       ..createSync();
     final trashRoot = context.join(runsDir.path, 'trash');
     final localFs = LocalFileSystem();
+    final restoreRootPath = await localFs.canonicalize(restoreRoot.path);
     final identity = await resolveSyncTrashRoot(
       localFs,
       trashRoot,
@@ -920,7 +939,7 @@ void main() {
     final report = await restoreTrashedFiles(
       journal,
       fsFor: (_) => fs,
-      rootFor: (_) => restoreRoot.path,
+      rootFor: (_) => restoreRootPath,
     );
 
     expect(report.restored, ['document.txt'], reason: '${report.skipped}');

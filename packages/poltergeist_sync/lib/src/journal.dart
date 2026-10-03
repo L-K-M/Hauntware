@@ -597,7 +597,7 @@ final class SyncRunJournal {
       );
     }
     final journal = SyncRunJournal._(
-      '$syncRunsDirectory/${record.runId}.jsonl',
+      p.join(syncRunsDirectory, '${record.runId}.jsonl'),
       record,
     );
     await Directory(syncRunsDirectory).create(recursive: true);
