@@ -125,8 +125,13 @@ final class DesktopWindow with WindowListener {
       // dead window now that this runs before runWidget.
     } finally {
       // Always reached: on macOS the window is hidden at launch and show()
-      // is the only exit from that — even after a failed prepare.
-      await _lifecycle.show();
+      // is the only exit from that — even after a failed prepare. A show
+      // whose restore still fails rethrows after reporting through the
+      // lifecycle's onError; swallow here as well so runWidget always
+      // mounts rather than dying on a blank window.
+      try {
+        await _lifecycle.show();
+      } catch (_) {}
     }
   }
 

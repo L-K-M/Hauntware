@@ -160,7 +160,11 @@ void main() {
 
     test('windowReady stays unresolved when prepare failed', () async {
       final window = FakeWindowAdapter()..failEnsureInitialized = true;
-      final lifecycle = _lifecycle(window: window);
+      final reports = <Object>[];
+      final lifecycle = _lifecycle(
+        window: window,
+        onError: (error, _) => reports.add(error),
+      );
       var ready = false;
       unawaited(lifecycle.windowReady.then((_) => ready = true));
 
@@ -170,6 +174,9 @@ void main() {
 
       expect(window.events, isNot(contains('ready')));
       expect(ready, isFalse);
+      // One prepare failure, one report — no double onError from the
+      // throw being both caught and rethrown.
+      expect(reports, hasLength(1));
     });
 
     test('show returns window presentation failures', () async {

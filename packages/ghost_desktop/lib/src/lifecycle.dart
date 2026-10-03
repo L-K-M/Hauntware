@@ -252,6 +252,10 @@ base class GhostWindowLifecycle extends GhostWindowListener {
     }
   }
 
+  /// The once-per-launch reveal: prepares the frame off-screen, applies the
+  /// restored geometry, then shows. Repeated calls are no-ops — a host that
+  /// only wants to re-focus a window must use its own channel, because
+  /// replaying this would re-assert the launch frame.
   Future<void> show() async {
     if (!_prepared || _closing) {
       // macOS runners hide the window at launch for this service to place
@@ -275,7 +279,10 @@ base class GhostWindowLifecycle extends GhostWindowListener {
         // Restore replays the launch frame; a later show() meant as a
         // generic "bring to front" must not re-assert it.
         _didInitialShow = true;
-      } catch (_) {
+      } catch (error, stack) {
+        // Reported here so hosts that swallow the rethrow (to keep
+        // mounting their UI) still see the failure.
+        _report(error, stack);
         await _rescueHiddenWindow();
         rethrow;
       }
