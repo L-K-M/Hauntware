@@ -1,5 +1,21 @@
 # Status
 
+## Recovered editor and file-drop work (2026-10-03)
+
+Supported leftovers from closed branches now use the current shared
+editor and document-window layers: input-source exclusivity, guarded caret
+fallback, tab/Unicode status columns, keyword lookup, bracket/quote pairing,
+token styles, editor scrollbars, monospace find fields and find-aware Go to
+Line. Multi-file opens aggregate failures through the existing window owner.
+Native desktop drops use `desktop_drop` and the same batch-open route;
+locked workspaces refuse drops. Platform-channel regressions failed before
+replacing the ineffective framework-only drag target.
+
+Local analysis is clean. Core: 605 tests pass; shared editor: 422; app: 501
+with two existing skips. Native desktop builds remain CI-gated. Wrap-off
+layout requires separate viewport work; current wrap/highlight defaults
+stay intact. The rejected age-based temporary-file sweep is not revived.
+
 The initial desktop app and shared editor extraction are implemented. The
 ownership boundaries and compatibility policies are documented in
 [ARCHITECTURE.md](ARCHITECTURE.md).
