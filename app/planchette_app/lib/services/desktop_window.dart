@@ -119,10 +119,23 @@ final class DesktopWindow with WindowListener {
     );
     try {
       await _lifecycle.prepare();
+    } catch (_) {
+      // Already reported through the lifecycle's onError. Swallow so the
+      // root still mounts — a failed restore must not become a blank,
+      // dead window now that this runs before runWidget.
     } finally {
       // Always reached: on macOS the window is hidden at launch and show()
-      // is the only exit from that — even after a failed prepare.
-      await _lifecycle.show();
+      // is the only exit from that — even after a failed prepare. A show
+      // whose restore still fails rethrows after reporting through the
+      // lifecycle's onError; swallow here as well so runWidget always
+      // mounts rather than dying on a blank window.
+      try {
+        await _lifecycle.show();
+      } catch (_) {
+        // Restore failures were already reported through the lifecycle's
+        // onError; swallowed so runWidget still mounts. A show() path that
+        // throws without reporting is a lifecycle bug.
+      }
     }
   }
 

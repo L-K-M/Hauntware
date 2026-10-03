@@ -20,6 +20,7 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
   var fullScreen = false;
   var preventClose = false;
   var failDestroy = false;
+  var failReady = false;
   var destroyCalls = 0;
   GhostWindowOptions? readyOptions;
   GhostWindowListener? _listener;
@@ -32,6 +33,7 @@ final class FakeWindowAdapter implements GhostWindowAdapter {
   Future<void> ensureInitialized() async => events.add('ensureInitialized');
   @override
   Future<void> waitUntilReadyToShow(GhostWindowOptions? options) async {
+    if (failReady) throw StateError('ready failed');
     readyOptions = options;
     events.add('waitUntilReadyToShow');
   }
@@ -308,11 +310,33 @@ void main() {
     window.emitMove();
     await pending.single();
     window.maximized = true;
+    // Report the maximized frame too: without it the bounds assertion
+    // cannot tell "kept the normal frame" from "saved the live frame".
+    window.bounds = const Rect.fromLTWH(0, 0, 2560, 1440);
     await desktop.requestQuit();
 
     expect(persistence.stored?.isMaximized, isTrue);
     expect(persistence.stored?.bounds, normal);
   });
+
+  test(
+    'a restore failure still lets initialize return for runWidget',
+    () async {
+      final window = FakeWindowAdapter()..failReady = true;
+      final errors = <Object>[];
+      final desktop = desktopFor(window: window, onQuitFailed: errors.add);
+      addTearDown(desktop.dispose);
+
+      // The queued restore throws, show() rescues then rethrows — and
+      // initialize() must still return, because main() mounts the UI only
+      // after it. The failure reaches onQuitFailed through the lifecycle's
+      // onError rather than escaping as a blank-window crash.
+      await desktop.initialize();
+
+      expect(window.events, contains('show'));
+      expect(errors.single, isA<StateError>());
+    },
+  );
 
   test(
     'the close button with other windows up neither quits nor saves',
