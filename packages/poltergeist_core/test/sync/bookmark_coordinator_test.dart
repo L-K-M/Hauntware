@@ -495,6 +495,44 @@ void main() {
   });
 
   group('skip-and-preserve', () {
+    for (final entry in const {
+      RecordKind.inboxApp: 'inboxapp:client',
+      RecordKind.inboxStatus: 'inboxstatus:client:proposal',
+    }.entries) {
+      test('${entry.key.name} survives backup and reopen byte-identical',
+          () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+
+        // Inbox payloads belong to Séance and remain opaque in Poltergeist.
+        final inbox = await _sealRaw(entry.value, {
+          'kind': entry.key.name,
+          'data': {'opaque': 'inbox payload'},
+        });
+        server.seed(inbox);
+
+        await device.coordinator.runRound(server);
+        await _save(device, _bookmark('mine'));
+        await device.coordinator.runRound(server);
+        device.records = PersistentLocalRecordStore(
+          path: '${device.dir.path}/sync_records.json',
+          now: device.clock.call,
+        );
+        device.rebind(syncSecrets: false);
+        final result = await device.coordinator.runRound(server);
+
+        final preserved = await device.records.getRecord(entry.value);
+        expect(preserved!.blob, inbox.blob);
+        expect(preserved.deleted, isFalse);
+        expect(server.records[entry.value]!.blob, inbox.blob);
+        expect(server.records[entry.value]!.deleted, isFalse);
+        expect(await device.records.dirtyRecords(), isEmpty);
+        expect(await device.bookmarks.load(), hasLength(1));
+        expect(await device.servers!.byId('client'), isNull);
+        expect(result.report.appliedIds, isNot(contains(entry.value)));
+        expect(await device.tripwires.trippedIds(), isEmpty);
+      });
+    }
+
     test('a flurb-kind record survives rounds byte-identical', () async {
       final device = await _Device.create(tempDir, 'a');
       final flurb = await _sealRaw(

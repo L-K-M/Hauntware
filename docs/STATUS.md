@@ -15,17 +15,31 @@ partial-failure report; active local runs block explicit purge.
 Trash roots carry a random ownership marker. Its identity scopes journals
 and host-local activity locks across endpoint aliases, while unowned paths,
 filesystem roots, malformed run directories, observed symlink swaps, and
-foreign quarantines fail closed. Purges re-list before acting, rename each selected
-run to an owner-tagged quarantine, delete without following links, and mark
-only the affected journal scope. Retry and restore use the same device-local
-leases, so a local purge cannot race a local undo or live run. There is no
-distributed cross-machine lease; sibling-machine or manual removal is
-reconciled from the next live listing.
+foreign quarantines fail closed. Purges re-list before acting, rename each
+selected run to an owner-tagged quarantine, delete without following links,
+and mark only the affected journal scope. Retry and restore use the same
+device-local leases, so a local purge cannot race a local undo or live run.
+There is no distributed cross-machine lease; sibling-machine or manual removal
+is reconciled from the next live listing.
 
 Sync-package analysis is clean; 324 tests pass with five SSH-fixture skips.
 Flutter analysis is clean; all 3,263 app tests pass together. Native Linux
 before/after captures and provenance are in
 `tasks/sync-trash-purge/screenshots/`. No Séance source or pin changed.
+
+## Séance current-core compatibility (2026-10-03)
+
+The live core/protocol dependencies now resolve to Séance main at
+`76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`. Both declarations, four
+lockfiles and the live benchmark identity agree. No vault, bookmark or
+record-store migration is needed. PORTS.md records the upstream diff,
+updated upload contracts and regenerated pin audit.
+
+Local analysis is clean: 797 upstream core/protocol tests, 2,177
+Poltergeist core/sync tests, 86 benchmark tests, 3,212 app tests and three
+real HTTP sync-server convergence tests pass. The existing environment
+skips remain (6 upstream, 32 core/sync, one benchmark); Docker SSH fixtures
+remain CI-gated. Frozen M0 evidence still validates at its measured pins.
 
 ## Shared Ghost UI and file lists (2026-10-02)
 
@@ -628,15 +642,15 @@ patch reuses that policy and does not claim to repair it or add remote fsync.
 | Area | State |
 |---|---|
 | Repo infrastructure | CI (`ci.yml`: Dart analyze+test now; Flutter + client-matrix jobs self-activate when `app/poltergeist_app` appears), GLM PR review workflow, release workflow (`v*` tags → per-platform client assets), `scripts/build.sh` / `release.sh` / `package-linux.sh` adapted from Séance, Unlicense, analyzer config, pub workspace. |
-| `poltergeist_core` | Pure-Dart engine packages over the exact Séance PR-S4 bridge (`4c0a960`). The endpoint-keyed `PooledConnectionManager` implements 03 §3.2's serialized first connect, TOFU hard block, interactive-route cap, prompting-disabled growth, reconnect, refcounted teardown, and bounded ProxyJump routes. Complete secret-free routes resolve before credentials or I/O; target and hop credentials are cached only for the pool lifetime. `scripts/check-imports.sh` guards the dartssh2 boundary. |
+| `poltergeist_core` | Pure-Dart engine packages over the reviewed Séance main revision (`76e466f`). The endpoint-keyed `PooledConnectionManager` implements 03 §3.2's serialized first connect, TOFU hard block, interactive-route cap, prompting-disabled growth, reconnect, refcounted teardown, and bounded ProxyJump routes. Complete secret-free routes resolve before credentials or I/O; target and hop credentials are cached only for the pool lifetime. `scripts/check-imports.sh` guards the dartssh2 boundary. |
 | The plan | Complete in [`docs/plan/`](plan/) — overview + decision log (D1–D31), product, UX spec, architecture, Séance integration, sync, editor, milestones, testing, playbook. Reviewed via the GLM PR workflow, internal consistency passes, and a final whole-plan coherence pass (2026-08-31). |
-| Séance pin | Exact upstream revision `4c0a960289c919379d016507fa7ebae6b14b2e7c`, the merge of PR-S4. No release tag contains it, so this is D2's temporary revision bridge: both declarations, four lockfiles, and the live benchmark revision match; dartssh2 remains 3.0.2. PORTS.md carries the full re-diff and regenerated ancestor/tree/license/identity audit. Re-pin the first containing tag under open item 2. Frozen M0 evidence remains bound to the revisions it measured. |
+| Séance pin | Exact upstream revision `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`, containing PR-S4 and current core/protocol fixes. No release tag contains it, so D2's revision bridge continues: both declarations, four lockfiles and the live benchmark revision match; dartssh2 remains 3.0.2. PORTS.md carries the compatibility and ancestor/tree/license/identity audits. Re-pin a containing tag under open item 2. Frozen M0 evidence remains bound to the revisions it measured. |
 | Séance PR-S0 | LICENSE audit and Unlicense grant merged in [Séance #57](https://github.com/L-K-M/Seance/pull/57), merge `4d8ee1e026ce4e5d939d6390d9fd98a78fabcf6e`. |
 | Séance PR-S1 | Record-kind forward compatibility merged in [Séance #58](https://github.com/L-K-M/Seance/pull/58), merge `599ff936b8222e6cd77920495dcdcc4a50643f44`. The release wait ended 2026-09-14 when `v0.9.1` included it; D10 later advanced the pin to the exact PR-S4 merge above. |
 | Séance cancellation cleanup | dartssh2 3.0.2 and bounded asynchronous SSH teardown merged in [Séance #59](https://github.com/L-K-M/Seance/pull/59), merge `da9d45492ac7d25cbc4eefb97a6ec29254de219f`. |
 | Séance PR-S2 | `openAuthenticatedClient` split merged in [Séance #61](https://github.com/L-K-M/Seance/pull/61), merge `dad6d4f66dbfba6c170b98c204980e5801a890cb`. |
 | Séance PR-S3 | `RemoteFileSystem` additions (`setTimes`, `setOwner`, opt-out `computeHash` on transfers) merged in [Séance #62](https://github.com/L-K-M/Seance/pull/62), merge `2f99f4efb25a83340605464635bdf0f3ba95d931`. The upstream-and-pin gate is satisfied by #13 (bench) and #14 (core); remote sync, chown UI, and bulk verification remain future milestone work. |
-| Séance PR-S4 | Native SSH-agent authentication and recursive ProxyJump merged in [Séance #131](https://github.com/L-K-M/Seance/pull/131), merge `4c0a960289c919379d016507fa7ebae6b14b2e7c`. Poltergeist consumes that exact revision and wires both features through its pool, engine, prompts, editor trial, and import safety. |
+| Séance PR-S4 | Native SSH-agent authentication and recursive ProxyJump merged in [Séance #131](https://github.com/L-K-M/Seance/pull/131), merge `4c0a960289c919379d016507fa7ebae6b14b2e7c`. Poltergeist's current pin contains it and wires both features through its pool, engine, prompts, editor trial, and import safety. |
 | M0 — engine fitness | Complete from workflow-dispatch run [`33563514640`](https://github.com/L-K-M/Poltergeist/actions/runs/33563514640), attempt 1, measured commit `6b8873eafdaaa3a4157e265dee838ab3b47219b3`. The 78-row canonical bundle is committed at [`docs/evidence/m0`](evidence/m0); `m0-evidence.json` SHA-256 is `b93660b9f1c06bac206096d25c6fff472bcb31d13589a4d81bd5a3df70fa7fcc`. D7 is final: managed checkouts always hash; bulk transfers and sync hashing are opt-in. D8 passed every isolate gate, so sockets, SFTP, transfers, and hashing stay in the engine isolate. D9 adopts dartssh2 3.0.2 at ladder rung 4: document the roughly 10–11× single-file LAN ceiling versus OpenSSH, compensate with bounded channels/transports, and do not adopt libssh2. `PoolPolicy` is finalized at 2 transports, 4 transfer channels per transport, 8 total channels per transport, 6 global in-flight transfers, and remote readdir depth 8. Keepalive remains 30 seconds, extra idle 60 seconds, reconnect cap 30 seconds, and retry limit 5; these are retained design defaults, not M0-tuned values. Earlier runs `33458209337`, `33481554062`, and `33504660759` were partial; `33534298280` stopped in preflight; `33535334440` diagnosed dartssh2 2.22.0's detached cancellation error. None is admissible evidence. M0 closes untagged. |
 | M1 — app scaffold implementation | Implemented in [PR #8](https://github.com/L-K-M/Poltergeist/pull/8) with Flutter 3.47.2, exact dependency pins, generated platform icons from the 1024×1024 master, and the verified platform identity contract. Flutter analysis, 108 tests, and all five client builds pass; see the [PR checks](https://github.com/L-K-M/Poltergeist/pull/8/checks). Closed by the v0.1.0 publish (next row). |
 | M1 — closed (v0.1.0) | Published 2026-09-06 as a **pre-release**; not Latest (`/releases/latest` stays 404). One-time manual publish per 00 D23's carve-out for the pre-change draft: the notes' stale `SHA256SUMS.asc` paragraph was dropped (aligned with the direct-publish template) and all seven assets re-verified against `SHA256SUMS` (bijection + strict recompute) immediately before publish; the APK signer-cert check stands from the rehearsal (assets unchanged, sums identical). §3.12 chores: STATUS sweep (this change), PORTS re-diff clean (no upstream drift on ported files, no `TODO(pin)` markers), pin bump impossible (no Séance tag contains `2f99f4e` — open item 2), the tag was already cut, and the M1 mobile invariant was re-verified (`check-imports.sh` + 92 core tests green). The merged direct-publish path's first end-to-end exercise is the v0.2.0 rehearsal. |
@@ -9936,6 +9950,9 @@ unverified.
    benchmark revision now use that exact SHA under D2's temporary bridge.
    Re-pin the first containing Séance tag, re-diff every PORTS source, and
    regenerate the pin audit.
+   **Advanced 2026-10-03:** compatibility verified against current main
+   `76e466f`; both declarations, four lockfiles and the live benchmark
+   revision match. A containing release tag remains the steady-state target.
 3. **2026-09-04 — M2 remaining slices** (implementation complete
    2026-09-10; consolidated 2026-09-11). Every implementation slice below
    landed — each bullet carries its dated Done record, and the Done
