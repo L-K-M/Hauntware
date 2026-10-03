@@ -40,7 +40,7 @@ Package-default executors bind marker scopes before journal creation, so a
 later purge releases their journals without weakening legacy path-only safety.
 
 Core and sync analysis are clean; 1,929 core tests pass with 27 environment
-skips, and 388 sync tests pass with five SSH-fixture skips. Flutter analysis is
+skips, and 389 sync tests pass with five SSH-fixture skips. Flutter analysis is
 clean; all 3,338 app tests pass together. All 140 benchmark tests pass. Light-
 theme captures and provenance are in
 `tasks/sync-trash-purge/screenshots/`. Local native builds remain
@@ -10701,7 +10701,7 @@ unverified.
     resumes under an exclusive cross-process restore lease. Missing, ambiguous, or
     unreadable matching recovery blocks scan, run, and purge; unrelated corrupt
     journals do not. Completion rediscovers before scanning, while normal runs
-    keep shared location gates across app instances. Analysis is clean; 388 sync
+    keep shared location gates across app instances. Analysis is clean; 389 sync
     tests pass with five SSH-fixture skips. All 3,338 app tests pass together.
     Captures are in
     `tasks/sync-trash-purge/screenshots/`.

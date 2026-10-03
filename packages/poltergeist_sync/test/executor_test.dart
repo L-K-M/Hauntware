@@ -1683,6 +1683,53 @@ void main() {
       expect(Directory('${trashDir.path}/sub').existsSync(), isFalse);
     });
 
+    test('a lost scoped trash root is not reclaimed during execution', () async {
+      await writeFile(leftRoot, 'entry.txt', 'new');
+      await writeFile(rightRoot, 'entry.txt', 'old');
+      final plan = makePlan([
+        item(
+          'entry.txt',
+          left: await snapOf(leftRoot, 'entry.txt'),
+          right: await snapOf(rightRoot, 'entry.txt'),
+          suggested: SyncActionType.updateLeftToRight,
+          reason: SyncReason.contentDiffers,
+        ),
+      ], updateRules);
+      final trashRoot = _trashJoin(
+        rightRoot.path,
+        RemoteTrash.rootDirectoryName,
+      );
+      final identity = await resolveSyncTrashRoot(
+        rightFs,
+        trashRoot,
+        pathStyle: _nativeTrashPathStyle,
+        access: SyncTrashRootAccess.createOrClaim,
+      );
+      final scopedExecutor = SyncExecutor(
+        leftFileSystem: leftFs,
+        rightFileSystem: rightFs,
+        leftRoot: leftRoot.path,
+        rightRoot: rightRoot.path,
+        syncRunsDirectory: runsDir.path,
+        deviceId: deviceId,
+        trashRootRight: trashRoot,
+        trashScopeRight: identity.scopeKey,
+        trashPathStyleLeft: _nativeTrashPathStyle,
+        trashPathStyleRight: _nativeTrashPathStyle,
+      );
+      await Directory(trashRoot).delete(recursive: true);
+
+      final run = await scopedExecutor.run(plan, pairId: pairId);
+
+      expect(run.journal.record.trashScopeRight, identity.scopeKey);
+      expect(plan.items.single.status, SyncItemStatus.conflicted);
+      expect(Directory(trashRoot).existsSync(), isFalse);
+      expect(
+        await File('${rightRoot.path}/entry.txt').readAsString(),
+        'old',
+      );
+    });
+
     for (final swap in _TrashDirectorySwap.values) {
       test(
         'trash refuses a ${swap.name} symlink swapped between moves',

@@ -1656,17 +1656,37 @@ final class _RunSession {
         : executor.trashPathStyleRight;
     final context = syncTrashPathContext(pathStyle);
     final trashRoot = executor._effectiveTrashRoot(rules, side);
-    final identity = await resolveSyncTrashRoot(
-      fs,
-      trashRoot,
-      pathStyle: pathStyle,
-      access: SyncTrashRootAccess.createOrClaim,
-    );
     final expectedScope =
         journal.trashScopeForSide(side) ??
         (side == SyncSide.left
             ? executor.trashScopeLeft
             : executor.trashScopeRight);
+
+    // A scoped journal may only reopen its claimed root. Recreating a lost
+    // root would mutate the replacement before rejecting its new identity.
+    final SyncTrashRootIdentity identity;
+    try {
+      identity = await resolveSyncTrashRoot(
+        fs,
+        trashRoot,
+        pathStyle: pathStyle,
+        access: expectedScope == null
+            ? SyncTrashRootAccess.createOrClaim
+            : SyncTrashRootAccess.openExisting,
+      );
+    } on RemoteFileException catch (error) {
+      if (expectedScope == null ||
+          error.kind != RemoteFileErrorKind.notFound) {
+        rethrow;
+      }
+
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'trash',
+        path: trashRoot,
+        message: 'The sync-trash root changed after planning.',
+      );
+    }
     if (expectedScope != null && expectedScope != identity.scopeKey) {
       throw RemoteFileException(
         kind: RemoteFileErrorKind.conflict,
