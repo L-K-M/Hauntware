@@ -540,6 +540,8 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
 }
 
 /// JSON-file [HostKeyStore] for pinned TOFU keys.
+///
+/// Use one instance per [file]. Separate instances do not coordinate writes.
 class FileHostKeyStore implements HostKeyStore {
   final File file;
   final Map<String, HostKey> _keys = {};
@@ -571,6 +573,8 @@ class FileHostKeyStore implements HostKeyStore {
   }
 
   /// Keep the cache and each atomic snapshot in one operation order.
+  ///
+  /// Bodies must not call another method on this store or the queue deadlocks.
   Future<T> _serialize<T>(Future<T> Function() body) {
     final operation = _pending.then((_) async {
       await _load();

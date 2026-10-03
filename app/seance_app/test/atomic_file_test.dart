@@ -145,6 +145,7 @@ void main() {
 
   test('a failed host-key write cannot leak into a later snapshot', () async {
     final file = File('${dir.path}/known_hosts.json');
+    // Block the staging path used by writeStringAtomically().
     final blocked = Directory('${file.path}.tmp')..createSync();
     final store = FileHostKeyStore(file);
     const failed = HostKey(
@@ -162,8 +163,11 @@ void main() {
       pinnedAt: 2,
     );
 
-    await expectLater(store.put(failed), throwsA(isA<FileSystemException>()));
-    await blocked.delete();
+    try {
+      await expectLater(store.put(failed), throwsA(isA<FileSystemException>()));
+    } finally {
+      await blocked.delete();
+    }
     await store.put(saved);
 
     final restored = await FileHostKeyStore(file).all();
