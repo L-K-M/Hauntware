@@ -2,6 +2,7 @@ import Cocoa
 import FlutterMacOS
 import Quartz
 import macos_window_utils
+import window_manager
 
 class MainFlutterWindow: NSWindow {
   private var trashChannel: FlutterMethodChannel?
@@ -266,6 +267,16 @@ class MainFlutterWindow: NSWindow {
     settingsWindow?.close()
     workspaceWindows?.closeAll()
     super.close()
+  }
+
+  /// Keep the window invisible while Dart puts it back where it was closed:
+  /// DesktopWindowLifecycle.show() (main.dart, after runApp) applies the
+  /// previous session's frame and then shows the window — always, even when
+  /// restoring fails — so the storyboard's default-size window never
+  /// flashes. Do not remove this without removing that contract too.
+  override public func order(_ place: NSWindow.OrderingMode, relativeTo otherWin: Int) {
+    super.order(place, relativeTo: otherWin)
+    hiddenWindowAtLaunch()
   }
 
   @objc private func hideToolbarBandForFullScreen(_ notification: Notification) {

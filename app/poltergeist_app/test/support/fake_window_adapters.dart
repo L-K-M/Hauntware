@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:poltergeist_app/services/desktop_window_lifecycle.dart';
 
 /// Scripted adapters for [DesktopWindowLifecycle] tests: every native call
@@ -19,6 +20,10 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
   bool preventClose = false;
   bool callbacksRegistered = false;
   bool destroyed = false;
+  bool minimized = false;
+  bool maximized = false;
+  bool fullScreen = false;
+  double devicePixelRatio = 1;
   Rect bounds = const Rect.fromLTWH(80, 60, 1180, 760);
   Size? minimumSize;
   final minimumSizes = <Size>[];
@@ -31,9 +36,7 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
   Completer<void>? _readyToShowRelease;
   Completer<void>? _ensureInitializedRelease;
   Completer<void>? _getBoundsRelease;
-  void Function()? _onMove;
-  void Function()? _onResize;
-  void Function()? _onClose;
+  GhostWindowListener? _listener;
 
   @override
   Future<void> ensureInitialized() async {
@@ -60,10 +63,20 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
   }
 
   @override
-  Future<void> setBounds(Rect value) async {
+  Future<void> setBounds(Rect? value, {Offset? position}) async {
     _recordCall('setBounds');
-    bounds = value;
-    events.add('bounds');
+    if (position != null) {
+      bounds = Rect.fromLTWH(
+        position.dx,
+        position.dy,
+        bounds.width,
+        bounds.height,
+      );
+    }
+    if (value != null) {
+      bounds = value;
+      events.add('bounds');
+    }
   }
 
   @override
@@ -75,13 +88,37 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
   }
 
   @override
-  Future<void> enableCloseInterception() async {
-    _recordCall('enableCloseInterception');
-    preventClose = true;
+  double getDevicePixelRatio() => devicePixelRatio;
+
+  @override
+  Future<bool> isMinimized() async => minimized;
+
+  @override
+  Future<bool> isMaximized() async => maximized;
+
+  @override
+  Future<bool> isFullScreen() async => fullScreen;
+
+  @override
+  Future<void> maximize() async {
+    _recordCall('maximize');
+    maximized = true;
   }
 
   @override
-  Future<void> waitUntilReadyToShow(WindowShowOptions options) async {
+  Future<void> setFullScreen(bool value) async {
+    _recordCall('setFullScreen');
+    fullScreen = value;
+  }
+
+  @override
+  Future<void> setPreventClose(bool prevent) async {
+    _recordCall('setPreventClose');
+    preventClose = prevent;
+  }
+
+  @override
+  Future<void> waitUntilReadyToShow(WindowShowOptions? options) async {
     _recordCall('waitUntilReadyToShow');
     readyOptions = options;
     events.add('ready');
@@ -114,29 +151,24 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
   }
 
   @override
-  void registerCallbacks({
-    required void Function() onMove,
-    required void Function() onResize,
-    required void Function() onClose,
-  }) {
-    _recordCall('registerCallbacks');
+  void addListener(GhostWindowListener listener) {
+    _recordCall('addListener');
     callbacksRegistered = true;
-    _onMove = onMove;
-    _onResize = onResize;
-    _onClose = onClose;
+    _listener = listener;
   }
 
   @override
-  void unregisterCallbacks() {
+  void removeListener(GhostWindowListener listener) {
+    // Only the attached listener detaches — removing a stale one must not
+    // leave a live listener behind a flag claiming none is registered.
+    if (!identical(_listener, listener)) return;
+    _listener = null;
     callbacksRegistered = false;
-    _onMove = null;
-    _onResize = null;
-    _onClose = null;
   }
 
-  void emitMove() => _onMove?.call();
-  void emitResize() => _onResize?.call();
-  void emitClose() => _onClose?.call();
+  void emitMove() => _listener?.onWindowMove();
+  void emitResize() => _listener?.onWindowResize();
+  void emitClose() => _listener?.onWindowClose();
 
   // Releases are one-shot and idempotent: the gate drops its completer
   // and clears the block flag, so a second release is a no-op and the
@@ -169,11 +201,12 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
 
 final class FakeDisplayAdapter implements DisplayAdapter {
   @override
-  Future<Rect> primaryWorkArea() async => const Rect.fromLTWH(0, 0, 1920, 1040);
+  Future<GhostDisplay> primaryDisplay() async =>
+      const GhostDisplay(workArea: Rect.fromLTWH(0, 0, 1920, 1040));
 
   @override
-  Future<List<Rect>> workAreas() async => [
-    const Rect.fromLTWH(0, 0, 1920, 1040),
+  Future<List<GhostDisplay>> displays() async => [
+    const GhostDisplay(workArea: Rect.fromLTWH(0, 0, 1920, 1040)),
   ];
 }
 

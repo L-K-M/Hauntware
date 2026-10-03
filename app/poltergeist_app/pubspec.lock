@@ -351,12 +351,21 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  ghost_desktop:
+    dependency: "direct main"
+    description:
+      path: "packages/ghost_desktop"
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      resolved-ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      url: "https://github.com/L-K-M/Planchette.git"
+    source: git
+    version: "0.1.0"
   ghost_ui:
     dependency: "direct main"
     description:
       path: "packages/ghost_ui"
-      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
-      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      resolved-ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"
@@ -681,8 +690,8 @@ packages:
     dependency: transitive
     description:
       path: "packages/planchette_core"
-      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
-      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      resolved-ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"
@@ -690,8 +699,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/planchette_editor"
-      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
-      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      resolved-ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"
