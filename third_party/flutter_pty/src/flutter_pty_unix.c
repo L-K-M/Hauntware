@@ -3,7 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <errno.h>
+#include <fcntl.h>
+#include <poll.h>
 #include <pthread.h>
+#include <signal.h>
 #include <unistd.h>
 #include <termios.h>
 #include <sys/ioctl.h>
@@ -37,6 +41,12 @@ typedef struct PtyHandle
 
     int waiter_started;
 
+    /* Séance: self-pipe that wakes the reader out of poll() — Bionic
+       provides no pthread_cancel, and closing the master first could let
+       a recycled fd number feed a stale read. stop_fd[0] is read by the
+       reader, stop_fd[1] is written once by pty_close. */
+    int stop_fd[2];
+
     int closed;
 
 } PtyHandle;
@@ -44,6 +54,8 @@ typedef struct PtyHandle
 typedef struct ReadLoopOptions
 {
     int fd;
+
+    int stop_fd;
 
     pthread_mutex_t *mutex;
 
@@ -61,10 +73,17 @@ static void *read_loop(void *arg)
 
     char buffer[1024];
 
-    /* Séance: pty_close cancels this thread, which unwinds past the
-       function's end — a tail free() would only run on the normal path.
-       The cleanup handler fires on either exit, exactly once. */
-    pthread_cleanup_push(free, options);
+    /* Séance: poll() waits on the master and the stop pipe together, so
+       pty_close can wake this thread with a byte instead of a
+       cancellation — portable to Bionic. The stop fd is checked first:
+       a close in progress drops whatever output was still pending. This
+       thread frees its own options on every exit path. */
+    struct pollfd fds[2];
+
+    fds[0].fd = options->fd;
+    fds[0].events = POLLIN;
+    fds[1].fd = options->stop_fd;
+    fds[1].events = POLLIN;
 
     while (1)
     {
@@ -74,10 +93,34 @@ static void *read_loop(void *arg)
             // freed again once the chunk of data has been processed
             pthread_mutex_lock(options->mutex);
         }
+
+        if (poll(fds, 2, -1) < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            break;
+        }
+
+        if (fds[1].revents != 0)
+        {
+            break;
+        }
+
+        if (fds[0].revents == 0)
+        {
+            continue;
+        }
+
         ssize_t n = read(options->fd, buffer, sizeof(buffer));
 
         if (n < 0)
         {
+            if (errno == EINTR)
+            {
+                continue;
+            }
             // TODO: handle error
             break;
         }
@@ -96,7 +139,7 @@ static void *read_loop(void *arg)
         Dart_PostCObject_DL(options->port, &result);
     }
 
-    pthread_cleanup_pop(1);
+    free(options);
 
     return NULL;
 }
@@ -106,6 +149,8 @@ static void start_read_thread(PtyHandle *handle, Dart_Port port)
     ReadLoopOptions *options = malloc(sizeof(ReadLoopOptions));
 
     options->fd = handle->ptm;
+
+    options->stop_fd = handle->stop_fd[0];
 
     options->port = port;
 
@@ -231,7 +276,34 @@ FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
     handle->ackRead = options->ackRead;
     handle->reader_started = 0;
     handle->waiter_started = 0;
+    handle->stop_fd[0] = -1;
+    handle->stop_fd[1] = -1;
     handle->closed = 0;
+
+    /* Séance: the pipe exists to wake the reader out of poll() — Bionic
+       has no pthread_cancel. Created after the fork so this child never
+       inherits either end, marked close-on-exec so later siblings don't
+       either. */
+    if (pipe(handle->stop_fd) < 0 ||
+        fcntl(handle->stop_fd[0], F_SETFD, FD_CLOEXEC) < 0 ||
+        fcntl(handle->stop_fd[1], F_SETFD, FD_CLOEXEC) < 0)
+    {
+        error_message = "stop pipe failed";
+        kill(pid, SIGKILL);
+        waitpid(pid, NULL, 0);
+        if (handle->stop_fd[0] >= 0)
+        {
+            close(handle->stop_fd[0]);
+        }
+        if (handle->stop_fd[1] >= 0)
+        {
+            close(handle->stop_fd[1]);
+        }
+        close(ptm);
+        pthread_mutex_destroy(&handle->mutex);
+        free(handle);
+        return NULL;
+    }
 
     start_read_thread(handle, options->stdout_port);
 
@@ -290,27 +362,40 @@ FFI_PLUGIN_EXPORT void pty_close(PtyHandle *handle)
 
     if (handle->reader_started)
     {
-        /* The reader can be parked inside read() on the master; read(2)
-           is a cancellation point, so cancel+join drains it before the fd
-           goes away — closing first could let a recycled fd number feed a
-           stale read. A reader that already exited joins instantly. */
-        pthread_cancel(handle->reader);
+        /* A byte on the stop pipe makes the reader exit poll() on its
+           own and unwind — the portable replacement for pthread_cancel,
+           which Bionic does not declare. Both pipe ends are open until
+           the cleanup below, so a one-byte write always lands: a reader
+           that already exited simply never consumes it, and joins
+           instantly. */
+        ssize_t ignored = write(handle->stop_fd[1], "x", 1);
+        (void)ignored;
         if (!handle->ackRead)
         {
-            /* Ack mode can park the reader on the shared mutex, which is
-               not a cancellation point — joining it here could hang the
-               caller. Séance never enables ackRead; that teardown keeps
-               the pre-vendoring behaviour (hang up, leave the rest). */
+            /* Ack mode can park the reader on the shared mutex, which
+               poll() never sees — joining it here could hang the caller.
+               Séance never enables ackRead; that teardown keeps the
+               pre-vendoring behaviour (hang up, leave the rest). */
             pthread_join(handle->reader, NULL);
         }
     }
 
     /* Closing the master is the hangup: the kernel SIGHUPs the foreground
-       process group of the child's session. */
+       process group of the child's session. The reader is already gone
+       by now, so no recycled fd number can feed it a stale read. */
     close(handle->ptm);
 
     if (!handle->ackRead || !handle->reader_started)
     {
+        if (handle->stop_fd[0] >= 0)
+        {
+            close(handle->stop_fd[0]);
+        }
+        if (handle->stop_fd[1] >= 0)
+        {
+            close(handle->stop_fd[1]);
+        }
+
         pthread_mutex_destroy(&handle->mutex);
 
         if (handle->waiter_started)
