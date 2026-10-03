@@ -321,39 +321,36 @@ void main() {
       expect(window.maximized, isTrue);
     });
 
-    test(
-      'the flags backstop queues behind an in-flight operation',
-      () async {
-        final window = FakeWindowAdapter();
-        final debounce = FakeDebounceScheduler();
-        final persistence =
-            MemoryPersistence(const GhostWindowSnapshot(isFullScreen: true))
-              ..blockWrites = true;
-        final lifecycle = _lifecycle(
-          window: window,
-          platform: GhostDesktopPlatform.windows,
-          debounce: debounce,
-          persistence: persistence,
-        );
+    test('the flags backstop queues behind an in-flight operation', () async {
+      final window = FakeWindowAdapter();
+      final debounce = FakeDebounceScheduler();
+      final persistence = MemoryPersistence(
+        const GhostWindowSnapshot(isFullScreen: true),
+      )..blockWrites = true;
+      final lifecycle = _lifecycle(
+        window: window,
+        platform: GhostDesktopPlatform.windows,
+        debounce: debounce,
+        persistence: persistence,
+      );
 
-        await lifecycle.prepare();
-        await lifecycle.show();
+      await lifecycle.prepare();
+      await lifecycle.show();
 
-        final saving = lifecycle.saveBounds();
-        await persistence.writeStarted.future;
+      final saving = lifecycle.saveBounds();
+      await persistence.writeStarted.future;
 
-        // The backstop fires while a capture is still blocked on its write;
-        // the flag apply must queue behind it, not write concurrently.
-        unawaited(debounce.fire());
-        await pumpEventQueue();
-        expect(window.events, isNot(contains('fullScreen')));
+      // The backstop fires while a capture is still blocked on its write;
+      // the flag apply must queue behind it, not write concurrently.
+      unawaited(debounce.fire());
+      await pumpEventQueue();
+      expect(window.events, isNot(contains('fullScreen')));
 
-        persistence.releaseWrites();
-        await saving;
-        await pumpEventQueue();
-        expect(window.fullScreen, isTrue);
-      },
-    );
+      persistence.releaseWrites();
+      await saving;
+      await pumpEventQueue();
+      expect(window.fullScreen, isTrue);
+    });
 
     test('windows deferred flags also fire on the backstop', () async {
       final window = FakeWindowAdapter();
