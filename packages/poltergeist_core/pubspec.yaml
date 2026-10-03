@@ -20,7 +20,7 @@ dependencies:
   planchette_core:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
       path: packages/planchette_core
   # D2: git-pinned to Séance, never forked or copied. Temporary revision
   # bridge to PR-S4 (Séance #131: agent auth + ProxyJump); return to a tag

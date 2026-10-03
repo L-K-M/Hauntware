@@ -14,7 +14,7 @@ dependencies:
   ghost_ui:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
       path: packages/ghost_ui
   # SHA-256 key identification for the vault re-key journal (the same use
   # Séance's FileVaultStore makes of it).
@@ -50,12 +50,12 @@ dependencies:
   planchette_editor:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
       path: packages/planchette_editor
   ghost_desktop:
     git:
       url: https://github.com/L-K-M/Planchette.git
-      ref: b5b65afc9f36994515f2a5044ea7eabae743e41b
+      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
       path: packages/ghost_desktop
   poltergeist_core:
     path: ../../packages/poltergeist_core
