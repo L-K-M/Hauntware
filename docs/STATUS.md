@@ -3,6 +3,19 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Local shell reconciliation (2026-10-03)
+
+PR #44's optional local shell now uses the current shared pane/tab strip,
+sidebar rows, settings backends and SSH host-key flow. Local tabs have no
+server config; editor tabs retain a required server. The setting defaults
+off, with Linux/macOS support and explicit Windows/Android/iOS refusal.
+
+Local analysis is clean. Core/protocol: 824 tests pass with six environment
+skips; sync server: 126 pass; app: 1,254 pass after integrating #172's
+transactional host-key store. Current verification uses fake
+PTY adapters; native startup, resize and interrupt behavior still need a
+device smoke test. The existing historical Linux smoke record is separate.
+
 ## Shared Ghost UI and file lists (2026-10-02)
 
 Sidebars, hues, contrast/brightness helpers, ellipsis and top notices now
