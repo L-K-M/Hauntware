@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/quick_open_match.dart';
 import '../../services/recent_locations.dart';
 import '../../services/registered_command.dart';
-import '../../services/shortcut_format.dart';
 import '../../theme/family_hues.dart';
 import '../menus/app_menus.dart';
 import '../place_glyphs.dart';

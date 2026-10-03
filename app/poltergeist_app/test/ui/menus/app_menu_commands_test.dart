@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http_testing;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
@@ -44,10 +45,10 @@ void main() {
     enabled: () => true,
   );
 
-  List<String> ids(AppMenuModel menu) => [
+  List<String> ids(GhostMenu menu) => [
     for (final group in menu.groups)
       for (final row in group)
-        if (row is AppMenuCommandRow) row.command.id,
+        if (row is GhostCommandRow) ghostRowCommand(row.command).id,
   ];
 
   test('Check for Updates… leads the macOS app menu, before Settings…', () {
@@ -80,12 +81,12 @@ void main() {
       );
       final file = menus.singleWhere((m) => m.id == AppMenuId.file);
       expect(
-        file.groups.last.map((row) => (row as AppMenuCommandRow).command.id),
+        file.groups.last.map((row) => ghostRowCommand((row as GhostCommandRow).command).id),
         [kAppSettingsCommandId, kAppQuitCommandId],
         reason: platform.name,
       );
       expect(
-        (file.groups.last.last as AppMenuCommandRow).command.label(l10n),
+        ghostRowCommand((file.groups.last.last as GhostCommandRow).command).label(l10n),
         'Quit',
       );
     }

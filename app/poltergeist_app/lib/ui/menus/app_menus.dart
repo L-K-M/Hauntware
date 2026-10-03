@@ -1,63 +1,40 @@
 import 'package:flutter/widgets.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/registered_command.dart';
 
-/// One row inside a derived menu.
-///
-/// The menu model is a pure function of the command registry (07 §3.4 /
-/// D21): the app renderer only serializes these rows, so menu content can
-/// never drift from what is registered.
-sealed class AppMenuRow {
-  const AppMenuRow();
-}
+/// The registry command behind a row built by [buildAppMenus] — its
+/// [GhostCommandSpec.tag]. Surfaces that need more than the snapshot
+/// (disabled reasons, icons, run routing) recover it here.
+RegisteredCommand ghostRowCommand(GhostCommandSpec spec) =>
+    spec.tag! as RegisteredCommand;
 
-/// A command leaf row.
-final class AppMenuCommandRow extends AppMenuRow {
-  const AppMenuCommandRow(this.command);
-  final RegisteredCommand command;
-}
+/// The resolved snapshot the shared renderers draw for [command]:
+/// label, enablement, toggle state and chords fixed for [platform] at
+/// model-build time; the command itself rides in [GhostCommandSpec.tag].
+GhostCommandSpec ghostCommandSpec(
+  RegisteredCommand command,
+  AppLocalizations l10n,
+  TargetPlatform platform,
+) => GhostCommandSpec(
+  id: command.id,
+  label: command.label(l10n),
+  enabled: command.enabled(),
+  checked: command.checked?.call(),
+  activators: command.activators?.call(platform) ?? const [],
+  tag: command,
+);
 
-/// A named submenu grouping command rows (02 §9 "Sort By").
-final class AppMenuSubmenuRow extends AppMenuRow {
-  AppMenuSubmenuRow({required this.title, required List<AppMenuCommandRow> items})
-    : items = List.unmodifiable(items);
-
-  final String title;
-  final List<AppMenuCommandRow> items;
-}
-
-/// A platform-provided native item — used only on macOS for the
-/// application and window chrome (02 §9).
-final class AppMenuProvidedRow extends AppMenuRow {
-  const AppMenuProvidedRow(this.type);
-  final PlatformProvidedMenuItemType type;
-}
-
-/// A top-level menu: a localized title plus divider-separated groups of
-/// rows in render order.
-class AppMenuModel {
-  const AppMenuModel({
-    required this.id,
-    required this.title,
-    required this.groups,
-  });
-
-  final AppMenuId id;
-  final String title;
-
-  /// Sections in order; the renderer inserts a divider between groups.
-  final List<List<AppMenuRow>> groups;
-}
-
-/// Derives the app's menus from the registered commands for [platform].
+/// Derives the app's menus from the registered commands for [platform]
+/// into the shared [GhostMenu] model both menu backends render.
 ///
 /// Commands without a [RegisteredCommand.menuPlacement] never appear —
 /// there are no disabled placeholders for commands that do not exist yet,
 /// and stable [CommandMenuPlacement.order] slots leave gaps for future
 /// commands. Menus with no rows are dropped (except the macOS chrome
 /// below).
-List<AppMenuModel> buildAppMenus({
+List<GhostMenu> buildAppMenus({
   required List<RegisteredCommand> commands,
   required AppLocalizations l10n,
   required TargetPlatform platform,
@@ -79,32 +56,32 @@ List<AppMenuModel> buildAppMenus({
     placed.putIfAbsent(placement.menu, () => []).add(command);
   }
 
-  final menus = <AppMenuModel>[
-    if (mac) _macAppMenu(l10n, _menuGroups(appMenu, l10n)),
+  final menus = <GhostMenu>[
+    if (mac) _macAppMenu(l10n, _menuGroups(appMenu, l10n, platform)),
   ];
 
   for (final id in AppMenuId.values) {
     if (id == AppMenuId.app) continue;
-    var groups = _menuGroups(placed[id] ?? const [], l10n);
+    var groups = _menuGroups(placed[id] ?? const [], l10n, platform);
     if (mac && id == AppMenuId.view) {
       // AppKit's own Enter/Exit Full Screen item (⌃⌘F), last in View as
       // every Mac app places it.
       groups = [
         ...groups,
         const [
-          AppMenuProvidedRow(PlatformProvidedMenuItemType.toggleFullScreen),
+          GhostProvidedRow(PlatformProvidedMenuItemType.toggleFullScreen),
         ],
       ];
     }
     if (mac && id == AppMenuId.window) {
       groups = [
         const [
-          AppMenuProvidedRow(PlatformProvidedMenuItemType.minimizeWindow),
-          AppMenuProvidedRow(PlatformProvidedMenuItemType.zoomWindow),
+          GhostProvidedRow(PlatformProvidedMenuItemType.minimizeWindow),
+          GhostProvidedRow(PlatformProvidedMenuItemType.zoomWindow),
         ],
         ...groups,
         const [
-          AppMenuProvidedRow(
+          GhostProvidedRow(
             PlatformProvidedMenuItemType.arrangeWindowsInFront,
           ),
         ],
@@ -112,7 +89,7 @@ List<AppMenuModel> buildAppMenus({
     }
     if (groups.isEmpty) continue;
     menus.add(
-      AppMenuModel(id: id, title: _menuTitle(id, l10n), groups: groups),
+      GhostMenu(id: id, title: _menuTitle(id, l10n), groups: groups),
     );
   }
   return menus;
@@ -123,30 +100,31 @@ List<AppMenuModel> buildAppMenus({
 /// Settings…), then Services, the hide trio, and Quit — AppKit's order.
 /// Quit is AppKit's own row here; Linux and Windows get a registered
 /// Quit command at the end of File instead (`app_menu_commands.dart`).
-AppMenuModel _macAppMenu(
+GhostMenu _macAppMenu(
   AppLocalizations l10n,
-  List<List<AppMenuRow>> commandGroups,
-) => AppMenuModel(
+  List<List<GhostMenuRow>> commandGroups,
+) => GhostMenu(
   id: AppMenuId.app,
   title: l10n.appTitle,
   groups: [
-    const [AppMenuProvidedRow(PlatformProvidedMenuItemType.about)],
+    const [GhostProvidedRow(PlatformProvidedMenuItemType.about)],
     ...commandGroups,
-    const [AppMenuProvidedRow(PlatformProvidedMenuItemType.servicesSubmenu)],
+    const [GhostProvidedRow(PlatformProvidedMenuItemType.servicesSubmenu)],
     const [
-      AppMenuProvidedRow(PlatformProvidedMenuItemType.hide),
-      AppMenuProvidedRow(PlatformProvidedMenuItemType.hideOtherApplications),
-      AppMenuProvidedRow(PlatformProvidedMenuItemType.showAllApplications),
+      GhostProvidedRow(PlatformProvidedMenuItemType.hide),
+      GhostProvidedRow(PlatformProvidedMenuItemType.hideOtherApplications),
+      GhostProvidedRow(PlatformProvidedMenuItemType.showAllApplications),
     ],
-    const [AppMenuProvidedRow(PlatformProvidedMenuItemType.quit)],
+    const [GhostProvidedRow(PlatformProvidedMenuItemType.quit)],
   ],
 );
 
 /// Sorts one menu's commands by `(group, order)` and splits the sorted
 /// run into divider-separated groups.
-List<List<AppMenuRow>> _menuGroups(
+List<List<GhostMenuRow>> _menuGroups(
   List<RegisteredCommand> items,
   AppLocalizations l10n,
+  TargetPlatform platform,
 ) {
   final sorted = [...items]..sort((a, b) {
     final pa = a.menuPlacement!;
@@ -170,13 +148,13 @@ List<List<AppMenuRow>> _menuGroups(
   }());
 
   // Per divider-separated section: `ordered` keeps each row's
-  // first-occurrence position (a command, an AppMenuSubmenuRow built
+  // first-occurrence position (a command, a GhostSubmenuRow built
   // from a parameterized command's own items, or a submenu title for
   // merged submenu rows whose members buffer in `submenuItems`).
-  final groups = <List<AppMenuRow>>[];
+  final groups = <List<GhostMenuRow>>[];
   int? group;
   List<Object>? ordered;
-  Map<String, List<AppMenuCommandRow>>? submenuItems;
+  Map<String, List<GhostCommandRow>>? submenuItems;
 
   void flush() {
     final entries = ordered;
@@ -185,12 +163,14 @@ List<List<AppMenuRow>> _menuGroups(
     groups.add([
       for (final entry in entries)
         switch (entry) {
-          String() => AppMenuSubmenuRow(
+          String() => GhostSubmenuRow(
             title: entry,
             items: submenus[entry]!,
           ),
-          AppMenuSubmenuRow() => entry,
-          _ => AppMenuCommandRow(entry as RegisteredCommand),
+          GhostSubmenuRow() => entry,
+          _ => GhostCommandRow(
+            ghostCommandSpec(entry as RegisteredCommand, l10n, platform),
+          ),
         },
     ]);
   }
@@ -210,10 +190,11 @@ List<List<AppMenuRow>> _menuGroups(
       // the row's items are the parameter-bound invocations, built at
       // render time so they track the live selection/registry.
       ordered!.add(
-        AppMenuSubmenuRow(
+        GhostSubmenuRow(
           title: command.label(l10n),
           items: [
-            for (final item in items(l10n)) AppMenuCommandRow(item),
+            for (final item in items(l10n))
+              GhostCommandRow(ghostCommandSpec(item, l10n, platform)),
           ],
         ),
       );
@@ -226,7 +207,7 @@ List<List<AppMenuRow>> _menuGroups(
             ordered!.add(title);
             return [];
           })
-          .add(AppMenuCommandRow(command));
+          .add(GhostCommandRow(ghostCommandSpec(command, l10n, platform)));
     }
   }
   flush();

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/registered_command.dart';
@@ -99,7 +100,7 @@ class _CommandSheetBody extends StatelessWidget {
   });
 
   final String title;
-  final List<AppMenuModel> menus;
+  final List<GhostMenu> menus;
   final ScrollController scroll;
   final List<Widget> leading;
   final ValueChanged<RegisteredCommand> onRun;
@@ -158,11 +159,13 @@ class _CommandSheetBody extends StatelessWidget {
     );
   }
 
-  List<Widget> _rowTiles(BuildContext context, AppMenuRow row) {
+  List<Widget> _rowTiles(BuildContext context, GhostMenuRow row) {
     switch (row) {
-      case AppMenuCommandRow(:final command):
-        return [_CommandTile(command: command, onRun: onRun)];
-      case AppMenuSubmenuRow(:final title, :final items):
+      case GhostCommandRow(:final command):
+        return [
+          _CommandTile(command: ghostRowCommand(command), onRun: onRun),
+        ];
+      case GhostSubmenuRow(:final title, :final items):
         if (items.isEmpty) return const [];
         return [
           Padding(
@@ -175,9 +178,13 @@ class _CommandSheetBody extends StatelessWidget {
             ),
           ),
           for (final item in items)
-            _CommandTile(command: item.command, onRun: onRun, nested: true),
+            _CommandTile(
+              command: ghostRowCommand(item.command),
+              onRun: onRun,
+              nested: true,
+            ),
         ];
-      case AppMenuProvidedRow():
+      case GhostProvidedRow():
         // AppKit chrome (About, Hide, Quit…) exists only in the native
         // macOS menu bar — never on a touch platform.
         return const [];

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostChordBinding, GhostChordScope, GhostUnmodifiedChordPolicy;
 import 'package:poltergeist_core/poltergeist_core.dart'
     show FileSortKey, RemoteFileType;
 
@@ -1205,6 +1207,11 @@ bool keyMayRunFrom(
   return !_listingOnly(command, activator) || _isPaneListing(focus);
 }
 
+/// The shell's command-chord layer over the family's [GhostChordScope]:
+/// the registry's chords bound with the delete family's pane-listing
+/// guard ([_listingOnly]) and the unmodified allowlist ([_functionKeys])
+/// kept host-side. Field-first precedence (02 §8.2) comes from the
+/// shared scope's editing suspension.
 class CommandChordScope extends StatelessWidget {
   const CommandChordScope({
     super.key,
@@ -1218,92 +1225,37 @@ class CommandChordScope extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final platform = Theme.of(context).platform;
-    final bindings = <ShortcutActivator, VoidCallback>{};
-    final listingOnly = <ShortcutActivator>{};
-    for (final command in commands) {
-      final activators = command.activators?.call(platform);
-      if (activators == null) continue;
-      for (final activator in activators) {
-        // Unmodified keys — any activator type — stay with the pane focus
-        // nodes (02 §8.2), not only SingleActivator spellings; skip them
-        // BEFORE the duplicate diagnostics so an unmodified overlap is
-        // not misreported as a chord collision.
-        // Function keys are never typing keys, so an unmodified F5/F6
-        // (the dual-pane copy/move convention) binds at this layer too.
-        final bool unmodified = activator is SingleActivator
-            ? !activator.control &&
-                  !activator.meta &&
-                  !activator.alt &&
-                  !_functionKeys.contains(activator.trigger)
-            : activator is CharacterActivator &&
-                  !activator.control &&
-                  !activator.meta &&
-                  !activator.alt;
-        if (unmodified) {
-          continue;
-        }
-        // Two commands claiming one chord is a registration bug; debug
-        // builds fail it immediately (release keeps later-command-wins,
-        // the documented fallback).
-        assert(
-          !bindings.containsKey(activator),
-          'Duplicate shortcut activator $activator: later command wins',
-        );
-        // Release builds keep later-command-wins silently by design; the
-        // print keeps user-reported "shortcut does nothing" diagnosable.
-        if (bindings.containsKey(activator)) {
-          debugPrint(
-            'Duplicate shortcut activator $activator: later command wins',
-          );
-        }
-        if (_listingOnly(command, activator)) listingOnly.add(activator);
-        bindings[activator] = () {
-          if (!command.enabled()) return;
-          // Pane commands complete without escaping routes, but a
-          // future app-scope chord must not leak an unhandled zone
-          // error — the guard mirrors _runCommand's.
-          unawaited(
-            command.run(context).catchError((Object error, StackTrace st) {
-              FlutterError.reportError(
-                FlutterErrorDetails(exception: error, stack: st),
-              );
-            }),
-          );
-        };
-      }
-    }
-
-    return Focus(
-      // Same posture CallbackShortcuts takes: this node only dispatches,
-      // it never takes focus or traversal itself.
-      canRequestFocus: false,
-      skipTraversal: true,
-      onKeyEvent: (node, event) {
-        // Keep CallbackShortcuts' event contract: bindings fire on
-        // down/repeat only — never on key-up.
-        if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-          return KeyEventResult.ignored;
-        }
-        // Field-first precedence (02 §8.2): with a text surface focused,
-        // chords belong to its editing shortcuts — returning ignored
-        // keeps the event propagating upward to them, where a consumed
-        // command chord would have swallowed ⌘A mid-typing.
-        final primary = FocusManager.instance.primaryFocus;
-        if (primary?.context?.findAncestorWidgetOfExactType<EditableText>() !=
-            null) {
-          return KeyEventResult.ignored;
-        }
-        var result = KeyEventResult.ignored;
-        for (final activator in bindings.keys) {
-          if (activator.accepts(event, HardwareKeyboard.instance)) {
-            if (!listingOnly.contains(activator) || _isPaneListing(primary)) {
-              bindings[activator]!();
-            }
-            result = KeyEventResult.handled;
-          }
-        }
-        return result;
-      },
+    return GhostChordScope(
+      unmodifiedPolicy: GhostUnmodifiedChordPolicy.allowlisted,
+      unmodifiedTriggers: _functionKeys,
+      bindings: [
+        for (final command in commands)
+          for (final activator
+              in command.activators?.call(platform) ??
+                  const <ShortcutActivator>[])
+            GhostChordBinding(
+              activator: activator,
+              mayRunFrom: _listingOnly(command, activator)
+                  ? _isPaneListing
+                  : null,
+              onInvoke: () {
+                if (!command.enabled()) return;
+                // Pane commands complete without escaping routes, but a
+                // future app-scope chord must not leak an unhandled zone
+                // error — the guard mirrors _runCommand's.
+                unawaited(
+                  command.run(context).catchError((
+                    Object error,
+                    StackTrace st,
+                  ) {
+                    FlutterError.reportError(
+                      FlutterErrorDetails(exception: error, stack: st),
+                    );
+                  }),
+                );
+              },
+            ),
+      ],
       child: child,
     );
   }

@@ -6,6 +6,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart' show GlobalKey, ScaffoldMessengerState;
 import 'package:flutter/services.dart' show ServicesBinding;
 import 'package:flutter/widgets.dart';
+import 'package:ghost_ui/ghost_ui.dart' show CheckedPlatformMenuDelegate;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -19,7 +20,6 @@ import 'services/appearance_controller.dart';
 import 'services/application_error_reporter.dart';
 import 'services/bookmark_backup_service.dart';
 import 'services/checkout_prompt_ledger.dart';
-import 'services/checked_platform_menu.dart';
 import 'services/checkout_session.dart';
 import 'services/desktop_window_lifecycle.dart';
 import 'services/deep_links.dart';
@@ -78,7 +78,7 @@ Future<void> main(List<String> args) async {
   }
   if (Platform.isMacOS) {
     WidgetsBinding.instance.platformMenuDelegate =
-        CheckedPlatformMenuDelegate();
+        CheckedPlatformMenuDelegate(channelName: 'poltergeist/menu_checks');
   }
 
   final errorReporter = ApplicationErrorReporter();

@@ -23,18 +23,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "']'",
     r"'[$rawHost]'",
   },
-  // Flutter menu serialization and the AppKit checkmark channel protocol.
-  'lib/services/checked_platform_menu.dart': {
-    "'checked'",
-    "'flutter/menu'",
-    "'poltergeist/menu_checks'",
-    "'Menu.setMenus'",
-    "'id'",
-    "'children'",
-    "'0'",
-    "'setChecked'",
-    r"'${item['id']}'",
-  },
   // View schema keys and validation diagnostics, never rendered UI copy.
   'lib/services/view_preferences_store.dart': {
     "'view.preferences'",
@@ -129,6 +117,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     // The runId device prefix when enrollment has no cached id — a
     // machine identity string, never rendered.
     "'local'",
+    // The AppKit checkmark channel name on the shared menu delegate —
+    // protocol plumbing, not copy.
+    "'poltergeist/menu_checks'",
   },
   // The production engine session's store file names and wiring literals
   // (paths inside the app-support directory, the review pane-tab id) —
@@ -1058,11 +1049,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$stem$separator$child'",
     r"'$prefix${segments.join(separator)}'",
   },
-  // Menu-row widget keys keyed to the registry's command/menu ids —
-  // widget plumbing, not authored copy.
+  // The ☰ button's widget key — widget plumbing, not authored copy. The
+  // `menu.<id>`/`menu.item.<id>` row keys moved to ghost_ui with the
+  // shared row renderer.
   'lib/ui/menus/app_menu_host.dart': {
-    r"'menu.${menu.id.name}'",
-    r"'menu.item.${command.id}'",
     "'menu.main'",
   },
   // Debug-only placement-slot invariant diagnostics — never rendered.
@@ -1114,7 +1104,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'view.sortBy'",
     r"'$kViewSortByCommandId:${key.name}'",
     r"'\n'",
-    r"'Duplicate shortcut activator $activator: later command wins'",
   },
   // The tab strip's widget keys and pane-id name lookup — widget plumbing
   // keyed to the engine's paneTabId identity, never authored copy.
@@ -2332,49 +2321,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The fuzzy matcher's word-separator set — match mechanics, never
   // rendered.
   'lib/services/quick_open_match.dart': {r"' -_./\\:;()[]{}'"},
-  // The chord formatter's glyph/name table and modifier joiner —
-  // platform keyboard spelling (Ctrl+Shift+P, ⌃⌥⇧⌘P), spec-fixed
-  // symbols, not authored copy.
-  'lib/services/shortcut_format.dart': {
-    r"'$name+'",
-    "'⌃'",
-    "'⌥'",
-    "'⇧'",
-    "'⌘'",
-    "'Ctrl'",
-    "'Alt'",
-    "'Shift'",
-    "'Meta'",
-    "'↑'",
-    "'↓'",
-    "'←'",
-    "'→'",
-    "'↩'",
-    "'⇥'",
-    "'⌫'",
-    "'⌦'",
-    "'Up'",
-    "'Down'",
-    "'Left'",
-    "'Right'",
-    "'Enter'",
-    "'Tab'",
-    "'Esc'",
-    "'Backspace'",
-    "'Del'",
-    "'Space'",
-    "','",
-    "'.'",
-    "'/'",
-    r"'\\'",
-    "'['",
-    "']'",
-    "'-'",
-    "'='",
-    "';'",
-    "\"'\"",
-    "'`'",
-  },
   // The palette's plumbing: the command id, widget key, empty-string
   // and separator joins inside match corpora and row compositions —
   // every rendered word resolves through ARB.
