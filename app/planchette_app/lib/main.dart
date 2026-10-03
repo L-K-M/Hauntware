@@ -62,6 +62,11 @@ Future<void> main(List<String> arguments) async {
     mainTitle: desktop.setTitle,
   );
   await windows.start();
+  // The remembered frame goes on while the window is still off-screen: the
+  // Linux and Windows runners show it on the first frame, and macOS keeps
+  // it hidden until this show() runs — so the window must be placed before
+  // the root mounts.
+  await desktop.initialize();
   // runWidget, not runApp: runApp wraps the root in its own View for the
   // implicit view, and ViewCollection would then mount a second View for
   // view 0 — two render trees on one FlutterView is forbidden.
@@ -77,7 +82,6 @@ Future<void> main(List<String> arguments) async {
       ),
     ),
   );
-  await desktop.initialize();
 
   // Finder/argv opens route through the windows: to whoever holds the file,
   // the active window, or a fresh one.

@@ -2,9 +2,16 @@ import 'dart:async';
 import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/widgets.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:window_manager/window_manager.dart';
 
-/// Keeps both native close routes behind the workspace's shared dirty guard.
+import 'window_state.dart';
+
+/// Keeps both native close routes behind the workspace's shared dirty guard,
+/// and the primary window's remembered frame behind the shared lifecycle.
+///
+/// Only the primary window runs through this: extra document windows are
+/// native, driven by the runner's window host, and keep their own placement.
 final class DesktopWindow with WindowListener {
   DesktopWindow({
     required this.confirmQuit,
@@ -12,10 +19,44 @@ final class DesktopWindow with WindowListener {
     this.onFocus,
     this.closeInstead,
     this.windowBackgroundColor,
-    Future<void> Function()? destroyWindow,
+    GhostWindowPersistence? persistence,
+    GhostWindowAdapter? window,
+    GhostDisplayAdapter? displays,
+    GhostDesktopPlatform? platform,
+    void Function() Function(Duration, Future<void> Function())?
+    scheduleDebounce,
     Future<void> Function(String title)? setWindowTitle,
-  }) : _destroyWindow = destroyWindow ?? windowManager.destroy,
-       _setWindowTitle = setWindowTitle ?? windowManager.setTitle;
+  }) : _window = window ?? WindowManagerGhostWindowAdapter(),
+       _setWindowTitle = setWindowTitle ?? windowManager.setTitle {
+    _lifecycle = GhostWindowLifecycle(
+      persistence: persistence ?? WindowStateStore.defaultLocation(),
+      closePolicy: GhostClosePolicy.intercept,
+      missingMonitor: MissingMonitorPolicy.rejectAndKeep,
+      // Physical pixels on Windows: the same space Séance's file established,
+      // stable across mixed-DPI relaunches.
+      coordinates: GhostCoordinateSpace.physicalOnWindows,
+      // Linux and Windows runners show the window themselves on the first
+      // frame — initialize() runs before runWidget so the restored frame is
+      // in place by then. macOS exempts itself: its window is hidden at
+      // launch and only the lifecycle can show it.
+      showTrigger: GhostShowTrigger.runner,
+      window: _window,
+      displays: displays,
+      platform: platform,
+      scheduleDebounce: scheduleDebounce,
+      windowDefaults: _sharedOptions(windowOptions),
+      // The close button can mean "just this window" while other windows
+      // stay up; a programmatic quit (menu, exit request) must never take
+      // that branch.
+      closeInstead: () async {
+        if (_quitRequested) return false;
+        return await closeInstead?.call() ?? false;
+      },
+      confirmClose: confirmQuit,
+      onError: (error, _) => onQuitFailed(error),
+    );
+  }
+
   final Future<bool> Function() confirmQuit;
   final void Function(Object error) onQuitFailed;
 
@@ -33,10 +74,12 @@ final class DesktopWindow with WindowListener {
   /// unset the platform shows its own default, which reads as a white flash on
   /// a dark desktop.
   final Color? windowBackgroundColor;
-  final Future<void> Function() _destroyWindow;
+
+  final GhostWindowAdapter _window;
+  late final GhostWindowLifecycle _lifecycle;
   final Future<void> Function(String title) _setWindowTitle;
-  AppLifecycleListener? _lifecycle;
-  bool _destroying = false;
+  AppLifecycleListener? _appLifecycle;
+  bool _quitRequested = false;
   String? _title;
 
   /// Public rather than inline in [initialize] so the geometry and the
@@ -51,52 +94,50 @@ final class DesktopWindow with WindowListener {
     backgroundColor: windowBackgroundColor,
   );
 
+  static GhostWindowOptions _sharedOptions(WindowOptions options) =>
+      GhostWindowOptions(
+        // windowOptions always sets one; the plugin's field is nullable only
+        // because callers may leave the platform default.
+        size: options.size!,
+        minimumSize: options.minimumSize,
+        title: options.title,
+        backgroundColor: options.backgroundColor,
+      );
+
   Future<void> initialize() async {
-    await windowManager.ensureInitialized();
-    await windowManager.setPreventClose(true);
+    // Focus stays app-side: the disk check on activation is Planchette's,
+    // not the lifecycle's.
     windowManager.addListener(this);
-    _lifecycle = AppLifecycleListener(
+    _appLifecycle = AppLifecycleListener(
       onExitRequested: () async {
-        return await confirmQuit()
-            ? AppExitResponse.exit
-            : AppExitResponse.cancel;
+        if (!await confirmQuit()) return AppExitResponse.cancel;
+        // The OS tears the window down after an accepted exit without a
+        // close event, so the last geometry save runs here instead.
+        await _lifecycle.saveBounds();
+        return AppExitResponse.exit;
       },
     );
-    await windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-      await windowManager.focus();
-    });
-  }
-
-  Future<void> requestQuit() async {
-    if (_destroying) return;
-    _destroying = true;
     try {
-      if (!await confirmQuit()) return;
-      await _destroyWindow();
-    } catch (error) {
-      onQuitFailed(error);
+      await _lifecycle.prepare();
     } finally {
-      _destroying = false;
+      // Always reached: on macOS the window is hidden at launch and show()
+      // is the only exit from that — even after a failed prepare.
+      await _lifecycle.show();
     }
   }
 
-  @override
-  void onWindowClose() => unawaited(_close());
-
-  /// A second close event while the first is still deciding must not run
-  /// again: it would find the window already hidden and read it as the
-  /// last one, quitting the app over two open windows.
-  bool _closeRunning = false;
-
-  Future<void> _close() async {
-    if (_destroying || _closeRunning) return;
-    _closeRunning = true;
+  /// A programmatic quit — the menu's Quit, the runner's exit request
+  /// path. Unlike the window's own close button it is never intercepted by
+  /// [closeInstead]; the guard still applies.
+  Future<void> requestQuit() async {
+    if (_quitRequested) return;
+    _quitRequested = true;
     try {
-      if (await closeInstead?.call() ?? false) return;
-      await requestQuit();
-    } finally {
-      _closeRunning = false;
+      final closed = await _lifecycle.close();
+      if (!closed) _quitRequested = false;
+    } catch (error) {
+      _quitRequested = false;
+      onQuitFailed(error);
     }
   }
 
@@ -117,7 +158,8 @@ final class DesktopWindow with WindowListener {
   }
 
   void dispose() {
+    _lifecycle.dispose();
     windowManager.removeListener(this);
-    _lifecycle?.dispose();
+    _appLifecycle?.dispose();
   }
 }
