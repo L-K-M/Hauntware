@@ -57,7 +57,9 @@ release (proposal §2, M10).
 Requires the Dart SDK (3.12+) for the pure-Dart packages and the Flutter SDK
 for the app. `scripts/build.sh` builds every target this host can build (the
 native sync-server binary, the Docker image, the Flutter desktop app, and the
-Android APK) and prints one summary; the individual commands:
+Android APK; on Linux it also packages the app into a `.deb`, a Flatpak
+bundle, and an AppImage)
+and prints one summary; the individual commands:
 
 ```bash
 # Everything this host can build (missing toolchains are skipped; explicitly
@@ -89,8 +91,10 @@ docker compose -f packages/seance_sync_server/docker-compose.yml up -d --build
 version line at the top of this README in step, commits, and tags `v<version>`
 — pushing that tag triggers `.github/workflows/release.yml`, which tests, then
 publishes the sync-server binaries, the `ghcr.io/l-k-m/seance` Docker image,
-and the app for every client platform — Android APK, Linux/macOS/Windows
-desktop bundles, and an unsigned iOS IPA (re-sign to sideload) — as the
+and the app for every client platform — Android APK, Linux `.deb` + Flatpak + AppImage
+packages for x64 plus plain desktop bundles (via
+`scripts/package-linux.sh`), macOS/Windows desktop bundles, and an unsigned
+iOS IPA (re-sign to sideload) — as the
 GitHub Release. The desktop bundles are unsigned (macOS: ad-hoc), so first
 launch needs the usual unidentified-developer step; `scripts/build.sh` stays
 the local path for a signed-for-this-Mac build.
@@ -108,7 +112,7 @@ the latest code and rebuilds + recreates the stack in one step.
 Everything security- or correctness-critical is covered by tests that run in CI
 (`.github/workflows/ci.yml`):
 
-- **228 Dart tests** across the three packages — crypto round-trips and
+- **746 Dart tests** across the three packages — crypto round-trips and
   wrong-key/tamper rejection, verifier independence, recovery-code corruption
   detection, TOFU decisions, the danger linter, paste sanitization, secret
   redaction, LLM request/response handling and the chat tool loop, **two-device
@@ -161,10 +165,21 @@ sudo apt-get update && sudo apt-get install -y libsqlite3-0
 
 Facts about this environment:
 - Outbound HTTPS goes through a proxy; pub.dev and the Dart archive are reachable.
+- **No root in the dev container** (no sudo, uid 1000): the apt packages above
+  can't be installed. A conda-forge env substitutes for the whole Linux
+  toolchain — `micromamba create -n build -c conda-forge clang=17 clangxx=17
+  compiler-rt lld sysroot_linux-64 cmake ninja pkg-config gtk3 libsecret
+  jsoncpp xz imagemagick binutils file glib 'libstdcxx-devel_linux-64=12'
+  'libgcc-devel_linux-64=12'`, then export
+  `PKG_CONFIG_PATH="$CONDA_PREFIX/lib/pkgconfig:$CONDA_PREFIX/share/pkgconfig"`
+  (the env's activate scripts don't set it, and `expat` ships no `expat.pc` —
+  write a stub). The gcc-12 downgrade matters: GCC 16's libstdc++ headers drop
+  C++14, which the Flutter Linux template's `cxx_std_14` needs.
+- Even `unzip`/`bzip2` may be missing — a static busybox in `~/opt/bin`\n  provides them (Flutter's bootstrap needs unzip).
 - **Docker CLI is present but the daemon was NOT running** — `docker build`
   could not be exercised here. The Dockerfile is verified only by `dart compile
   exe` + a native-binary curl smoke test (see §4).
-- Flutter runs as root and prints a "don't run as root" warning — harmless.
+- Flutter may run as root and print a "don't run as root" warning — harmless.
 
 ---
 
@@ -209,6 +224,19 @@ flutter test             # widget tests (TOFU dialog)
 flutter run -d linux     # needs GTK/clang/ninja for a Linux desktop build
 ```
 
+On macOS, `scripts/test-macos-accessibility.sh` runs the native accessibility
+lifecycle regression against the cached release engine. Run it after
+`flutter build macos`; it also gates macOS CI and release builds. The fixture
+does not launch the Dart app or use saved user data. See
+[the crash investigation](docs/macos-accessibility-crash.md) for the native
+compatibility boundary and the limits of the reproduction.
+
+`scripts/test-macos-keyboard.sh` also gates macOS CI and release builds. It
+checks injected Command shortcuts against the real native keyboard pipeline
+without launching the app or posting system input. See
+[the keyboard compatibility note](docs/macos-keyboard-compatibility.md) for
+the fixture, stock-engine reproduction, and limits.
+
 The platform folders (android/ios/linux/macos/windows) ARE committed — they
 carry real configuration: the display name (`Séance` — AndroidManifest label;
 macOS `CFBundleName`/`CFBundleDisplayName`, while `PRODUCT_NAME` stays ASCII
@@ -222,8 +250,21 @@ the -34018 error of the data-protection keychain), and the launcher icons. Icons
 `media-sources/seance-icon.png` via `dart run flutter_launcher_icons` (config
 in `app/seance_app/flutter_launcher_icons.yaml`); the server favicon is
 embedded in `packages/seance_sync_server/lib/src/favicon.dart` (regeneration
-recipe in its header). Bundle ids are `com.lkm.seance_app` (Android) /
-`com.lkm.seanceApp` (Apple).
+recipe in its header). Bundle ids are `ch.lkmc.seance` (Android) /
+`ch.lkmc.seanceApp` (Apple).
+
+The macOS floor is **12.0**, not the 10.15 the Flutter template once
+generated. It is `MACOSX_DEPLOYMENT_TARGET` in
+`macos/Runner.xcodeproj/project.pbxproj`, set in all three configurations and
+maintained **by hand** — nothing in the SDK rewrites an existing project's
+target, and this app has no Podfile to carry a `platform :osx` line either
+(plugins come through Swift Package Manager). What it has to keep up with is
+the SDK's own macOS minimum, which reached 12.0; raising it is what an
+`unsupported deployment target` build failure after a Flutter upgrade is
+asking for. Anything guarded by `#available(macOS 11.0, *)` or
+`#available(macOS 12.0, *)` in the runner is therefore dead weight — the check
+is always true and the dead branch is still compiled, which is how a deprecated
+API that was deliberately replaced gets its warning back.
 
 **Sync server as a native binary (works without Docker):**
 
@@ -246,26 +287,50 @@ compiles the app for android/linux/macos/ios/windows on their native runners
 **Helper scripts** (family conventions shared with the sibling repos):
 
 - `scripts/build.sh` — builds every target this host can build (`server`,
-  `docker`, `app`, `apk`); skips targets whose toolchain is missing, fails only
-  on targets you name explicitly. Artifacts are staged into `dist/`;
-  `--install` builds the host's app and installs it (macOS:
-  `/Applications/Séance.app`; Linux: `~/.local/opt/seance`), then reveals the
-  installed copy. `--help` prints the contract.
+  `docker`, `app`, `apk`, `flatpak`); skips targets whose toolchain is missing,
+  fails only
+  on targets you name explicitly. Artifacts are staged into `dist/`; on Linux
+  the `app` target additionally runs `scripts/package-linux.sh` to produce a
+  `.deb` and an AppImage there, and `flatpak` repacks the `.deb` via
+  `scripts/build-flatpak.sh`. `--install` builds the host's app and installs
+  it (macOS: `/Applications/Séance.app`; Linux: `~/.local/opt/seance`), then
+  reveals the installed copy. `--help` prints the contract.
+- `scripts/package-linux.sh` — turns a built Flutter Linux bundle into
+  installable artifacts: `seance_<version>-1_<arch>.deb` (dpkg-deb; Depends
+  derived from the bundle's actual ELF headers via readelf/objdump — a
+  soname→package table with t64 alternatives, glibc/libstdc++ symbol-version
+  floors — so the metadata can't go stale as plugins change) and
+  `seance-linux-<arch>.AppImage` (appimagetool, fetched once and cached).
+  Flatpak joins the matrix as the sandboxed install path
+  (`scripts/build-flatpak.sh` repacks the .deb under /app); still no .rpm —
+  AppImage remains the bare-metal non-Debian option. Runs from
+  `scripts/build.sh` (best-effort AppImage) and both CI workflows (required).
 - `scripts/release.sh X.Y.Z [--push]` — stub over the shared
   [release-tool](https://github.com/L-K-M/release-tool) engine (`lkm-release`):
   bumps all four pubspecs in lockstep (+ app lockfile + README version line),
   commits, tags `v<version>`; the pushed tag triggers
   `.github/workflows/release.yml` (tests gate; publishes sync-server binaries,
-  the GHCR Docker image, and all five app clients). Runs on macOS (BSD sed),
-  like the engine.
+  the GHCR Docker image, and all app clients, now including the Linux
+  .deb + Flatpak + AppImage packages). Runs on macOS (BSD sed),
+  like the engine. (The post-bump hook is sed-portable since 0.7.0, so Linux
+  hosts can cut releases too.)
 - `./update.sh` — on a deployment host: pull the latest code, then
-  `docker compose up -d --build` the sync server.
+  `docker compose build --pull` (refreshes the FROM base image — `up
+  --build` alone never refetches it) and `up -d` the sync server. Honors
+  per-deployment
+  overrides in `packages/seance_sync_server/.env` (e.g. `SEANCE_PUBLISH_ADDR`
+  when a containerized reverse proxy can't reach the default loopback publish)
+  and fails with container logs when the recreated server doesn't answer
+  `/healthz` within 30 s.
 
 ---
 
 ## 4. How things were verified (so you can re-verify)
 
-- 228 Dart tests + 283 Flutter tests, all analyze clean.
+- 746 Dart tests + 700 Flutter tests + 245 in the vendored xterm fork.
+  `dart analyze` and the app's `flutter analyze` are clean; the vendored
+  fork carries 11 upstream `info` lints and is deliberately not analyze-
+  gated in CI (only its tests run).
 - The local shell's *wiring* is covered by fakes; the pty itself cannot be in
   CI (no native library under `flutter test`). To re-verify it for real on
   Linux, build the plugin's unity target and run a throwaway test against it:
@@ -284,13 +349,21 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   takes **rows first** while `TerminalSize` is columns-first, and this is the
   test that catches the transposition; `^C` kills a `sleep 30` and the shell
   survives it; `exit` fires `onClosed` with status 0; `close()` tears down.
-- Sync correctness is proven two ways: `seance_core/test/sync_test.dart` (engine,
+- Sync correctness is proven two ways: `packages/seance_core/test/sync_test.dart` (engine,
   two devices converge, concurrent-edit LWW, tombstones) and
-  `seance_sync_server/test/integration_test.dart` (the real `HttpSyncClient` +
+  `packages/seance_sync_server/test/integration_test.dart` (the real `HttpSyncClient` +
   `SyncEngine` against a live server over a socket).
 - The server was compiled to a native binary and smoke-tested with `curl`:
   register → login (accept correct verifier, reject wrong) → push (assigns seq)
   → pull → unauthenticated 401.
+- The Linux installers were built and smoke-tested end-to-end: `flutter build
+  linux --release` → `scripts/package-linux.sh` produced a `.deb` and an
+  AppImage; `dpkg-deb -I/-c` confirmed the control fields (Depends derived
+  from the bundle's ELF headers) and file layout, `dpkg-deb -x` + running the
+  extracted binary and `APPIMAGE_EXTRACT_AND_RUN=1 ./seance-linux-*.AppImage`
+  both reach GTK's "cannot open display" on a headless host — i.e. every ELF
+  and library path resolves; only the GUI needs a display. (Built in a no-root
+  Debian 12 container using a conda-forge toolchain — see §1.)
 - SQLite backend has its own test (round-trips + durability across reopen).
 
 ---
@@ -311,6 +384,17 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   `resolution: workspace` (verified).
 - Pure-Dart **Argon2id is slow** (19 MiB). Tests use `Argon2Params.fast()`;
   never use that in production.
+- **Anything that reaches the real event loop hangs a widget test.** A widget
+  test runs in a fake-async zone, so work that completes on the *real* loop
+  never does: `AppServices.initialize()` (file I/O), `ui.instantiateImageCodec`
+  and every `Image.memory`/`Image.file` resolution. Symptom is a hang, not a
+  failure — `pumpAndSettle` spins forever and the test times out with no
+  message. Do the work inside `tester.runAsync(...)` (including the `tap` that
+  starts it — starting it outside and delaying inside does not help), then
+  `pump()` fixed frames rather than settling. An `Image` *widget* is in the
+  tree from the first frame, so assertions about the widget itself need none
+  of this; only its decoded result does. See `server_list_pane_test.dart` and
+  `server_mark_picker_test.dart`.
 - **file_picker ≥11 breaks the APK build** ("cannot find symbol:
   FilePickerPlugin" in GeneratedPluginRegistrant.java): on AGP 9+ the plugin
   stops applying the Kotlin plugin and expects AGP's built-in Kotlin, which the
@@ -355,11 +439,87 @@ Do not "simplify" these away — they are load-bearing:
   `fingerprintSha256`; `publicKeyBase64` is only known from a known_hosts import.
 - **dartssh2 does not expose `SSHUserInfoRequest`** from its barrel — the
   keyboard-interactive handler lets the lambda parameter type be inferred.
-- **dartssh2 has no local ssh-agent auth path.** `AuthMethod.agent` throws
-  `UnsupportedError` in `SshSessionManager.connect` (see §7 gaps).
+- **dartssh2 has no built-in local ssh-agent path.** `SshAgentClient` speaks
+  the OpenSSH agent protocol and exposes each key through
+  `SSHIdentity.custom`; Unix uses `$SSH_AUTH_SOCK`, while Windows performs
+  blocking named-pipe I/O on a worker isolate. Keep those platform mechanics
+  behind that class.
 - **xterm 4.0**: `Terminal(maxLines:)`, settable `onOutput`/`onResize`,
   `write(String)`, `buffer.getText()`, `TerminalView(terminal, ...)`. SSH is
   bytes; the engine decodes UTF-8 leniently (`allowMalformed: true`).
+- **`dart:ui` is the whole image pipeline.** Badge images are decoded, cropped,
+  scaled and re-encoded with `ui.ImageDescriptor.encoded` (deliberately not
+  `instantiateImageCodec`: the descriptor reports the dimensions *before*
+  a pixel buffer is allocated, which is what lets an oversized source be
+  refused) → `instantiateCodec` → `PictureRecorder` +
+  `Canvas.drawImageRect` → `Picture.toImage` → `Image.toByteData(format:
+  ImageByteFormat.png)`, with no image package. All of it works under
+  `flutter_test` (see `badge_image_test.dart`), which is why there is no
+  platform channel here. `instantiateCodec`'s `targetWidth`/`targetHeight`
+  cannot do the *crop* — they scale, and a badge has to be square — but they
+  do bound the decode, and both axes are scaled by one factor so the crop
+  that follows is unaffected. Without them an ordinary 4000x3000 photo
+  expands to 46 MB of RGBA on the way to a 256 px badge (measured: 1.3 MB
+  with them, same result).
+- **Font families are resolved by name by the platform, not by Flutter.**
+  `TextStyle.fontFamily` is handed to the OS font manager, which is why
+  `SeanceTheme.monoFallback` can name Menlo and Consolas without the app
+  bundling either, and why the font picker
+  (`services/system_fonts.dart`) can offer any family it finds on disk. There
+  is no Flutter API to *enumerate* installed fonts — the picker reads the
+  `name` table out of the sfnt files in each desktop's font directories
+  itself, which is also where `post.isFixedPitch` and the PANOSE proportion
+  come from for the monospace filter.
+- **window_manager hidden-at-launch (macOS)**: `MainFlutterWindow.order(_:relativeTo:)`
+  calls `hiddenWindowAtLaunch()`, so the window stays invisible until Dart calls
+  `windowManager.show()` — which `WindowStateService.restoreAndTrack()` (run in
+  `main()` before `runApp`) always does, even when restoring fails. Don't remove
+  either side without the other. The Windows runner shows the window on the
+  first frame with `SW_SHOWNORMAL`, which cancels a pre-show maximize — that's
+  why maximize/full-screen restore waits for the plugin's `show` event
+  (WM_SHOWWINDOW, timer backstop) there. Windows geometry is also stored in
+  *physical* pixels: window_manager scales bounds by the current monitor's
+  ratio while screen_retriever scales each display by its own, so on mixed-DPI
+  setups their "logical" spaces disagree — physical is the one space both map
+  into exactly (`WindowStateSnapshot` doc has the details).
+
+- **The macOS integrated titlebar is macos_window_utils', not
+  window_manager's.** The main window draws its header under an empty
+  unified NSToolbar (a 52 pt band) over full-size content, as Poltergeist
+  does. Three things hold it together. The runner hosts the Flutter view in
+  `MacOSWindowUtilsViewController` (the package's passthrough code
+  force-casts to it), with `SeanceFlutterViewController` inside so the
+  accessibility guard stays. `MainFlutterWindowManipulator.start` resets the
+  window to a standard titlebar, so `MacosTitlebar.install()` re-applies it
+  from `main()` *before* `restoreAndTrack()` shows the hidden window. Never
+  also pass `titleBarStyle` to window_manager: its `setTitleBarStyle`
+  rewrites the same window properties. In full screen the runner hides the
+  toolbar (AppKit would keep it in an opaque strip over the header) and
+  reports it on `seance/window` from will-enter/will-exit *notifications*,
+  because window_manager owns the window delegate. Controls inside the band
+  take clicks only through `MacosToolbarPassthrough`; every other surface
+  keeps below it (`ReserveMacosToolbarBand` above the navigator,
+  `ClaimMacosToolbarBand` for the wide layout). The Settings window keeps a
+  standard titlebar: the passthrough serves one window.
+
+- **A second window is a second engine.** Flutter stable has no
+  multi-window API (the framework's is `@internal`, master-channel only in
+  3.47, and macOS admits a second view on one engine only after a private
+  `enableMultiView`), so the Settings window is a second
+  `FlutterViewController`/`FlView` with its own isolate, and everything it
+  does crosses `seance/settings_link`, which the runners relay between the
+  engines (`lib/services/settings_window.dart`). Two traps shaped the
+  runners: on Linux, disposing an engine `eglTerminate`s the EGL display
+  every engine in the process shares, which kills the app's window with a
+  GLX `BadAccess` — so the settings window is hidden on close, never
+  destroyed while the app runs; and `FlView` hooks its window's
+  `delete-event` to ask Dart whether the *application* should quit — so the
+  settings window's own handler, connected before the view, runs first.
+  On macOS every engine makes itself the app delegate's termination
+  handler, the last one started winning, so the window's isolate forwards
+  exit requests to the app's (`RemoteSettingsBackend.requestAppExit`).
+  On macOS the window's controller is `SeanceFlutterViewController`, for the
+  accessibility guard (§3).
 
 ---
 
@@ -382,8 +542,57 @@ Do not "simplify" these away — they are load-bearing:
 - `ConfigStore` / `VaultStore` / `HostKeyStore` — in-memory (tests) and JSON-file
   (app) impls; SQLite/drift is the documented future swap.
 - `SyncApi` (pull/push) — `HttpSyncClient` in prod, `FakeServer` in tests.
+- `InboxApi` (the command inbox's account side) — `HttpSyncClient` in
+  prod, `_FakeInbox` in `seance_core/test/inbox_test.dart`. Apps and
+  handled statuses sync as sealed records and are never deleted by a
+  tombstone; an app's key lives in the vault as `inbox-key:<appId>`. See
+  [docs/INBOX.md](docs/INBOX.md).
+- `VaultRekeyJournal` (`file_stores.dart`) — crash recovery for a vault re-key,
+  which changes the vault file and the OS keystore with no operation spanning
+  both. `FileVaultStore` stages both generations to a `vault.json.rekey`
+  sidecar before the keystore changes; `AppServices` settles against the key
+  the keystore actually holds, at startup and on every unlock. Staging never
+  writes `vault.json`, so a damaged or unmatched sidecar is moved aside rather
+  than being allowed to wedge the vault. In-memory stores need none of it.
+- `SettingsBackend` — everything the Settings screen reads and does.
+  `LocalSettingsBackend` holds the logic (the assistant save's guards, the
+  sync switches' rollbacks) over `AppState`, for the route and for the
+  window's host; `RemoteSettingsBackend` forwards each call over the link
+  from the settings window's isolate. A new setting is a backend method plus
+  a `_Link` case, not an edit to `settings` from the screen — the window's
+  `settings` is a copy.
+- `ThemePalette` (`lib/theme/`) — the device's one editable theme: an
+  accent, nullable ("Automatic") colour slots, status colours, an optional
+  terminal block, a font family and a corner scale, stored as one JSON
+  object in `settings.json` (device-local) and decoded leniently: a bad
+  key costs only itself. `ThemePresets.all` are starting points copied in,
+  recognised by value (`matchingPreset`); the first (Séance, every
+  colour Automatic) must keep drawing the pre-theme look
+  (`theme_build_test.dart`) and is what partial themes and extension-less
+  host themes fall back to, while `ThemePresets.initial` (Terminal) is
+  what a new device starts in and Reset puts back.
+  `SeanceTheme.build` resolves Automatic slots from the sibling tables, or
+  from the palette's own surface once it sets one. Hand-drawn corners opt
+  in through `SeanceChrome.corner`; the MaterialApps rebuild from
+  `AppState.appearance` / `RemoteSettingsBackend.appearance` only.
 - `LlmProvider` — `AnthropicProvider` and `OpenAiCompatibleProvider` (the latter
   covers Ollama/LM Studio/etc. via `base_url`).
+- `SystemFonts` — `SfntSystemFonts` reads the host's font directories,
+  `NoSystemFonts` reports nothing (mobile, and tests that must not depend on
+  what is installed on the machine running them).
+- `ServerMark` — what a server's badge shows, resolved from `ServerConfig`'s
+  `icon`/`iconEmoji`/`iconImage` (image, then emoji, then built-in glyph). The
+  three are separate fields so an older build ignores the keys it does not know
+  and still draws the glyph every mark keeps beside it; `ServerMark.stored` is
+  the inverse, so an editor holds one mark and writes the three. The app maps
+  glyph names to `IconData` in `ui/server_appearance.dart`, and only there.
+- `FamilyHue` (`lib/family_hues.dart`) is the colour vocabulary shared with
+  Poltergeist (its D34): twelve hues, each with one meaning, painted on glyphs
+  only. The file is byte-identical to Poltergeist's
+  `lib/theme/family_hues.dart`, so change both together. A new glyph takes its
+  colour from `FamilyPalette.of(context).glyph(hue)`, never an ad-hoc colour;
+  file kinds come from `ui/file_kinds.dart` (see
+  [POLTERGEIST.md](docs/POLTERGEIST.md#the-colour-vocabulary)).
 - Record model: `EncryptedRecord` is what the server sees (`kind` is *inside* the
   ciphertext); `DecryptedRecord` is app-side. Conflicts resolve by
   `Lww.resolve` = `(updatedAt, deviceId, seq)`; the server assigns `seq`.
@@ -394,9 +603,9 @@ Do not "simplify" these away — they are load-bearing:
 
 - Commit messages end with a co-author trailer and the session link, per repo
   convention. **Do not put a model identifier** in commits, code, or docs.
-- Development happens on branch `claude/ssh-client-design-proposal-esejrg` and is
-  also mirrored to `main`. Push with `git push -u origin <branch>` and retry on
-  network errors.
+- Earlier design work used `claude/ssh-client-design-proposal-esejrg`.
+  New work follows the shared implementation and review rules below.
+  Push with `git push -u origin <branch>` and retry on network errors.
 - Keep new code matching the surrounding style: small focused files, doc
   comments that explain *why*, `analyze` clean before committing.
 - The assistant (LLM) is intentionally **always on** (personal tool) — there is
@@ -415,3 +624,173 @@ Both are behind interfaces and swappable without touching callers:
 
 See [docs/STATUS.md](docs/STATUS.md) for the full list of known gaps and the
 prioritized next-steps checklist.
+
+<!-- shared-rules:start -->
+
+## Working practices
+
+- Follow explicit task instructions over the default workflow below.
+- Writing the code is not finishing the task. A task is finished when
+  its changes are merged to main through a PR that passed CI and review,
+  or when the user explicitly accepts a different end state.
+- Start every task on current code. Fetch first, then cut the task
+  branch from origin/main — never from a stale local branch or an old
+  checkout. To continue existing work, rebase or merge the latest
+  origin/main into it before editing. Never overwrite existing work to
+  update.
+- Resolve ambiguity before making consequential changes. State low-risk
+  assumptions; ask when scope, safety, or expected behavior is unclear.
+- Keep changes focused. Do not modify unrelated code, formatting, or comments.
+- Prefer surgical edits over whole-file rewrites when the result is equivalent.
+- Stage only intended files. Inspect the diff before committing.
+
+## Communication
+
+- Be concise, factual, and direct. Preserve necessary context and uncertainty.
+- Avoid praise, motivational filler, emojis, and em dashes in new prose.
+- Address the reader directly in user-facing copy.
+- Report what was verified and what remains unverified. Never imply that an
+  unavailable check passed.
+
+## Code design
+
+- Prefer early returns and shallow nesting. Separate logical blocks with
+  blank lines.
+- Use descriptive constants or enums for meaningful or repeated values.
+  Use existing standard definitions for protocol/specification constants.
+  Keep obvious, one-off values inline.
+- Use enums for behavioral modes that would otherwise require ambiguous
+  boolean arguments.
+- Default members to private. Widen visibility only for required consumers,
+  and review the change as an API design decision.
+- Follow the repository's declared dependency boundaries. UI and controllers
+  must use application services rather than directly accessing databases,
+  subprocesses, sockets, or other low-level mechanisms.
+- Encapsulate low-level mechanics behind domain-oriented interfaces.
+- Reuse genuinely shared logic. Avoid speculative abstractions and layers
+  that only forward calls.
+- Prefer pure functions for business rules and immutable data where practical.
+  Isolate side effects; document non-obvious state ownership or synchronization.
+- Explain non-obvious intent, constraints, and tradeoffs in comments.
+  Do not narrate obvious code. Add examples or diagrams when they clarify it.
+
+## Validation and errors
+
+- Validate untrusted input at entry points. Where practical, represent valid
+  states in types and enforce persistent invariants in database schemas.
+- Represent absence and failure explicitly.
+- Use assertions for internal programming invariants, not external-input
+  validation or required runtime error handling.
+- Prefer explicit, actionable errors over silent failure or undocumented
+  fallback. Document intentional recovery behavior.
+- Never report a skipped or failed operation as successful.
+
+## Bug fixes
+
+1. Identify the root cause and define an observable success criterion.
+2. Add a regression test and observe the relevant failure before fixing it.
+3. Implement the fix and observe the test passing.
+4. Check surrounding behavior for regressions and architectural consistency.
+
+If an automated regression test is impractical, document the reproduction
+and verification procedure. State any inability to reproduce the failure.
+
+## Verification
+
+- Run relevant tests and lint after changes.
+- Choose coverage by affected behavior and risk, not patch size.
+- Use integration or end-to-end tests for critical workflows and boundaries;
+  test isolated business rules at the lowest effective level.
+- Run broader suites for cross-cutting or high-risk changes, and the full
+  required release checks before releasing.
+- Validate the requested command, options, platform, and configuration.
+  Unrelated green CI is not proof that the reported problem is fixed.
+- Recheck after the final edit. Distinguish local checks from CI results.
+
+## Commit messages
+
+- Use a capitalized, imperative subject without a final period.
+- Target 50 characters; never exceed 72.
+- Separate the subject and body with one blank line.
+- Wrap body text at 72 characters.
+- Explain what changed and why. Leave implementation mechanics to the code.
+
+## Implementation and review
+
+Unless explicitly instructed otherwise:
+
+1. Work on a focused branch cut from the latest origin/main and open a PR
+   against main before reporting the task as done.
+2. Inspect CI results and completed review feedback for the latest commit.
+   A successful reviewer job does not mean the review found no problems.
+3. Address important findings or explain why they do not apply. Handle minor
+   findings according to the stopping rules below.
+4. Evaluate each fix in the surrounding project, add regression coverage,
+   and rerun affected checks before pushing.
+5. Repeat until a stopping criterion is met.
+6. Merge without asking again once the stopping criterion is met, required
+   checks pass on the latest commit, and no unresolved blockers or required
+   human review requests remain.
+
+### Reviewer context limits
+
+The automated PR reviewer does not see the user's original prompt or
+conversation. It may suggest changes that go against or beyond what the
+user asked for. Do not implement such suggestions. Note each conflict and
+report it to the user at the end of the thread.
+
+### Automated review stopping rules
+
+Judge findings by verified impact, not the reviewer's severity label.
+Important findings concern correctness, security, data loss, broken builds,
+or materially degraded behavior/performance.
+
+Track completed review rounds and consecutive rounds without important
+findings. Reruns of the same revision and integration failures do not count.
+
+- No applicable actionable feedback: finish immediately.
+- First minor-only round: optionally fix worthwhile, low-risk findings.
+  Do not manufacture another push merely to obtain another review.
+- Two consecutive rounds without important findings: stop responding to
+  automated nitpicks, even if actionable minor suggestions remain.
+  Defer worthwhile leftovers rather than continuing the cycle.
+- A confirmed important finding resets the minor-only streak. Address it
+  and verify the fix before continuing.
+
+After ten completed rounds, enter stabilization:
+
+- Stop optional cleanup, refactoring, and nitpick fixes.
+- One completed review without confirmed important findings is sufficient
+  to finish, even if minor suggestions remain.
+- Continue only for confirmed important defects. If resolving them stalls,
+  report the blockers rather than continuing indefinitely.
+
+These limits end optional automated-feedback work. They do not waive
+confirmed blockers, unresolved human review requests, or required checks.
+
+### Reviewer integration failures
+
+After two consecutive reviewer-integration failures, stop and report the
+review gap. Do not treat failures as approval. An explicit user instruction
+may waive review; report that waiver rather than claiming review passed.
+
+## Ending a task
+
+- A task ends with its changes merged to main — not with code written,
+  and not with a PR merely opened. An open PR is work in progress:
+  monitor CI on the latest commit, address review findings per the
+  stopping rules, and merge once the criteria are met.
+- Never finish with uncommitted changes or unpushed commits in the
+  worktree. Commit, push, and open or update the PR first.
+- If a step is impossible (missing push access, CI failure, reviewer
+  outage), report the exact blocker instead. Never present unreviewed or
+  unmerged work as finished.
+- Before finishing, confirm: the requested behavior is implemented
+  without unrelated changes; relevant checks pass on the latest code;
+  important review findings are addressed or rejected with reasons;
+  deferred suggestions, remaining risks, and validation gaps are
+  disclosed.
+- The final response states where the work stands: branch, PR, CI
+  status, review rounds completed, and whether it is merged.
+
+<!-- shared-rules:end -->

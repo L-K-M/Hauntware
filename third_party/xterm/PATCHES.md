@@ -236,6 +236,202 @@ what must be preserved.
     first survivor, detaches the trimmed slots, and advances
     `absoluteStartIndex` — exactly like a ring-buffer eviction.
 
+26. **Clickable web URLs** (`core/buffer/buffer.dart#getLinkAt`,
+    `terminal_view.dart#onLinkTap`; regressions: `link_test.dart`,
+    `link_gesture_test.dart`): HTTP(S) detection follows soft wraps and maps
+    wide characters to display cells. Prose punctuation is trimmed; credentials
+    and non-web schemes are rejected. Logical lines exceeding 16K cells are
+    skipped to bound hover work. Links show a hand cursor and activate on
+    Ctrl-click (Cmd-click on Apple platforms) or touch tap. Plain clicks,
+    shift-clicks, drags, and remote mouse reporting keep their existing behavior.
+    Hover hints clear on output, scrolling, or controller changes and stay
+    hidden where remote mouse reporting owns the tap, including click-only
+    reporting (which leaves releases unconsumed). The app launches links
+    externally and reports browser failures.
+
+### Robustness (regressions: `app/seance_app/test/terminal_runaway_sequence_test.dart`,
+`test/src/core/escape/parser_test.dart`)
+
+27. **An unfinished escape sequence is no longer unbounded**
+    (`core/escape/parser.dart#_process`, `kMaxPendingSequenceLength`):
+    upstream parks an incomplete sequence by rolling the whole run back onto
+    the `ByteConsumer` and waiting for the rest on a later `write`. That is
+    right for a sequence split across a chunk boundary and catastrophic for
+    one that never finishes: every later `write` re-parses the entire pending
+    run from the top, so the cost is **quadratic** in the output that follows,
+    and the queue pins all of it in memory at ~26x (`ByteConsumer` stores one
+    `int` per rune, and `_consumeOsc` rebuilds a `StringBuffer` over the whole
+    run each pass). OSC closes only on BEL or ESC, so a single stray `ESC ]`
+    — a log with captured escapes, a binary, a program killed mid-title — was
+    enough. Measured on the real parser at 4 KiB chunks: 1 MiB of following
+    output took 2.1 s, 4 MiB took 31 s, 8 MiB took 120 s, 32 MiB did not
+    finish in 10 minutes, and **nothing was ever rendered** — the terminal was
+    wedged for the rest of the session at 100% CPU with the heap climbing. A
+    well-formed but large payload (an `imgcat` OSC 1337, a big OSC 52
+    clipboard) hit the same wall without being malformed at all.
+
+    The parser now only parks a run while it is still short enough to be a
+    real sequence; past `kMaxPendingSequenceLength` (64 KiB — every supported
+    sequence is orders of magnitude shorter) it drops what it has consumed and
+    resumes parsing, so the payload reverts to ordinary text and a later
+    terminator lands normally. Same measurements after: 8 MiB in 148 ms and
+    32 MiB in 555 ms, both linear and level with plain output, RSS flat. At
+    most one cap's worth plus the current write is lost, once per runaway
+    sequence. The cap is injectable on the constructor so tests can drive the
+    abandon path without generating 64 KiB.
+
+    Note this is a *bound*, not a fix for the underlying design: the parser is
+    documented as having "no internal state", which is exactly why it must
+    re-parse. Making OSC/CSI parsing resumable across writes would make it
+    O(n) and support arbitrarily large legitimate payloads — worth doing if
+    inline images or large OSC 52 clipboard traffic ever matter here, and
+    unnecessary until then.
+
+### Selection is bounded by the content
+
+Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
+
+28. **Selection gestures clamp to the end of the content**
+    (`core/buffer/buffer.dart#contentEnd`, `ui/render.dart#_clampToContent`/
+    `#_selectionCellOffset`): dragging through the blank area under the shell
+    prompt painted a selection band across it and copied one newline per row
+    crossed. Nothing was out of bounds — a `Buffer` is built with one
+    `BufferLine` per viewport row and gains one per newline, so every row below
+    the prompt is a real, addressable line, and `getCellOffset` clamps to
+    `lines.length - 1` rather than to anything about content. A sweep through
+    the void therefore produced a perfectly valid multi-row range over cells
+    that hold nothing.
+
+    `Buffer.contentEnd` now reports one cell past the last cell in the buffer
+    that holds anything (null for a buffer nothing has been written to), and
+    every selection path in `RenderTerminal` routes its pixel→cell conversion
+    through `_selectionCellOffset`, which pulls the result back to it:
+    `selectWord`, `selectCharacters`, `selectCharactersTo`, `selectWordTo`,
+    `selectLine`, `selectLineTo`, `createAnchorAt` (the drag origin and the
+    shift-click base), `createWordAnchorsAt` and `createLineAnchorsAt`. The
+    end-inclusive +1 of the character paths is re-clamped after the bump, or it
+    would reach one cell past the content it was just pulled back to.
+
+    Consequences, all intended: a drag that never leaves the void starts and
+    ends on the same cell, so it paints nothing and copies nothing; a drag that
+    starts in output and runs off the bottom ends where the output does; a drag
+    rightward past the end of the last line stops at its last cell instead of
+    at the viewport edge; and a triple-click in the void selects the last line
+    of output rather than a blank row. A blank row *between* two rows of output
+    is inside the content and stays selectable — its newline is part of what is
+    being copied — and trailing blanks to the right of a short line mid-
+    selection are still painted, which every terminal does and which
+    `BufferLine.getText` already drops from the copy.
+
+    `getCellOffset` itself is deliberately unchanged: `mouseEvent`, link
+    hit-testing and the secondary-tap callbacks go through it, and a remote app
+    that owns the mouse has to be told the row the pointer is really on, void or
+    not. `contentEnd` is scanned from the end, so the common case stops within a
+    screen height. The worst case is not bounded by `viewHeight`: a program
+    printing nothing but newlines pushes blank lines into the scrollback like
+    any other output, and the scan then covers every line (measured 4 us
+    ordinarily against 2.1 ms over 9000 blank lines). It runs per selection
+    pointer event, so cache it if a drag ever shows up in a profile.
+
+### Cursor reports and scrolling margins
+
+29. **Cursor-position reports use protocol coordinates**
+    (`core/escape/emitter.dart#cursorPosition`,
+    `terminal.dart#sendCursorPosition`; regressions:
+    `test/src/terminal_test.dart`): CPR replies to CSI 6 n now translate the
+    buffer's zero-based row and column to one-based coordinates. The old reply
+    reported the home position as `CSI 0;0 R` and shifted every queried
+    position up and left, breaking remote programs that use the report to
+    position prompts or restore the cursor. Reports also honor the scrolling
+    margin as the origin when DECOM is enabled, matching cursor positioning.
+    Setting DECOM or DECSTBM homes the cursor in its new coordinate space;
+    reports are bounded to that space even after legacy cursor controls that
+    still clamp movement to the viewport instead of the scrolling margins.
+    Invalid equal/inverted DECSTBM regions are ignored before homing. Zero or
+    omitted parameters restore the default edges; CSI parsing preserves empty
+    parameter positions, including a leading omitted top margin. CUP/HVP
+    normalize omitted and zero coordinates before applying the origin.
+    Empty fields now reach all CSI handlers as zero. Editing and scrolling
+    counts treat zero as one, matching REP and cursor movement; this also
+    prevents a zero-length ECH from reading before the start of a line.
+
+### OSC 8 hyperlinks
+
+30. **Links a program marks are followed, not re-read from the screen**
+    (`core/hyperlinks.dart`, `core/escape/parser.dart#_escHandleOSC`,
+    `core/escape/handler.dart#setHyperlink`, `terminal.dart`,
+    `core/cell.dart#CellAttr`, `core/cursor.dart`,
+    `core/buffer/line.dart#getHyperlinkId`, `core/buffer/buffer.dart#getLinkAt`;
+    regressions: `test/src/core/hyperlinks_test.dart`,
+    `test/src/core/buffer/link_test.dart`, `test/src/ui/link_gesture_test.dart`):
+    patch 26 found links by reading the text on screen, which is all a terminal
+    can do for a bare URL — and is not what modern CLIs emit. `OSC 8 ; params ;
+    URI ST` attaches a target to the cells that follow until `OSC 8 ; ; ST`, so
+    the visible text is free to be anything. Both halves of the Antigravity
+    CLI's login flow were unusable without it: its "Click here to authenticate"
+    line has no URL to find, and the line that does print one is wrapped by the
+    CLI itself across hard newlines, so following the text opened the first
+    fragment of the URL as if it were the whole thing.
+
+    The parser now hands OSC 8 to the terminal, which registers the target in a
+    `Hyperlinks` table and stores the returned id in the cursor style; every
+    cell written carries it, and `getLinkAt` resolves that id before falling
+    back to the text scan. Details worth keeping:
+    - **Where the id lives**: the high 24 bits of the cell's attribute word,
+      whose low byte holds the style flags (`CellAttr.styleMask` /
+      `hyperlinkMask`). A fifth word per cell would have grown every buffer by
+      25% for a field almost no cell uses; packing it here also means the
+      paths that already copy cells — `setCell`, `copyFrom`, the reflow —
+      carry the link with no new code. `CellData.getHash` masks it out so the
+      painter's paragraph cache stays one entry per glyph and style.
+    - **SGR 0 does not close a hyperlink** (`CursorStyle.reset`): OSC 8 is a
+      state of its own per the spec, and programs reset colors inside link text
+      routinely. `eraseCell` is the opposite case — an erased cell holds no
+      text, so it drops the link (and keeps the colors it still paints with),
+      or a full-screen redraw inside a link would leave rows of clickable
+      blanks.
+    - **The table is bounded and ids are never recycled**: past 1024 targets
+      the least recently opened one is dropped, so a cell whose entry is gone
+      resolves to nothing rather than to somebody else's URL. Spending the
+      whole id space stops new targets being registered rather than starting
+      the ids over — an open prints nothing, so a remote can spend every id
+      without ever scrolling away the cells that hold them. Only targets this
+      terminal would actually open are stored — same gate as the text scan
+      (`parseWebUri`: http(s) only, a host, no credentials), plus the 2083-byte
+      ceiling VTE and iTerm2 use. A `file://` listing from `ls --hyperlink`
+      therefore never enters the table at all.
+    - The `params` field is ignored. Its only defined key, `id`, exists to
+      group a link's cells for hover highlighting, which this terminal does not
+      do; targets containing semicolons are rejoined rather than truncated.
+
+### Search highlights (regressions: `test/src/ui/controller_test.dart`, `test/src/core/buffer/buffer_test.dart`)
+
+31. **Highlights can recolour cells instead of covering them**
+    (`ui/controller.dart#highlight`, `ui/render.dart#_collectRecolors`,
+    `ui/painter.dart#paintLine`): upstream painted a highlight as a rect over
+    the glyphs, so the opaque `searchHitBackground` hid the very text it
+    marked. A highlight given a `foreground` is now painted as the covered
+    cells' own background and foreground (RGB, alpha dropped), so the fill
+    sits under the text and the text takes a colour chosen to read on it
+    (`searchHitForeground`). Only visible rows are visited, however far a
+    highlight reaches (the S4-20 culling, for this path). Where two overlap,
+    the newest wins, as with overlays. Highlights without a foreground keep
+    upstream's overlay.
+
+32. **Highlights anchored in the other buffer are not painted**
+    (`ui/render.dart#_visibleRange`): a highlight anchored in the main
+    buffer painted at its row numbers over the alternate screen (vim, less).
+    Both anchors must belong to the active buffer, as selections already do
+    (patch 15).
+
+33. **Anchors can detach on trim** (`core/buffer/line.dart#AnchorTrimBehavior`,
+    `Buffer.createAnchor`/`createAnchorFromOffset`): patch 9 made every
+    anchor on a trimmed line migrate to the new oldest line, right for a
+    selection and wrong for a search hit, which would collapse onto row 0
+    and linger there. `onTrim: AnchorTrimBehavior.detach` disposes the
+    anchor with its line instead (ring-buffer eviction, CSI 3J and a whole
+    buffer clear alike, successor or not); `migrate` stays the default.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on
@@ -245,4 +441,3 @@ what must be preserved.
   (`XtermTerminalEngine.detectPlatform`). Leaving the default
   `TerminalTargetPlatform.unknown` re-introduces the Option-dead-key bug of
   patch 22 — `unknown` takes the non-Apple, alt-sends-Meta path.
-

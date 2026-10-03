@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:seance_core/seance_core.dart';
 
 import '../app_state.dart';
+import '../family_hues.dart';
 import 'top_toast.dart';
 
 /// The inline command generator: a focused "describe a task → get one command"
@@ -12,9 +13,7 @@ import 'top_toast.dart';
 Future<void> showCommandGenerator(BuildContext context, AppState state) {
   final active = state.activeSession;
   if (active == null || !active.isConnected) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Open a connected session first.')),
-    );
+    showTopToastIn(context, message: 'Open a connected session first.');
     return Future.value();
   }
   return showDialog<void>(
@@ -35,7 +34,6 @@ class _CommandGeneratorDialog extends StatefulWidget {
 
 class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
   late final TextEditingController _input;
-  bool _includeContext = true;
   bool _busy = false;
   String? _error;
 
@@ -74,7 +72,7 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
       final redactor = SecretRedactor(
           enabled: widget.state.services.settings.redactionEnabled);
       var prompt = request;
-      if (_includeContext) {
+      if (widget.state.includeTerminalContext) {
         final recent = widget.session.engine.recentText(maxLines: 40);
         if (recent.trim().isNotEmpty) {
           prompt =
@@ -148,7 +146,11 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.auto_fix_high, size: 20),
+                  Icon(
+                    Icons.auto_fix_high,
+                    size: 20,
+                    color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'Generate a command',
@@ -174,13 +176,19 @@ class _CommandGeneratorDialogState extends State<_CommandGeneratorDialog> {
                 ),
                 onSubmitted: (_) => _generate(),
               ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: _includeContext,
-                onChanged: (v) => setState(() => _includeContext = v ?? true),
-                title: const Text('Use recent terminal output as context'),
+              // The chat's "Include terminal output" under another name: an
+              // opt-out made in either place holds in both.
+              ListenableBuilder(
+                listenable: widget.state,
+                builder: (context, _) => CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: widget.state.includeTerminalContext,
+                  onChanged: (v) =>
+                      widget.state.setIncludeTerminalContext(v ?? true),
+                  title: const Text('Use recent terminal output as context'),
+                ),
               ),
               if (_error != null)
                 Padding(

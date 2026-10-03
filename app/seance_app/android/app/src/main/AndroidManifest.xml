@@ -3,10 +3,21 @@
          INTERNET to the debug/profile manifests, so release builds need it
          declared here explicitly. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Keep SSH sessions alive while the app is backgrounded (Android freezes
+         cached processes, killing their sockets). The anchor is a dataSync
+         foreground service while any session is connecting/connected. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Predictive back (Android 13+): the system hands a back to Flutter
+         only while the app has one of its own to take (the narrow terminal
+         screen, a Files folder) and otherwise runs its own back-to-home.
+         Older releases ignore the attribute. -->
     <application
         android:label="Séance"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -29,6 +40,13 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Keeps the process anchored while SSH sessions are live so
+             backgrounding the app doesn't freeze it and drop every connection.
+             Controlled from Dart via the seance/keepalive channel. -->
+        <service
+            android:name=".KeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

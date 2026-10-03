@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show HttpStatus;
+import 'dart:math' show min;
+import 'dart:typed_data' show BytesBuilder, Uint8List;
 
 import 'package:seance_protocol/seance_protocol.dart';
 import 'package:shelf/shelf.dart';
@@ -8,26 +11,74 @@ import 'package:shelf_router/shelf_router.dart';
 
 import 'config.dart';
 import 'favicon.dart';
+import 'inbox_docs.dart';
 import 'rate_limiter.dart';
 import 'storage.dart';
+
+part 'inbox_handlers.dart';
 
 /// The Séance sync server. A dumb, breach-tolerant blob store: it authenticates
 /// devices, stores end-to-end encrypted records, and resolves conflicts with
 /// the same last-write-wins rule the client uses. It can decrypt nothing.
 class SyncServer {
+  /// Cap on a body read before any authentication (register, prelogin,
+  /// login). The largest of them, a register body, is under 1 KiB; without
+  /// this they inherited the push cap, so anyone could make the server buffer
+  /// megabytes per request. Never above [ServerSettings.maxBodyBytes], so
+  /// lowering that still lowers this.
+  static const _maxAuthBodyBytes = 16 * 1024;
+
+  /// Longest username, in UTF-8 bytes. Enough for any email address (RFC 5321
+  /// caps one at 256 octets, brackets included) while keeping login limiter
+  /// keys, which live for a whole window, small.
+  static const _maxUsernameBytes = 256;
+
+  /// C0 controls, DEL, C1 controls, and the format characters that render as
+  /// nothing: soft hyphen, zero-width spaces and joiners, bidi marks,
+  /// embeddings, overrides and isolates, and the byte-order mark. None belongs
+  /// in a name, and one stored verbatim garbles or disguises the name wherever
+  /// it is later displayed.
+  static final _controlCharacter = RegExp(
+    '[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e'
+    '\u2060-\u206f\ufeff]',
+  );
+
+  /// What every client has always sent: `VaultCrypto` derives a 32-byte
+  /// verifier, and clients mint 16-byte Argon2 salts (a minimum, as a longer
+  /// salt is still a valid one). An empty verifier would create an account
+  /// anyone could sign in to with an empty one.
+  static const _authVerifierBytes = 32;
+  static const _minArgonSaltBytes = 16;
+
   final Storage storage;
   final ServerSettings settings;
   final RateLimiter loginLimiter;
+
+  /// Deposits per inbox app, keyed by app id (docs/INBOX.md: 30 a minute).
+  final RateLimiter inboxLimiter;
+
+  /// The clock inbox retention is measured with; injectable for tests.
+  final DateTime Function() _now;
 
   SyncServer({
     required this.storage,
     required this.settings,
     RateLimiter? loginLimiter,
-  }) : loginLimiter =
+    RateLimiter? inboxLimiter,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now,
+       loginLimiter =
            loginLimiter ??
            RateLimiter(
              maxAttempts: settings.loginMaxAttempts,
              window: settings.loginWindow,
+           ),
+       inboxLimiter =
+           inboxLimiter ??
+           RateLimiter(
+             maxAttempts: _inboxDepositsPerWindow,
+             window: _inboxDepositWindow,
+             now: now,
            );
 
   Handler get handler {
@@ -52,7 +103,28 @@ class SyncServer {
       ..post('/v1/login', _login)
       ..get('/v1/sync', _sync)
       ..put('/v1/records', _push)
-      ..delete('/v1/account', _deleteAccount);
+      ..delete('/v1/account', _deleteAccount)
+      // The command inbox (docs/INBOX.md). The producer's only route is the
+      // POST; every other inbox route needs a session, so a deposit token
+      // can add items and do nothing else.
+      ..post('/v1/apps', _createInboxApp)
+      ..get('/v1/apps', _listInboxApps)
+      ..delete('/v1/apps/<appId>', _deleteInboxApp)
+      ..get('/v1/inbox', _listInbox)
+      ..post('/v1/inbox/<appId>', _deposit)
+      ..delete('/v1/inbox/<appId>/<itemId>', _deleteInboxItem)
+      // Static documentation for producers, which have only a pairing
+      // string. App ids are base64url and so never contain a dot: these
+      // paths cannot shadow an app.
+      ..get('/llms.txt', (Request r) => _static(inboxLlmsTxt, 'text/plain'))
+      ..get(
+        '/v1/inbox/openapi.json',
+        (Request r) => _static(inboxOpenApiJson, 'application/json'),
+      )
+      ..get(
+        '/v1/inbox/seance-propose.py',
+        (Request r) => _static(inboxProposePy, 'text/x-python'),
+      );
 
     return const Pipeline()
         .addMiddleware(_errorToJson())
@@ -76,7 +148,7 @@ class SyncServer {
   // --- Handlers ---
 
   Future<Response> _register(Request req) async {
-    final body = await _readJson(req);
+    final body = await _readJson(req, _authBodyCap);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final RegisterRequest r;
     try {
@@ -94,12 +166,28 @@ class SyncServer {
     if (!settings.openRegistration) {
       return _error(403, 'registration_closed', 'Registration is disabled');
     }
-    if (await storage.getAccount(r.username) != null) {
-      return _error(409, 'account_exists', 'Username already registered');
+    if (!_isRegistrableUsername(r.username)) {
+      return _error(
+        400,
+        'bad_username',
+        'Username must be 1 to $_maxUsernameBytes bytes of UTF-8 without '
+            'control characters',
+      );
     }
     final authVerifier = _tryBase64Decode(r.authVerifier);
-    if (authVerifier == null) {
+    // Decoded with the same decoder a client uses at prelogin, so a salt
+    // stored here is one every client can read back.
+    final argonSalt = _tryBase64Decode(r.argonSalt);
+    if (authVerifier == null ||
+        authVerifier.length != _authVerifierBytes ||
+        argonSalt == null ||
+        argonSalt.length < _minArgonSaltBytes) {
       return _error(400, 'bad_request', 'Invalid register payload');
+    }
+    // After every check that needs no storage, so a malformed request costs
+    // no lookup and learns nothing about which names are taken.
+    if (await storage.getAccount(r.username) != null) {
+      return _error(409, 'account_exists', 'Username already registered');
     }
     final verifierSalt = secureRandomBytes(16);
     final hash = VaultCrypto.hashAuthVerifier(authVerifier, verifierSalt);
@@ -117,9 +205,13 @@ class SyncServer {
   }
 
   Future<Response> _prelogin(Request req) async {
-    final body = await _readJson(req);
-    final username = body?['username'] as String?;
+    final body = await _readJson(req, _authBodyCap);
+    final username = body?['username'];
     if (username == null) return _error(400, 'bad_request', 'Missing username');
+    if (username is! String) {
+      return _error(400, 'bad_request', 'Invalid prelogin payload');
+    }
+    if (!_usernameInBounds(username)) return _usernameOutOfBounds();
     final account = await storage.getAccount(username);
     if (account == null) {
       return _error(404, 'no_account', 'No such account');
@@ -133,7 +225,7 @@ class SyncServer {
   }
 
   Future<Response> _login(Request req) async {
-    final body = await _readJson(req);
+    final body = await _readJson(req, _authBodyCap);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final LoginRequest r;
     try {
@@ -144,6 +236,8 @@ class SyncServer {
     if (r.protocolVersion != kProtocolVersion) {
       return _error(400, 'protocol_version', 'Protocol version mismatch');
     }
+    // Before the limiter, whose keys outlive this request by a whole window.
+    if (!_usernameInBounds(r.username)) return _usernameOutOfBounds();
     if (!loginLimiter.allow('login:${r.username}')) {
       return _error(429, 'rate_limited', 'Too many login attempts');
     }
@@ -175,13 +269,20 @@ class SyncServer {
 
   Future<Response> _sync(Request req) => _withAuth(req, (username) async {
     final since = int.tryParse(req.url.queryParameters['since'] ?? '0') ?? 0;
-    final records = await storage.recordsSince(username, since);
-    final latest = await storage.latestSeq(username);
-    return _json(PullResponse(records: records, latestSeq: latest).toJson());
+    final snapshot = await storage.pullSnapshot(username, since);
+    // Every round pulls before it pushes, so this is where a client learns how
+    // to size the push it is about to make — see [PushLimits].
+    return _json(
+      PullResponse(
+        records: snapshot.records,
+        latestSeq: snapshot.latestSeq,
+        limits: settings.pushLimits,
+      ).toJson(),
+    );
   });
 
   Future<Response> _push(Request req) => _withAuth(req, (username) async {
-    final body = await _readJson(req);
+    final body = await _readJson(req, settings.maxBodyBytes);
     if (body == null) return _error(400, 'bad_request', 'Malformed JSON');
     final PushRequest r;
     try {
@@ -202,25 +303,8 @@ class SyncServer {
             'A record blob exceeds the ${settings.maxBlobBytes}-byte limit');
       }
     }
-    final results = <PushResult>[];
-    for (final incoming in r.records) {
-      final existing = await storage.getRecord(username, incoming.id);
-      // Server applies the same LWW rule as the client.
-      final incomingWins =
-          existing == null ||
-          identical(Lww.resolve(existing, incoming), incoming);
-      if (incomingWins) {
-        final seq = await storage.nextSeq(username);
-        await storage.putRecord(username, incoming.withSeq(seq));
-        results.add(PushResult(id: incoming.id, seq: seq, accepted: true));
-      } else {
-        results.add(
-          PushResult(id: incoming.id, seq: existing.seq ?? 0, accepted: false),
-        );
-      }
-    }
-    final latest = await storage.latestSeq(username);
-    return _json(PushResponse(results: results, latestSeq: latest).toJson());
+    final pushed = await storage.pushRecords(username, r.records);
+    return _json(pushed.toJson());
   });
 
   Future<Response> _deleteAccount(Request req) =>
@@ -246,17 +330,34 @@ class SyncServer {
     return fn(username);
   }
 
-  Future<Map<String, dynamic>?> _readJson(Request req) async {
+  int get _authBodyCap => min(settings.maxBodyBytes, _maxAuthBodyBytes);
+
+  /// Whether a new account may take [username]. Registration only: names were
+  /// never checked before, so a stored one may break this rule, and login and
+  /// prelogin keep answering for it with just [_usernameInBounds].
+  static bool _isRegistrableUsername(String username) =>
+      _usernameInBounds(username) && !_controlCharacter.hasMatch(username);
+
+  static bool _usernameInBounds(String username) =>
+      username.isNotEmpty && utf8.encode(username).length <= _maxUsernameBytes;
+
+  Response _usernameOutOfBounds() => _error(
+    400,
+    'bad_username',
+    'Username must be 1 to $_maxUsernameBytes bytes of UTF-8',
+  );
+
+  Future<Map<String, dynamic>?> _readJson(Request req, int maxBytes) async {
     // Reject an oversized body before reading it (a lying/omitted Content-Length
     // is still caught while streaming below). Throws _PayloadTooLarge, which the
     // error middleware maps to 413.
     final declared = req.contentLength;
-    if (declared != null && declared > settings.maxBodyBytes) {
+    if (declared != null && declared > maxBytes) {
       throw const _PayloadTooLarge();
     }
     final String text;
     try {
-      text = await _readBounded(req, settings.maxBodyBytes);
+      text = await _readBounded(req, maxBytes);
     } on _PayloadTooLarge {
       rethrow;
     } catch (_) {
@@ -271,13 +372,19 @@ class SyncServer {
     }
   }
 
-  Future<String> _readBounded(Request req, int maxBytes) async {
-    final bytes = <int>[];
+  Future<String> _readBounded(Request req, int maxBytes) async =>
+      utf8.decode(await _readBoundedBytes(req, maxBytes));
+
+  Future<Uint8List> _readBoundedBytes(Request req, int maxBytes) async {
+    // Keeps the received chunks as they are. A growable List<int> spends a
+    // word per byte plus growth slack, which made one body just under the
+    // 8 MiB push cap cost over 100 MiB of heap.
+    final bytes = BytesBuilder(copy: false);
     await for (final chunk in req.read()) {
-      bytes.addAll(chunk);
+      bytes.add(chunk);
       if (bytes.length > maxBytes) throw const _PayloadTooLarge();
     }
-    return utf8.decode(bytes);
+    return bytes.takeBytes();
   }
 
   List<int>? _tryBase64Decode(String value) {
@@ -292,6 +399,12 @@ class SyncServer {
     return (Request req) async {
       try {
         return await inner(req);
+      } on StorageUnavailableException catch (e) {
+        return _error(
+            HttpStatus.serviceUnavailable, 'storage_unavailable', e.toString());
+      } on StorageBusyException {
+        return _error(HttpStatus.serviceUnavailable, 'storage_busy',
+            'Storage is busy; retry shortly.');
       } on _PayloadTooLarge {
         return _error(413, 'payload_too_large', 'Request body too large');
       } on FormatException {
@@ -326,6 +439,9 @@ class SyncServer {
 <p>A breach-tolerant blob store for the <strong>Séance</strong> SSH client:
 it holds only end-to-end encrypted records and can decrypt nothing.
 Configure this server's URL in the app's sync settings.</p>
+<p>Handed an inbox pairing string to propose commands? Read
+<a href="/llms.txt">/llms.txt</a> or use the reference client,
+<a href="/v1/inbox/seance-propose.py">seance-propose.py</a>.</p>
 </body>
 </html>
 ''';
@@ -342,8 +458,8 @@ Configure this server's URL in the app's sync settings.</p>
   }
 }
 
-/// Signals that a request body exceeded [ServerSettings.maxBodyBytes]. Mapped to
-/// HTTP 413 by the error middleware.
+/// Signals that a request body exceeded its route's cap. Mapped to HTTP 413 by
+/// the error middleware.
 class _PayloadTooLarge implements Exception {
   const _PayloadTooLarge();
 }

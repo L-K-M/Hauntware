@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/seance_core.dart';
 import 'package:share_plus/share_plus.dart';
@@ -17,6 +19,7 @@ import '../services/managed_remote_file.dart';
 import '../services/remote_files_controller.dart';
 import '../services/xterm_engine.dart';
 import 'built_in_text_editor.dart';
+import 'file_kinds.dart';
 
 class FilesScreen extends StatelessWidget {
   const FilesScreen({super.key});
@@ -28,6 +31,10 @@ class FilesScreen extends StatelessWidget {
       listenable: state,
       builder: (context, _) => Scaffold(
         appBar: AppBar(
+          // The arrow leaves Files from any folder. Only the system back
+          // walks up the tree first (see _RemoteBrowserState), and the
+          // default arrow would ask the same PopScope, so pop outright.
+          leading: BackButton(onPressed: () => Navigator.of(context).pop()),
           title: Text(
             'Files · ${state.activeSession?.displayLabel ?? 'Session'}',
           ),
@@ -70,16 +77,25 @@ class FilesPane extends StatelessWidget {
         }
         if (!session.isConnected || session.files == null) {
           if (session.retainedLocalCopies.isNotEmpty) {
-            return _RecoveredLocalEdits(session: session, state: state);
+            return _RecoveredLocalEdits(
+              session: session,
+              state: state,
+              popAfterTerminalStage: popAfterTerminalStage,
+            );
           }
           return const _FilesUnavailable(
             icon: Icons.link_off,
             message: 'Reconnect this session to browse remote files.',
           );
         }
-        final sessions = state.sessionsForServer(session.serverId);
+        // "Session N" numbers the shell sessions — editor tabs between them
+        // do not count.
+        final terminals = state
+            .tabsForServer(session.serverId)
+            .whereType<TerminalSession>()
+            .toList();
         final ordinal =
-            sessions.indexWhere((item) => item.id == session.id) + 1;
+            terminals.indexWhere((item) => item.id == session.id) + 1;
         return _RemoteBrowser(
           key: ValueKey(session.id),
           controller: session.files!,
@@ -96,6 +112,9 @@ class _RemoteBrowser extends StatefulWidget {
   final RemoteFilesController controller;
   final String identity;
   final TerminalSession session;
+
+  /// True on the pushed [FilesScreen]: staging a path or opening an editor
+  /// tab pops the screen, and system back walks up the tree before it does.
   final bool popAfterTerminalStage;
 
   const _RemoteBrowser({
@@ -116,6 +135,19 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   final TextEditingController _filter = TextEditingController();
   final Set<String> _promptedDirtyCopies = {};
 
+  /// The desktop listing's keyboard cursor — the path the ring sits on.
+  String? _cursorPath;
+
+  /// The pane's double-click window (the pane state times it itself, as
+  /// Poltergeist's `_RowGestures` does): a second primary press on the
+  /// same row inside it opens the entry.
+  DateTime _lastPrimaryDownAt = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _lastPrimaryDownPath;
+
+  final FocusNode _listFocus = FocusNode();
+  final ScrollController _listScroll = ScrollController();
+  final GlobalKey _listViewportKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -125,6 +157,8 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   @override
   void dispose() {
     _filter.dispose();
+    _listFocus.dispose();
+    _listScroll.dispose();
     super.dispose();
   }
 
@@ -169,10 +203,10 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                 if (controller.localCopies.isNotEmpty)
                   _LocalCopiesPanel(
                     copies: controller.localCopies.values.toList(),
-                    onOpen: _openLocalCopy,
+                    onOpen: _openManagedCopy,
                     editorChoices: (copy) => _editorChoices(copy.remotePath),
                     onOpenWith: (copy, editorId) =>
-                        _openLocalCopy(copy, editorId: editorId),
+                        _openManagedCopy(copy, editorId: editorId),
                     onUpload: _uploadLocalCopy,
                     onDiscard: _discardLocalCopy,
                   ),
@@ -201,12 +235,18 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                             width: 2,
                           ),
                         ),
-                        child: const Column(
+                        child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.file_upload_outlined, size: 36),
-                            SizedBox(height: 8),
-                            Text('Upload to this directory'),
+                            Icon(
+                              Icons.file_upload,
+                              size: 36,
+                              color: FamilyPalette.of(
+                                context,
+                              ).glyph(FamilyHue.cyan),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text('Upload to this directory'),
                           ],
                         ),
                       ),
@@ -216,7 +256,10 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
               ),
           ],
         );
-        if (!_supportsDesktopDrop) return content;
+        final browser = widget.popAfterTerminalStage
+            ? _systemBackGoesUp(controller, content)
+            : content;
+        if (!_supportsDesktopDrop) return browser;
         return DropTarget(
           enable:
               TickerMode.valuesOf(context).enabled &&
@@ -227,9 +270,30 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
             setState(() => _dragging = false);
             unawaited(_uploadDroppedFiles(details.files));
           },
-          child: content,
+          child: browser,
         );
       },
+    );
+  }
+
+  /// On the pushed Files screen, system back climbs one folder at a time the
+  /// way a file manager's does, and leaves the screen once it reaches the
+  /// root. The app bar's arrow still leaves from anywhere (see [FilesScreen]).
+  /// After a failed listing (a parent the user may not read, say) back
+  /// leaves too, so it can never get stuck retrying the same folder.
+  ///
+  /// Android only: it is the one platform with a system back. On iOS (and
+  /// macOS, whose page transition is Cupertino's too) back is the edge
+  /// swipe, which Flutter disables outright on a route that vetoes its pop,
+  /// so a swipe below the root would do nothing at all instead of leaving.
+  Widget _systemBackGoesUp(RemoteFilesController controller, Widget child) {
+    if (Theme.of(context).platform != TargetPlatform.android) return child;
+    return PopScope(
+      canPop: !controller.canGoUp || controller.error != null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(controller.goUp());
+      },
+      child: child,
     );
   }
 
@@ -255,7 +319,11 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.folder_open_outlined, size: 40),
+                Icon(
+                  Icons.folder_open,
+                  size: 40,
+                  color: FamilyPalette.of(context).glyph(FamilyHue.blue),
+                ),
                 const SizedBox(height: 10),
                 Text(
                   controller.filterQuery.isNotEmpty || !controller.showHidden
@@ -271,51 +339,496 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       );
     }
     return LayoutBuilder(
-      builder: (context, constraints) {
-        final showDetails = constraints.maxWidth >= 430;
-        return ListView.builder(
-          itemCount: controller.entries.length,
-          itemBuilder: (context, index) {
-            final entry = controller.entries[index];
-            final localCopy = controller.localCopies[entry.path];
-            return _FileRow(
-              entry: entry,
-              showDetails: showDetails,
-              hasLocalCopy: localCopy != null,
-              selected: controller.selectedPaths.contains(entry.path),
-              selectionMode: controller.selectedPaths.isNotEmpty,
-              onSelect: () => controller.toggleSelection(entry.path),
-              onOpen: () => entry.isDirectory
-                  ? controller.navigate(entry.path)
-                  : _openRemoteFile(entry),
-              onRename: () => _rename(entry),
-              onDelete: () => _delete(entry),
-              onProperties: () => _showProperties(entry),
-              onCopyPath: () => _copyRemotePath(entry.path),
-              onOpenTerminalHere: entry.isDirectory
-                  ? () => _openTerminalHere(entry.path)
-                  : null,
-              onDownload: entry.type == RemoteFileType.file
-                  ? () => _exportRemoteFile(entry)
-                  : entry.isDirectory && _supportsDesktopDrop
-                  ? () => _downloadRemoteEntries([entry])
-                  : null,
-              onShare: entry.type == RemoteFileType.file && _supportsSharing
-                  ? () => _shareRemoteFile(entry)
-                  : null,
-              editorChoices: entry.type == RemoteFileType.file
-                  ? _editorChoices(entry.path)
-                  : const [],
-              onOpenWith: (editorId) =>
-                  _openRemoteFileWithEditor(entry, editorId),
-              onUploadChanges: localCopy == null
-                  ? null
-                  : () => _uploadLocalCopy(localCopy),
-            );
-          },
+      builder: (context, constraints) =>
+          ghostIsDesktopPlatform(Theme.of(context).platform)
+          ? _desktopListing(context, constraints.maxWidth, controller)
+          : _compactListing(controller),
+    );
+  }
+
+  /// The desktop listing (D32 §6): the shared column header over dense
+  /// [GhostFileRow]s — pointer-down selection with Ctrl/⌘-toggle and
+  /// Shift-range, pane-owned double-click timing, the keyboard cursor,
+  /// and the verbs' context menu on right-click, Menu, or Shift+F10.
+  Widget _desktopListing(
+    BuildContext context,
+    double width,
+    RemoteFilesController controller,
+  ) {
+    final metrics = GhostFileColumnMetrics.forWidth(
+      width,
+      MediaQuery.textScalerOf(context),
+      modifiedWidth: GhostFileColumnMetrics.modifiedWidthIn(
+        context,
+        today: (time) => 'Today at $time',
+        yesterday: (time) => 'Yesterday at $time',
+      ),
+    );
+    return GhostFileColumnMetricsScope(
+      metrics: metrics,
+      child: Column(
+        children: [
+          GhostFileColumnHeader(
+            listId: 'files',
+            sortColumn: switch (controller.sortField) {
+              RemoteSortField.name => GhostFileColumn.name,
+              RemoteSortField.size => GhostFileColumn.size,
+              RemoteSortField.modifiedAt => GhostFileColumn.modified,
+              // A type sort still lives in the ⋮ menu; no column claims
+              // its chevron.
+              RemoteSortField.type => null,
+            },
+            sortDirection:
+                controller.sortDirection == RemoteSortDirection.ascending
+                ? GhostFileSortDirection.ascending
+                : GhostFileSortDirection.descending,
+            onSort: (column) {
+              final field = switch (column) {
+                GhostFileColumn.name => RemoteSortField.name,
+                GhostFileColumn.size => RemoteSortField.size,
+                GhostFileColumn.modified => RemoteSortField.modifiedAt,
+              };
+              controller.setSort(
+                field,
+                controller.sortField == field &&
+                        controller.sortDirection ==
+                            RemoteSortDirection.ascending
+                    ? RemoteSortDirection.descending
+                    : RemoteSortDirection.ascending,
+              );
+            },
+          ),
+          Expanded(
+            child: Focus(
+              focusNode: _listFocus,
+              onKeyEvent: _onListingKey,
+              child: Listener(
+                // A press anywhere in the listing arms the keyboard
+                // focus; the rows' own Listeners see the same event.
+                onPointerDown: (_) => _listFocus.requestFocus(),
+                child: ListView.builder(
+                  key: _listViewportKey,
+                  controller: _listScroll,
+                  itemExtent: scaledGhostFileRowExtent(context),
+                  itemCount: controller.entries.length,
+                  itemBuilder: (context, index) =>
+                      _desktopRow(controller.entries[index]),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The touch listing (D32 §9): the shared 56 dp rows — tap opens (or
+  /// toggles while selecting), long-press extends the selection, ⋮ opens
+  /// the verb menu.
+  Widget _compactListing(RemoteFilesController controller) {
+    return ListView.builder(
+      itemExtent: scaledGhostCompactFileRowExtent(context),
+      itemCount: controller.entries.length,
+      itemBuilder: (context, index) {
+        final entry = controller.entries[index];
+        final localCopy = controller.localCopies[entry.path];
+        final selecting = controller.selectedPaths.isNotEmpty;
+        final selected = controller.selectedPaths.contains(entry.path);
+        return Builder(
+          builder: (itemContext) => GhostFileCompactRow(
+            item: ghostFileItemOf(entry),
+            selected: selected,
+            selecting: selecting,
+            onTap: () => selecting
+                ? controller.toggleSelection(entry.path)
+                : _openEntry(entry),
+            onLongPress: () => controller.toggleSelection(entry.path),
+            onActions: () {
+              final box = itemContext.findRenderObject() as RenderBox?;
+              unawaited(
+                _showEntryMenu(
+                  entry,
+                  box == null
+                      ? const Offset(32, 32)
+                      : box.localToGlobal(box.size.centerRight(Offset.zero)),
+                ),
+              );
+            },
+            onRename: ghostFileNameIsFlagged(entry.name)
+                ? null
+                : () => _rename(entry),
+            trailing: localCopy == null
+                ? null
+                : IconButton(
+                    tooltip: 'Upload local changes',
+                    iconSize: 20,
+                    onPressed: () => unawaited(_uploadLocalCopy(localCopy)),
+                    icon: const Icon(Icons.edit_note),
+                  ),
+          ),
         );
       },
     );
+  }
+
+  GhostFileRow _desktopRow(RemoteFileEntry entry) {
+    final controller = widget.controller;
+    final selected = controller.selectedPaths.contains(entry.path);
+    final cursor = _cursorPath == entry.path;
+    final localCopy = controller.localCopies[entry.path];
+    return GhostFileRow(
+      item: ghostFileItemOf(entry),
+      // The disclosure column stays reserved so names line up with the
+      // header's Name label; this listing never expands in place, so no
+      // row draws a triangle.
+      outline: true,
+      selected: selected,
+      active: true,
+      cursorRing: cursor,
+      onPointerDown: (event) => _rowPointerDown(entry, event),
+      onPointerMove: (_) {},
+      onPointerUp: (_) {},
+      onTap: () {},
+      onLongPress: () {},
+      onOpen: () => _openEntry(entry),
+      onRename: ghostFileNameIsFlagged(entry.name)
+          ? null
+          : () => _rename(entry),
+      trailing: _rowTrailing(entry, localCopy),
+    );
+  }
+
+  Widget _rowTrailing(RemoteFileEntry entry, ManagedRemoteFile? localCopy) =>
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (localCopy != null)
+            _DenseActionIcon(
+              tooltip: 'Upload local changes',
+              icon: Icons.edit_note,
+              onPressedAt: (_) => unawaited(_uploadLocalCopy(localCopy)),
+            ),
+          _DenseActionIcon(
+            tooltip: 'Actions',
+            icon: Icons.more_vert,
+            onPressedAt: (rect) =>
+                unawaited(_showEntryMenu(entry, rect.center)),
+          ),
+        ],
+      );
+
+  /// A desktop row's primary/secondary press. Selection lands on
+  /// pointer-down; the double-click window stays here, in pane state.
+  void _rowPointerDown(RemoteFileEntry entry, PointerDownEvent event) {
+    final controller = widget.controller;
+    _setCursor(entry.path);
+    if (event.buttons & kSecondaryMouseButton != 0) {
+      // A right-click on an unselected row selects it first, like the
+      // file managers: the menu then names what it acts on.
+      if (!controller.selectedPaths.contains(entry.path)) {
+        controller.selectOnly(entry.path);
+      }
+      unawaited(_showEntryMenu(entry, event.position));
+      return;
+    }
+    if (event.buttons & kPrimaryMouseButton == 0) return;
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final isApple = Theme.of(context).platform == TargetPlatform.macOS;
+    final toggle = isApple
+        ? pressed.contains(LogicalKeyboardKey.metaLeft) ||
+              pressed.contains(LogicalKeyboardKey.metaRight)
+        : pressed.contains(LogicalKeyboardKey.controlLeft) ||
+              pressed.contains(LogicalKeyboardKey.controlRight);
+    final shift =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight);
+    if (shift) {
+      controller.selectRangeTo(entry.path);
+      return;
+    }
+    if (toggle) {
+      controller.toggleSelection(entry.path);
+      return;
+    }
+    final now = DateTime.now();
+    final doubleClick =
+        _lastPrimaryDownPath == entry.path &&
+        now.difference(_lastPrimaryDownAt) <= kDoubleTapTimeout;
+    _lastPrimaryDownAt = now;
+    _lastPrimaryDownPath = entry.path;
+    controller.selectOnly(entry.path);
+    if (doubleClick) {
+      _lastPrimaryDownPath = null;
+      _openEntry(entry);
+    }
+  }
+
+  void _openEntry(RemoteFileEntry entry) {
+    if (entry.isDirectory) {
+      unawaited(widget.controller.navigate(entry.path));
+    } else {
+      unawaited(_openRemoteFile(entry));
+    }
+  }
+
+  void _setCursor(String path) {
+    if (_cursorPath == path) return;
+    setState(() => _cursorPath = path);
+  }
+
+  /// The listing's keyboard contract: arrows move the cursor (Shift
+  /// extends the range, a plain move single-selects), Enter opens,
+  /// Space toggles, Ctrl/⌘+A selects all, Escape clears, and the Menu
+  /// key or Shift+F10 opens the cursor row's verbs.
+  KeyEventResult _onListingKey(FocusNode node, KeyEvent event) {
+    // Key-down and the arrows' key-repeat run; a held Enter would keep
+    // re-opening rows and repeating Space/select-all is meaningless, so
+    // only cursor movement honours auto-repeat.
+    if (event is! KeyDownEvent &&
+        !(event is KeyRepeatEvent &&
+            (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+                event.logicalKey == LogicalKeyboardKey.arrowUp))) {
+      return KeyEventResult.ignored;
+    }
+    final controller = widget.controller;
+    final entries = controller.entries;
+    if (entries.isEmpty) return KeyEventResult.ignored;
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    final isApple = Theme.of(context).platform == TargetPlatform.macOS;
+    final modifier = isApple
+        ? pressed.contains(LogicalKeyboardKey.metaLeft) ||
+              pressed.contains(LogicalKeyboardKey.metaRight)
+        : pressed.contains(LogicalKeyboardKey.controlLeft) ||
+              pressed.contains(LogicalKeyboardKey.controlRight);
+    final shift =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+        pressed.contains(LogicalKeyboardKey.shiftRight);
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.keyA && modifier) {
+      controller.selectAll();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      controller.clearSelection();
+      return KeyEventResult.handled;
+    }
+    var index = entries.indexWhere((entry) => entry.path == _cursorPath);
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      final delta = key == LogicalKeyboardKey.arrowDown ? 1 : -1;
+      index = index < 0
+          ? (delta > 0 ? 0 : entries.length - 1)
+          : (index + delta).clamp(0, entries.length - 1);
+      final target = entries[index];
+      _setCursor(target.path);
+      shift
+          ? controller.selectRangeTo(target.path)
+          : controller.selectOnly(target.path);
+      _scrollCursorIntoView(index);
+      return KeyEventResult.handled;
+    }
+    if (index < 0) return KeyEventResult.ignored;
+    final entry = entries[index];
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      _openEntry(entry);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.space) {
+      controller.toggleSelection(entry.path);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.contextMenu ||
+        (key == LogicalKeyboardKey.f10 && shift)) {
+      unawaited(_showEntryMenu(entry, _cursorMenuPosition(index)));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Keeps the cursor row inside the viewport on keyboard moves — the
+  /// rows are fixed-extent, so the target scroll offset is exact.
+  void _scrollCursorIntoView(int index) {
+    if (!_listScroll.hasClients) return;
+    final extent = scaledGhostFileRowExtent(context);
+    final position = _listScroll.position;
+    final top = index * extent;
+    final bottom = top + extent;
+    if (top < position.pixels) {
+      _listScroll.jumpTo(top);
+    } else if (bottom > position.pixels + position.viewportDimension) {
+      _listScroll.jumpTo(bottom - position.viewportDimension);
+    }
+  }
+
+  /// Where the cursor row's menu anchors for the Menu key/Shift+F10 —
+  /// the row's own rect inside the viewport, not the screen edge.
+  Offset _cursorMenuPosition(int index) {
+    final box =
+        _listViewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return const Offset(32, 32);
+    final origin = box.localToGlobal(Offset.zero);
+    final extent = scaledGhostFileRowExtent(context);
+    final offset = _listScroll.hasClients ? _listScroll.offset : 0.0;
+    final center = (index * extent) - offset + extent / 2;
+    return Offset(
+      origin.dx + box.size.width * 0.4,
+      (origin.dy + center).clamp(origin.dy, origin.dy + box.size.height),
+    );
+  }
+
+  /// The row's verb menu — the ⋮, a right-click, or the keyboard — all
+  /// in the shared ghost skin.
+  Future<void> _showEntryMenu(
+    RemoteFileEntry entry,
+    Offset globalPosition,
+  ) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final value = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: _entryMenuItems(entry),
+    );
+    if (value == null || !mounted) return;
+    _dispatchEntryVerb(entry, value);
+  }
+
+  List<PopupMenuEntry<String>> _entryMenuItems(RemoteFileEntry entry) {
+    final palette = FamilyPalette.of(context);
+    final localCopy = widget.controller.localCopies[entry.path];
+    final editors = entry.type == RemoteFileType.file
+        ? _editorChoices(entry.path)
+        : const <_EditorChoice>[];
+    final selected = widget.controller.selectedPaths.contains(entry.path);
+    return [
+      GhostMenuItem(
+        context: context,
+        value: 'open',
+        icon: entry.isDirectory ? Icons.folder_open : Icons.open_in_new,
+        iconColor: palette.glyph(FamilyHue.blue),
+        label: entry.isDirectory ? 'Open' : 'Open locally',
+      ),
+      GhostMenuItem(
+        context: context,
+        value: 'select',
+        icon: selected ? Icons.check_box : Icons.check_box_outline_blank,
+        iconColor: palette.glyph(FamilyHue.graphite),
+        label: selected ? 'Deselect' : 'Select',
+      ),
+      for (final editor in editors)
+        GhostMenuItem(
+          context: context,
+          value: 'open_with:${editor.id}',
+          icon: Icons.edit_outlined,
+          iconColor: palette.glyph(FamilyHue.graphite),
+          label: 'Open with ${editor.label}',
+        ),
+      if (localCopy != null)
+        GhostMenuItem(
+          context: context,
+          value: 'upload',
+          icon: Icons.edit_note,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          label: 'Upload local changes',
+        ),
+      if (entry.type == RemoteFileType.file ||
+          (entry.isDirectory && _supportsDesktopDrop))
+        GhostMenuItem(
+          context: context,
+          value: 'download',
+          icon: Icons.download,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          label: 'Download / Save as…',
+        ),
+      if (entry.type == RemoteFileType.file && _supportsSharing)
+        GhostMenuItem(
+          context: context,
+          value: 'share',
+          icon: Icons.share,
+          iconColor: palette.glyph(FamilyHue.cyan),
+          label: 'Share…',
+        ),
+      const GhostMenuDivider(),
+      GhostMenuItem(
+        context: context,
+        value: 'copy_path',
+        icon: Icons.link,
+        iconColor: palette.glyph(FamilyHue.graphite),
+        label: 'Copy remote path',
+      ),
+      if (entry.isDirectory)
+        GhostMenuItem(
+          context: context,
+          value: 'terminal_here',
+          icon: Icons.terminal,
+          iconColor: palette.glyph(FamilyHue.graphite),
+          label: 'Open terminal here',
+        ),
+      GhostMenuItem(
+        context: context,
+        value: 'rename',
+        icon: Icons.edit,
+        iconColor: palette.glyph(FamilyHue.graphite),
+        // A flagged (undecodable) name cannot build a valid wire path —
+        // rename stays visible but inert, matching the row's semantics.
+        enabled: !ghostFileNameIsFlagged(entry.name),
+        label: 'Rename…',
+      ),
+      GhostMenuItem(
+        context: context,
+        value: 'properties',
+        icon: Icons.info_outline,
+        iconColor: palette.glyph(FamilyHue.graphite),
+        label: 'Properties…',
+      ),
+      const GhostMenuDivider(),
+      GhostMenuItem(
+        context: context,
+        value: 'delete',
+        icon: Icons.delete_outline,
+        iconColor: palette.glyph(FamilyHue.red),
+        label: 'Delete…',
+      ),
+    ];
+  }
+
+  void _dispatchEntryVerb(RemoteFileEntry entry, String value) {
+    if (value.startsWith('open_with:')) {
+      unawaited(
+        _openRemoteFileWithEditor(entry, value.substring('open_with:'.length)),
+      );
+      return;
+    }
+    switch (value) {
+      case 'open':
+        _openEntry(entry);
+      case 'select':
+        widget.controller.toggleSelection(entry.path);
+      case 'upload':
+        final copy = widget.controller.localCopies[entry.path];
+        if (copy != null) unawaited(_uploadLocalCopy(copy));
+      case 'download':
+        if (entry.type == RemoteFileType.file) {
+          unawaited(_exportRemoteFile(entry));
+        } else {
+          unawaited(_downloadRemoteEntries([entry]));
+        }
+      case 'share':
+        unawaited(_shareRemoteFile(entry));
+      case 'copy_path':
+        unawaited(_copyRemotePath(entry.path));
+      case 'terminal_here':
+        unawaited(_openTerminalHere(entry.path));
+      case 'rename':
+        unawaited(_rename(entry));
+      case 'properties':
+        unawaited(_showProperties(entry));
+      case 'delete':
+        unawaited(_delete(entry));
+    }
   }
 
   Future<void> _pickUploads() async {
@@ -488,12 +1001,6 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       _showError('The built-in editor supports text files up to 4 MB.');
       return;
     }
-    final existing = widget.controller.localCopies[entry.path];
-    if (existing != null) {
-      await _openLocalCopy(existing, editorId: editorId);
-      return;
-    }
-
     try {
       final copy = await widget.controller.checkoutRemoteFile(
         entry,
@@ -518,11 +1025,6 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       _showError('The built-in editor supports text files up to 4 MB.');
       return;
     }
-    final existing = widget.controller.localCopies[entry.path];
-    if (existing != null) {
-      await _openLocalCopy(existing, editorId: editorId);
-      return;
-    }
     try {
       final copy = await widget.controller.checkoutRemoteFile(
         entry,
@@ -537,27 +1039,50 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     }
   }
 
+  /// Opens a managed copy — routed through [RemoteFilesController]'s checkout
+  /// so a stale copy is refreshed from the server before the editor sees it.
+  Future<void> _openManagedCopy(
+    ManagedRemoteFile copy, {
+    String? editorId,
+  }) async {
+    final registry = AppScope.of(context).services.settings.editorRegistry;
+    final selected = editorId ?? registry.effectiveDefaultFor(copy.remotePath);
+    try {
+      final fresh = await widget.controller.checkoutRemoteFile(
+        copy.remoteSnapshot,
+        maximumBytes: selected == EditorRegistry.builtInId
+            ? builtInEditorMaximumBytes
+            : null,
+      );
+      if (!mounted) return;
+      await _openLocalCopy(fresh, editorId: editorId);
+    } catch (e) {
+      _showError(e);
+    }
+  }
+
   Future<void> _openLocalCopy(
     ManagedRemoteFile copy, {
     String? editorId,
   }) async {
     try {
-      final file = widget.controller.localFile(copy);
-      final registry = AppScope.of(context).services.settings.editorRegistry;
+      final state = AppScope.of(context);
+      final registry = state.services.settings.editorRegistry;
       final selected =
           editorId ?? registry.effectiveDefaultFor(copy.remotePath);
       if (selected == EditorRegistry.builtInId) {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => BuiltInTextEditorScreen(
-              file: file,
-              remotePath: copy.remotePath,
-              onSaved: widget.controller.reconcileLocalCopies,
-              onUpload: () => _uploadLocalCopy(copy),
-            ),
-          ),
-        );
-      } else if (selected == EditorRegistry.systemDefaultId) {
+        // The built-in editor is a tab beside the terminals, not a route —
+        // the shell and the file stay one tap apart.
+        state.openEditorTab(copy);
+        // On the pushed Files route (the narrow layout) the new tab is
+        // underneath this screen, so get out of its way.
+        if (widget.popAfterTerminalStage && mounted) {
+          Navigator.of(context).pop();
+        }
+        return;
+      }
+      final file = widget.controller.localFile(copy);
+      if (selected == EditorRegistry.systemDefaultId) {
         await _fileOpener.openSystemDefault(file.path);
       } else {
         final editor = registry.byId(selected);
@@ -582,40 +1107,15 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     ];
   }
 
-  Future<bool> _uploadLocalCopy(ManagedRemoteFile copy) async {
-    copy = widget.controller.localCopies[copy.remotePath] ?? copy;
-    try {
-      await widget.controller.uploadLocalCopy(copy);
-      _showMessage('Uploaded ${remoteBasename(copy.remotePath)}');
-      return true;
-    } on RemoteFileException catch (e) {
-      if (e.kind != RemoteFileErrorKind.conflict) {
-        _showError(e);
-        return false;
-      }
-      if (!mounted) return false;
-      final overwrite = await _confirm(
-        title: 'Remote file changed',
-        message: '${e.message}\n\nOverwrite the newer remote version?',
-        confirmLabel: 'Overwrite',
-      );
-      if (!overwrite) return false;
-      try {
-        await widget.controller.uploadLocalCopy(
-          copy,
-          overwriteRemoteChanges: true,
-        );
-        _showMessage('Uploaded ${remoteBasename(copy.remotePath)}');
-        return true;
-      } catch (failure) {
-        _showError(failure);
-        return false;
-      }
-    } catch (e) {
-      _showError(e);
-      return false;
-    }
-  }
+  Future<bool> _uploadLocalCopy(
+    ManagedRemoteFile copy, {
+    bool notifySuccess = true,
+  }) => uploadManagedLocalCopy(
+    context,
+    widget.controller,
+    copy,
+    notifySuccess: notifySuccess,
+  );
 
   Future<void> _discardLocalCopy(ManagedRemoteFile copy) async {
     final discard = await _confirm(
@@ -633,26 +1133,33 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     };
     _promptedDirtyCopies.removeWhere((id) => !dirtyIds.contains(id));
     final dirty = controller.localCopies.values.where(
-      (copy) => copy.dirty && !_promptedDirtyCopies.contains(copy.id),
+      (copy) =>
+          copy.dirty &&
+          !_promptedDirtyCopies.contains(copy.id) &&
+          !controller.isUploadingLocalCopy(copy.remotePath),
     );
     if (dirty.isEmpty) return;
     final copy = dirty.first;
     _promptedDirtyCopies.add(copy.id);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !controller.localCopies.containsKey(copy.remotePath)) {
+      if (!mounted) return;
+      // Re-check right before showing: a save-and-upload from the built-in
+      // editor may already have uploaded (or be uploading) this copy, and a
+      // stale "Upload it?" prompt would read as a confirmation request.
+      final current = controller.localCopies[copy.remotePath];
+      if (current == null ||
+          !current.dirty ||
+          controller.isUploadingLocalCopy(current.remotePath)) {
+        _promptedDirtyCopies.remove(copy.id);
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
+      showTopToastIn(
+        context,
+        message:
             '${remoteBasename(copy.remotePath)} changed locally. Upload it?',
-          ),
-          duration: const Duration(seconds: 12),
-          action: SnackBarAction(
-            label: 'Upload',
-            onPressed: () => unawaited(_uploadLocalCopy(copy)),
-          ),
-        ),
+        duration: const Duration(seconds: 12),
+        actionLabel: 'Upload',
+        onAction: () => unawaited(_uploadLocalCopy(copy)),
       );
     });
   }
@@ -914,11 +1421,15 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                 const SizedBox(height: 12),
                 Text('Type: ${entry.type.name}'),
                 if (entry.size != null)
-                  Text('Size: ${_formatBytes(entry.size!)}'),
+                  Text(
+                    'Size: ${ghostFormatFileSize(entry.size, platform: Theme.of(context).platform)}',
+                  ),
                 if (entry.uid != null || entry.gid != null)
                   Text('Owner: ${entry.uid ?? '?'}:${entry.gid ?? '?'}'),
                 if (entry.modifiedAt != null)
-                  Text('Modified: ${_formatDate(entry.modifiedAt!.toLocal())}'),
+                  Text(
+                    'Modified: ${ghostFormatFileModified(entry.modifiedAt, now: DateTime.now(), localeName: Localizations.localeOf(context).toString(), today: (time) => 'Today at $time', yesterday: (time) => 'Yesterday at $time')}',
+                  ),
                 if (linkTarget != null) ...[
                   const SizedBox(height: 8),
                   const Text('Symbolic-link target'),
@@ -1110,16 +1621,12 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
 
   void _showError(Object error) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(error.toString())));
+    showTopToastIn(context, message: error.toString());
   }
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showTopToastIn(context, message: message);
   }
 
   static String _safeLocalName(String name) {
@@ -1253,13 +1760,12 @@ class _BrowserHeader extends StatelessWidget {
                 _HeaderButton(
                   tooltip: 'Up',
                   icon: Icons.arrow_upward,
-                  onPressed: controller.currentPath == '/'
-                      ? null
-                      : controller.goUp,
+                  onPressed: controller.canGoUp ? controller.goUp : null,
                 ),
                 _HeaderButton(
                   tooltip: 'Home',
-                  icon: Icons.home_outlined,
+                  icon: Icons.home,
+                  hue: FamilyHue.blue,
                   onPressed: controller.goHome,
                 ),
                 _HeaderButton(
@@ -1462,7 +1968,10 @@ class _BrowserHeader extends StatelessWidget {
                   if (onDownloadSelected != null)
                     IconButton(
                       tooltip: 'Download selected',
-                      icon: const Icon(Icons.download),
+                      icon: Icon(
+                        Icons.download,
+                        color: FamilyPalette.of(context).glyph(FamilyHue.cyan),
+                      ),
                       onPressed: onDownloadSelected,
                     ),
                   TextButton(
@@ -1486,17 +1995,30 @@ class _HeaderButton extends StatelessWidget {
   const _HeaderButton({
     required this.tooltip,
     required this.icon,
+    this.hue,
     this.onPressed,
   });
 
+  /// A place's family hue (Poltergeist's D34), drawn while the button is
+  /// live; navigation (Up, Refresh) keeps the button's ink.
+  final FamilyHue? hue;
+
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
-    visualDensity: VisualDensity.compact,
-    iconSize: 20,
-    onPressed: onPressed,
-    icon: Icon(icon),
-  );
+  Widget build(BuildContext context) {
+    final hue = this.hue;
+    return IconButton(
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      iconSize: 20,
+      onPressed: onPressed,
+      icon: Icon(
+        icon,
+        color: hue == null || onPressed == null
+            ? null
+            : FamilyPalette.of(context).glyph(hue),
+      ),
+    );
+  }
 }
 
 class _EditorChoice {
@@ -1506,149 +2028,40 @@ class _EditorChoice {
   const _EditorChoice(this.id, this.label);
 }
 
-class _FileRow extends StatelessWidget {
-  final RemoteFileEntry entry;
-  final bool showDetails;
-  final bool hasLocalCopy;
-  final bool selected;
-  final bool selectionMode;
-  final VoidCallback onSelect;
-  final VoidCallback onOpen;
-  final VoidCallback onRename;
-  final VoidCallback onDelete;
-  final VoidCallback onProperties;
-  final VoidCallback onCopyPath;
-  final VoidCallback? onOpenTerminalHere;
-  final VoidCallback? onDownload;
-  final VoidCallback? onShare;
-  final List<_EditorChoice> editorChoices;
-  final ValueChanged<String> onOpenWith;
-  final VoidCallback? onUploadChanges;
+/// A dense-row action icon (the ⋮ and the pending-edits badge): 16 px
+/// with a 24 px ink target, sized for the desktop row's 22 px extent —
+/// an [IconButton] would outgrow the row.
+class _DenseActionIcon extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final void Function(Rect bounds) onPressedAt;
 
-  const _FileRow({
-    required this.entry,
-    required this.showDetails,
-    required this.hasLocalCopy,
-    required this.selected,
-    required this.selectionMode,
-    required this.onSelect,
-    required this.onOpen,
-    required this.onRename,
-    required this.onDelete,
-    required this.onProperties,
-    required this.onCopyPath,
-    this.onOpenTerminalHere,
-    this.onDownload,
-    this.onShare,
-    required this.editorChoices,
-    required this.onOpenWith,
-    this.onUploadChanges,
+  const _DenseActionIcon({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressedAt,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final details = [
-      if (!entry.isDirectory && entry.size != null) _formatBytes(entry.size!),
-      if (entry.modifiedAt != null) _formatDate(entry.modifiedAt!.toLocal()),
-    ].join(' · ');
-    return ListTile(
-      dense: true,
-      selected: selected,
-      leading: selectionMode
-          ? Checkbox(value: selected, onChanged: (_) => onSelect())
-          : Icon(switch (entry.type) {
-              RemoteFileType.directory => Icons.folder_outlined,
-              RemoteFileType.symbolicLink => Icons.link,
-              RemoteFileType.file => Icons.insert_drive_file_outlined,
-              RemoteFileType.other => Icons.description_outlined,
-            }),
-      title: Text(entry.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: !showDetails && details.isNotEmpty
-          ? Text(details, maxLines: 1, overflow: TextOverflow.ellipsis)
-          : null,
-      onTap: selectionMode ? onSelect : onOpen,
-      onLongPress: onSelect,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (showDetails && details.isNotEmpty)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 150),
-              child: Text(
-                details,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          if (hasLocalCopy)
-            IconButton(
-              tooltip: 'Upload local changes',
-              iconSize: 18,
-              onPressed: onUploadChanges,
-              icon: const Icon(Icons.edit_note),
-            ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'open') onOpen();
-              if (value == 'select') onSelect();
-              if (value == 'upload') onUploadChanges?.call();
-              if (value.startsWith('open_with:')) {
-                onOpenWith(value.substring('open_with:'.length));
-              }
-              if (value == 'download') onDownload?.call();
-              if (value == 'share') onShare?.call();
-              if (value == 'copy_path') onCopyPath();
-              if (value == 'terminal_here') onOpenTerminalHere?.call();
-              if (value == 'rename') onRename();
-              if (value == 'delete') onDelete();
-              if (value == 'properties') onProperties();
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'open',
-                child: Text(entry.isDirectory ? 'Open' : 'Open locally'),
-              ),
-              const PopupMenuItem(value: 'select', child: Text('Select')),
-              for (final editor in editorChoices)
-                PopupMenuItem(
-                  value: 'open_with:${editor.id}',
-                  child: Text('Open with ${editor.label}'),
-                ),
-              if (onUploadChanges != null)
-                const PopupMenuItem(
-                  value: 'upload',
-                  child: Text('Upload local changes'),
-                ),
-              if (onDownload != null)
-                const PopupMenuItem(
-                  value: 'download',
-                  child: Text('Download / Save as…'),
-                ),
-              if (onShare != null)
-                const PopupMenuItem(value: 'share', child: Text('Share…')),
-              const PopupMenuItem(
-                value: 'copy_path',
-                child: Text('Copy remote path'),
-              ),
-              if (onOpenTerminalHere != null)
-                const PopupMenuItem(
-                  value: 'terminal_here',
-                  child: Text('Open terminal here'),
-                ),
-              const PopupMenuItem(value: 'rename', child: Text('Rename…')),
-              const PopupMenuItem(
-                value: 'properties',
-                child: Text('Properties…'),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: 'delete', child: Text('Delete…')),
-            ],
-          ),
-        ],
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(milliseconds: 500),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(3),
+      onTap: () {
+        final box = context.findRenderObject() as RenderBox;
+        onPressedAt(box.localToGlobal(Offset.zero) & box.size);
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(2),
+        child: Icon(
+          icon,
+          size: 15,
+          color: GhostFileTheme.of(context).secondaryText,
+        ),
       ),
-    );
-  }
+    ),
+  );
 }
 
 class _LocalCopiesPanel extends StatelessWidget {
@@ -1724,6 +2137,7 @@ class _TransfersPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = FamilyPalette.of(context);
     final visible = controller.transfers.reversed.take(3).toList();
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -1753,6 +2167,7 @@ class _TransfersPanel extends StatelessWidget {
                     ? Icons.upload
                     : Icons.download,
                 size: 19,
+                color: palette.glyph(FamilyHue.cyan),
               ),
               title: Text(
                 transfer.name,
@@ -1778,11 +2193,18 @@ class _TransfersPanel extends StatelessWidget {
                       icon: const Icon(Icons.close, size: 18),
                       onPressed: () => controller.cancelTransfer(transfer.id),
                     )
-                  : Icon(
-                      transfer.status == RemoteTransferStatus.completed
-                          ? Icons.check_circle_outline
-                          : Icons.error_outline,
+                  // A finished transfer says how it went by colour too:
+                  // done in the go green, failed or cancelled in the red.
+                  : transfer.status == RemoteTransferStatus.completed
+                  ? Icon(
+                      Icons.check_circle,
                       size: 18,
+                      color: palette.glyph(FamilyHue.green),
+                    )
+                  : Icon(
+                      Icons.error,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.error,
                     ),
             ),
         ],
@@ -1827,11 +2249,191 @@ class _FilesUnavailable extends StatelessWidget {
   );
 }
 
+/// Upload [copy] through [controller], confirming before it overwrites
+/// remote changes that landed after the checkout. Shared by the browser's
+/// upload buttons and the editor tab's save-and-upload, so both hold the
+/// controller's in-flight mark that keeps the "changed locally" prompt from
+/// asking about the upload's own save.
+Future<bool> uploadManagedLocalCopy(
+  BuildContext context,
+  RemoteFilesController controller,
+  ManagedRemoteFile copy, {
+  bool notifySuccess = true,
+}) {
+  // Keyed on remotePath, not the record's id: a reconcile mid-upload swaps
+  // in a record with a fresh id, and an id-keyed mark would miss it.
+  return controller.trackLocalCopyUpload(
+    copy.remotePath,
+    () => _uploadManagedLocalCopy(
+      context,
+      controller,
+      copy,
+      notifySuccess: notifySuccess,
+    ),
+  );
+}
+
+Future<bool> _uploadManagedLocalCopy(
+  BuildContext context,
+  RemoteFilesController controller,
+  ManagedRemoteFile copy, {
+  required bool notifySuccess,
+}) async {
+  // Re-resolve the copy — a reconcile may have swapped in a newer snapshot.
+  // When the controller no longer tracks the checkout at all, stop rather
+  // than upload a stale record: the checkout was discarded or reconciled
+  // away, and writing it would resurrect a file the user no longer manages.
+  final tracked = controller.localCopies[copy.remotePath];
+  if (tracked == null) {
+    if (context.mounted) {
+      showTopToastIn(
+        context,
+        message: 'No managed local copy of this file remains.',
+      );
+    }
+    return false;
+  }
+  copy = tracked;
+  void showError(Object error) {
+    if (context.mounted) {
+      showTopToastIn(context, message: error.toString());
+    }
+  }
+
+  void showSuccess() {
+    if (notifySuccess && context.mounted) {
+      showTopToastIn(
+        context,
+        message: 'Uploaded ${remoteBasename(copy.remotePath)}',
+      );
+    }
+  }
+
+  try {
+    await controller.uploadLocalCopy(copy);
+    showSuccess();
+    return true;
+  } on RemoteFileException catch (e) {
+    if (e.kind != RemoteFileErrorKind.conflict) {
+      showError(e);
+      return false;
+    }
+    if (!context.mounted) return false;
+    final overwrite =
+        await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Remote file changed'),
+            content: Text(
+              '${e.message}\n\nOverwrite the newer remote version?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Overwrite'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!overwrite) return false;
+    try {
+      await controller.uploadLocalCopy(copy, overwriteRemoteChanges: true);
+      showSuccess();
+      return true;
+    } catch (failure) {
+      showError(failure);
+      return false;
+    }
+  } catch (e) {
+    showError(e);
+    return false;
+  }
+}
+
+/// One editor tab's content: the built-in editor wired to whichever session
+/// currently owns the file's checkout. The owner is resolved fresh each
+/// build — a reconnect swaps the session object under the tab, and a dropped
+/// connection turns upload/drift off without touching the local copy.
+class EditorTabView extends StatelessWidget {
+  final EditorTab tab;
+  final AppState state;
+  final bool isActive;
+
+  const EditorTabView({
+    super.key,
+    required this.tab,
+    required this.state,
+    required this.isActive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final owner = state.ownerSessionFor(tab);
+    final files = owner?.files;
+    return BuiltInTextEditorScreen(
+      key: tab.editorKey,
+      file: state.services.managedRemoteFiles.checkoutFile(tab.localPath),
+      remotePath: tab.remotePath,
+      isActive: isActive,
+      remoteFiles: files,
+      dirtyNotifier: tab.dirty,
+      onSaved: () => _reconcileAfterSave(owner),
+      onUpload: files == null
+          ? null
+          : () async {
+              final copy = files.localCopies[tab.remotePath];
+              if (copy == null) {
+                showTopToastIn(
+                  context,
+                  message: 'No managed local copy of this file remains.',
+                );
+                return false;
+              }
+              // The editor reports "Saved and uploaded" itself.
+              return uploadManagedLocalCopy(
+                context,
+                files,
+                copy,
+                notifySuccess: false,
+              );
+            },
+    );
+  }
+
+  /// After a save: refresh the owning controller's copy bookkeeping — or the
+  /// retained-copy map when the session is offline.
+  Future<void> _reconcileAfterSave(TerminalSession? owner) async {
+    final files = owner?.files;
+    if (files != null) {
+      await files.reconcileLocalCopies();
+      return;
+    }
+    if (owner == null) return;
+    final copy = owner.retainedLocalCopies[tab.remotePath];
+    if (copy != null) {
+      await state.reconcileRetainedLocalCopy(owner.id, copy);
+    }
+  }
+}
+
 class _RecoveredLocalEdits extends StatelessWidget {
   final TerminalSession session;
   final AppState state;
 
-  const _RecoveredLocalEdits({required this.session, required this.state});
+  /// True when this pane lives on a pushed route (the narrow layout's
+  /// [FilesScreen]): opening an editor tab pops it out of the way.
+  final bool popAfterTerminalStage;
+
+  const _RecoveredLocalEdits({
+    required this.session,
+    required this.state,
+    this.popAfterTerminalStage = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1926,19 +2528,23 @@ class _RecoveredLocalEdits extends StatelessWidget {
     ManagedRemoteFile copy,
     String editorId,
   ) async {
-    final file = state.services.managedRemoteFiles.checkoutFile(copy.localPath);
     try {
       if (editorId == EditorRegistry.builtInId) {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => BuiltInTextEditorScreen(
-              file: file,
-              remotePath: copy.remotePath,
-              onSaved: () => state.reconcileRetainedLocalCopy(session.id, copy),
-            ),
-          ),
-        );
-      } else if (editorId == EditorRegistry.systemDefaultId) {
+        // A tab beside the terminals, like the live browser's open — the
+        // checkout keeps the placeholder session's edit identity, so the tab
+        // lands on it.
+        state.openEditorTab(copy);
+        // On the pushed Files route (the narrow layout) the new tab is
+        // underneath this screen, so get out of its way.
+        if (popAfterTerminalStage && context.mounted) {
+          Navigator.of(context).pop();
+        }
+        return;
+      }
+      final file = state.services.managedRemoteFiles.checkoutFile(
+        copy.localPath,
+      );
+      if (editorId == EditorRegistry.systemDefaultId) {
         await const ExternalFileOpener().openSystemDefault(file.path);
       } else {
         final editor = state.services.settings.editorRegistry.byId(editorId);
@@ -1949,9 +2555,7 @@ class _RecoveredLocalEdits extends StatelessWidget {
       }
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      showTopToastIn(context, message: error.toString());
     }
   }
 
@@ -1979,19 +2583,4 @@ class _RecoveredLocalEdits extends StatelessWidget {
       await state.discardRetainedLocalCopy(session.id, copy);
     }
   }
-}
-
-String _formatBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-}
-
-String _formatDate(DateTime date) {
-  String two(int value) => value.toString().padLeft(2, '0');
-  return '${date.year}-${two(date.month)}-${two(date.day)} '
-      '${two(date.hour)}:${two(date.minute)}';
 }

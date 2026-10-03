@@ -8,8 +8,12 @@
 #   docker — sync-server image (packages/seance_sync_server/Dockerfile, build
 #            context = repo root) → seance-sync:local
 #   app    — Flutter desktop app for THIS host (linux/macos/windows); platform
-#            folders are committed (missing ones are regenerated as a fallback)
+#            folders are committed (missing ones are regenerated as a fallback).
+#            On Linux, release builds are also packaged into installable
+#            artifacts (.deb + AppImage) via scripts/package-linux.sh → dist/
 #   apk    — Android APK (needs flutter + an Android SDK)
+#   flatpak — repack the app's .deb as a Flatpak bundle (Linux; runs the
+#            app target first when no dist/ .deb exists yet)
 #
 # Usage:
 #   scripts/build.sh                 # every target this host can build
@@ -53,8 +57,8 @@ while [[ $# -gt 0 ]]; do
     -h|--help) usage 0 ;;
     --debug) PROFILE="debug"; shift ;;
     --install) INSTALL=true; shift ;;
-    server|docker|app|apk) REQUESTED+=("$1"); EXPLICIT=1; shift ;;
-    all) REQUESTED=(server docker app apk); EXPLICIT=1; shift ;;
+    server|docker|app|apk|flatpak) REQUESTED+=("$1"); EXPLICIT=1; shift ;;
+    all) REQUESTED=(server docker app apk flatpak); EXPLICIT=1; shift ;;
     *) echo "unknown argument: $1" >&2; usage 1 ;;
   esac
 done
@@ -74,7 +78,7 @@ fi
 
 # Default to all targets; feasibility is decided per-target below.
 if [[ ${#REQUESTED[@]} -eq 0 ]]; then
-  REQUESTED=(server docker app apk)
+  REQUESTED=(server docker app apk flatpak)
 fi
 
 case "$(uname -s)" in
@@ -187,6 +191,67 @@ ensure_platform() {
   ( cd app/seance_app && flutter create --platforms="$platform" --project-name seance_app . )
 }
 
+# ---------------------------------------------------------------------------
+# Linux installers (.deb + AppImage) for a just-built bundle. build.sh stays
+# the orchestrator; the actual packaging logic lives in package-linux.sh.
+package_linux() {
+  # Debug builds aren't for distributing, and the .deb needs dpkg-deb.
+  if [[ "$PROFILE" != "release" ]]; then
+    record "packages: skipped (debug profile)"
+    return 0
+  fi
+  if ! command -v dpkg-deb >/dev/null 2>&1; then
+    echo ".. packages: .deb unavailable without dpkg-deb — scripts/package-linux.sh builds the AppImage anyway"
+    # No dpkg-deb → package-linux.sh itself falls back to AppImage-only.
+  fi
+  echo "== packages (deb + AppImage, via scripts/package-linux.sh) =="
+  # best-effort AppImage: fetching appimagetool can fail on an offline host,
+  # and the local path shouldn't hard-fail on that — CI runs the same script
+  # in required mode and catches real breakage.
+  if scripts/package-linux.sh --appimage=best-effort; then
+    local f staged=""
+    for f in dist/seance_*.deb dist/seance-linux-*.AppImage; do
+      [[ -e "$f" ]] || continue
+      record "packages: $(basename "$f") -> dist/"
+      staged=1
+    done
+    [[ -n "$staged" ]] || record "packages: built (nothing staged?)"
+  else
+    echo "!! packages: package-linux.sh failed" >&2
+    record "packages: FAILED"
+    return 1
+  fi
+}
+
+build_flatpak() {
+  if [[ "$HOST" != "linux" ]]; then
+    record "flatpak: skipped (Linux only)"
+    return 0
+  fi
+  if ! have flatpak-builder; then
+    skip_or_fail flatpak "flatpak-builder not found"; return
+  fi
+  # Reuse the .deb the app target just packaged; rebuild when absent or
+  # stale. (SECONDS is this script's runtime, so `start` is its launch time.)
+  local deb start
+  start=$(( $(date +%s) - SECONDS ))
+  deb="$(find dist -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n1 | cut -f2- || true)"
+  if [[ -z "$deb" || "$(stat -c %Y "$deb" 2>/dev/null || echo 0)" -lt "$start" ]]; then
+    build_app || { record "flatpak: FAILED (app build)"; return 1; }
+    deb="$(find dist -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' 2>/dev/null | sort -rn | head -n1 | cut -f2- || true)"
+    if [[ -z "$deb" || "$(stat -c %Y "$deb" 2>/dev/null || echo 0)" -lt "$start" ]]; then
+      record "flatpak: FAILED (no fresh .deb produced; a release 'app' build is required)"
+      return 1
+    fi
+  fi
+  if scripts/build-flatpak.sh "$deb"; then
+    record "flatpak: built -> dist/"
+  else
+    record "flatpak: FAILED (repack)"
+    return 1
+  fi
+}
+
 build_app() {
   echo "== app (Flutter desktop, this host) =="
   if [[ "$HOST" == "unknown" ]]; then
@@ -227,6 +292,7 @@ build_app() {
     else
       record "app: built ($HOST, $PROFILE) — product not found to stage"
     fi
+    if [[ "$HOST" == "linux" ]]; then package_linux; fi
     if $INSTALL; then
       if [[ -z "$out" ]]; then
         echo "!! app: nothing to install (product not found)" >&2
@@ -336,6 +402,7 @@ for target in "${REQUESTED[@]}"; do
     docker) build_docker || FAILED=1 ;;
     app)    build_app    || FAILED=1 ;;
     apk)    build_apk    || FAILED=1 ;;
+    flatpak) build_flatpak || FAILED=1 ;;
   esac
   echo
 done

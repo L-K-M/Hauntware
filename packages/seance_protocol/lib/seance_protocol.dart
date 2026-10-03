@@ -13,9 +13,14 @@ export 'src/crypto/vault.dart';
 export 'src/crypto/recovery_key.dart';
 
 export 'src/models/server_config.dart';
+export 'src/models/server_mark.dart';
 export 'src/models/secret.dart';
 export 'src/models/host_key.dart';
 export 'src/models/snippet.dart';
+export 'src/models/assistant_settings.dart';
+export 'src/models/bookmark.dart';
+
+export 'src/inbox/inbox.dart';
 
 export 'src/records/record.dart';
 export 'src/records/record_codec.dart';

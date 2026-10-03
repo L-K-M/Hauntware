@@ -112,7 +112,11 @@ shell exits, but that requires an explicit lifecycle and reauthentication UX.
 
 Uploads write a sibling temporary remote file and rename it into place after a
 complete transfer. Existing targets require an explicit overwrite decision.
-Where the server supports it, the original mode is preserved.
+Where the server supports it, the original mode is preserved; a file whose
+mode withholds read or write from group or others is staged owner-only. A
+symbolic link, FIFO, socket or device at the target is refused rather than
+replaced, since the rename would replace the node itself, not a link's target;
+a folder is refused before the transfer instead of failing at the rename.
 
 Opening a remote file locally is a managed checkout:
 
@@ -122,15 +126,30 @@ Opening a remote file locally is a managed checkout:
 3. Open UTF-8 text up to 4 MB in Séance's built-in editor, or use the platform
    default app or a configured desktop editor.
 4. Keep the checkout visible in a **Local edits** section.
-5. Offer **Upload changes**; do not silently overwrite the remote file.
+5. Offer **Upload changes**; do not silently overwrite the remote file. In
+   the built-in editor, ⌘S/Ctrl+S on a server file is an explicit **save and
+   upload** (⇧⌘S/Ctrl+Shift+S keeps a save local-only), and it uploads
+   immediately without an extra confirmation.
 6. Re-stat and stream-hash before commit; warn if the remote snapshot changed.
 7. Upload through a temporary remote file and rename only after completion.
 8. Remove plaintext support files on discard or confirmed tab/server deletion.
 
+Reopening a managed path re-stats the remote copy rather than reusing the
+checkout blindly: a clean local checkout is refreshed from the server when the
+remote snapshot drifted, while a dirty one keeps its edits and flags the drift
+instead — the built-in editor then shows a **Reload** banner (confirming
+before discarding unsaved changes). Directory listings, uploads, and finished
+shell commands (`pico`, `git pull`, …) all refresh the known remote snapshot
+for managed paths, so drift is noticed even when the file is not reopened.
+
 The managed-edit index is persisted atomically. Checkouts are SHA-256 hashed,
 watched by parent directory to catch atomic saves, reconciled on app resume,
-and restored into their original logical session after process death. A local
-save only prompts or marks the checkout dirty; it never uploads silently.
+and restored into their original logical session after process death. A save
+from an external editor only prompts or marks the checkout dirty; it never
+uploads without the user asking. The built-in editor's save-and-upload is
+such an ask, so it uploads at once — conflict detection (re-stat + hash
+against the checkout snapshot) still guards it, and a genuine remote-side
+change still raises an overwrite decision.
 
 Remote files are untrusted. Opening one is always an explicit action. Large or
 binary files are streamed as bytes and never decoded merely to transfer them.
@@ -245,6 +264,18 @@ reliably edit app-private checkouts in place.
 - Added streamed Save As, native sharing, and Android SAF export destinations.
 - Added a built-in conflict-aware UTF-8 text editor and configurable external
   editor registry. The built-in editor is the mobile default.
+- Made the built-in editor a real code editor: monospace stack, basic syntax
+  highlighting (shell/python/js/dart/json/yaml/ini/dockerfile/sql/c-family/
+  xml/markdown), an in-file find bar (⌘F/Ctrl+F, F3/⌘G cycling, match-case
+  toggle), open-at-top, and ⌘S/Ctrl+S as immediate save-and-upload for server
+  files. Feedback moved from bottom SnackBars to top toasts app-wide so
+  notices never cover the shell prompt.
+- Gave the built-in editor a line-number gutter that tracks soft wraps (a
+  laid-out per-line offset below the highlighting cap, a fixed-height
+  estimate past it) and a status bar: caret Ln/Col, line and byte counts,
+  then the file's standing — Saving…, Changed on server / Deleted on server,
+  Unsaved edits / Local changes (a dirty managed checkout) / In sync — plus
+  line ending (LF/CRLF), UTF-8 BOM, and detected language.
 
 ## Verification log
 

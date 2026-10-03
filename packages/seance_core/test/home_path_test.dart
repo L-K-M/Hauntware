@@ -33,7 +33,7 @@ void main() {
       // The exact regression: a sandboxed app's $HOME is the app container,
       // but ~/.ssh must mean the user's real .ssh directory.
       const env = {
-        'HOME': '/Users/benedikt/Library/Containers/com.lkm.seanceApp/Data',
+        'HOME': '/Users/benedikt/Library/Containers/ch.lkmc.seanceApp/Data',
       };
       expect(
         expandHomePath('~/.ssh/id_rsa', environment: env, isMacOS: true),

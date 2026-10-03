@@ -5,6 +5,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:seance_core/seance_core.dart';
 
+import '../theme/app_appearance.dart';
+import '../theme/theme_palette.dart';
+import '../theme/theme_presets.dart';
+import '../ui/server_list_density.dart';
 import '../ui/terminal_appearance.dart';
 import 'atomic_file.dart';
 import 'external_file_opener.dart';
@@ -52,11 +56,70 @@ class AppSettings {
   String llmModel;
   String llmApiKeyRef; // keystore entry name; empty for keyless local Ollama
 
-  // Web-search backend for the chat tool (local providers have no native one).
+  // Web-search backends for the chat tool (local providers have no native
+  // one). Every configured backend is used and their results merged, so
+  // leaving one blank is how you get "instead of" and filling several is how
+  // you get "in addition to" — see `CompositeSearch`.
   String? searxngUrl;
   String? braveApiKeyRef;
 
+  /// Keystore entry name for the Z.AI key, or null when Z.AI web search is
+  /// off. Like every other key reference this holds the *name*, never the key.
+  String? zaiApiKeyRef;
+
   bool redactionEnabled;
+
+  /// Whether assistant requests carry the active session's recent output:
+  /// the chat's "Include terminal output" chip and the command generator's
+  /// checkbox, which are one choice. On by default, as both always were.
+  ///
+  /// Stored here rather than in either widget because an opt-out has to
+  /// outlast the widget it was made in. The chat is unmounted every time the
+  /// phone drawer closes, and a flag in its state came back on at the next
+  /// open, so the following message sent the screen the user had just
+  /// withheld. Device-local: the synced assistant record does not carry it.
+  bool includeTerminalContext;
+
+  /// When the assistant's configuration was last edited on any device, or 0
+  /// while it has never been published.
+  ///
+  /// It is the synced record's `updatedAt`, so it must move only on a real
+  /// edit: sync re-collects every round, and a "now" timestamp would make each
+  /// one a fresh winning write with two devices trading the record forever.
+  /// Zero also serves as "nothing to publish", which keeps two fresh installs
+  /// from pushing rival defaults before either has configured anything.
+  int assistantUpdatedAt;
+
+  /// Keystore entry names this device adopted a *reference* to but could not
+  /// store, because the keyring was locked when the record arrived.
+  ///
+  /// Device-local, never synced: it describes this keystore, not the account.
+  /// Persisted because the hazard it blocks outlives the process. The write is
+  /// retried on a later round, but if the app is stopped before that lands, a
+  /// fresh run reads "reference set, key absent, keystore available" as the
+  /// supported never-stored state and publishes the configuration without the
+  /// key — under the stamp it adopted, which ties with the keyed record it
+  /// came from and is broken by device id.
+  Set<String> unwrittenAssistantKeyRefs;
+
+  /// Assistant key references this device has actually held a value for —
+  /// read from the keystore or written to it.
+  ///
+  /// The mirror of [unwrittenAssistantKeyRefs], for the null this device
+  /// otherwise cannot read. `getApiKey` answers null both for a reference
+  /// that never had a key (the Z.AI switch can be on with the field blank,
+  /// and that configuration is publishable) and for one the keystore has
+  /// *lost* — a keychain reset, an OS restore, a half-finished migration.
+  /// Published as keyless, the second case puts a record naming a key it does
+  /// not carry on the account under the stamp the keyed record already has,
+  /// where the device-id tiebreak can let it win and evict the copy that
+  /// still had the key.
+  ///
+  /// `settings.json` survives a keystore wipe, so this file is what tells the
+  /// two nulls apart. Pruned to the references the configuration still names,
+  /// exactly like the set above, so clearing a reference clears its history
+  /// with it.
+  Set<String> heldAssistantKeyRefs;
 
   // Sync (optional).
   String? syncBaseUrl;
@@ -66,6 +129,23 @@ class AppSettings {
   /// encrypted, but syncing them widens their blast radius). Only servers whose
   /// own [ServerConfig.syncSecret] flag is set are included.
   bool syncSecrets;
+
+  /// Sync the assistant's configuration — provider, model, endpoint, web
+  /// search and redaction — together with its API keys. Opt-in and off by
+  /// default, like [syncSecrets] and for the same reason: the record is
+  /// end-to-end encrypted, but keys that exist on one device are a smaller
+  /// blast radius than keys that exist on all of them.
+  ///
+  /// The keys travel with the settings rather than behind a second switch. A
+  /// provider and model without the key to use them leaves the other device
+  /// looking configured and answering nothing, which is a worse place to be
+  /// than either syncing or not.
+  ///
+  /// Independent of [syncSecrets], which governs the servers' own passwords
+  /// and private keys. Turning that off does not hold the assistant's keys
+  /// back: they are the assistant record, and a record without them is the
+  /// looks-configured-answers-nothing state above.
+  bool syncAssistant;
 
   /// Whether sync runs automatically (on startup, after edits, and on a timer).
   /// On by default once sync is set up; the manual "Sync now" button always works.
@@ -91,6 +171,13 @@ class AppSettings {
   /// must never surface a dead row after this file is copied to a phone.
   bool localShell;
 
+  /// Keep SSH sessions alive while the app is backgrounded (Android: a
+  /// foreground-service anchor). On by default — without it, Android freezes
+  /// the cached process and every connection drops within moments of leaving
+  /// the screen. Device-local by design: it is a battery-life trade-off, not
+  /// an account property.
+  bool keepSessionsAliveInBackground;
+
   /// Built-in/system/custom editors for managed remote-file checkouts. Local
   /// only: installed applications and executable paths are never synced.
   EditorRegistry editorRegistry;
@@ -113,6 +200,36 @@ class AppSettings {
   /// does sync.
   Set<String> collapsedServerGroups;
 
+  /// Servers the user has pinned to the top of the list, by
+  /// [ServerConfig.id].
+  ///
+  /// Device-local and deliberately not synced: a pin says "this is what I
+  /// reach for *here*", which is rarely the same answer on a phone as on the
+  /// desk it is in front of. It also keeps the feature free of the sync
+  /// layer — nothing is published, so there is no record to retract, no
+  /// conflict to resolve, and no way for one device's shortlist to reorder
+  /// another's list behind the user's back.
+  ///
+  /// Ids that no longer name a server are harmless — the list only ever asks
+  /// whether a server it is *already showing* is in here. A delete on this
+  /// device prunes its own entry; a server that disappears through sync does
+  /// not pass that path, so its id stays behind. Deliberately not swept
+  /// against the server list either, because "absent" and "not pulled yet"
+  /// look identical mid-round, and sweeping would drop the pin of a server
+  /// that is about to come back.
+  Set<String> pinnedServerIds;
+
+  /// Whether the server list draws two-line rows or one-line ones.
+  ServerListDensity serverListDensity;
+
+  /// Widths of the wide layout's server-list and utility panes, from the last
+  /// drag of their resize handles. Device-local like everything else here:
+  /// the right pane split is a property of the window in front of you. Null
+  /// until a handle is first dragged (the layout's defaults apply); the layout
+  /// clamps to its own min/max on use.
+  double? paneListWidth;
+  double? paneUtilityWidth;
+
   /// Terminal appearance. Device-local by design: the right font size depends
   /// on the screen in front of you, not on the account, so these never sync.
   double terminalFontSize;
@@ -121,6 +238,16 @@ class AppSettings {
   /// app's own stack" ([SeanceTheme.monoFallback]).
   String terminalFontFamily;
   TerminalPalette terminalPalette;
+
+  /// The app's theme. Device-local like the terminal's appearance and for
+  /// the same reason: a theme is chosen for the screen and the room in
+  /// front of you, so it never syncs — and a theme is the one setting
+  /// people paste to each other, which the Appearance tab's Copy and Paste
+  /// already carry between devices on request.
+  ThemePalette themePalette;
+
+  /// What the palette's Automatic colours follow.
+  ThemeModePreference themeMode;
 
   /// Stable per-device id used in synced records' conflict resolution.
   String deviceId;
@@ -136,29 +263,46 @@ class AppSettings {
     this.llmApiKeyRef = 'anthropic',
     this.searxngUrl,
     this.braveApiKeyRef,
+    this.zaiApiKeyRef,
     this.redactionEnabled = true,
+    this.includeTerminalContext = true,
+    this.assistantUpdatedAt = 0,
     this.syncBaseUrl,
     this.syncUsername,
     this.syncSecrets = false,
+    this.syncAssistant = false,
     this.autoSync = true,
     this.commandSuggestions = false,
     this.checkForUpdates = true,
     this.localShell = false,
+    this.keepSessionsAliveInBackground = true,
     EditorRegistry? editorRegistry,
     Map<String, List<String>>? remotePathBookmarks,
     Map<String, bool>? remoteShowHidden,
     Map<String, IdentityFileBookmark>? identityFileBookmarks,
     Set<String>? collapsedServerGroups,
+    Set<String>? pinnedServerIds,
+    this.serverListDensity = ServerListDensity.comfortable,
+    this.paneListWidth,
+    this.paneUtilityWidth,
+    Set<String>? unwrittenAssistantKeyRefs,
+    Set<String>? heldAssistantKeyRefs,
     this.terminalFontSize = kDefaultTerminalFontSize,
     this.terminalFontFamily = '',
     this.terminalPalette = TerminalPalette.followApp,
+    ThemePalette? themePalette,
+    this.themeMode = ThemeModePreference.system,
     this.deviceId = '',
     this.snippetsSeeded = false,
   }) : editorRegistry = editorRegistry ?? EditorRegistry(),
+       themePalette = themePalette ?? ThemePresets.initial,
        remotePathBookmarks = remotePathBookmarks ?? {},
        remoteShowHidden = remoteShowHidden ?? {},
        identityFileBookmarks = identityFileBookmarks ?? {},
-       collapsedServerGroups = collapsedServerGroups ?? {};
+       collapsedServerGroups = collapsedServerGroups ?? {},
+       pinnedServerIds = pinnedServerIds ?? {},
+       unwrittenAssistantKeyRefs = unwrittenAssistantKeyRefs ?? {},
+       heldAssistantKeyRefs = heldAssistantKeyRefs ?? {};
 
   Map<String, dynamic> toJson() => {
     'llmKind': llmKind.name,
@@ -167,14 +311,23 @@ class AppSettings {
     'llmApiKeyRef': llmApiKeyRef,
     if (searxngUrl != null) 'searxngUrl': searxngUrl,
     if (braveApiKeyRef != null) 'braveApiKeyRef': braveApiKeyRef,
+    if (zaiApiKeyRef != null) 'zaiApiKeyRef': zaiApiKeyRef,
     'redactionEnabled': redactionEnabled,
+    'includeTerminalContext': includeTerminalContext,
+    'assistantUpdatedAt': assistantUpdatedAt,
+    // Sorted for the same reason as [collapsedServerGroups]: an unchanged set
+    // has to write byte-identical JSON.
+    'unwrittenAssistantKeyRefs': unwrittenAssistantKeyRefs.toList()..sort(),
+    'heldAssistantKeyRefs': heldAssistantKeyRefs.toList()..sort(),
     if (syncBaseUrl != null) 'syncBaseUrl': syncBaseUrl,
     if (syncUsername != null) 'syncUsername': syncUsername,
     'syncSecrets': syncSecrets,
+    'syncAssistant': syncAssistant,
     'autoSync': autoSync,
     'commandSuggestions': commandSuggestions,
     'checkForUpdates': checkForUpdates,
     'localShell': localShell,
+    'keepSessionsAliveInBackground': keepSessionsAliveInBackground,
     'editorRegistry': editorRegistry.toJson(),
     // Keep old versions on a safe supported default if settings are downgraded.
     'remoteFileEditor':
@@ -189,9 +342,17 @@ class AppSettings {
     // file is rewritten on every save, and a set's iteration order would
     // otherwise make each one look like a change.
     'collapsedServerGroups': collapsedServerGroups.toList()..sort(),
+    // Sorted like the set above it, and for the same reason. The order here
+    // is not the display order: pinned rows keep the list's own ordering.
+    'pinnedServerIds': pinnedServerIds.toList()..sort(),
+    'serverListDensity': serverListDensity.name,
+    if (paneListWidth != null) 'paneListWidth': paneListWidth,
+    if (paneUtilityWidth != null) 'paneUtilityWidth': paneUtilityWidth,
     'terminalFontSize': terminalFontSize,
     'terminalFontFamily': terminalFontFamily,
     'terminalPalette': terminalPalette.name,
+    'themePalette': themePalette.toJson(),
+    'themeMode': themeMode.name,
     'deviceId': deviceId,
     'snippetsSeeded': snippetsSeeded,
   };
@@ -206,14 +367,22 @@ class AppSettings {
     llmApiKeyRef: json['llmApiKeyRef'] as String? ?? 'anthropic',
     searxngUrl: json['searxngUrl'] as String?,
     braveApiKeyRef: json['braveApiKeyRef'] as String?,
+    zaiApiKeyRef: json['zaiApiKeyRef'] as String?,
     redactionEnabled: json['redactionEnabled'] as bool? ?? true,
+    includeTerminalContext: json['includeTerminalContext'] as bool? ?? true,
+    assistantUpdatedAt: (json['assistantUpdatedAt'] as num?)?.toInt() ?? 0,
+    unwrittenAssistantKeyRefs: _stringSet(json['unwrittenAssistantKeyRefs']),
+    heldAssistantKeyRefs: _stringSet(json['heldAssistantKeyRefs']),
     syncBaseUrl: json['syncBaseUrl'] as String?,
     syncUsername: json['syncUsername'] as String?,
     syncSecrets: json['syncSecrets'] as bool? ?? false,
+    syncAssistant: json['syncAssistant'] as bool? ?? false,
     autoSync: json['autoSync'] as bool? ?? true,
     commandSuggestions: json['commandSuggestions'] as bool? ?? false,
     checkForUpdates: json['checkForUpdates'] as bool? ?? true,
     localShell: json['localShell'] as bool? ?? false,
+    keepSessionsAliveInBackground:
+        json['keepSessionsAliveInBackground'] as bool? ?? true,
     editorRegistry: EditorRegistry.fromJson(
       json['editorRegistry'],
       legacyEditor: json['remoteFileEditor'],
@@ -222,6 +391,13 @@ class AppSettings {
     remoteShowHidden: _boolMap(json['remoteShowHidden']),
     identityFileBookmarks: _identityBookmarkMap(json['identityFileBookmarks']),
     collapsedServerGroups: _stringSet(json['collapsedServerGroups']),
+    pinnedServerIds: _stringSet(json['pinnedServerIds']),
+    serverListDensity: ServerListDensity.values.firstWhere(
+      (d) => d.name == json['serverListDensity'],
+      orElse: () => ServerListDensity.comfortable,
+    ),
+    paneListWidth: _paneWidth(json['paneListWidth']),
+    paneUtilityWidth: _paneWidth(json['paneUtilityWidth']),
     // Clamped on read: a hand-edited or downgraded settings file must never be
     // able to render the terminal at an unusable size.
     terminalFontSize: clampTerminalFontSize(
@@ -232,6 +408,13 @@ class AppSettings {
     terminalPalette: TerminalPalette.values.firstWhere(
       (p) => p.name == json['terminalPalette'],
       orElse: () => TerminalPalette.followApp,
+    ),
+    // Lenient all the way down: a hand-edited theme costs at most its own
+    // bad values, never the rest of the settings file.
+    themePalette: ThemePalette.decodeStored(json['themePalette']),
+    themeMode: ThemeModePreference.values.firstWhere(
+      (m) => m.name == json['themeMode'],
+      orElse: () => ThemeModePreference.system,
     ),
     deviceId: json['deviceId'] as String? ?? '',
     snippetsSeeded: json['snippetsSeeded'] as bool? ?? false,
@@ -303,6 +486,15 @@ Map<String, IdentityFileBookmark> _identityBookmarkMap(Object? value) {
 Set<String> _stringSet(Object? value) {
   if (value is! List) return {};
   return value.whereType<String>().toSet();
+}
+
+/// A pane width from disk: only a finite positive number is usable — anything
+/// else reads as "never dragged" (null) rather than poisoning layout math with
+/// a NaN or negative width.
+double? _paneWidth(Object? value) {
+  if (value is! num) return null;
+  final width = value.toDouble();
+  return (width.isFinite && width > 0) ? width : null;
 }
 
 Map<String, bool> _boolMap(Object? value) {

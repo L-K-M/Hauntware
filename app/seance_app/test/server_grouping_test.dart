@@ -13,31 +13,55 @@ ServerConfig _server(String label, {String? group}) => ServerConfig(
   updatedAt: 0,
 );
 
-/// Each section as `[name, [member labels]]` — enough to assert membership and
-/// both orders at once. Nested lists rather than records because `equals`
-/// compares collections structurally and records only field-by-field, where a
-/// `List` field falls back to identity.
-List<List<Object?>> _shape(List<ServerGroupSection> sections) => [
-  for (final section in sections)
-    [section.name, [for (final s in section.servers) s.label]],
+/// The named groups as `[name, [member labels]]` — enough to assert
+/// membership and both orders at once. Nested lists rather than records
+/// because `equals` compares collections structurally and records only
+/// field-by-field, where a `List` field falls back to identity.
+List<List<Object?>> _shape(ServerSidebarSections sections) => [
+  for (final group in sections.groups)
+    [
+      group.name,
+      [for (final s in group.servers) s.label],
+    ],
+];
+
+List<String> _labels(List<ServerConfig> servers) => [
+  for (final s in servers) s.label,
+];
+
+/// The rendered rows as short strings: `#TITLE:count` for a section,
+/// `>name:count` for a group, `-` (or `--` nested) plus a label for a row,
+/// with a trailing `+` on anything collapsed.
+List<String> _rendered(List<ServerListRow> rows) => [
+  for (final row in rows)
+    switch (row) {
+      ServerSectionRow(:final title, :final count, :final collapsed) =>
+        '#$title:$count${collapsed ? '+' : ''}',
+      ServerGroupHeaderRow(:final name, :final count, :final collapsed) =>
+        '>$name:$count${collapsed ? '+' : ''}',
+      ServerRow(:final server, :final depth) =>
+        '${depth == 0 ? '-' : '--'}${server.label}',
+    },
 ];
 
 void main() {
   group('groupServers', () {
-    test('a list with no groups stays one anonymous section', () {
+    test('a list with no groups is all ungrouped', () {
       final sections = groupServers([_server('a'), _server('b')]);
-      expect(sections, hasLength(1));
-      expect(sections.single.name, isNull);
-      expect(sections.single.servers.map((s) => s.label), ['a', 'b']);
+      expect(sections.groups, isEmpty);
+      expect(sections.pinned, isEmpty);
+      expect(_labels(sections.ungrouped), ['a', 'b']);
     });
 
-    test('empty in, empty section out', () {
+    test('empty in, empty sections out', () {
       final sections = groupServers([]);
-      expect(sections, hasLength(1));
-      expect(sections.single.servers, isEmpty);
+      expect(sections.pinned, isEmpty);
+      expect(sections.ungrouped, isEmpty);
+      expect(sections.groups, isEmpty);
+      expect(sections.unpinnedCount, 0);
     });
 
-    test('sections are sorted by name with the ungrouped remainder last', () {
+    test('groups are sorted by name; the ungrouped are kept apart', () {
       final sections = groupServers([
         _server('loose'),
         _server('web', group: 'Production'),
@@ -46,10 +70,17 @@ void main() {
         _server('db', group: 'Production'),
       ]);
       expect(_shape(sections), [
-        ['CI', ['runner']],
-        ['Production', ['web', 'db']],
-        [null, ['loose', 'also-loose']],
+        [
+          'CI',
+          ['runner'],
+        ],
+        [
+          'Production',
+          ['web', 'db'],
+        ],
       ]);
+      expect(_labels(sections.ungrouped), ['loose', 'also-loose']);
+      expect(sections.unpinnedCount, 5);
     });
 
     test('grouping folds case but keeps the first member\'s spelling', () {
@@ -59,7 +90,10 @@ void main() {
         _server('c', group: 'PROD'),
       ]);
       expect(_shape(sections), [
-        ['Prod', ['a', 'b', 'c']],
+        [
+          'Prod',
+          ['a', 'b', 'c'],
+        ],
       ]);
     });
 
@@ -70,9 +104,12 @@ void main() {
         _server('c', group: 'Real'),
       ]);
       expect(_shape(sections), [
-        ['Real', ['c']],
-        [null, ['a', 'b']],
+        [
+          'Real',
+          ['c'],
+        ],
       ]);
+      expect(_labels(sections.ungrouped), ['a', 'b']);
     });
 
     test('edge whitespace does not fork a near-identical group', () {
@@ -80,90 +117,306 @@ void main() {
         _server('a', group: 'Home lab'),
         _server('b', group: '  Home lab  '),
       ]);
-      expect(sections, hasLength(1));
-      expect(sections.single.servers, hasLength(2));
+      expect(sections.groups, hasLength(1));
+      expect(sections.groups.single.servers, hasLength(2));
+    });
+  });
+
+  group('pinning', () {
+    test('pinned servers lead, in the list\'s own order', () {
+      final sections = groupServers(
+        [_server('a'), _server('b'), _server('c')],
+        pinnedIds: {'c', 'a'},
+      );
+      // 'a' before 'c' — the shortlist keeps the list's order, not the order
+      // the two were pinned in.
+      expect(_labels(sections.pinned), ['a', 'c']);
+      expect(_labels(sections.ungrouped), ['b']);
+    });
+
+    test('a pinned server leaves its group rather than appearing twice', () {
+      final sections = groupServers(
+        [
+          _server('web', group: 'Production'),
+          _server('db', group: 'Production'),
+        ],
+        pinnedIds: {'web'},
+      );
+      expect(_labels(sections.pinned), ['web']);
+      // The group's count is what is left in it, so folding it away never
+      // claims to hide a row that is sitting at the top of the list.
+      expect(_shape(sections), [
+        [
+          'Production',
+          ['db'],
+        ],
+      ]);
+    });
+
+    test('an id that names no server pins nothing', () {
+      final sections = groupServers(
+        [_server('a')],
+        pinnedIds: {'deleted-elsewhere'},
+      );
+      expect(sections.pinned, isEmpty);
+      expect(_labels(sections.ungrouped), ['a']);
+    });
+
+    test('no spelling of a group name can reach a section\'s key', () {
+      // [kPinnedKey] and [kServersKey] are collision-free only because
+      // [normalizeServerGroup] trims, which is an invariant in another
+      // function with nothing tying it to these constants. If trimming ever
+      // stopped, a user-typed group would start folding a whole section
+      // away with it.
+      for (final spelling in [
+        'Pinned',
+        'pinned',
+        ' pinned',
+        'pinned ',
+        '  Pinned  ',
+        kPinnedKey,
+        'Servers',
+        ' servers',
+        kServersKey,
+      ]) {
+        final group = groupServers([
+          _server('a', group: spelling),
+        ]).groups.single;
+        expect(group.key, isNot(kPinnedKey));
+        expect(group.key, isNot(kServersKey));
+      }
     });
   });
 
   group('serverListRows', () {
-    List<ServerListRow> rowsFor(
+    List<String> rowsFor(
       List<ServerConfig> servers, {
+      Set<String> pinned = const {},
       Set<String> collapsed = const {},
-    }) => serverListRows(
-      sections: groupServers(servers),
-      collapsedKeys: collapsed,
+      Set<String> kept = const {},
+    }) => _rendered(
+      serverListRows(
+        sections: groupServers(servers, pinnedIds: pinned),
+        collapsedKeys: collapsed,
+        keptSections: kept,
+      ),
     );
 
-    test('an ungrouped list renders no headers at all', () {
-      final rows = rowsFor([_server('a'), _server('b')]);
-      expect(rows.whereType<ServerGroupHeaderRow>(), isEmpty);
-      expect(rows, hasLength(2));
-    });
-
-    test('each section gets a header carrying its member count', () {
-      final rows = rowsFor([
-        _server('web', group: 'Production'),
-        _server('db', group: 'Production'),
-        _server('loose'),
+    test('a flat list sits under one SERVERS header', () {
+      expect(rowsFor([_server('a'), _server('b')]), [
+        '#$kServersLabel:2',
+        '-a',
+        '-b',
       ]);
-      final headers = rows.whereType<ServerGroupHeaderRow>().toList();
-      expect(headers.map((h) => h.name), ['Production', kUngroupedLabel]);
-      expect(headers.map((h) => h.count), [2, 1]);
-      expect(rows.whereType<ServerRow>(), hasLength(3));
     });
 
-    test('a collapsed section keeps its header and drops its members', () {
-      final rows = rowsFor(
-        [
+    test('nothing to show renders nothing, not an empty caption', () {
+      expect(rowsFor([]), isEmpty);
+    });
+
+    test('PINNED leads; SERVERS takes the rest', () {
+      expect(rowsFor([_server('a'), _server('b')], pinned: {'b'}), [
+        '#$kPinnedLabel:1',
+        '-b',
+        '#$kServersLabel:1',
+        '-a',
+      ]);
+    });
+
+    test('pinning everything leaves no empty SERVERS behind', () {
+      expect(rowsFor([_server('a'), _server('b')], pinned: {'a', 'b'}), [
+        '#$kPinnedLabel:2',
+        '-a',
+        '-b',
+      ]);
+    });
+
+    test('ungrouped rows lead; groups nest their members beneath them', () {
+      expect(
+        rowsFor([
           _server('web', group: 'Production'),
           _server('db', group: 'Production'),
           _server('runner', group: 'CI'),
+          _server('loose'),
+        ]),
+        [
+          '#$kServersLabel:4',
+          '-loose',
+          '>CI:1',
+          '--runner',
+          '>Production:2',
+          '--web',
+          '--db',
         ],
-        collapsed: {'production'},
-      );
-      final headers = rows.whereType<ServerGroupHeaderRow>().toList();
-      expect(headers.map((h) => h.name), ['CI', 'Production']);
-      expect(
-        headers.firstWhere((h) => h.name == 'Production').collapsed,
-        isTrue,
-      );
-      // The count still reports what is folded away, and only CI's member
-      // survives as a row.
-      expect(headers.firstWhere((h) => h.name == 'Production').count, 2);
-      expect(
-        rows.whereType<ServerRow>().map((r) => r.server.label),
-        ['runner'],
       );
     });
 
-    test('the ungrouped section collapses like any other', () {
-      final rows = rowsFor(
-        [_server('web', group: 'Production'), _server('loose')],
-        collapsed: {kUngroupedKey},
-      );
+    test('a collapsed group keeps its header and drops its members', () {
       expect(
-        rows.whereType<ServerRow>().map((r) => r.server.label),
-        ['web'],
+        rowsFor(
+          [
+            _server('web', group: 'Production'),
+            _server('db', group: 'Production'),
+            _server('runner', group: 'CI'),
+          ],
+          collapsed: {'production'},
+        ),
+        // The count still reports what is folded away.
+        ['#$kServersLabel:3', '>CI:1', '--runner', '>Production:2+'],
+      );
+    });
+
+    test('the shortlist folds away like any group', () {
+      expect(
+        rowsFor(
+          [_server('a'), _server('b')],
+          pinned: {'a'},
+          collapsed: {kPinnedKey},
+        ),
+        // The header stays — it is the only way back.
+        ['#$kPinnedLabel:1+', '#$kServersLabel:1', '-b'],
+      );
+    });
+
+    test('folding SERVERS folds its groups with it', () {
+      expect(
+        rowsFor(
+          [_server('web', group: 'Production'), _server('loose')],
+          collapsed: {kServersKey},
+        ),
+        ['#$kServersLabel:2+'],
       );
     });
 
     test('collapsing keys are case-folded like the groups they name', () {
-      final rows = rowsFor(
-        [_server('web', group: 'Production'), _server('loose')],
-        collapsed: {serverGroupKey('PRODUCTION')},
-      );
       expect(
-        rows.whereType<ServerRow>().map((r) => r.server.label),
-        ['loose'],
+        rowsFor(
+          [_server('web', group: 'Production'), _server('loose')],
+          collapsed: {serverGroupKey('PRODUCTION')},
+        ),
+        ['#$kServersLabel:2', '-loose', '>Production:1+'],
       );
     });
 
+    test('a kept section the filter emptied keeps its header, and only '
+        'that', () {
+      // The filter matched nothing: each section is kept because a live
+      // server is among what it hid, so each header stays, over no rows.
+      expect(rowsFor([], kept: {kPinnedKey, kServersKey}), [
+        '#$kPinnedLabel:0',
+        '#$kServersLabel:0',
+      ]);
+      expect(rowsFor([_server('a')], kept: {kPinnedKey}), [
+        '#$kPinnedLabel:0',
+        '#$kServersLabel:1',
+        '-a',
+      ]);
+    });
+
     test('a stale key for a group that no longer exists is harmless', () {
-      final rows = rowsFor(
-        [_server('a'), _server('b')],
-        collapsed: {'a-group-that-was-renamed'},
+      expect(
+        rowsFor(
+          [_server('a'), _server('b')],
+          collapsed: {'a-group-that-was-renamed', ''},
+        ),
+        ['#$kServersLabel:2', '-a', '-b'],
       );
-      expect(rows.whereType<ServerRow>(), hasLength(2));
+    });
+  });
+
+  group('hiddenByHeader', () {
+    final servers = [
+      _server('loose'),
+      _server('db', group: 'Production'),
+      _server('web', group: 'Production'),
+      _server('ci', group: 'Build'),
+      _server('star'),
+    ];
+    final pins = {'star'};
+    final all = groupServers(servers, pinnedIds: pins);
+    final production = serverGroupKey('Production');
+    final build = serverGroupKey('Build');
+
+    Map<String, List<String>> hidden(
+      List<ServerConfig> shown, {
+      Set<String> collapsed = const {},
+      Set<String> kept = const {},
+    }) => {
+      for (final MapEntry(:key, :value) in hiddenByHeader(
+        sections: all,
+        rows: serverListRows(
+          sections: groupServers(shown, pinnedIds: pins),
+          collapsedKeys: collapsed,
+          keptSections: kept,
+        ),
+      ).entries)
+        key: _labels(value),
+    };
+
+    test('nothing folded or filtered hides nothing', () {
+      expect(hidden(servers), isEmpty);
+    });
+
+    test('a folded group hides its members under its own row, not also '
+        'under SERVERS', () {
+      expect(hidden(servers, collapsed: {production}), {
+        production: ['db', 'web'],
+      });
+    });
+
+    test('a folded section hides everything under it, groups included', () {
+      expect(hidden(servers, collapsed: {kServersKey, kPinnedKey}), {
+        kPinnedKey: ['star'],
+        kServersKey: ['loose', 'ci', 'db', 'web'],
+      });
+    });
+
+    test('a filtered-out server goes to the nearest header left on screen, '
+        'or nowhere', () {
+      // "web" shares Production with a match; "ci" is alone in Build, whose
+      // row the filter drops, so SERVERS holds it; "star" has no PINNED
+      // header left to hold it.
+      final matches = servers
+          .where((s) => s.label == 'db' || s.label == 'loose')
+          .toList();
+      expect(hidden(matches), {
+        production: ['web'],
+        kServersKey: ['ci'],
+      });
+      expect(hidden(matches).containsKey(build), isFalse);
+    });
+
+    test('a section header kept for a live server holds all it hid', () {
+      // Nothing matched. PINNED and SERVERS were kept (a live server in
+      // each), so every server lands on one of them, groups included.
+      expect(hidden(const [], kept: {kPinnedKey, kServersKey}), {
+        kPinnedKey: ['star'],
+        kServersKey: ['loose', 'ci', 'db', 'web'],
+      });
+    });
+  });
+
+  group('sectionsHoldingLive', () {
+    final all = groupServers(
+      [_server('star'), _server('loose'), _server('db', group: 'Production')],
+      pinnedIds: {'star'},
+    );
+    Set<String> kept(Set<String> live) =>
+        sectionsHoldingLive(all, (server) => live.contains(server.id));
+
+    test('nothing live keeps no header', () {
+      expect(kept({}), isEmpty);
+    });
+
+    test('a live pinned server keeps PINNED, and only PINNED', () {
+      expect(kept({'star'}), {kPinnedKey});
+    });
+
+    test('a live server in SERVERS keeps SERVERS, grouped or not: a hidden '
+        "group's header is gone, so SERVERS is where its dot shows", () {
+      expect(kept({'loose'}), {kServersKey});
+      expect(kept({'db'}), {kServersKey});
+      expect(kept({'star', 'db'}), {kPinnedKey, kServersKey});
     });
   });
 

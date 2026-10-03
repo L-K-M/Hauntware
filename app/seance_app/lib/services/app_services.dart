@@ -1,15 +1,19 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:seance_core/seance_core.dart';
 
 import 'app_settings.dart';
+import 'assistant_settings_sync.dart';
 import 'command_stats.dart';
 import 'external_file_opener.dart';
 import 'file_stores.dart';
 import 'identity_audit_log.dart';
 import 'identity_bookmarks.dart';
+import 'inbox_stores.dart';
 import 'local_shell_service.dart';
 import 'managed_remote_file_store.dart';
 import 'secure_master_key.dart';
@@ -45,13 +49,49 @@ class IdentityFileException implements Exception {
   }
 }
 
+/// A vault without its key: the OS keystore was unavailable at bootstrap, so
+/// no key exists this session. Reads and writes fail with a clear message
+/// instead of decrypting with a wrong key (which would look like corruption)
+/// or fabricating an ephemeral one (which would silently orphan anything saved
+/// now on the next launch). Deleting stays legal — it needs no key.
+class LockedSecretVault extends SecretVault {
+  LockedSecretVault(VaultStore store) : super(store, const <int>[]);
+
+  @override
+  Future<Secret?> getSecret(String id) async => throw const VaultLockedException();
+
+  /// Throws too, rather than inheriting the "unreadable reads as absent" base.
+  /// Nothing here is damaged — there is no key to try — and a caller that took
+  /// the silent null would read a locked vault as an empty one and overwrite
+  /// the entries it cannot currently see.
+  @override
+  Future<Secret?> readableSecret(String id) async =>
+      throw const VaultLockedException();
+
+  @override
+  Future<void> putSecret(Secret secret) async => throw const VaultLockedException();
+
+  @override
+  Future<void> putSecrets(Iterable<Secret> secrets) async =>
+      throw const VaultLockedException();
+}
+
 /// Wires together the seance_core services with the app's file-backed stores
 /// and the OS keystore. Created once at startup.
 class AppServices {
   final ConfigStore configStore;
   final SnippetStore snippetStore;
+  /// Durable record of deletions awaiting sync (see [TombstoneStore]). Without
+  /// it a deleted server returns on the next full pull, since the sync mirror
+  /// is rebuilt each round.
+  final TombstoneStore tombstoneStore;
   // Mutable so sync enrolment can re-key the vault to the shared encryption key.
   SecretVault vault;
+  /// Crash recovery for [_rekeyVault]. This is the same object as
+  /// [SecretVault.store] behind [vault]; it is held separately because
+  /// surviving a crash is a property of the file-backed store, not something
+  /// every [VaultStore] can offer.
+  final VaultRekeyJournal _rekeyJournal;
   final HostKeyStore hostKeyStore;
   final TofuVerifier tofu;
   final ProbeService probe;
@@ -61,14 +101,47 @@ class AppServices {
   final CommandStats commandStats;
   final ManagedRemoteFileStore managedRemoteFiles;
   final IdentityFileBookmarks identityBookmarks;
+
+  /// The command inbox's connected apps (keys in [vault]), handled statuses
+  /// and this device's copy of the server queue. See docs/INBOX.md.
+  final InboxAppStore inboxApps;
+  final InboxStatusStore inboxStatuses;
+  final InboxCacheStore inboxCache;
   final IdentityAuditLog identityAudit;
   final LocalShellService localShell;
-  List<int> vaultKey;
+
+  /// Null while the vault is locked (keystore unavailable at bootstrap — see
+  /// [LockedSecretVault] and [unlockVaultFromKeystore]).
+  List<int>? vaultKey;
   AppSettings settings;
+
+  /// Whether the last [runSync] adopted a pulled assistant configuration. The
+  /// chat provider is built once per configuration version, so a new model or
+  /// key only takes effect if somebody rebuilds it.
+  ///
+  /// True from the end of a round that adopted until the start of the next
+  /// one, which resets it first thing. Read it right after the round that set
+  /// it, in the same call: rounds are serialized behind `AppState._mutate`,
+  /// but a reader that awaits something else in between can find the next
+  /// round has already begun and cleared it.
+  ///
+  /// Raised in a `finally`, so a round that applied the record and *then*
+  /// failed still reports the adoption — which is the case it was put there
+  /// for. Read it from a `finally` around [runSync] rather than only on the
+  /// success path, or that round's adoption is the one that goes unseen.
+  /// Read-only to everything but [runSync], which owns both writes. The
+  /// field was public and settable, and its whole correctness argument is
+  /// about *when* it is written relative to the round — so a second writer
+  /// anywhere would not fail to compile, would not fail a test, and would
+  /// cost an adopted provider its rebuild in exactly the silent way this
+  /// flag exists to prevent.
+  bool get assistantSettingsChanged => _assistantSettingsChanged;
+  bool _assistantSettingsChanged = false;
 
   AppServices._({
     required this.configStore,
     required this.snippetStore,
+    required this.tombstoneStore,
     required this.vault,
     required this.hostKeyStore,
     required this.tofu,
@@ -79,21 +152,36 @@ class AppServices {
     required this.commandStats,
     required this.managedRemoteFiles,
     required this.identityBookmarks,
+    required this.inboxApps,
+    required this.inboxStatuses,
+    required this.inboxCache,
     required this.identityAudit,
     required this.localShell,
     required this.vaultKey,
     required this.settings,
+    required this._rekeyJournal,
   });
 
-  static Future<AppServices> initialize() async {
+  /// [masterKeyManager] is for tests that need the OS keystore to misbehave
+  /// (a locked keyring refusing the re-key's install, say); production passes
+  /// nothing and gets the real one.
+  static Future<AppServices> initialize({
+    @visibleForTesting MasterKeyManager? masterKeyManager,
+  }) async {
     final dir = await getApplicationSupportDirectory();
     String p(String name) => '${dir.path}/$name';
 
-    final masterKeys = MasterKeyManager();
-    final vaultKey = await masterKeys.loadOrCreateFromKeystore();
+    final masterKeys = masterKeyManager ?? MasterKeyManager();
+    // May be null when the OS keystore is locked or unavailable (locked login
+    // keyring on auto-login systems, no Secret Service daemon on minimal
+    // desktops): the app then starts with a locked vault — secrets unreadable
+    // and unwritable with a clear error, retry offered in the UI — instead of
+    // crashing before the shell exists.
+    var vaultKey = await masterKeys.probeKeystore();
 
     final configStore = FileConfigStore(File(p('servers.json')));
     final snippetStore = FileSnippetStore(File(p('snippets.json')));
+    final tombstoneStore = FileTombstoneStore(File(p('deleted_records.json')));
     final vaultStore = FileVaultStore(File(p('vault.json')));
     final hostKeyStore = FileHostKeyStore(File(p('known_hosts.json')));
     final settingsStore = SettingsStore(File(p('settings.json')));
@@ -116,10 +204,37 @@ class AppServices {
     }
     if (settingsChanged) await settingsStore.save(settings);
 
-    return AppServices._(
+    // A re-key stages both vault generations before it changes the OS
+    // keystore, so a process that died between the two left them disagreeing.
+    // Settle that against the key the keystore actually holds, before anything
+    // can read a secret. A settle that fails starts the vault locked, which
+    // the retry affordance already covers, rather than opening it on a
+    // generation this key cannot read.
+    final probed = vaultKey;
+    if (probed != null) {
+      try {
+        await _settleRekey(vaultStore, probed);
+      } catch (error, stackTrace) {
+        developer.log(
+          'Could not settle a pending vault re-key; starting with a locked '
+          'vault so the next unlock can try again',
+          name: 'seance.app',
+          level: 1000,
+          error: error,
+          stackTrace: stackTrace,
+        );
+        vaultKey = null;
+      }
+    }
+
+    late final AppServices services;
+    services = AppServices._(
       configStore: configStore,
       snippetStore: snippetStore,
-      vault: SecretVault(vaultStore, vaultKey),
+      tombstoneStore: tombstoneStore,
+      vault: vaultKey == null
+          ? LockedSecretVault(vaultStore)
+          : SecretVault(vaultStore, vaultKey),
       hostKeyStore: hostKeyStore,
       tofu: TofuVerifier(hostKeyStore),
       probe: ProbeService(),
@@ -129,11 +244,66 @@ class AppServices {
       commandStats: await commandStatsStore.load(),
       managedRemoteFiles: managedRemoteFiles,
       identityBookmarks: IdentityFileBookmarks(),
+      inboxApps: FileInboxAppStore(
+        File(p('inbox_apps.json')),
+        () => services.vault,
+      ),
+      inboxStatuses: FileInboxStatusStore(File(p('inbox_statuses.json'))),
+      inboxCache: FileInboxCacheStore(File(p('inbox_cache.json'))),
       identityAudit: IdentityAuditLog(File(p('identity_reads.jsonl'))),
       localShell: LocalShellService(),
       vaultKey: vaultKey,
       settings: settings,
+      rekeyJournal: vaultStore,
     );
+    return services;
+  }
+
+  /// Re-probe the OS keystore and, if it's back, unlock the vault in place
+  /// (existing references to [vault] keep working — the key is swapped into a
+  /// fresh instance). Returns whether the vault has a key afterwards.
+  Future<bool> unlockVaultFromKeystore() async {
+    if (vaultKey != null) return true;
+    final key = await masterKeys.probeKeystore();
+    if (key == null) return false;
+    // A keystore that is back is also the first chance to finish a re-key the
+    // last run left staged, and it has to happen before the key is adopted:
+    // the generation the vault opens with has to be the one this key seals.
+    try {
+      await _settleRekey(_rekeyJournal, key);
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not settle a pending vault re-key; the vault stays locked and '
+        'the next unlock tries again',
+        name: 'seance.app',
+        level: 1000,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
+    vault = SecretVault(vault.store, key);
+    vaultKey = key;
+    return true;
+  }
+
+  /// Settle a staged re-key against [key], the one the OS keystore holds.
+  ///
+  /// A discarded journal is the outcome worth logging: the vault survives, but
+  /// a staged generation was dropped because no key on offer opened it, and
+  /// nothing else would explain the credentials that went with it.
+  static Future<VaultRekeyOutcome> _settleRekey(
+      VaultRekeyJournal journal, List<int> key) async {
+    final outcome = await journal.settleRekey(key);
+    if (outcome == VaultRekeyOutcome.discarded) {
+      developer.log(
+        'A staged vault re-key matched neither generation the OS keyring '
+        'could open; the journal was moved aside and the stored vault kept',
+        name: 'seance.app',
+        level: 1000,
+      );
+    }
+    return outcome;
   }
 
   /// True when the settings file could not be parsed at startup and was moved
@@ -152,20 +322,102 @@ class AppServices {
   bool get isSyncConfigured =>
       settings.syncBaseUrl != null && settings.syncBaseUrl!.isNotEmpty;
 
-  /// Re-key the vault to [newKey], re-encrypting secrets referenced by current
-  /// configs so nothing is lost. Used by sync enrolment to adopt the shared,
-  /// encryption-passphrase-derived key.
+  /// Re-key the vault to [newKey], the shared key sync enrolment derives from
+  /// the encryption passphrase, so the OS keystore and the vault file agree on
+  /// it afterwards.
+  ///
+  /// Both stores have to change and no operation spans them; the staged
+  /// journal is what makes the gap between them survivable, including a crash
+  /// (see [VaultRekeyJournal]). Staging re-seals every stored entry rather
+  /// than only the ones current configs reference, because it rewrites the
+  /// whole map anyway, so an orphan credential keeps opening instead of
+  /// quietly retiring with the key nothing holds any more.
   Future<void> _rekeyVault(List<int> newKey) async {
-    final newVault = SecretVault(vault.store, newKey);
-    for (final cfg in await configStore.listServers()) {
-      if (cfg.secretRef != null) {
-        final secret = await vault.getSecret(cfg.secretRef!);
-        if (secret != null) await newVault.putSecret(secret);
-      }
+    // An attempt that could not get a verdict out of the keyring left its
+    // journal staged rather than guess, and staging a second one over it is
+    // refused. This is the retry, and the keyring may be back by now: settle
+    // first, so the affordance the previous attempt counted on actually
+    // exists. A no-op when nothing is staged.
+    await _adoptInstalledKey();
+    final currentKey = vaultKey;
+    // Staging reads every entry to re-seal it, which a locked vault cannot do.
+    // Enrolment waits for the keyring rather than stage a generation built
+    // from a vault it could not read.
+    if (currentKey == null) throw const VaultLockedException();
+    await _rekeyJournal.stageRekey(currentKey: currentKey, newKey: newKey);
+    try {
+      // The keystore is the only place the new key survives a restart, and it
+      // can refuse outright: a locked keyring throws here, which is why the
+      // rest of this class treats that as a state to recover from rather than
+      // a crash. Nothing needs rolling back if it does: staging left the vault
+      // file on the generation the installed key still opens.
+      await masterKeys.setKeystoreKey(newKey);
+    } catch (_) {
+      await _adoptInstalledKey();
+      rethrow;
     }
-    vault = newVault;
+    await _settleRekey(_rekeyJournal, newKey);
+    vault = SecretVault(vault.store, newKey);
     vaultKey = newKey;
-    await masterKeys.setKeystoreKey(newKey);
+  }
+
+  /// Drive a vault re-key directly.
+  ///
+  /// Enrolment reaches [_rekeyVault] through [registerSync]/[loginSync], which
+  /// need a live sync server; what this has to get right is the order of the
+  /// two local stores it changes, which no server is party to.
+  @visibleForTesting
+  Future<void> rekeyVaultForTesting(List<int> newKey) => _rekeyVault(newKey);
+
+  /// Settle the staged re-key against the key the OS keystore really holds,
+  /// and adopt it — after a failed install, and at the head of a retry.
+  ///
+  /// Reads the keystore back rather than assuming the throw meant nothing
+  /// landed: a write that stores the value and then fails on the way out is
+  /// the case this exists for. [MasterKeyManager.readKeystoreKey], never
+  /// `probeKeystore`, because that one invents a key when it finds none and a
+  /// key neither generation matches is the one thing this must not install.
+  ///
+  /// Settles nothing unless the keystore can actually testify. A null read is
+  /// ambiguous — "holds none" and "locked, cannot answer" are the same answer
+  /// here — and settling on a guess is how this reopens the window it closes:
+  /// picking the old key finalizes the vault on that generation and clears the
+  /// journal, so a keyring that *had* committed the new key is left holding
+  /// one nothing on disk matches, with the other generation gone. Returning
+  /// instead costs nothing, because staging never wrote `vault.json`: the
+  /// stored vault and this session stay on the key that still opens it, and
+  /// the journal survives for the next launch to settle against whichever key
+  /// the keystore turns out to hold.
+  ///
+  /// Only an adopted outcome changes the key this session reads with, because
+  /// only that one moved the stored vault to the generation [installed] opens.
+  /// A discarded journal leaves the stored vault where it was, and so does a
+  /// journal that was never staged, so taking the key in either case would
+  /// wedge a session that can still read through the one it has.
+  ///
+  /// Only the caller's keystore error is worth reporting, so a failure here is
+  /// logged and swallowed; it leaves the journal on disk, which is exactly
+  /// what the next launch settles from.
+  Future<void> _adoptInstalledKey() async {
+    try {
+      final installed = await masterKeys.readKeystoreKey();
+      if (installed == null) return;
+      if (await _settleRekey(_rekeyJournal, installed) !=
+          VaultRekeyOutcome.adopted) {
+        return;
+      }
+      vault = SecretVault(vault.store, installed);
+      vaultKey = installed;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Vault re-key could not be settled after the OS keyring refused the '
+        'new key; the staged journal stays for the next launch',
+        name: 'seance.app',
+        level: 1000,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<({List<int> authVerifier, List<int> vaultKey})> _deriveSyncKeys({
@@ -195,13 +447,66 @@ class AppServices {
     );
   }
 
+  Future<void> _syncOperationTail = Future<void>.value();
+
+  /// Enrollment changes the vault key and account together. A round already
+  /// running must finish first, and a queued round must see the final account
+  /// or the disconnected state left by a failed enrollment.
+  Future<T> _serializeSyncOperation<T>(Future<T> Function() operation) {
+    final result = _syncOperationTail.then((_) => operation());
+    _syncOperationTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return result;
+  }
+
+  /// Publish an authenticated account only once its key and token are durable.
+  /// A failed local step leaves sync disconnected; sign in to finish enrolling
+  /// the account already accepted by the server. Clearing the old endpoint
+  /// first also prevents a restart from using an old account with a newly
+  /// installed account's vault key.
+  Future<void> _completeSyncEnrollment({
+    required String baseUrl,
+    required String username,
+    required String token,
+    required List<int> key,
+  }) async {
+    final previousUrl = settings.syncBaseUrl;
+    final previousUsername = settings.syncUsername;
+    settings.syncBaseUrl = null;
+    settings.syncUsername = null;
+    try {
+      await saveSettings();
+    } catch (_) {
+      // Nothing else changed yet, so retaining the previous account is safe.
+      settings.syncBaseUrl = previousUrl;
+      settings.syncUsername = previousUsername;
+      rethrow;
+    }
+
+    await _rekeyVault(key);
+    await masterKeys.putApiKey(syncTokenKeyName, token);
+    settings.syncBaseUrl = baseUrl;
+    settings.syncUsername = username;
+    try {
+      await saveSettings();
+    } catch (_) {
+      // The last durable endpoint is absent. Keep the live state absent too,
+      // so another settings save cannot activate an enrollment reported failed.
+      settings.syncBaseUrl = null;
+      settings.syncUsername = null;
+      rethrow;
+    }
+  }
+
   /// Create a sync account and adopt its separately protected vault key.
   Future<void> registerSync({
     required String baseUrl,
     required String username,
     required String password,
     required String encryptionPassphrase,
-  }) async {
+  }) => _serializeSyncOperation(() async {
     final salt = secureRandomBytes(16);
     final keys = await _deriveSyncKeys(
       password: password,
@@ -209,21 +514,23 @@ class AppServices {
       salt: salt,
       params: const Argon2Params(),
     );
-    final client = HttpSyncClient(baseUrl: baseUrl);
-    await client.register(
-      RegisterRequest(
+    await _withSyncClient(baseUrl, (client) async {
+      await client.register(
+        RegisterRequest(
+          username: username,
+          authVerifier: base64.encode(keys.authVerifier),
+          argonSalt: base64.encode(salt),
+          argonParams: const Argon2Params(),
+        ),
+      );
+      await _completeSyncEnrollment(
+        baseUrl: baseUrl,
         username: username,
-        authVerifier: base64.encode(keys.authVerifier),
-        argonSalt: base64.encode(salt),
-        argonParams: const Argon2Params(),
-      ),
-    );
-    settings.syncBaseUrl = baseUrl;
-    settings.syncUsername = username;
-    await saveSettings();
-    await masterKeys.putApiKey('sync.token', client.token!);
-    await _rekeyVault(keys.vaultKey);
-  }
+        token: client.token!,
+        key: keys.vaultKey,
+      );
+    });
+  });
 
   /// Enrol this device against an existing account and adopt its vault key.
   Future<void> loginSync({
@@ -231,81 +538,275 @@ class AppServices {
     required String username,
     required String password,
     required String encryptionPassphrase,
-  }) async {
-    final client = HttpSyncClient(baseUrl: baseUrl);
-    final pre = await client.prelogin(username);
-    // Refuse a KDF downgrade: the Argon2 parameters come from the server, so a
-    // malicious/compromised one could return weak factors to make the vault key
-    // cheap to brute-force. Never derive with anything weaker than the minimum.
-    if (!pre.argonParams.meetsMinimum(Argon2Params.minimum)) {
-      throw StateError(
-        'The sync server returned weaker password-hashing parameters than '
-        'Séance accepts — refusing to derive your key (possible downgrade '
-        'attack).',
-      );
-    }
-    final keys = await _deriveSyncKeys(
-      password: password,
-      encryptionPassphrase: encryptionPassphrase,
-      salt: base64.decode(pre.argonSalt),
-      params: pre.argonParams,
-    );
-    await client.login(
-      LoginRequest(
-        username: username,
-        authVerifier: base64.encode(keys.authVerifier),
-      ),
-    );
-    // Authentication cannot prove that the separate encryption passphrase is
-    // correct. Verify it against one remote payload before changing the local
-    // vault or persisting enrollment, so a typo cannot overwrite synced data.
-    final remote = await client.pull(since: 0);
-    for (final record in remote.records) {
-      if (record.deleted || record.blob.isEmpty) continue;
-      try {
-        await RecordCodec(keys.vaultKey).decrypt(record);
-      } catch (_) {
+  }) => _serializeSyncOperation(
+    () => _withSyncClient(baseUrl, (client) async {
+      final pre = await client.prelogin(username);
+      // Refuse a KDF downgrade: the Argon2 parameters come from the server, so a
+      // malicious/compromised one could return weak factors to make the vault key
+      // cheap to brute-force. Never derive with anything weaker than the minimum.
+      if (!pre.argonParams.meetsMinimum(Argon2Params.minimum)) {
         throw StateError(
-          'The vault encryption passphrase could not decrypt this account. '
-          'Check it and try again.',
+          'The sync server returned weaker password-hashing parameters than '
+          'Séance accepts — refusing to derive your key (possible downgrade '
+          'attack).',
         );
       }
-      break;
-    }
-    settings.syncBaseUrl = baseUrl;
-    settings.syncUsername = username;
-    await saveSettings();
-    await masterKeys.putApiKey('sync.token', client.token!);
-    await _rekeyVault(keys.vaultKey);
-  }
+      final keys = await _deriveSyncKeys(
+        password: password,
+        encryptionPassphrase: encryptionPassphrase,
+        salt: base64.decode(pre.argonSalt),
+        params: pre.argonParams,
+      );
+      await client.login(
+        LoginRequest(
+          username: username,
+          authVerifier: base64.encode(keys.authVerifier),
+        ),
+      );
+      // Authentication cannot prove that the separate encryption passphrase is
+      // correct. Verify it against one remote payload before changing the local
+      // vault or persisting enrollment, so a typo cannot overwrite synced data.
+      final remote = await client.pull(since: 0);
+      for (final record in remote.records) {
+        if (record.deleted || record.blob.isEmpty) continue;
+        try {
+          await RecordCodec(keys.vaultKey).decrypt(record);
+        } catch (_) {
+          throw StateError(
+            'The vault encryption passphrase could not decrypt this account. '
+            'Check it and try again.',
+          );
+        }
+        break;
+      }
+      await _completeSyncEnrollment(
+        baseUrl: baseUrl,
+        username: username,
+        token: client.token!,
+        key: keys.vaultKey,
+      );
+    }),
+  );
 
   /// Run one synchronization round against the configured server.
-  Future<SyncOutcome> runSync() async {
+  Future<SyncOutcome> runSync() => _serializeSyncOperation(_runSync);
+
+  Future<SyncOutcome> _runSync() async {
+    // First statement, above every guard. The guards below all throw today,
+    // so nothing can read a stale answer — but placing the reset after them
+    // means that stays true only while they keep throwing, and a guard that
+    // is one day changed to return a failure outcome would hand the caller
+    // the previous round's "adopted" answer with nothing to show for it.
+    _assistantSettingsChanged = false;
     final baseUrl = settings.syncBaseUrl;
-    final token = await masterKeys.getApiKey('sync.token');
+    final token = await masterKeys.getApiKey(syncTokenKeyName);
     if (baseUrl == null || token == null) {
+      // A configured account that suddenly reads as "not set up" means the
+      // keystore (which holds the token) is down — say that, not "set up sync".
+      if (baseUrl != null &&
+          masterKeys.keystoreStatus == KeystoreStatus.unavailable) {
+        throw StateError(
+          'Sync is configured, but the OS keyring is locked or unavailable '
+          '(${masterKeys.lastKeystoreError ?? 'no details'}) — the sync token '
+          'and the vault key live there. Unlock the keyring and sync again.',
+        );
+      }
       throw StateError('Sync is not set up');
     }
-    final client = HttpSyncClient(baseUrl: baseUrl)..token = token;
+    // The keystore answered for the token; the vault key may still be missing
+    // if the keystore was down at bootstrap — retry it now.
+    if (vaultKey == null) await unlockVaultFromKeystore();
+    final key = vaultKey;
+    if (key == null) {
+      throw StateError(
+        'The vault is locked: the OS keyring is unavailable '
+        '(${masterKeys.lastKeystoreError ?? 'no details'}). Unlock the keyring '
+        'and sync again.',
+      );
+    }
+    // Null unless opted in, which is what makes the assistant record neither
+    // pushed nor applied on a device that has not asked for it.
+    final assistant = settings.syncAssistant
+        ? AssistantSettingsSync(
+            settings: settings,
+            masterKeys: masterKeys,
+            saveSettings: saveSettings,
+          )
+        : null;
     final coordinator = SyncCoordinator(
       configStore: configStore,
       hostKeyStore: hostKeyStore,
       snippetStore: snippetStore,
-      codec: RecordCodec(vaultKey),
+      assistantStore: assistant,
+      codec: RecordCodec(key),
       local: InMemoryLocalRecordStore(),
       deviceId: settings.deviceId,
       syncSecrets: settings.syncSecrets,
       secretVault: settings.syncSecrets ? vault : null,
+      tombstoneStore: tombstoneStore,
+      inboxAppStore: inboxApps,
+      inboxStatusStore: inboxStatuses,
     );
-    return coordinator.run(client);
+    try {
+      return await _withSyncClient(baseUrl, (client) {
+        client.token = token;
+        return coordinator.run(client);
+      });
+    } finally {
+      // In a `finally`, because a round can apply the assistant record and
+      // *then* fail — the pull happens first, and a push after it can still
+      // throw. Assigned only on success, that adoption was invisible: the
+      // failed round skipped `reloadLlmProvider`, and the next successful
+      // round found the settings already adopted, so the fingerprint matched,
+      // `applied` was false again, and the chat provider kept answering with
+      // the old model and key until some unrelated edit happened to rebuild
+      // it.
+      _assistantSettingsChanged = assistant?.applied ?? false;
+    }
+  }
+
+  /// Run [action] against the inbox with this account's session. Throws
+  /// [StateError] when sync is not set up or the vault is locked, the same
+  /// conditions [runSync] refuses on: the inbox rides the sync account, and
+  /// app keys live in the vault.
+  Future<T> withInbox<T>(Future<T> Function(InboxService inbox) action) async {
+    final baseUrl = settings.syncBaseUrl;
+    final token = await masterKeys.getApiKey(syncTokenKeyName);
+    if (baseUrl == null || baseUrl.isEmpty || token == null) {
+      throw StateError('Sync is not set up');
+    }
+    if (vaultKey == null) await unlockVaultFromKeystore();
+    if (vaultKey == null) {
+      throw StateError(
+        'The vault is locked: the OS keyring is unavailable. Unlock the '
+        'keyring and try again.',
+      );
+    }
+    try {
+      return await _withSyncClient(baseUrl, (client) {
+        client.token = token;
+        return action(InboxService(
+          api: client,
+          apps: inboxApps,
+          statuses: inboxStatuses,
+          cache: inboxCache,
+        ));
+      });
+    } on ApiError catch (error) {
+      // A plain 404 (not the server's own `not_found`) is a sync server
+      // from before the inbox, which is worth saying in those words.
+      if (error.code != _plainNotFound) rethrow;
+      throw StateError(
+        'The sync server answered "not found" for the command inbox. It is '
+        'probably from before the inbox: update it (on the server: '
+        './update.sh) and try again. If it is up to date, check what is in '
+        'front of it (a reverse proxy) for the /v1/apps and /v1/inbox paths.',
+      );
+    }
+  }
+
+  /// Keep connections alive through response/persistence work, including errors.
+  Future<T> _withSyncClient<T>(
+    String baseUrl,
+    Future<T> Function(HttpSyncClient client) action,
+  ) async {
+    final client = HttpSyncClient(baseUrl: baseUrl);
+    try {
+      return await action(client);
+    } finally {
+      client.close();
+    }
   }
 
   /// Resolve connection credentials for [config] from the vault / on-disk key.
-  Future<SshCredentials> resolveCredentials(ServerConfig config) async {
+  ///
+  /// The `draft…` arguments are the server editor's own fields, for testing a
+  /// connection before saving. Material typed into the form is not in the
+  /// vault yet, so resolving from storage alone would quietly test the *old*
+  /// credential — or an empty one for a server being added. A blank draft
+  /// field falls back to the vault, which is how an unchanged credential is
+  /// re-tested, and matches what saving does with a blank field — with one
+  /// exception the blanket claim was hiding: a typed draft PEM is new key
+  /// material by construction (the editor passes null whenever the key is
+  /// referenced from disk or held in the vault), so a blank passphrase beside
+  /// one means "no passphrase" rather than "the stored one".
+  ///
+  /// Precedence, since it is not obvious from the branches: a configured
+  /// [ServerConfig.identityFilePath] wins over [draftPrivateKey]. The editor
+  /// cannot produce both — it sets the path only while the key is referenced
+  /// from disk, and passes the draft PEM as null in exactly that case — so
+  /// the order is unreachable from there today, and a caller that populates
+  /// both is asking to test the file.
+  ///
+  /// [draftIdentityBookmark] plays the same role for a Browse…-picked identity
+  /// file: its macOS security-scoped grant is keyed by server id and is not
+  /// written to settings until save, so without it a key outside `~/.ssh`
+  /// would fall back to the raw path and fail with EPERM.
+  ///
+  /// A *newly picked* identity file is not carved out the way a typed PEM is,
+  /// and the asymmetry is deliberate. Save keeps the stored passphrase when
+  /// the box is blank (the editor writes no secret in referenced-key mode
+  /// without one), so falling back to it here is what makes the test faithful
+  /// to the save — the property this whole method is built on. Treating the
+  /// pick as new key material instead would need a way to tell "a different
+  /// key" from "the same key re-picked", and the only signal available is the
+  /// bookmark: a macOS-only blob that is re-minted per grant, so it differs
+  /// for the same file and is null everywhere else. That would drop a correct
+  /// stored passphrase on every re-pick on one platform and never fire on the
+  /// others. The cost is that rotating to an unprotected key cannot be
+  /// expressed — the box is already blank — so the test reports a decrypt
+  /// failure for a configuration that is correct, and saving would store the
+  /// same stale passphrase. `docs/STATUS.md` follow-up 16 tracks the explicit
+  /// "no passphrase" affordance that closes it in both places at once.
+  Future<SshCredentials> resolveCredentials(
+    ServerConfig config, {
+    String? draftPassword,
+    String? draftPrivateKey,
+    String? draftKeyPassphrase,
+    IdentityFileBookmark? draftIdentityBookmark,
+  }) async {
+    String? draft(String? value) =>
+        (value == null || value.isEmpty) ? null : value;
+    if (config.authMethod == AuthMethod.agent) {
+      return const SshCredentials.agent();
+    }
+
+    // A cross-file contract with the editor, which builds the grant from the
+    // path it is about (`_bookmarkFor` returns null without one). Without the
+    // path this branch never runs, so a bookmark passed alone would be
+    // silently dropped and the test would resolve the vault credential
+    // instead — a green result for a key nobody asked it to try.
+    // A throw, not an assert: stripped from the build users run, the only
+    // symptom of a caller getting this wrong is a green "authenticated" for a
+    // credential nobody asked to test — the same reason the exclusion guard in
+    // `ServerConfig.copyWith` throws.
+    // Only under key auth: for a password or the agent the bookmark is never
+    // consulted, so a stale one left over from an auth-method switch cannot
+    // change what is tested, and throwing would turn a harmless leftover
+    // into a failed test. A typed PEM is the same case under key auth: it is
+    // returned before anything consults a path or a grant.
+    if (config.authMethod == AuthMethod.privateKey &&
+        config.identityFilePath == null &&
+        draft(draftPrivateKey) == null &&
+        draftIdentityBookmark != null) {
+      throw ArgumentError.value(
+        draftIdentityBookmark,
+        'draftIdentityBookmark',
+        'only honoured alongside identityFilePath: without the path the '
+            'grant is dropped and the vault credential is tested instead',
+      );
+    }
+    // Lazily re-probe a keystore that was down at bootstrap, so a keyring that
+    // came back (or just got unlocked) unlocks secrets without an app restart.
+    if (config.secretRef != null && vaultKey == null) {
+      await unlockVaultFromKeystore();
+    }
     switch (config.authMethod) {
       case AuthMethod.agent:
         return const SshCredentials.agent();
       case AuthMethod.password:
+        final typed = draft(draftPassword);
+        if (typed != null) return SshCredentials.password(typed);
         final secret = config.secretRef == null
             ? null
             : await vault.getSecret(config.secretRef!);
@@ -313,20 +814,48 @@ class AppServices {
       case AuthMethod.privateKey:
         // "Reference, don't store": read the key from disk at connect time.
         if (config.identityFilePath != null) {
-          final pem = await _readIdentityFile(config);
-          final storedPass = config.secretRef == null
-              ? null
-              : (await vault.getSecret(config.secretRef!))?.keyPassphrase;
-          return SshCredentials.privateKey(pem, keyPassphrase: storedPass);
+          final pem = await _readIdentityFile(
+            config,
+            bookmarkOverride: draftIdentityBookmark,
+          );
+          return SshCredentials.privateKey(
+            pem,
+            // Behind the `??`, so a typed passphrase skips the read that was
+            // about to be discarded. Only a read: the vault is `vault.json`
+            // (`FileVaultStore`), and the keyring holds the vault key alone —
+            // already resolved by the time this runs — so there is no unlock
+            // prompt or keychain failure to avoid here, and no behaviour
+            // difference to test. Free, and one less thing happening.
+            keyPassphrase: draft(draftKeyPassphrase) ??
+                (config.secretRef == null
+                    ? null
+                    : (await vault.getSecret(config.secretRef!))
+                        ?.keyPassphrase),
+          );
+        }
+        final typedPem = draft(draftPrivateKey);
+        if (typedPem != null) {
+          return SshCredentials.privateKey(
+            typedPem,
+            keyPassphrase: draft(draftKeyPassphrase),
+          );
         }
         final secret = config.secretRef == null
             ? null
             : await vault.getSecret(config.secretRef!);
         return SshCredentials.privateKey(
           secret?.value ?? '',
-          keyPassphrase: secret?.keyPassphrase,
+          keyPassphrase: draft(draftKeyPassphrase) ?? secret?.keyPassphrase,
         );
     }
+  }
+
+  /// Resolves a saved jump host at connection time, including its credential.
+  Future<ResolvedSshHost?> resolveJumpHost(String id) async {
+    final config = await configStore.getServer(id);
+    if (config == null) return null;
+
+    return ResolvedSshHost(config, await resolveCredentials(config));
   }
 
   /// Read a "reference, don't store" identity file for [config], through the
@@ -334,11 +863,15 @@ class AppServices {
   /// outside ~/.ssh is only readable inside that grant), falling back to the
   /// plain expanded path. Every attempt lands in the audit log; audit failures
   /// never block connecting.
-  Future<String> _readIdentityFile(ServerConfig config) async {
+  Future<String> _readIdentityFile(
+    ServerConfig config, {
+    IdentityFileBookmark? bookmarkOverride,
+  }) async {
     // Dart's File does not expand `~`, but the editor hint invites it.
     var readPath = _expandHome(config.identityFilePath!);
     ResolvedIdentityFile? scoped;
-    final entry = settings.identityFileBookmarks[config.id];
+    final saved = settings.identityFileBookmarks[config.id];
+    final entry = bookmarkOverride ?? saved;
     // The grant counts only while it was minted for the configured path: a
     // synced edit (say, a key rotation on another device) changes the path
     // without touching this device's bookmark map, and the new path must win
@@ -347,7 +880,22 @@ class AppServices {
       scoped = await identityBookmarks.resolveAndStart(entry.bookmark);
       if (scoped != null) {
         readPath = scoped.path;
-        if (scoped.refreshedBookmark != null) {
+        // Only a grant that came *from* settings is refreshed back into
+        // them. A draft override of a *newly picked* file is not persisted —
+        // that would file a grant under a server that may never exist — but
+        // an override that is simply the saved grant passed back in (which is
+        // what the editor does for a server it did not re-Browse) may refresh
+        // in place, or a stale bookmark would be re-minted on every attempt
+        // and never kept.
+        //
+        // Compared with `==`, which `IdentityFileBookmark` overrides over the
+        // path and the bookmark payload, so a grant reconstructed with the
+        // same contents still counts — the editor is not obliged to hand back
+        // the identical instance. Read once, above, rather than looked up
+        // again here.
+        final refreshable =
+            bookmarkOverride == null || bookmarkOverride == saved;
+        if (scoped.refreshedBookmark != null && refreshable) {
           // The stored bookmark went stale (key moved/replaced); persist the
           // re-minted one so the grant keeps surviving relaunches.
           settings.identityFileBookmarks[config.id] = IdentityFileBookmark(
@@ -432,23 +980,80 @@ class AppServices {
     }
   }
 
-  /// Build the web-search backend for the chat tool, if one is configured.
-  Future<SearchProvider?> buildSearchProvider() async {
-    if (settings.searxngUrl != null && settings.searxngUrl!.isNotEmpty) {
-      return SearxngSearch(baseUrl: settings.searxngUrl!);
-    }
-    if (settings.braveApiKeyRef != null &&
-        settings.braveApiKeyRef!.isNotEmpty) {
-      final key = await masterKeys.getApiKey(settings.braveApiKeyRef!);
-      if (key != null) return BraveSearch(apiKey: key);
-    }
-    return null;
+  /// A backend the user configured that this launch could not build.
+  ///
+  /// `CompositeSearch` logs a backend that fails mid-search "because this is
+  /// the only record it happened"; one dropped before the search starts leaves
+  /// exactly the same symptom — quietly worse results — and deserves the same
+  /// record. Never the key or the ref, only which backend and why.
+  static void _searchBackendUnavailable(String backend) {
+    developer.log(
+      '$backend search key unavailable (locked keyring or missing entry); '
+      'backend skipped for this session',
+      name: searchLoggerName,
+      // Warning, like `CompositeSearch`'s record of a backend failing
+      // mid-search: the two are halves of one signal, and a filter at
+      // warning level should see both. Through the shared constant, which is
+      // public so the halves cannot drift — restating the number here was the
+      // drift it exists to prevent.
+      level: searchWarningLogLevel,
+    );
   }
 
-  /// A sync client for the configured server, or null if sync isn't set up.
+  /// The chat tool's web search: every configured backend, merged.
+  ///
+  /// Configured means used, rather than a priority order that would quietly
+  /// ignore a backend someone took the trouble to set up. Clearing a field is
+  /// how you drop one; filling several is how you use them all (see
+  /// [CompositeSearch]). Null when nothing is configured, which
+  /// is what hides the search tool from the assistant.
+  Future<SearchProvider?> buildSearchProvider() async {
+    final backends = <SearchProvider>[];
+    // Trimmed, like the key refs below it: a URL that is only whitespace has
+    // nothing to resolve against — it would build a `SearxngSearch` whose
+    // every request fails, and the only sign would be the mid-search failure
+    // log. The settings screen already writes trimmed-or-null; a hand-edited
+    // or synced `settings.json` need not.
+    final searxngUrl = settings.searxngUrl?.trim() ?? '';
+    if (searxngUrl.isNotEmpty) {
+      backends.add(SearxngSearch(baseUrl: searxngUrl));
+    }
+    // Trimmed for the reason the URL above is: these arrive from a
+    // hand-edited `settings.json` or over sync, and a padded name addresses no
+    // keystore entry. Untrimmed, it passes the emptiness check, misses its
+    // lookup, and is reported as a locked keyring — sending the user to debug
+    // a keystore that is working.
+    final braveRef = settings.braveApiKeyRef?.trim() ?? '';
+    if (braveRef.isNotEmpty) {
+      // getApiKey answers null on a locked keyring rather than throwing, so a
+      // keystore that is down reads as "this backend is not available" and the
+      // others still work.
+      final key = await masterKeys.getApiKey(braveRef);
+      if (key != null) {
+        backends.add(BraveSearch(apiKey: key));
+      } else {
+        _searchBackendUnavailable('Brave');
+      }
+    }
+    final zaiRef = settings.zaiApiKeyRef?.trim() ?? '';
+    if (zaiRef.isNotEmpty) {
+      final key = await masterKeys.getApiKey(zaiRef);
+      if (key != null) {
+        backends.add(ZaiSearch(apiKey: key));
+      } else {
+        _searchBackendUnavailable('Z.AI');
+      }
+    }
+    if (backends.isEmpty) return null;
+    return backends.length == 1 ? backends.single : CompositeSearch(backends);
+  }
+
+  /// A caller-owned sync client, or null if sync isn't set up. Close after use.
   HttpSyncClient? buildSyncClient() {
     final url = settings.syncBaseUrl;
     if (url == null || url.isEmpty) return null;
     return HttpSyncClient(baseUrl: url);
   }
 }
+
+const String _plainNotFound = 'http_404';

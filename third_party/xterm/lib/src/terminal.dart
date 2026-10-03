@@ -8,6 +8,7 @@ import 'package:xterm/src/core/cursor.dart';
 import 'package:xterm/src/core/escape/emitter.dart';
 import 'package:xterm/src/core/escape/handler.dart';
 import 'package:xterm/src/core/escape/parser.dart';
+import 'package:xterm/src/core/hyperlinks.dart';
 import 'package:xterm/src/core/input/handler.dart';
 import 'package:xterm/src/core/input/keys.dart';
 import 'package:xterm/src/core/mouse/button.dart';
@@ -119,6 +120,11 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
 
   final _cursorStyle = CursorStyle();
 
+  /// [seance fork] Targets of the OSC 8 hyperlinks seen so far. Shared by both
+  /// buffers: a link belongs to the cells it was written to, and the alt buffer
+  /// can be entered and left in the middle of one.
+  final _hyperlinks = Hyperlinks();
+
   bool _insertMode = false;
 
   bool _lineFeedMode = false;
@@ -159,6 +165,9 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
 
   @override
   CursorStyle get cursor => _cursorStyle;
+
+  @override
+  Hyperlinks get hyperlinks => _hyperlinks;
 
   @override
   bool get insertMode => _insertMode;
@@ -557,12 +566,28 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
 
   @override
   void sendCursorPosition() {
-    onOutput?.call(_emitter.cursorPosition(_buffer.cursorX, _buffer.cursorY));
+    // [seance fork] CPR uses the same origin as cursor positioning, which
+    // is the top scrolling margin when DECOM is enabled.
+    // Some buffer cursor controls still clamp to the viewport rather than
+    // the margins. Bound the reported coordinate even in that legacy state.
+    final row = originMode
+        ? (_buffer.cursorY - _buffer.marginTop)
+            .clamp(0, _buffer.marginBottom - _buffer.marginTop)
+        : _buffer.cursorY;
+    onOutput?.call(_emitter.cursorPosition(_buffer.cursorX, row));
   }
 
   @override
   void setMargins(int top, [int? bottom]) {
-    _buffer.setVerticalMargins(top, bottom ?? viewHeight - 1);
+    final lastRow = viewHeight - 1;
+    final normalizedTop = top.clamp(0, lastRow);
+    final normalizedBottom = (bottom ?? lastRow).clamp(0, lastRow);
+    // [seance fork] An invalid or collapsed DECSTBM region must not alter
+    // either the previous scrolling region or the cursor position.
+    if (normalizedTop >= normalizedBottom) return;
+    _buffer.setVerticalMargins(normalizedTop, normalizedBottom);
+    // [seance fork] DECSTBM homes the cursor in the current origin mode.
+    _buffer.setCursor(0, 0);
   }
 
   @override
@@ -689,6 +714,8 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   @override
   void setOriginMode(bool enabled) {
     _originMode = enabled;
+    // [seance fork] DECOM homes the cursor using the new origin.
+    _buffer.setCursor(0, 0);
   }
 
   @override
@@ -903,6 +930,15 @@ class Terminal with Observable implements TerminalState, EscapeHandler {
   @override
   void setIconName(String name) {
     onIconChange?.call(name);
+  }
+
+  @override
+  void setHyperlink(String? uri) {
+    // An unopenable target (a non-web scheme, credentials, an oversized
+    // string) leaves the cells unlinked rather than carrying something this
+    // terminal would refuse to follow later.
+    _cursorStyle.hyperlinkId =
+        uri == null ? noHyperlink : _hyperlinks.open(uri);
   }
 
   @override

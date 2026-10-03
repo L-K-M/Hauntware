@@ -6,6 +6,13 @@ import 'package:xterm/src/utils/byte_consumer.dart';
 import 'package:xterm/src/utils/char_code.dart';
 import 'package:xterm/src/utils/lookup_table.dart';
 
+/// [seance fork] The default cap on how many bytes an unfinished escape
+/// sequence may hold before the parser abandons it. Every supported sequence
+/// is orders of magnitude shorter than this: titles and OSC 7 working
+/// directories run to hundreds of bytes, and the longest CSI is a handful.
+/// The cap only ever fires on a sequence that is never going to close.
+const kMaxPendingSequenceLength = 64 * 1024;
+
 /// [EscapeParser] translates control characters and escape sequences into
 /// function calls that the terminal can handle.
 ///
@@ -15,7 +22,14 @@ import 'package:xterm/src/utils/lookup_table.dart';
 class EscapeParser {
   final EscapeHandler handler;
 
-  EscapeParser(this.handler);
+  /// [seance fork] See [kMaxPendingSequenceLength]. Injectable so tests can
+  /// drive the abandon path without generating 64 KiB of input.
+  final int maxPendingSequenceLength;
+
+  EscapeParser(
+    this.handler, {
+    this.maxPendingSequenceLength = kMaxPendingSequenceLength,
+  });
 
   final _queue = ByteConsumer();
 
@@ -39,8 +53,25 @@ class EscapeParser {
       if (char == Ascii.ESC) {
         final processed = _processEscape();
         if (!processed) {
-          _queue.rollback(tokenEnd - tokenBegin);
-          return;
+          // An unfinished sequence goes back on the queue so the rest of it can
+          // arrive on a later write. That rollback is what makes a sequence
+          // that NEVER finishes catastrophic: every subsequent write re-parses
+          // the whole pending run from the top, so cost is quadratic in the
+          // output that follows and the queue pins all of it in memory (~26x,
+          // since ByteConsumer stores one int per rune). A stray `ESC ]` — OSC
+          // closes only on BEL or ESC — used to wedge the terminal for the rest
+          // of the session at 100% CPU. See PATCHES.md.
+          //
+          // [seance fork] So: only wait for the rest while the pending run is
+          // still short enough to be a real sequence. Past that, drop what has
+          // been consumed and resume parsing, which turns the payload back into
+          // ordinary text and lets a later terminator land normally.
+          final pending = tokenEnd - tokenBegin;
+          if (pending <= maxPendingSequenceLength) {
+            _queue.rollback(pending);
+            return;
+          }
+          continue;
         }
       } else {
         _processChar(char);
@@ -219,7 +250,7 @@ class EscapeParser {
 
     // test whether the csi is a `CSI ? Ps ...` or `CSI Ps ...`
     final prefix = _queue.peek();
-    if (prefix >= Ascii.colon && prefix <= Ascii.questionMark) {
+    if (prefix >= Ascii.lessThan && prefix <= Ascii.questionMark) {
       _csi.prefix = prefix;
       _queue.consume();
     } else {
@@ -237,9 +268,11 @@ class EscapeParser {
       final char = _queue.consume();
 
       if (char == Ascii.semicolon) {
-        if (hasParam) {
-          _csi.params.add(param);
-        }
+        // [seance fork] Empty fields retain their positions and default to
+        // zero. Dropping a leading field changes CSI ;8r from bottom=8 to
+        // top=8, and similarly swaps cursor-position parameters.
+        _csi.params.add(param);
+        hasParam = true;
         param = 0;
         continue;
       }
@@ -358,9 +391,11 @@ class EscapeParser {
     var row = 1;
     var col = 1;
 
-    if (_csi.params.length == 2) {
-      row = _csi.params[0];
-      col = _csi.params[1];
+    if (_csi.params.isNotEmpty) {
+      row = _csi.params[0] == 0 ? 1 : _csi.params[0];
+    }
+    if (_csi.params.length > 1) {
+      col = _csi.params[1] == 0 ? 1 : _csi.params[1];
     }
 
     handler.setCursor(col - 1, row - 1);
@@ -643,9 +678,11 @@ class EscapeParser {
     if (_csi.params.length > 2) return;
 
     if (_csi.params.isNotEmpty) {
-      top = _csi.params[0];
+      top = _csi.params[0] == 0 ? 1 : _csi.params[0];
 
-      if (_csi.params.length == 2) {
+      // [seance fork] Zero and omitted DECSTBM parameters mean the default
+      // top/bottom edges, before converting to zero-based buffer positions.
+      if (_csi.params.length == 2 && _csi.params[1] != 0) {
         bottom = _csi.params[1] - 1;
       }
     }
@@ -854,6 +891,7 @@ class EscapeParser {
 
     if (_csi.params.isNotEmpty) {
       amount = _csi.params[0];
+      if (amount == 0) amount = 1;
     }
 
     handler.insertLines(amount);
@@ -867,6 +905,7 @@ class EscapeParser {
 
     if (_csi.params.isNotEmpty) {
       amount = _csi.params[0];
+      if (amount == 0) amount = 1;
     }
 
     handler.deleteLines(amount);
@@ -880,6 +919,7 @@ class EscapeParser {
 
     if (_csi.params.isNotEmpty) {
       amount = _csi.params[0];
+      if (amount == 0) amount = 1;
     }
 
     handler.deleteChars(amount);
@@ -893,6 +933,7 @@ class EscapeParser {
 
     if (_csi.params.isNotEmpty) {
       amount = _csi.params[0];
+      if (amount == 0) amount = 1;
     }
 
     handler.scrollUp(amount);
@@ -906,6 +947,7 @@ class EscapeParser {
 
     if (_csi.params.isNotEmpty) {
       amount = _csi.params[0];
+      if (amount == 0) amount = 1;
     }
 
     handler.scrollDown(amount);
@@ -919,6 +961,7 @@ class EscapeParser {
 
     if (_csi.params.isNotEmpty) {
       amount = _csi.params[0];
+      if (amount == 0) amount = 1;
     }
 
     handler.eraseChars(amount);
@@ -936,6 +979,7 @@ class EscapeParser {
 
     if (_csi.params.isNotEmpty) {
       amount = _csi.params[0];
+      if (amount == 0) amount = 1;
     }
 
     handler.insertBlankChars(amount);
@@ -1071,6 +1115,16 @@ class EscapeParser {
           return true;
         case '2':
           handler.setTitle(pt);
+          return true;
+        // [seance fork] OSC 8 ; params ; URI — a hyperlink attached to the
+        // cells that follow, which is how a program links text that is not a
+        // URL (or wraps a URL across its own hard newlines). The params field
+        // is ignored: its only defined key, `id`, exists to group a link's
+        // cells for hover highlighting, which this terminal does not do. A
+        // target may itself contain semicolons, so the rest is rejoined.
+        case '8':
+          final target = _osc.length > 2 ? _osc.sublist(2).join(';') : '';
+          handler.setHyperlink(target.isEmpty ? null : target);
           return true;
       }
     }

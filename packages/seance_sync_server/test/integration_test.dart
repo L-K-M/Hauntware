@@ -10,24 +10,57 @@ import 'package:test/test.dart';
 /// End-to-end: a real server over a socket, the real HTTP client, real E2E
 /// encryption, and two devices converging. This is the whole sync stack.
 void main() {
-  late SyncServer server;
-  late HttpServerLike running;
-  late String baseUrl;
-
-  setUp(() async {
-    server = SyncServer(
+  /// Start a server on an ephemeral loopback port and return its base URL. The
+  /// push limits are per-test, so a test can shrink them instead of having to
+  /// build a payload that exceeds the shipped 8 MiB / 1000-record defaults.
+  Future<String> startServer({
+    int maxBodyBytes = kDefaultMaxPushBodyBytes,
+    int maxRecordsPerPush = kDefaultMaxRecordsPerPush,
+    int maxBlobBytes = kDefaultMaxBlobBytes,
+  }) async {
+    final server = SyncServer(
       storage: InMemoryStorage(),
       // port 0 -> ephemeral; bind to loopback for the test.
-      settings: const ServerSettings(
-          openRegistration: true, bindAddress: '127.0.0.1', port: 0),
+      settings: ServerSettings(
+        openRegistration: true,
+        bindAddress: '127.0.0.1',
+        port: 0,
+        maxBodyBytes: maxBodyBytes,
+        maxRecordsPerPush: maxRecordsPerPush,
+        maxBlobBytes: maxBlobBytes,
+      ),
     );
-    running = await server.start();
-    baseUrl = 'http://${running.host}:${running.port}';
-  });
+    final running = await server.start();
+    addTearDown(running.close);
+    return 'http://${running.host}:${running.port}';
+  }
 
-  tearDown(() async => running.close());
+  /// Register a fresh account and return the authenticated client.
+  Future<HttpSyncClient> registerDevice(String baseUrl, String username) async {
+    final client = HttpSyncClient(baseUrl: baseUrl);
+    addTearDown(client.close);
+    await client.register(RegisterRequest(
+      username: username,
+      authVerifier: base64.encode(secureRandomBytes(32)),
+      argonSalt: base64.encode(secureRandomBytes(16)),
+      argonParams: const Argon2Params.fast(),
+    ));
+    return client;
+  }
+
+  /// An opaque record of roughly [blobBytes] sealed bytes. The server never
+  /// looks inside a blob, so random bytes stand in for a real sealed payload.
+  EncryptedRecord record(String id, {required int blobBytes}) => EncryptedRecord(
+        id: id,
+        updatedAt: 1,
+        deviceId: 'device-A',
+        deleted: false,
+        seq: null,
+        blob: secureRandomBytes(blobBytes),
+      );
 
   test('two devices register/login and converge over real HTTP', () async {
+    final baseUrl = await startServer();
     // Shared vault key (in reality derived from the passphrase / recovery code).
     final vaultKey = secureRandomBytes(32);
     final codec = RecordCodec(vaultKey);
@@ -77,7 +110,145 @@ void main() {
     expect(roundTripped.label, 'prod');
   });
 
+  test('a dirty set larger than one request body converges', () async {
+    // Five times the server's body limit once the 12 KiB blobs are
+    // base64-encoded (~16 KiB of JSON each): unbatched, this push is rejected
+    // whole and every later round repeats it identically, so the sync never
+    // converges rather than merely running slowly.
+    final baseUrl = await startServer(maxBodyBytes: 64 * 1024);
+    final client = await registerDevice(baseUrl, 'bulky');
+
+    final store = InMemoryLocalRecordStore();
+    for (var i = 0; i < 20; i++) {
+      await store.putLocal(record('r$i', blobBytes: 12 * 1024));
+    }
+
+    final outcome = await SyncEngine(store).sync(client);
+
+    expect(outcome.pushed, 20);
+    expect(await store.dirtyRecords(), isEmpty);
+    final onServer = await client.pull(since: 0);
+    expect(onServer.records.map((r) => r.id).toSet(),
+        {for (var i = 0; i < 20; i++) 'r$i'});
+  });
+
+  test('the body limit is inclusive on both sides', () async {
+    // The batcher fills a batch up to maxBodyBytes; the server refuses only
+    // what exceeds it. Both halves of that "inclusive" reading are this
+    // package's own, and an off-by-one between them is a 413 no retry clears.
+    // Pushed directly rather than through the engine: the engine would split a
+    // body one byte too large and converge anyway, hiding the disagreement.
+    final records = [
+      for (var i = 0; i < 4; i++) record('r$i', blobBytes: 700),
+    ];
+    final exactBody =
+        utf8.encode(jsonEncode(PushRequest(records: records).toJson())).length;
+
+    final atLimit = await registerDevice(
+        await startServer(maxBodyBytes: exactBody), 'exact');
+    final accepted = await atLimit.push(records);
+    expect(accepted.results.where((r) => r.accepted), hasLength(4),
+        reason: 'a body of exactly maxBodyBytes must be accepted whole');
+
+    final overLimit = await registerDevice(
+        await startServer(maxBodyBytes: exactBody - 1), 'over');
+    await expectLater(
+        overLimit.push(records),
+        throwsA(isA<ApiError>()
+            .having((e) => e.code, 'code', 'payload_too_large')),
+        reason: 'one byte more than the limit must be refused, so the '
+            'accepted case above is the boundary and not slack');
+  });
+
+  test('a dirty set with more records than one push allows converges',
+      () async {
+    final baseUrl = await startServer(maxRecordsPerPush: 3);
+    final client = await registerDevice(baseUrl, 'many');
+
+    final store = InMemoryLocalRecordStore();
+    for (var i = 0; i < 10; i++) {
+      await store.putLocal(record('r$i', blobBytes: 16));
+    }
+
+    final outcome = await SyncEngine(store).sync(client);
+
+    expect(outcome.pushed, 10);
+    expect(await store.dirtyRecords(), isEmpty);
+    final onServer = await client.pull(since: 0);
+    expect(onServer.records, hasLength(10));
+  });
+
+  test('one over-sized blob does not hold back the rest of the dirty set',
+      () async {
+    // The per-record blob cap is refused with the same 413 as an over-sized
+    // body, but it is refused for the *whole* push: one record past the cap
+    // takes every record batched beside it down with it, and since the batcher
+    // is deterministic the next round rebuilds the same doomed batch. The
+    // record past the cap can never be accepted — nothing local can shrink a
+    // sealed blob — so the account's sync stops until the user finds and
+    // deletes it. Batching the oversized record alone, and last, keeps the
+    // failure to the one record that caused it.
+    final baseUrl = await startServer(maxBlobBytes: 4 * 1024);
+    final client = await registerDevice(baseUrl, 'oversized');
+
+    final store = InMemoryLocalRecordStore();
+    for (var i = 0; i < 5; i++) {
+      await store.putLocal(record('r$i', blobBytes: 128));
+    }
+    // A blob of *exactly* the cap, alongside one past it. Both sides compare
+    // strictly, so this one batches normally and the server takes it — and
+    // that agreement is what the record beside it depends on. Were either side
+    // to read the boundary the other way, an at-cap record would ride in a
+    // normal batch and its 413 would take that whole batch down: this bug
+    // again, at the one value no test would otherwise reach. The body cap has
+    // the same guard a few tests up, for the same reason.
+    await store.putLocal(record('exact', blobBytes: 4 * 1024));
+    await store.putLocal(record('huge', blobBytes: 8 * 1024));
+
+    await expectLater(
+      SyncEngine(store).sync(client),
+      throwsA(isA<SyncRecordsRefused>()
+          .having((e) => e.code, 'code', 'payload_too_large')
+          .having((e) => e.recordIds, 'recordIds', ['huge'])),
+      reason: 'the record past the blob cap can never be accepted, so the '
+          'failure must still surface rather than be swallowed, and it names '
+          'that record: the server\'s 413 reaches the engine as its own code',
+    );
+
+    final onServer = await client.pull(since: 0);
+    expect(
+      onServer.records.map((r) => r.id).toSet(),
+      {for (var i = 0; i < 5; i++) 'r$i', 'exact'},
+      reason: 'every record that fits the cap must reach the server, the one '
+          'exactly at it included; only the one past it stays behind',
+    );
+    expect(
+      (await store.dirtyRecords()).map((r) => r.id),
+      ['huge'],
+      reason: 'and only that record stays dirty, so the next round retries it '
+          'alone instead of rebuilding a doomed batch',
+    );
+  });
+
+  test('an oversized login body is a structured 413 over HTTP', () async {
+    // Answered before the body is read, so the client must still receive the
+    // error rather than a reset connection.
+    final baseUrl = await startServer();
+    final client = HttpSyncClient(baseUrl: baseUrl);
+    addTearDown(client.close);
+
+    await expectLater(
+      client.login(
+        LoginRequest(username: 'someone', authVerifier: 'A' * (17 * 1024)),
+      ),
+      throwsA(
+        isA<ApiError>().having((e) => e.code, 'code', 'payload_too_large'),
+      ),
+    );
+  });
+
   test('server rejects a bad login verifier over HTTP', () async {
+    final baseUrl = await startServer();
     final client = HttpSyncClient(baseUrl: baseUrl);
     final verifier = base64.encode(secureRandomBytes(32));
     await client.register(RegisterRequest(

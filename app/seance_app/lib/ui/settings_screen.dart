@@ -1,44 +1,117 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:seance_core/seance_core.dart';
 
-import '../app_state.dart';
-import '../main.dart';
+import '../family_hues.dart';
 import '../services/external_file_opener.dart';
+import '../services/settings_backend.dart';
+import '../services/system_fonts.dart';
+import 'appearance_settings.dart';
+import 'font_picker.dart';
+import 'inbox_settings.dart';
+import 'selected_tab_view.dart';
+import 'settings_layout.dart';
 import 'sync_enrollment_validation.dart';
 import 'terminal_appearance.dart';
+import 'top_toast.dart';
+
+export '../services/settings_backend.dart' show SettingsTab;
+
+/// Where the screen is shown, which decides its chrome.
+enum SettingsPresentation {
+  /// A route over the app: an app bar with the title and a back button.
+  route,
+
+  /// The desktop settings window, whose own title bar names it and closes
+  /// it: the tabs alone.
+  window,
+}
 
 /// Settings: LLM provider (the assistant is always on — this only picks which
-/// model), the web-search backend, secret redaction, and sync enrolment.
-enum SettingsTab { general, assistant, files, sync }
-
+/// model), the web-search backend, secret redaction, sync enrolment, and the
+/// app's theme (its own file, `appearance_settings.dart`).
+///
+/// Reads and writes through [backend] only, so the same screen runs as a
+/// route in the app and in the desktop settings window's own isolate.
 class SettingsScreen extends StatefulWidget {
+  final SettingsBackend backend;
   final SettingsTab initialTab;
+  final SettingsPresentation presentation;
 
-  const SettingsScreen({super.key, this.initialTab = SettingsTab.general});
+  /// Tabs to switch to while open: the settings window receives these when
+  /// Settings is chosen again with a different tab.
+  final Stream<SettingsTab>? tabRequests;
+
+  /// Test seam: the source of installed font families behind the terminal
+  /// font picker. Defaults to the host's own collection, which a widget test
+  /// must not depend on.
+  @visibleForTesting
+  final SystemFonts? systemFonts;
+
+  const SettingsScreen({
+    super.key,
+    required this.backend,
+    this.initialTab = SettingsTab.general,
+    this.presentation = SettingsPresentation.route,
+    this.tabRequests,
+    this.systemFonts,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with SingleTickerProviderStateMixin {
+  /// Shown by both of Save's refusals, which are one message about one
+  /// situation: written twice, a wording fix or a translation reaches one of
+  /// them and the drift is invisible in review.
+  static const String _adoptedMidSave =
+      'The assistant settings changed on another device while this screen '
+      'was open. They have been reloaded — review them and save again.';
+
   late final _baseUrl = TextEditingController();
   late final _model = TextEditingController();
   late final _apiKey = TextEditingController();
   late final _searxng = TextEditingController();
+  final _zaiApiKey = TextEditingController();
   late final _syncUrl = TextEditingController();
   late final _syncUser = TextEditingController();
   final _syncPassword = TextEditingController();
   final _syncEncryptionPassphrase = TextEditingController();
   final _syncEncryptionPassphraseConfirm = TextEditingController();
 
+  late final TabController _tabs = TabController(
+    length: SettingsTab.values.length,
+    initialIndex: widget.initialTab.index,
+    vsync: this,
+  );
+  StreamSubscription<SettingsTab>? _tabRequests;
+
   late LlmProviderKind _kind;
+  late bool _zai;
+  late bool _syncAssistant;
   late bool _redaction;
   late bool _autoSync;
   late bool _syncSecrets;
   late bool _commandSuggestions;
   late bool _checkForUpdates;
   late bool _localShell;
+  late bool _keepSessionsAlive;
+
+  /// This screen's own copy, edited here and handed to the backend whole:
+  /// the settings window's [SettingsBackend.settings] is itself a copy, and
+  /// editing the route's in place would change the live settings before the
+  /// write that is supposed to carry the change.
   late EditorRegistry _editorRegistry;
+
+  /// A getter, not a `late final` field: the service caches its directory
+  /// walk, so reading this per build is free, and a field initialized once
+  /// would pin the test seam to whatever the first widget instance carried.
+  SystemFonts get _systemFonts => widget.systemFonts ?? hostSystemFonts();
+
   late double _terminalFontSize;
   late TerminalPalette _terminalPalette;
   final _terminalFont = TextEditingController();
@@ -51,44 +124,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _loadingModels = false;
   String? _modelsError;
 
+  /// Load the assistant half of the settings into this screen's fields.
+  ///
+  /// Separate from the rest of the load because it is the one half another
+  /// device can rewrite while the screen is open: turning assistant sync on
+  /// adopts the account's configuration into `settings`, and a Save made
+  /// afterwards would otherwise write these stale values back over it — and
+  /// stamp them, so the revert would win everywhere.
+  void _loadAssistantFields(AssistantFields f) {
+    _kind = f.kind;
+    _baseUrl.text = f.baseUrl;
+    _model.text = f.model;
+    _searxng.text = f.searxngUrl;
+    _zai = f.zaiEnabled;
+    _redaction = f.redactionEnabled;
+  }
+
+  /// [SettingsBackend.llmConfigVersion] as of the last [_loadAssistantFields]:
+  /// a sync round that adopts another device's configuration bumps it, and
+  /// that is how Save tells that the fields it holds are stale.
+  int _assistantVersionSeen = 0;
+
+  /// [_loadAssistantFields], and remember which configuration it loaded.
+  void _syncAssistantFields(AssistantFields fields, int version) {
+    _loadAssistantFields(fields);
+    _assistantVersionSeen = version;
+  }
+
+  SettingsBackend get _backend => widget.backend;
+
   @override
   void initState() {
     super.initState();
-    // Deferred to didChangeDependencies to read AppScope.
-  }
-
-  bool _initialized = false;
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_initialized) return;
-    _initialized = true;
-    final s = AppScope.of(context).services.settings;
-    _kind = s.llmKind;
-    _baseUrl.text = s.llmBaseUrl;
-    _model.text = s.llmModel;
-    _searxng.text = s.searxngUrl ?? '';
-    _redaction = s.redactionEnabled;
+    final s = _backend.settings;
+    _syncAssistantFields(AssistantFields.of(s), _backend.llmConfigVersion);
     _autoSync = s.autoSync;
     _syncSecrets = s.syncSecrets;
+    _syncAssistant = s.syncAssistant;
     _commandSuggestions = s.commandSuggestions;
     _checkForUpdates = s.checkForUpdates;
     _localShell = s.localShell;
-    _editorRegistry = s.editorRegistry;
+    _keepSessionsAlive = s.keepSessionsAliveInBackground;
+    _editorRegistry = EditorRegistry.fromJson(s.editorRegistry.toJson());
     _terminalFontSize = clampTerminalFontSize(s.terminalFontSize);
     _terminalPalette = s.terminalPalette;
     _terminalFont.text = s.terminalFontFamily;
     _syncUrl.text = s.syncBaseUrl ?? '';
     _syncUser.text = s.syncUsername ?? '';
+    _listenForTabRequests();
+  }
+
+  void _listenForTabRequests() {
+    _tabRequests = widget.tabRequests?.listen(
+      (tab) => _tabs.animateTo(tab.index),
+    );
+  }
+
+  @override
+  void didUpdateWidget(SettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tabRequests == oldWidget.tabRequests) return;
+    unawaited(_tabRequests?.cancel());
+    _listenForTabRequests();
   }
 
   @override
   void dispose() {
+    unawaited(_tabRequests?.cancel());
+    _tabs.dispose();
     for (final c in [
       _baseUrl,
       _model,
       _apiKey,
       _searxng,
+      _zaiApiKey,
       _syncUrl,
       _syncUser,
       _syncPassword,
@@ -103,40 +212,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = AppScope.of(context);
-    return DefaultTabController(
-      length: SettingsTab.values.length,
-      initialIndex: widget.initialTab.index,
-      child: Scaffold(
-        appBar: AppBar(
+    final palette = FamilyPalette.of(context);
+    // Each section in its family hue (Poltergeist's D34): the assistant
+    // purple, files blue, sync indigo, the inbox attention yellow; General and
+    // Appearance stay in the tab bar's ink.
+    final tabBar = TabBar(
+      controller: _tabs,
+      isScrollable: true,
+      tabAlignment: TabAlignment.start,
+      tabs: [
+        const Tab(icon: Icon(Icons.tune_outlined), text: 'General'),
+        const Tab(icon: Icon(Icons.palette_outlined), text: 'Appearance'),
+        Tab(
+          icon: Icon(Icons.auto_awesome, color: palette.glyph(FamilyHue.purple)),
+          text: 'Assistant',
+        ),
+        Tab(
+          icon: Icon(Icons.folder_open, color: palette.glyph(FamilyHue.blue)),
+          text: 'Files',
+        ),
+        Tab(
+          icon: Icon(Icons.cloud_sync, color: palette.glyph(FamilyHue.indigo)),
+          text: 'Sync',
+        ),
+        Tab(
+          icon: Icon(Icons.move_to_inbox, color: palette.glyph(FamilyHue.yellow)),
+          text: 'Inbox',
+        ),
+      ],
+    );
+    return Scaffold(
+      appBar: switch (widget.presentation) {
+        SettingsPresentation.route => AppBar(
           title: const Text('Settings'),
-          bottom: const TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [
-              Tab(icon: Icon(Icons.tune_outlined), text: 'General'),
-              Tab(icon: Icon(Icons.auto_awesome_outlined), text: 'Assistant'),
-              Tab(icon: Icon(Icons.folder_open_outlined), text: 'Files'),
-              Tab(icon: Icon(Icons.cloud_sync_outlined), text: 'Sync'),
-            ],
-          ),
+          bottom: tabBar,
         ),
-        body: TabBarView(
-          children: [
-            _generalTab(state),
-            _assistantTab(state),
-            _filesTab(state),
-            _syncTab(state),
-          ],
+        SettingsPresentation.window => AppBar(
+          automaticallyImplyLeading: false,
+          toolbarHeight: 0,
+          bottom: tabBar,
         ),
+      },
+      body: SelectedTabView(
+        controller: _tabs,
+        children: [
+          _generalTab(),
+          AppearanceSettings(backend: _backend, systemFonts: _systemFonts),
+          _assistantTab(),
+          _filesTab(),
+          _syncTab(),
+          InboxSettings(backend: _backend),
+        ],
       ),
     );
   }
 
-  Widget _assistantTab(AppState state) => _settingsPage(
-    key: const PageStorageKey('assistant-settings'),
+  Widget _assistantTab() => SettingsPage(
+    storageKey: const PageStorageKey('assistant-settings'),
     children: [
-      _section(
+      SettingsSectionHeader(
         'Assistant',
         helpTitle: 'Assistant privacy and providers',
         help:
@@ -189,7 +323,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : OutlinedButton.icon(
-                  onPressed: () => _fetchModels(state),
+                  onPressed: _fetchModels,
                   icon: const Icon(Icons.playlist_add_check, size: 18),
                   label: const Text('Fetch models'),
                 );
@@ -244,12 +378,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         controller: _apiKey,
         obscureText: true,
         decoration: const InputDecoration(
-          labelText: 'API key (stored in OS keystore, never synced)',
+          // Not "never synced" any more, which is what this said before the
+          // record below existed and carried these keys. It is the sentence a
+          // user reads before deciding to paste a credential in, so it has to
+          // describe what the switch further down actually does.
+          labelText: 'API key (OS keystore; synced if assistant sync is on)',
           hintText: 'leave blank to keep the existing key / keyless local',
         ),
       ),
       const SizedBox(height: 16),
-      _section('Web search (chat tool)'),
+      SettingsSectionHeader(
+        'Web search (chat tool)',
+        helpTitle: 'Web search backends',
+        help:
+            'Every backend you configure is used, and their results are '
+            'merged — so filling in more than one uses them all, and '
+            'clearing one leaves the others. With none configured, the '
+            'assistant '
+            'has no search tool at all.',
+      ),
       TextField(
         controller: _searxng,
         decoration: const InputDecoration(
@@ -257,6 +404,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
           hintText: 'https://searx.example.com',
         ),
       ),
+      const SizedBox(height: 8),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Z.AI Web Search Prime'),
+        subtitle: const Text('Needs a Z.AI key with a GLM Coding Plan.'),
+        value: _zai,
+        // Frozen while a save runs, like the Save button and the sync
+        // switches. This used to be the invariant: `_save` read `_zai` twice,
+        // before the awaits to decide whether to write the key and after them
+        // to set the reference, so a toggle in between made one save act on
+        // two different answers — off-to-on persisting a reference with
+        // nothing stored behind it, on-to-off storing a key the settings it
+        // just wrote call unused. `_saveInner` snapshots `_zai` once now,
+        // before any await, so the two writes can no longer disagree and this
+        // gate is defense in depth rather than the thing holding it up.
+        onChanged: _saving ? null : (v) => setState(() => _zai = v),
+      ),
+      if (_zai)
+        TextField(
+          controller: _zaiApiKey,
+          obscureText: true,
+          decoration: const InputDecoration(
+            // Same correction as the LLM key's above: this one rides the
+            // assistant record too.
+            labelText:
+                'Z.AI API key (OS keystore; synced if assistant sync is on)',
+            hintText: 'leave blank to keep the existing key',
+          ),
+        ),
       const SizedBox(height: 8),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
@@ -269,16 +445,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       const SizedBox(height: 8),
       FilledButton(
-        onPressed: _saving ? null : () => _save(state),
+        onPressed: _saving ? null : () => _save(),
         child: const Text('Save assistant settings'),
       ),
     ],
   );
 
-  Widget _generalTab(AppState state) => _settingsPage(
-    key: const PageStorageKey('general-settings'),
+  Widget _generalTab() => SettingsPage(
+    storageKey: const PageStorageKey('general-settings'),
     children: [
-      _section(
+      SettingsSectionHeader(
         'General',
         helpTitle: 'General preferences',
         help:
@@ -293,13 +469,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
         value: _checkForUpdates,
         onChanged: (value) {
           setState(() => _checkForUpdates = value);
-          _persistCheckForUpdates(state);
+          _persistCheckForUpdates();
         },
       ),
+      // Android freezes cached processes, killing every live SSH connection
+      // moments after the app leaves the screen; only this platform needs (and
+      // has) a mechanism to opt out of that. dart:io's Platform would crash on
+      // a web build; foundation's target detection compiles everywhere.
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) ...[
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Keep sessions alive in the background'),
+          subtitle: const Text(
+            'Keeps connections open while Séance is backgrounded, via an '
+            'ongoing Android notification. Uses some battery.',
+          ),
+          value: _keepSessionsAlive,
+          onChanged: (value) {
+            setState(() => _keepSessionsAlive = value);
+            _persistKeepSessionsAlive();
+          },
+        ),
+      ],
       const Divider(height: 40),
-      ..._localShellSection(state),
+      ..._localShellSection(),
       const Divider(height: 40),
-      _section(
+      SettingsSectionHeader(
         'Terminal',
         helpTitle: 'Terminal appearance',
         help:
@@ -307,8 +503,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'device. With the terminal focused you can zoom without opening '
             'Settings: ⌘ with +, − or 0 on macOS and iPadOS, Ctrl+Shift with '
             'the same keys elsewhere (plain Ctrl chords belong to the shell). '
-            'Leave the font family blank to use Séance’s bundled monospace '
-            'stack.',
+            'Leave the font family blank to use Séance’s own monospace '
+            'stack. On desktop the button in the field lists the fonts '
+            'installed here, previewed in their own face; you can also type '
+            'any family name the system knows.',
       ),
       Row(
         children: [
@@ -322,9 +520,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       .round(),
               value: _terminalFontSize,
               label: '${_terminalFontSize.round()} pt',
-              onChanged: (value) =>
-                  setState(() => _terminalFontSize = clampTerminalFontSize(value)),
-              onChangeEnd: (_) => _persistTerminalAppearance(state),
+              onChanged: (value) => setState(
+                () => _terminalFontSize = clampTerminalFontSize(value),
+              ),
+              onChangeEnd: (_) => _persistTerminalAppearance(),
             ),
           ),
           SizedBox(
@@ -339,17 +538,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       TextField(
         controller: _terminalFont,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: 'Font family (optional)',
           hintText: 'e.g. JetBrains Mono — blank uses the built-in stack',
+          // Only where there is an installed collection to read: on mobile an
+          // app sees the system faces it is given rather than a user-managed
+          // library, so a picker there would list the fallback stack back at
+          // the user. The field itself stays typeable everywhere.
+          suffixIcon: _systemFonts.isSupported
+              ? IconButton(
+                  tooltip: 'Choose an installed font',
+                  icon: const Icon(Icons.font_download_outlined),
+                  onPressed: _pickTerminalFont,
+                )
+              : null,
         ),
-        onSubmitted: (_) => _persistTerminalAppearance(state),
+        onSubmitted: (_) => _persistTerminalAppearance(),
         onTapOutside: (_) {
           // Overriding onTapOutside replaces TextField's default handler, so
           // the dismissal it would have done has to be done here — otherwise
           // the soft keyboard stays up after tapping away on mobile.
           FocusManager.instance.primaryFocus?.unfocus();
-          _persistTerminalAppearance(state);
+          _persistTerminalAppearance();
         },
       ),
       const SizedBox(height: 16),
@@ -373,11 +583,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onChanged: (value) {
           if (value == null) return;
           setState(() => _terminalPalette = value);
-          _persistTerminalAppearance(state);
+          _persistTerminalAppearance();
         },
       ),
       const Divider(height: 40),
-      _section(
+      SettingsSectionHeader(
         'Snippets',
         helpTitle: 'Command suggestions',
         help:
@@ -393,17 +603,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         value: _commandSuggestions,
         onChanged: (value) {
           setState(() => _commandSuggestions = value);
-          _persistCommandSuggestions(state);
+          _persistCommandSuggestions();
         },
       ),
     ],
   );
 
   /// The local-shell opt-in, or — where no shell can be opened — the reason.
-  List<Widget> _localShellSection(AppState state) {
-    final localShell = state.services.localShell;
+  List<Widget> _localShellSection() {
+    final localShell = _backend.localShell;
     return [
-      _section(
+      SettingsSectionHeader(
         'Local shell',
         helpTitle: 'A shell on this machine',
         help:
@@ -433,7 +643,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           value: _localShell,
           onChanged: (value) {
             setState(() => _localShell = value);
-            state.setLocalShellEnabled(value);
+            _persistLocalShell();
           },
         )
       else
@@ -448,7 +658,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
   }
 
-  Widget _filesTab(AppState state) {
+  Widget _filesTab() {
     final defaultItems = <DropdownMenuItem<String>>[
       const DropdownMenuItem(
         value: EditorRegistry.builtInId,
@@ -471,10 +681,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
     ];
-    return _settingsPage(
-      key: const PageStorageKey('files-settings'),
+    return SettingsPage(
+      storageKey: const PageStorageKey('files-settings'),
       children: [
-        _section(
+        SettingsSectionHeader(
           'Remote file editing',
           helpTitle: 'How remote editing works',
           help:
@@ -491,16 +701,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onChanged: (value) {
             if (value == null) return;
             setState(() => _editorRegistry.defaultEditorId = value);
-            _persistEditorRegistry(state);
+            _persistEditorRegistry();
           },
         ),
         const SizedBox(height: 24),
         Row(
           children: [
-            Expanded(child: _section('External editors')),
+            Expanded(child: SettingsSectionHeader('External editors')),
             if (currentEditorHostPlatform != null)
               OutlinedButton.icon(
-                onPressed: () => _addEditor(state),
+                onPressed: _addEditor,
                 icon: const Icon(Icons.add),
                 label: const Text('Add editor'),
               ),
@@ -535,12 +745,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              onTap: () => _editEditor(state, editor),
+              onTap: () => _editEditor(editor),
               trailing: PopupMenuButton<String>(
                 tooltip: 'Editor actions',
                 onSelected: (action) {
-                  if (action == 'edit') _editEditor(state, editor);
-                  if (action == 'remove') _removeEditor(state, editor);
+                  if (action == 'edit') _editEditor(editor);
+                  if (action == 'remove') _removeEditor(editor);
                 },
                 itemBuilder: (context) => const [
                   PopupMenuItem(value: 'edit', child: Text('Edit…')),
@@ -552,10 +762,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _syncTab(AppState state) => _settingsPage(
-    key: const PageStorageKey('sync-settings'),
+  Widget _syncTab() => SettingsPage(
+    storageKey: const PageStorageKey('sync-settings'),
     children: [
-      _section(
+      SettingsSectionHeader(
         'Sync (optional)',
         helpTitle: 'Account and vault credentials',
         help:
@@ -610,10 +820,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Runs on startup, after edits, and every few minutes.',
         ),
         value: _autoSync,
-        onChanged: (value) {
-          setState(() => _autoSync = value);
-          _persistSyncPrefs(state);
-        },
+        onChanged: _saving
+            ? null
+            : (value) {
+                setState(() => _autoSync = value);
+                _persistSyncPrefs();
+              },
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
@@ -622,10 +834,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'Only includes servers where credential sync is also enabled.',
         ),
         value: _syncSecrets,
-        onChanged: (value) {
-          setState(() => _syncSecrets = value);
-          _persistSyncPrefs(state);
-        },
+        onChanged: _saving
+            ? null
+            : (value) {
+                setState(() => _syncSecrets = value);
+                _persistSyncPrefs();
+              },
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Sync assistant settings'),
+        subtitle: const Text(
+          'Provider, model, endpoint, web search and redaction — with their '
+          'API keys, so the assistant works on the other device. '
+          'End-to-end encrypted. A localhost endpoint will not resolve '
+          'elsewhere. Turning this on adopts the settings already on the '
+          'account, replacing the assistant setup on this device. '
+          'Turning this off stops this device sharing further '
+          'changes; it does not remove what was already shared, which the '
+          'other devices are still using.',
+        ),
+        value: _syncAssistant,
+        onChanged: _saving
+            ? null
+            : (value) {
+                setState(() => _syncAssistant = value);
+                _persistSyncPrefs();
+              },
       ),
       const SizedBox(height: 8),
       TextField(
@@ -680,7 +915,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         runSpacing: 8,
         children: [
           FilledButton(
-            onPressed: _saving ? null : () => _sync(state, mode: _syncMode),
+            onPressed: _saving ? null : () => _sync(mode: _syncMode),
             child: Text(
               _syncMode == SyncEnrollmentMode.register
                   ? 'Create sync account'
@@ -688,7 +923,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           FilledButton.tonal(
-            onPressed: _saving ? null : () => _syncNow(state),
+            onPressed: _saving ? null : () => _syncNow(),
             child: const Text('Sync now'),
           ),
         ],
@@ -701,84 +936,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
       Padding(
         padding: const EdgeInsets.only(top: 8),
         child: ListenableBuilder(
-          listenable: state,
-          builder: (context, _) => _SyncStatusLine(state: state),
+          listenable: _backend,
+          builder: (context, _) => _SyncStatusLine(status: _backend.syncStatus),
         ),
       ),
     ],
-  );
-
-  Widget _settingsPage({required Key key, required List<Widget> children}) =>
-      Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: FocusTraversalGroup(
-            child: ListView(
-              key: key,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-              children: children,
-            ),
-          ),
-        ),
-      );
-
-  Widget _section(String title, {String? helpTitle, String? help}) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-        ),
-        if (help != null)
-          IconButton(
-            tooltip: 'About $title',
-            icon: const Icon(Icons.help_outline, size: 20),
-            onPressed: () => showDialog<void>(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: Text(helpTitle ?? title),
-                content: SingleChildScrollView(child: Text(help)),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-      ],
-    ),
   );
 
   /// Ask the configured endpoint which models it offers. Uses the key typed in
   /// the form if present, otherwise the stored one; keyless local endpoints
   /// (Ollama) need none. The manual field remains the fallback if this fails or
   /// the list omits the model the user wants.
-  Future<void> _fetchModels(AppState state) async {
+  Future<void> _fetchModels() async {
     setState(() {
       _loadingModels = true;
       _modelsError = null;
     });
     try {
-      final ref = _kind == LlmProviderKind.anthropic ? 'anthropic' : 'openai';
-      final key = _apiKey.text.isNotEmpty
-          ? _apiKey.text
-          : (await state.services.masterKeys.getApiKey(ref) ?? '');
-      final baseUrl = _baseUrl.text.trim();
-      final LlmProvider provider = _kind == LlmProviderKind.anthropic
-          ? AnthropicProvider(
-              apiKey: key,
-              baseUrl: baseUrl,
-              model: _model.text.trim(),
-            )
-          : OpenAiCompatibleProvider(
-              baseUrl: baseUrl,
-              apiKey: key,
-              model: _model.text.trim(),
-            );
-      final models = await provider.listModels();
-      models.sort();
+      final models = await _backend.fetchModels(
+        ModelQuery(
+          kind: _kind,
+          baseUrl: _baseUrl.text,
+          model: _model.text,
+          typedApiKey: _apiKey.text,
+        ),
+      );
+      if (!mounted) return;
       setState(() {
         _models = models;
         if (models.isEmpty) {
@@ -786,100 +969,289 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       });
     } catch (e) {
-      setState(() => _modelsError = 'Could not fetch models: $e');
+      if (mounted) setState(() => _modelsError = 'Could not fetch models: $e');
     } finally {
       if (mounted) setState(() => _loadingModels = false);
     }
   }
 
-  Future<void> _save(AppState state) async {
+  Future<void> _save() async {
+    // A draft loaded before another device's configuration was adopted is
+    // refused by the backend, against the app's live version — not here,
+    // against [SettingsBackend.llmConfigVersion]: in the settings window that
+    // arrives with a snapshot, which can trail the version a save result has
+    // just handed this screen, and a check against it would read the lag as
+    // an adoption and reload the fields from the older settings.
+    //
+    // Everything the save uses is read here, once, before the `setState`
+    // that disables the form: the fields stay editable while a save is in
+    // flight, and the keystore writes it waits on are exactly where it
+    // stalls, since an OS keyring can put a prompt in front of one. Anything
+    // read later would fold text typed during that stall into the save
+    // already running — and the key fields would then be cleared as if text
+    // the store never saw had been stored.
+    final draft = AssistantDraft(
+      fields: AssistantFields(
+        kind: _kind,
+        baseUrl: _baseUrl.text,
+        model: _model.text,
+        searxngUrl: _searxng.text,
+        zaiEnabled: _zai,
+        redactionEnabled: _redaction,
+      ),
+      llmApiKey: _apiKey.text,
+      zaiApiKey: _zaiApiKey.text,
+      versionSeen: _assistantVersionSeen,
+    );
     setState(() => _saving = true);
-    final s = state.services.settings;
-    s.llmKind = _kind;
-    s.llmBaseUrl = _baseUrl.text.trim();
-    s.llmModel = _model.text.trim();
-    s.redactionEnabled = _redaction;
-    s.searxngUrl = _searxng.text.trim().isEmpty ? null : _searxng.text.trim();
-    // Store the API key under a per-provider name.
-    final ref = _kind == LlmProviderKind.anthropic ? 'anthropic' : 'openai';
-    s.llmApiKeyRef = ref;
-    if (_apiKey.text.isNotEmpty) {
-      await state.services.masterKeys.putApiKey(ref, _apiKey.text);
+    // What `_saving` disables — Save, all three sync switches, the Z.AI
+    // switch, the mode selector and both sync buttons — must come back
+    // whatever the save does, or a transient disk failure would lock the
+    // whole assistant section until the screen is closed and reopened.
+    try {
+      final result = await _backend.saveAssistant(draft);
+      if (mounted) _applySaveResult(draft, result);
+    } catch (e) {
+      // The settings write itself failed (or the settings window lost the
+      // app). The settings may well not be on disk, which is the one outcome
+      // silence must not cover.
+      if (mounted) {
+        showTopToastIn(context, message: 'Settings not saved — $e');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
-    await state.services.saveSettings();
-    // Rebuild the chat provider (new key/model) and refresh sidebar visibility.
-    await state.reloadLlmProvider();
-    if (mounted) {
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(
+  }
+
+  void _applySaveResult(AssistantDraft draft, AssistantSaveResult result) {
+    switch (result.status) {
+      case AssistantSaveStatus.adoptedBeforeSave:
+        setState(() => _syncAssistantFields(result.current, result.version));
+        showTopToastIn(context, message: _adoptedMidSave);
+        return;
+      case AssistantSaveStatus.keystoreFailed:
+        // Named per key: the same class of error otherwise produced a bare
+        // `KeystoreException` string with nothing saying which of the two
+        // keys failed to save.
+        final which = result.failedKey == AssistantKey.zai
+            ? 'the Z.AI key'
+            : 'the API key';
+        showTopToastIn(
+          context,
+          message:
+              'Settings not saved — could not store $which: '
+              '${result.error}',
+        );
+        return;
+      case AssistantSaveStatus.saved:
+        break;
+    }
+    if (result.publishError != null) {
+      showTopToastIn(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Saved')));
+        message: 'Assistant sync: ${result.publishError}',
+      );
     }
+    if (result.keysStored) {
+      // Cleared once stored, or the text left in the field makes every later
+      // Save on this screen look like a key change: it would stamp `now` and
+      // republish, and on last-write-wins that beats a genuinely newer edit
+      // from another device with content that did not change. The field is
+      // write-only anyway — it is never populated from the keystore.
+      //
+      // Only what this Save stored, though: text typed into a field while
+      // the save ran was never persisted, and clearing it would discard it
+      // without a trace. The Z.AI key is stored only with its switch on, so
+      // its clear follows the switch position the draft carried.
+      if (_apiKey.text == draft.llmApiKey) _apiKey.clear();
+      if (draft.fields.zaiEnabled && _zaiApiKey.text == draft.zaiApiKey) {
+        _zaiApiKey.clear();
+      }
+    }
+    // An adoption during the save means these fields are not what is
+    // configured any more; blessing the version would let the next Save
+    // revert it silently, with a fresh stamp. Reloaded instead, as the
+    // refusal does, and the user saves again from what is configured.
+    if (result.adoptedMeanwhile) {
+      setState(() => _syncAssistantFields(result.current, result.version));
+    } else {
+      _assistantVersionSeen = result.version;
+    }
+    showTopToastIn(
+      context,
+      // Ordered by what the user has to act on. An adoption means this Save's
+      // values are not what is configured any more and it has to be made
+      // again — nothing else matters until that is done. A reload failure is
+      // next: the assistant in this process is still the old one. The Z.AI
+      // notice is last, about a key the next search reads.
+      message: result.adoptedMeanwhile
+          ? 'Saved — but the assistant settings changed on another device '
+                'meanwhile. The fields show what is configured now; review '
+                'them and save again.'
+          : result.reloadError != null
+          ? 'Saved — but the assistant could not be reloaded, so it is '
+                'still running the previous configuration: '
+                '${result.reloadError}'
+          : result.zaiWithoutKey
+          ? 'Saved — but no Z.AI key could be read (none stored, or '
+                'the keyring is locked), so Z.AI search will be '
+                'skipped.'
+          : 'Saved',
+    );
   }
 
   /// Persist the sync preference toggles and (re)start the auto-sync timer.
-  Future<void> _persistSyncPrefs(AppState state) async {
-    final s = state.services.settings;
-    s.autoSync = _autoSync;
-    s.syncSecrets = _syncSecrets;
-    await state.services.saveSettings();
-    state.ensureAutoSyncTimer();
+  Future<void> _persistSyncPrefs() async {
+    // The same flag Save sets, for the same reason it exists: this awaits a
+    // disk write and, on switch-on, a whole sync round, and the switches are
+    // only disabled while it is set. Without it the user can press Save — or
+    // flip a second toggle — while adoption is rewriting the very settings
+    // this write assigns to and rolls back.
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final result = await _backend.setSyncPrefs(
+        autoSync: _autoSync,
+        syncSecrets: _syncSecrets,
+        syncAssistant: _syncAssistant,
+      );
+      if (!mounted) return;
+      setState(() {
+        _autoSync = result.autoSync;
+        _syncSecrets = result.syncSecrets;
+        _syncAssistant = result.syncAssistant;
+        // Adoption rewrites the assistant half of the settings, and this
+        // screen loaded its fields once; without this the next Save writes
+        // the pre-adoption values back — with a fresh stamp, so the revert
+        // wins on every device. Only when adoption actually ran: otherwise
+        // this would overwrite what the user had typed but not yet saved.
+        if (result.adopted) {
+          _syncAssistantFields(result.current, result.version);
+        }
+      });
+      if (result.saveError != null) {
+        showTopToastIn(
+          context,
+          message: 'Sync preferences: ${result.saveError}',
+        );
+      } else if (result.assistantSyncError != null) {
+        showTopToastIn(
+          context,
+          message: 'Assistant sync: ${result.assistantSyncError}',
+        );
+      }
+    } catch (e) {
+      // Only the settings window gets here, when it lost the app: the local
+      // backend reports every failure in the result. What is persisted is
+      // unknown, so show what this screen last knew.
+      if (mounted) {
+        final s = _backend.settings;
+        setState(() {
+          _autoSync = s.autoSync;
+          _syncSecrets = s.syncSecrets;
+          _syncAssistant = s.syncAssistant;
+        });
+        showTopToastIn(context, message: 'Sync preferences: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// A write the General and Files tabs make on each change, which reports
+  /// its own failure: these are fired from `onChanged` without an awaiter, so
+  /// an escaping error would be an unhandled async error behind a control
+  /// that looks saved.
+  Future<void> _persist(String what, Future<void> Function() write) async {
+    try {
+      await write();
+    } catch (e) {
+      if (mounted) showTopToastIn(context, message: '$what not saved — $e');
+    }
   }
 
   /// Persist the command-suggestions toggle and refresh the current list.
-  Future<void> _persistCommandSuggestions(AppState state) async {
-    state.services.settings.commandSuggestions = _commandSuggestions;
-    await state.services.saveSettings();
-    state.refreshSuggestions();
-  }
+  Future<void> _persistCommandSuggestions() => _persist(
+    'Command suggestions',
+    () => _backend.setCommandSuggestions(_commandSuggestions),
+  );
 
   /// Persist the update-check toggle; turning it off also clears any banner
   /// already showing this session.
-  Future<void> _persistCheckForUpdates(AppState state) async {
-    state.services.settings.checkForUpdates = _checkForUpdates;
-    await state.services.saveSettings();
-    if (!_checkForUpdates) state.dismissUpdateNotice();
+  Future<void> _persistCheckForUpdates() => _persist(
+    'Update check',
+    () => _backend.setCheckForUpdates(_checkForUpdates),
+  );
+
+  /// Persist the local-shell opt-in; off closes every open local tab, so a
+  /// hidden row cannot strand live shells.
+  Future<void> _persistLocalShell() => _persist(
+    'Local shell',
+    () => _backend.setLocalShellEnabled(_localShell),
+  );
+
+  /// Persist the background keep-alive toggle and apply it to live sessions.
+  /// A failed save reverts the switch — unless the user toggled again while
+  /// the save was in flight, in which case the newer choice is authoritative
+  /// and stands.
+  Future<void> _persistKeepSessionsAlive() async {
+    final requested = _keepSessionsAlive;
+    try {
+      await _backend.setKeepSessionsAlive(requested);
+    } catch (e) {
+      // A newer toggle governs the switch now, and reports for itself.
+      if (_keepSessionsAlive != requested) return;
+      _keepSessionsAlive = !requested;
+      if (!mounted) return;
+      setState(() {});
+      showTopToastIn(context, message: 'Keep sessions alive not saved — $e');
+    }
   }
 
   /// Persist terminal appearance and repaint every live session. Called on
   /// slider release and on each discrete choice, so the General tab keeps its
   /// "saves immediately" contract.
-  Future<void> _persistTerminalAppearance(AppState state) async {
-    final settings = state.services.settings;
-    final family = _terminalFont.text.trim();
-    if (settings.terminalFontSize == _terminalFontSize &&
-        settings.terminalPalette == _terminalPalette &&
-        settings.terminalFontFamily == family) {
-      return;
-    }
-    settings.terminalFontSize = _terminalFontSize;
-    settings.terminalPalette = _terminalPalette;
-    settings.terminalFontFamily = family;
-    // Terminals read the settings during build, so they need a nudge.
-    state.terminalAppearanceChanged();
-    await state.services.saveSettings();
+  Future<void> _persistTerminalAppearance() => _persist(
+    'Terminal appearance',
+    () => _backend.setTerminalAppearance(
+      fontSize: _terminalFontSize,
+      fontFamily: _terminalFont.text.trim(),
+      palette: _terminalPalette,
+    ),
+  );
+
+  /// Opens the installed-font picker and applies what it returns.
+  ///
+  /// A dismissal leaves the field alone; the built-in-stack choice clears it,
+  /// which is what a blank family already means to [TerminalAppearance].
+  Future<void> _pickTerminalFont() async {
+    final chosen = await showFontPicker(
+      context,
+      fonts: _systemFonts,
+      current: _terminalFont.text.trim(),
+    );
+    if (chosen == null || !mounted) return;
+    _terminalFont.text = chosen;
+    await _persistTerminalAppearance();
   }
 
-  Future<void> _persistEditorRegistry(AppState state) async {
-    state.services.settings.editorRegistry = _editorRegistry;
-    await state.services.saveSettings();
-  }
+  Future<void> _persistEditorRegistry() => _persist(
+    'Editor settings',
+    () => _backend.setEditorRegistry(_editorRegistry),
+  );
 
-  Future<void> _addEditor(AppState state) async {
+  Future<void> _addEditor() async {
     try {
-      final picked = await const ExternalFileOpener().pickEditor();
+      final picked = await _backend.pickEditor();
       if (picked == null || !mounted) return;
-      await _editEditor(state, picked, adding: true);
+      await _editEditor(picked, adding: true);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      showTopToastIn(context, message: error.toString());
     }
   }
 
   Future<void> _editEditor(
-    AppState state,
     ExternalEditorDefinition editor, {
     bool adding = false,
   }) async {
@@ -960,13 +1332,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     extensions.dispose();
     if (updated == null || !mounted) return;
     setState(() => _editorRegistry.put(updated));
-    await _persistEditorRegistry(state);
+    await _persistEditorRegistry();
   }
 
-  Future<void> _removeEditor(
-    AppState state,
-    ExternalEditorDefinition editor,
-  ) async {
+  Future<void> _removeEditor(ExternalEditorDefinition editor) async {
     final remove = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -991,10 +1360,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (remove != true || !mounted) return;
     setState(() => _editorRegistry.remove(editor.id));
-    await _persistEditorRegistry(state);
+    await _persistEditorRegistry();
   }
 
-  Future<void> _sync(AppState state, {required SyncEnrollmentMode mode}) async {
+  Future<void> _sync({required SyncEnrollmentMode mode}) async {
     final register = mode == SyncEnrollmentMode.register;
     final validationError = validateSyncEnrollment(
       mode: mode,
@@ -1014,28 +1383,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _syncStatus = register ? 'Registering…' : 'Logging in…';
     });
     try {
-      if (register) {
-        await state.services.registerSync(
+      await _backend.enrollSync(
+        SyncEnrollment(
+          mode: mode,
           baseUrl: _syncUrl.text.trim(),
           username: _syncUser.text.trim(),
           password: _syncPassword.text,
           encryptionPassphrase: _syncEncryptionPassphrase.text,
-        );
-      } else {
-        await state.services.loginSync(
-          baseUrl: _syncUrl.text.trim(),
-          username: _syncUser.text.trim(),
-          password: _syncPassword.text,
-          encryptionPassphrase: _syncEncryptionPassphrase.text,
-        );
-      }
-      // Schedule periodic sync if enabled, then always verify enrollment with
-      // one immediate round.
-      state.ensureAutoSyncTimer();
+        ),
+      );
+      // Always verify enrollment with one immediate round.
       if (mounted) {
         setState(() => _syncStatus = 'Connected. Synchronizing…');
       }
-      await state.syncNow();
+      await _backend.syncNow();
       if (mounted) setState(() => _syncStatus = 'Connected and synced.');
     } catch (e) {
       if (mounted) setState(() => _syncStatus = 'Failed: $e');
@@ -1044,13 +1405,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _syncNow(AppState state) async {
+  Future<void> _syncNow() async {
     setState(() {
       _saving = true;
       _syncStatus = 'Syncing…';
     });
     try {
-      final outcome = await state.syncNow();
+      final outcome = await _backend.syncNow();
       if (mounted) {
         setState(
           () => _syncStatus =
@@ -1123,14 +1484,14 @@ class SyncEnrollmentFields extends StatelessWidget {
 /// A live, one-line reflection of the app-wide sync state (also updated by
 /// automatic background syncs, not just the buttons above).
 class _SyncStatusLine extends StatelessWidget {
-  final AppState state;
-  const _SyncStatusLine({required this.state});
+  final SyncStatus status;
+  const _SyncStatusLine({required this.status});
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final style = Theme.of(context).textTheme.bodySmall;
-    if (state.syncing) {
+    if (status.syncing) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1144,14 +1505,14 @@ class _SyncStatusLine extends StatelessWidget {
         ],
       );
     }
-    if (state.lastSyncError != null) {
+    if (status.lastSyncError != null) {
       return Text(
-        'Last sync failed: ${state.lastSyncError}',
+        'Last sync failed: ${status.lastSyncError}',
         style: style?.copyWith(color: scheme.error),
       );
     }
-    if (state.lastSyncAt != null) {
-      return Text('Last synced ${_ago(state.lastSyncAt!)}.', style: style);
+    if (status.lastSyncAt != null) {
+      return Text('Last synced ${_ago(status.lastSyncAt!)}.', style: style);
     }
     return const SizedBox.shrink();
   }
