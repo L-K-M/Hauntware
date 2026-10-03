@@ -15,7 +15,9 @@ import 'identity_audit_log.dart';
 import 'identity_bookmarks.dart';
 import 'inbox_stores.dart';
 import 'local_shell_service.dart';
+import 'macos_sandbox.dart';
 import 'managed_remote_file_store.dart';
+import 'sandbox_migration.dart';
 import 'secure_master_key.dart';
 
 /// A "reference, don't store" identity file couldn't be read at connect time.
@@ -27,23 +29,38 @@ class IdentityFileException implements Exception {
   final FileSystemException cause;
   // Injectable so the hint branch is unit-testable off-macOS (CI runs Linux).
   final bool isMacOS;
-  IdentityFileException(this.path, this.cause, {bool? isMacOS})
-      : isMacOS = isMacOS ?? Platform.isMacOS;
+
+  /// Whether the sandbox is actually in force. Séance ships unsandboxed on
+  /// macOS, where an EPERM is ordinary filesystem permissions and the sandbox
+  /// advice below would send the user to fix something that isn't wrong.
+  final bool isSandboxed;
+
+  IdentityFileException(
+    this.path,
+    this.cause, {
+    bool? isMacOS,
+    bool? isSandboxed,
+  }) : isMacOS = isMacOS ?? Platform.isMacOS,
+       isSandboxed =
+           isSandboxed ?? macOsSandboxed(isMacOS: isMacOS ?? Platform.isMacOS);
 
   @override
   String toString() {
     final os = cause.osError?.message;
     final detail = (os == null || os.isEmpty) ? cause.message : os;
-    // errno 1 = EPERM: the app sandbox blocked the read. The entitlements
-    // cover only files physically under ~/.ssh, so this also fires for a
-    // ~/.ssh entry that is a symlink elsewhere (the sandbox checks the
-    // resolved path) — the wording below has to fit that case too.
-    final sandboxHint = isMacOS && cause.osError?.errorCode == 1
+    // errno 1 = EPERM. Only worth blaming the sandbox when there is one:
+    // Séance ships unsandboxed on macOS, so this is normally ordinary
+    // filesystem permissions and the advice below would be a wild goose
+    // chase. Inside a sandbox the entitlement covered only files physically
+    // under ~/.ssh, so it also fired for a ~/.ssh entry that was a symlink
+    // elsewhere (the resolved path is what was checked) — which is why the
+    // wording has to fit that case too.
+    final sandboxHint = isMacOS && isSandboxed && cause.osError?.errorCode == 1
         ? ' The macOS sandbox lets Séance read keys only from ~/.ssh or '
-            'files granted via Browse… — store the key in ~/.ssh as a real '
-            'file (a symlink to another folder won\'t open), re-pick it with '
-            'Browse…, or paste it into the server settings instead of '
-            'referencing a file.'
+              'files granted via Browse… — store the key in ~/.ssh as a real '
+              'file (a symlink to another folder won\'t open), re-pick it with '
+              'Browse…, or paste it into the server settings instead of '
+              'referencing a file.'
         : '';
     return 'Could not read identity file $path — $detail.$sandboxHint';
   }
@@ -58,7 +75,8 @@ class LockedSecretVault extends SecretVault {
   LockedSecretVault(VaultStore store) : super(store, const <int>[]);
 
   @override
-  Future<Secret?> getSecret(String id) async => throw const VaultLockedException();
+  Future<Secret?> getSecret(String id) async =>
+      throw const VaultLockedException();
 
   /// Throws too, rather than inheriting the "unreadable reads as absent" base.
   /// Nothing here is damaged — there is no key to try — and a caller that took
@@ -69,7 +87,8 @@ class LockedSecretVault extends SecretVault {
       throw const VaultLockedException();
 
   @override
-  Future<void> putSecret(Secret secret) async => throw const VaultLockedException();
+  Future<void> putSecret(Secret secret) async =>
+      throw const VaultLockedException();
 
   @override
   Future<void> putSecrets(Iterable<Secret> secrets) async =>
@@ -81,12 +100,14 @@ class LockedSecretVault extends SecretVault {
 class AppServices {
   final ConfigStore configStore;
   final SnippetStore snippetStore;
+
   /// Durable record of deletions awaiting sync (see [TombstoneStore]). Without
   /// it a deleted server returns on the next full pull, since the sync mirror
   /// is rebuilt each round.
   final TombstoneStore tombstoneStore;
   // Mutable so sync enrolment can re-key the vault to the shared encryption key.
   SecretVault vault;
+
   /// Crash recovery for [_rekeyVault]. This is the same object as
   /// [SecretVault.store] behind [vault]; it is held separately because
   /// surviving a crash is a property of the file-backed store, not something
@@ -171,18 +192,46 @@ class AppServices {
     final dir = await getApplicationSupportDirectory();
     String p(String name) => '${dir.path}/$name';
 
+    // Before anything reads or creates a store: an install made by a
+    // sandboxed build keeps its data inside a container this build no longer
+    // looks in. Running first means the stores below open the migrated files
+    // rather than creating empty ones beside them.
+    //
+    // A failure here ends startup. Everything below this line writes — the
+    // deviceId mint alone creates settings.json — and any one of those writes
+    // makes the next launch see a directory in use and skip the migration for
+    // good. Carrying on would therefore convert a recoverable failure into
+    // permanent stranding, while showing the user an app that looks wiped.
+    final migration = SandboxMigration.forSupportDirectory(dir);
+    if (migration != null) {
+      final outcome = await migration.run();
+      if (outcome == SandboxMigrationOutcome.failed) {
+        throw SandboxMigrationFailure(
+          migration.legacySupport,
+          migration.error ?? 'unknown error',
+        );
+      }
+    }
+
+    final vaultFile = File(p('vault.json'));
     final masterKeys = masterKeyManager ?? MasterKeyManager();
     // May be null when the OS keystore is locked or unavailable (locked login
     // keyring on auto-login systems, no Secret Service daemon on minimal
     // desktops): the app then starts with a locked vault — secrets unreadable
     // and unwritable with a clear error, retry offered in the UI — instead of
     // crashing before the shell exists.
-    var vaultKey = await masterKeys.probeKeystore();
+    //
+    // A keystore that *answers* but holds no key while a vault already sits on
+    // disk is the other refusal: minting a fresh key over it would strand
+    // every saved secret, so probeKeystore throws rather than guess.
+    var vaultKey = await masterKeys.probeKeystore(
+      hasExistingVault: await _holdsSecrets(vaultFile),
+    );
 
     final configStore = FileConfigStore(File(p('servers.json')));
     final snippetStore = FileSnippetStore(File(p('snippets.json')));
     final tombstoneStore = FileTombstoneStore(File(p('deleted_records.json')));
-    final vaultStore = FileVaultStore(File(p('vault.json')));
+    final vaultStore = FileVaultStore(vaultFile);
     final hostKeyStore = FileHostKeyStore(File(p('known_hosts.json')));
     final settingsStore = SettingsStore(File(p('settings.json')));
     final commandStatsStore = CommandStatsStore(File(p('command_stats.json')));
@@ -264,7 +313,26 @@ class AppServices {
   /// fresh instance). Returns whether the vault has a key afterwards.
   Future<bool> unlockVaultFromKeystore() async {
     if (vaultKey != null) return true;
-    final key = await masterKeys.probeKeystore();
+    // The vault file a retry must not mint a key over, when it is a real
+    // file. A keystore that is back but answers "no key" while a vault sits
+    // on disk is the same refusal startup enforces; surfacing it as "still
+    // locked" is the honest answer a retry can give.
+    final journal = _rekeyJournal;
+    final vaultFile = journal is FileVaultStore ? journal.file : null;
+    final List<int>? key;
+    try {
+      key = await masterKeys.probeKeystore(
+        hasExistingVault: vaultFile != null && await _holdsSecrets(vaultFile),
+      );
+    } on MasterKeyUnavailableException catch (error) {
+      // Distinguish a missing key from a temporarily unavailable keystore.
+      // Retrying after key restoration remains valid.
+      developer.log(
+        'Refused a replacement key for an existing vault: $error',
+        name: 'seance.app',
+      );
+      return false;
+    }
     if (key == null) return false;
     // A keystore that is back is also the first chance to finish a re-key the
     // last run left staged, and it has to happen before the key is adopted:
@@ -293,7 +361,9 @@ class AppServices {
   /// a staged generation was dropped because no key on offer opened it, and
   /// nothing else would explain the credentials that went with it.
   static Future<VaultRekeyOutcome> _settleRekey(
-      VaultRekeyJournal journal, List<int> key) async {
+    VaultRekeyJournal journal,
+    List<int> key,
+  ) async {
     final outcome = await journal.settleRekey(key);
     if (outcome == VaultRekeyOutcome.discarded) {
       developer.log(
@@ -304,6 +374,23 @@ class AppServices {
       );
     }
     return outcome;
+  }
+
+  /// Whether [file] is a vault that actually holds something. An absent or
+  /// empty vault is a first run; an unreadable one is treated as holding
+  /// secrets, because the safe reading of "cannot tell" is "do not overwrite".
+  /// A file that parses into a shape no vault can be — a list, a scalar —
+  /// reads the same way: only a well-formed object can prove it is empty.
+  /// Zero-length or whitespace-only files remain unrecognized. Atomic vault
+  /// writes produce valid JSON; do not mint over foreign or corrupt states.
+  static Future<bool> _holdsSecrets(File file) async {
+    if (!await file.exists()) return false;
+    try {
+      final decoded = jsonDecode(await file.readAsString());
+      return decoded is! Map || decoded.isNotEmpty;
+    } catch (_) {
+      return true;
+    }
   }
 
   /// True when the settings file could not be parsed at startup and was moved
@@ -685,12 +772,14 @@ class AppServices {
     try {
       return await _withSyncClient(baseUrl, (client) {
         client.token = token;
-        return action(InboxService(
-          api: client,
-          apps: inboxApps,
-          statuses: inboxStatuses,
-          cache: inboxCache,
-        ));
+        return action(
+          InboxService(
+            api: client,
+            apps: inboxApps,
+            statuses: inboxStatuses,
+            cache: inboxCache,
+          ),
+        );
       });
     } on ApiError catch (error) {
       // A plain 404 (not the server's own `not_found`) is a sync server
@@ -826,11 +915,13 @@ class AppServices {
             // already resolved by the time this runs — so there is no unlock
             // prompt or keychain failure to avoid here, and no behaviour
             // difference to test. Free, and one less thing happening.
-            keyPassphrase: draft(draftKeyPassphrase) ??
+            keyPassphrase:
+                draft(draftKeyPassphrase) ??
                 (config.secretRef == null
                     ? null
-                    : (await vault.getSecret(config.secretRef!))
-                        ?.keyPassphrase),
+                    : (await vault.getSecret(
+                        config.secretRef!,
+                      ))?.keyPassphrase),
           );
         }
         final typedPem = draft(draftPrivateKey);
@@ -914,12 +1005,21 @@ class AppServices {
     }
     try {
       final pem = await File(readPath).readAsString();
-      await _auditIdentityRead(config, readPath,
-          viaBookmark: scoped != null, ok: true);
+      await _auditIdentityRead(
+        config,
+        readPath,
+        viaBookmark: scoped != null,
+        ok: true,
+      );
       return pem;
     } on FileSystemException catch (e, stackTrace) {
-      await _auditIdentityRead(config, readPath,
-          viaBookmark: scoped != null, ok: false, error: e.toString());
+      await _auditIdentityRead(
+        config,
+        readPath,
+        viaBookmark: scoped != null,
+        ok: false,
+        error: e.toString(),
+      );
       // Keep the original I/O stack visible to crash reports/logs.
       Error.throwWithStackTrace(IdentityFileException(readPath, e), stackTrace);
     } finally {
@@ -935,15 +1035,17 @@ class AppServices {
     String? error,
   }) async {
     try {
-      await identityAudit.record(IdentityReadEvent(
-        at: DateTime.now().toUtc().toIso8601String(),
-        serverId: config.id,
-        serverLabel: config.label,
-        path: path,
-        viaBookmark: viaBookmark,
-        ok: ok,
-        error: error,
-      ));
+      await identityAudit.record(
+        IdentityReadEvent(
+          at: DateTime.now().toUtc().toIso8601String(),
+          serverId: config.id,
+          serverLabel: config.label,
+          path: path,
+          viaBookmark: viaBookmark,
+          ok: ok,
+          error: error,
+        ),
+      );
     } catch (_) {
       // The audit trail is best-effort; a full disk must not break connecting.
     }
@@ -954,10 +1056,10 @@ class AppServices {
   /// would otherwise never be found). [expandHomePath] also undoes the macOS
   /// sandbox's container `$HOME`, so `~` means the real home directory.
   static String _expandHome(String path) => expandHomePath(
-        path,
-        environment: Platform.environment,
-        isMacOS: Platform.isMacOS,
-      );
+    path,
+    environment: Platform.environment,
+    isMacOS: Platform.isMacOS,
+  );
 
   /// Build the configured LLM provider, resolving its API key from the keystore.
   Future<LlmProvider> buildLlmProvider() async {

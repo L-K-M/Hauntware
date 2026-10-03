@@ -4,6 +4,33 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:seance_core/seance_core.dart';
 
+/// Thrown when the OS keystore reports no master key but an encrypted vault is
+/// already on disk.
+///
+/// The two situations are indistinguishable from the keystore alone — a first
+/// run and a keystore that will not hand the key over both read as "nothing
+/// there" — and the difference is total: minting a fresh key in the second
+/// case makes every stored password and private key permanently
+/// undecryptable. So the vault itself is the tiebreaker, and this refuses to
+/// start rather than guess.
+///
+/// On macOS, missing items return no value; permission and interaction
+/// errors reach the locked-vault retry path instead. The plugin can also
+/// return no value for an unusable payload, so null alone does not prove
+/// why the key is unavailable.
+class MasterKeyUnavailableException implements Exception {
+  const MasterKeyUnavailableException();
+
+  @override
+  String toString() =>
+      'The vault master key could not be read from the system keystore, but '
+      'an encrypted vault already exists. Séance stopped rather than create a '
+      'new key, which would make your saved passwords and private keys '
+      'unreadable. The keystore returned no master key. Restore the matching '
+      'key from a backup (a keychain backup on macOS) before reopening this '
+      'vault.';
+}
+
 /// The OS keystore could not be read or written — on Linux that is usually a
 /// locked login keyring (auto-login leaves it locked) or a desktop without a
 /// Secret Service daemon (gnome-keyring/KWallet) at all. [message] is
@@ -20,7 +47,8 @@ class KeystoreException implements Exception {
 class VaultLockedException implements Exception {
   final String message;
   const VaultLockedException([
-    this.message = 'Saved secrets are unavailable: the OS keyring is locked '
+    this.message =
+        'Saved secrets are unavailable: the OS keyring is locked '
         'or missing. Unlock the login keyring (or install gnome-keyring), '
         'then retry.',
   ]);
@@ -51,17 +79,18 @@ class MasterKeyManager {
   String? lastKeystoreError;
 
   MasterKeyManager([FlutterSecureStorage? storage])
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              // macOS: use the legacy login keychain, not the iOS-style
-              // data-protection keychain. The latter requires a
-              // keychain-access-groups entitlement — a *restricted*
-              // entitlement that macOS only honors for team-signed builds, so
-              // an ad-hoc "sign to run locally" app either throws -34018 at
-              // the first read (entitlement absent) or refuses to launch at
-              // all (entitlement present but unvalidated).
-              mOptions: MacOsOptions(usesDataProtectionKeychain: false),
-            );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            // macOS: use the legacy login keychain, not the iOS-style
+            // data-protection keychain. The latter requires a
+            // keychain-access-groups entitlement — a *restricted*
+            // entitlement that macOS only honors for team-signed builds, so
+            // an ad-hoc "sign to run locally" app either throws -34018 at
+            // the first read (entitlement absent) or refuses to launch at
+            // all (entitlement present but unvalidated).
+            mOptions: MacOsOptions(usesDataProtectionKeychain: false),
+          );
 
   void _markAvailable() {
     keystoreStatus = KeystoreStatus.available;
@@ -91,13 +120,30 @@ class MasterKeyManager {
   /// fabricate an ephemeral key: anything encrypted with a key that dies with
   /// the process would be silently orphaned on the next launch, which is a
   /// far worse failure than "secrets are temporarily unavailable".
-  Future<List<int>?> probeKeystore() async {
+  ///
+  /// [hasExistingVault] is what makes "first run" distinguishable from "the
+  /// keystore said no": when an encrypted vault is already on disk, a keystore
+  /// that *answers* — reads fine, holds nothing — is one that will not hand
+  /// the key over, and minting a fresh one makes every stored password and
+  /// private key permanently undecryptable. The probe then throws
+  /// [MasterKeyUnavailableException] rather than guess. A read that throws
+  /// instead is a keystore that cannot answer at all — the locked-vault null
+  /// above, not a refusal: nothing is minted either way.
+  Future<List<int>?> probeKeystore({bool hasExistingVault = false}) async {
     try {
       final existing = await _storage.read(key: _keyName);
       if (existing != null) {
         _markAvailable();
         return base64.decode(existing);
       }
+      // The keystore answered: reachable, holding nothing.
+      _markAvailable();
+    } catch (e) {
+      _markUnavailable(e);
+      return null;
+    }
+    if (hasExistingVault) throw const MasterKeyUnavailableException();
+    try {
       final key = secureRandomBytes(32);
       await _storage.write(key: _keyName, value: base64.encode(key));
       _markAvailable();
@@ -161,9 +207,11 @@ class MasterKeyManager {
     String passphrase,
     List<int> salt, {
     Argon2Params params = const Argon2Params(),
-  }) =>
-      VaultCrypto.deriveKeys(
-          passphrase: passphrase, salt: salt, params: params);
+  }) => VaultCrypto.deriveKeys(
+    passphrase: passphrase,
+    salt: salt,
+    params: params,
+  );
 
   /// Store an API key (LLM provider) in the OS keystore under [name]. Never
   /// synced. Throws [KeystoreException] when the keystore is unavailable —
