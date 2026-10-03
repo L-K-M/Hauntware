@@ -79,8 +79,16 @@ class SandboxMigration {
   final Directory legacySupport;
 
   /// Scratch space beside [support] — not inside it, so [support] stays empty
-  /// right up to the rename that fills it in one step.
+  /// right up to the rename that fills it in one step. Holds only copies, so
+  /// a failed run can always delete it.
   final Directory staging;
+
+  /// Where the originals of the destination's strays wait out the run.
+  ///
+  /// A sibling like [staging] but under a name unique to this run, so the
+  /// next run's stale-staging cleanup can never own it: a leftover staging is
+  /// provably a partial copy, while a leftover backup is provably user data.
+  final Directory backup;
 
   /// How one file is copied.
   ///
@@ -106,6 +114,10 @@ class SandboxMigration {
     Future<Directory> Function(Directory staging, String to)? publish,
   }) : staging = Directory(
          '${support.parent.path}${Platform.pathSeparator}$stagingName',
+       ),
+       backup = Directory(
+         '${support.parent.path}${Platform.pathSeparator}'
+         '$stagingName-strays-${DateTime.now().microsecondsSinceEpoch}-$pid',
        ),
        copyFile = copyFile ?? _copyOneFile,
        publish = publish ?? _publish;
@@ -150,9 +162,8 @@ class SandboxMigration {
   Object? _error;
 
   Future<SandboxMigrationOutcome> run() async {
-    // The strays carried out of the destination: moved, not copied, so a
-    // failure must give them back rather than let the staging delete take
-    // them. Recording them is cheap enough to do unconditionally.
+    // The strays carried out of the destination, in the order they moved.
+    // Their originals sit in [backup]; restoring them is the catch's job.
     final movedStrays = <FileSystemEntity>[];
     try {
       // A leftover staging directory means a previous run died before its
@@ -187,8 +198,17 @@ class SandboxMigration {
         final strays = await support.list(followLinks: false).toList();
         for (final entry in strays) {
           final name = entry.path.split(Platform.pathSeparator).last;
+          // The original goes to the backup; staging gets only a copy. The
+          // staging delete on failure is then free to run, and a process
+          // that dies here leaves the originals in a named directory the
+          // next run never cleans.
+          if (!await backup.exists()) await backup.create();
           movedStrays.add(
-            await entry.rename('${staging.path}${Platform.pathSeparator}$name'),
+            await entry.rename('${backup.path}${Platform.pathSeparator}$name'),
+          );
+          await _copyStray(
+            movedStrays.last,
+            '${staging.path}${Platform.pathSeparator}$name',
           );
         }
       }
@@ -202,34 +222,49 @@ class SandboxMigration {
       // failure, and the next launch treats the newcomer as one more stray and
       // carries it across, so the race costs a relaunch rather than the data.
       await publish(staging, support.path);
+      // Their copies published with the rest of the tree, so the originals
+      // are redundant — dropped deliberately here, never by a later run's
+      // cleanup. If the process dies first the backup is only a leftover.
+      try {
+        if (await backup.exists()) await backup.delete(recursive: true);
+      } catch (_) {
+        // Best effort — a leftover backup is only ever read by hand.
+      }
       return SandboxMigrationOutcome.migrated;
     } catch (error, stackTrace) {
       _error = error;
       debugPrint('Sandbox-container migration failed: $error\n$stackTrace');
-      // The strays were moved, not copied, so the staging delete would take
-      // them with it. Send each one home first; if home refuses, park staging
-      // under a name the next run's cleanup does not own rather than delete
-      // the user's files with our own scratch.
+      // Give every moved stray back. A newcomer that claimed its name while
+      // the run was failing — the Finder-write the publish rename races —
+      // wins it: a restore must never overwrite. Anything that cannot go
+      // home stays recoverable in the backup, which is never auto-cleaned.
       for (final stray in movedStrays) {
         try {
-          if (!await support.exists()) {
-            await support.create(recursive: true);
-          }
           final name = stray.path.split(Platform.pathSeparator).last;
-          await stray.rename('${support.path}${Platform.pathSeparator}$name');
-        } catch (_) {
-          try {
-            await staging.rename(
-              '${staging.path}-strays-${DateTime.now().millisecondsSinceEpoch}',
-            );
-          } catch (_) {
-            // Best effort — staging left in place still keeps the strays on
-            // disk for whoever comes to look.
+          final home = '${support.path}${Platform.pathSeparator}$name';
+          if (await FileSystemEntity.type(home, followLinks: false) ==
+              FileSystemEntityType.notFound) {
+            if (!await support.exists()) {
+              await support.create(recursive: true);
+            }
+            await stray.rename(home);
           }
-          return SandboxMigrationOutcome.failed;
+        } catch (_) {
+          // Best effort — an unrestored stray is left on disk in the backup
+          // rather than destroyed with our own scratch.
         }
       }
-      // Leave nothing half-done behind; the container still holds everything.
+      // Leave nothing half-done behind: staging holds only copies, and a
+      // backup that gave everything back is empty, so both are droppable. A
+      // backup still holding strays keeps them.
+      try {
+        if (await backup.exists() &&
+            await backup.list(followLinks: false).isEmpty) {
+          await backup.delete();
+        }
+      } catch (_) {
+        // Best effort — a leftover backup is only ever read by hand.
+      }
       try {
         if (await staging.exists()) await staging.delete(recursive: true);
       } catch (_) {
@@ -252,6 +287,28 @@ class SandboxMigration {
       }
     }
     return false;
+  }
+
+  /// A copy of one stray for the staging tree. The original stays in the
+  /// backup; this is what the publish step carries home.
+  ///
+  /// Strays are the user's files, not the container's — so unlike [_copyInto]
+  /// a link here is carried as a link rather than skipped, and directories
+  /// recurse through this method to keep that rule for everything inside.
+  Future<void> _copyStray(FileSystemEntity from, String to) async {
+    if (from is Directory) {
+      await Directory(to).create(recursive: true);
+      await for (final entry in from.list(followLinks: false)) {
+        final name = entry.path.split(Platform.pathSeparator).last;
+        await _copyStray(entry, '$to${Platform.pathSeparator}$name');
+      }
+    } else if (from is File) {
+      await copyFile(from, to);
+    } else if (from is Link) {
+      // Re-created as a link, never followed: the target stays wherever the
+      // user pointed it, and nothing outside the stray is copied.
+      await Link(to).create(await from.target());
+    }
   }
 
   Future<void> _copyInto(Directory from, Directory to) async {

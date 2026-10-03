@@ -273,10 +273,9 @@ void main() {
     test(
       'a failed publish gives the moved strays back instead of deleting them',
       () async {
-        // The strays are moved into staging, not copied: if the rename that
-        // would publish the staged tree then fails, the catch's cleanup must
-        // not take them with it — they are the user's, and the run promised
-        // to carry rather than delete.
+        // The strays' originals are parked in a uniquely-named backup and
+        // only copies reach staging, so a failed run can give them back
+        // home — the staging delete is never allowed to take them.
         File('${support.path}/.DS_Store').writeAsStringSync('finder');
         Directory('${support.path}/.Spotlight-V100').createSync();
         File(
@@ -308,6 +307,11 @@ void main() {
           reason: 'no staging left to misread on the next launch',
         );
         expect(
+          run.backup.existsSync(),
+          isFalse,
+          reason: 'a backup that gave everything back has no reason to stay',
+        );
+        expect(
           File('${legacy.path}/settings.json').existsSync(),
           isTrue,
           reason: 'the container is still the fallback it promised to be',
@@ -323,6 +327,119 @@ void main() {
         );
       },
     );
+
+    test(
+      'a newcomer claiming a stray\'s name mid-run is never overwritten',
+      () async {
+        File('${support.path}/.DS_Store').writeAsStringSync('original');
+        writeLegacy('settings.json', '{"deviceId":"abc"}');
+
+        // The Finder-write the publish rename is documented to race: the
+        // stray's name is claimed again before the run can fail.
+        final run = SandboxMigration(
+          support: support,
+          legacySupport: legacy,
+          publish: (_, __) {
+            File('${support.path}/.DS_Store').writeAsStringSync('newcomer');
+            throw const FileSystemException('ENOTEMPTY');
+          },
+        );
+        expect(await run.run(), SandboxMigrationOutcome.failed);
+
+        // The newcomer wins the name — the restore must not touch it.
+        expect(
+          File('${support.path}/.DS_Store').readAsStringSync(),
+          'newcomer',
+        );
+        expect(
+          File('${run.backup.path}/.DS_Store').readAsStringSync(),
+          'original',
+          reason: 'an unrestored stray is kept, never deleted with staging',
+        );
+        expect(
+          Directory(
+            '${support.parent.path}/${SandboxMigration.stagingName}',
+          ).existsSync(),
+          isFalse,
+        );
+
+        // And the next run's cleanup does not own the backup either: the
+        // newcomer is carried across while the original stays recoverable.
+        expect(await migration().run(), SandboxMigrationOutcome.migrated);
+        expect(
+          File('${support.path}/.DS_Store').readAsStringSync(),
+          'newcomer',
+          reason: 'the second run carries the name\'s current owner',
+        );
+        expect(
+          File('${run.backup.path}/.DS_Store').readAsStringSync(),
+          'original',
+          reason: 'the leftover backup survives the relaunch untouched',
+        );
+      },
+    );
+
+    test(
+      'a run interrupted after moving strays leaves them recoverable',
+      () async {
+        // As a previous run left it when the process died mid-move: the
+        // staged copy under the staging name, and the original inside a
+        // uniquely-named backup. The next launch owns the staging name —
+        // the backup is never its cleanup's business.
+        final staleStaging = Directory(
+          '${support.parent.path}/${SandboxMigration.stagingName}',
+        )..createSync();
+        File('${staleStaging.path}/.DS_Store').writeAsStringSync('stale copy');
+        final abandoned = Directory(
+          '${support.parent.path}/.seance-sandbox-migration-strays-1-1',
+        )..createSync();
+        File('${abandoned.path}/.DS_Store').writeAsStringSync('original');
+        writeLegacy('settings.json', '{"deviceId":"abc"}');
+
+        expect(await migration().run(), SandboxMigrationOutcome.migrated);
+        expect(
+          staleStaging.existsSync(),
+          isFalse,
+          reason: 'stale staging is dropped — it only ever held copies',
+        );
+        expect(
+          File('${abandoned.path}/.DS_Store').readAsStringSync(),
+          'original',
+          reason: 'the abandoned backup is user data, not scratch',
+        );
+        expect(jsonDecode(readSupport('settings.json'))['deviceId'], 'abc');
+      },
+    );
+
+    test('a stray directory keeps its links as links', () async {
+      // The stray tree is the user's, not the app's — the container copy's
+      // "skip unexpected links" rule does not apply. A link inside a stray
+      // is carried as a link: never followed, never dropped.
+      File('${root.path}/outside.txt').writeAsStringSync('outside');
+      Directory('${support.path}/.Spotlight-V100').createSync();
+      File(
+        '${support.path}/.Spotlight-V100/index.db',
+      ).writeAsStringSync('spotlight');
+      Link(
+        '${support.path}/.Spotlight-V100/alias',
+      ).createSync('${root.path}/outside.txt');
+      writeLegacy('settings.json', '{"deviceId":"abc"}');
+
+      expect(await migration().run(), SandboxMigrationOutcome.migrated);
+
+      final alias = Link('${support.path}/.Spotlight-V100/alias');
+      expect(
+        FileSystemEntity.typeSync(alias.path, followLinks: false),
+        FileSystemEntityType.link,
+        reason: 'the destination gets the user\'s link, not a copy or a loss',
+      );
+      expect(await alias.target(), '${root.path}/outside.txt');
+      expect(File('${root.path}/outside.txt').readAsStringSync(), 'outside');
+      expect(
+        File('${support.path}/.Spotlight-V100/index.db').readAsStringSync(),
+        'spotlight',
+      );
+    });
   });
 
   group('choosing where to migrate from', () {
