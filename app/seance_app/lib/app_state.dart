@@ -1450,7 +1450,6 @@ class AppState extends ChangeNotifier {
   Future<void> setLocalShellEnabled(bool enabled) async {
     if (services.settings.localShell == enabled) return;
     services.settings.localShell = enabled;
-    if (!enabled) await closeAllTabsForServer(kLocalShellServerId);
     notifyListeners();
     try {
       await services.saveSettings();
@@ -1459,6 +1458,14 @@ class AppState extends ChangeNotifier {
       services.settings.localShell = !enabled;
       notifyListeners();
       rethrow;
+    }
+    // Tear the shells down only once the setting is durably off; closing
+    // them before the save means a failed save flips the switch back on
+    // while every local tab is already gone. A newer toggle that re-enabled
+    // while this save was in flight keeps its own shells.
+    if (!enabled && services.settings.localShell == enabled) {
+      await closeAllTabsForServer(kLocalShellServerId);
+      notifyListeners();
     }
   }
 

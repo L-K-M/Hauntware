@@ -45,7 +45,11 @@ dependencies:
   # xterm.dart. An FFI plugin: it adds a small native target to every platform
   # it declares, but Séance only opens a local shell on Linux and macOS (see
   # `localShellSupportedOn` in seance_core for why the others are refused).
-  flutter_pty: ^0.4.2
+  # Vendored fork of flutter_pty 0.4.2 — upstream leaks the master fd and
+  # both worker threads per session and offers no close API; ours adds
+  # Pty.close() (see third_party/flutter_pty/PATCHES.md).
+  flutter_pty:
+    path: ../../third_party/flutter_pty
   # OS keystore for the vault master key and LLM API keys.
   flutter_secure_storage: ^10.0.0
   path_provider: ^2.1.0

@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
+import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/services/local_shell_service.dart';
 import 'package:seance_app/services/xterm_engine.dart';
@@ -388,4 +392,229 @@ void main() {
       expect(AppSettings.fromJson(json).localShell, isFalse);
     });
   });
+
+  /// The kill policy behind `FlutterPtyLocalPty.kill`. These tests pin the
+  /// *sequence* only — hangup always runs, SIGKILL is armed only while the
+  /// child is not proven dead. Whether a hangup or a signal actually ends
+  /// a process is an OS question the fake cannot answer; that half is
+  /// covered by the real-pty test in `local_shell_native_test.dart`.
+  group('pty termination', () {
+    List<ProcessSignal> sent = [];
+    var hangups = 0;
+
+    bool Function(ProcessSignal) recorder() => (signal) {
+      sent.add(signal);
+      return true;
+    };
+    void Function() hangupRecorder() => () => hangups++;
+
+    setUp(() {
+      sent = [];
+      hangups = 0;
+    });
+
+    test('hangs up, and sends no signals to an already-reaped child', () {
+      PtyTermination(
+        hasExited: () => true,
+        send: recorder(),
+        hangup: hangupRecorder(),
+      ).run();
+      expect(hangups, 1);
+      // The pid of a reaped child may already be recycled — nothing is
+      // signalled, not even the benign-looking SIGHUP.
+      expect(sent, isEmpty);
+    });
+
+    test('a live child gets the hangup plus a SIGKILL after the grace',
+        () async {
+      PtyTermination(
+        hasExited: () => false,
+        send: recorder(),
+        hangup: hangupRecorder(),
+        grace: const Duration(milliseconds: 50),
+      ).run();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(hangups, 1);
+      expect(sent, [ProcessSignal.sigkill]);
+    });
+
+    test('an exit inside the grace window cancels the escalation', () async {
+      var exited = false;
+      PtyTermination(
+        hasExited: () => exited,
+        send: recorder(),
+        hangup: hangupRecorder(),
+        grace: const Duration(milliseconds: 150),
+      ).run();
+      exited = true;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(hangups, 1);
+      expect(sent, isEmpty);
+    });
+
+    test('run() is idempotent — hangup and watchdog fire once', () async {
+      final termination = PtyTermination(
+        hasExited: () => false,
+        send: recorder(),
+        hangup: hangupRecorder(),
+        grace: const Duration(milliseconds: 50),
+      )..run();
+      termination.run();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(hangups, 1);
+      expect(sent, [ProcessSignal.sigkill]);
+    });
+
+    test('a send that reports failure does not throw', () async {
+      PtyTermination(
+        hasExited: () => false,
+        send: (_) => false,
+        hangup: hangupRecorder(),
+        grace: const Duration(milliseconds: 50),
+      ).run();
+      PtyTermination(
+        hasExited: () => false,
+        send: (_) => throw StateError('no such process'),
+        hangup: hangupRecorder(),
+        grace: const Duration(milliseconds: 50),
+      ).run();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(hangups, 2);
+    });
+  });
+
+  /// [AppState.setLocalShellEnabled] turns live shells off, so its ordering
+  /// with the save matters: only a durable "off" may tear the tabs down.
+  /// The shells are fakes — the launcher seam is covered elsewhere — and the
+  /// save failure is a real thrown error from `services.saveSettings`.
+  group('toggling the setting', () {
+    late _Services services;
+    late AppState state;
+    final engines = <XtermTerminalEngine>[];
+    final transports = <_FakeTransport>[];
+
+    TerminalSession localTab(String id) {
+      final engine = XtermTerminalEngine();
+      engines.add(engine);
+      final transport = _FakeTransport(engine);
+      transports.add(transport);
+      final tab = TerminalSession(
+        id: id,
+        serverId: kLocalShellServerId,
+        shellName: 'zsh',
+        engine: engine,
+      )..session = transport;
+      state.tabs.add(tab);
+      return tab;
+    }
+
+    setUp(() {
+      services = _Services()..settings.localShell = true;
+      state = AppState(services);
+    });
+
+    tearDown(() async {
+      state.dispose();
+      for (final e in engines) {
+        await e.dispose();
+      }
+      engines.clear();
+      transports.clear();
+    });
+
+    test('a durable off closes every live shell', () async {
+      localTab('l1');
+      localTab('l2');
+      await state.setLocalShellEnabled(false);
+
+      expect(services.settings.localShell, isFalse);
+      expect(state.tabs, isEmpty);
+      expect(transports.every((t) => t.closed), isTrue);
+      expect(services.saves, 1);
+    });
+
+    test('a failed save keeps the shells and puts the switch back', () async {
+      final tab = localTab('l1');
+      services.failSaves = true;
+
+      await expectLater(
+        state.setLocalShellEnabled(false),
+        throwsA(isA<StateError>()),
+      );
+      expect(services.settings.localShell, isTrue,
+          reason: 'the flag reverts when the save did not land');
+      expect(state.tabs, contains(tab),
+          reason: 'an off that never persisted must not kill the shells');
+      expect(transports.single.closed, isFalse);
+    });
+
+    test('a newer toggle during the save keeps the shells it re-enabled',
+        () async {
+      localTab('l1');
+      final gate = Completer<void>();
+      services.saveGate = gate;
+
+      final disabling = state.setLocalShellEnabled(false);
+      await pumpEventQueue();
+      expect(services.settings.localShell, isFalse);
+
+      // The user flips it back on while the off-save is still in flight.
+      await state.setLocalShellEnabled(true);
+      gate.complete();
+      await disabling;
+
+      expect(services.settings.localShell, isTrue);
+      expect(state.tabs, hasLength(1),
+          reason: 'the re-enabled shells belong to the newer toggle');
+      expect(transports.single.closed, isFalse);
+      expect(services.saves, 2);
+    });
+  });
+}
+
+/// A services seam for the toggle tests: `settings` is real, `saveSettings`
+/// can be held open or made to fail, everything else is unreachable.
+class _Services implements AppServices {
+  @override
+  final AppSettings settings = AppSettings();
+  @override
+  final ProbeService probe = ProbeService();
+
+  /// Set once: the next save parks until this completes, then clears itself.
+  Completer<void>? saveGate;
+  bool failSaves = false;
+  int saves = 0;
+
+  @override
+  Future<void> saveSettings() async {
+    saves++;
+    final gate = saveGate;
+    saveGate = null;
+    if (gate != null) await gate.future;
+    if (failSaves) throw StateError('settings write failed');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// The transport half of a local tab: [close] disposes its engine, matching
+/// the contract [AppState] leans on.
+class _FakeTransport implements SessionTransport {
+  _FakeTransport(this.engine);
+
+  final XtermTerminalEngine engine;
+
+  @override
+  bool get isClosed => closed;
+  bool closed = false;
+
+  @override
+  Future<void> close() async {
+    closed = true;
+    await engine.dispose();
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

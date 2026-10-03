@@ -110,6 +110,7 @@ class LocalShellService {
 class FlutterPtyLocalPty implements LocalPty {
   final Pty _pty;
   bool _killed = false;
+  bool _exited = false;
 
   /// `Pty.start` is a synchronous constructor that throws [StateError] when
   /// the fork fails; [LocalShellSession.start] turns that into a
@@ -125,7 +126,14 @@ class FlutterPtyLocalPty implements LocalPty {
           environment: command.environment,
           rows: size.rows,
           columns: size.cols,
-        );
+        ) {
+    // Exit observation is registered at spawn, not at kill time: by the
+    // time close() runs, a child that already died has been reaped and its
+    // pid is recyclable — signalling then could hit an unrelated process.
+    // A failed exit future means "not proven dead", so onError deliberately
+    // leaves _exited false and the watchdog still escalates.
+    _pty.exitCode.then((_) => _exited = true, onError: (_) {});
+  }
 
   @override
   Stream<Uint8List> get output => _pty.output;
@@ -147,10 +155,78 @@ class FlutterPtyLocalPty implements LocalPty {
     // and close() is allowed to run after the shell died on its own.
     if (_killed) return;
     _killed = true;
+    PtyTermination(
+      hasExited: () => _exited,
+      // The pid was captured at spawn; killPid reaches the child even after
+      // close() has released the native handle.
+      send: (signal) => Process.killPid(_pty.pid, signal),
+      hangup: _pty.close,
+    ).run();
+  }
+}
+
+/// The teardown sequence that actually ends the child behind a pty and
+/// releases its native side.
+///
+/// Two facts drive the shape. First, the plugin's signal-only `kill`
+/// (SIGTERM by default) cannot end an interactive POSIX shell — they are
+/// required to ignore SIGTERM, and the pid verifiably outlived
+/// `LocalShellSession.close()`. The authentic teardown is [hangup]:
+/// closing the master fd makes the kernel SIGHUP the foreground process
+/// group of the child's session — terminal semantics, not a synthetic
+/// signal. Second, upstream leaked the master fd, the reader thread and
+/// the handle on every session, so [hangup] runs even when the child is
+/// already dead — releasing the native side is the other half of "close".
+///
+/// A child that survives the hangup (trapped HUP, or a non-shell
+/// executable) still must not leak: if [hasExited] stays false for
+/// [grace], the watchdog escalates to SIGKILL, which cannot be caught.
+/// [hasExited] is backed by an observation registered at spawn, so a child
+/// that already exited suppresses all signalling — its pid may have been
+/// recycled. An observer that fails or never fires reads as *not dead*,
+/// and escalation proceeds — fail closed.
+@visibleForTesting
+class PtyTermination {
+  PtyTermination({
+    required this.hasExited,
+    required this.send,
+    required this.hangup,
+    this.grace = const Duration(milliseconds: 500),
+  });
+
+  /// True once the child has been observed reaped.
+  final bool Function() hasExited;
+
+  /// Sends one signal to the child's pid.
+  final bool Function(ProcessSignal signal) send;
+
+  /// Closes the pty master, hanging up the child's session and releasing
+  /// the native handle, fd and reader thread.
+  final void Function() hangup;
+
+  /// How long to wait for the child to die before escalating to SIGKILL.
+  final Duration grace;
+
+  bool _started = false;
+
+  /// Idempotent: repeated calls do not repeat the sequence.
+  void run() {
+    if (_started) return;
+    _started = true;
+    hangup();
+    if (hasExited()) return;
+    Timer(grace, () {
+      if (!hasExited()) _signal(ProcessSignal.sigkill);
+    });
+  }
+
+  void _signal(ProcessSignal signal) {
     try {
-      _pty.kill();
+      if (!send(signal)) {
+        debugPrint('Local shell: $signal was not delivered to the child');
+      }
     } catch (error) {
-      debugPrint('Local shell was already gone when killed: $error');
+      debugPrint('Local shell: sending $signal to the child failed: $error');
     }
   }
 }

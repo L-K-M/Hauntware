@@ -10,11 +10,21 @@ sidebar rows, settings backends and SSH host-key flow. Local tabs have no
 server config; editor tabs retain a required server. The setting defaults
 off, with Linux/macOS support and explicit Windows/Android/iOS refusal.
 
-Local analysis is clean. Core/protocol: 824 tests pass with six environment
-skips; sync server: 126 pass; app: 1,254 pass after integrating #172's
-transactional host-key store. Current verification uses fake
-PTY adapters; native startup, resize and interrupt behavior still need a
-device smoke test. The existing historical Linux smoke record is separate.
+`dart analyze` and `flutter analyze` are clean. Core/protocol: 828 tests
+pass with six environment skips; sync server: 126 pass with the local SQLite
+loader shim; app: 1,262 pass with ten native-environment skips.
+
+Real Linux PTY tests exposed orphaned shells and native descriptor/thread
+leaks. The vendored MIT `flutter_pty` lifecycle patch now closes the master,
+reaps worker resources and releases borrowed FFI buffers. Ten native tests
+pass, including terminal resize, interrupts, foreground-job hangup and
+repeated resource cleanup. CI and release Linux builds run these tests
+against the compiled plugin and fail if it cannot load.
+
+Concurrent close callers now await one teardown, late exit notification
+waits for disposal, and a failed settings save keeps running local tabs.
+macOS device/keychain behavior remains unverified; unused plugin ack mode
+retains its documented upstream limitation.
 
 ## Shared Ghost UI and file lists (2026-10-02)
 

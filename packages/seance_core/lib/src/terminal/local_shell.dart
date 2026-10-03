@@ -232,6 +232,7 @@ class LocalShellSession implements SessionTransport {
 
   final List<StreamSubscription<dynamic>> _subs = [];
   final Completer<void> _outputDone = Completer<void>();
+  Future<void>? _finishFuture;
   bool _closed = false;
   bool _exited = false;
   bool _closedNotified = false;
@@ -263,7 +264,15 @@ class LocalShellSession implements SessionTransport {
   @override
   set onClosed(void Function()? callback) {
     _onClosed = callback;
-    if (_exited && callback != null) scheduleMicrotask(_notifyClosed);
+    if (!_exited || callback == null) return;
+    // The exit is known, but it is only safe to report once teardown has
+    // run — the callback may look at the engine, and an exit still inside
+    // its drain window (or mid-teardown) has not reached that point. With
+    // _finishFuture still null, _childExited is in the drain and its own
+    // _notifyClosed after _finish will find the callback; otherwise chain
+    // the notify onto the shared teardown.
+    final teardown = _finishFuture;
+    if (teardown != null) unawaited(teardown.then((_) => _notifyClosed()));
   }
 
   @override
@@ -338,8 +347,14 @@ class LocalShellSession implements SessionTransport {
   @override
   Future<void> close() => _finish();
 
-  Future<void> _finish() async {
-    if (_closed) return;
+  /// Every close path — a user [close] and the self-exit teardown in
+  /// [_childExited] — shares one teardown future, the way `SshSession`'s
+  /// cleanup seam does: the first caller runs it and every later caller
+  /// awaits the same future, so nobody sees close() complete while
+  /// subscriptions or the engine are still going away.
+  Future<void> _finish() => _finishFuture ??= _finishOnce();
+
+  Future<void> _finishOnce() async {
     _closed = true;
     // Release anyone waiting on the drain. Cancelling a subscription does not
     // fire `onDone`, so a close() that lands while [_childExited] is waiting

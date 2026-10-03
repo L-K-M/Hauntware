@@ -63,6 +63,22 @@ Future<LocalShellSession> startWith(
       engine: engine,
     );
 
+/// An engine whose [dispose] can be held open, so a test can park teardown
+/// mid-flight and ask who is still waiting on it.
+class _GatedEngine extends HeadlessTerminalEngine {
+  final _gate = Completer<void>();
+  int disposeCalls = 0;
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
+    await _gate.future;
+    return super.dispose();
+  }
+
+  void release() => _gate.complete();
+}
+
 void main() {
   group('localShellSupportedOn', () {
     test('only the two platforms with a usable shell say yes', () {
@@ -232,6 +248,24 @@ void main() {
       await session.close();
     });
 
+    test("the launcher is given the engine's initial size", () async {
+      final pty = FakeLocalPty();
+      final engine = HeadlessTerminalEngine()
+        ..resize(const TerminalSize(90, 25));
+      TerminalSize? given;
+      final session = await LocalShellSession.start(
+        launcher: (_, size) async {
+          given = size;
+          return pty;
+        },
+        command: const LocalShellCommand(executable: '/bin/zsh'),
+        engine: engine,
+      );
+
+      expect(given, const TerminalSize(90, 25));
+      await session.close();
+    });
+
     test('resize reaches both the engine and the pty', () async {
       final pty = FakeLocalPty();
       final engine = HeadlessTerminalEngine();
@@ -384,6 +418,85 @@ void main() {
 
       expect(closedCalls, 1);
       expect(session.isClosed, isTrue);
+    });
+
+    test('a close() racing self-exit shares its in-flight teardown', () async {
+      final pty = FakeLocalPty();
+      final engine = _GatedEngine();
+      final session = await startWith(pty, engine);
+
+      // The child exits and its output drains, so teardown begins and parks
+      // inside the engine's dispose.
+      await pty.exit(0);
+      for (var i = 0; i < 20 && engine.disposeCalls == 0; i++) {
+        await pumpEventQueue();
+      }
+      expect(engine.disposeCalls, 1, reason: 'teardown reached the engine');
+
+      // A user close arriving mid-teardown must not report done while the
+      // teardown it joined is still running — callers rely on close()
+      // meaning the engine is gone.
+      var returned = false;
+      unawaited(session.close().then((_) => returned = true));
+      await pumpEventQueue();
+      expect(returned, isFalse, reason: 'engine.dispose still in flight');
+
+      engine.release();
+      await pumpEventQueue();
+      expect(returned, isTrue);
+      expect(engine.isDisposed, isTrue);
+      expect(pty.killCount, 1);
+    });
+
+    test('a second close() waits on the teardown still in flight', () async {
+      final pty = FakeLocalPty();
+      final engine = _GatedEngine();
+      final session = await startWith(pty, engine);
+
+      var firstDone = false;
+      var secondDone = false;
+      unawaited(session.close().then((_) => firstDone = true));
+      for (var i = 0; i < 20 && engine.disposeCalls == 0; i++) {
+        await pumpEventQueue();
+      }
+      unawaited(session.close().then((_) => secondDone = true));
+      await pumpEventQueue();
+
+      expect(firstDone, isFalse);
+      expect(secondDone, isFalse);
+      engine.release();
+      await pumpEventQueue();
+      expect(firstDone, isTrue);
+      expect(secondDone, isTrue);
+      expect(pty.killCount, 1);
+    });
+
+    test('onClosed assigned during the drain waits for teardown', () async {
+      final pty = FakeLocalPty();
+      final engine = HeadlessTerminalEngine();
+      final session = await startWith(pty, engine);
+
+      // The child is gone but its output never ends: the session sits in its
+      // drain window, torn down by neither exit nor close yet.
+      pty.exitWithoutDraining(0);
+      await pumpEventQueue();
+      expect(session.isClosed, isFalse);
+
+      var calls = 0;
+      var disposedWhenCalled = false;
+      session.onClosed = () {
+        calls++;
+        disposedWhenCalled = engine.isDisposed;
+      };
+      await pumpEventQueue();
+      expect(calls, 0, reason: 'still inside the drain window');
+
+      // A close releases the drain; the callback set meanwhile fires once,
+      // after the teardown it was notified about has actually happened.
+      await session.close();
+      await pumpEventQueue();
+      expect(calls, 1);
+      expect(disposedWhenCalled, isTrue);
     });
 
     test('a shell that cannot be spawned surfaces one readable line', () async {
