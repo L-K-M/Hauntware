@@ -148,8 +148,8 @@ packages:
     dependency: transitive
     description:
       path: "packages/seance_core"
-      ref: "4c0a960289c919379d016507fa7ebae6b14b2e7c"
-      resolved-ref: "4c0a960289c919379d016507fa7ebae6b14b2e7c"
+      ref: "76e466fbcbfe5dc90b4fa399e5dfac990b23c30d"
+      resolved-ref: "76e466fbcbfe5dc90b4fa399e5dfac990b23c30d"
       url: "https://github.com/L-K-M/Seance.git"
     source: git
     version: "0.9.2"
@@ -157,8 +157,8 @@ packages:
     dependency: transitive
     description:
       path: "packages/seance_protocol"
-      ref: "4c0a960289c919379d016507fa7ebae6b14b2e7c"
-      resolved-ref: "4c0a960289c919379d016507fa7ebae6b14b2e7c"
+      ref: "76e466fbcbfe5dc90b4fa399e5dfac990b23c30d"
+      resolved-ref: "76e466fbcbfe5dc90b4fa399e5dfac990b23c30d"
       url: "https://github.com/L-K-M/Seance.git"
     source: git
     version: "0.9.2"
