@@ -1,0 +1,475 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:seance_core/seance_core.dart';
+import 'package:xterm/xterm.dart';
+
+enum TerminalCursorKey {
+  arrowUp(0x41),
+  arrowDown(0x42),
+  arrowRight(0x43),
+  arrowLeft(0x44),
+  home(0x48),
+  end(0x46);
+
+  final int finalByte;
+  const TerminalCursorKey(this.finalByte);
+}
+
+enum TerminalPromptPhase { unknown, rendering, acceptingInput, executing, done }
+
+enum TerminalStageResult {
+  staged,
+  shellIntegrationRequired,
+  promptNotReady,
+  pendingInput,
+  invalidPath,
+}
+
+@immutable
+class ShellIntegrationState {
+  final RemoteShellKind? shell;
+  final TerminalPromptPhase phase;
+  final bool inputSincePrompt;
+  final int? lastExitCode;
+
+  const ShellIntegrationState({
+    this.shell,
+    this.phase = TerminalPromptPhase.unknown,
+    this.inputSincePrompt = true,
+    this.lastExitCode,
+  });
+
+  ShellIntegrationState copyWith({
+    RemoteShellKind? shell,
+    TerminalPromptPhase? phase,
+    bool? inputSincePrompt,
+    int? lastExitCode,
+    bool clearExitCode = false,
+  }) => ShellIntegrationState(
+    shell: shell ?? this.shell,
+    phase: phase ?? this.phase,
+    inputSincePrompt: inputSincePrompt ?? this.inputSincePrompt,
+    lastExitCode: clearExitCode ? null : lastExitCode ?? this.lastExitCode,
+  );
+}
+
+/// A [TerminalEngine] backed by xterm.dart's [Terminal]. This is the concrete
+/// v1 terminal; a future libghostty engine drops in behind the same interface
+/// (see the proposal's M10). Bytes from SSH are written to the terminal;
+/// keystrokes it emits are forwarded to SSH as bytes.
+class XtermTerminalEngine implements TerminalEngine {
+  final Terminal terminal;
+  final StreamController<Uint8List> _input =
+      StreamController<Uint8List>.broadcast();
+  late final ByteConversionSink _terminalDecoder;
+  TerminalSize _size;
+  bool _feedingOutput = false;
+
+  /// Fired with each completed command line the user submits (Enter). Best
+  /// effort — see [_pendingInput] — and used to suggest frequently-run
+  /// commands as snippets. Never leaves the device on its own.
+  final void Function(String command)? onCommand;
+
+  /// Current shell directory reported through standard OSC 7 metadata. Null
+  /// until the remote shell emits it; never inferred from prompt text.
+  final ValueNotifier<String?> workingDirectory = ValueNotifier<String?>(null);
+
+  /// Last OSC 0/2 terminal title. Common Bash configurations include the cwd
+  /// here even when they do not emit OSC 7, so Files can use it as a fallback.
+  final ValueNotifier<String?> terminalTitle = ValueNotifier<String?>(null);
+
+  /// Explicit OSC 133/1337 prompt and shell metadata. A guarded Files action
+  /// uses this conservative state rather than guessing from prompt text.
+  final ValueNotifier<ShellIntegrationState> shellIntegration =
+      ValueNotifier<ShellIntegrationState>(const ShellIntegrationState());
+
+  /// The command line currently executing (best effort), or null at a prompt.
+  ///
+  /// Set when Enter submits a non-empty captured line *at an accepting OSC
+  /// 133 prompt* — which both filters out lines typed into a running program
+  /// and guarantees the integration that will deliver the end-of-command
+  /// signal. Without 133 this stays null: a name that can never clear is
+  /// worse than none. Cleared when the shell reports the command done
+  /// (`133;D`) or a fresh prompt (`133;A`).
+  final ValueNotifier<String?> activeCommand = ValueNotifier<String?>(null);
+
+  // A best-effort reconstruction of the current, not-yet-submitted input line,
+  // built from the keystrokes the user sends. Used to prefill the command
+  // generator. It's an approximation — full readline editing (history, cursor
+  // moves) isn't modelled — but covers the common "typed a partial command"
+  // case.
+  String _pendingInput = '';
+  bool _localInputSincePrompt = false;
+  bool _submittedSincePrompt = false;
+  bool _sawCommandCompletion = false;
+  bool _hasAcceptedPrompt = false;
+
+  /// One-shot Ctrl modifier for the on-screen key row (mobile has no physical
+  /// Ctrl): when armed, the next character the soft keyboard produces is sent
+  /// as its control code (e.g. `c` → 0x03). Consumed after one keystroke.
+  final ValueNotifier<bool> ctrlArmed = ValueNotifier<bool>(false);
+
+  /// The platform the terminal reports itself as running on.
+  ///
+  /// Never leave this [TerminalTargetPlatform.unknown]: xterm's input
+  /// handlers gate "Option/Alt sends Meta" on it, and `unknown` takes the
+  /// non-macOS path. On a Mac that turned Option-N into `ESC N` **and marked
+  /// the key event handled**, which starved the IME of the keystroke — so
+  /// dead keys never composed and every Option-composed character on
+  /// international layouts (`~` on Swiss Option-N, `@` on German Option-G, …)
+  /// was untypeable. The stray `ESC N` then put remote readline into its
+  /// non-incremental history search, whose prompt renders as `:` — the
+  /// "types a colon" symptom.
+  static TerminalTargetPlatform detectPlatform({
+    TargetPlatform? platform,
+    bool isWeb = kIsWeb,
+  }) {
+    if (isWeb) return TerminalTargetPlatform.web;
+    return switch (platform ?? defaultTargetPlatform) {
+      TargetPlatform.android => TerminalTargetPlatform.android,
+      TargetPlatform.fuchsia => TerminalTargetPlatform.fuchsia,
+      TargetPlatform.iOS => TerminalTargetPlatform.ios,
+      TargetPlatform.linux => TerminalTargetPlatform.linux,
+      TargetPlatform.macOS => TerminalTargetPlatform.macos,
+      TargetPlatform.windows => TerminalTargetPlatform.windows,
+    };
+  }
+
+  XtermTerminalEngine({
+    int maxLines = 10000,
+    TerminalSize? initialSize,
+    this.onCommand,
+  }) : terminal = Terminal(maxLines: maxLines, platform: detectPlatform()),
+       _size = initialSize ?? const TerminalSize(80, 24) {
+    _terminalDecoder = const Utf8Decoder(
+      allowMalformed: true,
+    ).startChunkedConversion(_TerminalOutputSink(terminal));
+    // Keystrokes / paste / device replies produced by the terminal go to SSH.
+    terminal.onOutput = (data) {
+      if (_disposed) return;
+      // xterm answers terminal queries synchronously during feed. These
+      // replies belong to the transport, so they must not consume a user's
+      // one-shot modifier or turn an empty shell prompt into pending input.
+      final out = _feedingOutput ? data : _applyCtrl(data);
+      if (!_feedingOutput) {
+        _markInputActivity();
+        _trackPending(out);
+      }
+      _input.add(Uint8List.fromList(utf8.encode(out)));
+    };
+    terminal.onTitleChange = (title) => terminalTitle.value = title;
+    terminal.onPrivateOSC = _handlePrivateOsc;
+  }
+
+  void _handlePrivateOsc(String code, List<String> args) {
+    if (args.isEmpty) return;
+    if (code == '133') {
+      _handlePromptMarker(args);
+      return;
+    }
+    if (code == '1337') {
+      _handleShellIdentity(args);
+      return;
+    }
+    if (code != '7') return;
+    try {
+      final value = args.join(';');
+      final uri = Uri.tryParse(value);
+      if (uri == null || uri.scheme != 'file' || !value.startsWith('file://')) {
+        return;
+      }
+      final path = Uri.decodeComponent(uri.path);
+      if (!path.startsWith('/') || path.contains('\u0000')) return;
+      workingDirectory.value = path;
+    } on FormatException {
+      // Ignore malformed remote metadata; it must never disrupt the terminal.
+    }
+  }
+
+  void _handlePromptMarker(List<String> args) {
+    final marker = args.first;
+    final current = shellIntegration.value;
+    switch (marker) {
+      case 'A':
+        activeCommand.value = null;
+        shellIntegration.value = current.copyWith(
+          phase: TerminalPromptPhase.rendering,
+          clearExitCode: true,
+        );
+      case 'B':
+        final initialPrompt = !_hasAcceptedPrompt && !_localInputSincePrompt;
+        final completedCommand = _submittedSincePrompt && _sawCommandCompletion;
+        if (current.phase != TerminalPromptPhase.rendering ||
+            (!initialPrompt && !completedCommand)) {
+          return;
+        }
+        _hasAcceptedPrompt = true;
+        _localInputSincePrompt = false;
+        _submittedSincePrompt = false;
+        _sawCommandCompletion = false;
+        shellIntegration.value = current.copyWith(
+          phase: TerminalPromptPhase.acceptingInput,
+          inputSincePrompt: false,
+        );
+      case 'C':
+        shellIntegration.value = current.copyWith(
+          phase: TerminalPromptPhase.executing,
+          inputSincePrompt: true,
+        );
+      case 'D':
+        activeCommand.value = null;
+        final status = args.length > 1 ? int.tryParse(args[1]) : null;
+        if (_submittedSincePrompt) _sawCommandCompletion = true;
+        shellIntegration.value = current.copyWith(
+          phase: TerminalPromptPhase.done,
+          inputSincePrompt: true,
+          lastExitCode: status != null && status >= 0 && status <= 255
+              ? status
+              : null,
+          clearExitCode: status == null || status < 0 || status > 255,
+        );
+    }
+  }
+
+  void _handleShellIdentity(List<String> args) {
+    if (args.length < 2 || args.first != 'ShellIntegrationVersion=1') return;
+    final shell = switch (args[1].toLowerCase()) {
+      'bash' || 'zsh' || 'sh' => RemoteShellKind.posix,
+      'fish' => RemoteShellKind.fish,
+      _ => null,
+    };
+    if (shell != null) {
+      shellIntegration.value = shellIntegration.value.copyWith(shell: shell);
+    }
+  }
+
+  /// The current, not-yet-submitted input line (best effort).
+  String get pendingInput => _pendingInput;
+
+  /// If the Ctrl modifier is armed, rewrite the first character of [data] to its
+  /// control code and disarm. Escape sequences (device replies, function keys)
+  /// start with ESC and are passed through unchanged.
+  String _applyCtrl(String data) {
+    if (!ctrlArmed.value) return data;
+    ctrlArmed.value = false;
+    if (data.isEmpty || data.codeUnitAt(0) == 0x1b) return data;
+    final code = _controlCode(data.codeUnitAt(0));
+    if (code == null) return data;
+    return String.fromCharCode(code) + data.substring(1);
+  }
+
+  /// Map a printable ASCII key to the control code Ctrl+key would produce, or
+  /// null if there's no sensible mapping. Covers letters (Ctrl-C, Ctrl-D, …)
+  /// and the `@ [ \ ] ^ _` / space group.
+  static int? _controlCode(int c) {
+    if (c >= 0x61 && c <= 0x7a) return c - 0x60; // a-z → 1..26
+    if (c >= 0x41 && c <= 0x5a) return c - 0x40; // A-Z → 1..26
+    if (c == 0x20 || c == 0x40) return 0; // space / @ → NUL
+    if (c >= 0x5b && c <= 0x5f) return c - 0x40; // [ \ ] ^ _ → 27..31
+    return null;
+  }
+
+  /// Fold one outbound chunk into [_pendingInput]. Escape sequences (arrow
+  /// keys, device replies) arrive as their own chunk starting with ESC and are
+  /// ignored; Enter clears the line (and reports the command); backspace/kill
+  /// trim it.
+  void _trackPending(String data) {
+    if (data.isEmpty || data.codeUnitAt(0) == 0x1b) return;
+    for (final r in data.runes) {
+      if (r == 0x0d || r == 0x0a) {
+        // Read before the phase is overwritten below: only an Enter at an
+        // accepting prompt submits a *command*. An Enter while a command is
+        // already executing is input to that program, not a new command.
+        final atPrompt =
+            shellIntegration.value.phase == TerminalPromptPhase.acceptingInput;
+        _submittedSincePrompt = true;
+        shellIntegration.value = shellIntegration.value.copyWith(
+          phase: TerminalPromptPhase.executing,
+          inputSincePrompt: true,
+        );
+        _submitPending(atPrompt: atPrompt);
+      } else if (r == 0x7f || r == 0x08) {
+        if (_pendingInput.isNotEmpty) {
+          _pendingInput = _pendingInput.substring(0, _pendingInput.length - 1);
+        }
+      } else if (r == 0x15 || r == 0x03) {
+        if (r == 0x03) _submittedSincePrompt = true;
+        _pendingInput = ''; // Ctrl-U (kill line) / Ctrl-C (interrupt)
+      } else if (r >= 0x20) {
+        _pendingInput += String.fromCharCode(r);
+      }
+    }
+  }
+
+  /// A line was submitted: report it (for command suggestions) and reset.
+  ///
+  /// [atPrompt] — whether the shell was at an accepting OSC 133 prompt when
+  /// Enter arrived. Only then is the line a command (see [activeCommand]);
+  /// `acceptingInput` is only ever set from a `133;B` marker, so this gate
+  /// also implies the integration that will later deliver the clearing `D`.
+  void _submitPending({required bool atPrompt}) {
+    final line = _pendingInput.trim();
+    if (line.isNotEmpty) {
+      onCommand?.call(line);
+      if (atPrompt) activeCommand.value = line;
+    }
+    _pendingInput = '';
+  }
+
+  /// Type [text] into the session as if the user typed it — used by the
+  /// assistant's paste-to-prompt tool. The remote shell echoes it back so it
+  /// appears at the prompt; because it contains no newline it is never executed.
+  void injectInput(String text) {
+    if (_disposed) return;
+    _markInputActivity();
+    _trackPending(text);
+    _input.add(Uint8List.fromList(utf8.encode(text)));
+  }
+
+  /// Send raw [bytes] to the session — used by the on-screen key row for fixed
+  /// byte inputs such as Tab, Esc, and Ctrl-C. Unlike
+  /// [injectInput] this is allowed to carry control bytes such as Enter.
+  void sendKey(List<int> bytes) {
+    if (_disposed) return;
+    _markInputActivity();
+    _trackPending(utf8.decode(bytes, allowMalformed: true));
+    _input.add(Uint8List.fromList(bytes));
+  }
+
+  /// Send an arrow, Home, or End [key] using the active DECCKM mode.
+  void sendCursorKey(TerminalCursorKey key) {
+    if (_disposed) return;
+    final prefix = terminal.cursorKeysMode ? 0x4f : 0x5b; // SS3 or CSI
+    // Cursor sequences are intentionally terminal controls, not command text.
+    // Bypass pending-input tracking and leave one-shot Ctrl armed for typing.
+    _markInputActivity();
+    _input.add(Uint8List.fromList([0x1b, prefix, key.finalByte]));
+  }
+
+  /// Stages a quoted `cd` at a verified empty prompt, without submitting it.
+  TerminalStageResult stageChangeDirectory(String absolutePath) {
+    if (_disposed) return TerminalStageResult.promptNotReady;
+    final state = shellIntegration.value;
+    final shell = state.shell;
+    if (shell == null) return TerminalStageResult.shellIntegrationRequired;
+    if (state.phase != TerminalPromptPhase.acceptingInput) {
+      return TerminalStageResult.promptNotReady;
+    }
+    if (state.inputSincePrompt || _pendingInput.isNotEmpty) {
+      return TerminalStageResult.pendingInput;
+    }
+    late final String command;
+    try {
+      command = buildChangeDirectoryCommand(absolutePath, shell: shell);
+    } on ArgumentError {
+      return TerminalStageResult.invalidPath;
+    }
+    injectInput(command);
+    return TerminalStageResult.staged;
+  }
+
+  void _markInputActivity() {
+    _localInputSincePrompt = true;
+    final state = shellIntegration.value;
+    if (!state.inputSincePrompt) {
+      shellIntegration.value = state.copyWith(inputSincePrompt: true);
+    }
+  }
+
+  /// Toggle the one-shot Ctrl modifier (armed by the key row's Ctrl button).
+  void toggleCtrl() {
+    if (_disposed) return;
+    ctrlArmed.value = !ctrlArmed.value;
+  }
+
+  @override
+  void feed(Uint8List data) {
+    // A tab can close while its SSH handshake is still opening the shell.
+    // The pending connection is closed when it returns, but may emit data
+    // first; never revive a disposed terminal or notify its released views.
+    if (_disposed) return;
+    final wasFeedingOutput = _feedingOutput;
+    _feedingOutput = true;
+    try {
+      _terminalDecoder.add(data);
+    } finally {
+      _feedingOutput = wasFeedingOutput;
+    }
+  }
+
+  @override
+  Stream<Uint8List> get userInput => _input.stream;
+
+  @override
+  TerminalSize get size => _size;
+
+  @override
+  void resize(TerminalSize size) {
+    // Only record the size — the xterm widget owns the on-screen terminal size
+    // (autoResize) and calls terminal.resize itself, which is what fires
+    // terminal.onResize. Since our onResize handler routes back here (to forward
+    // the size to the remote PTY), calling terminal.resize again would re-fire
+    // onResize and recurse until the stack overflows. So this is bookkeeping
+    // only, mirroring HeadlessTerminalEngine.
+    _size = size;
+  }
+
+  /// Rendered scrollback text (no escape codes) for LLM context — the last
+  /// [maxLines] lines. Uses xterm's own buffer so it matches what the user sees.
+  ///
+  /// Reads only the requested range. `getText()` with no argument materializes
+  /// the *entire* buffer — up to `maxLines: 10000` rows of full-width cells —
+  /// into one string, which the old implementation then split into a
+  /// ten-thousand-element list to keep the last two hundred entries. That ran
+  /// on every assistant turn and every ⌘K, and cost megabytes of allocation on
+  /// a long-lived session.
+  String recentText({int maxLines = 200}) {
+    final buffer = terminal.buffer;
+    final height = buffer.height;
+    final viewWidth = terminal.viewWidth;
+    if (height <= 0 || maxLines <= 0 || viewWidth <= 0) return '';
+    final start = height > maxLines ? height - maxLines : 0;
+    return buffer
+        .getText(
+          BufferRangeLine(
+            CellOffset(0, start),
+            CellOffset(viewWidth, height - 1),
+          ),
+        )
+        .trimRight();
+  }
+
+  bool _disposed = false;
+
+  @override
+  Future<void> dispose() async {
+    // Idempotent: with per-server tabs, closeTab/reconnect can dispose an
+    // engine that a closing SshSession also disposes. A second dispose would
+    // otherwise re-dispose the ValueNotifier (a debug assertion).
+    if (_disposed) return;
+    _disposed = true;
+    _terminalDecoder.close();
+    ctrlArmed.dispose();
+    workingDirectory.dispose();
+    terminalTitle.dispose();
+    shellIntegration.dispose();
+    activeCommand.dispose();
+    await _input.close();
+  }
+}
+
+class _TerminalOutputSink implements Sink<String> {
+  final Terminal terminal;
+
+  _TerminalOutputSink(this.terminal);
+
+  @override
+  void add(String data) => terminal.write(data);
+
+  @override
+  void close() {
+    // Decoder closure flushes pending bytes; xterm has no output sink to close.
+  }
+}

@@ -1,0 +1,145 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:seance_app/services/atomic_file.dart';
+import 'package:seance_app/services/file_stores.dart';
+import 'package:seance_core/seance_core.dart';
+
+void main() {
+  late Directory dir;
+
+  setUp(() async {
+    dir = await Directory.systemTemp.createTemp('seance_atomic_test');
+  });
+
+  tearDown(() async {
+    if (await dir.exists()) await dir.delete(recursive: true);
+  });
+
+  group('writeStringAtomically', () {
+    test('creates the parent directory and round-trips content', () async {
+      final file = File('${dir.path}/nested/deep/data.json');
+      await writeStringAtomically(file, '{"hello":"world"}');
+      expect(await file.readAsString(), '{"hello":"world"}');
+    });
+
+    test('replaces existing content and leaves no temp file behind', () async {
+      final file = File('${dir.path}/data.json');
+      await writeStringAtomically(file, 'first');
+      await writeStringAtomically(file, 'second');
+      expect(await file.readAsString(), 'second');
+      expect(await File('${file.path}.tmp').exists(), isFalse);
+    });
+
+    test('overlapping writes preserve the last requested complete snapshot',
+        () async {
+      final file = File('${dir.path}/data.json');
+      final snapshots = [
+        for (var i = 0; i < 16; i++) '{"snapshot":"$i${'x' * (4096 + i)}"}',
+      ];
+      await Future.wait([
+        for (final snapshot in snapshots)
+          writeStringAtomically(File(file.path), snapshot),
+      ]);
+      expect(await file.readAsString(), snapshots.last);
+      expect(await dir.list().toList(), hasLength(1));
+    });
+
+    test('a failed write does not block later saves to the same path', () async {
+      final file = File('${dir.path}/data.json');
+      final blocked = Directory('${file.path}.tmp');
+      await blocked.create();
+      await expectLater(writeStringAtomically(file, 'first'),
+          throwsA(isA<FileSystemException>()));
+      await blocked.delete();
+
+      await writeStringAtomically(file, 'second');
+      expect(await file.readAsString(), 'second');
+    });
+
+    test('case-variant paths preserve write order and filesystem identity',
+        () async {
+      final file = File('${dir.path}/data.json');
+      final alias = File('${dir.path}/DATA.json');
+      await file.writeAsString('initial');
+      // Windows and ordinary macOS volumes alias these names; Linux usually
+      // keeps two files. The queue must protect either filesystem's behavior.
+      final aliasesSameFile = await alias.exists();
+      final snapshots = [
+        for (var i = 0; i < 16; i++) '$i:${'x' * (4096 + i)}',
+      ];
+
+      await Future.wait([
+        for (var i = 0; i < snapshots.length; i++)
+          writeStringAtomically(i.isEven ? file : alias, snapshots[i]),
+      ]);
+
+      expect(await file.readAsString(),
+          aliasesSameFile ? snapshots.last : snapshots[snapshots.length - 2]);
+      expect(await alias.readAsString(), snapshots.last);
+      expect(await dir.list().toList(), hasLength(aliasesSameFile ? 1 : 2));
+    });
+  });
+
+  group('quarantineCorruptFile', () {
+    test('moves the bad file aside to *.corrupt', () async {
+      final file = File('${dir.path}/data.json');
+      await file.writeAsString('not json');
+      await quarantineCorruptFile(file);
+      expect(await file.exists(), isFalse);
+      expect(await File('${file.path}.corrupt').exists(), isTrue);
+    });
+  });
+
+  group('FileConfigStore resilience', () {
+    test('a corrupt servers file does not throw and starts empty', () async {
+      final file = File('${dir.path}/servers.json');
+      await file.writeAsString('}{ this is not valid json');
+      final store = FileConfigStore(file);
+      // Must not throw (previously this crashed app startup).
+      expect(await store.listServers(), isEmpty);
+      // The bad file was quarantined so it can't wedge the next launch either.
+      expect(await File('${file.path}.corrupt').exists(), isTrue);
+    });
+
+    test('a valid round-trip still works after the atomic-write change',
+        () async {
+      final file = File('${dir.path}/servers.json');
+      final store = FileConfigStore(file);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await store.putServer(ServerConfig(
+        id: 'a',
+        label: 'box',
+        host: 'example.com',
+        username: 'me',
+        authMethod: AuthMethod.password,
+        createdAt: now,
+        updatedAt: now,
+      ));
+      final reloaded = FileConfigStore(file);
+      final servers = await reloaded.listServers();
+      expect(servers, hasLength(1));
+      expect(servers.single.host, 'example.com');
+    });
+  });
+
+  test('concurrent host-key approvals persist every approved key', () async {
+    final file = File('${dir.path}/known_hosts.json');
+    final store = FileHostKeyStore(file);
+    final keys = [
+      for (var i = 0; i < 8; i++)
+        HostKey(
+          host: 'host$i.test',
+          port: 22,
+          type: 'ssh-ed25519',
+          fingerprintSha256: 'SHA256:key$i',
+          pinnedAt: i,
+        ),
+    ];
+    await Future.wait(keys.map(store.put));
+
+    final restored = await FileHostKeyStore(file).all();
+    expect(restored.map((key) => key.fingerprintSha256),
+        unorderedEquals(keys.map((key) => key.fingerprintSha256)));
+  });
+}
