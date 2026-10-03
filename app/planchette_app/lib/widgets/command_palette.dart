@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 
 /// One command the palette can run: a menu item, named with its path.
 final class PaletteCommand {
@@ -124,35 +125,6 @@ bool _isWordStart(String text, int index) =>
 
 bool _isWordCharacter(int unit) =>
     (unit >= 0x30 && unit <= 0x39) || (unit >= 0x61 && unit <= 0x7a);
-
-/// How a shortcut is written on this platform: symbols on Apple platforms,
-/// `Ctrl+Shift+S` elsewhere.
-String shortcutLabel(SingleActivator activator, {required bool apple}) {
-  final key = switch (activator.trigger) {
-    LogicalKeyboardKey.arrowUp => apple ? '↑' : 'Up',
-    LogicalKeyboardKey.arrowDown => apple ? '↓' : 'Down',
-    LogicalKeyboardKey.arrowLeft => apple ? '←' : 'Left',
-    LogicalKeyboardKey.arrowRight => apple ? '→' : 'Right',
-    LogicalKeyboardKey.tab => apple ? '⇥' : 'Tab',
-    final other => other.keyLabel,
-  };
-  if (apple) {
-    return [
-      if (activator.control) '⌃',
-      if (activator.alt) '⌥',
-      if (activator.shift) '⇧',
-      if (activator.meta) '⌘',
-      key,
-    ].join();
-  }
-  return [
-    if (activator.control) 'Ctrl',
-    if (activator.alt) 'Alt',
-    if (activator.shift) 'Shift',
-    if (activator.meta) 'Meta',
-    key,
-  ].join('+');
-}
 
 /// The palette itself: a filter field over the commands. Up and Down move
 /// the highlight, Enter or a click runs it, Escape closes.
@@ -351,10 +323,6 @@ class _CommandPaletteState extends State<CommandPalette> {
   Widget _row(BuildContext context, int index, _Row row) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final apple = switch (theme.platform) {
-      TargetPlatform.iOS || TargetPlatform.macOS => true,
-      _ => false,
-    };
     final highlighted = index == _highlighted;
     final command = row.command;
     final dim = TextStyle(
@@ -418,7 +386,10 @@ class _CommandPaletteState extends State<CommandPalette> {
                     Text(command.path, style: dim),
                     if (command.shortcut case final shortcut?) ...[
                       const SizedBox(width: 12),
-                      Text(shortcutLabel(shortcut, apple: apple), style: dim),
+                      Text(
+                        formatShortcutActivator(shortcut, theme.platform) ?? '',
+                        style: dim,
+                      ),
                     ],
                   ],
                 ),

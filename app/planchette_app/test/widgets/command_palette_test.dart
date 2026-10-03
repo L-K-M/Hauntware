@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 import 'package:planchette_app/widgets/command_palette.dart';
 
 void main() {
@@ -32,12 +33,12 @@ void main() {
       meta: true,
       shift: true,
     );
-    expect(shortcutLabel(saveAs, apple: true), '⇧⌘S');
+    expect(formatShortcutActivator(saveAs, TargetPlatform.macOS), '⇧⌘S');
     const next = SingleActivator(LogicalKeyboardKey.tab, control: true);
-    expect(shortcutLabel(next, apple: false), 'Ctrl+Tab');
+    expect(formatShortcutActivator(next, TargetPlatform.linux), 'Ctrl+Tab');
     const up = SingleActivator(LogicalKeyboardKey.arrowUp, alt: true);
-    expect(shortcutLabel(up, apple: true), '⌥↑');
-    expect(shortcutLabel(up, apple: false), 'Alt+Up');
+    expect(formatShortcutActivator(up, TargetPlatform.macOS), '⌥↑');
+    expect(formatShortcutActivator(up, TargetPlatform.windows), 'Alt+Up');
   });
 
   group('CommandPalette', () {
