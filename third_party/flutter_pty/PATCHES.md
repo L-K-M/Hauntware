@@ -47,8 +47,13 @@ All edits are marked `// Séance:` at the site.
   kill escalation. Thread-start failures (malloc/`pthread_create`) now
   kill and reap the child, close the master and pipe ends, free the
   handle, and return NULL instead of handing back a live-but-broken
-  handle. The stop-byte write retries `EINTR` — a lost wake would leave
-  the join blocked on a reader still parked in `poll()`. `pty_error`
+  handle. The stop-byte write retries `EINTR` in `pty_close` *and* in
+  the thread-start failure teardown — a lost wake would leave the join
+  blocked on a reader still parked in `poll()` (proven by fault
+  injection: an interrupted write without the retry hangs `pty_create`
+  for good). Every synchronous reap likewise retries `EINTR` via a
+  `reap_child` helper, or an interrupted `waitpid` would leave the
+  killed child a zombie. `pty_error`
   returns the recorded message instead of NULL (upstream never wired the
   return), and the `winsize` passed to `pty_forkpty` is fully
   initialized so garbage `ws_xpixel`/`ws_ypixel` can't reach `TIOCSWINSZ`.
