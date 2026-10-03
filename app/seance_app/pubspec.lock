@@ -288,6 +288,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  ghost_desktop:
+    dependency: "direct main"
+    description:
+      path: "/home/paseo/workspace/Planchette/.worktrees/ghost-window-restoration/packages/ghost_desktop"
+      relative: false
+    source: path
+    version: "0.1.0"
   hooks:
     dependency: transitive
     description:
