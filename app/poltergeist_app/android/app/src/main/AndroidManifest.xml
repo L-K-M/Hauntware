@@ -45,6 +45,11 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Android 11+ hides sibling URL handlers unless declared here. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="seance"/>
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

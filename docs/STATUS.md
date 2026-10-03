@@ -4,6 +4,56 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Shared Ghost UI and file lists (2026-10-02)
+
+The app consumes Planchette's `ghost_ui` package for sidebars, family hues,
+contrast, appearance helpers, ellipsis and top notices. Legacy import paths
+re-export the shared implementations. Theme adapters provide the existing
+chrome tokens; palettes and localized strings remain app-owned.
+
+Both desktop and touch listings now render through `GhostFileRow` and
+`GhostFileCompactRow`, with shared columns, kind glyphs and formatting.
+Selection, outline navigation, inline rename, context commands, drag/drop
+and transfer pipelines retain their existing owners. Core/editor/UI pins
+match Planchette #129's revision.
+
+Local Linux validation against the Git pin: analysis clean and 522 focused
+pane, compact, sidebar, theme and primitive tests passed. A metadata-sort
+header regression failed first on a misleading Name chevron, then passed.
+
+The corrected shared revision also passes all 3,216 app tests after
+integrating current main. The error-overlay regression now checks semantic
+node attachment rather than assuming one text-exclusion ancestor; it still
+proves that cached rows leave accessibility navigation and return on cancel.
+
+## Cross-app deep links (2026-10-02)
+
+Poltergeist now accepts the two strict `poltergeist://browse` forms from
+04 §7.1. Catalog links resolve only an existing server id and open its decoded
+remote path without review; misses stop at an error. Embedded-host links carry
+no secrets and always show a bounded, anti-reflex endpoint review before any
+connection, TOFU decision, or credential prompt. The display removes hidden
+controls and warns for internationalized, mixed, or unrecognized scripts.
+
+The active workspace owns one serialized queue. Exact endpoints coalesce;
+distinct endpoints remain individually reviewable; overflow must be expanded
+before bulk discard, which affects only the reviewed snapshot. macOS, Linux,
+and Windows register and forward the scheme. Windows forwards URI launches to
+the primary process, while ordinary launches still raise an existing window.
+
+Server rows and connected remote panes expose “Open Terminal in Séance” only
+when a handler exists. Synchronized server ids are preferred; embedded host
+data is used only without an id, and a refused id link never falls back. The
+reciprocal Séance work is proposed in
+[Séance #168](https://github.com/L-K-M/Seance/issues/168); no Séance source or
+pin changed.
+
+Local validation: core analysis is clean and all 1,920 core tests pass (27
+environment-gated skips); Flutter analysis is clean and all 3,211 app tests
+pass; the Linux release app builds. Native macOS and Windows compilation stays
+CI-gated. The reviewed host-link capture is in
+`tasks/deep-links/captures/host-link-review.png`.
+
 ## Ghost desktop context menus (2026-10-02)
 
 The app adopts the shared menu skin from Planchette #127, with matching
@@ -134,7 +184,7 @@ Core analysis is clean; all 1,907 core tests pass with 27 environment-gated
 skips. Flutter analysis is clean; all 3,083 app tests pass. All 140 root
 benchmark tests and the import-boundary guard pass. No Séance source was
 copied or changed, so no upstream port is required. Numbered fast-follow items
-1–4 are complete; deep links and the text-diff view remain demand-dependent
+1–4 and deep links are complete; the text-diff view remains demand-dependent
 per 07 §3.13.
 
 ## Settings window closes on ⌘W (2026-09-30)
@@ -8198,8 +8248,8 @@ then the v1.x backlog (named skip rules, batch rename, custom keymap,
 native icons, Compare entry point, preview warming — and Sync Browsing
 if risk 8's cut line is ever exercised). None was started in this release-prep
 slice; D10 completed on 2026-09-29 and D27 completed on 2026-09-30 as recorded
-above. Numbered fast-follow items 1–4 are complete; deep links and the text-diff
-view remain demand-dependent. Item
+above. Numbered fast-follow items 1–4 and deep links are complete; the text-diff
+view remains demand-dependent. Item
 23's remote-transfer wiring is the de-facto headline fast-follow even
 though §3.13 predates naming it.
 

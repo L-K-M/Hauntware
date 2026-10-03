@@ -494,6 +494,7 @@ class _SavedServerRow extends StatelessWidget {
       ServerGlyphMark(bookmark.icon),
     );
     final endpoint = _savedEndpoint(data, bookmark);
+    final terminalCommand = view.bookmarkTerminalCommand?.call(bookmark);
     // The landing path follows the endpoint: two remote favorites of one
     // server differ only there.
     final place = bookmark.remotePath;
@@ -552,6 +553,14 @@ class _SavedServerRow extends StatelessWidget {
           l10n,
           open == null ? null : (action) => open(bookmark, action),
         ),
+        if (terminalCommand != null && view.onRunCommand != null)
+          SidebarMenuAction(
+            key: const ValueKey('sidebar.menu.openTerminalInSeance'),
+            label: terminalCommand.label(l10n),
+            onSelected: terminalCommand.enabled()
+                ? () => unawaited(view.onRunCommand!(terminalCommand))
+                : null,
+          ),
         const SidebarMenuDivider(),
         ?_disconnectVerb(data, server, live),
         if (blocked && view.onReviewBlocked != null)
@@ -728,6 +737,7 @@ class _CatalogServerRow extends StatelessWidget {
           username: server.username,
         );
     final open = view.onOpenCatalogServer;
+    final terminalCommand = view.catalogTerminalCommand?.call(server);
     final tint = ServerTint.of(server);
     final endpoint = sidebarEndpointText(
       username: server.username,
@@ -782,6 +792,14 @@ class _CatalogServerRow extends StatelessWidget {
             open == null ? null : (action) => open(server, action),
             keyPrefix: 'sidebar.catalog.menu',
           ),
+          if (terminalCommand != null && view.onRunCommand != null)
+            SidebarMenuAction(
+              key: const ValueKey('sidebar.catalog.menu.openTerminalInSeance'),
+              label: terminalCommand.label(l10n),
+              onSelected: terminalCommand.enabled()
+                  ? () => unawaited(view.onRunCommand!(terminalCommand))
+                  : null,
+            ),
           const SidebarMenuDivider(),
           ?_disconnectVerb(data, connection, live),
           if (blocked && view.onReviewBlocked != null)

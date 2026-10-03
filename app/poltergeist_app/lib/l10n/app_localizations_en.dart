@@ -7408,6 +7408,116 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appQuitLabel => 'Quit';
 
   @override
+  String get deepLinkReviewTitle => 'Review connection link';
+
+  @override
+  String get deepLinkReviewBody =>
+      'A link is asking Poltergeist to connect. Verify the endpoint before continuing.';
+
+  @override
+  String get deepLinkHostLabel => 'Host';
+
+  @override
+  String get deepLinkPortLabel => 'Port';
+
+  @override
+  String get deepLinkUsernameLabel => 'Username';
+
+  @override
+  String get deepLinkFolderLabel => 'Folder';
+
+  @override
+  String get deepLinkEmptyValue => 'Not specified';
+
+  @override
+  String get deepLinkConnect => 'Connect';
+
+  @override
+  String get deepLinkCancel => 'Cancel';
+
+  @override
+  String get deepLinkDiscardAll => 'Discard all remaining';
+
+  @override
+  String deepLinkRepeatedActivations(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This endpoint was opened $count times.',
+      two: 'This endpoint was opened twice.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get deepLinkWaitingTitle => 'Waiting';
+
+  @override
+  String deepLinkAdditionalPending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count additional link activations pending',
+      one: '1 additional link activation pending',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String deepLinkEndpointSummary(String username, String host, int port) {
+    return '$username@$host:$port';
+  }
+
+  @override
+  String get deepLinkInternationalizedWarning =>
+      'Internationalized hostname. Check every character.';
+
+  @override
+  String get deepLinkMixedScriptWarning =>
+      'Mixed writing systems detected in this hostname.';
+
+  @override
+  String get deepLinkUnrecognizedScriptWarning =>
+      'Unrecognized writing system in this hostname. Check every character.';
+
+  @override
+  String get deepLinkControlsRemovedWarning =>
+      'Hidden direction or line-control characters were removed for display.';
+
+  @override
+  String get deepLinkFailureTitle => 'Link can’t be opened';
+
+  @override
+  String get deepLinkFailureUnsupported =>
+      'This Poltergeist link does not name a supported action.';
+
+  @override
+  String get deepLinkFailureParameters =>
+      'This Poltergeist link has invalid or unexpected parameters.';
+
+  @override
+  String get deepLinkFailurePort =>
+      'This Poltergeist link must name a numeric port from 1 to 65535.';
+
+  @override
+  String get deepLinkFailurePath =>
+      'This Poltergeist link contains an unsafe folder path.';
+
+  @override
+  String get deepLinkFailureServer =>
+      'The linked server is not in your synchronized server catalog.';
+
+  @override
+  String get deepLinkFailureClose => 'Close';
+
+  @override
+  String get sidebarOpenTerminalInSeance => 'Open Terminal in Séance';
+
+  @override
+  String get commandDisabledNoRemoteServer =>
+      'Requires a tab connected to a server';
+
+  @override
   String get editorUndoLabel => 'Undo';
 
   @override
