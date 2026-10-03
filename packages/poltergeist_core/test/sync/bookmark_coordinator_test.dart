@@ -86,10 +86,7 @@ final class _Device {
 
   /// A fresh coordinator over the same stores — what the app does when
   /// the device-level "Sync saved passwords & keys" switch flips.
-  void rebind({
-    required bool syncSecrets,
-    SyncEnrollmentState? enrollment,
-  }) {
+  void rebind({required bool syncSecrets, SyncEnrollmentState? enrollment}) {
     coordinator = BookmarkCoordinator(
       records: records,
       bookmarks: bookmarks,
@@ -148,6 +145,25 @@ final class _RacingHostKeyStore implements ConflictAwareHostKeyStore {
     }
 
     _keys[key.locator] = key;
+    return HostKeyInstallResult.installed;
+  }
+
+  @override
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  ) async {
+    if (expected.locator != replacement.locator) {
+      throw ArgumentError.value(replacement.locator, 'replacement');
+    }
+
+    final current = _keys[expected.locator];
+    if (current == null ||
+        current.fingerprintSha256 != expected.fingerprintSha256) {
+      return HostKeyInstallResult.conflict;
+    }
+
+    _keys[replacement.locator] = replacement;
     return HostKeyInstallResult.installed;
   }
 
@@ -218,8 +234,7 @@ final class _HoldState implements SyncEnrollmentState {
   Future<bool> passphraseUnverified() async => unverified;
 
   @override
-  Future<void> setPassphraseUnverified(bool value) async =>
-      unverified = value;
+  Future<void> setPassphraseUnverified(bool value) async => unverified = value;
 
   @override
   Future<Set<String>> notices() async => Set.of(noticeSet);
@@ -236,14 +251,14 @@ final class _HoldState implements SyncEnrollmentState {
 }
 
 Bookmark _bookmark(String id, {String? label}) => Bookmark(
-      id: id,
-      kind: BookmarkKind.localFolder,
-      label: label ?? id,
-      localPath: '/home/user/$id',
-      sortKey: 'm',
-      createdAt: _epoch,
-      updatedAt: _epoch,
-    );
+  id: id,
+  kind: BookmarkKind.localFolder,
+  label: label ?? id,
+  localPath: '/home/user/$id',
+  sortKey: 'm',
+  createdAt: _epoch,
+  updatedAt: _epoch,
+);
 
 EncryptedRecord _enc(
   String id, {
@@ -251,15 +266,14 @@ EncryptedRecord _enc(
   String deviceId = 'foreign-device',
   bool deleted = false,
   List<int>? blob,
-}) =>
-    EncryptedRecord(
-      id: id,
-      updatedAt: updatedAt,
-      deviceId: deviceId,
-      deleted: deleted,
-      seq: null,
-      blob: Uint8List.fromList(blob ?? const [9]),
-    );
+}) => EncryptedRecord(
+  id: id,
+  updatedAt: updatedAt,
+  deviceId: deviceId,
+  deleted: deleted,
+  seq: null,
+  blob: Uint8List.fromList(blob ?? const [9]),
+);
 
 /// Seal a raw payload map (any kind name — incl. kinds this build does not
 /// know) under [id], the way a foreign/newer client would.
@@ -268,29 +282,28 @@ Future<EncryptedRecord> _sealRaw(
   Map<String, dynamic> payload, {
   int updatedAt = 0,
   String deviceId = 'foreign-device',
-}) async =>
-    EncryptedRecord(
-      id: id,
-      updatedAt: updatedAt,
-      deviceId: deviceId,
-      deleted: false,
-      seq: null,
-      blob: await VaultCrypto.sealJson(_key, payload),
-    );
+}) async => EncryptedRecord(
+  id: id,
+  updatedAt: updatedAt,
+  deviceId: deviceId,
+  deleted: false,
+  seq: null,
+  blob: await VaultCrypto.sealJson(_key, payload),
+);
 
 Future<EncryptedRecord> _sealBookmark(
   Bookmark bookmark, {
   int? updatedAt,
   String deviceId = 'foreign-device',
-}) =>
-    RecordCrypto(RecordCodec(_key)).seal(DecryptedRecord(
-      id: 'bookmark:${bookmark.id}',
-      kind: RecordKind.bookmark,
-      updatedAt:
-          updatedAt ?? bookmark.updatedAt.toUtc().millisecondsSinceEpoch,
-      deviceId: deviceId,
-      data: bookmark.toJson(),
-    ));
+}) => RecordCrypto(RecordCodec(_key)).seal(
+  DecryptedRecord(
+    id: 'bookmark:${bookmark.id}',
+    kind: RecordKind.bookmark,
+    updatedAt: updatedAt ?? bookmark.updatedAt.toUtc().millisecondsSinceEpoch,
+    deviceId: deviceId,
+    data: bookmark.toJson(),
+  ),
+);
 
 /// Save locally and hand the stamped row to the coordinator — the same
 /// pair `BookmarkStore.save` + `changes` performs in production.
@@ -312,57 +325,58 @@ ServerConfig _server(
   String? secretRef,
   bool syncSecret = false,
   bool excludeFromSync = false,
-}) =>
-    ServerConfig(
-      id: id,
-      label: label ?? id,
-      host: '$id.example.com',
-      username: 'deploy',
-      group: group,
-      secretRef: secretRef,
-      syncSecret: syncSecret,
-      excludeFromSync: excludeFromSync,
-      createdAt: _epochMs,
-      updatedAt: _epochMs,
-    );
+}) => ServerConfig(
+  id: id,
+  label: label ?? id,
+  host: '$id.example.com',
+  username: 'deploy',
+  group: group,
+  secretRef: secretRef,
+  syncSecret: syncSecret,
+  excludeFromSync: excludeFromSync,
+  createdAt: _epochMs,
+  updatedAt: _epochMs,
+);
 
 Future<EncryptedRecord> _sealServer(
   ServerConfig server, {
   int? updatedAt,
   String deviceId = 'foreign-device',
   bool deleted = false,
-}) =>
-    RecordCrypto(RecordCodec(_key)).seal(DecryptedRecord(
-      id: server.id,
-      kind: RecordKind.serverConfig,
-      updatedAt: updatedAt ?? server.updatedAt,
-      deviceId: deviceId,
-      deleted: deleted,
-      // A tombstone carries no payload — `data` stays absent.
-      data: deleted ? const {} : server.toJson(),
-    ));
+}) => RecordCrypto(RecordCodec(_key)).seal(
+  DecryptedRecord(
+    id: server.id,
+    kind: RecordKind.serverConfig,
+    updatedAt: updatedAt ?? server.updatedAt,
+    deviceId: deviceId,
+    deleted: deleted,
+    // A tombstone carries no payload — `data` stays absent.
+    data: deleted ? const {} : server.toJson(),
+  ),
+);
 
 Secret _secret(String id, {int? updatedAt}) => Secret(
-      id: id,
-      kind: SecretKind.password,
-      value: 'value-$id',
-      updatedAt: updatedAt ?? _epochMs,
-    );
+  id: id,
+  kind: SecretKind.password,
+  value: 'value-$id',
+  updatedAt: updatedAt ?? _epochMs,
+);
 
 Future<EncryptedRecord> _sealSecret(
   Secret secret, {
   int? updatedAt,
   String deviceId = 'foreign-device',
   bool deleted = false,
-}) =>
-    RecordCrypto(RecordCodec(_key)).seal(DecryptedRecord(
-      id: 'secret:${secret.id}',
-      kind: RecordKind.secret,
-      updatedAt: updatedAt ?? secret.updatedAt,
-      deviceId: deviceId,
-      deleted: deleted,
-      data: deleted ? const {} : secret.toJson(),
-    ));
+}) => RecordCrypto(RecordCodec(_key)).seal(
+  DecryptedRecord(
+    id: 'secret:${secret.id}',
+    kind: RecordKind.secret,
+    updatedAt: updatedAt ?? secret.updatedAt,
+    deviceId: deviceId,
+    deleted: deleted,
+    data: deleted ? const {} : secret.toJson(),
+  ),
+);
 
 /// The shared-mode save pair the app service performs: persist + seal.
 Future<ServerConfig> _saveServer(_Device device, ServerConfig server) async {
@@ -400,18 +414,20 @@ void main() {
       expect(Bookmark.fromJson(dec.data, recordId: dec.id).label, 'b1');
     });
 
-    test('onBookmarkDeleted writes a real tombstone (empty blob, deleted)',
-        () async {
-      final device = await _Device.create(tempDir, 'a');
-      await _save(device, _bookmark('b1'));
-      await _delete(device, 'b1');
+    test(
+      'onBookmarkDeleted writes a real tombstone (empty blob, deleted)',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        await _save(device, _bookmark('b1'));
+        await _delete(device, 'b1');
 
-      final record = await device.records.getRecord('bookmark:b1');
-      expect(record, isNotNull);
-      expect(record!.deleted, isTrue);
-      expect(record.blob, isEmpty);
-      expect(await device.records.dirtyRecords(), isNotEmpty);
-    });
+        final record = await device.records.getRecord('bookmark:b1');
+        expect(record, isNotNull);
+        expect(record!.deleted, isTrue);
+        expect(record.blob, isEmpty);
+        expect(await device.records.dirtyRecords(), isNotEmpty);
+      },
+    );
   });
 
   group('two-device convergence', () {
@@ -480,8 +496,11 @@ void main() {
 
       // A stale live copy pushed by a device that never saw the delete:
       // it loses the same LWW compare on the server and never lands.
-      final stale = await _sealBookmark(_bookmark('doomed', label: 'stale'),
-          updatedAt: 5, deviceId: 'stale-device');
+      final stale = await _sealBookmark(
+        _bookmark('doomed', label: 'stale'),
+        updatedAt: 5,
+        deviceId: 'stale-device',
+      );
       expect(server.seed(stale), isFalse);
       expect(server.records['bookmark:doomed']!.deleted, isTrue);
 
@@ -489,8 +508,7 @@ void main() {
       await b.coordinator.runRound(server);
       expect(await b.bookmarks.byId('doomed'), isNull);
       // The tombstone record itself is retained indefinitely.
-      expect(
-          (await b.records.getRecord('bookmark:doomed'))!.deleted, isTrue);
+      expect((await b.records.getRecord('bookmark:doomed'))!.deleted, isTrue);
     });
   });
 
@@ -499,44 +517,48 @@ void main() {
       RecordKind.inboxApp: 'inboxapp:client',
       RecordKind.inboxStatus: 'inboxstatus:client:proposal',
     }.entries) {
-      test('${entry.key.name} survives backup and reopen byte-identical',
-          () async {
-        final device = await _Device.create(tempDir, 'a', shared: true);
+      test(
+        '${entry.key.name} survives backup and reopen byte-identical',
+        () async {
+          final device = await _Device.create(tempDir, 'a', shared: true);
 
-        // Inbox payloads belong to Séance and remain opaque in Poltergeist.
-        final inbox = await _sealRaw(entry.value, {
-          'kind': entry.key.name,
-          'data': {'opaque': 'inbox payload'},
-        });
-        server.seed(inbox);
+          // Inbox payloads belong to Séance and remain opaque in Poltergeist.
+          final inbox = await _sealRaw(entry.value, {
+            'kind': entry.key.name,
+            'data': {'opaque': 'inbox payload'},
+          });
+          server.seed(inbox);
 
-        await device.coordinator.runRound(server);
-        await _save(device, _bookmark('mine'));
-        await device.coordinator.runRound(server);
-        device.records = PersistentLocalRecordStore(
-          path: '${device.dir.path}/sync_records.json',
-          now: device.clock.call,
-        );
-        device.rebind(syncSecrets: false);
-        final result = await device.coordinator.runRound(server);
+          await device.coordinator.runRound(server);
+          await _save(device, _bookmark('mine'));
+          await device.coordinator.runRound(server);
+          device.records = PersistentLocalRecordStore(
+            path: '${device.dir.path}/sync_records.json',
+            now: device.clock.call,
+          );
+          device.rebind(syncSecrets: false);
+          final result = await device.coordinator.runRound(server);
 
-        final preserved = await device.records.getRecord(entry.value);
-        expect(preserved!.blob, inbox.blob);
-        expect(preserved.deleted, isFalse);
-        expect(server.records[entry.value]!.blob, inbox.blob);
-        expect(server.records[entry.value]!.deleted, isFalse);
-        expect(await device.records.dirtyRecords(), isEmpty);
-        expect(await device.bookmarks.load(), hasLength(1));
-        expect(await device.servers!.byId('client'), isNull);
-        expect(result.report.appliedIds, isNot(contains(entry.value)));
-        expect(await device.tripwires.trippedIds(), isEmpty);
-      });
+          final preserved = await device.records.getRecord(entry.value);
+          expect(preserved!.blob, inbox.blob);
+          expect(preserved.deleted, isFalse);
+          expect(server.records[entry.value]!.blob, inbox.blob);
+          expect(server.records[entry.value]!.deleted, isFalse);
+          expect(await device.records.dirtyRecords(), isEmpty);
+          expect(await device.bookmarks.load(), hasLength(1));
+          expect(await device.servers!.byId('client'), isNull);
+          expect(result.report.appliedIds, isNot(contains(entry.value)));
+          expect(await device.tripwires.trippedIds(), isEmpty);
+        },
+      );
     }
 
     test('a flurb-kind record survives rounds byte-identical', () async {
       final device = await _Device.create(tempDir, 'a');
-      final flurb = await _sealRaw(
-          'flurb:x1', {'kind': 'flurb', 'data': {'what': 'ever'}});
+      final flurb = await _sealRaw('flurb:x1', {
+        'kind': 'flurb',
+        'data': {'what': 'ever'},
+      });
       server.seed(flurb);
 
       await device.coordinator.runRound(server);
@@ -548,59 +570,73 @@ void main() {
       final local = await device.records.getRecord('flurb:x1');
       expect(local!.blob, flurb.blob);
       // Never re-pushed, never tombstoned, never decoded.
-      expect((await device.records.dirtyRecords()).map((r) => r.id),
-          isNot(contains('flurb:x1')));
+      expect(
+        (await device.records.dirtyRecords()).map((r) => r.id),
+        isNot(contains('flurb:x1')),
+      );
       expect(await device.tripwires.trippedIds(), isEmpty);
     });
 
-    test('a malformed bookmark record is skipped without aborting the round',
-        () async {
-      final device = await _Device.create(tempDir, 'a');
-      final malformed = await _sealRaw(
-          'bookmark:bad', {'kind': 'bookmark', 'data': {'id': 'bad'}});
-      final good = await _sealBookmark(_bookmark('good', label: 'ok'));
-      server.seed(malformed);
-      server.seed(good);
+    test(
+      'a malformed bookmark record is skipped without aborting the round',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        final malformed = await _sealRaw('bookmark:bad', {
+          'kind': 'bookmark',
+          'data': {'id': 'bad'},
+        });
+        final good = await _sealBookmark(_bookmark('good', label: 'ok'));
+        server.seed(malformed);
+        server.seed(good);
 
-      final result = await device.coordinator.runRound(server);
-      expect(await device.records.getRecord('bookmark:bad'), isNotNull);
-      expect(await device.tripwires.trippedIds(), contains('bookmark:bad'));
-      expect((await device.bookmarks.byId('good'))!.label, 'ok');
-      expect(result.report.appliedIds, contains('bookmark:good'));
-    });
+        final result = await device.coordinator.runRound(server);
+        expect(await device.records.getRecord('bookmark:bad'), isNotNull);
+        expect(await device.tripwires.trippedIds(), contains('bookmark:bad'));
+        expect((await device.bookmarks.byId('good'))!.label, 'ok');
+        expect(result.report.appliedIds, contains('bookmark:good'));
+      },
+    );
 
-    test('a relabeled secret under a bookmark: id is never applied',
-        () async {
+    test('a relabeled secret under a bookmark: id is never applied', () async {
       final device = await _Device.create(tempDir, 'a');
-      final relabeled = await _sealRaw('bookmark:sneaky',
-          {'kind': 'secret', 'data': {'id': 's1', 'blob': 'hunter2'}});
+      final relabeled = await _sealRaw('bookmark:sneaky', {
+        'kind': 'secret',
+        'data': {'id': 's1', 'blob': 'hunter2'},
+      });
       server.seed(relabeled);
 
       await device.coordinator.runRound(server);
       expect(await device.bookmarks.byId('sneaky'), isNull);
       expect(await device.bookmarks.load(), isEmpty);
+      expect(await device.tripwires.trippedIds(), contains('bookmark:sneaky'));
       expect(
-          await device.tripwires.trippedIds(), contains('bookmark:sneaky'));
-      expect((await device.records.getRecord('bookmark:sneaky'))!.blob,
-          relabeled.blob);
+        (await device.records.getRecord('bookmark:sneaky'))!.blob,
+        relabeled.blob,
+      );
     });
 
-    test('an undecryptable bookmark record is preserved without tripping',
-        () async {
-      final device = await _Device.create(tempDir, 'a');
-      final foreignKey = List<int>.generate(32, (i) => 255 - i);
-      server.seed(_enc(
-        'bookmark:sealed',
-        updatedAt: 1,
-        blob: await VaultCrypto.sealJson(
-            foreignKey, {'kind': 'bookmark', 'data': {}}),
-      ));
+    test(
+      'an undecryptable bookmark record is preserved without tripping',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        final foreignKey = List<int>.generate(32, (i) => 255 - i);
+        server.seed(
+          _enc(
+            'bookmark:sealed',
+            updatedAt: 1,
+            blob: await VaultCrypto.sealJson(foreignKey, {
+              'kind': 'bookmark',
+              'data': {},
+            }),
+          ),
+        );
 
-      await device.coordinator.runRound(server);
-      expect(await device.records.getRecord('bookmark:sealed'), isNotNull);
-      expect(await device.tripwires.trippedIds(), isEmpty);
-      expect(await device.bookmarks.load(), isEmpty);
-    });
+        await device.coordinator.runRound(server);
+        expect(await device.records.getRecord('bookmark:sealed'), isNotNull);
+        expect(await device.tripwires.trippedIds(), isEmpty);
+        expect(await device.bookmarks.load(), isEmpty);
+      },
+    );
   });
 
   group('tuple guard and deferral', () {
@@ -615,8 +651,10 @@ void main() {
 
       // A pulled live record older than the deletion wins the store merge
       // against the pre-delete row but must not resurrect it.
-      final stale =
-          (await _sealBookmark(_bookmark('gone'), updatedAt: 5)).withSeq(3);
+      final stale = (await _sealBookmark(
+        _bookmark('gone'),
+        updatedAt: 5,
+      )).withSeq(3);
       await device.records.putRemote(stale);
 
       final report = await device.coordinator.applyPulled();
@@ -634,9 +672,10 @@ void main() {
     test('a rejected push resurfaces the evicted pulled winner', () async {
       final device = await _Device.create(tempDir, 'a');
       final winner = await _sealBookmark(
-          _bookmark('r', label: 'remote'),
-          updatedAt: _epochMs + 100000,
-          deviceId: 'device-b');
+        _bookmark('r', label: 'remote'),
+        updatedAt: _epochMs + 100000,
+        deviceId: 'device-b',
+      );
       server.seed(winner);
       await device.coordinator.runRound(server);
       expect((await device.bookmarks.byId('r'))!.label, 'remote');
@@ -649,8 +688,9 @@ void main() {
       expect((await device.bookmarks.byId('r'))!.label, 'remote');
       expect(await device.records.dirtyRecords(), isEmpty);
       expect(
-          (await device.records.getRecord('bookmark:r'))!.deviceId,
-          'device-b');
+        (await device.records.getRecord('bookmark:r'))!.deviceId,
+        'device-b',
+      );
     });
 
     test('LWW ties apply idempotently and advance the cursor', () async {
@@ -667,36 +707,39 @@ void main() {
   });
 
   group('delta bookkeeping', () {
-    test('pulls are deltas off highWaterSeq and the apply cursor persists',
-        () async {
-      final device = await _Device.create(tempDir, 'a');
-      server.seed(await _sealBookmark(_bookmark('p1'), updatedAt: 1));
-      await device.coordinator.runRound(server);
-      expect(await device.records.highWaterSeq(), greaterThan(0));
-      expect(await device.records.lastAppliedSeq(), greaterThan(0));
+    test(
+      'pulls are deltas off highWaterSeq and the apply cursor persists',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        server.seed(await _sealBookmark(_bookmark('p1'), updatedAt: 1));
+        await device.coordinator.runRound(server);
+        expect(await device.records.highWaterSeq(), greaterThan(0));
+        expect(await device.records.lastAppliedSeq(), greaterThan(0));
 
-      // A restarted store carries both cursors: the next pull is a delta.
-      final restarted = PersistentLocalRecordStore(
-          path: '${device.dir.path}/sync_records.json');
-      expect(await restarted.highWaterSeq(), greaterThan(0));
-      device.records = restarted;
-      device.coordinator = BookmarkCoordinator(
-        records: restarted,
-        bookmarks: device.bookmarks,
-        hostKeys: device.hostKeys,
+        // A restarted store carries both cursors: the next pull is a delta.
+        final restarted = PersistentLocalRecordStore(
+          path: '${device.dir.path}/sync_records.json',
+        );
+        expect(await restarted.highWaterSeq(), greaterThan(0));
+        device.records = restarted;
+        device.coordinator = BookmarkCoordinator(
+          records: restarted,
+          bookmarks: device.bookmarks,
+          hostKeys: device.hostKeys,
           hostKeyMutations: device.hostKeyMutations,
-        crypto: device.crypto,
-        deviceId: device.deviceId,
-        pinVerdicts: device.verdicts,
-        tripwires: device.tripwires,
-        catalog: device.catalog,
-        now: device.clock.call,
-      );
-      final result = await device.coordinator.runRound(server);
-      // A true delta: nothing new on the server, nothing re-applies.
-      expect(result.report.appliedIds, isEmpty);
-      expect(await device.bookmarks.byId('p1'), isNotNull);
-    });
+          crypto: device.crypto,
+          deviceId: device.deviceId,
+          pinVerdicts: device.verdicts,
+          tripwires: device.tripwires,
+          catalog: device.catalog,
+          now: device.clock.call,
+        );
+        final result = await device.coordinator.runRound(server);
+        // A true delta: nothing new on the server, nothing re-applies.
+        expect(result.report.appliedIds, isEmpty);
+        expect(await device.bookmarks.byId('p1'), isNotNull);
+      },
+    );
 
     test('a rejected cursor triggers a one-time full resync', () async {
       final device = await _Device.create(tempDir, 'a');
@@ -729,40 +772,44 @@ void main() {
       // is the whole round — the losing edit stays dirty for next sync.
       expect(result.rounds, 1);
       expect(server.pushCalls, 1);
-      expect((await device.records.dirtyRecords()).single.id,
-          'bookmark:stuck');
+      expect((await device.records.dirtyRecords()).single.id, 'bookmark:stuck');
     });
   });
 
   group('hostkey records', () {
     HostKey pin(String host, String fp, {int pinnedAt = 1}) => HostKey(
-          host: host,
-          port: 22,
-          type: 'ssh-ed25519',
-          fingerprintSha256: fp,
-          pinnedAt: pinnedAt,
+      host: host,
+      port: 22,
+      type: 'ssh-ed25519',
+      fingerprintSha256: fp,
+      pinnedAt: pinnedAt,
+    );
+
+    Future<EncryptedRecord> pinRecord(
+      HostKey key, {
+      String deviceId = 'foreign-device',
+    }) => RecordCrypto(RecordCodec(_key)).seal(
+      DecryptedRecord(
+        id: key.recordId,
+        kind: RecordKind.hostKey,
+        updatedAt: key.pinnedAt,
+        deviceId: deviceId,
+        data: key.toJson(),
+      ),
+    );
+
+    test(
+      'a pulled pin installs when no local pin or negative verdict exists',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        server.seed(await pinRecord(pin('h.example.com', 'SHA256:AAA')));
+        await device.coordinator.runRound(server);
+        expect(
+          (await device.hostKeys.get('h.example.com', 22))!.fingerprintSha256,
+          'SHA256:AAA',
         );
-
-    Future<EncryptedRecord> pinRecord(HostKey key,
-            {String deviceId = 'foreign-device'}) =>
-        RecordCrypto(RecordCodec(_key)).seal(DecryptedRecord(
-          id: key.recordId,
-          kind: RecordKind.hostKey,
-          updatedAt: key.pinnedAt,
-          deviceId: deviceId,
-          data: key.toJson(),
-        ));
-
-    test('a pulled pin installs when no local pin or negative verdict exists',
-        () async {
-      final device = await _Device.create(tempDir, 'a');
-      server.seed(await pinRecord(pin('h.example.com', 'SHA256:AAA')));
-      await device.coordinator.runRound(server);
-      expect(
-          (await device.hostKeys.get('h.example.com', 22))!
-              .fingerprintSha256,
-          'SHA256:AAA');
-    });
+      },
+    );
 
     test('a conflicting pin is quarantined, not applied', () async {
       final device = await _Device.create(tempDir, 'a');
@@ -771,11 +818,10 @@ void main() {
 
       final result = await device.coordinator.runRound(server);
       expect(
-          (await device.hostKeys.get('h.example.com', 22))!
-              .fingerprintSha256,
-          'SHA256:LOCAL');
-      expect(
-          result.report.pinConflicts.single.locator, 'h.example.com:22');
+        (await device.hostKeys.get('h.example.com', 22))!.fingerprintSha256,
+        'SHA256:LOCAL',
+      );
+      expect(result.report.pinConflicts.single.locator, 'h.example.com:22');
     });
 
     test('a pin landing during auto-apply is not overwritten', () async {
@@ -794,6 +840,55 @@ void main() {
         (await hostKeys.get('h.example.com', 22))!.fingerprintSha256,
         'SHA256:ENGINE',
       );
+    });
+
+    test('a pin landing during accept-pulled is not overwritten', () async {
+      final hostKeys = _RacingHostKeyStore();
+      final device = await _Device.create(tempDir, 'a', hostKeys: hostKeys);
+      final local = pin('h.example.com', 'SHA256:LOCAL');
+      final pulled = pin('h.example.com', 'SHA256:PULLED', pinnedAt: 2);
+      final engine = pin('h.example.com', 'SHA256:ENGINE', pinnedAt: 3);
+      await hostKeys.put(local);
+      await device.records.putRemote((await pinRecord(pulled)).withSeq(1));
+
+      final resolution = device.coordinator.acceptPulledPin(
+        HostKeyConflict(locator: local.locator, local: local, pulled: pulled),
+      );
+      await hostKeys.readStarted.future;
+      hostKeys.pinFromEngine(engine);
+      hostKeys.releaseRead.complete();
+      await resolution;
+
+      expect(
+        (await hostKeys.get('h.example.com', 22))!.fingerprintSha256,
+        'SHA256:ENGINE',
+      );
+    });
+
+    test('a pin landing during keep-local makes the decision stale', () async {
+      final hostKeys = _RacingHostKeyStore();
+      final device = await _Device.create(tempDir, 'a', hostKeys: hostKeys);
+      final local = pin('h.example.com', 'SHA256:LOCAL');
+      final pulled = pin('h.example.com', 'SHA256:PULLED', pinnedAt: 2);
+      final engine = pin('h.example.com', 'SHA256:ENGINE', pinnedAt: 3);
+      await hostKeys.put(local);
+      await device.records.putRemote((await pinRecord(pulled)).withSeq(1));
+
+      final resolution = device.coordinator.keepLocalPin(
+        HostKeyConflict(locator: local.locator, local: local, pulled: pulled),
+      );
+      await hostKeys.readStarted.future;
+      hostKeys.pinFromEngine(engine);
+      hostKeys.releaseRead.complete();
+      await resolution;
+
+      expect(
+        await device.verdicts.rejectedFingerprintFor(local.locator),
+        isNull,
+      );
+      final record = await device.records.getRecord(pulled.recordId);
+      final decoded = await device.crypto.open(record!);
+      expect(HostKey.fromJson(decoded.data).fingerprintSha256, 'SHA256:PULLED');
     });
 
     test('a forget already in progress prevents auto-apply', () async {
@@ -825,67 +920,75 @@ void main() {
       expect(await device.hostKeys.get('h.example.com', 22), isNull);
     });
 
-    test('a kept-local verdict resolves a repeating conflict quietly',
-        () async {
-      final device = await _Device.create(tempDir, 'a');
-      await device.hostKeys.put(pin('h.example.com', 'SHA256:LOCAL'));
-      server.seed(await pinRecord(pin('h.example.com', 'SHA256:PULLED')));
-      final first = await device.coordinator.runRound(server);
+    test(
+      'a kept-local verdict resolves a repeating conflict quietly',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        await device.hostKeys.put(pin('h.example.com', 'SHA256:LOCAL'));
+        server.seed(await pinRecord(pin('h.example.com', 'SHA256:PULLED')));
+        final first = await device.coordinator.runRound(server);
 
-      await device.coordinator.keepLocalPin(first.report.pinConflicts.single);
-      final result = await device.coordinator.runRound(server);
-      expect(result.report.pinConflicts, isEmpty);
-      expect(
-          (await device.hostKeys.get('h.example.com', 22))!
-              .fingerprintSha256,
-          'SHA256:LOCAL');
-    });
+        await device.coordinator.keepLocalPin(first.report.pinConflicts.single);
+        final result = await device.coordinator.runRound(server);
+        expect(result.report.pinConflicts, isEmpty);
+        expect(
+          (await device.hostKeys.get('h.example.com', 22))!.fingerprintSha256,
+          'SHA256:LOCAL',
+        );
+      },
+    );
 
     test('a hostkey tombstone never deletes a local pin', () async {
       final device = await _Device.create(tempDir, 'a');
       await device.hostKeys.put(pin('h.example.com', 'SHA256:LOCAL'));
-      server.seed(EncryptedRecord(
-        id: 'hostkey:h.example.com:22',
-        updatedAt: 99999,
-        deviceId: 'anyone',
-        deleted: true,
-        seq: null,
-        blob: Uint8List(0),
-      ));
+      server.seed(
+        EncryptedRecord(
+          id: 'hostkey:h.example.com:22',
+          updatedAt: 99999,
+          deviceId: 'anyone',
+          deleted: true,
+          seq: null,
+          blob: Uint8List(0),
+        ),
+      );
       await device.coordinator.runRound(server);
       expect(
-          (await device.hostKeys.get('h.example.com', 22))!
-              .fingerprintSha256,
-          'SHA256:LOCAL');
+        (await device.hostKeys.get('h.example.com', 22))!.fingerprintSha256,
+        'SHA256:LOCAL',
+      );
     });
 
-    test('onHostKeyPinned pushes the pin and clears a negative verdict',
-        () async {
-      final device = await _Device.create(tempDir, 'a');
-      await device.verdicts.addNegativePin('h.example.com:22');
-      await device.coordinator
-          .onHostKeyPinned(pin('h.example.com', 'SHA256:NEW', pinnedAt: 7));
-      expect(await device.verdicts.negativePins(), isEmpty);
-      final record =
-          await device.records.getRecord('hostkey:h.example.com:22');
-      expect(record, isNotNull);
-      expect(record!.deleted, isFalse);
-      expect(await device.records.dirtyRecords(), isNotEmpty);
-    });
+    test(
+      'onHostKeyPinned pushes the pin and clears a negative verdict',
+      () async {
+        final device = await _Device.create(tempDir, 'a');
+        await device.verdicts.addNegativePin('h.example.com:22');
+        await device.coordinator.onHostKeyPinned(
+          pin('h.example.com', 'SHA256:NEW', pinnedAt: 7),
+        );
+        expect(await device.verdicts.negativePins(), isEmpty);
+        final record = await device.records.getRecord(
+          'hostkey:h.example.com:22',
+        );
+        expect(record, isNotNull);
+        expect(record!.deleted, isFalse);
+        expect(await device.records.dirtyRecords(), isNotEmpty);
+      },
+    );
   });
 
   group('serverConfig catalog (shared mode)', () {
     ServerConfig config(String id, String label) => ServerConfig(
-          id: id,
-          label: label,
-          host: '$id.example.com',
-          port: 22,
-          username: 'u',
-          authMethod: AuthMethod.privateKey,
-          syncSecret: false,
-          createdAt: 1,
-          updatedAt: 1,
-        );
+      id: id,
+      label: label,
+      host: '$id.example.com',
+      port: 22,
+      username: 'u',
+      authMethod: AuthMethod.privateKey,
+      syncSecret: false,
+      createdAt: 1,
+      updatedAt: 1,
+    );
 
     test('catalog publishes its assigned snapshot synchronously', () {
       late SeanceServerCatalog catalog;
@@ -908,37 +1011,47 @@ void main() {
 
     test('pulled serverConfig records materialize the catalog', () async {
       final device = await _Device.create(tempDir, 'a', shared: true);
-      server.seed(await RecordCrypto(RecordCodec(_key)).seal(DecryptedRecord(
-        id: 'srv-uuid-1',
-        kind: RecordKind.serverConfig,
-        updatedAt: 1,
-        deviceId: 'seance-device',
-        data: config('srv-uuid-1', 'web').toJson(),
-      )));
+      server.seed(
+        await RecordCrypto(RecordCodec(_key)).seal(
+          DecryptedRecord(
+            id: 'srv-uuid-1',
+            kind: RecordKind.serverConfig,
+            updatedAt: 1,
+            deviceId: 'seance-device',
+            data: config('srv-uuid-1', 'web').toJson(),
+          ),
+        ),
+      );
       await device.coordinator.runRound(server);
       expect(device.catalog!.servers.single.label, 'web');
     });
 
     test('a serverConfig tombstone removes the catalog entry', () async {
       final device = await _Device.create(tempDir, 'a', shared: true);
-      server.seed(await RecordCrypto(RecordCodec(_key)).seal(DecryptedRecord(
-        id: 'srv-uuid-1',
-        kind: RecordKind.serverConfig,
-        updatedAt: 1,
-        deviceId: 'seance-device',
-        data: config('srv-uuid-1', 'web').toJson(),
-      )));
+      server.seed(
+        await RecordCrypto(RecordCodec(_key)).seal(
+          DecryptedRecord(
+            id: 'srv-uuid-1',
+            kind: RecordKind.serverConfig,
+            updatedAt: 1,
+            deviceId: 'seance-device',
+            data: config('srv-uuid-1', 'web').toJson(),
+          ),
+        ),
+      );
       await device.coordinator.runRound(server);
       expect(device.catalog!.servers, hasLength(1));
 
-      server.seed(EncryptedRecord(
-        id: 'srv-uuid-1',
-        updatedAt: 2,
-        deviceId: 'seance-device',
-        deleted: true,
-        seq: null,
-        blob: Uint8List(0),
-      ));
+      server.seed(
+        EncryptedRecord(
+          id: 'srv-uuid-1',
+          updatedAt: 2,
+          deviceId: 'seance-device',
+          deleted: true,
+          seq: null,
+          blob: Uint8List(0),
+        ),
+      );
       await device.coordinator.runRound(server);
       expect(device.catalog!.servers, isEmpty);
     });
@@ -948,50 +1061,54 @@ void main() {
       server.seed(_enc('opaque-id', updatedAt: 1, blob: [1, 2, 3]));
       await device.coordinator.runRound(server);
       // The prefixless record is preserved verbatim, never decrypted.
-      expect((await device.records.getRecord('opaque-id'))!.blob,
-          Uint8List.fromList([1, 2, 3]));
+      expect(
+        (await device.records.getRecord('opaque-id'))!.blob,
+        Uint8List.fromList([1, 2, 3]),
+      );
       expect(await device.tripwires.trippedIds(), isEmpty);
     });
   });
 
   group('corruption recovery', () {
-    test('reSealAfterStoreLoss restamps rows with their persisted tuples',
-        () async {
-      final a = await _Device.create(tempDir, 'a');
-      final b = await _Device.create(tempDir, 'b');
-      await _save(b, _bookmark('fromb', label: 'remote'));
-      await b.coordinator.runRound(server);
-      await a.coordinator.runRound(server);
+    test(
+      'reSealAfterStoreLoss restamps rows with their persisted tuples',
+      () async {
+        final a = await _Device.create(tempDir, 'a');
+        final b = await _Device.create(tempDir, 'b');
+        await _save(b, _bookmark('fromb', label: 'remote'));
+        await b.coordinator.runRound(server);
+        await a.coordinator.runRound(server);
 
-      final tuple = await a.bookmarks.syncTupleOf('fromb');
-      expect(tuple!.deviceId, b.deviceId);
+        final tuple = await a.bookmarks.syncTupleOf('fromb');
+        expect(tuple!.deviceId, b.deviceId);
 
-      await File('${a.dir.path}/sync_records.json')
-          .writeAsString('{corrupt');
-      final restored = PersistentLocalRecordStore(
-          path: '${a.dir.path}/sync_records.json');
-      expect(await restored.allRecords(), isEmpty);
-      a.records = restored;
-      a.coordinator = BookmarkCoordinator(
-        records: restored,
-        bookmarks: a.bookmarks,
-        hostKeys: a.hostKeys,
+        await File('${a.dir.path}/sync_records.json').writeAsString('{corrupt');
+        final restored = PersistentLocalRecordStore(
+          path: '${a.dir.path}/sync_records.json',
+        );
+        expect(await restored.allRecords(), isEmpty);
+        a.records = restored;
+        a.coordinator = BookmarkCoordinator(
+          records: restored,
+          bookmarks: a.bookmarks,
+          hostKeys: a.hostKeys,
           hostKeyMutations: a.hostKeyMutations,
-        crypto: a.crypto,
-        deviceId: a.deviceId,
-        pinVerdicts: a.verdicts,
-        tripwires: a.tripwires,
-        catalog: a.catalog,
-        now: a.clock.call,
-      );
+          crypto: a.crypto,
+          deviceId: a.deviceId,
+          pinVerdicts: a.verdicts,
+          tripwires: a.tripwires,
+          catalog: a.catalog,
+          now: a.clock.call,
+        );
 
-      await a.coordinator.reSealAfterStoreLoss();
-      final resealed = await restored.getRecord('bookmark:fromb');
-      expect(resealed, isNotNull);
-      expect(resealed!.deviceId, b.deviceId);
-      expect(resealed.updatedAt, tuple.updatedAt);
-      expect(await restored.dirtyRecords(), isNotEmpty);
-    });
+        await a.coordinator.reSealAfterStoreLoss();
+        final resealed = await restored.getRecord('bookmark:fromb');
+        expect(resealed, isNotNull);
+        expect(resealed!.deviceId, b.deviceId);
+        expect(resealed.updatedAt, tuple.updatedAt);
+        expect(await restored.dirtyRecords(), isNotEmpty);
+      },
+    );
   });
 
   group('serverConfig write path (04 §4.2, amended)', () {
@@ -1001,7 +1118,8 @@ void main() {
       // The envelope is newer than the payload's own stamp: the row keeps
       // the payload's, the store's tuple the envelope's.
       server.seed(
-          await _sealServer(_server('web'), updatedAt: _epochMs + 60000));
+        await _sealServer(_server('web'), updatedAt: _epochMs + 60000),
+      );
       await a.coordinator.runRound(server);
       final row = (await a.servers!.byId('web'))!;
       expect(row.updatedAt, lessThan(_epochMs + 60000));
@@ -1030,8 +1148,7 @@ void main() {
       expect(device.catalog!.byId('web')!.label, 'Web');
     });
 
-    test('create, edit, and delete converge across shared devices',
-        () async {
+    test('create, edit, and delete converge across shared devices', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
       final b = await _Device.create(tempDir, 'b', shared: true);
 
@@ -1067,8 +1184,13 @@ void main() {
       // A device that never saw the delete pushes an older live copy:
       // it loses the same LWW compare server-side and never lands.
       expect(
-        server.seed(await _sealServer(_server('doomed'),
-            updatedAt: 5, deviceId: 'stale-device')),
+        server.seed(
+          await _sealServer(
+            _server('doomed'),
+            updatedAt: 5,
+            deviceId: 'stale-device',
+          ),
+        ),
         isFalse,
       );
       final b = await _Device.create(tempDir, 'b', shared: true);
@@ -1076,12 +1198,10 @@ void main() {
       await b.coordinator.runRound(server);
       expect(await b.servers!.byId('doomed'), isNull);
       // The tombstone tuple itself is retained in the store.
-      expect(
-          (await b.servers!.syncTupleOf('doomed'))!.deleted, isTrue);
+      expect((await b.servers!.syncTupleOf('doomed'))!.deleted, isTrue);
     });
 
-    test('an excluded server seals a retraction, never live payload',
-        () async {
+    test('an excluded server seals a retraction, never live payload', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
       final b = await _Device.create(tempDir, 'b', shared: true);
       await _saveServer(a, _server('web', label: 'Web'));
@@ -1093,10 +1213,10 @@ void main() {
       // local row survives and stays in this device's catalog.
       a.clock.ms += 1000;
       await a.coordinator.onServerSaved(
-          (await a.servers!.byId('web'))!.copyWith(
-        excludeFromSync: true,
-        updatedAt: a.clock.ms,
-      ));
+        (await a.servers!.byId(
+          'web',
+        ))!.copyWith(excludeFromSync: true, updatedAt: a.clock.ms),
+      );
       final retracted = await a.records.getRecord('web');
       expect(retracted!.deleted, isTrue);
       expect((await a.servers!.byId('web'))!.excludeFromSync, isTrue);
@@ -1107,22 +1227,25 @@ void main() {
       expect(await b.servers!.byId('web'), isNull);
     });
 
-    test('a pulled live record never replaces an excluded local row',
-        () async {
+    test('a pulled live record never replaces an excluded local row', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
       await _saveServer(a, _server('web', label: 'mine'));
       a.clock.ms += 1000;
       await a.coordinator.onServerSaved(
-          (await a.servers!.byId('web'))!.copyWith(
-        excludeFromSync: true,
-        updatedAt: a.clock.ms,
-      ));
+        (await a.servers!.byId(
+          'web',
+        ))!.copyWith(excludeFromSync: true, updatedAt: a.clock.ms),
+      );
 
       // A pulled live copy newer than the local stamp still loses to
       // the privacy boundary — and the retraction re-dates once to win
       // the fleet's LWW rather than bidding forever.
-      server.seed(await _sealServer(_server('web', label: 'theirs'),
-          updatedAt: a.clock.ms + 5000));
+      server.seed(
+        await _sealServer(
+          _server('web', label: 'theirs'),
+          updatedAt: a.clock.ms + 5000,
+        ),
+      );
       await a.coordinator.runRound(server);
       final local = await a.servers!.byId('web');
       expect(local!.label, 'mine');
@@ -1142,14 +1265,16 @@ void main() {
       // The fleet still holds this device's earlier exclusion
       // tombstone; the user re-included locally, so the live row must
       // win — re-dated past the tombstone and re-sealed for the push.
-      server.seed(EncryptedRecord(
-        id: 'web',
-        updatedAt: _epochMs + 500,
-        deviceId: a.deviceId,
-        deleted: true,
-        seq: null,
-        blob: Uint8List(0),
-      ));
+      server.seed(
+        EncryptedRecord(
+          id: 'web',
+          updatedAt: _epochMs + 500,
+          deviceId: a.deviceId,
+          deleted: true,
+          seq: null,
+          blob: Uint8List(0),
+        ),
+      );
       await a.coordinator.runRound(server);
       final row = await a.servers!.byId('web');
       expect(row, isNotNull);
@@ -1159,12 +1284,12 @@ void main() {
       expect(resealed.deviceId, a.deviceId);
     });
 
-    test('a delete outranks a pulled copy stamped by a faster clock',
-        () async {
+    test('a delete outranks a pulled copy stamped by a faster clock', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
       // A peer whose clock runs a minute ahead edited the server.
-      server.seed(await _sealServer(
-          _server('web').copyWith(updatedAt: _epochMs + 60000)));
+      server.seed(
+        await _sealServer(_server('web').copyWith(updatedAt: _epochMs + 60000)),
+      );
       await a.coordinator.runRound(server);
       expect((await a.servers!.byId('web'))!.updatedAt, _epochMs + 60000);
 
@@ -1175,8 +1300,10 @@ void main() {
       final tombstone = await a.records.getRecord('web');
       expect(tombstone!.deleted, isTrue);
       expect(tombstone.updatedAt, greaterThan(_epochMs + 60000));
-      expect((await a.servers!.syncTupleOf('web'))!.updatedAt,
-          tombstone.updatedAt);
+      expect(
+        (await a.servers!.syncTupleOf('web'))!.updatedAt,
+        tombstone.updatedAt,
+      );
 
       await a.coordinator.runRound(server);
       await a.coordinator.runRound(server);
@@ -1184,45 +1311,53 @@ void main() {
       expect(await a.servers!.byId('web'), isNull);
     });
 
-    test('an own-device tombstone older than the live row is left alone',
-        () async {
-      final a = await _Device.create(tempDir, 'a', shared: true);
-      await _saveServer(a, _server('web'));
-      await a.coordinator.runRound(server);
-      // A row newer than its sealed record — a crash between the store
-      // write and the seal leaves exactly this.
-      a.clock.ms += 2000;
-      final saved = await a.servers!.save(
-          (await a.servers!.byId('web'))!.copyWith(label: 'current'));
-      // This device's old retraction, dated between the two: nothing to
-      // revive, and re-dating the row to its stamp + 1 would regress it.
-      server.seed(EncryptedRecord(
-        id: 'web',
-        updatedAt: _epochMs + 500,
-        deviceId: a.deviceId,
-        deleted: true,
-        seq: null,
-        blob: Uint8List(0),
-      ));
-      await a.coordinator.runRound(server);
-      final row = await a.servers!.byId('web');
-      expect(row!.updatedAt, saved.updatedAt);
-      expect(row.label, 'current');
-    });
+    test(
+      'an own-device tombstone older than the live row is left alone',
+      () async {
+        final a = await _Device.create(tempDir, 'a', shared: true);
+        await _saveServer(a, _server('web'));
+        await a.coordinator.runRound(server);
+        // A row newer than its sealed record — a crash between the store
+        // write and the seal leaves exactly this.
+        a.clock.ms += 2000;
+        final saved = await a.servers!.save(
+          (await a.servers!.byId('web'))!.copyWith(label: 'current'),
+        );
+        // This device's old retraction, dated between the two: nothing to
+        // revive, and re-dating the row to its stamp + 1 would regress it.
+        server.seed(
+          EncryptedRecord(
+            id: 'web',
+            updatedAt: _epochMs + 500,
+            deviceId: a.deviceId,
+            deleted: true,
+            seq: null,
+            blob: Uint8List(0),
+          ),
+        );
+        await a.coordinator.runRound(server);
+        final row = await a.servers!.byId('web');
+        expect(row!.updatedAt, saved.updatedAt);
+        expect(row.label, 'current');
+      },
+    );
 
     test('the store-loss re-seal retracts an excluded server', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
       await _saveServer(a, _server('web'));
       a.clock.ms += 1000;
       await a.coordinator.onServerSaved(
-          (await a.servers!.byId('web'))!.copyWith(
-        excludeFromSync: true,
-        updatedAt: a.clock.ms,
-      ));
+        (await a.servers!.byId(
+          'web',
+        ))!.copyWith(excludeFromSync: true, updatedAt: a.clock.ms),
+      );
 
       await a.coordinator.reSealAfterStoreLoss();
-      expect((await a.records.getRecord('web'))!.deleted, isTrue,
-          reason: 'live payload would un-exclude the server fleet-wide');
+      expect(
+        (await a.records.getRecord('web'))!.deleted,
+        isTrue,
+        reason: 'live payload would un-exclude the server fleet-wide',
+      );
     });
 
     test('server writes are no-ops outside shared mode', () async {
@@ -1233,28 +1368,30 @@ void main() {
       expect(await device.records.allRecords(), isEmpty);
     });
 
-    test('rebuildCatalog repopulates from the store before any round',
-        () async {
-      final device = await _Device.create(tempDir, 'a', shared: true);
-      await _saveServer(device, _server('web', label: 'Web'));
-      final fresh = SeanceServerCatalog();
-      final restarted = BookmarkCoordinator(
-        records: device.records,
-        bookmarks: device.bookmarks,
-        hostKeys: device.hostKeys,
+    test(
+      'rebuildCatalog repopulates from the store before any round',
+      () async {
+        final device = await _Device.create(tempDir, 'a', shared: true);
+        await _saveServer(device, _server('web', label: 'Web'));
+        final fresh = SeanceServerCatalog();
+        final restarted = BookmarkCoordinator(
+          records: device.records,
+          bookmarks: device.bookmarks,
+          hostKeys: device.hostKeys,
           hostKeyMutations: device.hostKeyMutations,
-        crypto: device.crypto,
-        deviceId: device.deviceId,
-        pinVerdicts: device.verdicts,
-        tripwires: device.tripwires,
-        catalog: fresh,
-        servers: device.servers,
-        secrets: device.secrets,
-        now: device.clock.call,
-      );
-      await restarted.rebuildCatalog();
-      expect(fresh.byId('web')!.label, 'Web');
-    });
+          crypto: device.crypto,
+          deviceId: device.deviceId,
+          pinVerdicts: device.verdicts,
+          tripwires: device.tripwires,
+          catalog: fresh,
+          servers: device.servers,
+          secrets: device.secrets,
+          now: device.clock.call,
+        );
+        await restarted.rebuildCatalog();
+        expect(fresh.byId('web')!.label, 'Web');
+      },
+    );
 
     test('a prefixless record the apply cursor already passed backfills '
         'under its own tuple', () async {
@@ -1262,86 +1399,121 @@ void main() {
       // Sealed by a catalog-only build: stored with a seq the apply
       // cursor has long passed, no materialized tuple.
       await device.records.putRemote(
-          (await _sealServer(_server('old', label: 'Old'), updatedAt: 3))
-              .withSeq(1));
+        (await _sealServer(
+          _server('old', label: 'Old'),
+          updatedAt: 3,
+        )).withSeq(1),
+      );
       await device.records.setLastAppliedSeq(5);
 
       await device.coordinator.rebuildCatalog();
       expect(device.catalog!.byId('old')!.label, 'Old');
-      expect((await device.servers!.syncTupleOf('old'))!.deviceId,
-          'foreign-device');
+      expect(
+        (await device.servers!.syncTupleOf('old'))!.deviceId,
+        'foreign-device',
+      );
     });
   });
 
   group('secret records (04 §4.2, amended)', () {
-    test('a syncSecret server publishes its credential with the config',
-        () async {
-      final a = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
-      final b = await _Device.create(tempDir, 'b',
-          shared: true, syncSecrets: true);
-      await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
+    test(
+      'a syncSecret server publishes its credential with the config',
+      () async {
+        final a = await _Device.create(
+          tempDir,
+          'a',
+          shared: true,
+          syncSecrets: true,
+        );
+        final b = await _Device.create(
+          tempDir,
+          'b',
+          shared: true,
+          syncSecrets: true,
+        );
+        await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
+        await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
 
-      await a.coordinator.runRound(server);
-      expect(server.records.containsKey('secret:s1'), isTrue);
-      await b.coordinator.runRound(server);
-      expect(await b.servers!.byId('web'), isNotNull);
-      expect((await b.secrets!.getSecret('s1'))!.value, 'value-s1');
-    });
+        await a.coordinator.runRound(server);
+        expect(server.records.containsKey('secret:s1'), isTrue);
+        await b.coordinator.runRound(server);
+        expect(await b.servers!.byId('web'), isNotNull);
+        expect((await b.secrets!.getSecret('s1'))!.value, 'value-s1');
+      },
+    );
 
-    test('a credential stays published while a synced sharer remains',
-        () async {
-      final a = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
-      await a.secrets!
-          .putLocalSecret(_secret('shared-s'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web-a', secretRef: 'shared-s', syncSecret: true));
-      await _saveServer(
-          a, _server('web-b', secretRef: 'shared-s', syncSecret: true));
-      await a.coordinator.runRound(server);
-      expect(server.records['secret:shared-s']!.deleted, isFalse);
+    test(
+      'a credential stays published while a synced sharer remains',
+      () async {
+        final a = await _Device.create(
+          tempDir,
+          'a',
+          shared: true,
+          syncSecrets: true,
+        );
+        await a.secrets!.putLocalSecret(
+          _secret('shared-s'),
+          updatedAt: _epochMs,
+        );
+        await _saveServer(
+          a,
+          _server('web-a', secretRef: 'shared-s', syncSecret: true),
+        );
+        await _saveServer(
+          a,
+          _server('web-b', secretRef: 'shared-s', syncSecret: true),
+        );
+        await a.coordinator.runRound(server);
+        expect(server.records['secret:shared-s']!.deleted, isFalse);
 
-      // Exclude one sharer — the credential must NOT retract while
-      // web-b still syncs it.
-      a.clock.ms += 1000;
-      await a.coordinator.onServerSaved(
-          (await a.servers!.byId('web-a'))!.copyWith(
-        excludeFromSync: true,
-        updatedAt: a.clock.ms,
-      ));
-      expect((await a.records.getRecord('web-a'))!.deleted, isTrue);
-      expect(
+        // Exclude one sharer — the credential must NOT retract while
+        // web-b still syncs it.
+        a.clock.ms += 1000;
+        await a.coordinator.onServerSaved(
+          (await a.servers!.byId(
+            'web-a',
+          ))!.copyWith(excludeFromSync: true, updatedAt: a.clock.ms),
+        );
+        expect((await a.records.getRecord('web-a'))!.deleted, isTrue);
+        expect(
           (await a.records.getRecord('secret:shared-s'))!.deleted,
-          isFalse);
-    });
+          isFalse,
+        );
+      },
+    );
 
-    test('excluding the last synced sharer retracts the secret record',
-        () async {
-      final a = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
-      await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
-      a.clock.ms += 1000;
-      await a.coordinator.onServerSaved(
-          (await a.servers!.byId('web'))!.copyWith(
-        excludeFromSync: true,
-        updatedAt: a.clock.ms,
-      ));
-      expect((await a.records.getRecord('secret:s1'))!.deleted, isTrue);
-      // The vault copy itself is local material — untouched.
-      expect(await a.secrets!.getSecret('s1'), isNotNull);
-    });
+    test(
+      'excluding the last synced sharer retracts the secret record',
+      () async {
+        final a = await _Device.create(
+          tempDir,
+          'a',
+          shared: true,
+          syncSecrets: true,
+        );
+        await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
+        await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
+        a.clock.ms += 1000;
+        await a.coordinator.onServerSaved(
+          (await a.servers!.byId(
+            'web',
+          ))!.copyWith(excludeFromSync: true, updatedAt: a.clock.ms),
+        );
+        expect((await a.records.getRecord('secret:s1'))!.deleted, isTrue);
+        // The vault copy itself is local material — untouched.
+        expect(await a.secrets!.getSecret('s1'), isNotNull);
+      },
+    );
 
     test('deleting the server retracts its orphaned credential', () async {
-      final a = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
+      final a = await _Device.create(
+        tempDir,
+        'a',
+        shared: true,
+        syncSecrets: true,
+      );
       await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
+      await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
       await _deleteServer(a, (await a.servers!.byId('web'))!);
       expect((await a.records.getRecord('web'))!.deleted, isTrue);
       expect((await a.records.getRecord('secret:s1'))!.deleted, isTrue);
@@ -1349,186 +1521,212 @@ void main() {
 
     test('re-including after a retraction re-dates the credential past '
         'it', () async {
-      final a = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
+      final a = await _Device.create(
+        tempDir,
+        'a',
+        shared: true,
+        syncSecrets: true,
+      );
       await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
+      await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
       a.clock.ms += 1000;
       await a.coordinator.onServerSaved(
-          (await a.servers!.byId('web'))!.copyWith(
-        excludeFromSync: true,
-        updatedAt: a.clock.ms,
-      ));
+        (await a.servers!.byId(
+          'web',
+        ))!.copyWith(excludeFromSync: true, updatedAt: a.clock.ms),
+      );
       final tombstone = await a.records.getRecord('secret:s1');
       expect(tombstone!.deleted, isTrue);
 
       a.clock.ms += 1000;
       await a.coordinator.onServerSaved(
-          (await a.servers!.byId('web'))!.copyWith(
-        excludeFromSync: false,
-        updatedAt: a.clock.ms,
-      ));
+        (await a.servers!.byId(
+          'web',
+        ))!.copyWith(excludeFromSync: false, updatedAt: a.clock.ms),
+      );
       final revived = await a.records.getRecord('secret:s1');
       expect(revived!.deleted, isFalse);
       expect(revived.updatedAt, greaterThan(tombstone.updatedAt));
       // The vault copy carries the bumped stamp, so vault and record
       // agree on the credential's version.
-      expect((await a.secrets!.getSecret('s1'))!.updatedAt,
-          greaterThan(tombstone.updatedAt));
+      expect(
+        (await a.secrets!.getSecret('s1'))!.updatedAt,
+        greaterThan(tombstone.updatedAt),
+      );
     });
 
-    test('the retraction outranks a credential stamped past its server',
-        () async {
-      final a = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
-      // The credential was edited well after its server: its stamp
-      // advances on its own, so the server's delete stamp alone loses.
-      await a.secrets!.putLocalSecret(
+    test(
+      'the retraction outranks a credential stamped past its server',
+      () async {
+        final a = await _Device.create(
+          tempDir,
+          'a',
+          shared: true,
+          syncSecrets: true,
+        );
+        // The credential was edited well after its server: its stamp
+        // advances on its own, so the server's delete stamp alone loses.
+        await a.secrets!.putLocalSecret(
           _secret('s1', updatedAt: _epochMs + 9000),
-          updatedAt: _epochMs + 9000);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
-      await a.coordinator.runRound(server);
-      expect(server.records['secret:s1']!.updatedAt, _epochMs + 9000);
+          updatedAt: _epochMs + 9000,
+        );
+        await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
+        await a.coordinator.runRound(server);
+        expect(server.records['secret:s1']!.updatedAt, _epochMs + 9000);
 
-      a.clock.ms += 1000;
-      await _deleteServer(a, (await a.servers!.byId('web'))!);
-      final retraction = await a.records.getRecord('secret:s1');
-      expect(retraction!.deleted, isTrue);
-      expect(retraction.updatedAt, greaterThan(_epochMs + 9000));
-      await a.coordinator.runRound(server);
-      expect(server.records['secret:s1']!.deleted, isTrue);
-    });
+        a.clock.ms += 1000;
+        await _deleteServer(a, (await a.servers!.byId('web'))!);
+        final retraction = await a.records.getRecord('secret:s1');
+        expect(retraction!.deleted, isTrue);
+        expect(retraction.updatedAt, greaterThan(_epochMs + 9000));
+        await a.coordinator.runRound(server);
+        expect(server.records['secret:s1']!.deleted, isTrue);
+      },
+    );
 
     test("another device's retraction is not re-dated past", () async {
-      final a = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
-      server.seed(EncryptedRecord(
-        id: 'secret:s1',
-        updatedAt: _epochMs + 5000,
-        deviceId: 'other-device',
-        deleted: true,
-        seq: null,
-        blob: Uint8List(0),
-      ));
+      final a = await _Device.create(
+        tempDir,
+        'a',
+        shared: true,
+        syncSecrets: true,
+      );
+      server.seed(
+        EncryptedRecord(
+          id: 'secret:s1',
+          updatedAt: _epochMs + 5000,
+          deviceId: 'other-device',
+          deleted: true,
+          seq: null,
+          blob: Uint8List(0),
+        ),
+      );
       await a.coordinator.runRound(server);
       await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
+      await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
       // Séance's `_reviveSecrets` only overrules this device's own
       // retraction; the credential stays withdrawn until it is edited.
       expect((await a.secrets!.getSecret('s1'))!.updatedAt, _epochMs);
-      expect((await a.records.getRecord('secret:s1'))!.updatedAt,
-          _epochMs);
+      expect((await a.records.getRecord('secret:s1'))!.updatedAt, _epochMs);
     });
 
     test('an excluded-only credential is shielded from pulled '
         'application', () async {
-      final device = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
+      final device = await _Device.create(
+        tempDir,
+        'a',
+        shared: true,
+        syncSecrets: true,
+      );
       await device.servers!.save(
-          _server('priv', secretRef: 's1', excludeFromSync: true));
-      server.seed(
-          await _sealSecret(_secret('s1'), updatedAt: _epochMs + 1));
+        _server('priv', secretRef: 's1', excludeFromSync: true),
+      );
+      server.seed(await _sealSecret(_secret('s1'), updatedAt: _epochMs + 1));
       await device.coordinator.runRound(server);
       expect(await device.secrets!.getSecret('s1'), isNull);
     });
 
     test('a newer local credential is never overwritten by a stale '
         'pull', () async {
-      final device = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
+      final device = await _Device.create(
+        tempDir,
+        'a',
+        shared: true,
+        syncSecrets: true,
+      );
       await device.secrets!.putLocalSecret(
-          _secret('s1', updatedAt: _epochMs + 9000),
-          updatedAt: _epochMs + 9000);
+        _secret('s1', updatedAt: _epochMs + 9000),
+        updatedAt: _epochMs + 9000,
+      );
       // A non-excluded sharer exists so the shield does not hide the
       // record — the freshness floor is what protects the edit.
       await _saveServer(device, _server('web', secretRef: 's1'));
-      server.seed(
-          await _sealSecret(_secret('s1'), updatedAt: _epochMs + 1));
+      server.seed(await _sealSecret(_secret('s1'), updatedAt: _epochMs + 1));
       await device.coordinator.runRound(server);
-      expect((await device.secrets!.getSecret('s1'))!.updatedAt,
-          _epochMs + 9000);
+      expect(
+        (await device.secrets!.getSecret('s1'))!.updatedAt,
+        _epochMs + 9000,
+      );
     });
 
-    test('secret tombstones are no-ops — vault material survives',
-        () async {
-      final device = await _Device.create(tempDir, 'a',
-          shared: true, syncSecrets: true);
-      await device.secrets!
-          .putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      server.seed(EncryptedRecord(
-        id: 'secret:s1',
-        updatedAt: _epochMs + 99999,
-        deviceId: 'anyone',
-        deleted: true,
-        seq: null,
-        blob: Uint8List(0),
-      ));
+    test('secret tombstones are no-ops — vault material survives', () async {
+      final device = await _Device.create(
+        tempDir,
+        'a',
+        shared: true,
+        syncSecrets: true,
+      );
+      await device.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
+      server.seed(
+        EncryptedRecord(
+          id: 'secret:s1',
+          updatedAt: _epochMs + 99999,
+          deviceId: 'anyone',
+          deleted: true,
+          seq: null,
+          blob: Uint8List(0),
+        ),
+      );
       await device.coordinator.runRound(server);
       expect(await device.secrets!.getSecret('s1'), isNotNull);
     });
 
-    test('a pulled secret never lands on a device without a vault',
-        () async {
+    test('a pulled secret never lands on a device without a vault', () async {
       final device = await _Device.create(tempDir, 'a');
-      server.seed(
-          await _sealSecret(_secret('s1'), updatedAt: _epochMs + 1));
+      server.seed(await _sealSecret(_secret('s1'), updatedAt: _epochMs + 1));
       await device.coordinator.runRound(server);
       // Preserved verbatim, never decrypted, never tripped.
       expect(await device.tripwires.trippedIds(), isEmpty);
-      expect(
-          (await device.records.getRecord('secret:s1'))!.blob, isNotEmpty);
+      expect((await device.records.getRecord('secret:s1'))!.blob, isNotEmpty);
     });
   });
 
   group('device-level secret switch (Séance syncSecrets)', () {
-    test('while off, nothing publishes and no pulled credential lands',
-        () async {
-      final a = await _Device.create(tempDir, 'a', shared: true);
-      await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
-      await a.coordinator.onServerSecretSaved('s1');
-      expect(await a.records.getRecord('secret:s1'), isNull);
+    test(
+      'while off, nothing publishes and no pulled credential lands',
+      () async {
+        final a = await _Device.create(tempDir, 'a', shared: true);
+        await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
+        await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
+        await a.coordinator.onServerSecretSaved('s1');
+        expect(await a.records.getRecord('secret:s1'), isNull);
 
-      // A synced sharer exists, so neither the shield nor the freshness
-      // floor keeps the pulled credential out — the switch does.
-      await _saveServer(
-          a, _server('web2', secretRef: 's2', syncSecret: true));
-      server.seed(
-          await _sealSecret(_secret('s2'), updatedAt: _epochMs + 1));
-      await a.coordinator.runRound(server);
-      expect(await a.secrets!.getSecret('s2'), isNull);
-      expect(server.records.containsKey('secret:s1'), isFalse);
-      // Stored, not dropped: turning the switch on later can apply it.
-      expect(await a.records.getRecord('secret:s2'), isNotNull);
-    });
+        // A synced sharer exists, so neither the shield nor the freshness
+        // floor keeps the pulled credential out — the switch does.
+        await _saveServer(
+          a,
+          _server('web2', secretRef: 's2', syncSecret: true),
+        );
+        server.seed(await _sealSecret(_secret('s2'), updatedAt: _epochMs + 1));
+        await a.coordinator.runRound(server);
+        expect(await a.secrets!.getSecret('s2'), isNull);
+        expect(server.records.containsKey('secret:s1'), isFalse);
+        // Stored, not dropped: turning the switch on later can apply it.
+        expect(await a.records.getRecord('secret:s2'), isNotNull);
+      },
+    );
 
-    test('while off, deleting the server still retracts its credential',
-        () async {
-      // An earlier session with the switch on may have published it.
-      final a = await _Device.create(tempDir, 'a', shared: true);
-      await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
-      await _deleteServer(a, (await a.servers!.byId('web'))!);
-      expect((await a.records.getRecord('secret:s1'))!.deleted, isTrue);
-    });
+    test(
+      'while off, deleting the server still retracts its credential',
+      () async {
+        // An earlier session with the switch on may have published it.
+        final a = await _Device.create(tempDir, 'a', shared: true);
+        await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
+        await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
+        await _deleteServer(a, (await a.servers!.byId('web'))!);
+        expect((await a.records.getRecord('secret:s1'))!.deleted, isTrue);
+      },
+    );
 
     test('turning it on publishes opted-in credentials and applies the '
         'pulls it skipped', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
       await a.secrets!.putLocalSecret(_secret('s1'), updatedAt: _epochMs);
-      await _saveServer(
-          a, _server('web', secretRef: 's1', syncSecret: true));
+      await _saveServer(a, _server('web', secretRef: 's1', syncSecret: true));
       await a.secrets!.putLocalSecret(_secret('s3'), updatedAt: _epochMs);
       await _saveServer(a, _server('opted-out', secretRef: 's3'));
-      await _saveServer(
-          a, _server('web2', secretRef: 's2', syncSecret: true));
-      server.seed(
-          await _sealSecret(_secret('s2'), updatedAt: _epochMs + 1));
+      await _saveServer(a, _server('web2', secretRef: 's2', syncSecret: true));
+      server.seed(await _sealSecret(_secret('s2'), updatedAt: _epochMs + 1));
       await a.coordinator.runRound(server);
       expect(await a.secrets!.getSecret('s2'), isNull);
 
@@ -1549,10 +1747,8 @@ void main() {
     test('a catch-up the passphrase hold deferred re-runs once the hold '
         'clears', () async {
       final a = await _Device.create(tempDir, 'a', shared: true);
-      await _saveServer(
-          a, _server('web2', secretRef: 's2', syncSecret: true));
-      server.seed(
-          await _sealSecret(_secret('s2'), updatedAt: _epochMs + 1));
+      await _saveServer(a, _server('web2', secretRef: 's2', syncSecret: true));
+      server.seed(await _sealSecret(_secret('s2'), updatedAt: _epochMs + 1));
       // Switch off: the pull is skipped and the cursor passes it.
       await a.coordinator.runRound(server);
 

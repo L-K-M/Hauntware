@@ -22,10 +22,28 @@ device-local leases, so a local purge cannot race a local undo or live run.
 There is no distributed cross-machine lease; sibling-machine or manual removal
 is reconciled from the next live listing.
 
-Sync-package analysis is clean; 324 tests pass with five SSH-fixture skips.
-Flutter analysis is clean; all 3,263 app tests pass together. Native Linux
-before/after captures and provenance are in
-`tasks/sync-trash-purge/screenshots/`. No Séance source or pin changed.
+Review hardening adds conditional host-key conflict decisions, missing-suffix
+canonicalization, Windows UNC/case normalization, and portable legacy plus v2
+activity markers. Rule-4 undo records a staged transaction before mutation,
+validates ancestors without following links, resumes after disconnect, and
+can be cancelled between durable units. Restart preflight searches every
+pre-scan pair-id fold candidate, binds recorded journal sides to direct or
+swapped endpoints by scope/location and endpoint/root identity, opens existing
+roots read-only under the recorded rule snapshot, and resumes under an exclusive
+cross-process restore lease. Missing, ambiguous, or unreadable matching recovery
+blocks scan, run, and purge; unrelated corrupt journals do not. Completion
+rediscovers before scanning. Restore revalidates both canonical roots under held
+leases and rejects malformed or unsafe journal paths before filesystem access.
+Normal runs retain shared location gates across processes and app instances.
+Lease cleanup remains fail-closed without masking the operation result.
+
+Core and sync analysis are clean; 1,929 core tests pass with 27 environment
+skips, and 382 sync tests pass with five SSH-fixture skips. Flutter analysis is
+clean; all 3,338 app tests pass together. All 140 benchmark tests pass. Light-
+theme captures and provenance are in
+`tasks/sync-trash-purge/screenshots/`. Local native builds remain
+environment-gated by missing CMake and Java; the native matrix runs in CI. No
+Séance source or dependency pin changed in this PR.
 
 ## Séance current-core compatibility (2026-10-03)
 
@@ -10672,9 +10690,18 @@ unverified.
     scope. Root ownership markers, endpoint-alias convergence, local and
     cross-process activity locks, owner-tagged quarantine, live re-listing,
     no-follow deletion, foreign-device handling, and scoped restore/prune
-    markers close the safety and concurrency boundaries. Analysis is clean;
-    324 sync tests pass with five SSH-fixture skips. All 3,263 app tests pass
-    together. Captures are in
+    markers close the safety and concurrency boundaries. Review hardening adds
+    conditional host-key writes, dual portable markers, Windows path
+    normalization, durable staged replace restore, ancestor checks, and restore
+    cancellation. Restart preflight checks every pair-id fold candidate before
+    scanning, binds direct or swapped panes from recorded rule, scope, location,
+    endpoint, and root identities, opens existing trash roots read-only, then
+    resumes under an exclusive cross-process restore lease. Missing, ambiguous, or
+    unreadable matching recovery blocks scan, run, and purge; unrelated corrupt
+    journals do not. Completion rediscovers before scanning, while normal runs
+    keep shared location gates across app instances. Analysis is clean; 382 sync
+    tests pass with five SSH-fixture skips. All 3,338 app tests pass together.
+    Captures are in
     `tasks/sync-trash-purge/screenshots/`.
 28. **2026-09-22: M8 — the rail-5 docroot warning chip is unbuilt.**
     05 §8 (1083–1095) requires a warning — in the pair editor AND as a

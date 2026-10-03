@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -123,6 +124,41 @@ void main() {
     expect(controller.phase, SyncPlanPhase.ready);
     expect(controller.trashNotices.single.runCount, 1);
   });
+
+  test(
+    'dispose during a failed cache save lets a waiting run settle',
+    () async {
+      final runId = _runId(syncRunDevicePrefix('test-device'), 'gated-cache');
+      final trashRoot = Directory('${leftRoot.path}/.poltergeist-trash')
+        ..createSync();
+      final runDirectory = Directory('${trashRoot.path}/$runId')..createSync();
+      final trashed = File('${runDirectory.path}/000001-a.txt')
+        ..writeAsStringSync('old');
+      await _writeJournal(
+        runsDirectory,
+        runId: runId,
+        pairId: 'pair-1',
+        trashLocation: trashed.path,
+        startedAt: DateTime.now().subtract(const Duration(days: 31)),
+      );
+      final gatedStates = _GatedFailingCacheStateStore();
+      final controller = _controller(
+        pair: pair,
+        states: gatedStates,
+        activity: activity,
+      );
+
+      controller.start();
+      await gatedStates.cacheSaveStarted.future;
+      expect(controller.phase, SyncPlanPhase.ready);
+      final run = controller.run();
+
+      controller.dispose();
+      gatedStates.failCacheSave();
+
+      await expectLater(run, completes);
+    },
+  );
 
   test('a cached scope releases journals after whole-root deletion', () async {
     final trashRoot = Directory('${leftRoot.path}/.poltergeist-trash')
@@ -481,7 +517,9 @@ void main() {
       rootId: identity.rootId,
       resolvedTrashRoot: identity.canonicalRoot,
     );
-    final lease = await activity.begin('active-run', [location]);
+    final lease = await activity.begin('active-run', [
+      location,
+    ], mode: SyncTrashActivityMode.run);
     expect(controller.canPurgeTrash, isFalse);
     expect(controller.prepareFullTrashPurge(), isNull);
 
@@ -577,10 +615,10 @@ void main() {
         rootId: identity.rootId,
         resolvedTrashRoot: trashRoot,
       );
-      final markerKey = sha256.convert(utf8.encode(runId));
+      final markerKey = base64Url.encode(utf8.encode(runId));
       final markerPath = p.join(
         lockDirectory.path,
-        '${location.scopeKey}.active.$markerKey.lock',
+        '${location.scopeKey}.active.v2.$markerKey.lock',
       );
       final marker = await startTestFileLockHolder(
         lockDirectory,
@@ -751,4 +789,29 @@ final class _FailingCacheStateStore implements SyncStateStore {
 
     return _delegate.save(pairId, state);
   }
+}
+
+final class _GatedFailingCacheStateStore implements SyncStateStore {
+  final MemorySyncStateStore _delegate = MemorySyncStateStore();
+  final Completer<void> cacheSaveStarted = Completer<void>();
+  final Completer<void> _cacheSaveRelease = Completer<void>();
+  var _saveCount = 0;
+
+  @override
+  Future<SyncPairState> load(String pairId) => _delegate.load(pairId);
+
+  @override
+  Future<void> save(String pairId, SyncPairState state) async {
+    _saveCount++;
+    if (_saveCount == 1) {
+      await _delegate.save(pairId, state);
+      return;
+    }
+
+    cacheSaveStarted.complete();
+    await _cacheSaveRelease.future;
+    throw StateError('cache write failed');
+  }
+
+  void failCacheSave() => _cacheSaveRelease.complete();
 }

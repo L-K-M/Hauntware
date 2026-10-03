@@ -38,7 +38,8 @@ const kHostKeyReviewPaneTabId = 'review';
 /// connection, prompt, probe, and trust lanes. Production code names the
 /// concrete client nowhere but here; tests substitute a scripted fake, so
 /// the composition is drivable without an isolate.
-abstract interface class AppEngine implements PromptBridge, ProbeBridge, PaneEngineLanes {
+abstract interface class AppEngine
+    implements PromptBridge, ProbeBridge, PaneEngineLanes {
   /// Host keys the engine pinned; the app persists them (one store owner).
   Stream<HostKeyPinnedEvent> get hostKeyPins;
 
@@ -200,8 +201,7 @@ final class _EngineClientAppEngine implements AppEngine {
   Stream<EnginePromptEvent> get prompts => _client.prompts;
 
   @override
-  Stream<PromptDismissedEvent> get promptDismissals =>
-      _client.promptDismissals;
+  Stream<PromptDismissedEvent> get promptDismissals => _client.promptDismissals;
 
   @override
   void replyPrompt(String promptId, EnginePromptKind kind, PromptReply reply) =>
@@ -218,8 +218,7 @@ final class _EngineClientAppEngine implements AppEngine {
       _client.watchServer(serverId);
 
   @override
-  Stream<RecoveryFailedEvent> get recoveryFailures =>
-      _client.recoveryFailures;
+  Stream<RecoveryFailedEvent> get recoveryFailures => _client.recoveryFailures;
 
   @override
   Stream<ConnectionLogEvent> get connectionLog => _client.connectionLog;
@@ -249,10 +248,8 @@ final class _EngineClientAppEngine implements AppEngine {
   );
 
   @override
-  Future<AppBrowseChannel> openLocalChannel({required String rootPath})
-    async => _EngineClientChannel(
-      await _client.openLocalChannel(rootPath: rootPath),
-    );
+  Future<AppBrowseChannel> openLocalChannel({required String rootPath}) async =>
+      _EngineClientChannel(await _client.openLocalChannel(rootPath: rootPath));
 
   @override
   Future<void> disconnectServer(String serverId) =>
@@ -288,8 +285,7 @@ final class _EngineClientChannel implements AppBrowseChannel {
   String get homePath => _channel.homePath;
 
   @override
-  Stream<DirectoryWatchEvent> get directoryChanges =>
-      _channel.directoryChanges;
+  Stream<DirectoryWatchEvent> get directoryChanges => _channel.directoryChanges;
 
   @override
   Future<List<RemoteFileEntry>> listDirectory(String path) =>
@@ -315,8 +311,7 @@ final class _EngineClientChannel implements AppBrowseChannel {
   }
 
   @override
-  Future<void> openInDefaultApp(String path) =>
-      _channel.openInDefaultApp(path);
+  Future<void> openInDefaultApp(String path) => _channel.openInDefaultApp(path);
 
   @override
   Future<void> createDirectory(String path) => _channel.createDirectory(path);
@@ -455,9 +450,7 @@ final class EngineSession {
     // EngineClient sends before returning its Future. Catalog publication
     // therefore precedes later connection requests on the same FIFO port,
     // even while this acknowledgement is pending.
-    _errors.observe(
-      _engine.replaceServerCatalog(snapshot),
-    );
+    _errors.observe(_engine.replaceServerCatalog(snapshot));
   }
 
   bool _isPublishedServerCatalog(List<ServerConfig> configs) {
@@ -533,20 +526,27 @@ final class EngineSession {
     // Removals apply idempotently (both shipped stores treat an absent
     // record as a no-op), including for a record the app just seeded that
     // the engine dropped because its pin was gone.
-    _incidentTail = _incidentTail.then((_) {
-      final Future<void> operation = switch (event) {
-        IncidentRecordStoredEvent(:final record) => _incidentStore.put(record),
-        IncidentRecordRemovedEvent(:final serverId, :final endpoint) =>
-          endpoint == null
-              ? _incidentStore.removeAllFor(serverId)
-              : _incidentStore.removeFor(serverId, endpoint),
-      };
-      return operation;
-    }).then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {
-      // A failed write is reported, never thrown into the stream, and
-      // must not break the chain for later mutations.
-      _errors.report(error, stackTrace);
-    });
+    _incidentTail = _incidentTail
+        .then((_) {
+          final Future<void> operation = switch (event) {
+            IncidentRecordStoredEvent(:final record) => _incidentStore.put(
+              record,
+            ),
+            IncidentRecordRemovedEvent(:final serverId, :final endpoint) =>
+              endpoint == null
+                  ? _incidentStore.removeAllFor(serverId)
+                  : _incidentStore.removeFor(serverId, endpoint),
+          };
+          return operation;
+        })
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) {
+            // A failed write is reported, never thrown into the stream, and
+            // must not break the chain for later mutations.
+            _errors.report(error, stackTrace);
+          },
+        );
   }
 
   /// Forwards the app lifecycle. Only [AppLifecycleState.detached] — the
@@ -743,7 +743,9 @@ Future<EngineSession?> startEngineSession({
   final separator = Platform.pathSeparator;
   final pinsStore =
       pinStore ??
-      FileHostKeyStore(File('$supportDirectoryPath$separator$_pinStoreFileName'));
+      FileHostKeyStore(
+        File('$supportDirectoryPath$separator$_pinStoreFileName'),
+      );
   final incidentsStore =
       incidentStore ??
       FileIncidentStore(
@@ -777,7 +779,7 @@ Future<EngineSession?> startEngineSession({
   // unavailable — never a silent permanent delete.
   final trashServer =
       (trashServerBinder ??
-          () => TrashChannelServer.bind(onError: errors.report))();
+      () => TrashChannelServer.bind(onError: errors.report))();
   final AppEngine engine;
   try {
     engine = await spawn(
@@ -926,6 +928,43 @@ final class _ObservedHostKeyStore implements ConflictAwareHostKeyStore {
     });
   }
 
+  @override
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  ) {
+    if (expected.locator != replacement.locator) {
+      throw ArgumentError.value(
+        replacement.locator,
+        'replacement',
+        'must use the expected host-key locator',
+      );
+    }
+
+    final sequence = ++_nextSequence;
+    final locator = expected.locator;
+
+    return _enqueueOperation(() async {
+      var current = _accepted[locator];
+      if (current == null) {
+        final stored = await _delegate.get(expected.host, expected.port);
+        current = _accepted[locator] ?? stored;
+        if (stored != null) _acceptStored(stored);
+      }
+      if (current == null ||
+          current.fingerprintSha256 != expected.fingerprintSha256) {
+        return HostKeyInstallResult.conflict;
+      }
+
+      await _delegate.put(replacement);
+      final acceptedSequence = _acceptedSequences[locator] ?? -1;
+      if (acceptedSequence > sequence) return HostKeyInstallResult.conflict;
+
+      _accept(replacement, sequence);
+      return HostKeyInstallResult.installed;
+    });
+  }
+
   void _acceptStored(HostKey key) {
     final locator = _exactHostKeyLocator(key.host, key.port);
     if (_accepted.containsKey(locator)) return;
@@ -952,6 +991,5 @@ final class _AppConnectionLanes implements ConnectionStateBridge {
       _engine.watchServer(serverId);
 
   @override
-  Stream<RecoveryFailedEvent> get recoveryFailures =>
-      _engine.recoveryFailures;
+  Stream<RecoveryFailedEvent> get recoveryFailures => _engine.recoveryFailures;
 }

@@ -233,6 +233,15 @@ enum SyncTrashPurgeAdmission {
   requireIdle,
 }
 
+/// Whether a trash reservation may overlap another run at the same root.
+enum SyncTrashActivityMode {
+  /// Ordinary runs may share a root under distinct run ids.
+  run,
+
+  /// Restore owns the root while it checks and rewrites prior state.
+  restore,
+}
+
 final class SyncTrashPurgeInProgressException implements Exception {
   const SyncTrashPurgeInProgressException();
 }
@@ -264,7 +273,8 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
           : p.absolute(p.normalize(lockDirectory));
 
   static const _gateSuffix = '.gate.lock';
-  static const _activeMarker = '.active.';
+  static const _activeMarker = '.active.v2.';
+  static const _legacyActiveMarker = '.active.';
   static const _lockSuffix = '.lock';
 
   static var _nextMemoryNamespace = 0;
@@ -318,8 +328,9 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
   /// Reserves [runId] before the executor creates its journal or trash dir.
   Future<SyncTrashActivityLease> begin(
     String runId,
-    Iterable<SyncTrashLocation> locations,
-  ) async {
+    Iterable<SyncTrashLocation> locations, {
+    required SyncTrashActivityMode mode,
+  }) async {
     if (runId.isEmpty) {
       throw ArgumentError.value(runId, 'runId', 'must not be empty');
     }
@@ -329,27 +340,30 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
     final locationGuards = await _acquireLocationGuards(locationKeys);
     final guards = await _acquireProcessGuards(ordered);
     final gates = <_HeldFileLock>[];
-    final locationGates = <_HeldFileLock>[];
+    final locationGates = <_HeldLocationGate>[];
     final markers = <_RunMarker>[];
+    var retainScopeGates = false;
+    Object? operationError;
 
     try {
-      if (ordered.any(hasPurge) ||
-          locationKeys.any((key) => _locationState(key).transitioning)) {
-        throw const SyncTrashPurgeInProgressException();
-      }
       if (ordered.any((location) => activeRunIds(location).contains(runId))) {
         throw const SyncTrashActivityLockException(
           'reserve duplicate active run',
         );
       }
+      if (ordered.any(hasPurge) ||
+          ordered.any((location) => _blocksScopeActivity(location, mode)) ||
+          locationKeys.any((key) => _blocksActivity(key, mode))) {
+        throw const SyncTrashPurgeInProgressException();
+      }
 
       if (_lockDirectory != null) {
         await _ensureLockDirectory();
         for (final locationKey in locationKeys) {
-          final gate = await _tryLock(
-            _locationGatePath(locationKey),
-            FileLock.shared,
-          );
+          final gate = await _tryLocationGate(locationKey, switch (mode) {
+            SyncTrashActivityMode.run => FileLock.shared,
+            SyncTrashActivityMode.restore => FileLock.exclusive,
+          });
           if (gate == null) {
             throw const SyncTrashPurgeInProgressException();
           }
@@ -357,42 +371,71 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
         }
 
         for (final location in ordered) {
-          final gate = await _tryLock(
-            _scopeGatePath(location),
-            FileLock.shared,
-          );
+          final gate = await _tryLock(_scopeGatePath(location), switch (mode) {
+            SyncTrashActivityMode.run => FileLock.shared,
+            SyncTrashActivityMode.restore => FileLock.exclusive,
+          });
           if (gate == null) {
             throw const SyncTrashPurgeInProgressException();
           }
           gates.add(gate);
         }
 
-        for (final location in ordered) {
-          final path = _markerPath(location, runId);
-          final marker = await _tryLock(path, FileLock.exclusive);
-          if (marker == null) {
-            throw const SyncTrashActivityLockException(
-              'reserve active-run marker',
-            );
+        if (mode == SyncTrashActivityMode.restore) {
+          for (final location in ordered) {
+            if ((await _lockedMarkerRunIds(location)).isNotEmpty) {
+              throw const SyncTrashPurgeInProgressException();
+            }
           }
-          markers.add(_RunMarker(marker));
-          await _writeMarker(marker.file, runId);
+        }
+
+        for (final location in ordered) {
+          // Retain both generations until old processes no longer exist.
+          for (final path in _markerPaths(location, runId)) {
+            final marker = await _tryLock(path, FileLock.exclusive);
+            if (marker == null) {
+              throw const SyncTrashActivityLockException(
+                'reserve active-run marker',
+              );
+            }
+            markers.add(_RunMarker(marker));
+            await _writeMarker(marker.file, runId);
+          }
         }
       }
 
       for (final location in ordered) {
-        _scopeState(location).activeRunIds.add(runId);
+        final state = _scopeState(location);
+        state.activeRunIds.add(runId);
+        if (mode == SyncTrashActivityMode.restore) state.restoring = true;
       }
       for (final locationKey in locationKeys) {
-        _locationState(locationKey).sharedHolders++;
+        final state = _locationState(locationKey);
+        switch (mode) {
+          case SyncTrashActivityMode.run:
+            state.sharedHolders++;
+          case SyncTrashActivityMode.restore:
+            state.restoring = true;
+        }
       }
-    } catch (_) {
-      await _releaseMarkers(markers);
-      await _releaseLocks(locationGates);
+      retainScopeGates = mode == SyncTrashActivityMode.restore;
+    } catch (error) {
+      operationError = error;
+      try {
+        await _releaseRunLocks(markers, locationGates, const []);
+      } catch (_) {
+        // Preserve the admission failure after best-effort cleanup.
+      }
       rethrow;
     } finally {
       try {
-        await _releaseLocks(gates);
+        if (!retainScopeGates) {
+          try {
+            await _releaseLocks(gates);
+          } catch (_) {
+            if (operationError == null) rethrow;
+          }
+        }
       } finally {
         try {
           _releaseProcessGuards(guards);
@@ -409,6 +452,8 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
       ordered.toSet(),
       markers,
       locationGates,
+      retainScopeGates ? gates : const [],
+      mode,
     );
   }
 
@@ -423,22 +468,24 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
     final locationGuards = await _acquireLocationGuards(locationKeys);
     final guards = await _acquireProcessGuards(ordered);
     final gates = <_HeldFileLock>[];
-    final locationGates = <_HeldFileLock>[];
+    final locationGates = <_HeldLocationGate>[];
     var retainGates = false;
+    Object? operationError;
 
     try {
       if (ordered.any(hasPurge) ||
-          locationKeys.any((key) => _locationState(key).transitioning)) {
+          ordered.any(_scopeIsRestoring) ||
+          locationKeys.any((key) {
+            final state = _locationState(key);
+            return state.transitioning || state.restoring;
+          })) {
         return null;
       }
 
       if (_lockDirectory != null) {
         await _ensureLockDirectory();
         for (final locationKey in locationKeys) {
-          final gate = await _tryLock(
-            _locationGatePath(locationKey),
-            FileLock.shared,
-          );
+          final gate = await _tryLocationGate(locationKey, FileLock.shared);
           if (gate == null) return null;
           locationGates.add(gate);
         }
@@ -483,11 +530,17 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
         locationGates,
         activeByLocation,
       );
+    } catch (error) {
+      operationError = error;
+      rethrow;
     } finally {
       try {
         if (!retainGates) {
-          await _releaseLocks(gates);
-          await _releaseLocks(locationGates);
+          try {
+            await _releaseGateLocks(gates, locationGates);
+          } catch (_) {
+            if (operationError == null) rethrow;
+          }
         }
       } finally {
         try {
@@ -521,7 +574,9 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
     var retainLocks = false;
     try {
       final locationState = _locationState(locationKey);
-      if (locationState.transitioning || locationState.sharedHolders > 0) {
+      if (locationState.transitioning ||
+          locationState.restoring ||
+          locationState.sharedHolders > 0) {
         return null;
       }
       if (ordered.any(hasPurge) || ordered.any(hasActiveRun)) return null;
@@ -576,7 +631,9 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
     String runId,
     Set<SyncTrashLocation> locations,
     List<_RunMarker> markers,
-    List<_HeldFileLock> locationGates,
+    List<_HeldLocationGate> locationGates,
+    List<_HeldFileLock> scopeGates,
+    SyncTrashActivityMode mode,
   ) async {
     final ordered = _orderedLocations(locations);
     final locationKeys = _orderedLocationKeys(ordered);
@@ -586,17 +643,27 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
 
     try {
       // Keep failed releases visible as active rather than admitting purge.
-      await _releaseMarkers(markers);
-      await _releaseLocks(locationGates);
+      await _releaseRunLocks(markers, locationGates, scopeGates);
 
       for (final location in ordered) {
         final state = _processScopes[_processKey(location)];
-        if (state == null || !state.activeRunIds.remove(runId)) continue;
-        changed = true;
+        if (state == null) continue;
+        if (state.activeRunIds.remove(runId)) changed = true;
+        if (mode == SyncTrashActivityMode.restore && state.restoring) {
+          state.restoring = false;
+          changed = true;
+        }
         _discardEmptyScope(location, state);
       }
       for (final locationKey in locationKeys) {
-        _releaseLocationHolder(locationKey);
+        final state = _locationState(locationKey);
+        switch (mode) {
+          case SyncTrashActivityMode.run:
+            if (state.sharedHolders > 0) state.sharedHolders--;
+          case SyncTrashActivityMode.restore:
+            state.restoring = false;
+        }
+        _discardEmptyLocation(locationKey, state);
       }
     } finally {
       try {
@@ -612,7 +679,7 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
   Future<void> _endPurge(
     Set<SyncTrashLocation> locations,
     List<_HeldFileLock> gates,
-    List<_HeldFileLock> locationGates,
+    List<_HeldLocationGate> locationGates,
   ) async {
     final ordered = _orderedLocations(locations);
     final locationKeys = _orderedLocationKeys(ordered);
@@ -622,8 +689,7 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
 
     try {
       // The process-local guard stays closed if an OS gate cannot unlock.
-      await _releaseLocks(gates);
-      await _releaseLocks(locationGates);
+      await _releaseGateLocks(gates, locationGates);
 
       for (final location in ordered) {
         final state = _processScopes[_processKey(location)];
@@ -711,11 +777,35 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
   _ProcessLocationState _locationState(String locationKey) => _processLocations
       .putIfAbsent(_processLocationKey(locationKey), _ProcessLocationState.new);
 
+  bool _blocksScopeActivity(
+    SyncTrashLocation location,
+    SyncTrashActivityMode mode,
+  ) {
+    final state = _processScopes[_processKey(location)];
+    if (state == null) return false;
+    if (state.restoring) return true;
+
+    return mode == SyncTrashActivityMode.restore &&
+        state.activeRunIds.isNotEmpty;
+  }
+
+  bool _scopeIsRestoring(SyncTrashLocation location) =>
+      _processScopes[_processKey(location)]?.restoring ?? false;
+
+  bool _blocksActivity(String locationKey, SyncTrashActivityMode mode) {
+    final state = _locationState(locationKey);
+    if (state.transitioning || state.restoring) return true;
+
+    return mode == SyncTrashActivityMode.restore && state.sharedHolders > 0;
+  }
+
   void _discardEmptyScope(
     SyncTrashLocation location,
     _ProcessScopeState state,
   ) {
-    if (state.purging || state.activeRunIds.isNotEmpty) return;
+    if (state.purging || state.restoring || state.activeRunIds.isNotEmpty) {
+      return;
+    }
     _processScopes.remove(_processKey(location));
   }
 
@@ -726,7 +816,14 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
   }
 
   void _discardEmptyLocation(String locationKey, _ProcessLocationState state) {
-    if (state.transitioning || state.sharedHolders > 0) return;
+    if (state.transitioning ||
+        state.restoring ||
+        state.sharedHolders > 0 ||
+        state.sharedGate != null ||
+        state.sharedGateReferences > 0 ||
+        state.sharedGateFailure != null) {
+      return;
+    }
     _processLocations.remove(_processLocationKey(locationKey));
   }
 
@@ -781,11 +878,79 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
       p.join(_lockDirectory!, '$locationKey.location$_gateSuffix');
 
   String _markerPath(SyncTrashLocation location, String runId) {
-    final runKey = sha256.convert(utf8.encode(runId));
+    final runKey = base64Url.encode(utf8.encode(runId));
     return p.join(
       _lockDirectory!,
       '${location.scopeKey}$_activeMarker$runKey$_lockSuffix',
     );
+  }
+
+  String _legacyMarkerPath(SyncTrashLocation location, String runId) {
+    final runKey = sha256.convert(utf8.encode(runId));
+    return p.join(
+      _lockDirectory!,
+      '${location.scopeKey}$_legacyActiveMarker$runKey$_lockSuffix',
+    );
+  }
+
+  List<String> _markerPaths(SyncTrashLocation location, String runId) => [
+    _legacyMarkerPath(location, runId),
+    _markerPath(location, runId),
+  ];
+
+  String? _runIdFromMarkerName(SyncTrashLocation location, String name) {
+    final prefix = '${location.scopeKey}$_activeMarker';
+    if (!name.startsWith(prefix) || !name.endsWith(_lockSuffix)) return null;
+
+    final encoded = name.substring(
+      prefix.length,
+      name.length - _lockSuffix.length,
+    );
+    try {
+      final runId = utf8.decode(base64Url.decode(encoded));
+      if (runId.isEmpty || base64Url.encode(utf8.encode(runId)) != encoded) {
+        return null;
+      }
+      return runId;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<_HeldLocationGate?> _tryLocationGate(
+    String locationKey,
+    FileLock mode,
+  ) async {
+    if (mode != FileLock.shared) {
+      final lock = await _tryLock(_locationGatePath(locationKey), mode);
+      return lock == null ? null : _HeldLocationGate.exclusive(lock);
+    }
+
+    final state = _locationState(locationKey);
+    final failure = state.sharedGateFailure;
+    if (failure != null) {
+      throw SyncTrashActivityLockException(
+        'reuse failed shared location gate',
+        failure,
+      );
+    }
+
+    // POSIX closes every process lock when any descriptor for the file closes.
+    // Reuse one descriptor so one local lease cannot unlock another lease.
+    if (state.sharedGate != null) {
+      state.sharedGateReferences++;
+      return _HeldLocationGate.shared(locationKey);
+    }
+
+    final lock = await _tryLock(
+      _locationGatePath(locationKey),
+      FileLock.shared,
+    );
+    if (lock == null) return null;
+
+    state.sharedGate = lock;
+    state.sharedGateReferences = 1;
+    return _HeldLocationGate.shared(locationKey);
   }
 
   Future<_HeldFileLock?> _tryLock(String path, FileLock mode) async {
@@ -814,10 +979,14 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
   Future<Set<String>> _lockedMarkerRunIds(SyncTrashLocation location) async {
     final active = <String>{};
     final local = activeRunIds(location);
-    final localPaths = {
-      for (final runId in local) _markerPath(location, runId),
+    final localRunIdsByPath = {
+      for (final runId in local)
+        for (final path in _markerPaths(location, runId)) path: runId,
     };
     final prefix = '${location.scopeKey}$_activeMarker';
+    final legacyPrefix = '${location.scopeKey}$_legacyActiveMarker';
+    final currentMarkers = <File>[];
+    final legacyMarkers = <File>[];
 
     try {
       await for (final entity in Directory(
@@ -825,12 +994,52 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
       ).list(followLinks: false)) {
         if (entity is! File) continue;
         final name = p.basename(entity.path);
-        if (!name.startsWith(prefix) || !name.endsWith(_lockSuffix)) continue;
+        final isCurrent = name.startsWith(prefix) && name.endsWith(_lockSuffix);
+        final isLegacy =
+            !isCurrent &&
+            name.startsWith(legacyPrefix) &&
+            name.endsWith(_lockSuffix);
+        if (isCurrent) {
+          currentMarkers.add(entity);
+        } else if (isLegacy) {
+          legacyMarkers.add(entity);
+        }
+      }
 
-        if (localPaths.contains(entity.path)) {
-          active.addAll(
-            local.where((runId) => _markerPath(location, runId) == entity.path),
+      final liveLegacyRunIds = <String, String>{};
+      for (final entity in currentMarkers) {
+        final localRunId = localRunIdsByPath[entity.path];
+        if (localRunId != null) {
+          active.add(localRunId);
+          continue;
+        }
+
+        final marker = await _tryLock(entity.path, FileLock.exclusive);
+        if (marker != null) {
+          await _deleteStaleMarker(entity, marker);
+          continue;
+        }
+
+        final name = p.basename(entity.path);
+        final runId = _runIdFromMarkerName(location, name);
+        if (runId == null) {
+          throw const SyncTrashActivityLockException(
+            'decode active-run marker name',
           );
+        }
+        active.add(runId);
+        liveLegacyRunIds[_legacyMarkerPath(location, runId)] = runId;
+      }
+
+      for (final entity in legacyMarkers) {
+        final localRunId = localRunIdsByPath[entity.path];
+        if (localRunId != null) {
+          active.add(localRunId);
+          continue;
+        }
+        final currentRunId = liveLegacyRunIds[entity.path];
+        if (currentRunId != null) {
+          active.add(currentRunId);
           continue;
         }
 
@@ -846,8 +1055,7 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
           continue;
         }
 
-        await marker.release();
-        await entity.delete();
+        await _deleteStaleMarker(entity, marker);
       }
     } on SyncTrashActivityLockException {
       rethrow;
@@ -856,6 +1064,30 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
     }
 
     return active;
+  }
+
+  Future<void> _deleteStaleMarker(File markerFile, _HeldFileLock marker) async {
+    if (Platform.isWindows) {
+      // Windows rejects deletion through a path while its handle stays open.
+      // The exclusive scope gate prevents a compliant owner entering here.
+      await marker.release();
+      await markerFile.delete();
+      return;
+    }
+
+    Object? firstError;
+    try {
+      // Unlink the locked inode before another process can claim its path.
+      await markerFile.delete();
+    } catch (error) {
+      firstError = error;
+    }
+    try {
+      await marker.release();
+    } catch (error) {
+      firstError ??= error;
+    }
+    if (firstError != null) throw firstError;
   }
 
   Future<void> _releaseMarkers(List<_RunMarker> markers) async {
@@ -873,6 +1105,102 @@ final class SyncTrashActivityRegistry extends ChangeNotifier {
         firstError,
       );
     }
+  }
+
+  Future<void> _releaseRunLocks(
+    List<_RunMarker> markers,
+    List<_HeldLocationGate> locationGates,
+    List<_HeldFileLock> scopeGates,
+  ) async {
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    try {
+      await _releaseMarkers(markers);
+    } catch (error, stackTrace) {
+      firstError = error;
+      firstStackTrace = stackTrace;
+    }
+    try {
+      await _releaseLocationGates(locationGates);
+    } catch (error, stackTrace) {
+      firstError ??= error;
+      firstStackTrace ??= stackTrace;
+    }
+    try {
+      await _releaseLocks(scopeGates);
+    } catch (error, stackTrace) {
+      firstError ??= error;
+      firstStackTrace ??= stackTrace;
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError, firstStackTrace!);
+    }
+  }
+
+  Future<void> _releaseGateLocks(
+    List<_HeldFileLock> gates,
+    List<_HeldLocationGate> locationGates,
+  ) async {
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    try {
+      await _releaseLocks(gates);
+    } catch (error, stackTrace) {
+      firstError = error;
+      firstStackTrace = stackTrace;
+    }
+    try {
+      await _releaseLocationGates(locationGates);
+    } catch (error, stackTrace) {
+      firstError ??= error;
+      firstStackTrace ??= stackTrace;
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError, firstStackTrace!);
+    }
+  }
+
+  Future<void> _releaseLocationGates(List<_HeldLocationGate> gates) async {
+    Object? firstError;
+    for (final gate in gates.reversed) {
+      try {
+        await _releaseLocationGate(gate);
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+    if (firstError != null) {
+      throw SyncTrashActivityLockException('release gate locks', firstError);
+    }
+  }
+
+  Future<void> _releaseLocationGate(_HeldLocationGate gate) async {
+    final exclusive = gate.exclusive;
+    if (exclusive != null) {
+      await exclusive.release();
+      return;
+    }
+
+    final locationKey = gate.sharedLocationKey!;
+    final state = _processLocations[_processLocationKey(locationKey)];
+    if (state == null ||
+        state.sharedGate == null ||
+        state.sharedGateReferences <= 0) {
+      throw StateError('shared location gate has no owner');
+    }
+    if (state.sharedGateReferences > 1) {
+      state.sharedGateReferences--;
+      return;
+    }
+
+    try {
+      await state.sharedGate!.release();
+    } catch (error) {
+      state.sharedGateFailure = error;
+      rethrow;
+    }
+    state.sharedGate = null;
+    state.sharedGateReferences = 0;
   }
 
   Future<void> _releaseLocks(List<_HeldFileLock> locks) async {
@@ -898,17 +1226,27 @@ final class SyncTrashActivityLease {
     this._locations,
     this._markers,
     this._locationGates,
+    this._scopeGates,
+    this._mode,
   );
 
   final SyncTrashActivityRegistry _owner;
   final String _runId;
   final Set<SyncTrashLocation> _locations;
   final List<_RunMarker> _markers;
-  final List<_HeldFileLock> _locationGates;
+  final List<_HeldLocationGate> _locationGates;
+  final List<_HeldFileLock> _scopeGates;
+  final SyncTrashActivityMode _mode;
   Future<void>? _closing;
 
-  Future<void> close() =>
-      _closing ??= _owner._end(_runId, _locations, _markers, _locationGates);
+  Future<void> close() => _closing ??= _owner._end(
+    _runId,
+    _locations,
+    _markers,
+    _locationGates,
+    _scopeGates,
+    _mode,
+  );
 }
 
 /// Idempotent ownership token for an atomic purge reservation.
@@ -927,7 +1265,7 @@ final class SyncTrashPurgeLease {
   final SyncTrashActivityRegistry _owner;
   final Set<SyncTrashLocation> _locations;
   final List<_HeldFileLock> _gates;
-  final List<_HeldFileLock> _locationGates;
+  final List<_HeldLocationGate> _locationGates;
   final Map<SyncTrashLocation, Set<String>> _activeByLocation;
   Future<void>? _closing;
 
@@ -960,17 +1298,31 @@ final class SyncTrashTransitionLease {
 final class _ProcessScopeState {
   final Set<String> activeRunIds = {};
   var purging = false;
+  var restoring = false;
 }
 
 final class _ProcessLocationState {
   var sharedHolders = 0;
   var transitioning = false;
+  var restoring = false;
+  _HeldFileLock? sharedGate;
+  var sharedGateReferences = 0;
+  Object? sharedGateFailure;
 }
 
 final class _RunMarker {
   const _RunMarker(this.lock);
 
   final _HeldFileLock lock;
+}
+
+final class _HeldLocationGate {
+  const _HeldLocationGate.shared(this.sharedLocationKey) : exclusive = null;
+
+  const _HeldLocationGate.exclusive(this.exclusive) : sharedLocationKey = null;
+
+  final String? sharedLocationKey;
+  final _HeldFileLock? exclusive;
 }
 
 final class _HeldFileLock {

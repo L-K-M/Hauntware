@@ -114,9 +114,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$kPinStoreFileName'",
     // The engine's append-only identity-read log — same machine path data.
     r"'$kIdentityAuditLogFileName'",
-    // The runId device prefix when enrollment has no cached id — a
-    // machine identity string, never rendered.
-    "'local'",
     // The AppKit checkmark channel name on the shared menu delegate —
     // protocol plumbing, not copy.
     "'poltergeist/menu_checks'",
@@ -136,6 +133,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'bookmark has no embedded server identity'",
     // Exact host-key map locator, never rendered.
     r"'$host:$port'",
+    // Conditional host-key replacement diagnostics, never rendered.
+    "'replacement'",
+    "'must use the expected host-key locator'",
     // The setPermissions assert's mode-range diagnostic — a programming-
     // error message, never rendered.
     "'permissions must be a twelve-bit mode (0x000-0xFFF)'",
@@ -530,6 +530,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Finish vault recovery before changing credentials.'",
     "'A pending vault recovery must be completed first.'",
     "'No matching snapshot.'",
+    // Conditional host-key replacement diagnostics, never rendered.
+    "'replacement'",
+    "'must use the expected host-key locator'",
   },
   'lib/services/settings_store.dart': {
     "'settings root'",
@@ -999,7 +1002,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'~'",
     "'~/'",
     "'.'",
-    r"'$runId.purging-'",
+    r"'$runName.purging-'",
     "'open sync trash'",
     "'The sync-trash marker changed while old trash remains.'",
     "'The sync-trash root changed during reconciliation.'",
@@ -1021,6 +1024,21 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "''",
     r"'${_remoteTrashAddressIdentity(host: identity.host, port: identity.port, username: identity.username, jumpHostId: identity.jumpHostId, routeContext: identity.routeContext)}'",
     r"'\u0000${identity.fingerprintSha256}'",
+    // Endpoint-count invariant diagnostics, never rendered.
+    "'endpointBindings'",
+    "'must match the endpoint count'",
+    // Recovery resolution operation tags and conflict details are wrapped by
+    // localized recovery UI; they remain filesystem diagnostics here.
+    "'resume sync restore'",
+    "'The sync journal has no incomplete restore.'",
+    "'The recovery journal does not identify both canonical sync roots.'",
+    "'The recovery journal does not identify both sync-trash locations.'",
+    "'The recovery journal matches both endpoint orders.'",
+    "'The recovery journal does not match this pair\\'s endpoint identities.'",
+    "'The sync root changed while restore recovery was being verified.'",
+    // Windows drive spelling is machine data; directory case stays exact.
+    "':'",
+    r"'${normalized[0].toUpperCase()}${normalized.substring(1)}'",
   },
   // The plan controller's machine literals: the 'local' device-id
   // default, §9's heavy-suggestion noise names + glob join, the
@@ -1068,6 +1086,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'SyncTrashActivityLockException: $operation: $cause'",
     r"'memory:${_nextMemoryNamespace++}'",
     "'.gate.lock'",
+    "'.active.v2.'",
     "'.active.'",
     "'.lock'",
     "'trashScope'",
@@ -1081,12 +1100,17 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${location.scopeKey}$_gateSuffix'",
     r"'$locationKey.location$_gateSuffix'",
     r"'${location.scopeKey}$_activeMarker$runKey$_lockSuffix'",
+    r"'${location.scopeKey}$_legacyActiveMarker$runKey$_lockSuffix'",
     "'write active-run marker'",
     r"'${location.scopeKey}$_activeMarker'",
+    r"'${location.scopeKey}$_legacyActiveMarker'",
+    "'decode active-run marker name'",
     "'read an empty active-run marker'",
     "'inspect active-run markers'",
     "'release active-run markers'",
     "'release gate locks'",
+    "'reuse failed shared location gate'",
+    "'shared location gate has no owner'",
   },
   // The facade matches the executor's machine error sentinel to pick
   // the cancelled item state — protocol plumbing, never authored copy.
@@ -1130,9 +1154,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The ☰ button's widget key — widget plumbing, not authored copy. The
   // `menu.<id>`/`menu.item.<id>` row keys moved to ghost_ui with the
   // shared row renderer.
-  'lib/ui/menus/app_menu_host.dart': {
-    "'menu.main'",
-  },
+  'lib/ui/menus/app_menu_host.dart': {"'menu.main'"},
   // Debug-only placement-slot invariant diagnostics — never rendered.
   'lib/ui/menus/app_menus.dart': {
     "'commands reach the macOS application menu via appMenuOnMac'",

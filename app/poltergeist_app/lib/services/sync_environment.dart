@@ -26,12 +26,43 @@ import 'sync_trash_activity.dart';
 const String kSyncRunsDirectoryName = 'sync_runs';
 const String kSyncTrashActivityDirectoryName = '.trash-activity';
 const int _maximumJumpHosts = 16;
+const String _restoreRecoveryOperation = 'resume sync restore';
 
 /// Opaque authenticated endpoint identity captured after a scan.
 final class SyncEndpointBinding {
   const SyncEndpointBinding._(this._endpointIdentity);
 
   final String _endpointIdentity;
+}
+
+/// Read-only endpoint resolution for resuming one journal-owned restore.
+/// Maps are keyed by the journal's sides, even when the current panes swapped.
+final class SyncRestoreRecoveryContext {
+  SyncRestoreRecoveryContext._({
+    required Map<SyncSide, SyncEndpoint> endpoints,
+    required Map<SyncSide, String> roots,
+    required Map<SyncSide, SyncTrashLocation> trashLocations,
+    required Map<SyncSide, SyncEndpointBinding> endpointBindings,
+  }) : endpoints = Map.unmodifiable(endpoints),
+       roots = Map.unmodifiable(roots),
+       trashLocations = Map.unmodifiable(trashLocations),
+       endpointBindings = Map.unmodifiable(endpointBindings);
+
+  final Map<SyncSide, SyncEndpoint> endpoints;
+  final Map<SyncSide, String> roots;
+  final Map<SyncSide, SyncTrashLocation> trashLocations;
+  final Map<SyncSide, SyncEndpointBinding> endpointBindings;
+}
+
+/// The newest recovery candidate whose durable roots identify this pair.
+final class SyncRestoreRecoverySelection {
+  const SyncRestoreRecoverySelection._({
+    required this.journal,
+    required this.context,
+  });
+
+  final SyncRunJournal journal;
+  final SyncRestoreRecoveryContext context;
 }
 
 /// Everything a sync session needs that is not the pair itself: the
@@ -112,6 +143,312 @@ final class SyncEnvironment {
     LocalEndpoint() => true,
     RemoteEndpoint() => _connections != null && _serverConfigs != null,
   };
+
+  /// Selects and resolves an interrupted restore without walking either sync
+  /// tree or creating/reconciling trash roots. Distinct-root pair-id collisions
+  /// are skipped; a matching journal must have exactly one endpoint ordering.
+  Future<SyncRestoreRecoverySelection?> resolveRestoreRecoveryContext({
+    required SyncPair pair,
+    required Iterable<SyncRunJournal> journals,
+  }) async {
+    final candidates = journals.toList()
+      ..sort((left, right) {
+        final newest = right.record.startedAt.compareTo(left.record.startedAt);
+        return newest != 0 ? newest : left.path.compareTo(right.path);
+      });
+    if (candidates.isEmpty) return null;
+
+    for (final journal in candidates) {
+      if (!journal.hasIncompleteRestore) {
+        throw _restoreRecoveryConflict(
+          journal,
+          'The sync journal has no incomplete restore.',
+        );
+      }
+      final leftRecordedRoot = journal.record.canonicalRootLeft;
+      final rightRecordedRoot = journal.record.canonicalRootRight;
+      if (leftRecordedRoot == null ||
+          leftRecordedRoot.isEmpty ||
+          rightRecordedRoot == null ||
+          rightRecordedRoot.isEmpty) {
+        throw _restoreRecoveryConflict(
+          journal,
+          'The recovery journal does not identify both canonical sync roots.',
+        );
+      }
+    }
+
+    final leftRoot = await _canonicalRestoreRoot(pair.left);
+    final rightRoot = await _canonicalRestoreRoot(pair.right);
+    for (final journal in candidates) {
+      final direct = _restoreRootsMatch(
+        journal: journal,
+        leftEndpoint: pair.left,
+        leftRoot: leftRoot,
+        rightEndpoint: pair.right,
+        rightRoot: rightRoot,
+      );
+      final swapped = _restoreRootsMatch(
+        journal: journal,
+        leftEndpoint: pair.right,
+        leftRoot: rightRoot,
+        rightEndpoint: pair.left,
+        rightRoot: leftRoot,
+      );
+      if (!direct && !swapped) continue;
+      if (direct && swapped) {
+        throw _restoreRecoveryConflict(
+          journal,
+          'The recovery journal matches both endpoint orders.',
+        );
+      }
+      if (SyncSide.values.any(
+        (side) =>
+            journal.trashScopeForSide(side) == null ||
+            _journalTrashLocationKey(journal, side) == null,
+      )) {
+        throw _restoreRecoveryConflict(
+          journal,
+          'The recovery journal does not identify both sync-trash locations.',
+        );
+      }
+
+      final leftJournalSide = direct ? SyncSide.left : SyncSide.right;
+      final rightJournalSide = direct ? SyncSide.right : SyncSide.left;
+      final left = await _resolveRestoreEndpoint(
+        pair.left,
+        journal,
+        journalSide: leftJournalSide,
+        expectedCanonicalRoot: direct
+            ? journal.record.canonicalRootLeft!
+            : journal.record.canonicalRootRight!,
+      );
+      final right = await _resolveRestoreEndpoint(
+        pair.right,
+        journal,
+        journalSide: rightJournalSide,
+        expectedCanonicalRoot: direct
+            ? journal.record.canonicalRootRight!
+            : journal.record.canonicalRootLeft!,
+      );
+      final context = direct
+          ? _restoreRecoveryAssignment(
+              leftForJournal: left,
+              rightForJournal: right,
+            )
+          : _restoreRecoveryAssignment(
+              leftForJournal: right,
+              rightForJournal: left,
+            );
+      if (context == null) {
+        throw _restoreRecoveryConflict(
+          journal,
+          'The recovery journal does not match this pair\'s endpoint identities.',
+        );
+      }
+
+      return SyncRestoreRecoverySelection._(journal: journal, context: context);
+    }
+
+    return null;
+  }
+
+  Future<String> _canonicalRestoreRoot(SyncEndpoint endpoint) async {
+    final requestedRoot = rootFor(endpoint);
+    final fileSystem = fileSystemFor(endpoint);
+
+    Future<String> resolve(
+      RemoteFileSystem exactFileSystem,
+      AuthenticatedEndpointIdentity? _,
+    ) => exactFileSystem.canonicalize(requestedRoot);
+
+    if (fileSystem is LeasedRemoteFileSystem) {
+      return fileSystem.withAuthenticatedFileSystem(resolve);
+    }
+
+    return resolve(fileSystem, null);
+  }
+
+  bool _restoreRootsMatch({
+    required SyncRunJournal journal,
+    required SyncEndpoint leftEndpoint,
+    required String leftRoot,
+    required SyncEndpoint rightEndpoint,
+    required String rightRoot,
+  }) =>
+      _canonicalRestoreRootsEqual(
+        leftEndpoint,
+        leftRoot,
+        journal.record.canonicalRootLeft!,
+      ) &&
+      _canonicalRestoreRootsEqual(
+        rightEndpoint,
+        rightRoot,
+        journal.record.canonicalRootRight!,
+      );
+
+  Future<_RestoreEndpointContext> _resolveRestoreEndpoint(
+    SyncEndpoint endpoint,
+    SyncRunJournal journal, {
+    required SyncSide journalSide,
+    required String expectedCanonicalRoot,
+  }) async {
+    final requestedRoot = rootFor(endpoint);
+    final initialBinding = _trashEndpointBinding(endpoint, requestedRoot);
+    final fileSystem = fileSystemFor(endpoint);
+
+    Future<_RestoreEndpointContext> resolve(
+      RemoteFileSystem exactFileSystem,
+      AuthenticatedEndpointIdentity? authenticatedIdentity,
+    ) async {
+      final canonicalRoot = await exactFileSystem.canonicalize(requestedRoot);
+      if (!_canonicalRestoreRootsEqual(
+        endpoint,
+        canonicalRoot,
+        expectedCanonicalRoot,
+      )) {
+        throw _restoreRecoveryConflict(
+          journal,
+          'The sync root changed while restore recovery was being verified.',
+        );
+      }
+      final endpointIdentity = await _trashEndpointIdentityAfterAccess(
+        endpoint,
+        initialBinding,
+        canonicalRoot,
+        authenticatedIdentity: authenticatedIdentity,
+      );
+      SyncTrashLocation? location;
+      try {
+        location = await _openRestoreTrashLocation(
+          endpoint: endpoint,
+          canonicalRoot: canonicalRoot,
+          journal: journal,
+          journalSide: journalSide,
+          fileSystem: exactFileSystem,
+          endpointIdentity: endpointIdentity,
+          authenticatedIdentity: authenticatedIdentity,
+        );
+      } on RemoteFileException catch (error) {
+        if (error.kind != RemoteFileErrorKind.notFound &&
+            error.kind != RemoteFileErrorKind.conflict) {
+          rethrow;
+        }
+      }
+
+      return _RestoreEndpointContext(
+        endpoint: endpoint,
+        canonicalRoot: canonicalRoot,
+        endpointBinding: SyncEndpointBinding._(endpointIdentity),
+        locations: {journalSide: location},
+      );
+    }
+
+    if (fileSystem is LeasedRemoteFileSystem) {
+      return fileSystem.withAuthenticatedFileSystem(resolve);
+    }
+
+    return resolve(fileSystem, null);
+  }
+
+  Future<SyncTrashLocation?> _openRestoreTrashLocation({
+    required SyncEndpoint endpoint,
+    required String canonicalRoot,
+    required SyncRunJournal journal,
+    required SyncSide journalSide,
+    required RemoteFileSystem fileSystem,
+    required String endpointIdentity,
+    required AuthenticatedEndpointIdentity? authenticatedIdentity,
+  }) async {
+    final configured = switch (journalSide) {
+      SyncSide.left => journal.record.rules.trashPathLeft,
+      SyncSide.right => journal.record.rules.trashPathRight,
+    };
+    final configuredRoot = _resolveTrashPath(
+      endpoint,
+      canonicalRoot,
+      configured,
+    );
+    final expandedRoot = await _expandTrashHome(
+      fileSystem,
+      endpoint,
+      configuredRoot,
+    );
+    final pathStyle = endpoint is LocalEndpoint && Platform.isWindows
+        ? SyncTrashPathStyle.windows
+        : SyncTrashPathStyle.posix;
+    final identity = await resolveSyncTrashRoot(
+      fileSystem,
+      expandedRoot,
+      pathStyle: pathStyle,
+      access: SyncTrashRootAccess.openExisting,
+    );
+    await _verifyTrashEndpointIdentity(
+      endpoint,
+      endpointIdentity,
+      identity.canonicalRoot,
+      authenticatedIdentity: authenticatedIdentity,
+    );
+    if (identity.scopeKey != journal.trashScopeForSide(journalSide)) {
+      return null;
+    }
+
+    final expectedLocationKey = _journalTrashLocationKey(journal, journalSide)!;
+    final pathCases = configured == null
+        ? const [SyncTrashPathCase.sensitive, SyncTrashPathCase.insensitive]
+        : const [SyncTrashPathCase.sensitive];
+    for (final pathCase in pathCases) {
+      final locationKey = syncTrashLocationKey(
+        endpoint: endpoint,
+        trashRoot: configuredRoot,
+        pathCase: pathCase,
+        endpointIdentity: endpointIdentity,
+      );
+      if (expectedLocationKey != locationKey) continue;
+
+      return syncTrashLocation(
+        endpoint: endpoint,
+        canonicalRoot: canonicalRoot,
+        rules: journal.record.rules,
+        side: journalSide,
+        rootId: identity.rootId,
+        resolvedTrashRoot: identity.canonicalRoot,
+        pathCase: pathCase,
+        locationKey: locationKey,
+        locationKeyRoot: configuredRoot,
+      );
+    }
+
+    return null;
+  }
+
+  SyncRestoreRecoveryContext? _restoreRecoveryAssignment({
+    required _RestoreEndpointContext leftForJournal,
+    required _RestoreEndpointContext rightForJournal,
+  }) {
+    final leftLocation = leftForJournal.locations[SyncSide.left];
+    final rightLocation = rightForJournal.locations[SyncSide.right];
+    if (leftLocation == null || rightLocation == null) return null;
+
+    return SyncRestoreRecoveryContext._(
+      endpoints: {
+        SyncSide.left: leftForJournal.endpoint,
+        SyncSide.right: rightForJournal.endpoint,
+      },
+      roots: {
+        SyncSide.left: leftForJournal.canonicalRoot,
+        SyncSide.right: rightForJournal.canonicalRoot,
+      },
+      trashLocations: {
+        SyncSide.left: leftLocation,
+        SyncSide.right: rightLocation,
+      },
+      endpointBindings: {
+        SyncSide.left: leftForJournal.endpointBinding,
+        SyncSide.right: rightForJournal.endpointBinding,
+      },
+    );
+  }
 
   /// The filesystem [endpoint] resolves to. A remote endpoint leases a
   /// transfer channel of its server on first use and keeps it until
@@ -205,10 +542,7 @@ final class SyncEnvironment {
     );
     String endpointIdentity;
     try {
-      endpointIdentity = await _trashEndpointIdentity(
-        endpoint,
-        canonicalRoot,
-      );
+      endpointIdentity = await _trashEndpointIdentity(endpoint, canonicalRoot);
     } on RemoteFileException {
       // An unresolved catalog cannot safely reuse a host-scoped cache.
       endpointIdentity = _unverifiedTrashEndpointIdentity(endpoint);
@@ -240,8 +574,10 @@ final class SyncEnvironment {
       SyncSide.right => rules.trashPathRight,
     };
     final unresolved = _resolveTrashPath(endpoint, canonicalRoot, configured);
+    final fileSystem = fileSystemFor(endpoint);
+    final expanded = await _expandTrashHome(fileSystem, endpoint, unresolved);
 
-    return _expandTrashHome(fileSystemFor(endpoint), endpoint, unresolved);
+    return _canonicalizeWithMissingSuffix(fileSystem, endpoint, expanded);
   }
 
   /// Claims or opens the trash root before it becomes an activity key.
@@ -1010,6 +1346,36 @@ final class SyncEnvironment {
     );
   }
 
+  /// Rebinds both sync roots on the already-held restore filesystems, then
+  /// enters [body]. External trash roots cannot substitute for this check.
+  Future<T> withReboundRestoreRecoveryRoots<T>({
+    required SyncRunJournal journal,
+    required SyncRestoreRecoveryContext context,
+    required Map<SyncSide, RemoteFileSystem> fileSystems,
+    required Future<T> Function() body,
+  }) async {
+    for (final side in SyncSide.values) {
+      final endpoint = context.endpoints[side]!;
+      final canonicalRoot = await fileSystems[side]!.canonicalize(
+        rootFor(endpoint),
+      );
+      if (_canonicalRestoreRootsEqual(
+        endpoint,
+        canonicalRoot,
+        context.roots[side]!,
+      )) {
+        continue;
+      }
+
+      throw _restoreRecoveryConflict(
+        journal,
+        'The sync root changed while restore recovery was being verified.',
+      );
+    }
+
+    return body();
+  }
+
   Future<void> _verifyTrashLocationWithFileSystem(
     SyncEndpoint endpoint,
     SyncTrashLocation location,
@@ -1085,6 +1451,58 @@ AppLocalizations _syncEnvironmentLocalizations() => lookupAppLocalizations(
 );
 
 enum _TrashEndpointKind { local, remote }
+
+final class _RestoreEndpointContext {
+  const _RestoreEndpointContext({
+    required this.endpoint,
+    required this.canonicalRoot,
+    required this.endpointBinding,
+    required this.locations,
+  });
+
+  final SyncEndpoint endpoint;
+  final String canonicalRoot;
+  final SyncEndpointBinding endpointBinding;
+  final Map<SyncSide, SyncTrashLocation?> locations;
+}
+
+RemoteFileException _restoreRecoveryConflict(
+  SyncRunJournal journal,
+  String message,
+) => RemoteFileException(
+  kind: RemoteFileErrorKind.conflict,
+  operation: _restoreRecoveryOperation,
+  path: journal.path,
+  message: message,
+);
+
+String? _journalTrashLocationKey(SyncRunJournal journal, SyncSide side) =>
+    switch (side) {
+      SyncSide.left => journal.record.trashLocationKeyLeft,
+      SyncSide.right => journal.record.trashLocationKeyRight,
+    };
+
+bool _canonicalRestoreRootsEqual(
+  SyncEndpoint endpoint,
+  String current,
+  String recorded,
+) {
+  // Recovery runs before case-sensitivity probes. Folding path components
+  // could bind a journal to a distinct case-sensitive Windows directory.
+  if (endpoint is! LocalEndpoint || !Platform.isWindows) {
+    return current == recorded;
+  }
+
+  return _normalizeWindowsDriveLetter(current) ==
+      _normalizeWindowsDriveLetter(recorded);
+}
+
+String _normalizeWindowsDriveLetter(String path) {
+  final normalized = p.windows.normalize(path);
+  if (normalized.length < 2 || normalized[1] != ':') return normalized;
+
+  return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
+}
 
 final class _TrashEndpointBinding {
   const _TrashEndpointBinding({

@@ -5523,17 +5523,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncHeavySuggestionAccept => 'Exclude';
 
   @override
+  String get syncRestoreRecoveryTitle => 'Interrupted restore';
+
+  @override
+  String get syncRestoreRecoveryBody =>
+      'A previous restore stopped before it finished. Sync is paused until you finish it.';
+
+  @override
+  String syncRestoreRecoveryBlocked(String path) {
+    return 'Sync is paused because its interrupted restore cannot be verified. Keep both folders unchanged. Restore the journal from backup or contact support: $path';
+  }
+
+  @override
+  String get syncRestoreRecoveryAction => 'Finish Restore…';
+
+  @override
+  String get syncRestoreRecoveryDialogTitle => 'Finish Interrupted Restore';
+
+  @override
+  String syncRestoreRecoverySummary(int restored, int removedCreatedFiles) {
+    String _temp0 = intl.Intl.pluralLogic(
+      restored,
+      locale: localeName,
+      other: 'Restores $restored original items.',
+      one: 'Restores $restored original item.',
+      zero: 'Restores no original items.',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      removedCreatedFiles,
+      locale: localeName,
+      other: 'Removes $removedCreatedFiles files created by this run.',
+      one: 'Removes $removedCreatedFiles file created by this run.',
+      zero: 'Removes no files created by this run.',
+    );
+    return 'Finish the interrupted restore. $_temp0 $_temp1';
+  }
+
+  @override
   String get syncRestoreDialogTitle => 'Restore Trashed Files';
 
   @override
-  String syncRestoreSummary(int count) {
+  String syncRestoreSummary(int restored, int removedCreatedFiles) {
     String _temp0 = intl.Intl.pluralLogic(
-      count,
+      restored,
       locale: localeName,
-      other: '$count files will be restored from trash.',
-      one: '$count file will be restored from trash.',
+      other: 'Restores $restored original items.',
+      one: 'Restores $restored original item.',
+      zero: 'Restores no original items.',
     );
-    return '$_temp0';
+    String _temp1 = intl.Intl.pluralLogic(
+      removedCreatedFiles,
+      locale: localeName,
+      other: 'Removes $removedCreatedFiles files created by this run.',
+      one: 'Removes $removedCreatedFiles file created by this run.',
+      zero: 'Removes no files created by this run.',
+    );
+    return '$_temp0 $_temp1';
   }
 
   @override
@@ -5544,17 +5589,22 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       restored,
       locale: localeName,
-      other: 'Restored $restored files',
-      one: 'Restored $restored file',
+      other: 'Restored $restored items',
+      one: 'Restored $restored item',
     );
     String _temp1 = intl.Intl.pluralLogic(
       skipped,
       locale: localeName,
-      other: ' — $skipped skipped',
-      one: ' — $skipped skipped',
+      other: '. $skipped skipped',
+      one: '. $skipped skipped',
       zero: '',
     );
     return '$_temp0$_temp1';
+  }
+
+  @override
+  String syncRestoreFailed(String message) {
+    return 'Restore stopped. Check the connection and file state, then retry. Error: $message';
   }
 
   @override

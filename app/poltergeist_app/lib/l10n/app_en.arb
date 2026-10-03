@@ -6816,27 +6816,66 @@
   "@syncHeavySuggestionAccept": {
     "description": "Heavy-directory suggestion's accept verb (05 §9): adds the name to the pair's exclude rules."
   },
+  "syncRestoreRecoveryTitle": "Interrupted restore",
+  "@syncRestoreRecoveryTitle": {
+    "description": "Plan-view heading when restart recovery must finish before the pair can be scanned."
+  },
+  "syncRestoreRecoveryBody": "A previous restore stopped before it finished. Sync is paused until you finish it.",
+  "@syncRestoreRecoveryBody": {
+    "description": "Plan-view explanation for a readable interrupted restore."
+  },
+  "syncRestoreRecoveryBlocked": "Sync is paused because its interrupted restore cannot be verified. Keep both folders unchanged. Restore the journal from backup or contact support: {path}",
+  "@syncRestoreRecoveryBlocked": {
+    "description": "Fail-closed plan-view explanation when interrupted recovery cannot be verified.",
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "syncRestoreRecoveryAction": "Finish Restore…",
+  "@syncRestoreRecoveryAction": {
+    "description": "Action-bar verb for resuming an interrupted restore after restart."
+  },
+  "syncRestoreRecoveryDialogTitle": "Finish Interrupted Restore",
+  "@syncRestoreRecoveryDialogTitle": {
+    "description": "Confirmation title before resuming an interrupted restore."
+  },
+  "syncRestoreRecoverySummary": "Finish the interrupted restore. {restored, plural, =0{Restores no original items.} =1{Restores {restored} original item.} other{Restores {restored} original items.}} {removedCreatedFiles, plural, =0{Removes no files created by this run.} =1{Removes {removedCreatedFiles} file created by this run.} other{Removes {removedCreatedFiles} files created by this run.}}",
+  "@syncRestoreRecoverySummary": {
+    "description": "Recovery confirmation impact: original items restored and run-created files removed.",
+    "placeholders": {
+      "restored": {"type": "int"},
+      "removedCreatedFiles": {"type": "int"}
+    }
+  },
   "syncRestoreDialogTitle": "Restore Trashed Files",
   "@syncRestoreDialogTitle": {
     "description": "Restore dialog title (05 §8 rail 9)."
   },
-  "syncRestoreSummary": "{count, plural, =1{{count} file will be restored from trash.} other{{count} files will be restored from trash.}}",
+  "syncRestoreSummary": "{restored, plural, =0{Restores no original items.} =1{Restores {restored} original item.} other{Restores {restored} original items.}} {removedCreatedFiles, plural, =0{Removes no files created by this run.} =1{Removes {removedCreatedFiles} file created by this run.} other{Removes {removedCreatedFiles} files created by this run.}}",
   "@syncRestoreSummary": {
-    "description": "Restore dialog's count line — only journaled trash entries restore (05 §8 rail 9).",
+    "description": "Restore dialog impact: original items restored and run-created files removed by rule-4 recovery (05 §8 rail 9).",
     "placeholders": {
-      "count": {"type": "int"}
+      "restored": {"type": "int"},
+      "removedCreatedFiles": {"type": "int"}
     }
   },
   "syncRestoreButton": "Restore",
   "@syncRestoreButton": {
     "description": "Restore dialog's confirm verb."
   },
-  "syncRestoreResult": "{restored, plural, =1{Restored {restored} file} other{Restored {restored} files}}{skipped, plural, =0{} =1{ — {skipped} skipped} other{ — {skipped} skipped}}",
+  "syncRestoreResult": "{restored, plural, =1{Restored {restored} item} other{Restored {restored} items}}{skipped, plural, =0{} =1{. {skipped} skipped} other{. {skipped} skipped}}",
   "@syncRestoreResult": {
-    "description": "Post-restore summary line: how many entries came back and how many were skipped.",
+    "description": "Post-restore summary line: how many files or directories came back and how many were skipped.",
     "placeholders": {
       "restored": {"type": "int"},
       "skipped": {"type": "int"}
+    }
+  },
+  "syncRestoreFailed": "Restore stopped. Check the connection and file state, then retry. Error: {message}",
+  "@syncRestoreFailed": {
+    "description": "Actionable toast when Restore Trashed Files stops on a remote filesystem failure; the restore action remains available.",
+    "placeholders": {
+      "message": {"type": "String"}
     }
   },
   "syncDirectionLeftToRight": "Left to right",

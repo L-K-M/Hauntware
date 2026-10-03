@@ -131,6 +131,30 @@ final class SyncConfirmationRequiredException implements Exception {
       'deleted (${gate.clause.name})';
 }
 
+/// A prior rule-4 restore owns this pair or one of its trash roots.
+final class SyncRestoreRecoveryRequiredException implements Exception {
+  const SyncRestoreRecoveryRequiredException({
+    required this.runId,
+    required this.pairId,
+    required this.journalPath,
+    required this.journalState,
+  });
+
+  final String runId;
+  final String? pairId;
+  final String journalPath;
+  final SyncRestoreJournalState journalState;
+
+  @override
+  String toString() {
+    final owner = pairId == null ? '' : ' for pair $pairId';
+    final detail = journalState == SyncRestoreJournalState.unreadableRecovery
+        ? ' (its journal is unreadable)'
+        : '';
+    return 'sync run refused: restore run $runId$owner first$detail';
+  }
+}
+
 /// Per-side rail accounting — the unit every surface reconciles on
 /// (05 §8 rail 3): non-directory removals per side against that side's
 /// scanned non-directory count. Delete-phase directories are
@@ -521,12 +545,28 @@ final class SyncExecutor {
         );
       }
 
+      final incomplete = await SyncRunJournal.findIncompleteRestoreOverlap(
+        syncRunsDirectory,
+        pairId: pairId,
+        trashScopes: [trashScopeLeft, trashScopeRight],
+      );
+      if (incomplete != null) {
+        throw SyncRestoreRecoveryRequiredException(
+          runId: incomplete.runId,
+          pairId: incomplete.pairId,
+          journalPath: incomplete.journalPath,
+          journalState: incomplete.journalState,
+        );
+      }
+
       final journal = await SyncRunJournal.create(
         syncRunsDirectory,
         SyncRunRecord(
           runId: effectiveRunId,
           pairId: pairId,
           startedAt: startedAt ?? DateTime.now(),
+          canonicalRootLeft: leftRoot,
+          canonicalRootRight: rightRoot,
           trashScopeLeft: trashScopeLeft,
           trashScopeRight: trashScopeRight,
           trashLocationKeyLeft: trashLocationKeyLeft,
@@ -572,29 +612,40 @@ final class SyncExecutor {
     if (_runInProgress) {
       throw StateError('a sync run is already in progress on this executor');
     }
-    previous.plan.pair.rules.ensureSupported();
-    final session = _RunSession(
-      executor: this,
-      plan: previous.plan,
-      journal: previous.journal,
-      cancellation: cancellation,
-      pause: pause,
-      onEvent: onEvent,
-      retry: true,
-    );
     _runInProgress = true;
     try {
+      final restoreState = previous.journal.hasIncompleteRestore
+          ? SyncRestoreJournalState.incomplete
+          : await SyncRunJournal.inspectRestoreRecovery(previous.journal.path);
+      if (restoreState != SyncRestoreJournalState.none) {
+        throw SyncRestoreRecoveryRequiredException(
+          runId: previous.journal.record.runId,
+          pairId: previous.journal.record.pairId,
+          journalPath: previous.journal.path,
+          journalState: restoreState,
+        );
+      }
+      previous.plan.pair.rules.ensureSupported();
+      final session = _RunSession(
+        executor: this,
+        plan: previous.plan,
+        journal: previous.journal,
+        cancellation: cancellation,
+        pause: pause,
+        onEvent: onEvent,
+        retry: true,
+      );
       await session.execute();
+      return SyncRun(
+        journal: previous.journal,
+        plan: previous.plan,
+        mtimeUnreliableLeft: mtimeUnreliableLeft,
+        mtimeUnreliableRight: mtimeUnreliableRight,
+        cancelled: session.cancelled,
+      );
     } finally {
       _runInProgress = false;
     }
-    return SyncRun(
-      journal: previous.journal,
-      plan: previous.plan,
-      mtimeUnreliableLeft: mtimeUnreliableLeft,
-      mtimeUnreliableRight: mtimeUnreliableRight,
-      cancelled: session.cancelled,
-    );
   }
 }
 
@@ -719,9 +770,9 @@ final class _RunSession {
         case SyncActionType.deleteLeft || SyncActionType.deleteRight:
           deletes.add(item);
         case SyncActionType.copyLeftToRight ||
-              SyncActionType.copyRightToLeft ||
-              SyncActionType.updateLeftToRight ||
-              SyncActionType.updateRightToLeft:
+            SyncActionType.copyRightToLeft ||
+            SyncActionType.updateLeftToRight ||
+            SyncActionType.updateRightToLeft:
           transfers.add(item);
         case SyncActionType.skip || SyncActionType.conflict:
           break;
@@ -873,8 +924,7 @@ final class _RunSession {
   Future<_ItemOutcome> _executeItem(SyncItem item) async {
     final destSide = _destinationSide(item.effective);
     if (destSide == null) return const _ItemOutcome();
-    final srcSide =
-        destSide == SyncSide.left ? SyncSide.right : SyncSide.left;
+    final srcSide = destSide == SyncSide.left ? SyncSide.right : SyncSide.left;
     final destFs = _fs(destSide);
     final srcFs = _fs(srcSide);
     final destAbs = _abs(destSide, item.relativePath);
@@ -915,8 +965,13 @@ final class _RunSession {
           destSnapshot,
           forDelete: true,
         );
-        return _deletePhaseEntry(item, destFs, destSide, destAbs,
-            destSnapshot!);
+        return _deletePhaseEntry(
+          item,
+          destFs,
+          destSide,
+          destAbs,
+          destSnapshot!,
+        );
       case SyncActionType.copyLeftToRight ||
           SyncActionType.copyRightToLeft ||
           SyncActionType.updateLeftToRight ||
@@ -941,8 +996,12 @@ final class _RunSession {
           // The per-file trash lines the removal wrote carry the
           // origin map; the item line does not repeat them.
         } else if (isUpdate) {
-          final liveDest =
-              await _verifyDestination(item, destFs, destAbs, destSnapshot);
+          final liveDest = await _verifyDestination(
+            item,
+            destFs,
+            destAbs,
+            destSnapshot,
+          );
           if (rules.backups == BackupPolicy.trash) {
             final moved = await _trashEntry(
               destFs,
@@ -979,8 +1038,9 @@ final class _RunSession {
         // `_stampAndVerify` can observe it — retry the copy without
         // mode preservation; the setTimes refusal that follows flags
         // the side for §9's sizeOnly fallback as designed.
-        final preserveMode =
-            _noPreserveMode.contains(destSide) ? null : liveSource.mode;
+        final preserveMode = _noPreserveMode.contains(destSide)
+            ? null
+            : liveSource.mode;
         RemoteFileEntry uploaded;
         try {
           uploaded = await _transfer(
@@ -1205,12 +1265,7 @@ final class _RunSession {
         size: snapshot.size,
       );
       if (toTrash) {
-        final moved = await _trashEntry(
-          destFs,
-          side,
-          entry,
-          item.relativePath,
-        );
+        final moved = await _trashEntry(destFs, side, entry, item.relativePath);
         await journal.appendTrash(
           SyncJournalTrashLine(
             parentPath: item.relativePath,
@@ -1645,7 +1700,8 @@ final class _RunSession {
         kind: RemoteFileErrorKind.conflict,
         operation: 'trash',
         path: path,
-        message: '"$path" exists and is not a directory; refusing to '
+        message:
+            '"$path" exists and is not a directory; refusing to '
             'use it as trash',
       );
     }
@@ -1678,7 +1734,7 @@ final class _RunSession {
       onProgress: item == null
           ? null
           : (transferred, total) =>
-              _emit(SyncRunEvent.itemProgress, item, transferred, total),
+                _emit(SyncRunEvent.itemProgress, item, transferred, total),
       cancellation: cancellation,
       computeHash: computeHash,
     );
@@ -1730,8 +1786,7 @@ final class _RunSession {
     // Verify against what was actually sent — a filesystem that
     // clamps an out-of-range mtime diverges and flags the side
     // unreliable; one that stores it (POSIX local) verifies true.
-    final requestedSecs =
-        (sourceMtime.millisecondsSinceEpoch / 1000).floor();
+    final requestedSecs = (sourceMtime.millisecondsSinceEpoch / 1000).floor();
     try {
       await destFs.setTimes(
         destAbs,
@@ -1813,10 +1868,7 @@ final class _RunSession {
     return path.startsWith(prefix) ? path.substring(prefix.length) : path;
   }
 
-  Future<RemoteFileEntry?> _statOrNull(
-    RemoteFileSystem fs,
-    String path,
-  ) async {
+  Future<RemoteFileEntry?> _statOrNull(RemoteFileSystem fs, String path) async {
     try {
       return await fs.stat(path, followLinks: false);
     } on RemoteFileException catch (error) {
@@ -2009,6 +2061,5 @@ RemoteFileType _remoteType(EntryKind kind) => switch (kind) {
   EntryKind.other => RemoteFileType.other,
 };
 
-int? _seconds(DateTime? time) => time == null
-    ? null
-    : (time.millisecondsSinceEpoch / 1000).floor();
+int? _seconds(DateTime? time) =>
+    time == null ? null : (time.millisecondsSinceEpoch / 1000).floor();

@@ -5,6 +5,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,8 @@ import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import '../support/fake_bookmark_store.dart';
 import '../support/sync_harness.dart';
+
+const _locationGateSuffix = '.location.gate.lock';
 
 SyncPlanController _controller({
   required SyncPair pair,
@@ -43,9 +46,7 @@ SyncPlanController _controller({
   );
 }
 
-Future<SyncPlanController> _ready(
-  SyncPlanController controller,
-) async {
+Future<SyncPlanController> _ready(SyncPlanController controller) async {
   controller.start();
   await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
   return controller;
@@ -63,9 +64,7 @@ void main() {
           reason: SyncReason.onlyOnLeft,
         ),
       ]);
-      final controller = await _ready(
-        _controller(pair: pair, plan: plan),
-      );
+      final controller = await _ready(_controller(pair: pair, plan: plan));
       addTearDown(controller.dispose);
       expect(controller.plan, same(plan));
       expect(controller.stats!.countOf(SyncActionType.copyLeftToRight), 1);
@@ -150,10 +149,7 @@ void main() {
         reason: SyncReason.onlyOnLeft,
       );
       final controller = await _ready(
-        _controller(
-          pair: pair,
-          plan: testPlan(pair, [comparable, oneSided]),
-        ),
+        _controller(pair: pair, plan: testPlan(pair, [comparable, oneSided])),
       );
       addTearDown(controller.dispose);
 
@@ -315,16 +311,18 @@ void main() {
       );
       addTearDown(controller.dispose);
       final offers = controller.availableOverrides(item);
-      expect(offers, containsAll(<SyncActionType>[
-        SyncActionType.copyLeftToRight,
-        SyncActionType.skip,
-      ]));
+      expect(
+        offers,
+        containsAll(<SyncActionType>[
+          SyncActionType.copyLeftToRight,
+          SyncActionType.skip,
+        ]),
+      );
       expect(offers, isNot(contains(SyncActionType.deleteRight)));
       expect(offers, isNot(contains(SyncActionType.deleteLeft)));
     });
 
-    test('Mirror offers delete only for sides the item exists on',
-        () async {
+    test('Mirror offers delete only for sides the item exists on', () async {
       final pair = testSyncPair(
         rules: const SyncRuleSet(deletions: DeletionPolicy.trash),
       );
@@ -404,8 +402,7 @@ void main() {
       expect(item.userOverridden, isFalse);
     });
 
-    test('re-picking the suggested action resets the override',
-        () async {
+    test('re-picking the suggested action resets the override', () async {
       final pair = testSyncPair();
       final item = testItem(
         'a.txt',
@@ -432,10 +429,9 @@ void main() {
         right: testFile(),
         suggested: SyncActionType.skip,
         reason: SyncReason.typeDiffers,
-        destinationSubtree: const {'thing/a.txt': EntrySnapshot(
-          kind: EntryKind.file,
-          size: 1,
-        )},
+        destinationSubtree: const {
+          'thing/a.txt': EntrySnapshot(kind: EntryKind.file, size: 1),
+        },
       );
       final plain = testItem(
         'b.txt',
@@ -447,10 +443,10 @@ void main() {
         _controller(pair: pair, plan: testPlan(pair, [typeChange, plain])),
       );
       addTearDown(controller.dispose);
-      final skipped = controller.applyOverrideTo(
-        [typeChange, plain],
-        SyncActionType.copyLeftToRight,
-      );
+      final skipped = controller.applyOverrideTo([
+        typeChange,
+        plain,
+      ], SyncActionType.copyLeftToRight);
       // §6 rule 4: a no-delete mode's bulk copy must not silently
       // authorize a pre-delete — the type-differs row is reported.
       expect(skipped, contains(typeChange));
@@ -485,18 +481,16 @@ void main() {
         controller.availableOverrides(typeChange),
         contains(SyncActionType.updateLeftToRight),
       );
-      final skipped = controller.applyOverrideTo(
-        [typeChange],
-        SyncActionType.updateLeftToRight,
-      );
+      final skipped = controller.applyOverrideTo([
+        typeChange,
+      ], SyncActionType.updateLeftToRight);
       expect(skipped, contains(typeChange));
       expect(typeChange.effective, SyncActionType.skip);
     });
   });
 
   group('resolveConflicts', () {
-    test('keepLeft / keepRight / skip resolve every conflict row',
-        () async {
+    test('keepLeft / keepRight / skip resolve every conflict row', () async {
       final pair = testSyncPair(
         rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
       );
@@ -521,8 +515,7 @@ void main() {
       expect(conflict.effective, SyncActionType.skip);
     });
 
-    test('newerWins resolves by mtime and hides on untrusted clocks',
-        () async {
+    test('newerWins resolves by mtime and hides on untrusted clocks', () async {
       final pair = testSyncPair(
         rules: const SyncRuleSet(direction: SyncDirection.bidirectional),
       );
@@ -538,10 +531,7 @@ void main() {
       );
       addTearDown(controller.dispose);
       expect(controller.offersNewerWins, isTrue);
-      expect(
-        controller.resolveConflicts(SyncConflictChoice.newerWins),
-        1,
-      );
+      expect(controller.resolveConflicts(SyncConflictChoice.newerWins), 1);
       expect(conflict.effective, SyncActionType.updateLeftToRight);
       controller.pairState.mtimeUnreliableLeft = true;
       expect(controller.offersNewerWins, isFalse);
@@ -567,10 +557,7 @@ void main() {
         _controller(pair: pair, plan: testPlan(pair, [typeChange])),
       );
       addTearDown(controller.dispose);
-      expect(
-        controller.resolveConflicts(SyncConflictChoice.keepLeft),
-        0,
-      );
+      expect(controller.resolveConflicts(SyncConflictChoice.keepLeft), 0);
       expect(typeChange.effective, SyncActionType.conflict);
     });
 
@@ -595,17 +582,11 @@ void main() {
         _controller(pair: pair, plan: testPlan(pair, [conflict])),
       );
       addTearDown(controller.dispose);
-      expect(
-        controller.resolveConflicts(SyncConflictChoice.keepRight),
-        1,
-      );
+      expect(controller.resolveConflicts(SyncConflictChoice.keepRight), 1);
       expect(conflict.effective, SyncActionType.skip);
       // keepLeft keeps the source — that direction is permitted.
       conflict.effective = SyncActionType.conflict;
-      expect(
-        controller.resolveConflicts(SyncConflictChoice.keepLeft),
-        1,
-      );
+      expect(controller.resolveConflicts(SyncConflictChoice.keepLeft), 1);
       expect(conflict.effective, SyncActionType.updateLeftToRight);
     });
 
@@ -631,26 +612,17 @@ void main() {
         reason: SyncReason.bothChanged,
       );
       final controller = await _ready(
-        _controller(
-          pair: pair,
-          plan: testPlan(pair, [closeCall, realGap]),
-        ),
+        _controller(pair: pair, plan: testPlan(pair, [closeCall, realGap])),
       );
       addTearDown(controller.dispose);
-      expect(
-        controller.resolveConflicts(SyncConflictChoice.newerWins),
-        1,
-      );
+      expect(controller.resolveConflicts(SyncConflictChoice.newerWins), 1);
       expect(closeCall.effective, SyncActionType.conflict);
       expect(realGap.effective, SyncActionType.updateLeftToRight);
 
       // An engine-flagged clock refuses even a real gap.
       realGap.effective = SyncActionType.conflict;
       controller.pairState.mtimeUnreliableRight = true;
-      expect(
-        controller.resolveConflicts(SyncConflictChoice.newerWins),
-        0,
-      );
+      expect(controller.resolveConflicts(SyncConflictChoice.newerWins), 0);
       expect(realGap.effective, SyncActionType.conflict);
     });
   });
@@ -742,13 +714,9 @@ void main() {
       expect(controller.syncTasks.tasks, isEmpty);
     });
 
-    test('rail 4 refuses the plan outright — run stays disabled',
-        () async {
+    test('rail 4 refuses the plan outright — run stays disabled', () async {
       final pair = testSyncPair(
-        rules: const SyncRuleSet(
-          deletions: DeletionPolicy.trash,
-          maxDelete: 2,
-        ),
+        rules: const SyncRuleSet(deletions: DeletionPolicy.trash, maxDelete: 2),
       );
       final items = [
         for (var i = 0; i < 3; i++)
@@ -789,24 +757,77 @@ void main() {
       SyncQueueTasks? tasks,
       SyncEnvironment? environment,
     }) => SyncPlanController(
-      pair: testSyncPair(
-        left: left.path,
-        right: right.path,
-        rules: rules,
-      ),
+      pair: testSyncPair(left: left.path, right: right.path, rules: rules),
       environment: environment ?? testSyncEnvironment(scratch),
       syncTasks: tasks ?? SyncQueueTasks(),
       deviceId: 'test-device',
       rsyncEndpoints: resolveRsyncEndpoints,
     );
 
-    test('copy run completes, item rows land in the panel task',
-        () async {
+    Future<({SyncEnvironment environment, String journalPath, SyncPair pair})>
+    leaveInterruptedRestore(
+      _RestoreCleanupFailureFileSystem fileSystem, {
+      SyncRuleSet? rules,
+    }) async {
+      final effectiveRules =
+          rules ??
+          const SyncRuleSet(
+            direction: SyncDirection.leftToRight,
+            deletions: DeletionPolicy.trash,
+            conflictDefault: ConflictDefault.keepLeft,
+          );
+      final pair = testSyncPair(
+        left: left.path,
+        right: right.path,
+        rules: effectiveRules,
+      );
+      final environment = testSyncEnvironment(
+        scratch,
+        localFileSystem: () => fileSystem,
+      );
+      final controller = SyncPlanController(
+        pair: pair,
+        environment: environment,
+        syncTasks: SyncQueueTasks(),
+        deviceId: 'test-device',
+        rsyncEndpoints: resolveRsyncEndpoints,
+      );
+
+      File('${left.path}/entry').writeAsStringSync('replacement');
+      Directory('${right.path}/entry').createSync();
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run();
+
+      fileSystem.failStageDelete = true;
+      await expectLater(
+        controller.restoreTrashed(),
+        throwsA(isA<RemoteFileException>()),
+      );
+      final journalPath = controller.lastRun!.journal.path;
+      controller.dispose();
+
+      return (environment: environment, journalPath: journalPath, pair: pair);
+    }
+
+    SyncPlanController recoveryController({
+      required SyncEnvironment environment,
+      required SyncPair pair,
+      required SyncPairScanner scanner,
+    }) => SyncPlanController(
+      pair: pair,
+      environment: environment,
+      syncTasks: SyncQueueTasks(),
+      scanner: scanner,
+      deviceId: 'test-device',
+      rsyncEndpoints: resolveRsyncEndpoints,
+    );
+
+    test('copy run completes, item rows land in the panel task', () async {
       File('${left.path}/a.txt').writeAsStringSync('alpha');
       File('${left.path}/b.txt').writeAsStringSync('beta');
       final tasks = SyncQueueTasks();
-      final controller = realController(const SyncRuleSet(),
-          tasks: tasks);
+      final controller = realController(const SyncRuleSet(), tasks: tasks);
       addTearDown(controller.dispose);
       controller.start();
       await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
@@ -838,10 +859,7 @@ void main() {
 
       await controller.run();
       expect(controller.phase, SyncPlanPhase.completed);
-      expect(
-        File('${right.path}/a.txt').readAsStringSync(),
-        'alpha',
-      );
+      expect(File('${right.path}/a.txt').readAsStringSync(), 'alpha');
       // The activity-panel task exists and finished completed.
       expect(tasks.tasks, hasLength(1));
       final task = tasks.tasks.single;
@@ -939,18 +957,14 @@ void main() {
       );
       final oldFile = File(p.join(left.path, 'old.txt'))
         ..writeAsStringSync('old');
-      final plan = testPlan(
-        pair,
-        [
-          testItem(
-            'old.txt',
-            left: testFile(size: 3),
-            suggested: SyncActionType.deleteLeft,
-            reason: SyncReason.onlyOnLeft,
-          ),
-        ],
-        leftFileCount: 1,
-      );
+      final plan = testPlan(pair, [
+        testItem(
+          'old.txt',
+          left: testFile(size: 3),
+          suggested: SyncActionType.deleteLeft,
+          reason: SyncReason.onlyOnLeft,
+        ),
+      ], leftFileCount: 1);
       final controller = SyncPlanController(
         pair: pair,
         environment: environment,
@@ -974,12 +988,10 @@ void main() {
       expect(oldFile.existsSync(), isTrue);
     });
 
-    test('a failed item surfaces failed phase and retries to done',
-        () async {
+    test('a failed item surfaces failed phase and retries to done', () async {
       final source = File('${left.path}/a.txt')..writeAsStringSync('x');
       final tasks = SyncQueueTasks();
-      final controller = realController(const SyncRuleSet(),
-          tasks: tasks);
+      final controller = realController(const SyncRuleSet(), tasks: tasks);
       addTearDown(controller.dispose);
       controller.start();
       await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
@@ -1007,8 +1019,7 @@ void main() {
       }
     });
 
-    test('mirror delete trashes and restoreTrashed returns the file',
-        () async {
+    test('mirror delete trashes and restoreTrashed returns the file', () async {
       File('${right.path}/old.txt').writeAsStringSync('old');
       File('${left.path}/a.txt').writeAsStringSync('a');
       final tasks = SyncQueueTasks();
@@ -1030,6 +1041,407 @@ void main() {
       final report = await controller.restoreTrashed();
       expect(report.restored, isNotEmpty);
       expect(File('${right.path}/old.txt').readAsStringSync(), 'old');
+    });
+
+    test('empty-directory replacement remains restorable', () async {
+      File('${left.path}/entry').writeAsStringSync('replacement');
+      Directory('${right.path}/entry').createSync();
+      final controller = realController(
+        const SyncRuleSet(
+          direction: SyncDirection.leftToRight,
+          deletions: DeletionPolicy.trash,
+          conflictDefault: ConflictDefault.keepLeft,
+        ),
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      expect(
+        controller.plan!.items.single.effective,
+        SyncActionType.copyLeftToRight,
+      );
+
+      await controller.run();
+
+      expect(File('${right.path}/entry').readAsStringSync(), 'replacement');
+      expect(controller.canRestore, isTrue);
+
+      final report = await controller.restoreTrashed();
+
+      expect(report.restored, contains('entry'));
+      expect(Directory('${right.path}/entry').existsSync(), isTrue);
+    });
+
+    test('incomplete restore blocks mutations but admits recovery', () async {
+      File('${left.path}/entry').writeAsStringSync('replacement');
+      Directory('${right.path}/entry').createSync();
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final controller = realController(
+        const SyncRuleSet(
+          direction: SyncDirection.leftToRight,
+          deletions: DeletionPolicy.trash,
+          conflictDefault: ConflictDefault.keepLeft,
+        ),
+        environment: testSyncEnvironment(
+          scratch,
+          localFileSystem: () => fileSystem,
+        ),
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run();
+      final reviewedPair = controller.pair;
+      final reviewedPlan = controller.plan;
+
+      fileSystem.failStageDelete = true;
+      await expectLater(
+        controller.restoreTrashed(),
+        throwsA(isA<RemoteFileException>()),
+      );
+
+      expect(controller.lastRun!.journal.hasIncompleteRestore, isTrue);
+      expect(controller.planMutationsBlocked, isTrue);
+      expect(controller.canRestore, isTrue);
+      expect(controller.canRetryFailed, isFalse);
+      expect(controller.prepareFullTrashPurge(), isNull);
+      final recoveryRun = controller.lastRun;
+
+      await controller.updateRules(
+        const SyncRuleSet(direction: SyncDirection.rightToLeft),
+      );
+      await controller.rescan();
+      await controller.run();
+
+      expect(controller.pair, same(reviewedPair));
+      expect(controller.plan, same(reviewedPlan));
+      expect(controller.lastRun, same(recoveryRun));
+
+      fileSystem.failStageDelete = false;
+      final report = await controller.restoreTrashed();
+
+      expect(report.restored, contains('entry'));
+      expect(controller.lastRun!.journal.hasIncompleteRestore, isFalse);
+      expect(Directory('${right.path}/entry').existsSync(), isTrue);
+    });
+
+    test(
+      'restart detects recovery before scanning and resumes after cancel',
+      () async {
+        final fileSystem = _RestoreCleanupFailureFileSystem();
+        final interrupted = await leaveInterruptedRestore(fileSystem);
+        final scanner = _CountingScanner(interrupted.environment);
+        final controller = recoveryController(
+          environment: interrupted.environment,
+          pair: interrupted.pair,
+          scanner: scanner,
+        );
+        addTearDown(controller.dispose);
+
+        controller.start();
+        controller.start();
+        await pumpUntil(() => controller.phase == SyncPlanPhase.recovery);
+
+        expect(scanner.calls, 0);
+        expect(controller.lastRun, isNull);
+        expect(controller.recoveryPending, isTrue);
+        expect(controller.restoreImpact, isNotNull);
+        expect(controller.canRestore, isTrue);
+        expect(controller.planMutationsBlocked, isTrue);
+
+        final originalPair = controller.pair;
+        await controller.rescan();
+        await controller.updateRules(const SyncRuleSet());
+        await controller.run();
+        await controller.retryFailed();
+        expect(controller.pair, same(originalPair));
+        expect(scanner.calls, 0);
+        expect(controller.prepareFullTrashPurge(), isNull);
+
+        await expectLater(
+          controller.restoreTrashed(),
+          throwsA(isA<RemoteFileException>()),
+        );
+        expect(controller.phase, SyncPlanPhase.recovery);
+        expect(controller.recoveryPending, isTrue);
+        expect(controller.canRestore, isTrue);
+        expect(scanner.calls, 0);
+
+        fileSystem.failStageDelete = false;
+        fileSystem.gateTrashVerification();
+        final cancelledRestore = controller.restoreTrashed();
+        await fileSystem.trashVerificationStarted;
+        controller.cancelRestore();
+        fileSystem.releaseTrashVerification();
+        final cancelledReport = await cancelledRestore;
+
+        expect(cancelledReport.restored, isEmpty);
+        expect(controller.phase, SyncPlanPhase.recovery);
+        expect(controller.recoveryPending, isTrue);
+        expect(controller.canRestore, isTrue);
+        expect(scanner.calls, 0);
+
+        final report = await controller.restoreTrashed();
+
+        expect(report.restored, contains('entry'));
+        expect(controller.recoveryPending, isFalse);
+        expect(controller.phase, SyncPlanPhase.ready);
+        expect(scanner.calls, 2);
+        expect(Directory('${right.path}/entry').existsSync(), isTrue);
+      },
+    );
+
+    test('rescan before start still discovers recovery first', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(fileSystem);
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+
+      await controller.rescan();
+
+      expect(controller.phase, SyncPlanPhase.recovery);
+      expect(controller.recoveryPending, isTrue);
+      expect(scanner.calls, 0);
+    });
+
+    test('recovery rebinds roots before external-trash mutation', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(
+        fileSystem,
+        rules: SyncRuleSet(
+          direction: SyncDirection.leftToRight,
+          deletions: DeletionPolicy.trash,
+          conflictDefault: ConflictDefault.keepLeft,
+          trashPathLeft: p.join(scratch.path, 'external-left-trash'),
+          trashPathRight: p.join(scratch.path, 'external-right-trash'),
+        ),
+      );
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.canRestore);
+      final changedRoot = Directory(p.join(scratch.path, 'changed-right'))
+        ..createSync();
+      fileSystem.retargetCanonicalRoot(
+        interrupted.environment.rootFor(interrupted.pair.right),
+        await changedRoot.resolveSymbolicLinks(),
+      );
+
+      await expectLater(
+        controller.restoreTrashed(),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.conflict,
+          ),
+        ),
+      );
+
+      expect(controller.phase, SyncPlanPhase.recovery);
+      expect(controller.recoveryPending, isTrue);
+      expect(controller.canRestore, isTrue);
+      expect(scanner.calls, 0);
+    });
+
+    test('recovery discovery releases its remote lease', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final connections = _RetargetableConnections(fileSystem);
+      final bookmarks = FakeBookmarkStore();
+      addTearDown(bookmarks.close);
+      final serverConfigs = AppServerConfigSource(
+        bookmarks: bookmarks,
+        catalogLookup: (_) => _serverConfig('one.example.com'),
+      );
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: p.join(scratch.path, 'sync_runs'),
+        deviceId: () async => 'test-device',
+        localFileSystem: () => fileSystem,
+        connections: connections,
+        serverConfigs: serverConfigs,
+      );
+      final pair = SyncPair(
+        id: 'remote-recovery',
+        name: 'Remote recovery',
+        left: RemoteEndpoint(
+          server: const BookmarkServerRef(serverConfigId: 'target'),
+          path: left.path,
+        ),
+        right: LocalEndpoint(right.path),
+        rules: const SyncRuleSet(
+          direction: SyncDirection.leftToRight,
+          deletions: DeletionPolicy.trash,
+          conflictDefault: ConflictDefault.keepLeft,
+        ),
+      );
+      final original = SyncPlanController(
+        pair: pair,
+        environment: environment,
+        syncTasks: SyncQueueTasks(),
+        deviceId: 'test-device',
+        rsyncEndpoints: resolveRsyncEndpoints,
+      );
+
+      File('${left.path}/entry').writeAsStringSync('replacement');
+      Directory('${right.path}/entry').createSync();
+      original.start();
+      await pumpUntil(() => original.phase == SyncPlanPhase.ready);
+      await environment.releaseRemoteLeases();
+      await original.run();
+      fileSystem.failStageDelete = true;
+      await expectLater(
+        original.restoreTrashed(),
+        throwsA(isA<RemoteFileException>()),
+      );
+      original.dispose();
+      await environment.releaseRemoteLeases();
+      final releasesBeforeDiscovery = connections.releaseCount;
+      final scanner = _CountingScanner(environment);
+      final recovery = recoveryController(
+        environment: environment,
+        pair: pair,
+        scanner: scanner,
+      );
+      addTearDown(recovery.dispose);
+
+      recovery.start();
+      await pumpUntil(() => recovery.canRestore);
+
+      expect(recovery.phase, SyncPlanPhase.recovery);
+      expect(scanner.calls, 0);
+      expect(connections.releaseCount, releasesBeforeDiscovery + 1);
+    });
+
+    test('restart selects the exact-root recovery candidate', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(fileSystem);
+      final source = File(interrupted.journalPath);
+      final lines = await source.readAsLines();
+      final headerIndex = lines.indexWhere((line) => line.trim().isNotEmpty);
+      final header = Map<String, Object?>.from(
+        jsonDecode(lines[headerIndex]) as Map,
+      );
+      header['runId'] = 'newer-distinct-roots';
+      header['startedAt'] = DateTime.parse(
+        header['startedAt']! as String,
+      ).add(const Duration(days: 1)).toIso8601String();
+      header['canonicalRootLeft'] = p.join(scratch.path, 'other-left');
+      header['canonicalRootRight'] = p.join(scratch.path, 'other-right');
+      lines[headerIndex] = jsonEncode(header);
+      await File(
+        p.join(interrupted.environment.syncRunsDirectory, 'newer.jsonl'),
+      ).writeAsString('${lines.join('\n')}\n', flush: true);
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.recovery);
+
+      expect(controller.recoveryPending, isTrue);
+      expect(controller.canRestore, isTrue);
+      expect(scanner.calls, 0);
+    });
+
+    test('distinct-root pair-id collision proceeds to scan', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(fileSystem);
+      final journal = File(interrupted.journalPath);
+      final lines = await journal.readAsLines();
+      final headerIndex = lines.indexWhere((line) => line.trim().isNotEmpty);
+      final header =
+          Map<String, Object?>.from(jsonDecode(lines[headerIndex]) as Map)
+            ..['canonicalRootLeft'] = p.join(scratch.path, 'other-left')
+            ..['canonicalRootRight'] = p.join(scratch.path, 'other-right');
+      lines[headerIndex] = jsonEncode(header);
+      await journal.writeAsString('${lines.join('\n')}\n', flush: true);
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+
+      expect(controller.recoveryPending, isFalse);
+      expect(scanner.calls, 2);
+    });
+
+    test('matching unreadable recovery blocks scan and restore', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(fileSystem);
+      await File(interrupted.journalPath).writeAsString(
+        '\n${jsonEncode(const <String, Object?>{'v': 999, 'type': 'futureRecovery'})}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.recovery);
+
+      expect(scanner.calls, 0);
+      expect(controller.recoveryPending, isFalse);
+      expect(controller.restoreImpact, isNull);
+      expect(controller.canRestore, isFalse);
+      expect(controller.planMutationsBlocked, isTrue);
+      expect(controller.errorMessage, interrupted.journalPath);
+      final report = await controller.restoreTrashed();
+      expect(report.restored, isEmpty);
+      expect(scanner.calls, 0);
+    });
+
+    test('unrelated unreadable recovery does not block scanning', () async {
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final interrupted = await leaveInterruptedRestore(fileSystem);
+      final journal = File(interrupted.journalPath);
+      final lines = await journal.readAsLines();
+      final headerIndex = lines.indexWhere((line) => line.trim().isNotEmpty);
+      final header = Map<String, Object?>.from(
+        jsonDecode(lines[headerIndex]) as Map,
+      )..['pairId'] = 'unrelated-pair';
+      lines[headerIndex] = jsonEncode(header);
+      lines.add(
+        jsonEncode(const <String, Object?>{'v': 999, 'type': 'futureRecovery'}),
+      );
+      await journal.writeAsString('${lines.join('\n')}\n', flush: true);
+      final scanner = _CountingScanner(interrupted.environment);
+      final controller = recoveryController(
+        environment: interrupted.environment,
+        pair: interrupted.pair,
+        scanner: scanner,
+      );
+      addTearDown(controller.dispose);
+
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+
+      expect(controller.recoveryPending, isFalse);
+      expect(scanner.calls, 2);
     });
 
     test('restore reserves its trash roots against purge', () async {
@@ -1073,6 +1485,139 @@ void main() {
       expect(restoreHeldLease, isTrue);
     });
 
+    test('restore report survives trash-lease release failure', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/new.txt').writeAsStringSync('new');
+      final lockDirectory = p.join(scratch.path, 'activity-locks');
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: p.join(scratch.path, 'sync_runs'),
+        deviceId: () async => 'test-device',
+        trashActivity: SyncTrashActivityRegistry(lockDirectory: lockDirectory),
+      );
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+      final location = await environment.resolveTrashLocation(
+        endpoint: controller.pair.right,
+        canonicalRoot: right.path,
+        rules: controller.pair.rules,
+        side: SyncSide.right,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+
+      final report = await _withFailingActivityUnlock(
+        lockDirectory: lockDirectory,
+        location: location,
+        body: controller.restoreTrashed,
+      );
+
+      expect(report.restored, contains('old.txt'));
+      expect(File('${right.path}/old.txt').readAsStringSync(), 'old');
+    });
+
+    test('lease release failure does not mask the restore error', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/new.txt').writeAsStringSync('new');
+      final lockDirectory = p.join(scratch.path, 'activity-locks');
+      final fileSystem = _RestoreCleanupFailureFileSystem();
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: p.join(scratch.path, 'sync_runs'),
+        deviceId: () async => 'test-device',
+        localFileSystem: () => fileSystem,
+        trashActivity: SyncTrashActivityRegistry(lockDirectory: lockDirectory),
+      );
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+      final location = await environment.resolveTrashLocation(
+        endpoint: controller.pair.right,
+        canonicalRoot: right.path,
+        rules: controller.pair.rules,
+        side: SyncSide.right,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      fileSystem.failTrashVerification = true;
+
+      await expectLater(
+        _withFailingActivityUnlock(
+          lockDirectory: lockDirectory,
+          location: location,
+          body: controller.restoreTrashed,
+        ),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.message,
+            'message',
+            'restore transport unavailable',
+          ),
+        ),
+      );
+    });
+
+    test('restore cancellation releases its trash lease', () async {
+      File('${right.path}/old-a.txt').writeAsStringSync('a');
+      File('${right.path}/old-b.txt').writeAsStringSync('b');
+      File('${left.path}/new.txt').writeAsStringSync('new');
+      final fileSystem = _RestoreGateFileSystem();
+      final activity = SyncTrashActivityRegistry();
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: '${scratch.path}/sync_runs',
+        deviceId: () async => 'test-device',
+        localFileSystem: () => fileSystem,
+        trashActivity: activity,
+      );
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+
+      final restore = controller.restoreTrashed();
+      await fileSystem.restoreStarted.future;
+      expect(controller.isRestoringTrash, isTrue);
+      controller.cancelRestore();
+      fileSystem.releaseRestore();
+      final report = await restore;
+
+      expect(report.restored, hasLength(1));
+      expect(controller.isRestoringTrash, isFalse);
+      expect(
+        [
+          'old-a.txt',
+          'old-b.txt',
+        ].where((name) => File('${right.path}/$name').existsSync()),
+        hasLength(1),
+      );
+      final location = await environment.resolveTrashLocation(
+        endpoint: controller.pair.right,
+        canonicalRoot: right.path,
+        rules: controller.pair.rules,
+        side: SyncSide.right,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final purge = await activity.tryBeginPurge([
+        location,
+      ], SyncTrashPurgeAdmission.requireIdle);
+      expect(purge, isNotNull);
+      await purge!.close();
+    });
+
     test('restore blocks another run on the same controller', () async {
       File('${right.path}/old.txt').writeAsStringSync('old');
       File('${left.path}/a.txt').writeAsStringSync('a');
@@ -1097,6 +1642,91 @@ void main() {
       expect(controller.lastRun, same(restoringRun));
       fileSystem.releaseRestore();
       await restore;
+    });
+
+    test('restore blocks a run on another controller', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final fileSystem = _TrashVerificationGateFileSystem();
+      final environment = testSyncEnvironment(
+        scratch,
+        localFileSystem: () => fileSystem,
+      );
+      final restoringController = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(restoringController.dispose);
+      restoringController.start();
+      await pumpUntil(() => restoringController.phase == SyncPlanPhase.ready);
+      await restoringController.run(deleteConfirmed: true);
+
+      File('${left.path}/a.txt').writeAsStringSync('changed content');
+      final runningController = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(runningController.dispose);
+      runningController.start();
+      await pumpUntil(() => runningController.phase == SyncPlanPhase.ready);
+      await pumpUntil(() => runningController.canPurgeTrash);
+
+      fileSystem.armVerification();
+      final restore = restoringController.restoreTrashed();
+      await fileSystem.verificationStarted.future;
+      addTearDown(fileSystem.releaseVerification);
+      await runningController.run(deleteConfirmed: true);
+
+      expect(runningController.phase, SyncPlanPhase.ready);
+      expect(File('${right.path}/a.txt').readAsStringSync(), 'a');
+
+      fileSystem.releaseVerification();
+      await restore;
+    });
+
+    test('active run blocks restore on another controller', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final fileSystem = _CancelAwareGateFs();
+      final environment = testSyncEnvironment(
+        scratch,
+        localFileSystem: () => fileSystem,
+      );
+      final restoringController = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(restoringController.dispose);
+      restoringController.start();
+      await pumpUntil(() => restoringController.phase == SyncPlanPhase.ready);
+      await restoringController.run(deleteConfirmed: true);
+
+      File('${left.path}/a.txt').writeAsStringSync('changed content');
+      final runningController = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(runningController.dispose);
+      runningController.start();
+      await pumpUntil(() => runningController.phase == SyncPlanPhase.ready);
+      await pumpUntil(() => runningController.canPurgeTrash);
+
+      fileSystem.arm();
+      addTearDown(fileSystem.release);
+      final run = runningController.run(deleteConfirmed: true);
+      await fileSystem.uploadStarted;
+      final blockedReport = await restoringController.restoreTrashed();
+
+      expect(blockedReport.restored, isEmpty);
+      expect(File('${right.path}/old.txt').existsSync(), isFalse);
+      expect(restoringController.canRestore, isTrue);
+
+      fileSystem.release();
+      await run;
+      final report = await restoringController.restoreTrashed();
+
+      expect(report.restored, contains('old.txt'));
+      expect(File('${right.path}/old.txt').readAsStringSync(), 'old');
     });
 
     test('dispose during restore preflight prevents restoration', () async {
@@ -1187,6 +1817,36 @@ void main() {
       expect(controller.canRestore, isFalse);
     });
 
+    test('a purge lock failure reports an active run', () async {
+      File('${right.path}/old.txt').writeAsStringSync('old');
+      File('${left.path}/a.txt').writeAsStringSync('a');
+      final lockPath = p.join(scratch.path, 'purge-locks');
+      final environment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: p.join(scratch.path, 'sync_runs'),
+        deviceId: () async => 'test-device',
+        trashActivity: SyncTrashActivityRegistry(lockDirectory: lockPath),
+      );
+      final controller = realController(
+        const SyncRuleSet(deletions: DeletionPolicy.trash),
+        environment: environment,
+      );
+      addTearDown(controller.dispose);
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run(deleteConfirmed: true);
+      final request = await controller.prepareFullTrashPurgeLive();
+      expect(request, isNotNull);
+
+      Directory(lockPath).deleteSync(recursive: true);
+      File(lockPath).writeAsStringSync('occupied');
+
+      await expectLater(
+        controller.purgeTrash(request!),
+        throwsA(isA<SyncTrashActiveRunException>()),
+      );
+    });
+
     test('restore reopens a journal purged by another process', () async {
       File('${right.path}/old.txt').writeAsStringSync('old');
       File('${left.path}/a.txt').writeAsStringSync('a');
@@ -1212,8 +1872,7 @@ void main() {
       expect(controller.canRestore, isFalse);
     });
 
-    test('the typed confirmation carries through to a real run',
-        () async {
+    test('the typed confirmation carries through to a real run', () async {
       // 10 deletes of 11 files on the right trips rail 3's fraction
       // clause (≥ 10 and > 50 %, under the 90 % floor).
       for (var i = 0; i < 10; i++) {
@@ -1335,8 +1994,7 @@ void main() {
     test('a fresh run retires the previous task row\u2019s retry', () async {
       File('${left.path}/a.txt').writeAsStringSync('x');
       final tasks = SyncQueueTasks();
-      final controller = realController(const SyncRuleSet(),
-          tasks: tasks);
+      final controller = realController(const SyncRuleSet(), tasks: tasks);
       addTearDown(controller.dispose);
       controller.start();
       await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
@@ -1357,8 +2015,7 @@ void main() {
     test('a rescan retires Retry Failed and the stale task row', () async {
       File('${left.path}/a.txt').writeAsStringSync('x');
       final tasks = SyncQueueTasks();
-      final controller = realController(const SyncRuleSet(),
-          tasks: tasks);
+      final controller = realController(const SyncRuleSet(), tasks: tasks);
       addTearDown(controller.dispose);
       controller.start();
       await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
@@ -1434,8 +2091,7 @@ void main() {
       },
     );
 
-    test('a retry that completes stamps lastRunAt like a run',
-        () async {
+    test('a retry that completes stamps lastRunAt like a run', () async {
       File('${left.path}/a.txt').writeAsStringSync('x');
       final gateFs = _CancelAwareGateFs();
       final controller = realController(
@@ -1467,8 +2123,7 @@ void main() {
   group('rsyncExport', () {
     final stamp = DateTime.utc(2026, 9, 22, 15, 4, 7);
 
-    test('renders the effective ruleset with the injected resolver',
-        () async {
+    test('renders the effective ruleset with the injected resolver', () async {
       final pair = testSyncPair(
         rules: const SyncRuleSet(deletions: DeletionPolicy.trash),
       );
@@ -1522,8 +2177,7 @@ void main() {
       expect(export.permanentDeletions, isTrue);
     });
 
-    test('manual overrides and engine skips land in the export',
-        () async {
+    test('manual overrides and engine skips land in the export', () async {
       final pair = testSyncPair();
       final plan = testPlan(pair, [
         testItem(
@@ -1532,15 +2186,9 @@ void main() {
           suggested: SyncActionType.copyLeftToRight,
           reason: SyncReason.onlyOnLeft,
         ),
-        testItem(
-          'bad/sub',
-          left: testDir,
-          reason: SyncReason.scanError,
-        ),
+        testItem('bad/sub', left: testDir, reason: SyncReason.scanError),
       ]);
-      final controller = await _ready(
-        _controller(pair: pair, plan: plan),
-      );
+      final controller = await _ready(_controller(pair: pair, plan: plan));
       addTearDown(controller.dispose);
       // One manual override on the plan's first row.
       controller.applyOverrideTo([plan.items.first], SyncActionType.skip);
@@ -1613,8 +2261,7 @@ void main() {
       expect(controller.canExportRsync, isTrue);
     });
 
-    test('untrusted mtimes downgrade the export to --size-only',
-        () async {
+    test('untrusted mtimes downgrade the export to --size-only', () async {
       final pair = testSyncPair();
       final scratch = Directory.systemTemp.createTempSync();
       addTearDown(() => scratch.deleteSync(recursive: true));
@@ -1638,10 +2285,7 @@ void main() {
       final export = controller.rsyncExport(now: stamp)!;
       expect(export.text, contains('--size-only'));
       expect(export.text, isNot(contains('--modify-window')));
-      expect(
-        export.text,
-        contains('mtimes untrusted'),
-      );
+      expect(export.text, contains('mtimes untrusted'));
     });
   });
 }
@@ -1652,10 +2296,30 @@ void main() {
 /// the same verb.
 final class _CancelAwareGateFs extends LocalFileSystem {
   Completer<void>? _gate;
+  Completer<void>? _uploadStarted;
   bool failUploads = false;
 
-  void arm() => _gate = Completer<void>();
-  void disarm() => _gate = null;
+  void arm() {
+    _gate = Completer<void>();
+    _uploadStarted = Completer<void>();
+  }
+
+  Future<void> get uploadStarted {
+    final started = _uploadStarted;
+    if (started != null) return started.future;
+    throw StateError('The upload gate is not armed.');
+  }
+
+  void release() {
+    final gate = _gate;
+    if (gate != null && !gate.isCompleted) gate.complete();
+  }
+
+  void disarm() {
+    release();
+    _gate = null;
+    _uploadStarted = null;
+  }
 
   @override
   Future<RemoteFileEntry> upload(
@@ -1678,6 +2342,8 @@ final class _CancelAwareGateFs extends LocalFileSystem {
     }
     final gate = _gate;
     if (gate != null) {
+      final started = _uploadStarted;
+      if (started != null && !started.isCompleted) started.complete();
       await Future.any([
         gate.future,
         if (cancellation != null) cancellation.whenCancelled,
@@ -1720,6 +2386,176 @@ final class _RestoreGateFileSystem extends LocalFileSystem {
 
     return super.rename(oldPath, newPath, overwrite: overwrite);
   }
+}
+
+final class _RestoreCleanupFailureFileSystem extends LocalFileSystem {
+  static const _restoreStagePrefix = '.poltergeist-restore-';
+
+  bool failStageDelete = false;
+  bool failTrashVerification = false;
+  String? _retargetedPath;
+  String? _retargetedCanonicalRoot;
+  Completer<void>? _trashVerificationStarted;
+  Completer<void>? _trashVerificationRelease;
+
+  Future<void> get trashVerificationStarted =>
+      _trashVerificationStarted?.future ??
+      Future<void>.error(StateError('Trash verification is not gated.'));
+
+  void gateTrashVerification() {
+    _trashVerificationStarted = Completer<void>();
+    _trashVerificationRelease = Completer<void>();
+  }
+
+  void releaseTrashVerification() {
+    final release = _trashVerificationRelease;
+    if (release != null && !release.isCompleted) release.complete();
+    _trashVerificationStarted = null;
+    _trashVerificationRelease = null;
+  }
+
+  void retargetCanonicalRoot(String path, String canonicalRoot) {
+    _retargetedPath = path;
+    _retargetedCanonicalRoot = canonicalRoot;
+  }
+
+  @override
+  Future<String> canonicalize(String path) {
+    final retargetedPath = _retargetedPath;
+    if (retargetedPath != null && p.equals(path, retargetedPath)) {
+      return Future.value(_retargetedCanonicalRoot!);
+    }
+
+    return super.canonicalize(path);
+  }
+
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
+    if (failTrashVerification && path.contains(syncTrashRootMarkerName)) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'verify sync trash',
+        path: path,
+        message: 'restore transport unavailable',
+      );
+    }
+
+    final started = _trashVerificationStarted;
+    final release = _trashVerificationRelease;
+    if (started != null &&
+        release != null &&
+        path.contains(syncTrashRootMarkerName)) {
+      if (!started.isCompleted) started.complete();
+      await release.future;
+    }
+
+    return super.stat(path, followLinks: followLinks);
+  }
+
+  @override
+  Future<void> delete(RemoteFileEntry entry) {
+    if (failStageDelete &&
+        p.basename(entry.path).startsWith(_restoreStagePrefix)) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'delete restore stage',
+        path: entry.path,
+        message: 'connection lost during restore cleanup',
+      );
+    }
+
+    return super.delete(entry);
+  }
+}
+
+Future<T> _withFailingActivityUnlock<T>({
+  required String lockDirectory,
+  required SyncTrashLocation location,
+  required Future<T> Function() body,
+}) {
+  final locationGatePath = p.absolute(
+    p.normalize(
+      p.join(lockDirectory, '${location.locationKey}$_locationGateSuffix'),
+    ),
+  );
+  final probe = _UnlockFailureProbe();
+  addTearDown(probe.forceClose);
+  final parentZone = Zone.current;
+
+  return IOOverrides.runZoned(
+    body,
+    createFile: (path) {
+      final delegate = parentZone.run(() => File(path));
+      if (p.absolute(p.normalize(path)) != locationGatePath) return delegate;
+
+      return _UnlockFailureFile(delegate, probe);
+    },
+  );
+}
+
+final class _UnlockFailureProbe {
+  RandomAccessFile? file;
+  bool closed = false;
+
+  Future<void> forceClose() async {
+    if (closed) return;
+    await file?.close();
+    closed = true;
+  }
+}
+
+final class _UnlockFailureFile implements File {
+  const _UnlockFailureFile(this._delegate, this._probe);
+
+  final File _delegate;
+  final _UnlockFailureProbe _probe;
+
+  @override
+  String get path => _delegate.path;
+
+  @override
+  Future<RandomAccessFile> open({FileMode mode = FileMode.read}) async {
+    final file = await _delegate.open(mode: mode);
+    _probe.file = file;
+    return _UnlockFailureRandomAccessFile(file, _probe);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _UnlockFailureRandomAccessFile implements RandomAccessFile {
+  const _UnlockFailureRandomAccessFile(this._delegate, this._probe);
+
+  final RandomAccessFile _delegate;
+  final _UnlockFailureProbe _probe;
+
+  @override
+  String get path => _delegate.path;
+
+  @override
+  Future<void> close() async {
+    await _delegate.close();
+    _probe.closed = true;
+  }
+
+  @override
+  Future<RandomAccessFile> lock([
+    FileLock mode = FileLock.exclusive,
+    int start = 0,
+    int end = -1,
+  ]) async {
+    await _delegate.lock(mode, start, end);
+    return this;
+  }
+
+  @override
+  Future<RandomAccessFile> unlock([int start = 0, int end = -1]) {
+    throw FileSystemException('injected unlock failure', path);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 final class _TrashVerificationGateFileSystem extends LocalFileSystem {
@@ -1855,14 +2691,51 @@ final class _EndpointTouchingScanner implements SyncPairScanner {
     ScanCancellation? cancellation,
     void Function(int entriesScanned)? onProgress,
   }) async {
-    final root = await environment.fileSystemFor(endpoint).canonicalize(
-      environment.rootFor(endpoint),
-    );
+    final root = await environment
+        .fileSystemFor(endpoint)
+        .canonicalize(environment.rootFor(endpoint));
     final entries = side == SyncSide.left
         ? {'old.txt': testFile(size: 3)}
         : const <String, EntrySnapshot>{};
     onProgress?.call(entries.length);
 
     return testScanResult(root, entries);
+  }
+}
+
+final class _CountingScanner implements SyncPairScanner {
+  _CountingScanner(this.environment);
+
+  final SyncEnvironment environment;
+  int calls = 0;
+
+  @override
+  Future<ScanResult> scan(
+    SyncEndpoint endpoint,
+    SyncSide side,
+    SyncRuleSet rules, {
+    bool? caseSensitivityOverride,
+    ScanCancellation? cancellation,
+    void Function(int entriesScanned)? onProgress,
+  }) async {
+    calls++;
+    final root = environment.rootFor(endpoint);
+    final trashPath = await environment.effectiveTrashPath(
+      endpoint: endpoint,
+      canonicalRoot: root,
+      rules: rules,
+      side: side,
+    );
+
+    return TreeScanner(environment.fileSystemFor(endpoint)).scan(
+      root,
+      side: side,
+      rules: rules,
+      trashPath: trashPath,
+      caseSensitivityOverride: caseSensitivityOverride,
+      probeCaseSensitivity: caseSensitivityOverride == null,
+      cancellation: cancellation,
+      onProgress: onProgress,
+    );
   }
 }

@@ -7599,17 +7599,53 @@ abstract class AppLocalizations {
   /// **'Exclude'**
   String get syncHeavySuggestionAccept;
 
+  /// Plan-view heading when restart recovery must finish before the pair can be scanned.
+  ///
+  /// In en, this message translates to:
+  /// **'Interrupted restore'**
+  String get syncRestoreRecoveryTitle;
+
+  /// Plan-view explanation for a readable interrupted restore.
+  ///
+  /// In en, this message translates to:
+  /// **'A previous restore stopped before it finished. Sync is paused until you finish it.'**
+  String get syncRestoreRecoveryBody;
+
+  /// Fail-closed plan-view explanation when interrupted recovery cannot be verified.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync is paused because its interrupted restore cannot be verified. Keep both folders unchanged. Restore the journal from backup or contact support: {path}'**
+  String syncRestoreRecoveryBlocked(String path);
+
+  /// Action-bar verb for resuming an interrupted restore after restart.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish Restore…'**
+  String get syncRestoreRecoveryAction;
+
+  /// Confirmation title before resuming an interrupted restore.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish Interrupted Restore'**
+  String get syncRestoreRecoveryDialogTitle;
+
+  /// Recovery confirmation impact: original items restored and run-created files removed.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish the interrupted restore. {restored, plural, =0{Restores no original items.} =1{Restores {restored} original item.} other{Restores {restored} original items.}} {removedCreatedFiles, plural, =0{Removes no files created by this run.} =1{Removes {removedCreatedFiles} file created by this run.} other{Removes {removedCreatedFiles} files created by this run.}}'**
+  String syncRestoreRecoverySummary(int restored, int removedCreatedFiles);
+
   /// Restore dialog title (05 §8 rail 9).
   ///
   /// In en, this message translates to:
   /// **'Restore Trashed Files'**
   String get syncRestoreDialogTitle;
 
-  /// Restore dialog's count line — only journaled trash entries restore (05 §8 rail 9).
+  /// Restore dialog impact: original items restored and run-created files removed by rule-4 recovery (05 §8 rail 9).
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{{count} file will be restored from trash.} other{{count} files will be restored from trash.}}'**
-  String syncRestoreSummary(int count);
+  /// **'{restored, plural, =0{Restores no original items.} =1{Restores {restored} original item.} other{Restores {restored} original items.}} {removedCreatedFiles, plural, =0{Removes no files created by this run.} =1{Removes {removedCreatedFiles} file created by this run.} other{Removes {removedCreatedFiles} files created by this run.}}'**
+  String syncRestoreSummary(int restored, int removedCreatedFiles);
 
   /// Restore dialog's confirm verb.
   ///
@@ -7617,11 +7653,17 @@ abstract class AppLocalizations {
   /// **'Restore'**
   String get syncRestoreButton;
 
-  /// Post-restore summary line: how many entries came back and how many were skipped.
+  /// Post-restore summary line: how many files or directories came back and how many were skipped.
   ///
   /// In en, this message translates to:
-  /// **'{restored, plural, =1{Restored {restored} file} other{Restored {restored} files}}{skipped, plural, =0{} =1{ — {skipped} skipped} other{ — {skipped} skipped}}'**
+  /// **'{restored, plural, =1{Restored {restored} item} other{Restored {restored} items}}{skipped, plural, =0{} =1{. {skipped} skipped} other{. {skipped} skipped}}'**
   String syncRestoreResult(int restored, int skipped);
+
+  /// Actionable toast when Restore Trashed Files stops on a remote filesystem failure; the restore action remains available.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore stopped. Check the connection and file state, then retry. Error: {message}'**
+  String syncRestoreFailed(String message);
 
   /// Pair-editor direction choice (05 §5): one-way, left feeds right.
   ///

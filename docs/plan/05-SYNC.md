@@ -1188,8 +1188,17 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    `.poltergeist-root/identity` ownership marker — never a recursive
    walk. The marker's random id is the physical-root scope used by
    journals and local activity locks, so endpoint aliases converge; an
-   unmarked non-trash directory is never adopted or purged. Only valid
-   §6 run ids and `rsync-<ts>` directories enter inventory; the marker,
+   unmarked non-trash directory is never adopted or purged. During the
+   active-marker format transition, each run holds both the legacy hashed
+   marker and the v2 name-encoded marker. Readers resolve v2 first so Windows
+   never needs to read a current locked marker; an unreadable legacy-only
+   marker fails closed. Admission also holds a host-local gate keyed by each
+   stable location key for the operation's lifetime. Ordinary runs take shared
+   gates, so distinct run ids may coexist at one location; restore takes both
+   locations exclusively across controllers, processes, and app instances, so
+   no run or second restore can overlap its read-check-write transaction.
+   Inventory admits only valid §6 run ids and `rsync-<ts>` directories; the
+   marker,
    claim remnants, and unrelated directories never do. File counts
    therefore come from journals (or the
    §9 `trashCache`) **only**: a journal-less directory — a crash
@@ -1359,7 +1368,14 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    one
    summary line. A purge appends `trashScopePurged` for each affected
    physical-root scope; the legacy unscoped `purged` line remains a
-   run-wide compatibility marker. Every line is appended with an immediate flush — no
+   run-wide compatibility marker. A rule-4 replace restore appends
+   version-2 preparation and phase lines around the otherwise-version-1
+   journal; they record the verified trash hashes, private sibling stage,
+   restored children, cleanup, and completion. A reader that does not
+   understand those safety records rejects the journal rather than replaying
+   a staged mutation without its recovery state. Legacy path scopes normalize
+   both UNC spellings and compare Windows paths case-insensitively. Every line
+   is appended with an immediate flush — no
    userspace buffering — so a killed process loses at most the line it
    was mid-writing (a torn final line is dropped on replay — 03 §4.6's
    journal-recovery pattern, applied here too) and rail 8's
@@ -1402,21 +1418,59 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    destination that no longer matches that post-state
    (changed by a later run or by hand) is **skipped and listed in the
    result** — Undo never overwrites newer changes. For a §6-rule-4
-   replace, restore runs in order: conflict-check the run's created
-   entry — a created *directory's* recorded post-state is its
-   **end-of-run entry set**, the copies this run placed inside it
-   included (the journal's item lines under and inside the parent carry
-   it) — then remove the entry together with that set, recreate the
-   original entry's directory chain shallowest-first, and reverse the
-   recorded renames; the per-file `trashLocation` lines under the
-   parent item carry the rest. Reverting a replace is atomic on
-   purpose: the pre-run file cannot come back while the created
-   directory stands, so this is the **one place v1 undo removes
-   run-created copies** — the confirm dialog counts those files among
-   what it removes, and any file inside the created directory that no
-   longer matches its recorded post-state skips the whole replace
-   revert (listed in the result) rather than deleting someone's newer
-   work. The trashed entry
+   replace, restore first conflict-checks every trashed child and the run's
+   created entry as one unit — a created *directory's* recorded post-state
+   is its **end-of-run entry set**, the copies this run placed inside it
+   included (the journal's item lines under and inside the parent carry it).
+   Only after that preflight is durably recorded does restore rename the
+   created entry to a collision-resistant sibling stage, recreate the
+   original entry's directory chain, and reverse the recorded child renames.
+   The same transaction covers file-to-directory replacements whose only
+   trashed entry is the parent, and empty-directory-to-file replacements with
+   no trashed child. Immediately before stage inspection, rename, or cleanup,
+   restore verifies lexical containment and every destination ancestor without
+   following links; a replaced ancestor cannot redirect stage I/O outside the
+   sync root.
+   Each phase is flushed before the next destructive step; retry reconciles
+   a rename that committed before disconnect, resumes the remaining children,
+   and removes the still-verified stage only after every original child is
+   restored. Restore cancellation stops before the next independent entry,
+   replace preflight or child, or emptied-directory recreation; completed
+   entries stay restored and a durable replace transaction resumes on retry.
+   Once started, an incomplete transaction is recovery-pending: journal
+   pruning retains it, a new run or rescan is refused, purge inventory excludes
+   it, and purge rechecks that state after confirmation. On controller creation
+   or restart, recovery preflight runs before any tree scan and searches every
+   `pairId` candidate produced by the independent case and normalization folds
+   for both endpoints. A readable incomplete journal is bound without a tree
+   walk: its recorded rule snapshot chooses the trash paths, existing owned
+   trash roots are opened read-only (never created, claimed, retired, or
+   reconciled), and the current endpoints are tried in direct and pane-swapped
+   order. Each journal side must match its separately recorded canonical sync
+   root, physical-root scope, stable location key, and endpoint/host-key
+   identity; exactly one assignment is valid. Restore then takes the exclusive
+   location lease, re-canonicalizes both sync roots under that lease, reopens
+   the journal, and resumes the durable transaction using journal-side
+   endpoint/root/location maps. Every journal path is validated as relative and
+   contained before any filesystem access.
+
+   A matching recovery that is unreadable, lacks either side's required scope
+   or location identity, cannot reopen its recorded root, or does not map
+   exactly once blocks scan, run, and purge; an unrelated corrupt journal does
+   not block this pair. After a recovery completes, discovery runs again over
+   all fold candidates, and tree scanning starts only when none remain. A staged failure
+   is surfaced without hiding the Restore retry. Admission is atomic and the
+   replacement withdraws in one rename,
+   but the original children become visible one by one — the operation is not
+   externally visibility-atomic across a disconnect. This is the **one place
+   v1 undo removes run-created copies** — the confirm dialog counts those
+   files among what it removes. Any mismatch found before staging skips the
+   whole replace rather than deleting newer work; after staging begins, an
+   interrupted transaction remains journal-owned and resumable instead of
+   being mistaken for a fresh restore. The per-file `trashLocation` lines
+   under the parent item carry the reverse mapping. The confirmation separately
+   counts the original items restored and the run-created files removed by
+   this revert. The trashed entry
    itself is verified too: its size is re-statted against the journal
    line — and a rail 5 **copy-fallback** trash entry is additionally
    verified against the `trashContentSha256` its journal line recorded

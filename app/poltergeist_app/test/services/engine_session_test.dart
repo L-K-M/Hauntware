@@ -92,8 +92,7 @@ class FakeAppEngine implements AppEngine {
   final pinsController = StreamController<HostKeyPinnedEvent>.broadcast();
   final incidentsController = StreamController<IncidentStoreEvent>.broadcast();
   final statesControllers = <String, StreamController<ServerStatus>>{};
-  final recoveryController =
-      StreamController<RecoveryFailedEvent>.broadcast();
+  final recoveryController = StreamController<RecoveryFailedEvent>.broadcast();
   final logController = StreamController<ConnectionLogEvent>.broadcast();
   final probeStatusesController =
       StreamController<ProbeStatusesEvent>.broadcast();
@@ -145,16 +144,14 @@ class FakeAppEngine implements AppEngine {
   }
 
   @override
-  Stream<IncidentStoreEvent> get incidentChanges =>
-      incidentsController.stream;
+  Stream<IncidentStoreEvent> get incidentChanges => incidentsController.stream;
 
   @override
   Stream<ServerStatus> watchServer(String serverId) =>
       _stateOf(serverId).stream;
 
   @override
-  Stream<RecoveryFailedEvent> get recoveryFailures =>
-      recoveryController.stream;
+  Stream<RecoveryFailedEvent> get recoveryFailures => recoveryController.stream;
 
   @override
   Stream<ConnectionLogEvent> get connectionLog => logController.stream;
@@ -183,9 +180,9 @@ class FakeAppEngine implements AppEngine {
   }) async {
     openCalls.add((serverId: serverId, paneTabId: paneTabId, config: config));
     final repliesAtOpenStart = replies.length;
-    _stateOf(serverId).add(
-      const ServerStatus(ServerConnectionState.connecting),
-    );
+    _stateOf(
+      serverId,
+    ).add(const ServerStatus(ServerConnectionState.connecting));
     for (final prompt in promptScript) {
       promptsController.add(prompt);
       await _waitForReply(prompt.promptId);
@@ -218,9 +215,7 @@ class FakeAppEngine implements AppEngine {
     }
     final channel = this.channel;
     if (channel == null) throw StateError('no browse channel scripted');
-    _stateOf(serverId).add(
-      const ServerStatus(ServerConnectionState.connected),
-    );
+    _stateOf(serverId).add(const ServerStatus(ServerConnectionState.connected));
     return channel;
   }
 
@@ -632,10 +627,9 @@ void main() {
       // Audit finding A: the incident and the pin it names cross together,
       // or the engine refuses to restore the record. The pinned HostKey
       // type carries no ==, so the seed is compared by its JSON form.
-      expect(
-        configs.single.hostKeyPins.map((pin) => pin.toJson()).toList(),
-        [_pin.toJson()],
-      );
+      expect(configs.single.hostKeyPins.map((pin) => pin.toJson()).toList(), [
+        _pin.toJson(),
+      ]);
       expect(configs.single.incidents, [_incident]);
     });
 
@@ -807,6 +801,48 @@ void main() {
       pins.firstWriteGate.complete();
 
       expect(await install, HostKeyInstallResult.installed);
+      await session.flushWrites();
+      expect(pins._written, [enginePin]);
+      expect(
+        (await session.pinStore.get(
+          enginePin.host,
+          enginePin.port,
+        ))!.fingerprintSha256,
+        enginePin.fingerprintSha256,
+      );
+    });
+
+    test('an engine pin during conditional replacement wins', () async {
+      final pins = _ConcurrentWritePinStore([_pin]);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.firstWriteGate.isCompleted) pins.firstWriteGate.complete();
+        await session!.shutdown();
+      });
+      const pulled = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:pulled',
+        pinnedAt: 1700000000001,
+      );
+      const enginePin = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine-after',
+        pinnedAt: 1700000000002,
+      );
+
+      final replacement = session!.pinStore.replaceIfCurrent(_pin, pulled);
+      await pumpEventQueue();
+      expect(pins.calls, [pulled]);
+
+      engine!.pinHostKey(enginePin);
+      await pumpEventQueue();
+      pins.firstWriteGate.complete();
+
+      expect(await replacement, HostKeyInstallResult.conflict);
       await session.flushWrites();
       expect(pins._written, [enginePin]);
       expect(
@@ -1142,10 +1178,7 @@ void main() {
 
       // Catalog replacement publishes before notifying its bound listener.
       session.publishServerCatalog(catalog.value);
-      session.bindServerCatalog(
-        changes: catalog,
-        read: () => catalog.value,
-      );
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
       await pumpEventQueue();
 
       expect(engine!.catalogSnapshots, [
@@ -1167,10 +1200,7 @@ void main() {
       final (session, engine) = await startSession();
       addTearDown(session!.shutdown);
 
-      session.bindServerCatalog(
-        changes: catalog,
-        read: () => catalog.value,
-      );
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
       catalog.value = const [];
       await pumpEventQueue();
 
@@ -1193,10 +1223,7 @@ void main() {
       addTearDown(catalog.dispose);
       final (session, engine) = await startSession();
 
-      session!.bindServerCatalog(
-        changes: catalog,
-        read: () => catalog.value,
-      );
+      session!.bindServerCatalog(changes: catalog, read: () => catalog.value);
       await pumpEventQueue();
       expect(engine!.catalogSnapshots, [
         [direct],
@@ -1362,9 +1389,7 @@ void main() {
 
     test('routes the raised prompt through the session coordinator', () async {
       final navigatorKey = GlobalKey<NavigatorState>();
-      final (session, engine) = await startSession(
-        navigatorKey: navigatorKey,
-      );
+      final (session, engine) = await startSession(navigatorKey: navigatorKey);
       addTearDown(session!.shutdown);
       engine!.promptScript = [_changedKeyPrompt('p1')];
       engine.channel = FakeAppBrowseChannel();
@@ -1389,35 +1414,44 @@ void main() {
         engine.replies
             .where((reply) => reply.$1 == 'p1')
             .map((reply) => reply.$3),
-        [isA<HostKeyPromptReply>().having((r) => r.accepted, 'accepted', false)],
+        [
+          isA<HostKeyPromptReply>().having(
+            (r) => r.accepted,
+            'accepted',
+            false,
+          ),
+        ],
       );
     });
 
-    test('shares the coordinator, engine, and lanes with app surfaces', () async {
-      final (session, engine) = await startSession();
-      addTearDown(session!.shutdown);
-      engine!.channel = FakeAppBrowseChannel();
+    test(
+      'shares the coordinator, engine, and lanes with app surfaces',
+      () async {
+        final (session, engine) = await startSession();
+        addTearDown(session!.shutdown);
+        engine!.channel = FakeAppBrowseChannel();
 
-      expect(session.prompts, isA<PromptCoordinator>());
-      expect(session.connectionLanes.watchServer('b1'), isNotNull);
+        expect(session.prompts, isA<PromptCoordinator>());
+        expect(session.connectionLanes.watchServer('b1'), isNotNull);
 
-      // The pane lanes are the same production engine — one engine per
-      // process, never a second spawn behind a pane binding.
-      await session.paneLanes.openBrowseChannel(
-        serverId: 'pane',
-        paneTabId: 'pane.left',
-        config: ServerConfig(
-          id: 'pane',
-          label: 'pane',
-          host: 'pane.example.com',
-          port: 22,
-          username: 'deploy',
-          authMethod: AuthMethod.agent,
-          createdAt: _now.millisecondsSinceEpoch,
-          updatedAt: _now.millisecondsSinceEpoch,
-        ),
-      );
-      expect(engine.openCalls, hasLength(1));
-    });
+        // The pane lanes are the same production engine — one engine per
+        // process, never a second spawn behind a pane binding.
+        await session.paneLanes.openBrowseChannel(
+          serverId: 'pane',
+          paneTabId: 'pane.left',
+          config: ServerConfig(
+            id: 'pane',
+            label: 'pane',
+            host: 'pane.example.com',
+            port: 22,
+            username: 'deploy',
+            authMethod: AuthMethod.agent,
+            createdAt: _now.millisecondsSinceEpoch,
+            updatedAt: _now.millisecondsSinceEpoch,
+          ),
+        );
+        expect(engine.openCalls, hasLength(1));
+      },
+    );
   });
 }

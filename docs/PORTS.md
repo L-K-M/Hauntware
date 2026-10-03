@@ -341,7 +341,8 @@ port candidates.
   store lands in M6 per 04 §3.1); corrupt quarantine is store-owned and
   UTC-stamped per this repo's atomic-file port instead of the source's
   shared `.corrupt` helper; types imported via the poltergeist_core barrel;
-  `ConflictAwareHostKeyStore.putIfNoConflict` is Poltergeist's sync contract;
+  `ConflictAwareHostKeyStore.putIfNoConflict` and `replaceIfCurrent` are
+  Poltergeist's sync contracts;
   the optional `atomicWriter` constructor seam makes failed commits
   deterministic in tests without changing production writes.
 - Port-back candidates: UTC-stamped quarantine names (shared with the

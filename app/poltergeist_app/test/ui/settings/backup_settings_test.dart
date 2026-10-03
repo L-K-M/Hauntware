@@ -49,20 +49,20 @@ final class _Harness {
   var records = InMemorySyncRecordStore();
 
   late final BookmarkBackupService service = BookmarkBackupService(
-        credentials: credentials,
-        retainedTokens: retained,
-        enrollmentState: state,
-        records: records,
-        resetRecords: () async => records = InMemorySyncRecordStore(),
-        bookmarks: bookmarks,
-        hostKeys: hostKeys,
-        pinVerdicts: pinVerdicts,
-        tripwires: tripwires,
-        transportFactory: fakeTransportFactory(server, transports),
-        vaultKey: () async => credentials.vaultKey,
-        servers: servers,
-        vaultStore: vaultStore,
-      );
+    credentials: credentials,
+    retainedTokens: retained,
+    enrollmentState: state,
+    records: records,
+    resetRecords: () async => records = InMemorySyncRecordStore(),
+    bookmarks: bookmarks,
+    hostKeys: hostKeys,
+    pinVerdicts: pinVerdicts,
+    tripwires: tripwires,
+    transportFactory: fakeTransportFactory(server, transports),
+    vaultKey: () async => credentials.vaultKey,
+    servers: servers,
+    vaultStore: vaultStore,
+  );
 
   /// Enroll directly in [mode] and load the service — the starting state
   /// for every enrolled-surface test.
@@ -90,39 +90,43 @@ extension on _Harness {
     String host = 'conflict.example.com',
     int port = 22,
   }) async {
-    hostKeys.put(HostKey(
-      host: host,
-      port: port,
-      type: 'ssh-ed25519',
-      fingerprintSha256: 'SHA256:local',
-      pinnedAt: 1,
-    ));
-    final crypto = RecordCrypto(RecordCodec(credentials.vaultKey!));
-    await records.putRemote(await crypto.seal(DecryptedRecord(
-      id: 'hostkey:$host:$port',
-      kind: RecordKind.hostKey,
-      updatedAt: 4000,
-      deviceId: 'fleet-device',
-      data: HostKey(
+    await hostKeys.put(
+      HostKey(
         host: host,
         port: port,
         type: 'ssh-ed25519',
-        fingerprintSha256: 'SHA256:fleet',
-        pinnedAt: 2,
-      ).toJson(),
-    )));
+        fingerprintSha256: 'SHA256:local',
+        pinnedAt: 1,
+      ),
+    );
+    final crypto = RecordCrypto(RecordCodec(credentials.vaultKey!));
+    await records.putRemote(
+      await crypto.seal(
+        DecryptedRecord(
+          id: 'hostkey:$host:$port',
+          kind: RecordKind.hostKey,
+          updatedAt: 4000,
+          deviceId: 'fleet-device',
+          data: HostKey(
+            host: host,
+            port: port,
+            type: 'ssh-ed25519',
+            fingerprintSha256: 'SHA256:fleet',
+            pinnedAt: 2,
+          ).toJson(),
+        ),
+      ),
+    );
   }
 }
 
 Widget _wrap(Widget child, {ThemeData? theme}) => MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: theme ?? buildPoltergeistTheme(Brightness.dark),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(
-        body: SingleChildScrollView(child: child),
-      ),
-    );
+  debugShowCheckedModeBanner: false,
+  theme: theme ?? buildPoltergeistTheme(Brightness.dark),
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: Scaffold(body: SingleChildScrollView(child: child)),
+);
 
 Future<void> _pumpSection(
   WidgetTester tester,
@@ -154,16 +158,20 @@ Future<void> _enterAll(
   String passphrase = 'pw',
   String confirm = 'pw',
 }) async {
+  await tester.enterText(find.byKey(const ValueKey('backup.enroll.url')), url);
   await tester.enterText(
-      find.byKey(const ValueKey('backup.enroll.url')), url);
+    find.byKey(const ValueKey('backup.enroll.username')),
+    username,
+  );
   await tester.enterText(
-      find.byKey(const ValueKey('backup.enroll.username')), username);
+    find.byKey(const ValueKey('backup.enroll.password')),
+    password,
+  );
   await tester.enterText(
-      find.byKey(const ValueKey('backup.enroll.password')), password);
-  await tester.enterText(
-      find.byKey(const ValueKey('backup.enroll.passphrase')), passphrase);
-  final confirmField =
-      find.byKey(const ValueKey('backup.enroll.confirm'));
+    find.byKey(const ValueKey('backup.enroll.passphrase')),
+    passphrase,
+  );
+  final confirmField = find.byKey(const ValueKey('backup.enroll.confirm'));
   if (confirmField.evaluate().isNotEmpty) {
     await tester.enterText(confirmField, confirm);
   }
@@ -202,13 +210,15 @@ bool _enabled(WidgetTester tester, Key key) {
     // A silent false would read as "disabled" — a new widget kind must
     // extend this switch, not inherit a wrong answer.
     _ => throw StateError(
-        'unhandled widget type for $key: ${widget.runtimeType}'),
+      'unhandled widget type for $key: ${widget.runtimeType}',
+    ),
   };
 }
 
 // --- Capture helpers (house convention, see quit_dialog_capture_test) ---
 
-final _captureDir = Platform.environment['POLTERGEIST_CAPTURE_DIR'] ??
+final _captureDir =
+    Platform.environment['POLTERGEIST_CAPTURE_DIR'] ??
     '../../tasks/run3-task81/captures';
 
 bool get _captureOn => Platform.environment['POLTERGEIST_CAPTURE'] == '1';
@@ -218,7 +228,8 @@ Future<ByteData> _fontBytes(String path) async =>
 
 Future<void> _loadRealFonts() async {
   final home = Platform.environment['HOME'];
-  final dir = Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
+  final dir =
+      Platform.environment['POLTERGEIST_CAPTURE_FONT_DIR'] ??
       (home == null ? '' : '$home/.local/share/fonts');
   final sans = File('$dir/DejaVuSans.ttf');
   final sansBold = File('$dir/DejaVuSans-Bold.ttf');
@@ -232,8 +243,7 @@ Future<void> _loadRealFonts() async {
     await iconsLoader.load();
   }
   if (!sans.existsSync()) return;
-  final loader = FontLoader('DejaVu Sans')
-    ..addFont(_fontBytes(sans.path));
+  final loader = FontLoader('DejaVu Sans')..addFont(_fontBytes(sans.path));
   if (sansBold.existsSync()) loader.addFont(_fontBytes(sansBold.path));
   await loader.load();
 }
@@ -242,9 +252,7 @@ ThemeData get _captureTheme {
   final base = buildPoltergeistTheme(Brightness.dark);
   return base.copyWith(
     textTheme: base.textTheme.apply(fontFamily: 'DejaVu Sans'),
-    primaryTextTheme: base.primaryTextTheme.apply(
-      fontFamily: 'DejaVu Sans',
-    ),
+    primaryTextTheme: base.primaryTextTheme.apply(fontFamily: 'DejaVu Sans'),
   );
 }
 
@@ -258,8 +266,7 @@ Future<void> _capture(
   final bytes = (await tester.runAsync(() async {
     final image = await boundary.toImage(pixelRatio: 2);
     try {
-      final data =
-          await image.toByteData(format: ui.ImageByteFormat.png);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
       return data!.buffer.asUint8List();
     } finally {
       image.dispose();
@@ -276,8 +283,9 @@ void main() {
   setUp(() => h = _Harness());
 
   group('enrollment form (04 §4.3)', () {
-    testWidgets('D32: preselects the shared Séance account when offered',
-        (tester) async {
+    testWidgets('D32: preselects the shared Séance account when offered', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(720, 1200);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -291,17 +299,21 @@ void main() {
       expect(group.groupValue, SyncAccountMode.shared);
       // Shared accounts log in; the register/login segment is hidden and
       // Continue still waits on the fleet assertion.
-      expect(find.byKey(const ValueKey('backup.enroll.action')),
-          findsNothing);
-      expect(find.byKey(const ValueKey('backup.fleet.checkbox')),
-          findsOneWidget);
+      expect(find.byKey(const ValueKey('backup.enroll.action')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('backup.fleet.checkbox')),
+        findsOneWidget,
+      );
       // The separate account stays reachable.
-      expect(find.byKey(const ValueKey('backup.mode.separate')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.mode.separate')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('a closed gate preselects Design B with the verbatim copy',
-        (tester) async {
+    testWidgets('a closed gate preselects Design B with the verbatim copy', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(720, 1200);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -315,27 +327,34 @@ void main() {
         findsOneWidget,
       );
       // Design B's radio is checked; the register segment is its action.
-      expect(find.byKey(const ValueKey('backup.mode.separate')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.enroll.action')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.enroll.confirm')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.mode.separate')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.enroll.action')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.enroll.confirm')),
+        findsOneWidget,
+      );
       // §4.3's callout, verbatim.
       expect(
         find.textContaining(
-            'The encryption passphrase never leaves your devices'),
+          'The encryption passphrase never leaves your devices',
+        ),
         findsOneWidget,
       );
     });
 
-    testWidgets('a null gate tag disables the shared option outright',
-        (tester) async {
+    testWidgets('a null gate tag disables the shared option outright', (
+      tester,
+    ) async {
       await _pumpSection(tester, h.service, gate: _gateClosed);
       await tester.pumpAndSettle();
 
-      expect(_enabled(tester, const ValueKey('backup.mode.shared')),
-          isFalse);
+      expect(_enabled(tester, const ValueKey('backup.mode.shared')), isFalse);
       // Tapping the disabled tile must not select it — the RadioGroup
       // ancestor would otherwise take the tap through the Radio leaf.
       await tester.tap(find.byKey(const ValueKey('backup.mode.shared')));
@@ -345,8 +364,7 @@ void main() {
       );
       expect(group.groupValue, isNot(SyncAccountMode.shared));
       // No fleet checkbox — the gated copy cannot render without the tag.
-      expect(find.byKey(const ValueKey('backup.fleet.checkbox')),
-          findsNothing);
+      expect(find.byKey(const ValueKey('backup.fleet.checkbox')), findsNothing);
     });
 
     testWidgets('the shared option gates Continue on the fleet checkbox '
@@ -359,27 +377,34 @@ void main() {
 
       // The verbatim shared copy interpolates the recorded tag.
       expect(find.textContaining('v9.9.9-test'), findsWidgets);
-      expect(find.byKey(const ValueKey('backup.fleet.checkbox')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.shared.disclosure')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.fleet.checkbox')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.shared.disclosure')),
+        findsOneWidget,
+      );
       expect(
         find.textContaining(
-            'accept synced host-key pins without a conflict warning'),
+          'accept synced host-key pins without a conflict warning',
+        ),
         findsOneWidget,
       );
       // Shared is login-only: no register segment, no confirm field.
-      expect(find.byKey(const ValueKey('backup.enroll.action')),
-          findsNothing);
-      expect(find.byKey(const ValueKey('backup.enroll.confirm')),
-          findsNothing);
+      expect(find.byKey(const ValueKey('backup.enroll.action')), findsNothing);
+      expect(find.byKey(const ValueKey('backup.enroll.confirm')), findsNothing);
       // Continue waits on the fleet assertion.
-      expect(_enabled(tester, const ValueKey('backup.enroll.continue')),
-          isFalse);
+      expect(
+        _enabled(tester, const ValueKey('backup.enroll.continue')),
+        isFalse,
+      );
       await tester.tap(find.byKey(const ValueKey('backup.fleet.checkbox')));
       await tester.pumpAndSettle();
-      expect(_enabled(tester, const ValueKey('backup.enroll.continue')),
-          isTrue);
+      expect(
+        _enabled(tester, const ValueKey('backup.enroll.continue')),
+        isTrue,
+      );
     });
 
     testWidgets('the disclosure disappears when the recorded tag carries '
@@ -388,26 +413,32 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('backup.mode.shared')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('backup.shared.disclosure')),
-          findsNothing);
+      expect(
+        find.byKey(const ValueKey('backup.shared.disclosure')),
+        findsNothing,
+      );
     });
 
-    testWidgets('validation failures land in the live-region status',
-        (tester) async {
+    testWidgets('validation failures land in the live-region status', (
+      tester,
+    ) async {
       await _pumpSection(tester, h.service);
       await tester.pumpAndSettle();
       await _tapVisible(tester, const ValueKey('backup.enroll.continue'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('backup.enroll.status')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.enroll.status')),
+        findsOneWidget,
+      );
       expect(
         find.text('Enter a valid HTTP or HTTPS server URL.'),
         findsOneWidget,
       );
     });
 
-    testWidgets('registration closed reports the verbatim §4.3 copy',
-        (tester) async {
+    testWidgets('registration closed reports the verbatim §4.3 copy', (
+      tester,
+    ) async {
       h.server.registrationClosed = true;
       await _pumpSection(tester, h.service);
       await tester.pumpAndSettle();
@@ -415,12 +446,10 @@ void main() {
       await _tapVisible(tester, const ValueKey('backup.enroll.continue'));
       await _settleRealAsync(tester);
       expect(find.textContaining('registration closed'), findsOneWidget);
-      expect(find.textContaining('SEANCE_OPEN_REGISTRATION=1'),
-          findsOneWidget);
+      expect(find.textContaining('SEANCE_OPEN_REGISTRATION=1'), findsOneWidget);
     });
 
-    testWidgets('a KDF downgrade reports the verbatim refusal',
-        (tester) async {
+    testWidgets('a KDF downgrade reports the verbatim refusal', (tester) async {
       h.server.argonParams = const Argon2Params.fast();
       await _pumpSection(tester, h.service);
       await tester.pumpAndSettle();
@@ -436,69 +465,95 @@ void main() {
       );
     });
 
-    testWidgets('a successful register swaps to the enrolled view',
-        (tester) async {
+    testWidgets('a successful register swaps to the enrolled view', (
+      tester,
+    ) async {
       await _pumpSection(tester, h.service);
       await tester.pumpAndSettle();
       await _enterAll(tester);
       await _tapVisible(tester, const ValueKey('backup.enroll.continue'));
       await _settleRealAsync(tester);
       expect(find.byKey(const ValueKey('backup.enrolled')), findsOneWidget);
-      expect(find.textContaining('ghost-abcd1234 on https://sync.example'),
-          findsOneWidget);
+      expect(
+        find.textContaining('ghost-abcd1234 on https://sync.example'),
+        findsOneWidget,
+      );
     });
   });
 
   group('enrolled view (04 §3.3/§4.2)', () {
-    testWidgets('separate mode shows summary, status, and every action',
-        (tester) async {
+    testWidgets('separate mode shows summary, status, and every action', (
+      tester,
+    ) async {
       final service = await h.enrolled();
       await _pumpSection(tester, service, gate: _gateOffered);
       await tester.pumpAndSettle();
 
       expect(find.text('Separate backup account'), findsOneWidget);
-      expect(find.textContaining('ghost-abcd1234 on https://sync.example'),
-          findsOneWidget);
+      expect(
+        find.textContaining('ghost-abcd1234 on https://sync.example'),
+        findsOneWidget,
+      );
       expect(find.text('Not backed up yet.'), findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.enrolled.backupNow')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.enrolled.signOut')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.enrolled.switch')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.enrolled.delete')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.backupNow')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.signOut')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.switch')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.delete')),
+        findsOneWidget,
+      );
       // Credentials never travel on a separate account.
-      expect(find.byKey(const ValueKey('backup.enrolled.syncSecrets')),
-          findsNothing);
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.syncSecrets')),
+        findsNothing,
+      );
     });
 
     testWidgets('a closed gate hides the switch button', (tester) async {
       final service = await h.enrolled();
       await _pumpSection(tester, service, gate: _gateClosed);
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('backup.enrolled.switch')),
-          findsNothing);
-      expect(find.byKey(const ValueKey('backup.enrolled.delete')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.switch')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.delete')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('shared mode offers neither delete nor switch',
-        (tester) async {
+    testWidgets('shared mode offers neither delete nor switch', (tester) async {
       final service = await h.enrolled(mode: SyncAccountMode.shared);
       await _pumpSection(tester, service, gate: _gateOffered);
       await tester.pumpAndSettle();
       expect(find.text('Shared Séance account'), findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.enrolled.delete')),
-          findsNothing);
-      expect(find.byKey(const ValueKey('backup.enrolled.switch')),
-          findsNothing);
-      expect(find.byKey(const ValueKey('backup.enrolled.signOut')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.delete')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.switch')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.enrolled.signOut')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('shared mode offers the credential switch, off by default',
-        (tester) async {
+    testWidgets('shared mode offers the credential switch, off by default', (
+      tester,
+    ) async {
       final service = await h.enrolled(mode: SyncAccountMode.shared);
       await _pumpSection(tester, service, gate: _gateOffered);
       await tester.pumpAndSettle();
@@ -512,8 +567,9 @@ void main() {
       expect(tester.widget<SwitchListTile>(find.byKey(key)).value, isTrue);
     });
 
-    testWidgets('the paused hold renders with the separate way-out',
-        (tester) async {
+    testWidgets('the paused hold renders with the separate way-out', (
+      tester,
+    ) async {
       h.state.unverified = true;
       final service = await h.enrolled();
       await _pumpSection(tester, service);
@@ -522,8 +578,10 @@ void main() {
         find.textContaining('Backup paused until the passphrase'),
         findsOneWidget,
       );
-      expect(find.textContaining('Open Poltergeist on another device'),
-          findsOneWidget);
+      expect(
+        find.textContaining('Open Poltergeist on another device'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('the dead-account notice renders verbatim', (tester) async {
@@ -531,78 +589,87 @@ void main() {
       final service = await h.enrolled();
       await _pumpSection(tester, service);
       await tester.pumpAndSettle();
+      expect(find.textContaining('rejected this device'), findsOneWidget);
+    });
+
+    testWidgets('a quarantined pin renders the warning with both verbs', (
+      tester,
+    ) async {
+      h.credentials.vaultKey = List.filled(32, 5);
+      await tester.runAsync(h.seedPinConflict);
+      final service = (await tester.runAsync(h.enrolled))!;
+      await _pumpSection(tester, service);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('conflict.example.com:22'), findsWidgets);
       expect(
-        find.textContaining('rejected this device'),
+        find.byKey(const ValueKey('backup.pin.keep.conflict.example.com:22')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('backup.pin.accept.conflict.example.com:22')),
         findsOneWidget,
       );
     });
 
-    testWidgets('a quarantined pin renders the warning with both verbs',
-        (tester) async {
-      h.credentials.vaultKey = List.filled(32, 5);
-      await h.seedPinConflict();
-      final service = await h.enrolled();
-      await _pumpSection(tester, service);
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('conflict.example.com:22'),
-        findsWidgets,
-      );
-      expect(
-          find.byKey(const ValueKey(
-              'backup.pin.keep.conflict.example.com:22')),
-          findsOneWidget);
-      expect(
-          find.byKey(const ValueKey(
-              'backup.pin.accept.conflict.example.com:22')),
-          findsOneWidget);
-    });
-
-    testWidgets('sign-out asks, then returns to the enrollment form',
-        (tester) async {
+    testWidgets('sign-out asks, then returns to the enrollment form', (
+      tester,
+    ) async {
       final service = await h.enrolled();
       await _pumpSection(tester, service);
       await tester.pumpAndSettle();
       await _tapVisible(tester, const ValueKey('backup.enrolled.signOut'));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('backup.signout.dialog')),
-          findsOneWidget);
-      await tester
-          .tap(find.byKey(const ValueKey('backup.signout.confirm')));
+      expect(
+        find.byKey(const ValueKey('backup.signout.dialog')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('backup.signout.confirm')));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('backup.enroll.continue')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.enroll.continue')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('the delete dialog arms only on the typed account name',
-        (tester) async {
+    testWidgets('the delete dialog arms only on the typed account name', (
+      tester,
+    ) async {
       final service = await h.enrolled();
       await _pumpSection(tester, service);
       await tester.pumpAndSettle();
       await _tapVisible(tester, const ValueKey('backup.enrolled.delete'));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('backup.delete.dialog')),
-          findsOneWidget);
-      expect(_enabled(tester, const ValueKey('backup.delete.confirm')),
-          isFalse);
+      expect(
+        find.byKey(const ValueKey('backup.delete.dialog')),
+        findsOneWidget,
+      );
+      expect(
+        _enabled(tester, const ValueKey('backup.delete.confirm')),
+        isFalse,
+      );
       await tester.enterText(
-          find.byKey(const ValueKey('backup.delete.confirmField')),
-          'wrong-name');
+        find.byKey(const ValueKey('backup.delete.confirmField')),
+        'wrong-name',
+      );
       await tester.pumpAndSettle();
-      expect(_enabled(tester, const ValueKey('backup.delete.confirm')),
-          isFalse);
+      expect(
+        _enabled(tester, const ValueKey('backup.delete.confirm')),
+        isFalse,
+      );
       await tester.enterText(
-          find.byKey(const ValueKey('backup.delete.confirmField')),
-          'ghost-abcd1234');
+        find.byKey(const ValueKey('backup.delete.confirmField')),
+        'ghost-abcd1234',
+      );
       await tester.pumpAndSettle();
-      expect(_enabled(tester, const ValueKey('backup.delete.confirm')),
-          isTrue);
+      expect(_enabled(tester, const ValueKey('backup.delete.confirm')), isTrue);
       await tester.tap(find.byKey(const ValueKey('backup.delete.confirm')));
       await tester.pumpAndSettle();
       expect(h.server.deleteAccountCalls, 1);
-      expect(find.byKey(const ValueKey('backup.enroll.continue')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('backup.enroll.continue')),
+        findsOneWidget,
+      );
     });
   });
 
@@ -619,34 +686,46 @@ void main() {
       await _tapVisible(tester, const ValueKey('backup.enrolled.switch'));
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const ValueKey('backup.switch.dialog')),
-          findsOneWidget);
-      expect(_enabled(tester, const ValueKey('backup.switch.continue')),
-          isFalse);
+      expect(
+        find.byKey(const ValueKey('backup.switch.dialog')),
+        findsOneWidget,
+      );
+      expect(
+        _enabled(tester, const ValueKey('backup.switch.continue')),
+        isFalse,
+      );
       // The disclosure restates at the point of commitment.
       expect(
         find.textContaining(
-            'accept synced host-key pins without a conflict warning'),
+          'accept synced host-key pins without a conflict warning',
+        ),
         findsOneWidget,
       );
       await tester.tap(find.byKey(const ValueKey('backup.switch.fleet')));
       await tester.pumpAndSettle();
-      expect(_enabled(tester, const ValueKey('backup.switch.continue')),
-          isTrue);
+      expect(
+        _enabled(tester, const ValueKey('backup.switch.continue')),
+        isTrue,
+      );
 
       // The separate account's URL is prefilled; complete the login.
       await tester.enterText(
-          find.byKey(const ValueKey('backup.switch.username')), 'fleet');
+        find.byKey(const ValueKey('backup.switch.username')),
+        'fleet',
+      );
       await tester.enterText(
-          find.byKey(const ValueKey('backup.switch.password')), 'pw');
+        find.byKey(const ValueKey('backup.switch.password')),
+        'pw',
+      );
       await tester.enterText(
-          find.byKey(const ValueKey('backup.switch.passphrase')), 'pw');
+        find.byKey(const ValueKey('backup.switch.passphrase')),
+        'pw',
+      );
       await tester.tap(find.byKey(const ValueKey('backup.switch.continue')));
       await _settleRealAsync(tester);
 
       // No conflicts on an empty shared account → straight to done.
-      expect(find.byKey(const ValueKey('backup.switch.done')),
-          findsOneWidget);
+      expect(find.byKey(const ValueKey('backup.switch.done')), findsOneWidget);
       expect(service.account!.mode, SyncAccountMode.shared);
     });
 
@@ -659,12 +738,16 @@ void main() {
       final service = await h.enrolled();
       // The fleet pulls a conflicting pin — sealed under the vault key
       // the shared login ('pw'/'pw') derives.
-      h.hostKeys.put(const HostKey(
-        host: 'conflict.example.com',
-        type: 'ssh-ed25519',
-        fingerprintSha256: 'SHA256:local',
-        pinnedAt: 1,
-      ));
+      await tester.runAsync(
+        () => h.hostKeys.put(
+          const HostKey(
+            host: 'conflict.example.com',
+            type: 'ssh-ed25519',
+            fingerprintSha256: 'SHA256:local',
+            pinnedAt: 1,
+          ),
+        ),
+      );
       final sharedKeys = await tester.runAsync(
         () => VaultCrypto.deriveKeys(
           passphrase: 'pw',
@@ -672,21 +755,24 @@ void main() {
           params: const Argon2Params(),
         ),
       );
-      final fleetCrypto =
-          RecordCrypto(RecordCodec(sharedKeys!.vaultKey));
-      h.server.records.add((await fleetCrypto.seal(DecryptedRecord(
-        id: 'hostkey:conflict.example.com:22',
-        kind: RecordKind.hostKey,
-        updatedAt: 4000,
-        deviceId: 'fleet-device',
-        data: const HostKey(
-          host: 'conflict.example.com',
-          type: 'ssh-ed25519',
-          fingerprintSha256: 'SHA256:fleet',
-          pinnedAt: 2,
-        ).toJson(),
-      )))
-          .withSeq(7));
+      final fleetCrypto = RecordCrypto(RecordCodec(sharedKeys!.vaultKey));
+      final fleetRecord = await tester.runAsync(
+        () => fleetCrypto.seal(
+          DecryptedRecord(
+            id: 'hostkey:conflict.example.com:22',
+            kind: RecordKind.hostKey,
+            updatedAt: 4000,
+            deviceId: 'fleet-device',
+            data: const HostKey(
+              host: 'conflict.example.com',
+              type: 'ssh-ed25519',
+              fingerprintSha256: 'SHA256:fleet',
+              pinnedAt: 2,
+            ).toJson(),
+          ),
+        ),
+      );
+      h.server.records.add(fleetRecord!.withSeq(7));
 
       await _pumpSection(tester, service, gate: _gateOffered);
       await tester.pumpAndSettle();
@@ -695,24 +781,33 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('backup.switch.fleet')));
       await tester.pumpAndSettle();
       await tester.enterText(
-          find.byKey(const ValueKey('backup.switch.username')), 'fleet');
+        find.byKey(const ValueKey('backup.switch.username')),
+        'fleet',
+      );
       await tester.enterText(
-          find.byKey(const ValueKey('backup.switch.password')), 'pw');
+        find.byKey(const ValueKey('backup.switch.password')),
+        'pw',
+      );
       await tester.enterText(
-          find.byKey(const ValueKey('backup.switch.passphrase')), 'pw');
+        find.byKey(const ValueKey('backup.switch.passphrase')),
+        'pw',
+      );
       await tester.tap(find.byKey(const ValueKey('backup.switch.continue')));
       await _settleRealAsync(tester);
 
       // The switch holds on the conflict — no bulk resolution.
-      expect(find.byKey(const ValueKey('backup.switch.conflicts')),
-          findsOneWidget);
-      expect(find.byKey(const ValueKey('backup.switch.close')),
-          findsNothing);
-      await tester.tap(find.byKey(const ValueKey(
-          'backup.switch.adoptFleet.conflict.example.com:22')));
+      expect(
+        find.byKey(const ValueKey('backup.switch.conflicts')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('backup.switch.close')), findsNothing);
+      await tester.tap(
+        find.byKey(
+          const ValueKey('backup.switch.adoptFleet.conflict.example.com:22'),
+        ),
+      );
       await _settleRealAsync(tester);
-      expect(find.byKey(const ValueKey('backup.switch.done')),
-          findsOneWidget);
+      expect(find.byKey(const ValueKey('backup.switch.done')), findsOneWidget);
       expect(service.pinConflicts, isEmpty);
     });
   });
@@ -725,8 +820,7 @@ void main() {
     final theme = _captureOn ? _captureTheme : null;
 
     // 1. The unenrolled form with the shared option offered.
-    await _pumpSection(tester, h.service,
-        gate: _gateOffered, theme: theme);
+    await _pumpSection(tester, h.service, gate: _gateOffered, theme: theme);
     await tester.pumpAndSettle();
     await _capture(tester, '01-enrollment-form');
 
@@ -737,8 +831,7 @@ void main() {
 
     // 3. The enrolled separate surface.
     final enrolled = await h.enrolled();
-    await _pumpSection(tester, enrolled,
-        gate: _gateOffered, theme: theme);
+    await _pumpSection(tester, enrolled, gate: _gateOffered, theme: theme);
     await tester.pumpAndSettle();
     await _capture(tester, '03-enrolled-separate');
 
@@ -747,8 +840,8 @@ void main() {
     h2.state.unverified = true;
     h2.state.raised.add(syncNoticeAccountAuthFailed);
     h2.credentials.vaultKey = List.filled(32, 5);
-    await h2.seedPinConflict();
-    final conflicted = await h2.enrolled();
+    await tester.runAsync(h2.seedPinConflict);
+    final conflicted = (await tester.runAsync(h2.enrolled))!;
     await _pumpSection(tester, conflicted, theme: theme);
     await tester.pumpAndSettle();
     await _capture(tester, '04-paused-conflict');
@@ -756,12 +849,14 @@ void main() {
     // 5. The switch dialog's confirm phase.
     final h3 = _Harness();
     final switcher = await h3.enrolled();
-    await _pumpSection(tester, switcher,
-        gate: _gateOffered, theme: theme);
+    await _pumpSection(tester, switcher, gate: _gateOffered, theme: theme);
     await tester.pumpAndSettle();
     await _tapVisible(tester, const ValueKey('backup.enrolled.switch'));
     await tester.pumpAndSettle();
-    await _capture(tester, '05-switch-confirm',
-        key: const ValueKey('backup.capture'));
+    await _capture(
+      tester,
+      '05-switch-confirm',
+      key: const ValueKey('backup.capture'),
+    );
   });
 }

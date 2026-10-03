@@ -39,6 +39,7 @@ const Duration syncTrashRetention = Duration(days: 30);
 const String syncTrashRsyncDirPrefix = 'rsync-';
 
 const int _purgeQuarantineNameAttempts = 3;
+const String _journalFileSuffix = '.jsonl';
 const String _purgeQuarantineSeparator = '.purging-';
 const String _nestedPurgeQuarantinePrefix = '.poltergeist-purge-';
 const int _purgeQuarantineRandomBytes = 12;
@@ -85,6 +86,15 @@ enum SyncTrashOwnership {
   foreign,
 }
 
+/// Whether a listed run may enter a purge selection.
+enum SyncTrashPurgeEligibility {
+  eligible,
+
+  /// A durable rule-4 restore started but did not complete. Its trash is
+  /// recovery input and must survive both purge routes.
+  restoreRecoveryPending,
+}
+
 /// `<first 8 hex of sha256(deviceId)>` (05 §6): the run-id prefix that
 /// lets a remote listing tell this machine's trash directories from a
 /// sibling machine's. Hashed so remote-visible trash names carry no
@@ -100,6 +110,7 @@ final class SyncTrashRun {
     required this.runId,
     String? directoryName,
     required this.ownership,
+    required this.purgeEligibility,
     required this.ageBasis,
     required this.fileCount,
     required this.pairIds,
@@ -112,6 +123,7 @@ final class SyncTrashRun {
   /// foreign owner's abandoned purge quarantine.
   final String directoryName;
   final SyncTrashOwnership ownership;
+  final SyncTrashPurgeEligibility purgeEligibility;
 
   /// What aging reads: the run's `startedAt` when a journal covers it,
   /// the directory's mtime otherwise (`now` when the listing carries no
@@ -181,9 +193,8 @@ final class SyncTrashInventory {
 
   /// Pure filter over the observed runs — no I/O. Aged takes old
   /// journaled, local-orphan, and rsync runs; `all` takes every run
-  /// directory. Both skip active run ids: purging a live run's trash
-  /// would strand journal lines whose `trashLocation` no longer exists
-  /// and silently void that run's undo.
+  /// directory. Both skip active run ids and runs with incomplete restore
+  /// recovery: purging either one's trash would strand journal recovery.
   SyncTrashSelection select(
     SyncTrashPurgeScope scope,
     DateTime now,
@@ -192,6 +203,7 @@ final class SyncTrashInventory {
     final selected = <SyncTrashRun>[];
     for (final run in runs) {
       if (activeRunIds.contains(run.runId)) continue;
+      if (run.purgeEligibility != SyncTrashPurgeEligibility.eligible) continue;
       if (scope == SyncTrashPurgeScope.aged) {
         // Foreign runs belong to their owning machine's notice.
         if (run.ownership == SyncTrashOwnership.foreign) continue;
@@ -326,6 +338,17 @@ final class _RunCoverage {
   final Set<String> pairIds = <String>{};
   DateTime? startedAt;
   final Map<SyncRunJournal, String> journalScopes = {};
+  var purgeEligibility = SyncTrashPurgeEligibility.eligible;
+}
+
+final class _LocalJournalScan {
+  const _LocalJournalScan({
+    required this.journals,
+    required this.restoreProtectedRunIds,
+  });
+
+  final List<SyncRunJournal> journals;
+  final Set<String> restoreProtectedRunIds;
 }
 
 /// The rail-5 purge service: local journals live under
@@ -374,7 +397,7 @@ final class SyncTrashPurgeService {
       throw ArgumentError.value(locationKey, 'locationKey', 'is invalid');
     }
     final scopes = <String>{};
-    for (final journal in await _openLocalJournals()) {
+    for (final journal in (await _openLocalJournals()).journals) {
       for (final side in SyncSide.values) {
         if (_locationKeyForSide(journal.record, side) != locationKey) continue;
         final scope = journal.trashScopeForSide(side);
@@ -393,7 +416,7 @@ final class SyncTrashPurgeService {
       throw ArgumentError.value(locationKey, 'locationKey', 'is invalid');
     }
     final runIdsByScope = <String, Set<String>>{};
-    for (final journal in await _openLocalJournals()) {
+    for (final journal in (await _openLocalJournals()).journals) {
       for (final side in SyncSide.values) {
         if (_locationKeyForSide(journal.record, side) != locationKey) continue;
         final scope = journal.trashScopeForSide(side);
@@ -427,7 +450,7 @@ final class SyncTrashPurgeService {
       throw ArgumentError.value(keepScope, 'keepScope', 'is invalid');
     }
     final purgedByScope = <String, List<String>>{};
-    for (final journal in await _openLocalJournals()) {
+    for (final journal in (await _openLocalJournals()).journals) {
       final journalScopes = <String>{};
       for (final side in SyncSide.values) {
         if (_locationKeyForSide(journal.record, side) != locationKey) continue;
@@ -441,6 +464,7 @@ final class SyncTrashPurgeService {
         journalScopes.add(scope);
       }
       for (final scope in journalScopes) {
+        if (journal.hasIncompleteRestore) continue;
         await journal.markPurged(trashScope: scope);
         purgedByScope
             .putIfAbsent(scope, () => <String>[])
@@ -594,6 +618,8 @@ final class SyncTrashPurgeService {
             runId: runId,
             directoryName: entry.name,
             ownership: SyncTrashOwnership.foreign,
+            purgeEligibility:
+                cover?.purgeEligibility ?? SyncTrashPurgeEligibility.eligible,
             ageBasis: entry.modifiedAt ?? now,
             fileCount: cover?.locations.length,
             pairIds: Set<String>.unmodifiable(
@@ -609,6 +635,7 @@ final class SyncTrashPurgeService {
             runId: runId,
             directoryName: entry.name,
             ownership: SyncTrashOwnership.journaled,
+            purgeEligibility: cover.purgeEligibility,
             ageBasis: cover.startedAt!,
             fileCount: cover.locations.length,
             pairIds: Set<String>.unmodifiable(cover.pairIds),
@@ -621,6 +648,8 @@ final class SyncTrashPurgeService {
           runId: runId,
           directoryName: entry.name,
           ownership: _classify(runId, devicePrefix),
+          purgeEligibility:
+              cover?.purgeEligibility ?? SyncTrashPurgeEligibility.eligible,
           // A missing mtime falls back to now so the directory can
           // never read as immediately old.
           ageBasis: entry.modifiedAt ?? now,
@@ -636,6 +665,11 @@ final class SyncTrashPurgeService {
       if (observed.contains(covered.key)) continue;
       if (protectedRunIds.contains(covered.key)) continue;
       if (isActiveRun?.call(covered.key) == true) continue;
+      if (covered.value.purgeEligibility !=
+          SyncTrashPurgeEligibility.eligible) {
+        continue;
+      }
+      _throwIfCoverageCancelled(isCancelled, trashRoot);
       if (await _markPurged(covered.value)) {
         onPurgedRun?.call(covered.key);
       }
@@ -659,6 +693,8 @@ final class SyncTrashPurgeService {
   /// as directories — never newly appeared dirs, never the trash root,
   /// never non-directory children — skips active ids, and marks every
   /// matching journal only after its run directory is gone or absent.
+  /// Journal coverage is re-read after confirmation so a restore that
+  /// became incomplete after selection protects only its own run.
   /// Per-run failures are recorded in the report; listing errors other
   /// than absence propagate. Cancellation returns the completed prefix
   /// so callers can report and mirror journal invalidation accurately.
@@ -744,6 +780,12 @@ final class SyncTrashPurgeService {
       for (final runId in selection.runIds) {
         if (activeRunIds.contains(runId)) continue;
         _throwIfPurgeCancelled(cancellation, selection.trashRoot);
+        final cover = coverage[runId];
+        if (cover?.purgeEligibility ==
+            SyncTrashPurgeEligibility.restoreRecoveryPending) {
+          failures.add(_pendingRestoreRecoveryFailure(runId));
+          continue;
+        }
         final directoryName = selection.directoryNames[runId] ?? runId;
         final runIdKey = _trashNameKey(runId, selection.pathCase);
         final directoryNameKey = _trashNameKey(
@@ -798,7 +840,7 @@ final class SyncTrashPurgeService {
               failures.add(_changedRunFailure(runId));
               continue;
             }
-            await _markPurged(coverage[runId]);
+            await _markPurged(cover);
             purged.add(runId);
           } on Object catch (error) {
             _throwIfPurgeCancelled(cancellation, selection.trashRoot);
@@ -860,7 +902,7 @@ final class SyncTrashPurgeService {
               failures.add(_changedRunFailure(runId));
               continue;
             }
-            await _markPurged(coverage[runId]);
+            await _markPurged(cover);
             purged.add(runId);
             continue;
           }
@@ -880,7 +922,7 @@ final class SyncTrashPurgeService {
                 await _openSelectionRoot(fileSystem, selection);
               },
             );
-            await _markPurged(coverage[runId]);
+            await _markPurged(cover);
             purged.add(runId);
           } on Object {
             await _restoreQuarantinedDirectory(
@@ -928,6 +970,12 @@ final class SyncTrashPurgeService {
       SyncTrashPurgeFailure(
         runId: runId,
         message: 'refusing to purge "$runId": changed after confirmation',
+      );
+
+  SyncTrashPurgeFailure _pendingRestoreRecoveryFailure(String runId) =>
+      SyncTrashPurgeFailure(
+        runId: runId,
+        message: 'refusing to purge "$runId": restore recovery is pending',
       );
 
   Future<bool> _confirmLogicalRunAbsent(
@@ -1135,9 +1183,10 @@ final class SyncTrashPurgeService {
   /// trash locations whose parent directory basename equals the
   /// journal's own run id and whose normalized grandparent equals the
   /// root. Locations de-duplicate (update backups and pre-delete lines
-  /// can name the same file). Journals that fail to open are skipped —
-  /// a corrupt journal must not wedge the purge — and locations
-  /// pointing at other roots never count as coverage here.
+  /// can name the same file). Ordinary corrupt journals are skipped, but
+  /// recognizable incomplete restore records protect their filename's run
+  /// id even when ordinary replay fails. Locations pointing at other roots
+  /// never count as coverage here.
   Future<Map<String, _RunCoverage>> _loadCoverage(
     String trashRoot,
     String trashScope,
@@ -1153,10 +1202,15 @@ final class SyncTrashPurgeService {
       pathStyle,
       pathCase,
     );
-    for (final journal in await _openLocalJournals(
+    final journalScan = await _openLocalJournals(
       isCancelled: isCancelled,
       cancellationPath: trashRoot,
-    )) {
+    );
+    for (final runId in journalScan.restoreProtectedRunIds) {
+      coverage.putIfAbsent(runId, _RunCoverage.new).purgeEligibility =
+          SyncTrashPurgeEligibility.restoreRecoveryPending;
+    }
+    for (final journal in journalScan.journals) {
       _throwIfCoverageCancelled(isCancelled, trashRoot);
       if (!isSyncTrashRunDirectoryName(journal.record.runId)) continue;
       final entries = <({SyncSide side, String location})>{
@@ -1192,6 +1246,10 @@ final class SyncTrashPurgeService {
           journal.record.runId,
           _RunCoverage.new,
         );
+        if (journal.hasIncompleteRestore) {
+          cover.purgeEligibility =
+              SyncTrashPurgeEligibility.restoreRecoveryPending;
+        }
         cover.locations.add(location);
         cover.pairIds.add(journal.record.pairId);
         if (journalScope != null) {
@@ -1209,7 +1267,7 @@ final class SyncTrashPurgeService {
   /// Opens only derived, regular `.jsonl` children of the journal directory.
   /// Symlinks and listing-supplied paths never reach the append-capable
   /// journal API.
-  Future<List<SyncRunJournal>> _openLocalJournals({
+  Future<_LocalJournalScan> _openLocalJournals({
     bool Function()? isCancelled,
     String? cancellationPath,
   }) async {
@@ -1218,13 +1276,17 @@ final class SyncTrashPurgeService {
       cancellationPath ?? syncRunsDirectory,
     );
     final journals = <SyncRunJournal>[];
+    final restoreProtectedRunIds = <String>{};
     final localFileSystem = LocalFileSystem();
     final List<RemoteFileEntry> listing;
     try {
       listing = await localFileSystem.listDirectory(syncRunsDirectory);
     } on RemoteFileException catch (error) {
       if (error.kind != RemoteFileErrorKind.notFound) rethrow;
-      return journals;
+      return _LocalJournalScan(
+        journals: journals,
+        restoreProtectedRunIds: restoreProtectedRunIds,
+      );
     }
 
     final normalizedDirectory = p.normalize(syncRunsDirectory);
@@ -1234,7 +1296,7 @@ final class SyncTrashPurgeService {
         cancellationPath ?? syncRunsDirectory,
       );
       if (entity.type != RemoteFileType.file ||
-          !entity.name.endsWith('.jsonl') ||
+          !entity.name.endsWith(_journalFileSuffix) ||
           p.basename(entity.name) != entity.name) {
         continue;
       }
@@ -1247,6 +1309,17 @@ final class SyncTrashPurgeService {
           followLinks: false,
         );
         if (live.type != RemoteFileType.file) continue;
+        final runId = entity.name.substring(
+          0,
+          entity.name.length - _journalFileSuffix.length,
+        );
+        final restoreState = await SyncRunJournal.inspectRestoreRecovery(
+          journalPath,
+        );
+        if (restoreState != SyncRestoreJournalState.none &&
+            isSyncTrashRunDirectoryName(runId)) {
+          restoreProtectedRunIds.add(runId);
+        }
         journals.add(await SyncRunJournal.open(journalPath));
         _throwIfCoverageCancelled(
           isCancelled,
@@ -1260,7 +1333,10 @@ final class SyncTrashPurgeService {
       }
     }
 
-    return journals;
+    return _LocalJournalScan(
+      journals: journals,
+      restoreProtectedRunIds: restoreProtectedRunIds,
+    );
   }
 
   void _throwIfCoverageCancelled(bool Function()? isCancelled, String path) {
@@ -1302,7 +1378,11 @@ final class SyncTrashPurgeService {
   /// — the marker rail 9's retention reads. Callers invoke this only
   /// after the run directory is gone or confirmed absent.
   Future<bool> _markPurged(_RunCoverage? cover) async {
-    if (cover == null || cover.journalScopes.isEmpty) return false;
+    if (cover == null ||
+        cover.journalScopes.isEmpty ||
+        cover.purgeEligibility != SyncTrashPurgeEligibility.eligible) {
+      return false;
+    }
     for (final entry in cover.journalScopes.entries) {
       if (!entry.key.isTrashScopePurged(entry.value)) {
         await entry.key.markPurged(trashScope: entry.value);

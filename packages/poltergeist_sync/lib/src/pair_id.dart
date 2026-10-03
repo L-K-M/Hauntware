@@ -12,6 +12,20 @@ import 'package:unorm_dart/unorm_dart.dart' as unorm;
 
 import 'plan.dart';
 
+enum _EndpointIdentityFold {
+  exact,
+  caseInsensitive,
+  normalizationInsensitive,
+  caseAndNormalizationInsensitive;
+
+  bool get foldsCase =>
+      this == caseInsensitive || this == caseAndNormalizationInsensitive;
+
+  bool get foldsNormalization =>
+      this == normalizationInsensitive ||
+      this == caseAndNormalizationInsensitive;
+}
+
 /// One endpoint's canonical identity string (05 §9):
 /// `local:<absolute path>` for local sides,
 /// `<user>@<host>:<port>:<absolute path>` for remote sides (host
@@ -68,18 +82,24 @@ String syncPairId(
   }
 
   final digests = [
-    digest(
-      pair.left,
-      leftCaseInsensitive,
-      leftNormalizationInsensitive,
-    ),
-    digest(
-      pair.right,
-      rightCaseInsensitive,
-      rightNormalizationInsensitive,
-    ),
+    digest(pair.left, leftCaseInsensitive, leftNormalizationInsensitive),
+    digest(pair.right, rightCaseInsensitive, rightNormalizationInsensitive),
   ]..sort();
-  return sha256
-      .convert(utf8.encode('${digests[0]}:${digests[1]}'))
-      .toString();
+  return sha256.convert(utf8.encode('${digests[0]}:${digests[1]}')).toString();
 }
+
+/// Every pair id that pre-scan filesystem probes could select for [pair].
+///
+/// Restart recovery runs before those probes, so it must search all
+/// independent case and normalization fold combinations for both sides.
+Set<String> syncPairIdCandidates(SyncPair pair) => Set.unmodifiable({
+  for (final leftFold in _EndpointIdentityFold.values)
+    for (final rightFold in _EndpointIdentityFold.values)
+      syncPairId(
+        pair,
+        leftCaseInsensitive: leftFold.foldsCase,
+        rightCaseInsensitive: rightFold.foldsCase,
+        leftNormalizationInsensitive: leftFold.foldsNormalization,
+        rightNormalizationInsensitive: rightFold.foldsNormalization,
+      ),
+});

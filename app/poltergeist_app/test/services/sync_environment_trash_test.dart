@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,11 @@ import 'package:poltergeist_sync/poltergeist_sync.dart';
 final SyncTrashPathStyle _nativeTrashPathStyle = Platform.isWindows
     ? SyncTrashPathStyle.windows
     : SyncTrashPathStyle.posix;
+
+const String _restoreTransactionId = '0123456789abcdef0123456789abcdef';
+final String _mismatchedTrashScope = '0' * 64;
+final String _mismatchedTrashLocationKey = '1' * 64;
+int _nextRecoveryRun = 0;
 
 final class _CaseVariantRunListingFileSystem extends LocalFileSystem {
   String? trashRoot;
@@ -44,6 +50,103 @@ final class _CaseVariantRunListingFileSystem extends LocalFileSystem {
           entry,
     ];
   }
+}
+
+final class _InaccessiblePathFileSystem extends LocalFileSystem {
+  final Set<String> inaccessibleRoots = {};
+  final List<String> blockedAccesses = [];
+
+  bool _isInaccessible(String path) {
+    final normalized = p.normalize(path);
+    return inaccessibleRoots.any(
+      (root) => p.equals(root, normalized) || p.isWithin(root, normalized),
+    );
+  }
+
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
+    if (_isInaccessible(path)) {
+      blockedAccesses.add(path);
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.permissionDenied,
+        operation: 'inspect',
+        path: path,
+        message: 'path is intentionally inaccessible',
+      );
+    }
+
+    return super.stat(path, followLinks: followLinks);
+  }
+}
+
+final class _CanonicalRootSwapFileSystem extends LocalFileSystem {
+  String? watchedPath;
+  String? firstRoot;
+  String? secondRoot;
+  int watchedCanonicalizations = 0;
+
+  @override
+  Future<String> canonicalize(String path) {
+    final watched = watchedPath;
+    if (watched == null || !p.equals(path, watched)) {
+      return super.canonicalize(path);
+    }
+
+    watchedCanonicalizations++;
+    return Future.value(
+      watchedCanonicalizations == 1 ? firstRoot! : secondRoot!,
+    );
+  }
+}
+
+Future<SyncRunJournal> _recoveryJournal(
+  SyncEnvironment environment, {
+  required SyncRuleSet rules,
+  required String? canonicalRootLeft,
+  required String? canonicalRootRight,
+  required String? trashScopeLeft,
+  required String? trashScopeRight,
+  required String? trashLocationKeyLeft,
+  required String? trashLocationKeyRight,
+  String pairId = 'pair-1',
+  DateTime? startedAt,
+}) async {
+  final journal = await SyncRunJournal.create(
+    environment.syncRunsDirectory,
+    SyncRunRecord(
+      runId: 'recovery-run-${_nextRecoveryRun++}',
+      pairId: pairId,
+      startedAt: startedAt ?? DateTime.utc(2026),
+      canonicalRootLeft: canonicalRootLeft,
+      canonicalRootRight: canonicalRootRight,
+      trashScopeLeft: trashScopeLeft,
+      trashScopeRight: trashScopeRight,
+      trashLocationKeyLeft: trashLocationKeyLeft,
+      trashLocationKeyRight: trashLocationKeyRight,
+      rules: rules,
+      totals: const PlanTotals(
+        counts: {},
+        bytes: {},
+        replacedFiles: 0,
+        replacedBytes: 0,
+      ),
+      warnings: const [],
+    ),
+  );
+  const restoreStarted = <String, Object?>{
+    'v': 2,
+    'type': 'replaceRestoreStarted',
+    'transactionId': _restoreTransactionId,
+    'side': 'left',
+    'parent': 'entry',
+  };
+  await File(journal.path).writeAsString(
+    '\n${jsonEncode(restoreStarted)}\n',
+    mode: FileMode.append,
+    flush: true,
+  );
+
+  return SyncRunJournal.open(journal.path);
 }
 
 void main() {
@@ -170,6 +273,32 @@ void main() {
     skip: Platform.isWindows,
   );
 
+  test(
+    'scan exclusion resolves an alias before a missing trash suffix',
+    () async {
+      final physical = Directory(p.join(scratch.path, 'scan-physical'))
+        ..createSync();
+      final alias = Link(p.join(scratch.path, 'scan-alias'))
+        ..createSync(physical.path);
+      final configured = p.join(alias.path, 'missing', 'trash');
+      final expected = p.join(
+        await physical.resolveSymbolicLinks(),
+        'missing',
+        'trash',
+      );
+
+      final effective = await environment.effectiveTrashPath(
+        endpoint: LocalEndpoint(physical.path),
+        canonicalRoot: physical.path,
+        rules: SyncRuleSet(trashPathLeft: configured),
+        side: SyncSide.left,
+      );
+
+      expect(effective, expected);
+    },
+    skip: Platform.isWindows,
+  );
+
   test('home-relative trash passes pre-mutation verification', () async {
     final home = Directory(p.join(scratch.path, 'home'))..createSync();
     final root = Directory(p.join(scratch.path, 'root'))..createSync();
@@ -193,6 +322,576 @@ void main() {
 
     await homeEnvironment.verifyTrashLocation(endpoint, location);
   });
+
+  test(
+    'restore context maps a pane-swapped pair by journal identity',
+    () async {
+      final originalLeft = LocalEndpoint(
+        (Directory(p.join(scratch.path, 'restore-left'))..createSync()).path,
+      );
+      final originalRight = LocalEndpoint(
+        (Directory(p.join(scratch.path, 'restore-right'))..createSync()).path,
+      );
+      const journalRules = SyncRuleSet();
+      final leftLocation = await environment.resolveTrashLocation(
+        endpoint: originalLeft,
+        canonicalRoot: originalLeft.path,
+        rules: journalRules,
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final rightLocation = await environment.resolveTrashLocation(
+        endpoint: originalRight,
+        canonicalRoot: originalRight.path,
+        rules: journalRules,
+        side: SyncSide.right,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final originalLeftRoot = await Directory(
+        originalLeft.path,
+      ).resolveSymbolicLinks();
+      final originalRightRoot = await Directory(
+        originalRight.path,
+      ).resolveSymbolicLinks();
+      final journal = await _recoveryJournal(
+        environment,
+        rules: journalRules,
+        canonicalRootLeft: originalLeftRoot,
+        canonicalRootRight: originalRightRoot,
+        trashScopeLeft: leftLocation.scopeKey,
+        trashScopeRight: rightLocation.scopeKey,
+        trashLocationKeyLeft: leftLocation.locationKey,
+        trashLocationKeyRight: rightLocation.locationKey,
+      );
+      final pair = SyncPair(
+        id: 'pair',
+        name: 'pair',
+        left: originalRight,
+        right: originalLeft,
+        // Recovery must use the run snapshot, not a later favorite edit.
+        rules: const SyncRuleSet(
+          trashPathLeft: 'changed-left-trash',
+          trashPathRight: 'changed-right-trash',
+        ),
+      );
+
+      final selection = await environment.resolveRestoreRecoveryContext(
+        pair: pair,
+        journals: [journal],
+      );
+      final context = selection!.context;
+
+      expect(selection.journal.path, journal.path);
+      expect(context.endpoints[SyncSide.left], same(originalLeft));
+      expect(context.endpoints[SyncSide.right], same(originalRight));
+      expect(context.roots[SyncSide.left], originalLeftRoot);
+      expect(context.roots[SyncSide.right], originalRightRoot);
+      expect(
+        context.trashLocations[SyncSide.left]!.scopeKey,
+        leftLocation.scopeKey,
+      );
+      expect(
+        context.trashLocations[SyncSide.right]!.scopeKey,
+        rightLocation.scopeKey,
+      );
+      expect(context.endpointBindings.keys, containsAll(SyncSide.values));
+    },
+  );
+
+  test(
+    'restore context opens only each endpoint assigned trash side',
+    () async {
+      final fileSystem = _InaccessiblePathFileSystem();
+      final recoveryEnvironment = SyncEnvironment(
+        states: MemorySyncStateStore(),
+        syncRunsDirectory: p.join(scratch.path, 'assigned_sync_runs'),
+        deviceId: () async => 'test-device',
+        localFileSystem: () => fileSystem,
+      );
+      final left = LocalEndpoint(
+        (Directory(p.join(scratch.path, 'assigned-left'))..createSync()).path,
+      );
+      final right = LocalEndpoint(
+        (Directory(p.join(scratch.path, 'assigned-right'))..createSync()).path,
+      );
+      const rules = SyncRuleSet(
+        trashPathLeft: 'left-trash',
+        trashPathRight: 'right-trash',
+      );
+      final leftLocation = await recoveryEnvironment.resolveTrashLocation(
+        endpoint: left,
+        canonicalRoot: left.path,
+        rules: rules,
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final rightLocation = await recoveryEnvironment.resolveTrashLocation(
+        endpoint: right,
+        canonicalRoot: right.path,
+        rules: rules,
+        side: SyncSide.right,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final leftRoot = await Directory(left.path).resolveSymbolicLinks();
+      final rightRoot = await Directory(right.path).resolveSymbolicLinks();
+      final journal = await _recoveryJournal(
+        recoveryEnvironment,
+        rules: rules,
+        canonicalRootLeft: leftRoot,
+        canonicalRootRight: rightRoot,
+        trashScopeLeft: leftLocation.scopeKey,
+        trashScopeRight: rightLocation.scopeKey,
+        trashLocationKeyLeft: leftLocation.locationKey,
+        trashLocationKeyRight: rightLocation.locationKey,
+      );
+      fileSystem.inaccessibleRoots.addAll({
+        p.join(leftRoot, rules.trashPathRight!),
+        p.join(rightRoot, rules.trashPathLeft!),
+      });
+      final pair = SyncPair(
+        id: 'pair',
+        name: 'pair',
+        left: left,
+        right: right,
+        rules: rules,
+      );
+
+      final selection = await recoveryEnvironment.resolveRestoreRecoveryContext(
+        pair: pair,
+        journals: [journal],
+      );
+
+      expect(selection, isNotNull);
+      expect(fileSystem.blockedAccesses, isEmpty);
+    },
+  );
+
+  test('restore context rejects a root changed after assignment', () async {
+    final firstLeft = Directory(p.join(scratch.path, 'root-swap-first'))
+      ..createSync();
+    final secondLeft = Directory(p.join(scratch.path, 'root-swap-second'))
+      ..createSync();
+    final right = Directory(p.join(scratch.path, 'root-swap-right'))
+      ..createSync();
+    final requestedLeft = p.join(scratch.path, 'root-swap-requested');
+    final leftTrash = p.join(scratch.path, 'root-swap-left-trash');
+    final rightTrash = p.join(scratch.path, 'root-swap-right-trash');
+    final rules = SyncRuleSet(
+      trashPathLeft: leftTrash,
+      trashPathRight: rightTrash,
+    );
+    final leftLocation = await environment.resolveTrashLocation(
+      endpoint: LocalEndpoint(firstLeft.path),
+      canonicalRoot: firstLeft.path,
+      rules: rules,
+      side: SyncSide.left,
+      pathCase: SyncTrashPathCase.sensitive,
+    );
+    final rightLocation = await environment.resolveTrashLocation(
+      endpoint: LocalEndpoint(right.path),
+      canonicalRoot: right.path,
+      rules: rules,
+      side: SyncSide.right,
+      pathCase: SyncTrashPathCase.sensitive,
+    );
+    final firstCanonical = await firstLeft.resolveSymbolicLinks();
+    final secondCanonical = await secondLeft.resolveSymbolicLinks();
+    final rightCanonical = await right.resolveSymbolicLinks();
+    final journal = await _recoveryJournal(
+      environment,
+      rules: rules,
+      canonicalRootLeft: firstCanonical,
+      canonicalRootRight: rightCanonical,
+      trashScopeLeft: leftLocation.scopeKey,
+      trashScopeRight: rightLocation.scopeKey,
+      trashLocationKeyLeft: leftLocation.locationKey,
+      trashLocationKeyRight: rightLocation.locationKey,
+    );
+    final fileSystem = _CanonicalRootSwapFileSystem()
+      ..watchedPath = requestedLeft
+      ..firstRoot = firstCanonical
+      ..secondRoot = secondCanonical;
+    final recoveryEnvironment = SyncEnvironment(
+      states: MemorySyncStateStore(),
+      syncRunsDirectory: environment.syncRunsDirectory,
+      deviceId: () async => 'test-device',
+      localFileSystem: () => fileSystem,
+    );
+    final pair = SyncPair(
+      id: 'pair',
+      name: 'pair',
+      left: LocalEndpoint(requestedLeft),
+      right: LocalEndpoint(right.path),
+      rules: rules,
+    );
+
+    await expectLater(
+      recoveryEnvironment.resolveRestoreRecoveryContext(
+        pair: pair,
+        journals: [journal],
+      ),
+      throwsA(
+        isA<RemoteFileException>().having(
+          (error) => error.kind,
+          'kind',
+          RemoteFileErrorKind.conflict,
+        ),
+      ),
+    );
+    expect(fileSystem.watchedCanonicalizations, 2);
+  });
+
+  test('restore context refuses an ambiguous endpoint order', () async {
+    final root = Directory(p.join(scratch.path, 'restore-shared'))
+      ..createSync();
+    final endpoint = LocalEndpoint(root.path);
+    const rules = SyncRuleSet();
+    final location = await environment.resolveTrashLocation(
+      endpoint: endpoint,
+      canonicalRoot: root.path,
+      rules: rules,
+      side: SyncSide.left,
+      pathCase: SyncTrashPathCase.sensitive,
+    );
+    final journal = await _recoveryJournal(
+      environment,
+      rules: rules,
+      canonicalRootLeft: await root.resolveSymbolicLinks(),
+      canonicalRootRight: await root.resolveSymbolicLinks(),
+      trashScopeLeft: location.scopeKey,
+      trashScopeRight: location.scopeKey,
+      trashLocationKeyLeft: location.locationKey,
+      trashLocationKeyRight: location.locationKey,
+    );
+    final pair = SyncPair(
+      id: 'pair',
+      name: 'pair',
+      left: endpoint,
+      right: endpoint,
+      rules: rules,
+    );
+
+    await expectLater(
+      environment.resolveRestoreRecoveryContext(
+        pair: pair,
+        journals: [journal],
+      ),
+      throwsA(
+        isA<RemoteFileException>()
+            .having((error) => error.kind, 'kind', RemoteFileErrorKind.conflict)
+            .having(
+              (error) => error.message,
+              'message',
+              contains('both endpoint orders'),
+            ),
+      ),
+    );
+  });
+
+  test(
+    'folded pair-id collision selects the newest matching canonical roots',
+    () async {
+      if (Platform.isWindows) return;
+
+      final upperRoot = Directory(p.join(scratch.path, 'Data'))..createSync();
+      final lowerRoot = Directory(p.join(scratch.path, 'data'))..createSync();
+      final peerRoot = Directory(p.join(scratch.path, 'peer'))..createSync();
+      final upperCanonical = await upperRoot.resolveSymbolicLinks();
+      final lowerCanonical = await lowerRoot.resolveSymbolicLinks();
+      final peerCanonical = await peerRoot.resolveSymbolicLinks();
+      if (upperCanonical == lowerCanonical) return;
+
+      final leftTrash = p.join(scratch.path, 'shared-left-trash');
+      final rightTrash = p.join(scratch.path, 'shared-right-trash');
+      final rules = SyncRuleSet(
+        trashPathLeft: leftTrash,
+        trashPathRight: rightTrash,
+      );
+      final upperPair = SyncPair(
+        id: 'upper',
+        name: 'upper',
+        left: LocalEndpoint(upperCanonical),
+        right: LocalEndpoint(peerCanonical),
+        rules: rules,
+      );
+      final lowerPair = SyncPair(
+        id: 'lower',
+        name: 'lower',
+        left: LocalEndpoint(lowerCanonical),
+        right: LocalEndpoint(peerCanonical),
+        rules: rules,
+      );
+      final leftLocation = await environment.resolveTrashLocation(
+        endpoint: upperPair.left,
+        canonicalRoot: upperCanonical,
+        rules: rules,
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final rightLocation = await environment.resolveTrashLocation(
+        endpoint: upperPair.right,
+        canonicalRoot: await peerRoot.resolveSymbolicLinks(),
+        rules: rules,
+        side: SyncSide.right,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+
+      Future<SyncRunJournal> recovery({
+        required String root,
+        required String pairId,
+        required DateTime startedAt,
+      }) => _recoveryJournal(
+        environment,
+        rules: rules,
+        canonicalRootLeft: root,
+        canonicalRootRight: peerCanonical,
+        trashScopeLeft: leftLocation.scopeKey,
+        trashScopeRight: rightLocation.scopeKey,
+        trashLocationKeyLeft: leftLocation.locationKey,
+        trashLocationKeyRight: rightLocation.locationKey,
+        pairId: pairId,
+        startedAt: startedAt,
+      );
+
+      final currentPairId = syncPairId(upperPair);
+      final sharedCandidates = syncPairIdCandidates(
+        upperPair,
+      ).intersection(syncPairIdCandidates(lowerPair));
+      expect(sharedCandidates, isNotEmpty);
+      final collidingPairId = sharedCandidates.first;
+      final olderMatch = await recovery(
+        root: upperCanonical,
+        pairId: currentPairId,
+        startedAt: DateTime.utc(2026, 1, 1),
+      );
+      final newerMatch = await recovery(
+        root: upperCanonical,
+        pairId: currentPairId,
+        startedAt: DateTime.utc(2026, 1, 2),
+      );
+      final newerCollision = await recovery(
+        root: lowerCanonical,
+        pairId: collidingPairId,
+        startedAt: DateTime.utc(2026, 1, 3),
+      );
+      final lookup = await SyncRunJournal.findIncompleteRestoreForPairs(
+        environment.syncRunsDirectory,
+        syncPairIdCandidates(upperPair),
+      );
+      expect(lookup, isA<SyncIncompleteRestoreFound>());
+      final journals = (lookup as SyncIncompleteRestoreFound).journals;
+      expect(journals.map((journal) => journal.path), [
+        newerCollision.path,
+        newerMatch.path,
+        olderMatch.path,
+      ]);
+
+      final selection = await environment.resolveRestoreRecoveryContext(
+        pair: upperPair,
+        journals: journals,
+      );
+
+      expect(selection, isNotNull);
+      expect(selection!.journal.path, newerMatch.path);
+      expect(selection.context.roots[SyncSide.left], upperCanonical);
+      expect(
+        await environment.resolveRestoreRecoveryContext(
+          pair: upperPair,
+          journals: [newerCollision],
+        ),
+        isNull,
+      );
+    },
+  );
+
+  test('restore context does not recreate a missing trash root', () async {
+    final left = LocalEndpoint(
+      (Directory(
+        p.join(scratch.path, 'restore-mismatch-left'),
+      )..createSync()).path,
+    );
+    final right = LocalEndpoint(
+      (Directory(
+        p.join(scratch.path, 'restore-mismatch-right'),
+      )..createSync()).path,
+    );
+    const rules = SyncRuleSet();
+    final leftLocation = await environment.resolveTrashLocation(
+      endpoint: left,
+      canonicalRoot: left.path,
+      rules: rules,
+      side: SyncSide.left,
+      pathCase: SyncTrashPathCase.sensitive,
+    );
+    final rightLocation = await environment.resolveTrashLocation(
+      endpoint: right,
+      canonicalRoot: right.path,
+      rules: rules,
+      side: SyncSide.right,
+      pathCase: SyncTrashPathCase.sensitive,
+    );
+    final journal = await _recoveryJournal(
+      environment,
+      rules: rules,
+      canonicalRootLeft: await Directory(left.path).resolveSymbolicLinks(),
+      canonicalRootRight: await Directory(right.path).resolveSymbolicLinks(),
+      trashScopeLeft: leftLocation.scopeKey,
+      trashScopeRight: rightLocation.scopeKey,
+      trashLocationKeyLeft: leftLocation.locationKey,
+      trashLocationKeyRight: rightLocation.locationKey,
+    );
+    await Directory(leftLocation.trashRoot).delete(recursive: true);
+    final pair = SyncPair(
+      id: 'pair',
+      name: 'pair',
+      left: left,
+      right: right,
+      rules: rules,
+    );
+
+    await expectLater(
+      environment.resolveRestoreRecoveryContext(
+        pair: pair,
+        journals: [journal],
+      ),
+      throwsA(
+        isA<RemoteFileException>().having(
+          (error) => error.kind,
+          'kind',
+          RemoteFileErrorKind.conflict,
+        ),
+      ),
+    );
+    expect(Directory(leftLocation.trashRoot).existsSync(), isFalse);
+  });
+
+  test(
+    'restore context refuses missing scopes and location mismatches',
+    () async {
+      final left = LocalEndpoint(
+        (Directory(
+          p.join(scratch.path, 'restore-invalid-left'),
+        )..createSync()).path,
+      );
+      final right = LocalEndpoint(
+        (Directory(
+          p.join(scratch.path, 'restore-invalid-right'),
+        )..createSync()).path,
+      );
+      const rules = SyncRuleSet();
+      final leftLocation = await environment.resolveTrashLocation(
+        endpoint: left,
+        canonicalRoot: left.path,
+        rules: rules,
+        side: SyncSide.left,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final rightLocation = await environment.resolveTrashLocation(
+        endpoint: right,
+        canonicalRoot: right.path,
+        rules: rules,
+        side: SyncSide.right,
+        pathCase: SyncTrashPathCase.sensitive,
+      );
+      final pair = SyncPair(
+        id: 'pair',
+        name: 'pair',
+        left: left,
+        right: right,
+        rules: rules,
+      );
+      final missingScope = await _recoveryJournal(
+        environment,
+        rules: rules,
+        canonicalRootLeft: await Directory(left.path).resolveSymbolicLinks(),
+        canonicalRootRight: await Directory(right.path).resolveSymbolicLinks(),
+        trashScopeLeft: null,
+        trashScopeRight: rightLocation.scopeKey,
+        trashLocationKeyLeft: leftLocation.locationKey,
+        trashLocationKeyRight: rightLocation.locationKey,
+      );
+
+      await expectLater(
+        environment.resolveRestoreRecoveryContext(
+          pair: pair,
+          journals: [missingScope],
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+
+      final wrongScope = await _recoveryJournal(
+        environment,
+        rules: rules,
+        canonicalRootLeft: await Directory(left.path).resolveSymbolicLinks(),
+        canonicalRootRight: await Directory(right.path).resolveSymbolicLinks(),
+        trashScopeLeft: _mismatchedTrashScope,
+        trashScopeRight: rightLocation.scopeKey,
+        trashLocationKeyLeft: leftLocation.locationKey,
+        trashLocationKeyRight: rightLocation.locationKey,
+      );
+      await expectLater(
+        environment.resolveRestoreRecoveryContext(
+          pair: pair,
+          journals: [wrongScope],
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+
+      final wrongLocation = await _recoveryJournal(
+        environment,
+        rules: rules,
+        canonicalRootLeft: await Directory(left.path).resolveSymbolicLinks(),
+        canonicalRootRight: await Directory(right.path).resolveSymbolicLinks(),
+        trashScopeLeft: leftLocation.scopeKey,
+        trashScopeRight: rightLocation.scopeKey,
+        trashLocationKeyLeft: _mismatchedTrashLocationKey,
+        trashLocationKeyRight: rightLocation.locationKey,
+      );
+      await expectLater(
+        environment.resolveRestoreRecoveryContext(
+          pair: pair,
+          journals: [wrongLocation],
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+
+      final missingLocation = await _recoveryJournal(
+        environment,
+        rules: rules,
+        canonicalRootLeft: await Directory(left.path).resolveSymbolicLinks(),
+        canonicalRootRight: await Directory(right.path).resolveSymbolicLinks(),
+        trashScopeLeft: leftLocation.scopeKey,
+        trashScopeRight: rightLocation.scopeKey,
+        trashLocationKeyLeft: null,
+        trashLocationKeyRight: rightLocation.locationKey,
+      );
+      await expectLater(
+        environment.resolveRestoreRecoveryContext(
+          pair: pair,
+          journals: [missingLocation],
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+
+      final missingRoot = await _recoveryJournal(
+        environment,
+        rules: rules,
+        canonicalRootLeft: null,
+        canonicalRootRight: await Directory(right.path).resolveSymbolicLinks(),
+        trashScopeLeft: leftLocation.scopeKey,
+        trashScopeRight: rightLocation.scopeKey,
+        trashLocationKeyLeft: leftLocation.locationKey,
+        trashLocationKeyRight: rightLocation.locationKey,
+      );
+      await expectLater(
+        environment.resolveRestoreRecoveryContext(
+          pair: pair,
+          journals: [missingRoot],
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+    },
+  );
 
   test('a deleted root releases its prior scoped journals', () async {
     final root = Directory(p.join(scratch.path, 'root'))..createSync();

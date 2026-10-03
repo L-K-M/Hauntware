@@ -113,36 +113,36 @@ final class BookmarkCoordinator {
     SyncEnrollmentState? enrollment,
     DateTime Function()? now,
     int maxRounds = 5,
-  })  : // Collaborator names stay public; the fields stay private.
-        // ignore: prefer_initializing_formals
-        _records = records,
-        // ignore: prefer_initializing_formals
-        _bookmarks = bookmarks,
-        // ignore: prefer_initializing_formals
-        _hostKeys = hostKeys,
-        // ignore: prefer_initializing_formals
-        _hostKeyMutations = hostKeyMutations,
-        // ignore: prefer_initializing_formals
-        _crypto = crypto,
-        // ignore: prefer_initializing_formals
-        _deviceId = deviceId,
-        // ignore: prefer_initializing_formals
-        _pinVerdicts = pinVerdicts,
-        // ignore: prefer_initializing_formals
-        _tripwires = tripwires,
-        // ignore: prefer_initializing_formals
-        _catalog = catalog,
-        // ignore: prefer_initializing_formals
-        _servers = servers,
-        // ignore: prefer_initializing_formals
-        _secrets = secrets,
-        // ignore: prefer_initializing_formals
-        _syncSecrets = syncSecrets,
-        // ignore: prefer_initializing_formals
-        _enrollment = enrollment,
-        _now = now ?? DateTime.now,
-        // ignore: prefer_initializing_formals
-        _maxRounds = maxRounds;
+  }) : // Collaborator names stay public; the fields stay private.
+       // ignore: prefer_initializing_formals
+       _records = records,
+       // ignore: prefer_initializing_formals
+       _bookmarks = bookmarks,
+       // ignore: prefer_initializing_formals
+       _hostKeys = hostKeys,
+       // ignore: prefer_initializing_formals
+       _hostKeyMutations = hostKeyMutations,
+       // ignore: prefer_initializing_formals
+       _crypto = crypto,
+       // ignore: prefer_initializing_formals
+       _deviceId = deviceId,
+       // ignore: prefer_initializing_formals
+       _pinVerdicts = pinVerdicts,
+       // ignore: prefer_initializing_formals
+       _tripwires = tripwires,
+       // ignore: prefer_initializing_formals
+       _catalog = catalog,
+       // ignore: prefer_initializing_formals
+       _servers = servers,
+       // ignore: prefer_initializing_formals
+       _secrets = secrets,
+       // ignore: prefer_initializing_formals
+       _syncSecrets = syncSecrets,
+       // ignore: prefer_initializing_formals
+       _enrollment = enrollment,
+       _now = now ?? DateTime.now,
+       // ignore: prefer_initializing_formals
+       _maxRounds = maxRounds;
 
   static const _kindDelimiter = ':';
   static const _bookmarkPrefix = 'bookmark:';
@@ -193,13 +193,17 @@ final class BookmarkCoordinator {
   /// stamp and this install's authorship, and mark it dirty for the next
   /// push (04 §3.2 — `deviceId: deviceId`, always).
   Future<void> onBookmarkSaved(Bookmark bookmark) async {
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: '$_bookmarkPrefix${bookmark.id}',
-      kind: RecordKind.bookmark,
-      updatedAt: bookmark.updatedAt.toUtc().millisecondsSinceEpoch,
-      deviceId: _deviceId,
-      data: bookmark.toJson(),
-    )));
+    await _records.putLocal(
+      await _crypto.seal(
+        DecryptedRecord(
+          id: '$_bookmarkPrefix${bookmark.id}',
+          kind: RecordKind.bookmark,
+          updatedAt: bookmark.updatedAt.toUtc().millisecondsSinceEpoch,
+          deviceId: _deviceId,
+          data: bookmark.toJson(),
+        ),
+      ),
+    );
   }
 
   /// A local delete: a real tombstone (empty blob, `deleted: true`) dated
@@ -207,13 +211,17 @@ final class BookmarkCoordinator {
   /// store has. Tombstones are retained indefinitely: no GC window is safe
   /// while a long-offline device could still push the old row.
   Future<void> onBookmarkDeleted(String bookmarkId) async {
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: '$_bookmarkPrefix$bookmarkId',
-      kind: RecordKind.bookmark,
-      updatedAt: _now().toUtc().millisecondsSinceEpoch,
-      deviceId: _deviceId,
-      deleted: true,
-    )));
+    await _records.putLocal(
+      await _crypto.seal(
+        DecryptedRecord(
+          id: '$_bookmarkPrefix$bookmarkId',
+          kind: RecordKind.bookmark,
+          updatedAt: _now().toUtc().millisecondsSinceEpoch,
+          deviceId: _deviceId,
+          deleted: true,
+        ),
+      ),
+    );
   }
 
   /// A local server save in shared mode (04 §4.2, amended): persist the
@@ -229,13 +237,17 @@ final class BookmarkCoordinator {
     if (store == null) return;
     final stored = await store.save(server);
     if (stored.excludeFromSync) {
-      await _records.putLocal(await _crypto.seal(DecryptedRecord(
-        id: stored.id,
-        kind: RecordKind.serverConfig,
-        updatedAt: stored.updatedAt,
-        deviceId: _deviceId,
-        deleted: true,
-      )));
+      await _records.putLocal(
+        await _crypto.seal(
+          DecryptedRecord(
+            id: stored.id,
+            kind: RecordKind.serverConfig,
+            updatedAt: stored.updatedAt,
+            deviceId: _deviceId,
+            deleted: true,
+          ),
+        ),
+      );
       await _retractOrphanedSecret(stored.secretRef, stored.updatedAt);
     } else {
       await _sealServerRecord(stored);
@@ -262,18 +274,21 @@ final class BookmarkCoordinator {
     final tuple = await store.syncTupleOf(server.id);
     final deletedAt = tuple != null && tuple.deleted
         ? tuple.updatedAt
-        : deletionStamp(now: _now(), prior: [
-            prior?.updatedAt,
-            server.updatedAt,
-            tuple?.updatedAt,
-          ]);
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: server.id,
-      kind: RecordKind.serverConfig,
-      updatedAt: deletedAt,
-      deviceId: _deviceId,
-      deleted: true,
-    )));
+        : deletionStamp(
+            now: _now(),
+            prior: [prior?.updatedAt, server.updatedAt, tuple?.updatedAt],
+          );
+    await _records.putLocal(
+      await _crypto.seal(
+        DecryptedRecord(
+          id: server.id,
+          kind: RecordKind.serverConfig,
+          updatedAt: deletedAt,
+          deviceId: _deviceId,
+          deleted: true,
+        ),
+      ),
+    );
     await _retractOrphanedSecret(server.secretRef, deletedAt);
     await _refreshCatalog();
   }
@@ -302,13 +317,17 @@ final class BookmarkCoordinator {
   /// Seal one server under its own stamp — the record id is the bare
   /// config id, Séance's convention: prefixless ids are `serverConfig`.
   Future<void> _sealServerRecord(ServerConfig server) async {
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: server.id,
-      kind: RecordKind.serverConfig,
-      updatedAt: server.updatedAt,
-      deviceId: _deviceId,
-      data: server.toJson(),
-    )));
+    await _records.putLocal(
+      await _crypto.seal(
+        DecryptedRecord(
+          id: server.id,
+          kind: RecordKind.serverConfig,
+          updatedAt: server.updatedAt,
+          deviceId: _deviceId,
+          data: server.toJson(),
+        ),
+      ),
+    );
   }
 
   /// Seal the vault entry [ref] into its `secret:` record, dirty for the
@@ -347,13 +366,17 @@ final class BookmarkCoordinator {
         return;
       }
     }
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: '$_secretPrefix$ref',
-      kind: RecordKind.secret,
-      updatedAt: stamped.updatedAt,
-      deviceId: _deviceId,
-      data: stamped.toJson(),
-    )));
+    await _records.putLocal(
+      await _crypto.seal(
+        DecryptedRecord(
+          id: '$_secretPrefix$ref',
+          kind: RecordKind.secret,
+          updatedAt: stamped.updatedAt,
+          deviceId: _deviceId,
+          data: stamped.toJson(),
+        ),
+      ),
+    );
   }
 
   /// Retract a credential's `secret:` record when no synced server still
@@ -380,13 +403,17 @@ final class BookmarkCoordinator {
       if (existing.deleted) return;
       retractedAt = existing.updatedAt + 1;
     }
-    await _records.putLocal(await _crypto.seal(DecryptedRecord(
-      id: '$_secretPrefix$ref',
-      kind: RecordKind.secret,
-      updatedAt: retractedAt,
-      deviceId: _deviceId,
-      deleted: true,
-    )));
+    await _records.putLocal(
+      await _crypto.seal(
+        DecryptedRecord(
+          id: '$_secretPrefix$ref',
+          kind: RecordKind.secret,
+          updatedAt: retractedAt,
+          deviceId: _deviceId,
+          deleted: true,
+        ),
+      ),
+    );
   }
 
   /// The device-level switch just turned on: work off what change-driven
@@ -493,6 +520,12 @@ final class BookmarkCoordinator {
         final current = await _matchingConflictPins(expected);
         if (current == null) return;
 
+        final replacement = await _hostKeys.replaceIfCurrent(
+          current.local,
+          current.local,
+        );
+        if (replacement == HostKeyInstallResult.conflict) return;
+
         await _pinVerdicts.recordKeptVerdict(
           expected.locator,
           current.pulled.fingerprintSha256,
@@ -519,7 +552,12 @@ final class BookmarkCoordinator {
         final current = await _matchingConflictPins(expected);
         if (current == null) return;
 
-        await _hostKeys.put(current.pulled);
+        final replacement = await _hostKeys.replaceIfCurrent(
+          current.local,
+          current.pulled,
+        );
+        if (replacement == HostKeyInstallResult.conflict) return;
+
         await _pinVerdicts.removeNegativePin(expected.locator);
       });
 
@@ -585,8 +623,9 @@ final class BookmarkCoordinator {
           pin.fingerprintSha256) {
         continue;
       }
-      conflicts.add(HostKeyConflict(
-          locator: pin.locator, local: local, pulled: pin));
+      conflicts.add(
+        HostKeyConflict(locator: pin.locator, local: local, pulled: pin),
+      );
     }
     return conflicts;
   }
@@ -606,22 +645,30 @@ final class BookmarkCoordinator {
       final tuple = entry.value;
       final row = rows[entry.key];
       if (tuple.deleted) {
-        await _records.putLocal(await _crypto.seal(DecryptedRecord(
-          id: '$_bookmarkPrefix${entry.key}',
-          kind: RecordKind.bookmark,
-          updatedAt: tuple.updatedAt,
-          deviceId: tuple.deviceId,
-          deleted: true,
-        )));
+        await _records.putLocal(
+          await _crypto.seal(
+            DecryptedRecord(
+              id: '$_bookmarkPrefix${entry.key}',
+              kind: RecordKind.bookmark,
+              updatedAt: tuple.updatedAt,
+              deviceId: tuple.deviceId,
+              deleted: true,
+            ),
+          ),
+        );
         resealed++;
       } else if (row != null) {
-        await _records.putLocal(await _crypto.seal(DecryptedRecord(
-          id: '$_bookmarkPrefix${entry.key}',
-          kind: RecordKind.bookmark,
-          updatedAt: tuple.updatedAt,
-          deviceId: tuple.deviceId,
-          data: row.toJson(),
-        )));
+        await _records.putLocal(
+          await _crypto.seal(
+            DecryptedRecord(
+              id: '$_bookmarkPrefix${entry.key}',
+              kind: RecordKind.bookmark,
+              updatedAt: tuple.updatedAt,
+              deviceId: tuple.deviceId,
+              data: row.toJson(),
+            ),
+          ),
+        );
         resealed++;
       }
     }
@@ -638,23 +685,25 @@ final class BookmarkCoordinator {
         // An excluded row keeps a live local tuple but is retracted on the
         // account: re-seal the retraction, as [reSealPendingWrites] does —
         // live payload would un-exclude it fleet-wide.
-        await _records.putLocal(await _crypto.seal(
-          row == null || tuple.deleted || row.excludeFromSync
-              ? DecryptedRecord(
-                  id: entry.key,
-                  kind: RecordKind.serverConfig,
-                  updatedAt: tuple.updatedAt,
-                  deviceId: tuple.deviceId,
-                  deleted: true,
-                )
-              : DecryptedRecord(
-                  id: entry.key,
-                  kind: RecordKind.serverConfig,
-                  updatedAt: tuple.updatedAt,
-                  deviceId: tuple.deviceId,
-                  data: row.toJson(),
-                ),
-        ));
+        await _records.putLocal(
+          await _crypto.seal(
+            row == null || tuple.deleted || row.excludeFromSync
+                ? DecryptedRecord(
+                    id: entry.key,
+                    kind: RecordKind.serverConfig,
+                    updatedAt: tuple.updatedAt,
+                    deviceId: tuple.deviceId,
+                    deleted: true,
+                  )
+                : DecryptedRecord(
+                    id: entry.key,
+                    kind: RecordKind.serverConfig,
+                    updatedAt: tuple.updatedAt,
+                    deviceId: tuple.deviceId,
+                    data: row.toJson(),
+                  ),
+          ),
+        );
         resealed++;
       }
       // Credentials the vault still holds re-seal through the publish
@@ -696,13 +745,17 @@ final class BookmarkCoordinator {
           _ => null,
         };
         if (kind == null) continue;
-        await _records.putLocal(await _crypto.seal(DecryptedRecord(
-          id: record.id,
-          kind: kind,
-          updatedAt: record.updatedAt,
-          deviceId: record.deviceId,
-          deleted: true,
-        )));
+        await _records.putLocal(
+          await _crypto.seal(
+            DecryptedRecord(
+              id: record.id,
+              kind: kind,
+              updatedAt: record.updatedAt,
+              deviceId: record.deviceId,
+              deleted: true,
+            ),
+          ),
+        );
         resealed++;
         continue;
       }
@@ -717,16 +770,21 @@ final class BookmarkCoordinator {
       }
       switch (prefix) {
         case 'bookmark':
-          final row =
-              await _bookmarks.byId(record.id.substring(_bookmarkPrefix.length));
+          final row = await _bookmarks.byId(
+            record.id.substring(_bookmarkPrefix.length),
+          );
           if (row == null) continue;
-          await _records.putLocal(await _crypto.seal(DecryptedRecord(
-            id: record.id,
-            kind: RecordKind.bookmark,
-            updatedAt: record.updatedAt,
-            deviceId: record.deviceId,
-            data: row.toJson(),
-          )));
+          await _records.putLocal(
+            await _crypto.seal(
+              DecryptedRecord(
+                id: record.id,
+                kind: RecordKind.bookmark,
+                updatedAt: record.updatedAt,
+                deviceId: record.deviceId,
+                data: row.toJson(),
+              ),
+            ),
+          );
           resealed++;
         case 'hostkey':
           HostKey? pin;
@@ -734,30 +792,39 @@ final class BookmarkCoordinator {
             if (key.recordId == record.id) pin = key;
           }
           if (pin == null) continue;
-          await _records.putLocal(await _crypto.seal(DecryptedRecord(
-            id: record.id,
-            kind: RecordKind.hostKey,
-            updatedAt: record.updatedAt,
-            deviceId: record.deviceId,
-            data: pin.toJson(),
-          )));
+          await _records.putLocal(
+            await _crypto.seal(
+              DecryptedRecord(
+                id: record.id,
+                kind: RecordKind.hostKey,
+                updatedAt: record.updatedAt,
+                deviceId: record.deviceId,
+                data: pin.toJson(),
+              ),
+            ),
+          );
           resealed++;
         case 'secret':
           final Secret? secret;
           try {
             secret = await _secrets?.readableSecret(
-                record.id.substring(_secretPrefix.length));
+              record.id.substring(_secretPrefix.length),
+            );
           } catch (_) {
             continue;
           }
           if (secret == null) continue;
-          await _records.putLocal(await _crypto.seal(DecryptedRecord(
-            id: record.id,
-            kind: RecordKind.secret,
-            updatedAt: record.updatedAt,
-            deviceId: record.deviceId,
-            data: secret.toJson(),
-          )));
+          await _records.putLocal(
+            await _crypto.seal(
+              DecryptedRecord(
+                id: record.id,
+                kind: RecordKind.secret,
+                updatedAt: record.updatedAt,
+                deviceId: record.deviceId,
+                data: secret.toJson(),
+              ),
+            ),
+          );
           resealed++;
         case null:
           final row = await _servers?.byId(record.id);
@@ -765,23 +832,25 @@ final class BookmarkCoordinator {
           // An excluded server's stale live record re-seals as the
           // retraction the store says it should be — re-pushing live
           // payload would un-exclude it on the fleet.
-          await _records.putLocal(await _crypto.seal(
-            row.excludeFromSync
-                ? DecryptedRecord(
-                    id: record.id,
-                    kind: RecordKind.serverConfig,
-                    updatedAt: record.updatedAt,
-                    deviceId: record.deviceId,
-                    deleted: true,
-                  )
-                : DecryptedRecord(
-                    id: record.id,
-                    kind: RecordKind.serverConfig,
-                    updatedAt: record.updatedAt,
-                    deviceId: record.deviceId,
-                    data: row.toJson(),
-                  ),
-          ));
+          await _records.putLocal(
+            await _crypto.seal(
+              row.excludeFromSync
+                  ? DecryptedRecord(
+                      id: record.id,
+                      kind: RecordKind.serverConfig,
+                      updatedAt: record.updatedAt,
+                      deviceId: record.deviceId,
+                      deleted: true,
+                    )
+                  : DecryptedRecord(
+                      id: record.id,
+                      kind: RecordKind.serverConfig,
+                      updatedAt: record.updatedAt,
+                      deviceId: record.deviceId,
+                      data: row.toJson(),
+                    ),
+            ),
+          );
           resealed++;
       }
     }
@@ -846,8 +915,7 @@ final class BookmarkCoordinator {
               // displaced winner stays dirty for the next pull to reconcile.
               if (restored != null) {
                 progressed = true;
-                switch (await _dispatch(restored, report,
-                    holdActive: false)) {
+                switch (await _dispatch(restored, report, holdActive: false)) {
                   case _ApplyOutcome.applied:
                     report.appliedIds.add(restored.id);
                   case _ApplyOutcome.deferred:
@@ -988,8 +1056,7 @@ final class BookmarkCoordinator {
   Future<void> _applyPulledInto(ApplyReport report) async {
     final cursor = await _records.lastAppliedSeq();
     final holdActive = await _pushesHeld();
-    final dirtyIds =
-        (await _records.dirtyRecords()).map((r) => r.id).toSet();
+    final dirtyIds = (await _records.dirtyRecords()).map((r) => r.id).toSet();
     final pending = [
       for (final record in await _records.allRecords())
         if (record.seq != null &&
@@ -1003,8 +1070,9 @@ final class BookmarkCoordinator {
     Future<void> account(EncryptedRecord record, _ApplyOutcome outcome) async {
       if (outcome == _ApplyOutcome.deferred) {
         report.deferredIds.add(record.id);
-        blockedAt =
-            blockedAt == null ? record.seq : min(blockedAt!, record.seq!);
+        blockedAt = blockedAt == null
+            ? record.seq
+            : min(blockedAt!, record.seq!);
         return;
       }
       if (outcome == _ApplyOutcome.applied) {
@@ -1028,11 +1096,15 @@ final class BookmarkCoordinator {
         continue;
       }
       await account(
-          record, await _dispatch(record, report, holdActive: holdActive));
+        record,
+        await _dispatch(record, report, holdActive: holdActive),
+      );
     }
     for (final record in secretPending) {
-      await account(record,
-          await _applySecretRecord(record, holdActive: holdActive));
+      await account(
+        record,
+        await _applySecretRecord(record, holdActive: holdActive),
+      );
     }
 
     // The other deferral channel: pulled losers parked behind a dirty local
@@ -1069,8 +1141,11 @@ final class BookmarkCoordinator {
   /// failure under it is seen-but-deferred, not skipped — the record may
   /// simply be sealed under the passphrase the user has not yet typed
   /// right, and re-enrollment must find it ahead of the apply cursor.
-  Future<_ApplyOutcome> _dispatch(EncryptedRecord record, ApplyReport report,
-      {required bool holdActive}) async {
+  Future<_ApplyOutcome> _dispatch(
+    EncryptedRecord record,
+    ApplyReport report, {
+    required bool holdActive,
+  }) async {
     final prefix = _prefixOf(record.id);
     if (record.deleted) {
       // Tombstones carry no sealed kind, so the prefix alone routes them.
@@ -1085,20 +1160,20 @@ final class BookmarkCoordinator {
       return _ApplyOutcome.skipped;
     }
     return switch (prefix) {
-      'bookmark' =>
-        await _applyBookmarkRecord(record, holdActive: holdActive),
-      'hostkey' =>
-        await _applyHostKeyRecord(record, holdActive: holdActive),
+      'bookmark' => await _applyBookmarkRecord(record, holdActive: holdActive),
+      'hostkey' => await _applyHostKeyRecord(record, holdActive: holdActive),
       // Credentials materialize into the vault — skipped when shared
       // mode has none to write to.
-      'secret' => _secrets != null
-          ? await _applySecretRecord(record, holdActive: holdActive)
-          : _ApplyOutcome.skipped,
+      'secret' =>
+        _secrets != null
+            ? await _applySecretRecord(record, holdActive: holdActive)
+            : _ApplyOutcome.skipped,
       // Prefixless is Séance's actual serverConfig convention — decrypt it
       // only when a server store exists to materialize into (shared mode).
-      null => _servers != null
-          ? await _applyServerConfigRecord(record, holdActive: holdActive)
-          : _ApplyOutcome.skipped,
+      null =>
+        _servers != null
+            ? await _applyServerConfigRecord(record, holdActive: holdActive)
+            : _ApplyOutcome.skipped,
       _ => _ApplyOutcome.skipped,
     };
   }
@@ -1116,14 +1191,18 @@ final class BookmarkCoordinator {
   /// materialized into the bookmark store. A tie is the same winning
   /// envelope arriving again — idempotent by construction.
   static bool _outranksMaterialized(
-          EncryptedRecord record, BookmarkSyncTuple? materialized) =>
+    EncryptedRecord record,
+    BookmarkSyncTuple? materialized,
+  ) =>
       materialized == null ||
       record.updatedAt > materialized.updatedAt ||
       (record.updatedAt == materialized.updatedAt &&
           record.deviceId.compareTo(materialized.deviceId) >= 0);
 
-  Future<_ApplyOutcome> _applyBookmarkRecord(EncryptedRecord record,
-      {required bool holdActive}) async {
+  Future<_ApplyOutcome> _applyBookmarkRecord(
+    EncryptedRecord record, {
+    required bool holdActive,
+  }) async {
     final dec = await _openForApply(record);
     if (dec == null) {
       return holdActive ? _ApplyOutcome.deferred : _ApplyOutcome.skipped;
@@ -1145,14 +1224,18 @@ final class BookmarkCoordinator {
     // It pulled and strict-decoded: lift any past tripwire on this id.
     await _tripwires.clear(record.id);
     if (!_outranksMaterialized(
-        record, await _bookmarks.syncTupleOf(bookmark.id))) {
+      record,
+      await _bookmarks.syncTupleOf(bookmark.id),
+    )) {
       return _ApplyOutcome.deferred;
     }
     await _bookmarks.applySyncedRecords([
       (
         bookmark: bookmark,
         winner: BookmarkSyncTuple(
-            updatedAt: record.updatedAt, deviceId: record.deviceId),
+          updatedAt: record.updatedAt,
+          deviceId: record.deviceId,
+        ),
       ),
     ]);
     return _ApplyOutcome.applied;
@@ -1164,21 +1247,26 @@ final class BookmarkCoordinator {
     // tombstone and a live upsert key the same materialized row.
     final bookmarkId = record.id.substring(_bookmarkPrefix.length);
     if (!_outranksMaterialized(
-        record, await _bookmarks.syncTupleOf(bookmarkId))) {
+      record,
+      await _bookmarks.syncTupleOf(bookmarkId),
+    )) {
       return _ApplyOutcome.deferred;
     }
     await _bookmarks.removeSyncedRecord(
       bookmarkId,
       BookmarkSyncTuple(
-          updatedAt: record.updatedAt,
-          deviceId: record.deviceId,
-          deleted: true),
+        updatedAt: record.updatedAt,
+        deviceId: record.deviceId,
+        deleted: true,
+      ),
     );
     return _ApplyOutcome.applied;
   }
 
-  Future<_ApplyOutcome> _applyHostKeyRecord(EncryptedRecord record,
-      {required bool holdActive}) async {
+  Future<_ApplyOutcome> _applyHostKeyRecord(
+    EncryptedRecord record, {
+    required bool holdActive,
+  }) async {
     final dec = await _openForApply(record);
     if (dec == null) {
       return holdActive ? _ApplyOutcome.deferred : _ApplyOutcome.skipped;
@@ -1220,8 +1308,10 @@ final class BookmarkCoordinator {
     });
   }
 
-  Future<_ApplyOutcome> _applyServerConfigRecord(EncryptedRecord record,
-      {required bool holdActive}) async {
+  Future<_ApplyOutcome> _applyServerConfigRecord(
+    EncryptedRecord record, {
+    required bool holdActive,
+  }) async {
     final store = _servers;
     if (store == null) return _ApplyOutcome.skipped;
     final dec = await _openForApply(record);
@@ -1251,24 +1341,26 @@ final class BookmarkCoordinator {
     final local = await store.byId(config.id);
     if (local != null && local.excludeFromSync) {
       if (record.updatedAt >= local.updatedAt) {
-        await _records.putLocal(await _crypto.seal(DecryptedRecord(
-          id: record.id,
-          kind: RecordKind.serverConfig,
-          updatedAt: record.updatedAt + 1,
-          deviceId: _deviceId,
-          deleted: true,
-        )));
+        await _records.putLocal(
+          await _crypto.seal(
+            DecryptedRecord(
+              id: record.id,
+              kind: RecordKind.serverConfig,
+              updatedAt: record.updatedAt + 1,
+              deviceId: _deviceId,
+              deleted: true,
+            ),
+          ),
+        );
       }
       return _ApplyOutcome.skipped;
     }
-    if (!_outranksMaterialized(
-        record, await store.syncTupleOf(config.id))) {
+    if (!_outranksMaterialized(record, await store.syncTupleOf(config.id))) {
       return _ApplyOutcome.deferred;
     }
     await store.applySyncedRecord(
       config,
-      ServerSyncTuple(
-          updatedAt: record.updatedAt, deviceId: record.deviceId),
+      ServerSyncTuple(updatedAt: record.updatedAt, deviceId: record.deviceId),
     );
     return _ApplyOutcome.applied;
   }
@@ -1280,7 +1372,8 @@ final class BookmarkCoordinator {
   /// live local row is a reversed exclusion — the live record re-dates
   /// past it rather than honouring a decision the user undid.
   Future<_ApplyOutcome> _applyServerConfigTombstone(
-      EncryptedRecord record) async {
+    EncryptedRecord record,
+  ) async {
     final store = _servers;
     if (store == null) return _ApplyOutcome.skipped;
     final local = await store.byId(record.id);
@@ -1295,22 +1388,21 @@ final class BookmarkCoordinator {
       final revived = local.copyWith(updatedAt: record.updatedAt + 1);
       await store.applySyncedRecord(
         revived,
-        ServerSyncTuple(
-            updatedAt: revived.updatedAt, deviceId: _deviceId),
+        ServerSyncTuple(updatedAt: revived.updatedAt, deviceId: _deviceId),
       );
       await _sealServerRecord(revived);
       return _ApplyOutcome.applied;
     }
-    if (!_outranksMaterialized(
-        record, await store.syncTupleOf(record.id))) {
+    if (!_outranksMaterialized(record, await store.syncTupleOf(record.id))) {
       return _ApplyOutcome.deferred;
     }
     await store.removeSyncedRecord(
       record.id,
       ServerSyncTuple(
-          updatedAt: record.updatedAt,
-          deviceId: record.deviceId,
-          deleted: true),
+        updatedAt: record.updatedAt,
+        deviceId: record.deviceId,
+        deleted: true,
+      ),
     );
     return _ApplyOutcome.applied;
   }
@@ -1322,8 +1414,10 @@ final class BookmarkCoordinator {
   /// tie-break cannot protect a credential this device does not publish).
   /// Tombstones stay no-ops here — vault material is not something an
   /// envelope-only signal may strip.
-  Future<_ApplyOutcome> _applySecretRecord(EncryptedRecord record,
-      {required bool holdActive}) async {
+  Future<_ApplyOutcome> _applySecretRecord(
+    EncryptedRecord record, {
+    required bool holdActive,
+  }) async {
     final vault = _secrets;
     // Switch off: the record stays stored, unapplied — [catchUpSecrets]
     // picks it up if the switch turns on.
@@ -1432,7 +1526,9 @@ final class BookmarkCoordinator {
         await store.applySyncedRecord(
           config,
           ServerSyncTuple(
-              updatedAt: record.updatedAt, deviceId: record.deviceId),
+            updatedAt: record.updatedAt,
+            deviceId: record.deviceId,
+          ),
         );
       } catch (_) {
         // Left to the apply scan's tripwire.

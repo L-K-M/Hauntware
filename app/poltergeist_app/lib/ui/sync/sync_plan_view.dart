@@ -12,7 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:planchette_editor/planchette_editor.dart'
     show GhostMenuItem, GhostMenuDivider;
 import 'package:poltergeist_core/poltergeist_core.dart'
-    show RemoteFileErrorKind;
+    show RemoteFileErrorKind, RemoteFileException;
 import 'package:poltergeist_sync/poltergeist_sync.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -121,58 +121,61 @@ class _SyncPlanViewState extends State<SyncPlanView> {
       listenable: _controller,
       builder: (context, _) {
         final l10n = AppLocalizations.of(context);
+        final recovering = _controller.phase == SyncPlanPhase.recovery;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _Header(controller: _controller, l10n: l10n),
             if (_controller.phase == SyncPlanPhase.scanning)
               const LinearProgressIndicator(minHeight: 2),
-            _WarningsStrip(
-              controller: _controller,
-              l10n: l10n,
-              expanded: _warningsExpanded,
-              onToggle: () =>
-                  setState(() => _warningsExpanded = !_warningsExpanded),
-            ),
-            _TrashNotices(
-              controller: _controller,
-              l10n: l10n,
-              clock: widget.clock,
-            ),
-            _SuggestionBanner(controller: _controller, l10n: l10n),
-            _RefusalBanner(
-              controller: _controller,
-              l10n: l10n,
-              onEditRules: widget.onEditRules,
-            ),
-            _ReviewHoldBanner(controller: _controller, l10n: l10n),
-            if (_bulkSkipNotice != null)
-              MaterialBanner(
-                content: Text(_bulkSkipNotice!),
-                actions: [
-                  TextButton(
-                    onPressed: () => setState(() => _bulkSkipNotice = null),
-                    child: Text(l10n.paneNoticeDismiss),
-                  ),
-                ],
+            if (!recovering) ...[
+              _WarningsStrip(
+                controller: _controller,
+                l10n: l10n,
+                expanded: _warningsExpanded,
+                onToggle: () =>
+                    setState(() => _warningsExpanded = !_warningsExpanded),
               ),
-            _FilterBar(
-              controller: _controller,
-              l10n: l10n,
-              filter: _filter,
-              filterField: _filterField,
-              onlyActions: _onlyActions,
-              onFilterChanged: (filter) => setState(() => _filter = filter),
-              onFilterTextChanged: (text) =>
-                  setState(() => _filterText = text),
-              onOnlyActionsChanged: (value) =>
-                  setState(() => _onlyActions = value),
-            ),
-            _ConflictBar(
-              controller: _controller,
-              l10n: l10n,
-              onResolved: () => setState(() {}),
-            ),
+              _TrashNotices(
+                controller: _controller,
+                l10n: l10n,
+                clock: widget.clock,
+              ),
+              _SuggestionBanner(controller: _controller, l10n: l10n),
+              _RefusalBanner(
+                controller: _controller,
+                l10n: l10n,
+                onEditRules: widget.onEditRules,
+              ),
+              _ReviewHoldBanner(controller: _controller, l10n: l10n),
+              if (_bulkSkipNotice != null)
+                MaterialBanner(
+                  content: Text(_bulkSkipNotice!),
+                  actions: [
+                    TextButton(
+                      onPressed: () => setState(() => _bulkSkipNotice = null),
+                      child: Text(l10n.paneNoticeDismiss),
+                    ),
+                  ],
+                ),
+              _FilterBar(
+                controller: _controller,
+                l10n: l10n,
+                filter: _filter,
+                filterField: _filterField,
+                onlyActions: _onlyActions,
+                onFilterChanged: (filter) => setState(() => _filter = filter),
+                onFilterTextChanged: (text) =>
+                    setState(() => _filterText = text),
+                onOnlyActionsChanged: (value) =>
+                    setState(() => _onlyActions = value),
+              ),
+              _ConflictBar(
+                controller: _controller,
+                l10n: l10n,
+                onResolved: () => setState(() {}),
+              ),
+            ],
             Expanded(child: _buildBody(context, l10n)),
             _ActionBar(
               controller: _controller,
@@ -199,9 +202,32 @@ class _SyncPlanViewState extends State<SyncPlanView> {
             ),
           ),
         );
+      case SyncPlanPhase.recovery:
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  l10n.syncRestoreRecoveryTitle,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _controller.recoveryPending
+                      ? l10n.syncRestoreRecoveryBody
+                      : l10n.syncRestoreRecoveryBlocked(
+                          _controller.errorMessage ?? '',
+                        ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
       case SyncPlanPhase.error:
-        final remote =
-            _controller.errorKind == RemoteFileErrorKind.unsupported;
+        final remote = _controller.errorKind == RemoteFileErrorKind.unsupported;
         return Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -365,8 +391,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         item.effective == SyncActionType.deleteLeft ||
             item.effective == SyncActionType.deleteRight ||
             _controller.itemCarriesPreDelete(item),
-      SyncFilter.conflicts =>
-        item.effective == SyncActionType.conflict,
+      SyncFilter.conflicts => item.effective == SyncActionType.conflict,
       SyncFilter.skipped => item.effective == SyncActionType.skip,
     };
     final query = _filterText.trim().toLowerCase();
@@ -391,8 +416,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
     setState(() {
       _focusedRow = item;
       final modifiers = HardwareKeyboard.instance;
-      final multi =
-          modifiers.isControlPressed || modifiers.isMetaPressed;
+      final multi = modifiers.isControlPressed || modifiers.isMetaPressed;
       final range = modifiers.isShiftPressed;
       if (range && _selectionAnchor != null) {
         final items = _rowOrder;
@@ -404,9 +428,7 @@ class _SyncPlanViewState extends State<SyncPlanView> {
             ..addAll(items.sublist(a < b ? a : b, (a > b ? a : b) + 1));
         }
       } else if (multi) {
-        _selected.contains(item)
-            ? _selected.remove(item)
-            : _selected.add(item);
+        _selected.contains(item) ? _selected.remove(item) : _selected.add(item);
       } else {
         _selected
           ..clear()
@@ -550,8 +572,8 @@ class _SyncPlanViewState extends State<SyncPlanView> {
         SyncActionType.copyRightToLeft ||
         SyncActionType.updateRightToLeft ||
         SyncActionType.makeDirLeft => l10n.syncOverrideCopyRightToLeft,
-        SyncActionType.deleteLeft || SyncActionType.deleteRight =>
-          l10n.syncOverrideDelete,
+        SyncActionType.deleteLeft ||
+        SyncActionType.deleteRight => l10n.syncOverrideDelete,
         SyncActionType.conflict => l10n.syncOverrideReset,
       };
 
@@ -595,25 +617,28 @@ class _SyncPlanViewState extends State<SyncPlanView> {
   /// Rail 9's restore — a small summary dialog, then the report line.
   Future<void> _onRestore() async {
     final l10n = AppLocalizations.of(context);
-    final journal = _controller.lastRun?.journal;
-    if (journal == null) return;
-    final count =
-        journal.trashLines
-            .where(
-              (line) =>
-                  !journal.isTrashEntryPurged(line.side, line.trashLocation),
-            )
-            .length +
-        journal.items.where((line) {
-          final location = line.trashLocation;
-          return location != null &&
-              !journal.isTrashEntryPurged(line.side, location);
-        }).length;
+    final impact = _controller.restoreImpact;
+    if (impact == null) return;
+    final recovering = _controller.recoveryPending;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(l10n.syncRestoreDialogTitle),
-        content: Text(l10n.syncRestoreSummary(count)),
+        title: Text(
+          recovering
+              ? l10n.syncRestoreRecoveryDialogTitle
+              : l10n.syncRestoreDialogTitle,
+        ),
+        content: Text(
+          recovering
+              ? l10n.syncRestoreRecoverySummary(
+                  impact.restoredItemCount,
+                  impact.removedCreatedFileCount,
+                )
+              : l10n.syncRestoreSummary(
+                  impact.restoredItemCount,
+                  impact.removedCreatedFileCount,
+                ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -627,15 +652,21 @@ class _SyncPlanViewState extends State<SyncPlanView> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    final report = await _controller.restoreTrashed();
+    final SyncRestoreReport report;
+    try {
+      report = await _controller.restoreTrashed();
+    } on RemoteFileException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.syncRestoreFailed(error.message))),
+      );
+      return;
+    }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          l10n.syncRestoreResult(
-            report.restored.length,
-            report.skipped.length,
-          ),
+          l10n.syncRestoreResult(report.restored.length, report.skipped.length),
         ),
       ),
     );
@@ -826,12 +857,9 @@ class _Header extends StatelessWidget {
       controller.pairState.mtimeUnreliableRight;
 
   Future<void> _setMode(SyncMode mode) => switch (mode) {
-    SyncMode.update => controller.setMode(
-      deletions: DeletionPolicy.none,
-    ),
+    SyncMode.update => controller.setMode(deletions: DeletionPolicy.none),
     SyncMode.mirror => controller.setMode(
-      direction: controller.pair.rules.direction ==
-              SyncDirection.bidirectional
+      direction: controller.pair.rules.direction == SyncDirection.bidirectional
           ? SyncDirection.leftToRight
           : controller.pair.rules.direction,
       deletions: DeletionPolicy.trash,
@@ -843,8 +871,7 @@ class _Header extends StatelessWidget {
   };
 
   Future<void> _flipDirection() => controller.setMode(
-    direction:
-        controller.pair.rules.direction == SyncDirection.leftToRight
+    direction: controller.pair.rules.direction == SyncDirection.leftToRight
         ? SyncDirection.rightToLeft
         : SyncDirection.leftToRight,
   );
@@ -1250,15 +1277,10 @@ class _FilterBar extends StatelessWidget {
                     stats.replacedFiles,
         ),
       ),
-      (
-        SyncFilter.conflicts,
-        l10n.syncFilterConflicts(stats?.conflicts ?? 0),
-      ),
+      (SyncFilter.conflicts, l10n.syncFilterConflicts(stats?.conflicts ?? 0)),
       (
         SyncFilter.skipped,
-        l10n.syncFilterSkipped(
-          stats?.countOf(SyncActionType.skip) ?? 0,
-        ),
+        l10n.syncFilterSkipped(stats?.countOf(SyncActionType.skip) ?? 0),
       ),
     ];
     // One scrolling row: a narrow D32 pane keeps its table height
@@ -1417,17 +1439,13 @@ class _ActionBar extends StatelessWidget {
                       icon: const Icon(Icons.terminal, size: 16),
                       label: Text(l10n.syncCopyRsyncCommand),
                       onPressed: controller.canExportRsync
-                          ? () => unawaited(
-                              copyRsyncCommand(context, controller),
-                            )
+                          ? () =>
+                                unawaited(copyRsyncCommand(context, controller))
                           : null,
                     ),
                     if (controller.lastRun != null)
                       TextButton.icon(
-                        icon: const Icon(
-                          Icons.summarize_outlined,
-                          size: 16,
-                        ),
+                        icon: const Icon(Icons.summarize_outlined, size: 16),
                         label: Text(l10n.syncCopyReport),
                         onPressed: () => unawaited(
                           Clipboard.setData(
@@ -1451,37 +1469,39 @@ class _ActionBar extends StatelessWidget {
                       ),
                     if (controller.canRestore)
                       TextButton.icon(
-                        icon: const Icon(
-                          Icons.restore_from_trash,
-                          size: 16,
+                        icon: const Icon(Icons.restore_from_trash, size: 16),
+                        label: Text(
+                          controller.recoveryPending
+                              ? l10n.syncRestoreRecoveryAction
+                              : l10n.syncRestoreTrashed,
                         ),
-                        label: Text(l10n.syncRestoreTrashed),
                         onPressed: onRestore,
                       ),
-                    // §10's run controls — the activity panel exposes
-                    // the same verbs through the task row; the view
-                    // mirrors them here so a run is steerable without
-                    // leaving the tab.
-                    if (controller.isRunning) ...[
-                      TextButton.icon(
-                        icon: Icon(
-                          controller.isPaused
-                              ? Icons.play_arrow
-                              : Icons.pause,
-                          size: 16,
+                    // Keep active work cancellable without leaving the tab.
+                    if (controller.isRunning ||
+                        controller.isRestoringTrash) ...[
+                      if (controller.isRunning)
+                        TextButton.icon(
+                          icon: Icon(
+                            controller.isPaused
+                                ? Icons.play_arrow
+                                : Icons.pause,
+                            size: 16,
+                          ),
+                          label: Text(
+                            controller.isPaused
+                                ? l10n.syncResume
+                                : l10n.syncPause,
+                          ),
+                          onPressed: () =>
+                              controller.setPaused(!controller.isPaused),
                         ),
-                        label: Text(
-                          controller.isPaused
-                              ? l10n.syncResume
-                              : l10n.syncPause,
-                        ),
-                        onPressed: () =>
-                            controller.setPaused(!controller.isPaused),
-                      ),
                       TextButton.icon(
                         icon: const Icon(Icons.stop, size: 16),
                         label: Text(l10n.syncCancel),
-                        onPressed: controller.cancelRun,
+                        onPressed: controller.isRestoringTrash
+                            ? controller.cancelRestore
+                            : controller.cancelRun,
                       ),
                     ],
                   ],
@@ -1490,9 +1510,7 @@ class _ActionBar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: constraints.maxWidth * 0.6,
-              ),
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth * 0.6),
               child: FilledButton.icon(
                 icon: controller.isRunning
                     ? const SizedBox(
@@ -1530,9 +1548,7 @@ class _ActionBar extends StatelessWidget {
     final parts = <String>[
       for (final side in SyncSide.values) ...[
         if (stats.newFilesTo(side) + stats.updatesTo(side) > 0)
-          l10n.syncRunCopyPart(
-            stats.newFilesTo(side) + stats.updatesTo(side),
-          ),
+          l10n.syncRunCopyPart(stats.newFilesTo(side) + stats.updatesTo(side)),
         if (stats.foldersTo(side) > 0)
           l10n.syncRunCreateFolders(stats.foldersTo(side)),
         if (stats.deletesOn(side) + (stats.replacedBySide[side] ?? 0) > 0)
@@ -1548,10 +1564,7 @@ class _ActionBar extends StatelessWidget {
 /// The post-run report's clipboard text (05 §7's "Copy Report"): one
 /// line per executed item — path, action, outcome, error — followed by
 /// the done/failed/skipped roll-up.
-String syncReportText(
-  AppLocalizations l10n,
-  SyncPlanController controller,
-) {
+String syncReportText(AppLocalizations l10n, SyncPlanController controller) {
   final run = controller.lastRun;
   if (run == null) return '';
   final buffer = StringBuffer();

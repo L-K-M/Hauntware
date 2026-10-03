@@ -516,6 +516,8 @@ class SyncRunRecord {
     required this.rules,
     required this.totals,
     required this.warnings,
+    this.canonicalRootLeft,
+    this.canonicalRootRight,
     this.trashScopeLeft,
     this.trashScopeRight,
     this.trashLocationKeyLeft,
@@ -537,6 +539,12 @@ class SyncRunRecord {
   /// across ⌥⌘Y invocations.
   final String pairId;
   final DateTime startedAt;
+
+  /// Canonical sync roots at execution time. Incomplete restores require both
+  /// to distinguish case-sensitive pairs whose pre-scan ids may collide.
+  /// Null reads legacy journals but cannot authorize durable recovery.
+  final String? canonicalRootLeft;
+  final String? canonicalRootRight;
 
   /// Stable physical host/root identities for root-scoped purge markers.
   /// Null reads legacy journals whose coverage falls back to path text.

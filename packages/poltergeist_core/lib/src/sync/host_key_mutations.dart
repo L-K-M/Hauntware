@@ -1,6 +1,6 @@
 import 'package:seance_core/seance_core.dart';
 
-/// Result of conditionally installing a pulled host key.
+/// Result of a conditional host-key write.
 enum HostKeyInstallResult { installed, conflict }
 
 /// A TOFU store that can reject a conflicting write atomically.
@@ -9,6 +9,12 @@ enum HostKeyInstallResult { installed, conflict }
 /// could overwrite a key accepted by the connection engine between calls.
 abstract interface class ConflictAwareHostKeyStore implements HostKeyStore {
   Future<HostKeyInstallResult> putIfNoConflict(HostKey key);
+
+  /// Replaces [expected] only while its fingerprint is still current.
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  );
 }
 
 /// Serializes coordinator-owned trust and verdict mutations.
@@ -60,4 +66,29 @@ final class InMemoryConflictAwareHostKeyStore
         _keys[key.locator] = key;
         return HostKeyInstallResult.installed;
       });
+
+  @override
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  ) {
+    if (expected.locator != replacement.locator) {
+      throw ArgumentError.value(
+        replacement.locator,
+        'replacement',
+        'must use the expected host-key locator',
+      );
+    }
+
+    return _serialize(() async {
+      final current = _keys[expected.locator];
+      if (current == null ||
+          current.fingerprintSha256 != expected.fingerprintSha256) {
+        return HostKeyInstallResult.conflict;
+      }
+
+      _keys[replacement.locator] = replacement;
+      return HostKeyInstallResult.installed;
+    });
+  }
 }

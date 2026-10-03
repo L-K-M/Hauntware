@@ -23,6 +23,12 @@ final SyncTrashPathCase _nativeTrashPathCase = Platform.isWindows
     ? SyncTrashPathCase.insensitive
     : SyncTrashPathCase.sensitive;
 final _nativeTrashPathContext = syncTrashPathContext(_nativeTrashPathStyle);
+const int _replaceRestoreSchemaVersion = 2;
+const int _unsupportedJournalSchemaVersion = 999;
+const String _journalFileSuffix = '.jsonl';
+const String _testRestoreTransactionId = '0123456789abcdef0123456789abcdef';
+const String _testRestoreDigest =
+    '0000000000000000000000000000000000000000000000000000000000000000';
 
 String _nativeJoin(String parent, String child) =>
     _nativeTrashPathContext.join(parent, child);
@@ -670,8 +676,9 @@ final class _ReplaceRootAfterRunQuarantineFs extends LocalFileSystem {
     final replacementQuarantine = Directory(
       _nativeJoin(trashRoot, quarantineName!),
     )..createSync();
-    File(_nativeJoin(replacementQuarantine.path, 'precious.txt'))
-        .writeAsStringSync('precious');
+    File(
+      _nativeJoin(replacementQuarantine.path, 'precious.txt'),
+    ).writeAsStringSync('precious');
   }
 }
 
@@ -893,6 +900,46 @@ void main() {
     return journal;
   }
 
+  Future<void> appendIncompleteRestore(SyncRunJournal journal) async {
+    final trash = journal.trashLines.first;
+    final records = [
+      <String, Object?>{
+        'v': _replaceRestoreSchemaVersion,
+        'type': 'replaceRestorePrepared',
+        'transactionId': _testRestoreTransactionId,
+        'side': trash.side.name,
+        'parent': trash.parentPath,
+        'path': trash.relativePath,
+        'trashLocation': trash.trashLocation,
+        'bytes': trash.bytes,
+        'sha256': _testRestoreDigest,
+      },
+      <String, Object?>{
+        'v': _replaceRestoreSchemaVersion,
+        'type': 'replaceRestoreStarted',
+        'transactionId': _testRestoreTransactionId,
+        'side': trash.side.name,
+        'parent': trash.parentPath,
+      },
+    ];
+    await File(journal.path).writeAsString(
+      '${records.map(jsonEncode).join('\n')}\n',
+      mode: FileMode.append,
+      flush: true,
+    );
+  }
+
+  Future<void> makeIncompleteRestoreJournalUnreadable(
+    SyncRunJournal journal,
+  ) async {
+    await appendIncompleteRestore(journal);
+    await File(journal.path).writeAsString(
+      '${jsonEncode(<String, Object?>{'v': _unsupportedJournalSchemaVersion, 'type': 'unsupported'})}\n',
+      mode: FileMode.append,
+      flush: true,
+    );
+  }
+
   Future<String> makeRunDir(String name) async {
     final dir = Directory(_nativeJoin(trashRoot, name));
     await dir.create(recursive: true);
@@ -1073,8 +1120,9 @@ void main() {
 
     test('performs exactly one listing; a missing root fails closed', () async {
       final counting = _CountingFs();
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(counting, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(counting, trashRoot, devicePrefix, now);
       expect(counting.listCalls, 1);
       expect(inventory.runs, isEmpty);
 
@@ -1097,8 +1145,9 @@ void main() {
 
     test('non-notFound listing errors propagate', () async {
       await expectLater(
-        SyncTrashPurgeService(runsDir.path)
-            .inspectNative(_FailingListFs(), trashRoot, devicePrefix, now),
+        SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(_FailingListFs(), trashRoot, devicePrefix, now),
         throwsA(
           isA<RemoteFileException>().having(
             (e) => e.kind,
@@ -1117,8 +1166,9 @@ void main() {
         await makeRunDir(runId);
         await writeJournal(runId, startedAt: startedAt);
 
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now);
 
         expect(inventory.runs, hasLength(1));
         final run = inventory.runs.single;
@@ -1216,8 +1266,9 @@ void main() {
           ),
         );
 
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now);
 
         expect(inventory.runs, hasLength(1));
         expect(inventory.runs.single.ownership, SyncTrashOwnership.localOrphan);
@@ -1249,8 +1300,9 @@ void main() {
         ),
       );
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       expect(inventory.runs.single.ownership, SyncTrashOwnership.journaled);
       expect(inventory.runs.single.fileCount, 1);
@@ -1271,8 +1323,9 @@ void main() {
         ..dirMtime[exported] = old
         ..dirMtime[foreign] = old;
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(agedFs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(agedFs, trashRoot, devicePrefix, now);
 
       final byId = {for (final run in inventory.runs) run.runId: run};
       expect(byId[orphan]!.ownership, SyncTrashOwnership.localOrphan);
@@ -1291,8 +1344,9 @@ void main() {
     test('missing mtime never reads as immediately old', () async {
       final orphan = _runId('12345678', 'no-mtime');
       await makeRunDir(orphan);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(_NoMtimeFs(), trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(_NoMtimeFs(), trashRoot, devicePrefix, now);
       final run = inventory.runs.singleWhere((r) => r.runId == orphan);
       expect(run.ownership, SyncTrashOwnership.foreign);
       final selection = inventory.select(
@@ -1305,8 +1359,9 @@ void main() {
 
     test('non-directory children are ignored, never inventoried', () async {
       await File(_nativeJoin(trashRoot, 'stray.txt')).writeAsString('stray');
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       expect(inventory.runs, isEmpty);
     });
 
@@ -1316,8 +1371,9 @@ void main() {
       final occupant = File(_nativeJoin(trashRoot, runId));
       await occupant.writeAsString('not a run directory');
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       expect(inventory.runs, isEmpty);
       expect(await occupant.readAsString(), 'not a run directory');
@@ -1331,12 +1387,14 @@ void main() {
       await unrelatedRoot.create();
       final unrelated = Directory(_nativeJoin(unrelatedRoot.path, 'etc'));
       await unrelated.create();
-      await File(_nativeJoin(unrelated.path, 'precious.txt'))
-          .writeAsString('precious');
+      await File(
+        _nativeJoin(unrelated.path, 'precious.txt'),
+      ).writeAsString('precious');
 
       await expectLater(
-        SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, unrelatedRoot.path, devicePrefix, now),
+        SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, unrelatedRoot.path, devicePrefix, now),
         throwsA(isA<RemoteFileException>()),
       );
 
@@ -1351,8 +1409,9 @@ void main() {
       () async {
         final unrelatedRoot = Directory(_nativeJoin(scratch.path, 'file-only'));
         await unrelatedRoot.create();
-        await File(_nativeJoin(unrelatedRoot.path, 'precious.txt'))
-            .writeAsString('precious');
+        await File(
+          _nativeJoin(unrelatedRoot.path, 'precious.txt'),
+        ).writeAsString('precious');
         RemoteFileEntry? before;
         if (!Platform.isWindows) {
           await fs.setMode(unrelatedRoot.path, 0x1ED); // 0755
@@ -1380,8 +1439,9 @@ void main() {
           expect(after.mode, before.mode);
         }
         expect(
-          File(_nativeJoin(unrelatedRoot.path, 'precious.txt'))
-              .readAsStringSync(),
+          File(
+            _nativeJoin(unrelatedRoot.path, 'precious.txt'),
+          ).readAsStringSync(),
           'precious',
         );
       },
@@ -1395,8 +1455,9 @@ void main() {
         final precious = File(_nativeJoin(unrelated.path, 'precious.txt'));
         await precious.writeAsString('precious');
 
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now);
 
         expect(inventory.runs, isEmpty);
         expect(
@@ -1417,8 +1478,9 @@ void main() {
       await identity.writeAsString('not-a-marker');
 
       await expectLater(
-        SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now),
+        SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now),
         throwsA(
           isA<RemoteFileException>().having(
             (error) => error.kind,
@@ -1439,8 +1501,9 @@ void main() {
       await identity.writeAsBytes([0xFF], flush: true);
 
       await expectLater(
-        SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now),
+        SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now),
         throwsA(
           isA<RemoteFileException>().having(
             (error) => error.kind,
@@ -1495,8 +1558,9 @@ void main() {
       final journal = await writeJournal(runId, trashScopeLeft: scope);
       expect(journal.hasUnpurgedTrash, isTrue);
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now, trashScope: scope);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now, trashScope: scope);
       expect(inventory.runs.where((r) => r.runId == runId), isEmpty);
 
       final reopened = await SyncRunJournal.open(journal.path);
@@ -1504,12 +1568,97 @@ void main() {
       expect(reopened.hasUnpurgedTrash, isFalse);
     });
 
+    test('absent runs with incomplete restore stay recoverable', () async {
+      final scope = await currentTrashScope();
+      final runId = _runId(devicePrefix, 'absent-incomplete-restore');
+      final journal = await writeJournal(runId, trashScopeLeft: scope);
+      await appendIncompleteRestore(journal);
+
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now, trashScope: scope);
+
+      expect(inventory.runs, isEmpty);
+      final reopened = await SyncRunJournal.open(journal.path);
+      expect(reopened.hasUnpurgedTrash, isTrue);
+      expect(reopened.hasPurgeMarker, isFalse);
+    });
+
+    test('absent unreadable restore journal is left untouched', () async {
+      final scope = await currentTrashScope();
+      final runId = _runId(devicePrefix, 'absent-unreadable-restore');
+      final journal = await writeJournal(runId, trashScopeLeft: scope);
+      await makeIncompleteRestoreJournalUnreadable(journal);
+      final before = await File(journal.path).readAsString();
+      final marked = <String>[];
+
+      final inventory = await SyncTrashPurgeService(runsDir.path).inspectNative(
+        fs,
+        trashRoot,
+        devicePrefix,
+        now,
+        trashScope: scope,
+        onPurgedRun: marked.add,
+      );
+
+      expect(inventory.runs, isEmpty);
+      expect(marked, isEmpty);
+      expect(await File(journal.path).readAsString(), before);
+    });
+
+    test('cancellation stops absent-journal marking between runs', () async {
+      final scope = await currentTrashScope();
+      final journals = [
+        await writeJournal(
+          _runId(devicePrefix, 'cancel-absent-first'),
+          trashScopeLeft: scope,
+        ),
+        await writeJournal(
+          _runId(devicePrefix, 'cancel-absent-second'),
+          trashScopeLeft: scope,
+        ),
+      ];
+      bool hasMarkedJournal() => journals.any(
+        (journal) => File(
+          journal.path,
+        ).readAsStringSync().contains('"trashScopePurged"'),
+      );
+
+      await expectLater(
+        SyncTrashPurgeService(runsDir.path).inspectNative(
+          fs,
+          trashRoot,
+          devicePrefix,
+          now,
+          trashScope: scope,
+          isCancelled: hasMarkedJournal,
+        ),
+        throwsA(
+          isA<RemoteFileException>().having(
+            (error) => error.kind,
+            'kind',
+            RemoteFileErrorKind.cancelled,
+          ),
+        ),
+      );
+
+      final replayed = [
+        for (final journal in journals) await SyncRunJournal.open(journal.path),
+      ];
+      expect(replayed.where((journal) => journal.purged), hasLength(1));
+      expect(
+        replayed.where((journal) => journal.hasUnpurgedTrash),
+        hasLength(1),
+      );
+    });
+
     test('absent legacy lexical coverage stays retained', () async {
       final runId = _runId(devicePrefix, 'legacy-other-host');
       final journal = await writeJournal(runId);
 
-      await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       var reopened = await SyncRunJournal.open(journal.path);
       expect(reopened.hasPurgeMarker, isFalse);
@@ -1619,11 +1768,13 @@ void main() {
         ),
       );
       final before = await File(journal.path).readAsString();
-      await Link(_nativeJoin(runsDir.path, _nativeBasename(journal.path)))
-          .create(journal.path);
+      await Link(
+        _nativeJoin(runsDir.path, _nativeBasename(journal.path)),
+      ).create(journal.path);
 
-      await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       expect(await File(journal.path).readAsString(), before);
       expect((await SyncRunJournal.open(journal.path)).hasPurgeMarker, isFalse);
@@ -1695,8 +1846,9 @@ void main() {
         trashRootOverride: trashRoot.toUpperCase(),
       );
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now, trashScope: scope);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now, trashScope: scope);
 
       expect(inventory.runs.single.ownership, SyncTrashOwnership.journaled);
       expect(inventory.runs.single.fileCount, 2);
@@ -1832,14 +1984,74 @@ void main() {
       final agedFs = _AgedDirFs()
         ..dirMtime[runId] = now.subtract(syncTrashRetention);
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(agedFs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(agedFs, trashRoot, devicePrefix, now);
 
       expect(
         inventory.select(SyncTrashPurgeScope.aged, now, const {}).runIds,
         isEmpty,
       );
     });
+
+    test('incomplete restore is not selectable for either purge', () async {
+      final runId = _runId(devicePrefix, 'incomplete-restore-selection');
+      await makeRunDir(runId);
+      final journal = await writeJournal(
+        runId,
+        startedAt: now.subtract(const Duration(days: 31)),
+        trashScopeLeft: await currentTrashScope(),
+      );
+      await appendIncompleteRestore(journal);
+
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
+
+      expect(
+        inventory.select(SyncTrashPurgeScope.aged, now, const {}).runIds,
+        isEmpty,
+      );
+      expect(
+        inventory.select(SyncTrashPurgeScope.all, now, const {}).runIds,
+        isEmpty,
+      );
+    });
+
+    test(
+      'unreadable restore journal protects its run but corruption does not',
+      () async {
+        final old = now.subtract(const Duration(days: 31));
+        final protectedRun = _runId(devicePrefix, 'unreadable-selection');
+        final corruptRun = _runId(devicePrefix, 'ordinary-corruption');
+        await makeRunDir(protectedRun);
+        await makeRunDir(corruptRun);
+        final protectedJournal = await writeJournal(
+          protectedRun,
+          trashScopeLeft: await currentTrashScope(),
+        );
+        await makeIncompleteRestoreJournalUnreadable(protectedJournal);
+        await File(
+          _nativeJoin(runsDir.path, '$corruptRun$_journalFileSuffix'),
+        ).writeAsString('ordinary corruption');
+        final agedFs = _AgedDirFs()
+          ..dirMtime[protectedRun] = old
+          ..dirMtime[corruptRun] = old;
+
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(agedFs, trashRoot, devicePrefix, now);
+
+        expect(
+          inventory.select(SyncTrashPurgeScope.aged, now, const {}).runIds,
+          [corruptRun],
+        );
+        expect(
+          inventory.select(SyncTrashPurgeScope.all, now, const {}).runIds,
+          [corruptRun],
+        );
+      },
+    );
 
     test(
       'aged takes old journaled/orphan/rsync, never foreign/active',
@@ -1863,8 +2075,9 @@ void main() {
           ..dirMtime[foreignId] = old
           ..dirMtime[activeId] = old;
 
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(agedFs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(agedFs, trashRoot, devicePrefix, now);
         final aged = inventory.select(SyncTrashPurgeScope.aged, now, {
           activeId,
         });
@@ -1902,8 +2115,9 @@ void main() {
           ..dirMtime[foreign] = old
           ..dirMtime[activeId] = old;
 
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(agedFs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(agedFs, trashRoot, devicePrefix, now);
         final all = inventory.select(SyncTrashPurgeScope.all, now, {activeId});
         expect(all.runIds, unorderedEquals([first, foreign, young]));
         expect(all.foreignRunCount, 1);
@@ -1921,8 +2135,9 @@ void main() {
         final foreign = _runId('ffffffff', 'cached-foreign');
         await makeRunDir(foreign);
 
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now);
         final cache = inventory.toCache();
 
         expect(
@@ -1949,8 +2164,9 @@ void main() {
         final quarantinedPath = '$runPath.purging-$devicePrefix-$suffix';
         await fs.rename(runPath, quarantinedPath);
 
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now);
 
         expect(inventory.runs.single.runId, runId);
         expect(Directory(runPath).existsSync(), isTrue);
@@ -2016,8 +2232,9 @@ void main() {
       final replacementQuarantine = Directory(
         _nativeJoin(replacementRoot, quarantineName),
       )..createSync();
-      File(_nativeJoin(replacementQuarantine.path, 'precious.txt'))
-          .writeAsStringSync('precious');
+      File(
+        _nativeJoin(replacementQuarantine.path, 'precious.txt'),
+      ).writeAsStringSync('precious');
 
       await expectLater(
         SyncTrashPurgeService(runsDir.path).inspectNative(
@@ -2070,8 +2287,9 @@ void main() {
       );
       final replacementOriginal = Directory(_nativeJoin(replacementRoot, runId))
         ..createSync();
-      File(_nativeJoin(replacementOriginal.path, 'precious.txt'))
-          .writeAsStringSync('precious');
+      File(
+        _nativeJoin(replacementOriginal.path, 'precious.txt'),
+      ).writeAsStringSync('precious');
 
       await expectLater(
         SyncTrashPurgeService(runsDir.path).inspectNative(
@@ -2173,16 +2391,19 @@ void main() {
     test('deletes only selected dirs, recursively, keeping the rest', () async {
       final doomed = _runId(devicePrefix, 'doomed');
       final doomedPath = await makeRunDir(doomed);
-      await Directory(_nativeJoin(doomedPath, 'nested/deep'))
-          .create(recursive: true);
-      await File(_nativeJoin(doomedPath, 'nested/deep/file.txt'))
-          .writeAsString('deep');
+      await Directory(
+        _nativeJoin(doomedPath, 'nested/deep'),
+      ).create(recursive: true);
+      await File(
+        _nativeJoin(doomedPath, 'nested/deep/file.txt'),
+      ).writeAsString('deep');
       final kept = _runId(devicePrefix, 'kept');
       await makeRunDir(kept);
       await File(_nativeJoin(trashRoot, 'stray.txt')).writeAsString('stray');
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final selection = inventory.select(
         SyncTrashPurgeScope.all,
         now,
@@ -2221,8 +2442,9 @@ void main() {
     test('a changed ownership marker invalidates a selection', () async {
       final runId = _runId(devicePrefix, 'changed-marker');
       final runPath = await makeRunDir(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final replacementRoot = _nativeJoin(scratch.path, 'replacement-marker');
       await resolveSyncTrashRoot(
         fs,
@@ -2249,8 +2471,9 @@ void main() {
       final runId = _runId(devicePrefix, 'root-swap-at-quarantine');
       final runPath = await makeRunDir(runId);
       final journal = await writeJournal(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final movedRoot = _nativeJoin(scratch.path, 'moved-trash');
       final replacementRoot = _nativeJoin(scratch.path, 'replacement-trash');
       await resolveSyncTrashRoot(
@@ -2261,8 +2484,9 @@ void main() {
       );
       final replacementRun = Directory(_nativeJoin(replacementRoot, runId));
       await replacementRun.create();
-      await File(_nativeJoin(replacementRun.path, 'precious.txt'))
-          .writeAsString('precious');
+      await File(
+        _nativeJoin(replacementRun.path, 'precious.txt'),
+      ).writeAsString('precious');
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         _ReplaceRootBeforeRunQuarantineFs(
@@ -2287,8 +2511,9 @@ void main() {
           .toList();
       expect(replacementQuarantines, hasLength(1));
       expect(
-        File(_nativeJoin(replacementQuarantines.single.path, 'precious.txt'))
-            .readAsStringSync(),
+        File(
+          _nativeJoin(replacementQuarantines.single.path, 'precious.txt'),
+        ).readAsStringSync(),
         'precious',
       );
       expect(Directory(runPath).existsSync(), isFalse);
@@ -2300,8 +2525,9 @@ void main() {
       final runId = _runId(devicePrefix, 'root-swap-before-rollback');
       final runPath = await makeRunDir(runId);
       final journal = await writeJournal(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final movedRoot = _nativeJoin(scratch.path, 'moved-rollback-trash');
       final replacementRoot = _nativeJoin(
         scratch.path,
@@ -2330,8 +2556,9 @@ void main() {
       expect(report.purgedRunIds, isEmpty);
       expect(report.failures.single.runId, runId);
       expect(
-        File(_nativeJoin(trashRoot, '$quarantineName/precious.txt'))
-            .readAsStringSync(),
+        File(
+          _nativeJoin(trashRoot, '$quarantineName/precious.txt'),
+        ).readAsStringSync(),
         'precious',
       );
       expect(Directory(_nativeJoin(trashRoot, runId)).existsSync(), isFalse);
@@ -2345,8 +2572,9 @@ void main() {
     test('skips active ids and never touches newly appeared dirs', () async {
       final activeId = _runId(devicePrefix, 'live');
       await makeRunDir(activeId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       // Appears after the inspection — purge must not learn about it
       // through its own re-listing.
       final newcomer = _runId(devicePrefix, 'newcomer');
@@ -2376,8 +2604,9 @@ void main() {
         trashScopeLeft: await currentTrashScope(),
       );
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         fs,
         inventory.select(SyncTrashPurgeScope.all, now, const {}),
@@ -2390,14 +2619,115 @@ void main() {
       expect((await SyncRunJournal.open(journal.path)).purged, isTrue);
     });
 
+    test('stale selection refuses newly incomplete restore only', () async {
+      final scope = await currentTrashScope();
+      final protectedRun = _runId(devicePrefix, 'stale-restore-protected');
+      final purgeableRun = _runId(devicePrefix, 'stale-restore-purgeable');
+      final protectedPath = await makeRunDir(protectedRun);
+      final purgeablePath = await makeRunDir(purgeableRun);
+      final protectedJournal = await writeJournal(
+        protectedRun,
+        trashScopeLeft: scope,
+      );
+      final purgeableJournal = await writeJournal(
+        purgeableRun,
+        trashScopeLeft: scope,
+      );
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now, trashScope: scope);
+      final selection = inventory.select(
+        SyncTrashPurgeScope.all,
+        now,
+        const {},
+      );
+      await appendIncompleteRestore(protectedJournal);
+
+      final report = await SyncTrashPurgeService(
+        runsDir.path,
+      ).purge(fs, selection, const {});
+
+      expect(report.purgedRunIds, [purgeableRun]);
+      expect(
+        report.failures,
+        contains(
+          isA<SyncTrashPurgeFailure>()
+              .having((failure) => failure.runId, 'runId', protectedRun)
+              .having(
+                (failure) => failure.message,
+                'message',
+                contains('restore recovery is pending'),
+              ),
+        ),
+      );
+      expect(Directory(protectedPath).existsSync(), isTrue);
+      expect(Directory(purgeablePath).existsSync(), isFalse);
+      expect(
+        (await SyncRunJournal.open(protectedJournal.path)).hasPurgeMarker,
+        isFalse,
+      );
+      expect((await SyncRunJournal.open(purgeableJournal.path)).purged, isTrue);
+    });
+
+    test('stale selection refuses unreadable restore journal only', () async {
+      final scope = await currentTrashScope();
+      final protectedRun = _runId(devicePrefix, 'stale-unreadable-protected');
+      final purgeableRun = _runId(devicePrefix, 'stale-unreadable-purgeable');
+      final protectedPath = await makeRunDir(protectedRun);
+      final purgeablePath = await makeRunDir(purgeableRun);
+      final protectedJournal = await writeJournal(
+        protectedRun,
+        trashScopeLeft: scope,
+      );
+      final purgeableJournal = await writeJournal(
+        purgeableRun,
+        trashScopeLeft: scope,
+      );
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now, trashScope: scope);
+      final selection = inventory.select(
+        SyncTrashPurgeScope.all,
+        now,
+        const {},
+      );
+      await makeIncompleteRestoreJournalUnreadable(protectedJournal);
+
+      final report = await SyncTrashPurgeService(
+        runsDir.path,
+      ).purge(fs, selection, const {});
+
+      expect(report.purgedRunIds, [purgeableRun]);
+      expect(
+        report.failures,
+        contains(
+          isA<SyncTrashPurgeFailure>()
+              .having((failure) => failure.runId, 'runId', protectedRun)
+              .having(
+                (failure) => failure.message,
+                'message',
+                contains('restore recovery is pending'),
+              ),
+        ),
+      );
+      expect(Directory(protectedPath).existsSync(), isTrue);
+      expect(Directory(purgeablePath).existsSync(), isFalse);
+      expect(
+        await File(protectedJournal.path).readAsString(),
+        isNot(contains('"trashScopePurged"')),
+      );
+      expect((await SyncRunJournal.open(purgeableJournal.path)).purged, isTrue);
+    });
+
     test(
       'legacy explicit purge removes files but retains its journal',
       () async {
         final runId = _runId(devicePrefix, 'legacy-explicit-purge');
         final runPath = await makeRunDir(runId);
         final journal = await writeJournal(runId);
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now);
 
         final report = await SyncTrashPurgeService(runsDir.path).purge(
           fs,
@@ -2416,8 +2746,9 @@ void main() {
     test('reports a selected run id replaced by a non-directory', () async {
       final runId = _runId(devicePrefix, 'replaced');
       final runPath = await makeRunDir(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       await Directory(runPath).delete(recursive: true);
       await File(runPath).writeAsString('replacement');
 
@@ -2439,8 +2770,9 @@ void main() {
         runId,
         trashScopeLeft: await currentTrashScope(),
       );
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final vanishing = _VanishAfterRootListFs(trashRoot, runPath);
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
@@ -2462,8 +2794,9 @@ void main() {
       await inside.writeAsString('old');
       final outside = File(_nativeJoin(scratch.path, 'outside.txt'));
       await outside.writeAsString('precious');
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         _PoisonedChildPathFs(runPath, outside.path),
@@ -2482,8 +2815,9 @@ void main() {
       final inside = File(_nativeJoin(runPath, '000001-a.txt'));
       final outside = File(_nativeJoin(scratch.path, 'outside.txt'));
       await outside.writeAsString('precious');
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         _PoisonedStatPathFs(inside.path, outside.path),
@@ -2509,8 +2843,9 @@ void main() {
         await writeJournal(goodRun);
 
         final failingFs = _FailingDeleteFs('poison.txt');
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(failingFs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(failingFs, trashRoot, devicePrefix, now);
         final report = await SyncTrashPurgeService(runsDir.path).purge(
           failingFs,
           inventory.select(SyncTrashPurgeScope.all, now, const {}),
@@ -2539,8 +2874,9 @@ void main() {
       await outside.writeAsString('precious');
       await Link(_nativeJoin(runPath, 'evil')).create(outside.path);
 
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         fs,
         inventory.select(SyncTrashPurgeScope.all, now, const {}),
@@ -2557,8 +2893,9 @@ void main() {
       final runId = _runId(devicePrefix, 'backslash');
       final runPath = await makeRunDir(runId);
       await File(_nativeJoin(runPath, r'a\b')).writeAsString('inside');
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         fs,
@@ -2577,10 +2914,12 @@ void main() {
       final nestedName = 'n' * 255;
       final nested = Directory(_nativeJoin(runPath, nestedName));
       await nested.create();
-      await File(_nativeJoin(nested.path, 'inside.txt'))
-          .writeAsString('inside');
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      await File(
+        _nativeJoin(nested.path, 'inside.txt'),
+      ).writeAsString('inside');
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         fs,
@@ -2596,8 +2935,9 @@ void main() {
     test('a swapped trash root cannot redirect a purge', () async {
       final runId = _runId(devicePrefix, 'root-race');
       await makeRunDir(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final movedRoot = _nativeJoin(scratch.path, 'moved-trash');
       final outsideRoot = Directory(_nativeJoin(scratch.path, 'outside-root'));
       final outsideRun = Directory(_nativeJoin(outsideRoot.path, runId));
@@ -2626,8 +2966,9 @@ void main() {
         final runId = _runId(devicePrefix, 'empty-root-race');
         final runPath = await makeRunDir(runId);
         final journal = await writeJournal(runId);
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now);
         final movedRoot = _nativeJoin(scratch.path, 'moved-empty-race');
 
         final report = await SyncTrashPurgeService(runsDir.path).purge(
@@ -2651,8 +2992,9 @@ void main() {
       final runId = _runId(devicePrefix, 'quarantine-race');
       final runPath = await makeRunDir(runId);
       final journal = await writeJournal(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final otherPrefix = syncRunDevicePrefix('other-device');
       final quarantine =
           '$runPath.purging-$otherPrefix-'
@@ -2683,8 +3025,9 @@ void main() {
           '$runPath.purging-$foreignPrefix-'
           '0123456789abcdef01234567';
       await fs.rename(runPath, quarantine);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         _RenameBeforeTrashListFs(
@@ -2713,8 +3056,9 @@ void main() {
             '$runPath.purging-$foreignPrefix-'
             '0123456789abcdef01234567';
         await fs.rename(runPath, quarantine);
-        final inventory = await SyncTrashPurgeService(runsDir.path)
-            .inspectNative(fs, trashRoot, devicePrefix, now);
+        final inventory = await SyncTrashPurgeService(
+          runsDir.path,
+        ).inspectNative(fs, trashRoot, devicePrefix, now);
 
         final report = await SyncTrashPurgeService(runsDir.path).purge(
           _RecoverBeforeReservationFs(
@@ -2739,8 +3083,9 @@ void main() {
         ..createSync();
       final precious = File(_nativeJoin(outside.path, 'precious.txt'))
         ..writeAsStringSync('precious');
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         _SwapRunForSymlinkFs(runPath, outside.path),
@@ -2759,14 +3104,16 @@ void main() {
       const nestedName = 'nested';
       final nested = Directory(_nativeJoin(runPath, nestedName));
       await nested.create();
-      await File(_nativeJoin(nested.path, 'inside.txt'))
-          .writeAsString('inside');
+      await File(
+        _nativeJoin(nested.path, 'inside.txt'),
+      ).writeAsString('inside');
       final outside = Directory(_nativeJoin(scratch.path, 'outside-nested'))
         ..createSync();
       final precious = File(_nativeJoin(outside.path, 'precious.txt'))
         ..writeAsStringSync('precious');
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
         _SwapNestedForSymlinkFs(nestedName, outside.path),
@@ -2782,8 +3129,9 @@ void main() {
     test('cancelled purge reports the public cancelled error', () async {
       final runId = _runId(devicePrefix, 'cancelled');
       await makeRunDir(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final cancellation = RemoteTransferCancellation()..cancel();
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
@@ -2799,8 +3147,9 @@ void main() {
     test('cancellation stops before journal coverage is read', () async {
       final runId = _runId(devicePrefix, 'cancel-before-coverage');
       await makeRunDir(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final invalidRunsPath = _nativeJoin(scratch.path, 'runs-file');
       await File(invalidRunsPath).writeAsString('not a directory');
       final cancellation = RemoteTransferCancellation();
@@ -2820,8 +3169,9 @@ void main() {
     test('cancellation reports a failed quarantine rollback', () async {
       final runId = _runId(devicePrefix, 'cancelled-rollback');
       final runPath = await makeRunDir(runId);
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final cancellation = RemoteTransferCancellation();
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
@@ -2847,8 +3197,9 @@ void main() {
         secondRun,
         trashScopeLeft: scope,
       );
-      final inventory = await SyncTrashPurgeService(runsDir.path)
-          .inspectNative(fs, trashRoot, devicePrefix, now);
+      final inventory = await SyncTrashPurgeService(
+        runsDir.path,
+      ).inspectNative(fs, trashRoot, devicePrefix, now);
       final cancellation = RemoteTransferCancellation();
 
       final report = await SyncTrashPurgeService(runsDir.path).purge(
