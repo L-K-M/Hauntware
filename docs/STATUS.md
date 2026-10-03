@@ -21,6 +21,11 @@ Local Linux validation against the Git pin: analysis clean and 522 focused
 pane, compact, sidebar, theme and primitive tests passed. A metadata-sort
 header regression failed first on a misleading Name chevron, then passed.
 
+The corrected shared revision also passes all 3,216 app tests after
+integrating current main. The error-overlay regression now checks semantic
+node attachment rather than assuming one text-exclusion ancestor; it still
+proves that cached rows leave accessibility navigation and return on cancel.
+
 ## Cross-app deep links (2026-10-02)
 
 Poltergeist now accepts the two strict `poltergeist://browse` forms from

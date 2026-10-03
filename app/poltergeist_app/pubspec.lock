@@ -355,8 +355,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/ghost_ui"
-      ref: cb42c9aa05914a33b227c209ecca1645ecab6c81
-      resolved-ref: cb42c9aa05914a33b227c209ecca1645ecab6c81
+      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"
@@ -681,8 +681,8 @@ packages:
     dependency: transitive
     description:
       path: "packages/planchette_core"
-      ref: cb42c9aa05914a33b227c209ecca1645ecab6c81
-      resolved-ref: cb42c9aa05914a33b227c209ecca1645ecab6c81
+      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"
@@ -690,8 +690,8 @@ packages:
     dependency: "direct main"
     description:
       path: "packages/planchette_editor"
-      ref: cb42c9aa05914a33b227c209ecca1645ecab6c81
-      resolved-ref: cb42c9aa05914a33b227c209ecca1645ecab6c81
+      ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
+      resolved-ref: c57882a210780ef0abca53e201fe3d5ac5a76c8f
       url: "https://github.com/L-K-M/Planchette.git"
     source: git
     version: "0.1.0"

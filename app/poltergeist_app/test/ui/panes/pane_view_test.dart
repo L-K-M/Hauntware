@@ -1022,6 +1022,10 @@ void main() {
       await pumpShell(tester);
       leftNode.requestFocus();
       await tester.pump();
+      final rowSemantics = tester.getSemantics(
+        find.bySemanticsLabel(RegExp(r'^report\.txt, file,')),
+      );
+      final rowLabel = rowSemantics.getSemanticsData().label;
 
       // A failing navigation shows the error overlay over the cached
       // listing.
@@ -1043,14 +1047,13 @@ void main() {
       // One extra frame: the semantics pipeline attaches to the next
       // build after the excluding flip, not the one that flipped it.
       await tester.pump();
-      final excluderOfRow = tester.widget<ExcludeSemantics>(
-        find.ancestor(
-          of: find.text('report.txt'),
-          matching: find.byType(ExcludeSemantics),
-        ),
+      // Label finders also see cached detached nodes. Check attachment to
+      // the published tree, not the shared row's text-leaf exclusions.
+      expect(
+        rowSemantics.attached,
+        isFalse,
+        reason: 'the error overlay must exclude row semantics',
       );
-      expect(excluderOfRow.excluding, isTrue,
-          reason: 'the error overlay must exclude row semantics');
 
       // Esc still reaches the overlay: it cancels back to the listing
       // the rows belong to.
@@ -1059,14 +1062,11 @@ void main() {
       expect(left.error, isNull, reason: 'Esc cancelled the failed navigation');
       expect(left.location, const LocalPaneLocation('/home/tester'));
       await tester.pump();
-      final restoredExcluder = tester.widget<ExcludeSemantics>(
-        find.ancestor(
-          of: find.text('report.txt'),
-          matching: find.byType(ExcludeSemantics),
-        ),
+      expect(
+        tester.getSemantics(find.bySemanticsLabel(rowLabel)).attached,
+        isTrue,
+        reason: 'the restored rows rejoin the semantics tree',
       );
-      expect(restoredExcluder.excluding, isFalse,
-          reason: 'the restored rows rejoin the semantics tree');
     } finally {
       semantics.dispose();
       debugDefaultTargetPlatformOverride = null;
