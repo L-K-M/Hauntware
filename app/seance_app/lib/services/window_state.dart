@@ -100,6 +100,9 @@ final class WindowStateService {
   static Future<void> restoreAndTrack() async {
     if (!_isDesktop || _instance != null) return;
     try {
+      // First: the catch's macOS fallback shows the window through this
+      // plugin, so it must be usable even when the earliest awaits fail.
+      await windowManager.ensureInitialized();
       final dir = await getApplicationSupportDirectory();
       final store = WindowStateStore(File('${dir.path}/window_state.json'));
       final lifecycle = GhostWindowLifecycle(
