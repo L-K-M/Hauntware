@@ -34,10 +34,14 @@ import '../../services/sync_browsing_controller.dart';
 import '../../services/view_preferences.dart' show PaneViewMode;
 import '../../services/workspace_controller.dart';
 import '../../theme/app_theme.dart';
-import '../compact/compact_pane_messages.dart' show expandFailedText;
+import '../compact/compact_pane_messages.dart'
+    show
+        compactErrorDetail,
+        compactErrorTitle,
+        compactNoticeText,
+        compactRenameErrorText;
 import '../local_edits_review.dart';
 import '../server_appearance.dart';
-import 'drag_out_notice.dart';
 import 'pane_column_header.dart';
 import 'pane_context_menu.dart';
 import 'pane_drop_area.dart';
@@ -2356,7 +2360,9 @@ class _RenameEditorState extends State<_RenameEditor> {
     // As tall as the row allows (22 px on desktop) and centered in it;
     // a touch row's 48 dp leaves the box at text height plus a margin.
     final boxHeight = math.min(widget.rowExtent, lineHeight + 6);
-    final errorText = error == null ? null : _errorText(l10n, error);
+    final errorText = error == null
+        ? null
+        : compactRenameErrorText(l10n, error);
 
     return Focus(
       // Esc cancels from inside the field — the field tier of §8.2's
@@ -2463,18 +2469,6 @@ class _RenameEditorState extends State<_RenameEditor> {
       ),
     );
   }
-
-  String _errorText(AppLocalizations l10n, RemoteFileException error) =>
-      switch (error) {
-        PaneFaultException(:final fault) => switch (fault) {
-          PaneFault.renameNameEmpty => l10n.paneFaultRenameNameEmpty,
-          PaneFault.renameNameSeparator => l10n.paneFaultRenameNameSeparator,
-          PaneFault.renameNameInvalid => l10n.paneFaultRenameNameInvalid,
-          PaneFault.renameTargetGone => l10n.paneFaultRenameTargetGone,
-          _ => error.message,
-        },
-        _ => error.message,
-      };
 }
 
 /// 02 §2.5's transient typing badge: shows the accumulated prefix while
@@ -3039,25 +3033,7 @@ class _ErrorOverlay extends StatelessWidget {
                         // line. A failed file Open is a FILE problem —
                         // the kind taxonomy's folder sentence would
                         // misname the failed verb.
-                        switch (error) {
-                          OpenEntryError() => l10n.paneFaultOpenFile,
-                          _ => switch (error.kind) {
-                            RemoteFileErrorKind.notFound =>
-                              l10n.paneErrorNotFound,
-                            RemoteFileErrorKind.permissionDenied =>
-                              l10n.paneErrorPermissionDenied,
-                            RemoteFileErrorKind.unsupported =>
-                              l10n.paneErrorUnsupported,
-                            RemoteFileErrorKind.disconnected =>
-                              l10n.paneErrorDisconnected,
-                            RemoteFileErrorKind.conflict =>
-                              l10n.paneErrorConflict,
-                            RemoteFileErrorKind.cancelled =>
-                              l10n.paneErrorCancelled,
-                            RemoteFileErrorKind.other =>
-                              l10n.paneErrorOther,
-                          },
-                        },
+                        compactErrorTitle(l10n, error),
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
@@ -3067,28 +3043,10 @@ class _ErrorOverlay extends StatelessWidget {
                 Text(
                   // Non-VFS faults carry no engine-authored diagnostic —
                   // the view maps the typed fault to an ARB sentence (D20);
-                  // every other error keeps the engine's message line.
-                  switch (error) {
-                    // The title already carries the openFile sentence —
-                    // an authored fault has no diagnostic to repeat.
-                    PaneFaultException(fault: PaneFault.openFile) => '',
-                    PaneFaultException(:final fault) => switch (fault) {
-                      PaneFault.connectionOpen => l10n.paneFaultConnectionOpen,
-                      PaneFault.localOpen => l10n.paneFaultLocalOpen,
-                      PaneFault.listFolder => l10n.paneFaultListFolder,
-                      PaneFault.invalidPath => l10n.paneFaultInvalidPath,
-                      PaneFault.renameNameEmpty =>
-                        l10n.paneFaultRenameNameEmpty,
-                      PaneFault.renameNameSeparator =>
-                        l10n.paneFaultRenameNameSeparator,
-                      PaneFault.renameNameInvalid =>
-                        l10n.paneFaultRenameNameInvalid,
-                      PaneFault.renameTargetGone =>
-                        l10n.paneFaultRenameTargetGone,
-                      PaneFault.openFile => l10n.paneFaultOpenFile,
-                    },
-                    _ => error.message,
-                  },
+                  // every other error keeps the engine's message line. The
+                  // title already carries the openFile sentence, so that
+                  // fault's line is empty (but still laid out).
+                  compactErrorDetail(l10n, error),
                   maxLines: 4,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -3488,24 +3446,13 @@ class _NoticeStrip extends StatelessWidget {
                   // ARB-authored sentence — the controller never
                   // authors user copy.
                   switch (controller.notice) {
-                    PaneNotice.openRemoteUnavailable =>
-                      l10n.paneNoticeOpenRemoteUnavailable,
-                    PaneNotice.editLater => l10n.paneNoticeEditLater,
-                    PaneNotice.transferLater => l10n.paneNoticeTransferLater,
-                    PaneNotice.saveFavoriteLater =>
-                      l10n.paneNoticeSaveFavoriteLater,
-                    PaneNotice.pathCopied => l10n.paneNoticePathCopied,
-                    PaneNotice.dragOutRemote => l10n.paneNoticeDragOutRemote,
-                    PaneNotice.dragOutLeftOut => dragOutLeftOutText(
-                      l10n,
-                      controller.dragOutLeftOut,
-                    ),
-                    PaneNotice.watchStopped => l10n.paneNoticeWatchStopped,
-                    PaneNotice.expandFailed => expandFailedText(
-                      l10n,
-                      controller.expansionFailure,
-                    ),
                     null => '',
+                    final notice => compactNoticeText(
+                      l10n,
+                      notice,
+                      dragOutLeftOut: controller.dragOutLeftOut,
+                      expansionFailure: controller.expansionFailure,
+                    ),
                   },
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
