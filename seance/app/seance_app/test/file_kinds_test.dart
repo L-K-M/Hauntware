@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart'
+    show GhostFileKind, GhostFileNodeType, ghostFileKind;
 import 'package:seance_app/family_hues.dart';
 import 'package:seance_app/ui/file_kinds.dart';
 import 'package:seance_core/seance_core.dart';
@@ -11,6 +13,74 @@ void main() {
     String name, [
     RemoteFileType type = RemoteFileType.file,
   ]) => RemoteFileEntry(path: '/x/$name', name: name, type: type);
+
+  group('ghostFileItemOf', () {
+    test('keeps each file type under the same name', () {
+      for (final type in RemoteFileType.values) {
+        expect(
+          ghostFileItemOf(entry('a', type)).type.name,
+          type.name,
+          reason: '$type',
+        );
+      }
+      expect(
+        ghostFileItemOf(entry('a', RemoteFileType.file)).type,
+        GhostFileNodeType.file,
+      );
+      expect(
+        ghostFileItemOf(entry('a', RemoteFileType.directory)).type,
+        GhostFileNodeType.directory,
+      );
+      expect(
+        ghostFileItemOf(entry('a', RemoteFileType.symbolicLink)).type,
+        GhostFileNodeType.symbolicLink,
+      );
+      expect(
+        ghostFileItemOf(entry('a', RemoteFileType.other)).type,
+        GhostFileNodeType.other,
+      );
+    });
+
+    test('passes the name through verbatim', () {
+      for (final name in ['notes.md', '.bashrc', 'Grüße – 日本.txt']) {
+        expect(ghostFileItemOf(entry(name)).name, name);
+      }
+    });
+
+    test('passes size and modification time through', () {
+      final modifiedAt = DateTime.utc(2026, 1, 2, 3, 4);
+      final item = ghostFileItemOf(
+        RemoteFileEntry(
+          path: '/x/a.bin',
+          name: 'a.bin',
+          type: RemoteFileType.file,
+          size: 2048,
+          modifiedAt: modifiedAt,
+        ),
+      );
+      expect(item.size, 2048);
+      expect(item.modifiedAt, modifiedAt);
+
+      final bare = ghostFileItemOf(entry('a.bin'));
+      expect(bare.size, isNull);
+      expect(bare.modifiedAt, isNull);
+    });
+
+    test('feeds the shared classifier, file type first', () {
+      expect(
+        ghostFileKind(
+          ghostFileItemOf(entry('photos.png', RemoteFileType.directory)),
+        ),
+        GhostFileKind.folder,
+      );
+      expect(
+        ghostFileKind(
+          ghostFileItemOf(entry('latest.zip', RemoteFileType.symbolicLink)),
+        ),
+        GhostFileKind.link,
+      );
+    });
+  });
 
   test('the file type wins over any extension', () {
     expect(fileKind(entry('photos.png', RemoteFileType.directory)),
