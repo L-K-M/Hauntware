@@ -5,6 +5,7 @@
 // tables.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show SidebarThemeTokens;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/theme/app_appearance.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
@@ -397,6 +398,52 @@ void main() {
       // Code keeps its monospace stack, which names its own family.
       expect(poltergeistMonoTextStyle.fontFamily, 'JetBrains Mono');
     });
+  });
+
+  // The shared sidebar kit reads PoltergeistChrome only through these
+  // tokens. Read the extension itself: SidebarThemeTokens.of falls back to
+  // values equal to the default chrome, so it would hide a missing extension.
+  test('the sidebar kit tokens mirror PoltergeistChrome', () {
+    final scaled = ThemePresets.poltergeist.copyWith(cornerScale: 0.5);
+    for (final palette in [...ThemePresets.all, scaled]) {
+      for (final brightness in Brightness.values) {
+        for (final platform in _platforms) {
+          final theme = buildPoltergeistThemeFor(
+            palette,
+            brightness,
+            platform: platform,
+          );
+          final where = '${palette.name} $brightness $platform';
+          final chrome = theme.extension<PoltergeistChrome>()!;
+          final tokens = theme.extension<SidebarThemeTokens>();
+          expect(tokens, isNotNull, reason: where);
+          expect(
+            tokens!.sidebarBackground,
+            chrome.sidebarBackground,
+            reason: where,
+          );
+          expect(tokens.separator, chrome.separator, reason: where);
+          expect(tokens.hoverFill, chrome.hoverFill, reason: where);
+          expect(tokens.capsuleFill, chrome.capsuleFill, reason: where);
+          expect(
+            tokens.inactiveSelectionFill,
+            chrome.inactiveSelectionFill,
+            reason: where,
+          );
+          expect(tokens.secondaryText, chrome.secondaryText, reason: where);
+          expect(
+            tokens.sidebarRowExtent,
+            chrome.sidebarRowExtent,
+            reason: where,
+          );
+          expect(tokens.cornerScale, chrome.cornerScale, reason: where);
+          // Not the constructor's default of 1 by coincidence.
+          if (identical(palette, scaled)) {
+            expect(tokens.cornerScale, 0.5, reason: where);
+          }
+        }
+      }
+    }
   });
 
   testWidgets('the status dots paint the palette\'s colours', (tester) async {
