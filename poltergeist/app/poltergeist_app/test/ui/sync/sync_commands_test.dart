@@ -27,6 +27,7 @@ void main() {
     var synchronizeCalls = 0;
     var newSavedCalls = 0;
     var copyRsyncCalls = 0;
+    var purgeTrashCalls = 0;
     var compareCalls = 0;
     var enabled = true;
     final commands = buildSyncCommands(
@@ -34,10 +35,12 @@ void main() {
       synchronizeEnabled: () => enabled,
       savedSyncEnabled: () => enabled,
       copyRsyncEnabled: () => enabled,
+      purgeTrashEnabled: () => enabled,
       compareEnabled: () => enabled,
       synchronizePanes: (_) => synchronizeCalls++,
       newSavedSync: (_) => newSavedCalls++,
       copyRsync: (_) => copyRsyncCalls++,
+      purgeTrash: (_) => purgeTrashCalls++,
       compareSelected: (_) => compareCalls++,
     );
 
@@ -49,6 +52,9 @@ void main() {
     );
     final copyRsync = commands.firstWhere(
       (c) => c.id == kSyncCopyRsyncCommandId,
+    );
+    final purgeTrash = commands.firstWhere(
+      (c) => c.id == kSyncPurgeTrashCommandId,
     );
     final compare = commands.firstWhere(
       (c) => c.id == kSyncCompareSelectedCommandId,
@@ -79,6 +85,7 @@ void main() {
     // menu/palette (and, for the latter, the plan view's action bar).
     expect(newSaved.activators, isNull);
     expect(copyRsync.activators, isNull);
+    expect(purgeTrash.activators, isNull);
     expect(compare.activators, isNull);
 
     // 02 §9's Commands table: Synchronize sits between the transfer
@@ -89,6 +96,8 @@ void main() {
     expect(newSaved.menuPlacement?.order, 35);
     expect(copyRsync.menuPlacement?.menu, AppMenuId.server);
     expect(copyRsync.menuPlacement?.order, 37);
+    expect(purgeTrash.menuPlacement?.menu, AppMenuId.server);
+    expect(purgeTrash.menuPlacement?.order, 38);
     expect(compare.scope, CommandScope.selection);
     expect(compare.menuPlacement?.menu, AppMenuId.server);
     expect(compare.menuPlacement?.order, 39);
@@ -99,6 +108,7 @@ void main() {
     expect(synchronize.enabled(), isFalse);
     expect(newSaved.enabled(), isFalse);
     expect(copyRsync.enabled(), isFalse);
+    expect(purgeTrash.enabled(), isFalse);
     expect(compare.enabled(), isFalse);
     enabled = true;
 
@@ -110,10 +120,12 @@ void main() {
     await synchronize.run(context);
     await newSaved.run(context);
     await copyRsync.run(context);
+    await purgeTrash.run(context);
     await compare.run(context);
     expect(synchronizeCalls, 1);
     expect(newSavedCalls, 1);
     expect(copyRsyncCalls, 1);
+    expect(purgeTrashCalls, 1);
     expect(compareCalls, 1);
   });
 }

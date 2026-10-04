@@ -49,6 +49,30 @@ final class _WindowsPathFs implements RemoteFileSystem {
   );
 }
 
+final class _CreateTrashAfterCanonicalMissFs extends LocalFileSystem {
+  _CreateTrashAfterCanonicalMissFs(this.trashPath);
+
+  final String trashPath;
+  var _created = false;
+
+  @override
+  Future<String> canonicalize(String path) async {
+    if (!_created && path == trashPath) {
+      _created = true;
+      final directory = Directory(trashPath)..createSync(recursive: true);
+      File('${directory.path}/appeared.txt').writeAsStringSync('trash');
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.notFound,
+        operation: 'canonicalize',
+        path: path,
+        message: 'missing before first run',
+      );
+    }
+
+    return super.canonicalize(path);
+  }
+}
+
 /// Robust root detection — the `USER` env var is unset in many root
 /// containers, where chmod-based permission tests silently misbehave.
 bool runningAsRoot() {
@@ -327,6 +351,52 @@ void main() {
 
       expect(result.entries.keys, ['normal.txt']);
     });
+
+    test('a missing in-root trash path stays excluded if it appears', () async {
+      touch('normal.txt', 'n');
+      final trashPath = '${root.path}/custom/trash';
+      final racingFs = _CreateTrashAfterCanonicalMissFs(trashPath);
+
+      final result = await TreeScanner(racingFs).scan(
+        root.path,
+        side: SyncSide.left,
+        trashPath: trashPath,
+      );
+
+      expect(result.entries.keys, containsAll(['custom', 'normal.txt']));
+      expect(
+        result.entries.keys.where(
+          (path) => path == 'custom/trash' || path.startsWith('custom/trash/'),
+        ),
+        isEmpty,
+      );
+    });
+
+    test(
+      'a missing trash path resolves through an aliased ancestor',
+      () async {
+        final realRoot = Directory('${root.path}/real')..createSync();
+        final alias = Link('${root.path}/alias')..createSync(realRoot.path);
+        File('${realRoot.path}/normal.txt').writeAsStringSync('normal');
+        final trashPath = '${alias.path}/custom/trash';
+        final racingFs = _CreateTrashAfterCanonicalMissFs(trashPath);
+
+        final result = await TreeScanner(racingFs).scan(
+          realRoot.path,
+          side: SyncSide.left,
+          trashPath: trashPath,
+        );
+
+        expect(result.entries.keys, containsAll(['custom', 'normal.txt']));
+        expect(
+          result.entries.keys.where(
+            (path) => path == 'custom/trash' || path.startsWith('custom/trash/'),
+          ),
+          isEmpty,
+        );
+      },
+      skip: Platform.isWindows,
+    );
 
     test(
       'a case-mismatched Windows trash path is still excluded',

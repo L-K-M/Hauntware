@@ -5333,6 +5333,176 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncRestoreTrashed => 'Restore Trashed Files…';
 
   @override
+  String get syncPurgeTrash => 'Purge Sync Trash…';
+
+  @override
+  String syncTrashNotice(int files, int runs) {
+    String _temp0 = intl.Intl.pluralLogic(
+      files,
+      locale: localeName,
+      other: '$files trashed files',
+      one: '$files trashed file',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      runs,
+      locale: localeName,
+      other: '$runs runs',
+      one: '$runs run',
+    );
+    return '$_temp0 from $_temp1 older than 30 days — delete them?';
+  }
+
+  @override
+  String syncTrashUnjournaled(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Plus $count unjournaled runs.',
+      one: 'Plus 1 unjournaled run.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncTrashAsOf(String time) {
+    return 'As of $time; reconnect to delete.';
+  }
+
+  @override
+  String get syncTrashAsOfRecent =>
+      'As of less than an hour ago; reconnect to delete.';
+
+  @override
+  String syncTrashAsOfHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'As of $count hours ago; reconnect to delete.',
+      one: 'As of 1 hour ago; reconnect to delete.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String syncTrashAsOfDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'As of $count days ago; reconnect to delete.',
+      one: 'As of 1 day ago; reconnect to delete.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncTrashDelete => 'Delete…';
+
+  @override
+  String get syncTrashPurgeTitle => 'Purge sync trash?';
+
+  @override
+  String syncTrashPurgeSummary(int files, int runs) {
+    String _temp0 = intl.Intl.pluralLogic(
+      files,
+      locale: localeName,
+      other: '$files journaled files',
+      one: '$files journaled file',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      runs,
+      locale: localeName,
+      other: '$runs runs',
+      one: '$runs run',
+    );
+    return '$_temp0 from $_temp1 will be permanently deleted.';
+  }
+
+  @override
+  String get syncTrashPurgeScope => 'Sync trash is shared by host and root.';
+
+  @override
+  String get syncTrashPurgeOtherPairs =>
+      'This includes trash from other sync pairs that use the same host and root.';
+
+  @override
+  String syncTrashPurgeForeign(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This includes $count runs created by other machines.',
+      one: 'This includes 1 run created by another machine.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get syncTrashPurgeForfeit => 'These files can no longer be restored.';
+
+  @override
+  String get syncTrashPurgeConfirm => 'Purge';
+
+  @override
+  String get syncTrashPurging => 'Purging sync trash…';
+
+  @override
+  String syncTrashPurgeResult(int purged, int failed) {
+    String _temp0 = intl.Intl.pluralLogic(
+      purged,
+      locale: localeName,
+      other: 'Purged $purged runs',
+      one: 'Purged 1 run',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      failed,
+      locale: localeName,
+      other: ' — $failed failed',
+      one: ' — 1 failed',
+      zero: '',
+    );
+    return '$_temp0$_temp1';
+  }
+
+  @override
+  String syncTrashPurgeCancelled(int purged) {
+    String _temp0 = intl.Intl.pluralLogic(
+      purged,
+      locale: localeName,
+      other: '$purged runs',
+      one: '1 run',
+    );
+    return 'Purge cancelled after $_temp0.';
+  }
+
+  @override
+  String get syncTrashPurgeActive =>
+      'Wait for active syncs to finish, then try again.';
+
+  @override
+  String syncTrashPurgeFailed(String message) {
+    return 'Couldn’t purge sync trash: $message';
+  }
+
+  @override
+  String get syncTrashEndpointChanged =>
+      'The sync endpoint changed while sync trash was being resolved.';
+
+  @override
+  String get syncTrashHostKeyUnavailable =>
+      'The sync endpoint has no accepted host key.';
+
+  @override
+  String get syncTrashJumpRouteInvalid =>
+      'The sync endpoint jump route is invalid.';
+
+  @override
+  String get syncTrashJumpHostUnavailable =>
+      'The sync endpoint jump host is unavailable.';
+
+  @override
+  String get syncTrashAuthenticationUnavailable =>
+      'The sync endpoint has no authenticated lease.';
+
+  @override
   String get syncCopyReport => 'Copy Report';
 
   @override
@@ -5353,17 +5523,62 @@ class AppLocalizationsEn extends AppLocalizations {
   String get syncHeavySuggestionAccept => 'Exclude';
 
   @override
+  String get syncRestoreRecoveryTitle => 'Interrupted restore';
+
+  @override
+  String get syncRestoreRecoveryBody =>
+      'A previous restore stopped before it finished. Sync is paused until you finish it.';
+
+  @override
+  String syncRestoreRecoveryBlocked(String path) {
+    return 'Sync is paused because its interrupted restore cannot be verified. Keep both folders unchanged. Restore the journal from backup or contact support: $path';
+  }
+
+  @override
+  String get syncRestoreRecoveryAction => 'Finish Restore…';
+
+  @override
+  String get syncRestoreRecoveryDialogTitle => 'Finish Interrupted Restore';
+
+  @override
+  String syncRestoreRecoverySummary(int restored, int removedCreatedFiles) {
+    String _temp0 = intl.Intl.pluralLogic(
+      restored,
+      locale: localeName,
+      other: 'Restores $restored original items.',
+      one: 'Restores $restored original item.',
+      zero: 'Restores no original items.',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      removedCreatedFiles,
+      locale: localeName,
+      other: 'Removes $removedCreatedFiles files created by this run.',
+      one: 'Removes $removedCreatedFiles file created by this run.',
+      zero: 'Removes no files created by this run.',
+    );
+    return 'Finish the interrupted restore. $_temp0 $_temp1';
+  }
+
+  @override
   String get syncRestoreDialogTitle => 'Restore Trashed Files';
 
   @override
-  String syncRestoreSummary(int count) {
+  String syncRestoreSummary(int restored, int removedCreatedFiles) {
     String _temp0 = intl.Intl.pluralLogic(
-      count,
+      restored,
       locale: localeName,
-      other: '$count files will be restored from trash.',
-      one: '$count file will be restored from trash.',
+      other: 'Restores $restored original items.',
+      one: 'Restores $restored original item.',
+      zero: 'Restores no original items.',
     );
-    return '$_temp0';
+    String _temp1 = intl.Intl.pluralLogic(
+      removedCreatedFiles,
+      locale: localeName,
+      other: 'Removes $removedCreatedFiles files created by this run.',
+      one: 'Removes $removedCreatedFiles file created by this run.',
+      zero: 'Removes no files created by this run.',
+    );
+    return '$_temp0 $_temp1';
   }
 
   @override
@@ -5374,17 +5589,22 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       restored,
       locale: localeName,
-      other: 'Restored $restored files',
-      one: 'Restored $restored file',
+      other: 'Restored $restored items',
+      one: 'Restored $restored item',
     );
     String _temp1 = intl.Intl.pluralLogic(
       skipped,
       locale: localeName,
-      other: ' — $skipped skipped',
-      one: ' — $skipped skipped',
+      other: '. $skipped skipped',
+      one: '. $skipped skipped',
       zero: '',
     );
     return '$_temp0$_temp1';
+  }
+
+  @override
+  String syncRestoreFailed(String message) {
+    return 'Restore stopped. Check the connection and file state, then retry. Error: $message';
   }
 
   @override
@@ -5647,6 +5867,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commandDisabledNoPlan => 'Requires an open sync plan';
+
+  @override
+  String get commandDisabledNoSyncTrash =>
+      'Requires live sync trash with no active run';
 
   @override
   String get commandDisabledNoComparableItem =>

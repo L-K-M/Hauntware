@@ -56,7 +56,8 @@ void main() {
     coordinator = BookmarkCoordinator(
       records: records,
       bookmarks: FileBookmarkStore(path: '${directory.path}/bookmarks.json'),
-      hostKeys: InMemoryHostKeyStore(),
+      hostKeys: InMemoryConflictAwareHostKeyStore(),
+      hostKeyMutations: HostKeyMutationGate(),
       crypto: crypto,
       deviceId: 'device-a',
       pinVerdicts: InMemoryPinVerdictStore(),
@@ -142,7 +143,8 @@ void main() {
       final restarted = BookmarkCoordinator(
         records: records,
         bookmarks: FileBookmarkStore(path: '${directory.path}/bookmarks.json'),
-        hostKeys: InMemoryHostKeyStore(),
+        hostKeys: InMemoryConflictAwareHostKeyStore(),
+        hostKeyMutations: HostKeyMutationGate(),
         crypto: crypto,
         deviceId: 'device-a',
         pinVerdicts: InMemoryPinVerdictStore(),

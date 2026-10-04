@@ -888,7 +888,25 @@ void main() {
     await h.pumping();
     h.reply(h.takePrompt(), const HostKeyPromptReply(accepted: true));
 
-    expect(await leased, isA<TransferLeaseGranted>());
+    expect(
+      await leased,
+      isA<TransferLeaseGranted>()
+          .having(
+            (grant) => grant.endpointIdentity.host,
+            'endpointIdentity.host',
+            'new.example.com',
+          )
+          .having(
+            (grant) => grant.endpointIdentity.username,
+            'endpointIdentity.username',
+            'user',
+          )
+          .having(
+            (grant) => grant.endpointIdentity.fingerprintSha256,
+            'endpointIdentity.fingerprintSha256',
+            'SHA256:presented',
+          ),
+    );
     expect(
       [for (final call in h.opener.calls) call.config.host],
       ['example.com', 'new.example.com'],

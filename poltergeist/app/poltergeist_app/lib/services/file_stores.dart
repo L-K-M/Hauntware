@@ -133,8 +133,11 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
     // Same secrets as the journal beside it, kept for longer: an unrelated
     // local account should not be able to take a copy of the sealed blobs for
     // an offline attempt, or alter them.
-    await writeStringAtomically(file, jsonEncode(_blobs),
-        privacy: AtomicFilePrivacy.ownerOnly);
+    await writeStringAtomically(
+      file,
+      jsonEncode(_blobs),
+      privacy: AtomicFilePrivacy.ownerOnly,
+    );
   }
 
   /// The staged generations, or null when no re-key is pending.
@@ -205,33 +208,33 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   /// successful write would then commit on its behalf. Restoring the snapshot
   /// keeps the two in step.
   Future<void> _mutate(void Function() change) => _serialize(() async {
-        _requireNoRekey();
-        final previous = Map<String, String>.from(_blobs);
-        try {
-          change();
-          await _flush();
-        } catch (_) {
-          _blobs
-            ..clear()
-            ..addAll(previous);
-          rethrow;
-        }
-      });
+    _requireNoRekey();
+    final previous = Map<String, String>.from(_blobs);
+    try {
+      change();
+      await _flush();
+    } catch (_) {
+      _blobs
+        ..clear()
+        ..addAll(previous);
+      rethrow;
+    }
+  });
 
   @override
   Future<Uint8List?> getSecretBlob(String id) => _serialize(() async {
-        // Connecting to a server resolves its credential while a sync round
-        // may be writing one, so a read outside the queue could report a
-        // value the mutation's flush is about to roll back.
-        //
-        // A pending journal does not block this. The cache holds the stored
-        // generation, which is the one the keystore still opens until the
-        // re-key gets past its keystore write; past that, [settleRekey] has
-        // swapped in the generation that matches. Refusing to read here would
-        // only turn a recoverable state into a locked vault.
-        final b64 = _blobs[id];
-        return b64 == null ? null : base64.decode(b64);
-      });
+    // Connecting to a server resolves its credential while a sync round
+    // may be writing one, so a read outside the queue could report a
+    // value the mutation's flush is about to roll back.
+    //
+    // A pending journal does not block this. The cache holds the stored
+    // generation, which is the one the keystore still opens until the
+    // re-key gets past its keystore write; past that, [settleRekey] has
+    // swapped in the generation that matches. Refusing to read here would
+    // only turn a recoverable state into a locked vault.
+    final b64 = _blobs[id];
+    return b64 == null ? null : base64.decode(b64);
+  });
 
   @override
   Future<void> putSecretBlob(String id, Uint8List blob) =>
@@ -239,10 +242,10 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
 
   @override
   Future<void> putSecretBlobs(Map<String, Uint8List> blobs) => _mutate(() {
-        for (final entry in blobs.entries) {
-          _blobs[entry.key] = base64.encode(entry.value);
-        }
-      });
+    for (final entry in blobs.entries) {
+      _blobs[entry.key] = base64.encode(entry.value);
+    }
+  });
 
   @override
   Future<void> deleteSecret(String id) => _mutate(() => _blobs.remove(id));
@@ -266,7 +269,10 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   /// nothing, while refusing would make enrolment impossible on exactly the
   /// vaults that most need this journal.
   Future<String> _reseal(
-      String stored, List<int> currentKey, List<int> newKey) async {
+    String stored,
+    List<int> currentKey,
+    List<int> newKey,
+  ) async {
     final Map<String, dynamic> plaintext;
     try {
       plaintext = await VaultCrypto.openJson(currentKey, base64.decode(stored));
@@ -287,28 +293,31 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   Future<void> stageRekey({
     required List<int> currentKey,
     required List<int> newKey,
-  }) =>
-      _serialize(() async {
-        _requireNoRekey();
-        if (await _rekeyFile.exists()) {
-          throw StateError('A pending vault recovery must be completed first.');
-        }
-        final next = <String, String>{};
-        for (final entry in _blobs.entries) {
-          next[entry.key] = await _reseal(entry.value, currentKey, newKey);
-        }
-        final snapshots = <String, String>{
-          // Preserve the raw map, orphan entries and version metadata included.
-          _keyId(currentKey): base64.encode(
-              await VaultCrypto.sealJson(currentKey, {'blobs': _blobs})),
-          _keyId(newKey): base64
-              .encode(await VaultCrypto.sealJson(newKey, {'blobs': next})),
-        };
-        await writeStringAtomically(_rekeyFile,
-            jsonEncode({'version': 1, 'snapshots': snapshots}),
-            privacy: AtomicFilePrivacy.ownerOnly);
-        _rekeySnapshots = snapshots;
-      });
+  }) => _serialize(() async {
+    _requireNoRekey();
+    if (await _rekeyFile.exists()) {
+      throw StateError('A pending vault recovery must be completed first.');
+    }
+    final next = <String, String>{};
+    for (final entry in _blobs.entries) {
+      next[entry.key] = await _reseal(entry.value, currentKey, newKey);
+    }
+    final snapshots = <String, String>{
+      // Preserve the raw map, orphan entries and version metadata included.
+      _keyId(currentKey): base64.encode(
+        await VaultCrypto.sealJson(currentKey, {'blobs': _blobs}),
+      ),
+      _keyId(newKey): base64.encode(
+        await VaultCrypto.sealJson(newKey, {'blobs': next}),
+      ),
+    };
+    await writeStringAtomically(
+      _rekeyFile,
+      jsonEncode({'version': 1, 'snapshots': snapshots}),
+      privacy: AtomicFilePrivacy.ownerOnly,
+    );
+    _rekeySnapshots = snapshots;
+  });
 
   /// Adopt whichever staged generation [key] opens, then clear the journal.
   ///
@@ -319,41 +328,47 @@ class FileVaultStore implements VaultStore, VaultRekeyJournal {
   /// otherwise do. The stored vault is untouched either way.
   @override
   Future<VaultRekeyOutcome> settleRekey(List<int> key) => _serialize(() async {
-        final snapshots = _rekeySnapshots;
-        if (snapshots == null) return VaultRekeyOutcome.none;
-        final Map<String, String> blobs;
-        try {
-          final sealed = snapshots[_keyId(key)];
-          if (sealed == null) throw const FormatException('No matching snapshot.');
-          blobs = _stringMap(
-              (await VaultCrypto.openJson(key, base64.decode(sealed)))['blobs']);
-        } catch (_) {
-          await _quarantineCorruptFile(_rekeyFile);
-          _rekeySnapshots = null;
-          return VaultRekeyOutcome.discarded;
-        }
-        _blobs
-          ..clear()
-          ..addAll(blobs);
-        // The cache is not restored if the flush fails: it now holds the
-        // generation [key] opens, which is the one this session has to read
-        // with. The journal stays on disk for the next launch to settle again,
-        // and lands on the same generation because the installed key has not
-        // changed.
-        await _flush();
-        if (await _rekeyFile.exists()) await _rekeyFile.delete();
-        _rekeySnapshots = null;
-        return VaultRekeyOutcome.adopted;
-      });
+    final snapshots = _rekeySnapshots;
+    if (snapshots == null) return VaultRekeyOutcome.none;
+    final Map<String, String> blobs;
+    try {
+      final sealed = snapshots[_keyId(key)];
+      if (sealed == null) throw const FormatException('No matching snapshot.');
+      blobs = _stringMap(
+        (await VaultCrypto.openJson(key, base64.decode(sealed)))['blobs'],
+      );
+    } catch (_) {
+      await _quarantineCorruptFile(_rekeyFile);
+      _rekeySnapshots = null;
+      return VaultRekeyOutcome.discarded;
+    }
+    _blobs
+      ..clear()
+      ..addAll(blobs);
+    // The cache is not restored if the flush fails: it now holds the
+    // generation [key] opens, which is the one this session has to read
+    // with. The journal stays on disk for the next launch to settle again,
+    // and lands on the same generation because the installed key has not
+    // changed.
+    await _flush();
+    if (await _rekeyFile.exists()) await _rekeyFile.delete();
+    _rekeySnapshots = null;
+    return VaultRekeyOutcome.adopted;
+  });
 }
 
 /// JSON-file [HostKeyStore] for pinned TOFU keys.
-class FileHostKeyStore implements HostKeyStore {
+class FileHostKeyStore implements ConflictAwareHostKeyStore {
   final File file;
+  final Future<void> Function(File target, String contents) _atomicWriter;
   final Map<String, HostKey> _keys = {};
   bool _loaded = false;
+  Future<void> _pending = Future<void>.value();
 
-  FileHostKeyStore(this.file);
+  FileHostKeyStore(
+    this.file, {
+    Future<void> Function(File target, String contents)? atomicWriter,
+  }) : _atomicWriter = atomicWriter ?? writeStringAtomically;
 
   Future<void> _load() async {
     if (_loaded) return;
@@ -372,27 +387,87 @@ class FileHostKeyStore implements HostKeyStore {
     _loaded = true;
   }
 
-  Future<void> _flush() async {
-    await writeStringAtomically(
-        file, jsonEncode(_keys.values.map((k) => k.toJson()).toList()));
+  Future<void> _flush(Map<String, HostKey> keys) async {
+    await _atomicWriter(
+      file,
+      jsonEncode(keys.values.map((key) => key.toJson()).toList()),
+    );
+  }
+
+  Future<T> _serialize<T>(Future<T> Function() body) {
+    final operation = _pending.then((_) async {
+      await _load();
+      return body();
+    });
+    _pending = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
   }
 
   @override
-  Future<List<HostKey>> all() async {
-    await _load();
-    return _keys.values.toList();
-  }
+  Future<List<HostKey>> all() => _serialize(() async => _keys.values.toList());
 
   @override
-  Future<HostKey?> get(String host, int port) async {
-    await _load();
-    return _keys['$host:$port'];
-  }
+  Future<HostKey?> get(String host, int port) =>
+      _serialize(() async => _keys['$host:$port']);
 
   @override
-  Future<void> put(HostKey key) async {
-    await _load();
-    _keys[key.locator] = key;
-    await _flush();
+  Future<void> put(HostKey key) => _serialize(() async {
+    final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
+    await _flush(next);
+
+    _keys
+      ..clear()
+      ..addAll(next);
+  });
+
+  @override
+  Future<HostKeyInstallResult> putIfNoConflict(HostKey key) =>
+      _serialize(() async {
+        final current = _keys[key.locator];
+        if (current != null && current.conflictsWith(key)) {
+          return HostKeyInstallResult.conflict;
+        }
+
+        final next = Map<String, HostKey>.of(_keys)..[key.locator] = key;
+        await _flush(next);
+
+        _keys
+          ..clear()
+          ..addAll(next);
+        return HostKeyInstallResult.installed;
+      });
+
+  @override
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  ) {
+    if (expected.locator != replacement.locator) {
+      throw ArgumentError.value(
+        replacement.locator,
+        'replacement',
+        'must use the expected host-key locator',
+      );
+    }
+
+    return _serialize(() async {
+      final current = _keys[expected.locator];
+      if (current == null ||
+          current.fingerprintSha256 != expected.fingerprintSha256) {
+        return HostKeyInstallResult.conflict;
+      }
+
+      final next = Map<String, HostKey>.of(_keys)
+        ..[replacement.locator] = replacement;
+      await _flush(next);
+
+      _keys
+        ..clear()
+        ..addAll(next);
+      return HostKeyInstallResult.installed;
+    });
   }
 }

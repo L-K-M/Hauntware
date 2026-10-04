@@ -39,16 +39,46 @@ final class LeasedRemoteFileSystem
   Future<TransferChannelLease>? _lease;
   int _active = 0;
   Timer? _idleTimer;
+  Completer<void>? _releaseWhenIdle;
 
   /// Whether a lease is currently held (or being acquired).
   bool get holdsLease => _lease != null;
 
+  /// Identity authenticated by the held lease, or null before acquisition.
+  Future<AuthenticatedEndpointIdentity?> heldEndpointIdentity() async {
+    final pending = _lease;
+    if (pending == null) return null;
+
+    try {
+      return (await pending).endpointIdentity;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Keeps one authenticated lease bound across a multi-call operation.
+  Future<T> withAuthenticatedFileSystem<T>(
+    Future<T> Function(
+      RemoteFileSystem fileSystem,
+      AuthenticatedEndpointIdentity identity,
+    )
+    body,
+  ) => _withLease((lease) => body(lease.fs, lease.endpointIdentity));
+
   /// Returns the held lease, if any. Calls in flight keep the lease they
   /// started on; the engine host drains them before the channel goes
   /// back to the pool. Idempotent; never throws.
-  Future<void> release() async {
+  Future<void> release() {
     _idleTimer?.cancel();
     _idleTimer = null;
+    if (_active != 0) {
+      return (_releaseWhenIdle ??= Completer<void>()).future;
+    }
+
+    return _releaseNow();
+  }
+
+  Future<void> _releaseNow() async {
     final pending = _lease;
     _lease = null;
     if (pending == null) return;
@@ -60,7 +90,9 @@ final class LeasedRemoteFileSystem
     }
   }
 
-  Future<T> _run<T>(Future<T> Function(RemoteFileSystem fs) body) async {
+  Future<T> _withLease<T>(
+    Future<T> Function(TransferChannelLease lease) body,
+  ) async {
     _idleTimer?.cancel();
     _idleTimer = null;
     final pending = _lease ??= _connections.leaseTransferChannel(serverId);
@@ -74,7 +106,7 @@ final class LeasedRemoteFileSystem
         rethrow;
       }
       try {
-        return await body(lease.fs);
+        return await body(lease);
       } on RemoteFileException catch (error) {
         if (error.kind == RemoteFileErrorKind.disconnected &&
             identical(_lease, pending)) {
@@ -85,9 +117,19 @@ final class LeasedRemoteFileSystem
       }
     } finally {
       _active--;
-      _armIdle();
+      final deferred = _releaseWhenIdle;
+      if (_active == 0 && deferred != null) {
+        _releaseWhenIdle = null;
+        await _releaseNow();
+        deferred.complete();
+      } else {
+        _armIdle();
+      }
     }
   }
+
+  Future<T> _run<T>(Future<T> Function(RemoteFileSystem fs) body) =>
+      _withLease((lease) => body(lease.fs));
 
   void _armIdle() {
     final idle = idleRelease;

@@ -6659,6 +6659,139 @@
   "@syncRestoreTrashed": {
     "description": "Summary-bar verb (05 §7/§8 rail 9): puts the run's trashed entries back."
   },
+  "syncPurgeTrash": "Purge Sync Trash…",
+  "@syncPurgeTrash": {
+    "description": "Server-menu command (05 §8 rail 5): empties the active plan's live sync-trash roots after confirmation."
+  },
+  "syncTrashNotice": "{files, plural, =1{{files} trashed file} other{{files} trashed files}} from {runs, plural, =1{{runs} run} other{{runs} runs}} older than 30 days — delete them?",
+  "@syncTrashNotice": {
+    "description": "Persistent plan notice for aged sync trash. File counts are journal-derived; run counts include unjournaled directories.",
+    "placeholders": {
+      "files": {"type": "int"},
+      "runs": {"type": "int"}
+    }
+  },
+  "syncTrashUnjournaled": "{count, plural, =1{Plus 1 unjournaled run.} other{Plus {count} unjournaled runs.}}",
+  "@syncTrashUnjournaled": {
+    "description": "Trash notice and confirmation tail for run directories whose file count cannot be derived locally.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "syncTrashAsOf": "As of {time}; reconnect to delete.",
+  "@syncTrashAsOf": {
+    "description": "Stale trash-cache label. Its purge action is disabled because deletion requires a live listing.",
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+  "syncTrashAsOfRecent": "As of less than an hour ago; reconnect to delete.",
+  "@syncTrashAsOfRecent": {
+    "description": "Stale trash-cache label for a listing less than one hour old."
+  },
+  "syncTrashAsOfHours": "{count, plural, =1{As of 1 hour ago; reconnect to delete.} other{As of {count} hours ago; reconnect to delete.}}",
+  "@syncTrashAsOfHours": {
+    "description": "Stale trash-cache label for a listing less than one day old.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "syncTrashAsOfDays": "{count, plural, =1{As of 1 day ago; reconnect to delete.} other{As of {count} days ago; reconnect to delete.}}",
+  "@syncTrashAsOfDays": {
+    "description": "Stale trash-cache label for a listing less than one month old.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "syncTrashDelete": "Delete…",
+  "@syncTrashDelete": {
+    "description": "Aged-trash notice action opening the shared purge confirmation."
+  },
+  "syncTrashPurgeTitle": "Purge sync trash?",
+  "@syncTrashPurgeTitle": {
+    "description": "Shared confirmation title for aged and explicit sync-trash purges."
+  },
+  "syncTrashPurgeSummary": "{files, plural, =1{{files} journaled file} other{{files} journaled files}} from {runs, plural, =1{{runs} run} other{{runs} runs}} will be permanently deleted.",
+  "@syncTrashPurgeSummary": {
+    "description": "Purge confirmation count. Journal-less runs are disclosed separately instead of inventing file counts.",
+    "placeholders": {
+      "files": {"type": "int"},
+      "runs": {"type": "int"}
+    }
+  },
+  "syncTrashPurgeScope": "Sync trash is shared by host and root.",
+  "@syncTrashPurgeScope": {
+    "description": "Always-visible rail-5 confirmation scope statement."
+  },
+  "syncTrashPurgeOtherPairs": "This includes trash from other sync pairs that use the same host and root.",
+  "@syncTrashPurgeOtherPairs": {
+    "description": "Rail-5 confirmation scope warning when matched journals span beyond the current pair."
+  },
+  "syncTrashPurgeForeign": "{count, plural, =1{This includes 1 run created by another machine.} other{This includes {count} runs created by other machines.}}",
+  "@syncTrashPurgeForeign": {
+    "description": "Explicit-purge warning for foreign device-prefix run directories.",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "syncTrashPurgeForfeit": "These files can no longer be restored.",
+  "@syncTrashPurgeForfeit": {
+    "description": "Rail-5 warning that purge permanently forfeits Restore Trashed Files."
+  },
+  "syncTrashPurgeConfirm": "Purge",
+  "@syncTrashPurgeConfirm": {
+    "description": "Destructive confirm verb in the sync-trash purge dialog."
+  },
+  "syncTrashPurging": "Purging sync trash…",
+  "@syncTrashPurging": {
+    "description": "Plan-view progress line while a confirmed trash purge runs."
+  },
+  "syncTrashPurgeResult": "{purged, plural, =1{Purged 1 run} other{Purged {purged} runs}}{failed, plural, =0{} =1{ — 1 failed} other{ — {failed} failed}}",
+  "@syncTrashPurgeResult": {
+    "description": "Toast after a sync-trash purge, including per-run failures.",
+    "placeholders": {
+      "purged": {"type": "int"},
+      "failed": {"type": "int"}
+    }
+  },
+  "syncTrashPurgeCancelled": "Purge cancelled after {purged, plural, =1{1 run} other{{purged} runs}}.",
+  "@syncTrashPurgeCancelled": {
+    "description": "Toast after cancelling a trash purge with a partial result.",
+    "placeholders": {
+      "purged": {"type": "int"}
+    }
+  },
+  "syncTrashPurgeActive": "Wait for active syncs to finish, then try again.",
+  "@syncTrashPurgeActive": {
+    "description": "Feedback when a purge cannot atomically reserve every target root."
+  },
+  "syncTrashPurgeFailed": "Couldn’t purge sync trash: {message}",
+  "@syncTrashPurgeFailed": {
+    "description": "Feedback when the purge fails before it can return a per-run report.",
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "syncTrashEndpointChanged": "The sync endpoint changed while sync trash was being resolved.",
+  "@syncTrashEndpointChanged": {
+    "description": "Error shown when a saved remote endpoint is retargeted during sync-trash resolution."
+  },
+  "syncTrashHostKeyUnavailable": "The sync endpoint has no accepted host key.",
+  "@syncTrashHostKeyUnavailable": {
+    "description": "Error shown when offline sync-trash metadata cannot be tied to an accepted remote host key."
+  },
+  "syncTrashJumpRouteInvalid": "The sync endpoint jump route is invalid.",
+  "@syncTrashJumpRouteInvalid": {
+    "description": "Error shown when a sync endpoint's jump-host route loops or exceeds its safety bound."
+  },
+  "syncTrashJumpHostUnavailable": "The sync endpoint jump host is unavailable.",
+  "@syncTrashJumpHostUnavailable": {
+    "description": "Error shown when a sync endpoint's jump host is absent from the synchronized catalog."
+  },
+  "syncTrashAuthenticationUnavailable": "The sync endpoint has no authenticated lease.",
+  "@syncTrashAuthenticationUnavailable": {
+    "description": "Error shown when sync-trash identity verification has no authenticated remote lease."
+  },
   "syncCopyReport": "Copy Report",
   "@syncCopyReport": {
     "description": "Summary-bar verb (05 §7): copies the run's per-item outcome table to the clipboard."
@@ -6683,27 +6816,66 @@
   "@syncHeavySuggestionAccept": {
     "description": "Heavy-directory suggestion's accept verb (05 §9): adds the name to the pair's exclude rules."
   },
+  "syncRestoreRecoveryTitle": "Interrupted restore",
+  "@syncRestoreRecoveryTitle": {
+    "description": "Plan-view heading when restart recovery must finish before the pair can be scanned."
+  },
+  "syncRestoreRecoveryBody": "A previous restore stopped before it finished. Sync is paused until you finish it.",
+  "@syncRestoreRecoveryBody": {
+    "description": "Plan-view explanation for a readable interrupted restore."
+  },
+  "syncRestoreRecoveryBlocked": "Sync is paused because its interrupted restore cannot be verified. Keep both folders unchanged. Restore the journal from backup or contact support: {path}",
+  "@syncRestoreRecoveryBlocked": {
+    "description": "Fail-closed plan-view explanation when interrupted recovery cannot be verified.",
+    "placeholders": {
+      "path": {"type": "String"}
+    }
+  },
+  "syncRestoreRecoveryAction": "Finish Restore…",
+  "@syncRestoreRecoveryAction": {
+    "description": "Action-bar verb for resuming an interrupted restore after restart."
+  },
+  "syncRestoreRecoveryDialogTitle": "Finish Interrupted Restore",
+  "@syncRestoreRecoveryDialogTitle": {
+    "description": "Confirmation title before resuming an interrupted restore."
+  },
+  "syncRestoreRecoverySummary": "Finish the interrupted restore. {restored, plural, =0{Restores no original items.} =1{Restores {restored} original item.} other{Restores {restored} original items.}} {removedCreatedFiles, plural, =0{Removes no files created by this run.} =1{Removes {removedCreatedFiles} file created by this run.} other{Removes {removedCreatedFiles} files created by this run.}}",
+  "@syncRestoreRecoverySummary": {
+    "description": "Recovery confirmation impact: original items restored and run-created files removed.",
+    "placeholders": {
+      "restored": {"type": "int"},
+      "removedCreatedFiles": {"type": "int"}
+    }
+  },
   "syncRestoreDialogTitle": "Restore Trashed Files",
   "@syncRestoreDialogTitle": {
     "description": "Restore dialog title (05 §8 rail 9)."
   },
-  "syncRestoreSummary": "{count, plural, =1{{count} file will be restored from trash.} other{{count} files will be restored from trash.}}",
+  "syncRestoreSummary": "{restored, plural, =0{Restores no original items.} =1{Restores {restored} original item.} other{Restores {restored} original items.}} {removedCreatedFiles, plural, =0{Removes no files created by this run.} =1{Removes {removedCreatedFiles} file created by this run.} other{Removes {removedCreatedFiles} files created by this run.}}",
   "@syncRestoreSummary": {
-    "description": "Restore dialog's count line — only journaled trash entries restore (05 §8 rail 9).",
+    "description": "Restore dialog impact: original items restored and run-created files removed by rule-4 recovery (05 §8 rail 9).",
     "placeholders": {
-      "count": {"type": "int"}
+      "restored": {"type": "int"},
+      "removedCreatedFiles": {"type": "int"}
     }
   },
   "syncRestoreButton": "Restore",
   "@syncRestoreButton": {
     "description": "Restore dialog's confirm verb."
   },
-  "syncRestoreResult": "{restored, plural, =1{Restored {restored} file} other{Restored {restored} files}}{skipped, plural, =0{} =1{ — {skipped} skipped} other{ — {skipped} skipped}}",
+  "syncRestoreResult": "{restored, plural, =1{Restored {restored} item} other{Restored {restored} items}}{skipped, plural, =0{} =1{. {skipped} skipped} other{. {skipped} skipped}}",
   "@syncRestoreResult": {
-    "description": "Post-restore summary line: how many entries came back and how many were skipped.",
+    "description": "Post-restore summary line: how many files or directories came back and how many were skipped.",
     "placeholders": {
       "restored": {"type": "int"},
       "skipped": {"type": "int"}
+    }
+  },
+  "syncRestoreFailed": "Restore stopped. Check the connection and file state, then retry. Error: {message}",
+  "@syncRestoreFailed": {
+    "description": "Actionable toast when Restore Trashed Files stops on a remote filesystem failure; the restore action remains available.",
+    "placeholders": {
+      "message": {"type": "String"}
     }
   },
   "syncDirectionLeftToRight": "Left to right",
@@ -7030,6 +7202,10 @@
   "commandDisabledNoPlan": "Requires an open sync plan",
   "@commandDisabledNoPlan": {
     "description": "Palette reason under Copy rsync Command while the active tab is not a sync plan."
+  },
+  "commandDisabledNoSyncTrash": "Requires live sync trash with no active run",
+  "@commandDisabledNoSyncTrash": {
+    "description": "Palette reason under sync.purgeTrash. Cached listings never authorize purge."
   },
   "commandDisabledNoComparableItem": "Requires a selected file present on both sides",
   "@commandDisabledNoComparableItem": {

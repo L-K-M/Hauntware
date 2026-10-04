@@ -516,6 +516,12 @@ class SyncRunRecord {
     required this.rules,
     required this.totals,
     required this.warnings,
+    this.canonicalRootLeft,
+    this.canonicalRootRight,
+    this.trashScopeLeft,
+    this.trashScopeRight,
+    this.trashLocationKeyLeft,
+    this.trashLocationKeyRight,
   });
 
   /// `<first 8 hex of sha256(04 §3.1 deviceId)>-<uuidV4>` — hashed so the
@@ -533,6 +539,22 @@ class SyncRunRecord {
   /// across ⌥⌘Y invocations.
   final String pairId;
   final DateTime startedAt;
+
+  /// Canonical sync roots at execution time. Incomplete restores require both
+  /// to distinguish case-sensitive pairs whose pre-scan ids may collide.
+  /// Null reads legacy journals but cannot authorize durable recovery.
+  final String? canonicalRootLeft;
+  final String? canonicalRootRight;
+
+  /// Stable physical host/root identities for root-scoped purge markers.
+  /// Null reads legacy journals whose coverage falls back to path text.
+  final String? trashScopeLeft;
+  final String? trashScopeRight;
+
+  /// Stable endpoint/path slots for detecting a deleted root across marker
+  /// generations. Null preserves replay of journals written before rail 5.
+  final String? trashLocationKeyLeft;
+  final String? trashLocationKeyRight;
 
   /// Snapshot at run time.
   final SyncRuleSet rules;

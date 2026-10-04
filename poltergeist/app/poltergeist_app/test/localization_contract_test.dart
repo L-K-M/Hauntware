@@ -114,9 +114,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$kPinStoreFileName'",
     // The engine's append-only identity-read log — same machine path data.
     r"'$kIdentityAuditLogFileName'",
-    // The runId device prefix when enrollment has no cached id — a
-    // machine identity string, never rendered.
-    "'local'",
     // The AppKit checkmark channel name on the shared menu delegate —
     // protocol plumbing, not copy.
     "'poltergeist/menu_checks'",
@@ -134,6 +131,11 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'$supportDirectoryPath$separator$_identityAuditLogFileName'",
     "'bookmark.id'",
     "'bookmark has no embedded server identity'",
+    // Exact host-key map locator, never rendered.
+    r"'$host:$port'",
+    // Conditional host-key replacement diagnostics, never rendered.
+    "'replacement'",
+    "'must use the expected host-key locator'",
     // The setPermissions assert's mode-range diagnostic — a programming-
     // error message, never rendered.
     "'permissions must be a twelve-bit mode (0x000-0xFFF)'",
@@ -528,6 +530,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'Finish vault recovery before changing credentials.'",
     "'A pending vault recovery must be completed first.'",
     "'No matching snapshot.'",
+    // Conditional host-key replacement diagnostics, never rendered.
+    "'replacement'",
+    "'must use the expected host-key locator'",
   },
   'lib/services/settings_store.dart': {
     "'settings root'",
@@ -988,11 +993,52 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // this message. Plumbing, never authored copy.
   'lib/services/sync_environment.dart': {
     "'sync_runs'",
+    "'.trash-activity'",
     r"'$supportDirectoryPath${Platform.pathSeparator}'",
     r"'$kSyncStateDirectoryName'",
     r"'$kSyncRunsDirectoryName'",
     "'sync endpoint'",
     "'remote sync endpoints are not available yet'",
+    "'~'",
+    "'~/'",
+    "'.'",
+    r"'$runName.purging-'",
+    "'open sync trash'",
+    "'The sync-trash marker changed while old trash remains.'",
+    "'The sync-trash root changed during reconciliation.'",
+    "'local'",
+    "'resolve sync trash'",
+    "'verify sync trash'",
+    "'The sync-trash root changed after planning.'",
+    // Endpoint identity serialization and programmer diagnostics, never
+    // rendered. User-visible failures above come from ARB.
+    "'local endpoint already handled'",
+    r"'unverified\u0000local'",
+    r"'unverified\u0000config\u0000${server.serverConfigId}'",
+    r"'unverified\u0000embedded\u0000'",
+    r"'${server.identity!.username}\u0000'",
+    r"'${server.identity!.host.toLowerCase()}\u0000'",
+    r"'${server.identity!.port}'",
+    r"'remote\u0000${username.trim()}\u0000${host.trim().toLowerCase()}'",
+    r"'\u0000$port\u0000${jumpHostId ?? ''}\u0000${routeContext ?? ''}'",
+    "''",
+    r"'${_remoteTrashAddressIdentity(host: identity.host, port: identity.port, username: identity.username, jumpHostId: identity.jumpHostId, routeContext: identity.routeContext)}'",
+    r"'\u0000${identity.fingerprintSha256}'",
+    // Endpoint-count invariant diagnostics, never rendered.
+    "'endpointBindings'",
+    "'must match the endpoint count'",
+    // Recovery resolution operation tags and conflict details are wrapped by
+    // localized recovery UI; they remain filesystem diagnostics here.
+    "'resume sync restore'",
+    "'The sync journal has no incomplete restore.'",
+    "'The recovery journal does not identify both canonical sync roots.'",
+    "'The recovery journal does not identify both sync-trash locations.'",
+    "'The recovery journal matches both endpoint orders.'",
+    "'The recovery journal does not match this pair\\'s endpoint identities.'",
+    "'The sync root changed while restore recovery was being verified.'",
+    // Windows drive spelling is machine data; directory case stays exact.
+    "':'",
+    r"'${normalized[0].toUpperCase()}${normalized.substring(1)}'",
   },
   // The plan controller's machine literals: the 'local' device-id
   // default, §9's heavy-suggestion noise names + glob join, the
@@ -1009,6 +1055,62 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'__pycache__'",
     "'/'",
     "'remote'",
+    r"'$devicePrefix-'",
+    r"'$error'",
+    "'resolve sync trash'",
+    r"'Sync trash on the ${side.name} side is unavailable: $cause'",
+    "'the endpoint is unavailable'",
+  },
+  // Physical trash-root keys, path normalization, and argument
+  // diagnostics are registry plumbing, never rendered copy.
+  'lib/services/sync_trash_activity.dart': {
+    "'local'",
+    r"'poltergeist-sync-trash\u0000$rootId'",
+    r"'config:${server.serverConfigId}'",
+    r"'${server.identity!.username}@'",
+    r"'${server.identity!.host.toLowerCase()}:'",
+    r"'${server.identity!.port}'",
+    r"'poltergeist-sync-trash-location\u0000$endpointKey\u0000'",
+    r"'$normalizedRoot'",
+    r"'unresolved:$effectiveLocationKey'",
+    "'The sync-trash root identity is unresolved.'",
+    "'/'",
+    r"r'/+$'",
+    "''",
+    "'scopeKey'",
+    "'locationKey'",
+    "'is invalid'",
+    "'runId'",
+    "'must not be empty'",
+    r"'SyncTrashActivityLockException: $operation'",
+    r"'SyncTrashActivityLockException: $operation: $cause'",
+    r"'memory:${_nextMemoryNamespace++}'",
+    "'.gate.lock'",
+    "'.active.v2.'",
+    "'.active.'",
+    "'.lock'",
+    "'trashScope'",
+    "'reserve duplicate active run'",
+    "'reserve active-run marker'",
+    "'reserve an unresolved trash root'",
+    "'reserve mismatched trash-root transition'",
+    r"'$_namespace\u0000${location.scopeKey}'",
+    r"'$_namespace\u0000location\u0000$locationKey'",
+    "'create lock directory'",
+    r"'${location.scopeKey}$_gateSuffix'",
+    r"'$locationKey.location$_gateSuffix'",
+    r"'${location.scopeKey}$_activeMarker$runKey$_lockSuffix'",
+    r"'${location.scopeKey}$_legacyActiveMarker$runKey$_lockSuffix'",
+    "'write active-run marker'",
+    r"'${location.scopeKey}$_activeMarker'",
+    r"'${location.scopeKey}$_legacyActiveMarker'",
+    "'decode active-run marker name'",
+    "'read an empty active-run marker'",
+    "'inspect active-run markers'",
+    "'release active-run markers'",
+    "'release gate locks'",
+    "'reuse failed shared location gate'",
+    "'shared location gate has no owner'",
   },
   // The facade matches the executor's machine error sentinel to pick
   // the cancelled item state — protocol plumbing, never authored copy.
@@ -1052,9 +1154,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // The ☰ button's widget key — widget plumbing, not authored copy. The
   // `menu.<id>`/`menu.item.<id>` row keys moved to ghost_ui with the
   // shared row renderer.
-  'lib/ui/menus/app_menu_host.dart': {
-    "'menu.main'",
-  },
+  'lib/ui/menus/app_menu_host.dart': {"'menu.main'"},
   // Debug-only placement-slot invariant diagnostics — never rendered.
   'lib/ui/menus/app_menus.dart': {
     "'commands reach the macOS application menu via appMenuOnMac'",
@@ -2135,6 +2235,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'sync.synchronizePanes'",
     "'sync.newSavedSync'",
     "'sync.copyRsyncCommand'",
+    "'sync.purgeTrash'",
     "'sync.compareSelected'",
   },
   // The pair editor's machine literals: numeric TextField seeds, the

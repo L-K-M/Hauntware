@@ -31,6 +31,13 @@ import 'package:poltergeist_app/ui/activity/activity_panel.dart';
 import 'package:poltergeist_app/ui/panes/pane_drop_area.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
+const _testEndpointIdentity = AuthenticatedEndpointIdentity(
+  host: 'example.com',
+  port: 22,
+  username: 'test',
+  fingerprintSha256: 'SHA256:test',
+);
+
 final _captureDir =
     Platform.environment['POLTERGEIST_CAPTURE_DIR'] ??
     '../../tasks/run3-task74/captures';
@@ -538,6 +545,9 @@ final class _Lease implements TransferChannelLease {
   @override
   final RemoteFileSystem fs;
   final void Function() _onRelease;
+
+  @override
+  AuthenticatedEndpointIdentity get endpointIdentity => _testEndpointIdentity;
 
   @override
   Future<void> release() async => _onRelease();

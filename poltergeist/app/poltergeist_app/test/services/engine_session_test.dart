@@ -92,8 +92,7 @@ class FakeAppEngine implements AppEngine {
   final pinsController = StreamController<HostKeyPinnedEvent>.broadcast();
   final incidentsController = StreamController<IncidentStoreEvent>.broadcast();
   final statesControllers = <String, StreamController<ServerStatus>>{};
-  final recoveryController =
-      StreamController<RecoveryFailedEvent>.broadcast();
+  final recoveryController = StreamController<RecoveryFailedEvent>.broadcast();
   final logController = StreamController<ConnectionLogEvent>.broadcast();
   final probeStatusesController =
       StreamController<ProbeStatusesEvent>.broadcast();
@@ -140,17 +139,19 @@ class FakeAppEngine implements AppEngine {
   @override
   Stream<HostKeyPinnedEvent> get hostKeyPins => pinsController.stream;
 
+  void pinHostKey(HostKey key) {
+    pinsController.add(HostKeyPinnedEvent(key: key));
+  }
+
   @override
-  Stream<IncidentStoreEvent> get incidentChanges =>
-      incidentsController.stream;
+  Stream<IncidentStoreEvent> get incidentChanges => incidentsController.stream;
 
   @override
   Stream<ServerStatus> watchServer(String serverId) =>
       _stateOf(serverId).stream;
 
   @override
-  Stream<RecoveryFailedEvent> get recoveryFailures =>
-      recoveryController.stream;
+  Stream<RecoveryFailedEvent> get recoveryFailures => recoveryController.stream;
 
   @override
   Stream<ConnectionLogEvent> get connectionLog => logController.stream;
@@ -179,9 +180,9 @@ class FakeAppEngine implements AppEngine {
   }) async {
     openCalls.add((serverId: serverId, paneTabId: paneTabId, config: config));
     final repliesAtOpenStart = replies.length;
-    _stateOf(serverId).add(
-      const ServerStatus(ServerConnectionState.connecting),
-    );
+    _stateOf(
+      serverId,
+    ).add(const ServerStatus(ServerConnectionState.connecting));
     for (final prompt in promptScript) {
       promptsController.add(prompt);
       await _waitForReply(prompt.promptId);
@@ -214,9 +215,7 @@ class FakeAppEngine implements AppEngine {
     }
     final channel = this.channel;
     if (channel == null) throw StateError('no browse channel scripted');
-    _stateOf(serverId).add(
-      const ServerStatus(ServerConnectionState.connected),
-    );
+    _stateOf(serverId).add(const ServerStatus(ServerConnectionState.connected));
     return channel;
   }
 
@@ -423,21 +422,109 @@ class _ThrowingPinStore implements HostKeyStore {
 /// A pin store whose writes block on a gate: the flush hook's test
 /// vehicle (writes pend, then land).
 class _GatedPinStore implements HostKeyStore {
-  _GatedPinStore(this.gate);
+  _GatedPinStore(this.gate, [Iterable<HostKey> initialKeys = const []])
+    : _written = List.of(initialKeys);
 
   final Completer<void> gate;
-  final List<HostKey> _written = [];
+  final List<HostKey> _written;
 
   @override
   Future<List<HostKey>> all() async => List.of(_written);
 
   @override
-  Future<HostKey?> get(String host, int port) async => null;
+  Future<HostKey?> get(String host, int port) async {
+    for (final key in _written) {
+      if (key.host == host && key.port == port) return key;
+    }
+    return null;
+  }
 
   @override
   Future<void> put(HostKey key) async {
     await gate.future;
+    _written.removeWhere(
+      (candidate) => candidate.host == key.host && candidate.port == key.port,
+    );
     _written.add(key);
+  }
+}
+
+/// Holds one stale delegate read while the engine observes a replacement.
+class _GatedReadPinStore implements HostKeyStore {
+  _GatedReadPinStore(this._stored);
+
+  final HostKey _stored;
+  final readStarted = Completer<void>();
+  final releaseRead = Completer<void>();
+
+  @override
+  Future<List<HostKey>> all() async => const [];
+
+  @override
+  Future<HostKey?> get(String host, int port) async {
+    readStarted.complete();
+    await releaseRead.future;
+    return _stored;
+  }
+
+  @override
+  Future<void> put(HostKey key) async {}
+}
+
+class _FailingPutPinStore implements HostKeyStore {
+  _FailingPutPinStore(this._stored);
+
+  final HostKey _stored;
+
+  @override
+  Future<List<HostKey>> all() async => [_stored];
+
+  @override
+  Future<HostKey?> get(String host, int port) async =>
+      host == _stored.host && port == _stored.port ? _stored : null;
+
+  @override
+  Future<void> put(HostKey key) async => throw StateError('write failed');
+}
+
+class _ConcurrentWritePinStore implements HostKeyStore {
+  _ConcurrentWritePinStore(Iterable<HostKey> initialKeys)
+    : _written = List.of(initialKeys);
+
+  final firstWriteGate = Completer<void>();
+  final List<HostKey> _written;
+  final calls = <HostKey>[];
+  int activeWrites = 0;
+  int maximumActiveWrites = 0;
+
+  @override
+  Future<List<HostKey>> all() async => List.of(_written);
+
+  @override
+  Future<HostKey?> get(String host, int port) async {
+    for (final key in _written) {
+      if (key.host == host && key.port == port) return key;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> put(HostKey key) async {
+    calls.add(key);
+    activeWrites++;
+    if (activeWrites > maximumActiveWrites) {
+      maximumActiveWrites = activeWrites;
+    }
+    try {
+      if (calls.length == 1) await firstWriteGate.future;
+
+      _written.removeWhere(
+        (candidate) => candidate.host == key.host && candidate.port == key.port,
+      );
+      _written.add(key);
+    } finally {
+      activeWrites--;
+    }
   }
 }
 
@@ -540,11 +627,23 @@ void main() {
       // Audit finding A: the incident and the pin it names cross together,
       // or the engine refuses to restore the record. The pinned HostKey
       // type carries no ==, so the seed is compared by its JSON form.
-      expect(
-        configs.single.hostKeyPins.map((pin) => pin.toJson()).toList(),
-        [_pin.toJson()],
-      );
+      expect(configs.single.hostKeyPins.map((pin) => pin.toJson()).toList(), [
+        _pin.toJson(),
+      ]);
       expect(configs.single.incidents, [_incident]);
+    });
+
+    test('exposes seeded keys through the shared store', () async {
+      await FileHostKeyStore(
+        File('${support.path}${Platform.pathSeparator}host_keys.json'),
+      ).put(_pin);
+      final (session, _) = await startSession();
+      addTearDown(session!.shutdown);
+
+      expect(
+        (await session.pinStore.get(_pin.host, _pin.port))?.fingerprintSha256,
+        _pin.fingerprintSha256,
+      );
     });
 
     test('carries the trash server port into the engine config', () async {
@@ -615,11 +714,265 @@ void main() {
   });
 
   group('trust mirrors', () {
+    test('returns an engine pin observed during a delegate read', () async {
+      final pins = _GatedReadPinStore(_pin);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.releaseRead.isCompleted) pins.releaseRead.complete();
+        await session!.shutdown();
+      });
+      const changed = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed-during-read',
+        pinnedAt: 1700000000001,
+      );
+
+      final read = session!.pinStore.get(_pin.host, _pin.port);
+      await pins.readStarted.future;
+      engine!.pinHostKey(changed);
+      await pumpEventQueue();
+      pins.releaseRead.complete();
+
+      expect((await read)?.fingerprintSha256, changed.fingerprintSha256);
+    });
+
+    test('conditional sync install refuses an earlier engine pin', () async {
+      final pins = InMemoryHostKeyStore();
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(session!.shutdown);
+      const enginePin = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine-first',
+        pinnedAt: 1700000000001,
+      );
+      const pulled = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:pulled',
+        pinnedAt: 1700000000002,
+      );
+
+      engine!.pinHostKey(enginePin);
+      await pumpEventQueue();
+      final result = await session.pinStore.putIfNoConflict(pulled);
+
+      expect(result, HostKeyInstallResult.conflict);
+      expect(
+        (await session.pinStore.get(
+          pulled.host,
+          pulled.port,
+        ))!.fingerprintSha256,
+        enginePin.fingerprintSha256,
+      );
+    });
+
+    test('an engine pin after conditional install wins write order', () async {
+      final pins = _ConcurrentWritePinStore(const []);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.firstWriteGate.isCompleted) pins.firstWriteGate.complete();
+        await session!.shutdown();
+      });
+      const pulled = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:pulled-first',
+        pinnedAt: 1700000000001,
+      );
+      const enginePin = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine-after',
+        pinnedAt: 1700000000002,
+      );
+
+      final install = session!.pinStore.putIfNoConflict(pulled);
+      await pumpEventQueue();
+      expect(pins.calls, [pulled]);
+      engine!.pinHostKey(enginePin);
+      await pumpEventQueue();
+      pins.firstWriteGate.complete();
+
+      expect(await install, HostKeyInstallResult.installed);
+      await session.flushWrites();
+      expect(pins._written, [enginePin]);
+      expect(
+        (await session.pinStore.get(
+          enginePin.host,
+          enginePin.port,
+        ))!.fingerprintSha256,
+        enginePin.fingerprintSha256,
+      );
+    });
+
+    test('an engine pin during conditional replacement wins', () async {
+      final pins = _ConcurrentWritePinStore([_pin]);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.firstWriteGate.isCompleted) pins.firstWriteGate.complete();
+        await session!.shutdown();
+      });
+      const pulled = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:pulled',
+        pinnedAt: 1700000000001,
+      );
+      const enginePin = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine-after',
+        pinnedAt: 1700000000002,
+      );
+
+      final replacement = session!.pinStore.replaceIfCurrent(_pin, pulled);
+      await pumpEventQueue();
+      expect(pins.calls, [pulled]);
+
+      engine!.pinHostKey(enginePin);
+      await pumpEventQueue();
+      pins.firstWriteGate.complete();
+
+      expect(await replacement, HostKeyInstallResult.conflict);
+      await session.flushWrites();
+      expect(pins._written, [enginePin]);
+      expect(
+        (await session.pinStore.get(
+          enginePin.host,
+          enginePin.port,
+        ))!.fingerprintSha256,
+        enginePin.fingerprintSha256,
+      );
+    });
+
+    test('keeps observed keys ahead of stale persistence reads', () async {
+      final gate = Completer<void>();
+      final pins = _GatedPinStore(gate, [_pin]);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!gate.isCompleted) gate.complete();
+        await session!.shutdown();
+      });
+      const changed = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedAt: 1700000000001,
+      );
+
+      engine!.pinHostKey(changed);
+      await pumpEventQueue();
+
+      expect(
+        (await session!.pinStore.all()).single.fingerprintSha256,
+        changed.fingerprintSha256,
+      );
+      expect(pins._written.single.fingerprintSha256, _pin.fingerprintSha256);
+
+      gate.complete();
+      await session.flushWrites();
+    });
+
+    test('shares successful external pin replacements', () async {
+      final pins = InMemoryHostKeyStore();
+      await pins.put(_pin);
+      final (session, _) = await startSession(pinStore: pins);
+      addTearDown(session!.shutdown);
+      const changed = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedAt: 1700000000001,
+      );
+
+      await session.pinStore.put(changed);
+
+      expect(
+        (await session.pinStore.all()).single.fingerprintSha256,
+        changed.fingerprintSha256,
+      );
+      expect(
+        (await pins.get(changed.host, changed.port))?.fingerprintSha256,
+        changed.fingerprintSha256,
+      );
+    });
+
+    test('does not expose failed external pin writes', () async {
+      final pins = _FailingPutPinStore(_pin);
+      final (session, _) = await startSession(pinStore: pins);
+      addTearDown(session!.shutdown);
+      const changed = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedAt: 1700000000001,
+      );
+
+      await expectLater(session.pinStore.put(changed), throwsStateError);
+
+      expect(
+        (await session.pinStore.all()).single.fingerprintSha256,
+        _pin.fingerprintSha256,
+      );
+    });
+
+    test('serializes engine and external pin writes', () async {
+      final pins = _ConcurrentWritePinStore([_pin]);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.firstWriteGate.isCompleted) {
+          pins.firstWriteGate.complete();
+        }
+        await session!.shutdown();
+      });
+      const engineChanged = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine',
+        pinnedAt: 1700000000001,
+      );
+      const externalChanged = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:external',
+        pinnedAt: 1700000000002,
+      );
+
+      engine!.pinHostKey(engineChanged);
+      await pumpEventQueue();
+      expect(pins.calls, [engineChanged]);
+
+      final externalWrite = session!.pinStore.put(externalChanged);
+      await pumpEventQueue();
+
+      expect(pins.calls, [engineChanged]);
+      expect(pins.maximumActiveWrites, 1);
+
+      pins.firstWriteGate.complete();
+      await externalWrite;
+      await session.flushWrites();
+      expect(pins._written, [externalChanged]);
+    });
+
     test('persists engine pin writes to the app-owned pin store', () async {
       final (session, engine) = await startSession();
       addTearDown(session!.shutdown);
 
-      engine!.pinsController.add(const HostKeyPinnedEvent(key: _pin));
+      engine!.pinHostKey(_pin);
       final store = FileHostKeyStore(
         File('${support.path}${Platform.pathSeparator}host_keys.json'),
       );
@@ -745,7 +1098,7 @@ void main() {
       final (session, engine) = await startSession(pinStore: pins);
       addTearDown(session!.shutdown);
 
-      engine!.pinsController.add(const HostKeyPinnedEvent(key: _pin));
+      engine!.pinHostKey(_pin);
       await pumpEventQueue();
 
       final flushed = Completer<void>();
@@ -825,10 +1178,7 @@ void main() {
 
       // Catalog replacement publishes before notifying its bound listener.
       session.publishServerCatalog(catalog.value);
-      session.bindServerCatalog(
-        changes: catalog,
-        read: () => catalog.value,
-      );
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
       await pumpEventQueue();
 
       expect(engine!.catalogSnapshots, [
@@ -850,10 +1200,7 @@ void main() {
       final (session, engine) = await startSession();
       addTearDown(session!.shutdown);
 
-      session.bindServerCatalog(
-        changes: catalog,
-        read: () => catalog.value,
-      );
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
       catalog.value = const [];
       await pumpEventQueue();
 
@@ -876,10 +1223,7 @@ void main() {
       addTearDown(catalog.dispose);
       final (session, engine) = await startSession();
 
-      session!.bindServerCatalog(
-        changes: catalog,
-        read: () => catalog.value,
-      );
+      session!.bindServerCatalog(changes: catalog, read: () => catalog.value);
       await pumpEventQueue();
       expect(engine!.catalogSnapshots, [
         [direct],
@@ -1045,9 +1389,7 @@ void main() {
 
     test('routes the raised prompt through the session coordinator', () async {
       final navigatorKey = GlobalKey<NavigatorState>();
-      final (session, engine) = await startSession(
-        navigatorKey: navigatorKey,
-      );
+      final (session, engine) = await startSession(navigatorKey: navigatorKey);
       addTearDown(session!.shutdown);
       engine!.promptScript = [_changedKeyPrompt('p1')];
       engine.channel = FakeAppBrowseChannel();
@@ -1072,35 +1414,44 @@ void main() {
         engine.replies
             .where((reply) => reply.$1 == 'p1')
             .map((reply) => reply.$3),
-        [isA<HostKeyPromptReply>().having((r) => r.accepted, 'accepted', false)],
+        [
+          isA<HostKeyPromptReply>().having(
+            (r) => r.accepted,
+            'accepted',
+            false,
+          ),
+        ],
       );
     });
 
-    test('shares the coordinator, engine, and lanes with app surfaces', () async {
-      final (session, engine) = await startSession();
-      addTearDown(session!.shutdown);
-      engine!.channel = FakeAppBrowseChannel();
+    test(
+      'shares the coordinator, engine, and lanes with app surfaces',
+      () async {
+        final (session, engine) = await startSession();
+        addTearDown(session!.shutdown);
+        engine!.channel = FakeAppBrowseChannel();
 
-      expect(session.prompts, isA<PromptCoordinator>());
-      expect(session.connectionLanes.watchServer('b1'), isNotNull);
+        expect(session.prompts, isA<PromptCoordinator>());
+        expect(session.connectionLanes.watchServer('b1'), isNotNull);
 
-      // The pane lanes are the same production engine — one engine per
-      // process, never a second spawn behind a pane binding.
-      await session.paneLanes.openBrowseChannel(
-        serverId: 'pane',
-        paneTabId: 'pane.left',
-        config: ServerConfig(
-          id: 'pane',
-          label: 'pane',
-          host: 'pane.example.com',
-          port: 22,
-          username: 'deploy',
-          authMethod: AuthMethod.agent,
-          createdAt: _now.millisecondsSinceEpoch,
-          updatedAt: _now.millisecondsSinceEpoch,
-        ),
-      );
-      expect(engine.openCalls, hasLength(1));
-    });
+        // The pane lanes are the same production engine — one engine per
+        // process, never a second spawn behind a pane binding.
+        await session.paneLanes.openBrowseChannel(
+          serverId: 'pane',
+          paneTabId: 'pane.left',
+          config: ServerConfig(
+            id: 'pane',
+            label: 'pane',
+            host: 'pane.example.com',
+            port: 22,
+            username: 'deploy',
+            authMethod: AuthMethod.agent,
+            createdAt: _now.millisecondsSinceEpoch,
+            updatedAt: _now.millisecondsSinceEpoch,
+          ),
+        );
+        expect(engine.openCalls, hasLength(1));
+      },
+    );
   });
 }

@@ -346,7 +346,7 @@ class EngineClient implements PromptBridge, ProbeBridge {
   /// engine-side while the pool is at capacity. Carries the server's
   /// [ServerConfig] — the lease may be the server's first connection; a
   /// null [config] leans on the one the server's browse open supplied.
-  Future<int> leaseTransferChannel({
+  Future<TransferLeaseGranted> leaseTransferChannel({
     required String serverId,
     ServerConfig? config,
   }) async {
@@ -357,7 +357,7 @@ class EngineClient implements PromptBridge, ProbeBridge {
         config: config,
       ),
     );
-    return (result as TransferLeaseGranted).leaseId;
+    return result as TransferLeaseGranted;
   }
 
   /// Returns a lease; idempotent engine-side.

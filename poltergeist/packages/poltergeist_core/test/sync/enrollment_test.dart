@@ -108,7 +108,8 @@ final class _Device {
   late final Directory dir;
   late final PersistentLocalRecordStore records;
   late final FileBookmarkStore bookmarks;
-  late final InMemoryHostKeyStore hostKeys;
+  late final InMemoryConflictAwareHostKeyStore hostKeys;
+  late final HostKeyMutationGate hostKeyMutations;
   late final InMemoryPinVerdictStore verdicts;
   late final InMemorySyncTripwireStore tripwires;
   late final FakeSyncCredentialStore credentials;
@@ -134,7 +135,8 @@ final class _Device {
       now: device.clock.call,
       syncDeviceId: () => device.state.id,
     );
-    device.hostKeys = InMemoryHostKeyStore();
+    device.hostKeys = InMemoryConflictAwareHostKeyStore();
+    device.hostKeyMutations = HostKeyMutationGate();
     device.verdicts = InMemoryPinVerdictStore();
     device.tripwires = InMemorySyncTripwireStore();
     device.credentials = FakeSyncCredentialStore();
@@ -153,6 +155,7 @@ final class _Device {
       records: records,
       bookmarks: bookmarks,
       hostKeys: hostKeys,
+      hostKeyMutations: hostKeyMutations,
       crypto: crypto,
       deviceId: state.id,
       pinVerdicts: verdicts,

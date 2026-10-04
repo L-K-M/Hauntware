@@ -21,6 +21,8 @@ void main() {
       );
       state.trashCacheRight = TrashCacheEntry(
         lastListedAt: DateTime.utc(2026, 3, 1, 13),
+        trashScope: 'scope-right',
+        locationKey: 'location-right',
         runs: [
           TrashCacheRun(
             runId: 'abcd1234-run-1',
@@ -51,6 +53,8 @@ void main() {
       expect(decoded.trashCacheRight?.runs, hasLength(2));
       expect(decoded.trashCacheRight?.runs[0].fileCount, 7);
       expect(decoded.trashCacheRight?.runs[1].fileCount, isNull);
+      expect(decoded.trashCacheRight?.trashScope, 'scope-right');
+      expect(decoded.trashCacheRight?.locationKey, 'location-right');
       expect(decoded.trashCacheLeft, isNull);
       expect(decoded.lastRunAt?.toUtc(), DateTime.utc(2026, 3, 1, 12));
     });
@@ -60,6 +64,16 @@ void main() {
       expect(decoded.mtimeUnreliableLeft, isFalse);
       expect(decoded.caseProbe, isEmpty);
       expect(decoded.trashCacheLeft, isNull);
+    });
+
+    test('legacy trash cache decodes without a scope', () {
+      final cache = TrashCacheEntry.fromJson({
+        'lastListedAt': DateTime.utc(2026).toIso8601String(),
+        'runs': const [],
+      });
+
+      expect(cache.trashScope, isNull);
+      expect(cache.locationKey, isNull);
     });
 
     test('corrupt text decodes to a fresh state, never throws', () {

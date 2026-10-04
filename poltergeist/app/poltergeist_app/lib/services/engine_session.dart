@@ -38,7 +38,8 @@ const kHostKeyReviewPaneTabId = 'review';
 /// connection, prompt, probe, and trust lanes. Production code names the
 /// concrete client nowhere but here; tests substitute a scripted fake, so
 /// the composition is drivable without an isolate.
-abstract interface class AppEngine implements PromptBridge, ProbeBridge, PaneEngineLanes {
+abstract interface class AppEngine
+    implements PromptBridge, ProbeBridge, PaneEngineLanes {
   /// Host keys the engine pinned; the app persists them (one store owner).
   Stream<HostKeyPinnedEvent> get hostKeyPins;
 
@@ -200,8 +201,7 @@ final class _EngineClientAppEngine implements AppEngine {
   Stream<EnginePromptEvent> get prompts => _client.prompts;
 
   @override
-  Stream<PromptDismissedEvent> get promptDismissals =>
-      _client.promptDismissals;
+  Stream<PromptDismissedEvent> get promptDismissals => _client.promptDismissals;
 
   @override
   void replyPrompt(String promptId, EnginePromptKind kind, PromptReply reply) =>
@@ -218,8 +218,7 @@ final class _EngineClientAppEngine implements AppEngine {
       _client.watchServer(serverId);
 
   @override
-  Stream<RecoveryFailedEvent> get recoveryFailures =>
-      _client.recoveryFailures;
+  Stream<RecoveryFailedEvent> get recoveryFailures => _client.recoveryFailures;
 
   @override
   Stream<ConnectionLogEvent> get connectionLog => _client.connectionLog;
@@ -249,10 +248,8 @@ final class _EngineClientAppEngine implements AppEngine {
   );
 
   @override
-  Future<AppBrowseChannel> openLocalChannel({required String rootPath})
-    async => _EngineClientChannel(
-      await _client.openLocalChannel(rootPath: rootPath),
-    );
+  Future<AppBrowseChannel> openLocalChannel({required String rootPath}) async =>
+      _EngineClientChannel(await _client.openLocalChannel(rootPath: rootPath));
 
   @override
   Future<void> disconnectServer(String serverId) =>
@@ -288,8 +285,7 @@ final class _EngineClientChannel implements AppBrowseChannel {
   String get homePath => _channel.homePath;
 
   @override
-  Stream<DirectoryWatchEvent> get directoryChanges =>
-      _channel.directoryChanges;
+  Stream<DirectoryWatchEvent> get directoryChanges => _channel.directoryChanges;
 
   @override
   Future<List<RemoteFileEntry>> listDirectory(String path) =>
@@ -315,8 +311,7 @@ final class _EngineClientChannel implements AppBrowseChannel {
   }
 
   @override
-  Future<void> openInDefaultApp(String path) =>
-      _channel.openInDefaultApp(path);
+  Future<void> openInDefaultApp(String path) => _channel.openInDefaultApp(path);
 
   @override
   Future<void> createDirectory(String path) => _channel.createDirectory(path);
@@ -359,16 +354,18 @@ final class _EngineClientChannel implements AppBrowseChannel {
 final class EngineSession {
   EngineSession._({
     required AppEngine engine,
-    required this._pinStore,
+    required HostKeyStore pinStore,
     required this._incidentStore,
     required this._bookmarks,
     required this._errors,
+    required Iterable<HostKey> initialPins,
     required GlobalKey<NavigatorState> navigatorKey,
     required GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey,
     required IdentityFileReader identityReader,
     SecretVault? vault,
     this._trashServer,
-  }) : _engine = engine {
+  }) : _engine = engine,
+       _pinStore = _ObservedHostKeyStore(pinStore, initialPins) {
     // One prompt coordinator per engine (02 §10): a second subscriber
     // would render every prompt twice.
     _prompts = PromptCoordinator(
@@ -388,7 +385,7 @@ final class EngineSession {
   }
 
   final AppEngine _engine;
-  final HostKeyStore _pinStore;
+  final _ObservedHostKeyStore _pinStore;
   final IncidentStore _incidentStore;
   final BookmarkRepository _bookmarks;
   final ApplicationErrorReporter _errors;
@@ -402,12 +399,6 @@ final class EngineSession {
 
   StreamSubscription<HostKeyPinnedEvent>? _pinMirror;
   StreamSubscription<IncidentStoreEvent>? _incidentMirror;
-
-  /// Pin-store writes serialize through this tail: the ported
-  /// [FileHostKeyStore] does not serialize internally, and stream events
-  /// do not await their handlers — two pins landing in one flush window
-  /// must not lose one to a read-modify-write race.
-  Future<void> _pinTail = Future<void>.value();
 
   /// Incident-mirror writes join a tail of their own: store events do
   /// not await their handlers, and mirror mutations — like the engine's
@@ -459,9 +450,7 @@ final class EngineSession {
     // EngineClient sends before returning its Future. Catalog publication
     // therefore precedes later connection requests on the same FIFO port,
     // even while this acknowledgement is pending.
-    _errors.observe(
-      _engine.replaceServerCatalog(snapshot),
-    );
+    _errors.observe(_engine.replaceServerCatalog(snapshot));
   }
 
   bool _isPublishedServerCatalog(List<ServerConfig> configs) {
@@ -519,7 +508,7 @@ final class EngineSession {
   /// coordinator's TOFU truth (04 §3.2): one instance over
   /// `host_keys.json`, since two file stores on one path would race
   /// their caches (FileHostKeyStore loads once, then writes blind).
-  HostKeyStore get pinStore => _pinStore;
+  ConflictAwareHostKeyStore get pinStore => _pinStore;
 
   /// The probe bridge the sidebar's reachability owner configures (02
   /// §4's favorites dots). Stable across rebuilds; the owner subscribes
@@ -528,33 +517,36 @@ final class EngineSession {
   late final ProbeBridge probeLanes = _engine;
 
   void _onPinPinned(HostKeyPinnedEvent event) {
-    _pinTail = _pinTail
-        .then((_) => _pinStore.put(event.key))
-        .then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {
-          // A failed write is reported, never thrown into the stream, and
-          // must not break the chain for later pins.
-          _errors.report(error, stackTrace);
-        });
+    final key = event.key;
+    _pinStore.observe(key);
+    _errors.observe(_pinStore.persist(key));
   }
 
   void _onIncidentChange(IncidentStoreEvent event) {
     // Removals apply idempotently (both shipped stores treat an absent
     // record as a no-op), including for a record the app just seeded that
     // the engine dropped because its pin was gone.
-    _incidentTail = _incidentTail.then((_) {
-      final Future<void> operation = switch (event) {
-        IncidentRecordStoredEvent(:final record) => _incidentStore.put(record),
-        IncidentRecordRemovedEvent(:final serverId, :final endpoint) =>
-          endpoint == null
-              ? _incidentStore.removeAllFor(serverId)
-              : _incidentStore.removeFor(serverId, endpoint),
-      };
-      return operation;
-    }).then<void>((_) {}, onError: (Object error, StackTrace stackTrace) {
-      // A failed write is reported, never thrown into the stream, and
-      // must not break the chain for later mutations.
-      _errors.report(error, stackTrace);
-    });
+    _incidentTail = _incidentTail
+        .then((_) {
+          final Future<void> operation = switch (event) {
+            IncidentRecordStoredEvent(:final record) => _incidentStore.put(
+              record,
+            ),
+            IncidentRecordRemovedEvent(:final serverId, :final endpoint) =>
+              endpoint == null
+                  ? _incidentStore.removeAllFor(serverId)
+                  : _incidentStore.removeFor(serverId, endpoint),
+          };
+          return operation;
+        })
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) {
+            // A failed write is reported, never thrown into the stream, and
+            // must not break the chain for later mutations.
+            _errors.report(error, stackTrace);
+          },
+        );
   }
 
   /// Forwards the app lifecycle. Only [AppLifecycleState.detached] — the
@@ -662,14 +654,15 @@ final class EngineSession {
   /// separate from [shutdown]: awaiting the tails inside the shutdown
   /// closure deadlocks flutter_test's teardown zone (see its doc), while
   /// this plain await of the tails completes everywhere.
-  Future<void> flushWrites() => Future.wait([_pinTail, _incidentTail]);
+  Future<void> flushWrites() =>
+      Future.wait([_pinStore.flushWrites(), _incidentTail]);
 
   /// Orderly engine shutdown, idempotent: prompts close, mirrors cancel,
   /// the engine stops (03 §5: orderly, then kill). The mirror
   /// cancellations are fire-and-forget — they only stop store writes, so
   /// nothing downstream depends on their completion.
   ///
-  /// The write tails ([_pinTail], [_incidentTail]) are deliberately NOT
+  /// The write tails (pin-store and [_incidentTail]) are deliberately NOT
   /// awaited here: an awaited instance-field future as this closure's
   /// first suspension deadlocks flutter_test's teardown zone (reproduced
   /// in isolation — the identical test passes without the await and
@@ -750,7 +743,9 @@ Future<EngineSession?> startEngineSession({
   final separator = Platform.pathSeparator;
   final pinsStore =
       pinStore ??
-      FileHostKeyStore(File('$supportDirectoryPath$separator$_pinStoreFileName'));
+      FileHostKeyStore(
+        File('$supportDirectoryPath$separator$_pinStoreFileName'),
+      );
   final incidentsStore =
       incidentStore ??
       FileIncidentStore(
@@ -784,7 +779,7 @@ Future<EngineSession?> startEngineSession({
   // unavailable — never a silent permanent delete.
   final trashServer =
       (trashServerBinder ??
-          () => TrashChannelServer.bind(onError: errors.report))();
+      () => TrashChannelServer.bind(onError: errors.report))();
   final AppEngine engine;
   try {
     engine = await spawn(
@@ -811,6 +806,7 @@ Future<EngineSession?> startEngineSession({
       incidentStore: incidentsStore,
       bookmarks: bookmarks,
       errors: errors,
+      initialPins: pins,
       navigatorKey: navigatorKey,
       scaffoldMessengerKey: scaffoldMessengerKey,
       identityReader: IdentityFileReader(
@@ -833,6 +829,157 @@ Future<EngineSession?> startEngineSession({
   }
 }
 
+String _exactHostKeyLocator(String host, int port) => '$host:$port';
+
+/// One accepted-key view for engine events and backup/sync writers.
+final class _ObservedHostKeyStore implements ConflictAwareHostKeyStore {
+  _ObservedHostKeyStore(this._delegate, Iterable<HostKey> initialKeys) {
+    for (final key in initialKeys) {
+      final locator = _exactHostKeyLocator(key.host, key.port);
+      _accepted[locator] = key;
+      _acceptedSequences[locator] = 0;
+    }
+  }
+
+  final HostKeyStore _delegate;
+  final Map<String, HostKey> _accepted = {};
+  final Map<String, int> _acceptedSequences = {};
+  var _nextSequence = 0;
+  Future<void> _writeTail = Future<void>.value();
+
+  void observe(HostKey key) {
+    final sequence = ++_nextSequence;
+    _accept(key, sequence);
+  }
+
+  Future<void> persist(HostKey key) => _enqueue(key);
+
+  Future<void> flushWrites() => _writeTail;
+
+  @override
+  Future<HostKey?> get(String host, int port) async {
+    final locator = _exactHostKeyLocator(host, port);
+    final accepted = _accepted[locator];
+    if (accepted != null) return accepted;
+
+    final stored = await _delegate.get(host, port);
+    final observed = _accepted[locator];
+    if (observed != null) return observed;
+
+    if (stored != null) _acceptStored(stored);
+    return stored;
+  }
+
+  @override
+  Future<List<HostKey>> all() async {
+    final stored = await _delegate.all();
+    for (final key in stored) {
+      _acceptStored(key);
+    }
+
+    return _accepted.values.toList(growable: false);
+  }
+
+  @override
+  Future<void> put(HostKey key) async {
+    final sequence = ++_nextSequence;
+    await _enqueue(key);
+
+    final locator = _exactHostKeyLocator(key.host, key.port);
+    final acceptedSequence = _acceptedSequences[locator] ?? -1;
+    if (acceptedSequence > sequence) return;
+
+    _accept(key, sequence);
+  }
+
+  Future<void> _enqueue(HostKey key) {
+    return _enqueueOperation(() => _delegate.put(key));
+  }
+
+  Future<T> _enqueueOperation<T>(Future<T> Function() write) {
+    final operation = _writeTail.then((_) => write());
+    _writeTail = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
+
+  @override
+  Future<HostKeyInstallResult> putIfNoConflict(HostKey key) {
+    final sequence = ++_nextSequence;
+    final locator = _exactHostKeyLocator(key.host, key.port);
+
+    return _enqueueOperation(() async {
+      var current = _accepted[locator];
+      if (current == null) {
+        final stored = await _delegate.get(key.host, key.port);
+        current = _accepted[locator] ?? stored;
+        if (stored != null) _acceptStored(stored);
+      }
+      if (current != null && current.conflictsWith(key)) {
+        return HostKeyInstallResult.conflict;
+      }
+
+      await _delegate.put(key);
+      final acceptedSequence = _acceptedSequences[locator] ?? -1;
+      if (acceptedSequence <= sequence) _accept(key, sequence);
+      return HostKeyInstallResult.installed;
+    });
+  }
+
+  @override
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  ) {
+    if (expected.locator != replacement.locator) {
+      throw ArgumentError.value(
+        replacement.locator,
+        'replacement',
+        'must use the expected host-key locator',
+      );
+    }
+
+    final sequence = ++_nextSequence;
+    final locator = expected.locator;
+
+    return _enqueueOperation(() async {
+      var current = _accepted[locator];
+      if (current == null) {
+        final stored = await _delegate.get(expected.host, expected.port);
+        current = _accepted[locator] ?? stored;
+        if (stored != null) _acceptStored(stored);
+      }
+      if (current == null ||
+          current.fingerprintSha256 != expected.fingerprintSha256) {
+        return HostKeyInstallResult.conflict;
+      }
+
+      await _delegate.put(replacement);
+      final acceptedSequence = _acceptedSequences[locator] ?? -1;
+      if (acceptedSequence > sequence) return HostKeyInstallResult.conflict;
+
+      _accept(replacement, sequence);
+      return HostKeyInstallResult.installed;
+    });
+  }
+
+  void _acceptStored(HostKey key) {
+    final locator = _exactHostKeyLocator(key.host, key.port);
+    if (_accepted.containsKey(locator)) return;
+
+    _accepted[locator] = key;
+    _acceptedSequences[locator] = 0;
+  }
+
+  void _accept(HostKey key, int sequence) {
+    final locator = _exactHostKeyLocator(key.host, key.port);
+    _accepted[locator] = key;
+    _acceptedSequences[locator] = sequence;
+  }
+}
+
 /// The Connections surface's two state lanes over [AppEngine].
 final class _AppConnectionLanes implements ConnectionStateBridge {
   _AppConnectionLanes(this._engine);
@@ -844,6 +991,5 @@ final class _AppConnectionLanes implements ConnectionStateBridge {
       _engine.watchServer(serverId);
 
   @override
-  Stream<RecoveryFailedEvent> get recoveryFailures =>
-      _engine.recoveryFailures;
+  Stream<RecoveryFailedEvent> get recoveryFailures => _engine.recoveryFailures;
 }

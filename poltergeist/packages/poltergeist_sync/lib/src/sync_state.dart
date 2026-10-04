@@ -149,6 +149,8 @@ final class CaseProbeRecord {
 final class TrashCacheEntry {
   const TrashCacheEntry({
     required this.lastListedAt,
+    this.trashScope,
+    this.locationKey,
     required this.runs,
   });
 
@@ -156,11 +158,20 @@ final class TrashCacheEntry {
   /// staleness label ("as of 3 days ago").
   final DateTime lastListedAt;
 
+  /// Last owned-root identity observed for this side. It lets a later scan
+  /// release journals if the whole trash root was removed between sessions.
+  final String? trashScope;
+
+  /// Stable endpoint/path slot for rejecting cache data from an old rule.
+  final String? locationKey;
+
   /// One entry per `<runId>` directory observed in the listing.
   final List<TrashCacheRun> runs;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'lastListedAt': lastListedAt.toUtc().toIso8601String(),
+    if (trashScope != null) 'trashScope': trashScope,
+    if (locationKey != null) 'locationKey': locationKey,
     'runs': [for (final run in runs) run.toJson()],
   };
 
@@ -170,6 +181,14 @@ final class TrashCacheEntry {
             DateTime.tryParse((json['lastListedAt'] as String?) ?? '')
                 ?.toLocal() ??
             DateTime.fromMillisecondsSinceEpoch(0),
+        trashScope: switch (json['trashScope']) {
+          final String value when value.isNotEmpty => value,
+          _ => null,
+        },
+        locationKey: switch (json['locationKey']) {
+          final String value when value.isNotEmpty => value,
+          _ => null,
+        },
         runs: [
           for (final run in (json['runs'] as List?) ?? const [])
             TrashCacheRun.fromJson(

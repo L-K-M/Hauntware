@@ -19,6 +19,8 @@ dependencies:
     path: ../poltergeist_core
   # sha256 — the runId's device-prefix digest (05 §6).
   crypto: ^3.0.0
+  # Lexical trash-root identity must match configured path aliases.
+  path: ^1.9.0
   # NFC/NFD name matching (05 §3). Dart ships no Unicode normalization;
   # pinned exactly — filename identity is correctness-critical.
   unorm_dart: 0.3.2

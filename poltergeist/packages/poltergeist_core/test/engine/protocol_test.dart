@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:poltergeist_core/poltergeist_core.dart';
 import 'package:test/test.dart';
 
-const _expectedProtocolVersion = 14;
+const _expectedProtocolVersion = 15;
 const _probeStatuses = {
   'reachable': ProbeStatus.online,
   'refused': ProbeStatus.offline,
@@ -533,7 +533,7 @@ void main() {
   );
 
   test(
-    'v14 bridge messages round-trip through a spawned isolate',
+    'v15 bridge messages round-trip through a spawned isolate',
     () async {
       final messages = ReceivePort();
       final incoming = StreamIterator<dynamic>(messages);
@@ -718,10 +718,29 @@ void main() {
             ResponseEvent(requestId: 40, result: value),
           )).result;
       expect(
-        (await result(const TransferLeaseGranted(leaseId: 3))
-                as TransferLeaseGranted)
-            .leaseId,
-        3,
+        await result(
+          const TransferLeaseGranted(
+            leaseId: 3,
+            endpointIdentity: AuthenticatedEndpointIdentity(
+              host: 'example.com',
+              port: 22,
+              username: 'user',
+              fingerprintSha256: 'SHA256:lease',
+            ),
+          ),
+        ),
+        isA<TransferLeaseGranted>()
+            .having((grant) => grant.leaseId, 'leaseId', 3)
+            .having(
+              (grant) => grant.endpointIdentity.host,
+              'endpointIdentity.host',
+              'example.com',
+            )
+            .having(
+              (grant) => grant.endpointIdentity.fingerprintSha256,
+              'endpointIdentity.fingerprintSha256',
+              'SHA256:lease',
+            ),
       );
       expect(
         (await result(const VfsEntryResult(entry: _entry)) as VfsEntryResult)

@@ -69,7 +69,7 @@ final class _BackupHarness {
   final bookmarks = FakeSyncTrackingBookmarkStore();
   final FakeSyncTrackingServerStore servers;
   final vaultStore = InMemoryVaultStore();
-  final hostKeys = InMemoryHostKeyStore();
+  final hostKeys = InMemoryConflictAwareHostKeyStore();
   final pinVerdicts = InMemoryPinVerdictStore();
   final tripwires = InMemorySyncTripwireStore();
   var records = InMemorySyncRecordStore();
