@@ -1,0 +1,168 @@
+Checksums	Set up job	﻿2026-09-11T04:13:49.6323871Z Current runner version: '2.337.0'
+Checksums	Set up job	2026-09-11T04:13:49.6349363Z ##[group]Runner Image Provisioner
+Checksums	Set up job	2026-09-11T04:13:49.6350473Z Hosted Compute Agent
+Checksums	Set up job	2026-09-11T04:13:49.6351874Z Version: 20260828.587
+Checksums	Set up job	2026-09-11T04:13:49.6352631Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+Checksums	Set up job	2026-09-11T04:13:49.6353385Z Build Date: 2026-08-28T16:44:25Z
+Checksums	Set up job	2026-09-11T04:13:49.6354070Z Worker ID: {efa82857-853a-4266-9e07-7f7b18c3bc7a}
+Checksums	Set up job	2026-09-11T04:13:49.6354869Z Azure Region: westus
+Checksums	Set up job	2026-09-11T04:13:49.6355435Z ##[endgroup]
+Checksums	Set up job	2026-09-11T04:13:49.6357074Z ##[group]Operating System
+Checksums	Set up job	2026-09-11T04:13:49.6357875Z Ubuntu
+Checksums	Set up job	2026-09-11T04:13:49.6358389Z 24.04.5
+Checksums	Set up job	2026-09-11T04:13:49.6359031Z LTS
+Checksums	Set up job	2026-09-11T04:13:49.6359535Z ##[endgroup]
+Checksums	Set up job	2026-09-11T04:13:49.6360061Z ##[group]Runner Image
+Checksums	Set up job	2026-09-11T04:13:49.6361019Z Image: ubuntu-24.04
+Checksums	Set up job	2026-09-11T04:13:49.6361621Z Version: 20260907.300.1
+Checksums	Set up job	2026-09-11T04:13:49.6362762Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+Checksums	Set up job	2026-09-11T04:13:49.6364500Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+Checksums	Set up job	2026-09-11T04:13:49.6365581Z ##[endgroup]
+Checksums	Set up job	2026-09-11T04:13:49.6366648Z ##[group]GITHUB_TOKEN Permissions
+Checksums	Set up job	2026-09-11T04:13:49.6368852Z Contents: write
+Checksums	Set up job	2026-09-11T04:13:49.6369501Z Metadata: read
+Checksums	Set up job	2026-09-11T04:13:49.6370411Z ##[endgroup]
+Checksums	Set up job	2026-09-11T04:13:49.6372814Z Secret source: Actions
+Checksums	Set up job	2026-09-11T04:13:49.6373894Z Cache mode: write
+Checksums	Set up job	2026-09-11T04:13:49.6374830Z Prepare workflow directory
+Checksums	Set up job	2026-09-11T04:13:49.6771744Z Prepare all required actions
+Checksums	Set up job	2026-09-11T04:13:49.6840408Z Complete job name: Checksums
+Checksums	Compute SHA256SUMS over the release's assets	﻿2026-09-11T04:13:49.7638262Z ##[group]Run set -euo pipefail
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7639096Z ^[[36;1mset -euo pipefail^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7639798Z ^[[36;1m^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7640335Z ^[[36;1massets_dir="$(mktemp -d)"^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7641977Z ^[[36;1mgh release download "$RELEASE_TAG" --repo "$REPO" \^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7642898Z ^[[36;1m  --dir "$assets_dir" --clobber^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7643554Z ^[[36;1m^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7644254Z ^[[36;1m# Rehearsal floor (07 §3.2): the APK and the Linux^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7645193Z ^[[36;1m# .deb/AppImage/bundle must publish; everything they need builds on^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7646294Z ^[[36;1m# ubuntu-latest, so a miss here is a pipeline bug the tag must wait^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7647141Z ^[[36;1m# for.^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7647684Z ^[[36;1mfloor_missing=()^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7648525Z ^[[36;1mfor asset in 'poltergeist-android.apk' 'poltergeist_*.deb' \^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7649451Z ^[[36;1m             'poltergeist-linux-x64.AppImage' \^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7650369Z ^[[36;1m             'poltergeist-linux-x64.tar.gz'; do^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7651340Z ^[[36;1m  compgen -G "$assets_dir/$asset" >/dev/null \^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7652122Z ^[[36;1m    || floor_missing+=("$asset")^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7652778Z ^[[36;1mdone^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7653366Z ^[[36;1mif ((${#floor_missing[@]} > 0)); then^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7654289Z ^[[36;1m  echo "floor asset(s) missing from the release: ${floor_missing[*]}" >&2^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7655135Z ^[[36;1m  exit 1^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7655634Z ^[[36;1mfi^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7656185Z ^[[36;1m^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7656842Z ^[[36;1m( cd "$assets_dir" && sha256sum -- * ) > SHA256SUMS^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7657591Z ^[[36;1m^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7658260Z ^[[36;1m# The notes own the labels D23 requires beside the artifacts — the^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7659215Z ^[[36;1m# APK and IPA are rehearsal artifacts of the desktop codebase — and^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7660258Z ^[[36;1m# the sums users verify downloads against (INSTALL.md points here).^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7661236Z ^[[36;1m{^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7661784Z ^[[36;1m  cat <<'NOTES'^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7662564Z ^[[36;1m**Android APK** — rehearsal artifact of the desktop codebase; Android^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7663489Z ^[[36;1mis not a supported target of this release.^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7664456Z ^[[36;1m**iOS IPA** — unsigned; re-sign to sideload. iOS is not a supported^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7665654Z ^[[36;1mtarget of this release.^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7666291Z ^[[36;1m^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7666994Z ^[[36;1m`SHA256SUMS` ships beside the assets; the same sums follow below.^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7667791Z ^[[36;1m^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7668342Z ^[[36;1m## SHA256 checksums^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7668946Z ^[[36;1m^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7669510Z ^[[36;1mNOTES^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7670082Z ^[[36;1m  cat SHA256SUMS^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7670799Z ^[[36;1m} > RELEASE_NOTES.md^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7671677Z ^[[36;1m^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7672337Z ^[[36;1m# Never mutate a published release: a re-run after a^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7673269Z ^[[36;1m# publish-step timeout would otherwise clobber SHA256SUMS and^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7674339Z ^[[36;1m# the notes on the live release. The draft probe fails loud:^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7675227Z ^[[36;1m# an errored view must not read as empty ("published").^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7676243Z ^[[36;1mis_draft=$(gh release view "$RELEASE_TAG" --repo "$REPO" \^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7677077Z ^[[36;1m  --json isDraft --jq .isDraft) || exit 1^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7677791Z ^[[36;1mif [ "$is_draft" = true ]; then^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7678788Z ^[[36;1m  gh release upload "$RELEASE_TAG" --repo "$REPO" SHA256SUMS --clobber^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7679704Z ^[[36;1m  gh release edit "$RELEASE_TAG" --repo "$REPO" \^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7680487Z ^[[36;1m    --notes-file RELEASE_NOTES.md^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7681431Z ^[[36;1melse^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7682189Z ^[[36;1m  echo "release already published; leaving assets and notes untouched" >&2^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.7683352Z ^[[36;1mfi^[[0m
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.8213257Z shell: /usr/bin/bash -e {0}
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.8214293Z env:
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.8214940Z   FLUTTER_VERSION: 3.47.2
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.8218953Z   GH_TOKEN: ***
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.8219534Z   REPO: L-K-M/Poltergeist
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.8220211Z   RELEASE_TAG: v0.2.0
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:49.8220953Z ##[endgroup]
+Checksums	Compute SHA256SUMS over the release's assets	2026-09-11T04:13:54.9324058Z https://github.com/L-K-M/Poltergeist/releases/tag/untagged-66371bbd684f93eee599
+Checksums	Verify the uploaded asset set before publishing	﻿2026-09-11T04:13:54.9456891Z ##[group]Run set -euo pipefail
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9458159Z ^[[36;1mset -euo pipefail^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9459299Z ^[[36;1mmkdir -p verify && cd verify^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9460608Z ^[[36;1mgh release download "$RELEASE_TAG" --repo "$REPO" --clobber^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9462373Z ^[[36;1m# Sums and files must be a bijection: sha256sum -c alone passes^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9463819Z ^[[36;1m# on a truncated sums list, leaving assets unchecked. Compare^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9465245Z ^[[36;1m# name sets, not counts -- a duplicate line balances the tally.^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9466686Z ^[[36;1mlisted=$(sed -E 's/^[0-9a-f]{64} [ *]?//' SHA256SUMS | awk 'NF' | sort)^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9468104Z ^[[36;1mfiles=$(find . -maxdepth 1 -type f ! -name SHA256SUMS \^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9469329Z ^[[36;1m  -printf '%f\n' | sort)^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9470556Z ^[[36;1mif ! diff -u <(printf '%s\n' "$files") <(printf '%s\n' "$listed"); then^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9472369Z ^[[36;1m  echo "SHA256SUMS and the downloaded asset set are not a bijection" >&2^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9473659Z ^[[36;1m  exit 1^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9474579Z ^[[36;1mfi^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9475547Z ^[[36;1msha256sum -c --strict SHA256SUMS^[[0m
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9514854Z shell: /usr/bin/bash -e {0}
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9515846Z env:
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9516738Z   FLUTTER_VERSION: 3.47.2
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9520503Z   GH_TOKEN: ***
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9521724Z   REPO: L-K-M/Poltergeist
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9522680Z   RELEASE_TAG: v0.2.0
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:54.9523600Z ##[endgroup]
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:56.2462019Z poltergeist-android.apk: OK
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:56.2527239Z poltergeist-ios-unsigned.ipa: OK
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:56.2607562Z poltergeist-linux-x64.AppImage: OK
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:56.2683812Z poltergeist-linux-x64.tar.gz: OK
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:56.2836560Z poltergeist-macos-universal.zip: OK
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:56.2924307Z poltergeist-windows-x64.zip: OK
+Checksums	Verify the uploaded asset set before publishing	2026-09-11T04:13:56.2988333Z poltergeist_0.2.0-1_amd64.deb: OK
+Checksums	Publish	﻿2026-09-11T04:13:56.3033705Z ##[group]Run set -euo pipefail
+Checksums	Publish	2026-09-11T04:13:56.3034109Z ^[[36;1mset -euo pipefail^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3034503Z ^[[36;1m# Fails loud: an errored probe reading as empty would take the^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3035006Z ^[[36;1m# else branch and exit 0 -- a green run over an unpublished^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3035397Z ^[[36;1m# draft.^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3035739Z ^[[36;1mdraft=$(gh release view "$RELEASE_TAG" --repo "$REPO" \^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3036177Z ^[[36;1m  --json isDraft --jq .isDraft) || exit 1^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3036533Z ^[[36;1mif [ "$draft" = true ]; then^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3036954Z ^[[36;1m  # The rehearsal checklist's flag check, automated: a v0.* tag^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3037458Z ^[[36;1m  # must publish as a pre-release (07 3.2). Fail loud rather^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3037898Z ^[[36;1m  # than publish a mis-flagged release.^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3038347Z ^[[36;1m  case "$RELEASE_TAG" in v0.*) want=true ;; *) want=false ;; esac^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3038825Z ^[[36;1m  got=$(gh release view "$RELEASE_TAG" --repo "$REPO" \^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3039303Z ^[[36;1m    --json isPrerelease --jq .isPrerelease) || exit 1^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3039683Z ^[[36;1m  [ "$got" = "$want" ] || {^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3040102Z ^[[36;1m    echo "prerelease flag is '$got', expected '$want' for $RELEASE_TAG" >&2^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3040535Z ^[[36;1m    exit 1^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3041051Z ^[[36;1m  }^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3041356Z ^[[36;1m  gh release ready "$RELEASE_TAG" --repo "$REPO"^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3041715Z ^[[36;1melse^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3042023Z ^[[36;1m  echo "release already published; nothing to do" >&2^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3042400Z ^[[36;1mfi^[[0m
+Checksums	Publish	2026-09-11T04:13:56.3079969Z shell: /usr/bin/bash -e {0}
+Checksums	Publish	2026-09-11T04:13:56.3080281Z env:
+Checksums	Publish	2026-09-11T04:13:56.3080524Z   FLUTTER_VERSION: 3.47.2
+Checksums	Publish	2026-09-11T04:13:56.3083262Z   GH_TOKEN: ***
+Checksums	Publish	2026-09-11T04:13:56.3083567Z   REPO: L-K-M/Poltergeist
+Checksums	Publish	2026-09-11T04:13:56.3083853Z   RELEASE_TAG: v0.2.0
+Checksums	Publish	2026-09-11T04:13:56.3084113Z ##[endgroup]
+Checksums	Publish	2026-09-11T04:13:57.3487119Z unknown command "ready" for "gh release"
+Checksums	Publish	2026-09-11T04:13:57.3487919Z 
+Checksums	Publish	2026-09-11T04:13:57.3488475Z Usage:  gh release <command> [flags]
+Checksums	Publish	2026-09-11T04:13:57.3488854Z 
+Checksums	Publish	2026-09-11T04:13:57.3489016Z Available commands:
+Checksums	Publish	2026-09-11T04:13:57.3489472Z   create
+Checksums	Publish	2026-09-11T04:13:57.3489808Z   delete
+Checksums	Publish	2026-09-11T04:13:57.3490130Z   delete-asset
+Checksums	Publish	2026-09-11T04:13:57.3490480Z   download
+Checksums	Publish	2026-09-11T04:13:57.3491006Z   edit
+Checksums	Publish	2026-09-11T04:13:57.3491310Z   list
+Checksums	Publish	2026-09-11T04:13:57.3491606Z   upload
+Checksums	Publish	2026-09-11T04:13:57.3491912Z   verify
+Checksums	Publish	2026-09-11T04:13:57.3492228Z   verify-asset
+Checksums	Publish	2026-09-11T04:13:57.3492553Z   view
+Checksums	Publish	2026-09-11T04:13:57.3515105Z ##[error]Process completed with exit code 1.
+Checksums	Complete job	﻿2026-09-11T04:13:57.3613372Z Cleaning up orphan processes

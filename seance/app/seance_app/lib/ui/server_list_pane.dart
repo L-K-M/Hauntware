@@ -1,0 +1,1123 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import 'package:flutter/material.dart';
+import 'package:seance_core/seance_core.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../app_state.dart';
+import '../main.dart';
+import '../theme.dart';
+import 'app_menus.dart';
+import 'inbox_view.dart';
+import 'server_editor.dart';
+import 'server_filter.dart';
+import 'server_grouping.dart';
+import 'server_list_density.dart';
+import 'server_status_dot.dart';
+import 'server_tile.dart';
+import 'settings_screen.dart';
+import 'sidebar/sidebar_kit.dart';
+import 'top_toast.dart';
+
+/// Where the server list is mounted, which decides its chrome.
+enum ServerListPosture {
+  /// The wide layout's left rail: the sibling sidebar anatomy (Poltergeist's
+  /// plan, 10 §5) with no app bar, a filter field at the top and the bottom
+  /// bar's "+" menu, sync status, density switch and gear at the foot.
+  rail,
+
+  /// The narrow layout's home screen, full screen (10 §9, §10.6): an app
+  /// bar with the density switch, the same sections and rows at the
+  /// platform's row extent, and a "+" button that adds a server.
+  home,
+}
+
+/// The copy the sibling kit renders, in Séance's words. Public so a widget
+/// test can pump a kit header or row exactly as the pane does.
+final SidebarKitStrings serverSidebarStrings = SidebarKitStrings(
+  sectionSemantics: (title, count) =>
+      '$title, $count ${count == 1 ? 'server' : 'servers'}',
+  showSection: 'Show',
+  hideSection: 'Hide',
+  filterHint: 'Filter servers…',
+  filterClear: 'Clear filter',
+  addMenu: 'New server or import',
+  settings: 'Sync & settings',
+  rowMenu: 'More actions',
+  compactRows: 'Compact rows',
+  comfortableRows: 'Comfortable rows',
+);
+
+/// The configured servers with their live state, in the sibling rail's
+/// sections. Tapping one opens a terminal (via [onOpen]).
+class ServerListPane extends StatefulWidget {
+  final void Function(ServerConfig server) onOpen;
+  final ServerListPosture posture;
+
+  /// Open the local shell.
+  final VoidCallback? onOpenLocal;
+
+  const ServerListPane({
+    super.key,
+    required this.onOpen,
+    required this.posture,
+    this.onOpenLocal,
+  });
+
+  /// Below this many servers the list is short enough to read at a glance
+  /// and the filter would just be chrome. Five, as both sibling apps had it
+  /// before the kit (and Poltergeist again now), so a phone with a handful
+  /// of servers, which has no chord to reveal the field, still gets one.
+  /// The field still shows while a query is live, and on demand through
+  /// [revealFilter].
+  static const int filterThreshold = 5;
+
+  static final List<_ServerListPaneState> _mounted = [];
+
+  /// Show and focus the filter field of the pane on screen (⌥⌘F, or
+  /// Ctrl+Alt+F off Apple platforms). Returns false when no pane is mounted
+  /// to take it, or when its list has nothing to filter: the onboarding
+  /// state draws no field, and a reveal remembered from then would pop one
+  /// open the moment the first server arrived. The newest pane wins: during
+  /// the narrow layout's screen switch the outgoing one is still mounted,
+  /// and is not the one the user is looking at.
+  static bool revealFilter() {
+    if (_mounted.isEmpty) return false;
+    return _mounted.last._revealFilter();
+  }
+
+  @override
+  State<ServerListPane> createState() => _ServerListPaneState();
+}
+
+class _ServerListPaneState extends State<ServerListPane> {
+  /// Bottom padding that lets the last row scroll clear of the home screen's
+  /// floating "+" button, so a row's "⋮" is never tapped through to the
+  /// button: 56 (button) + 16 (endFloat margin) + 16 (gap). The geometry
+  /// assertion in server_list_pane_test.dart fails if a button change ever
+  /// erodes the gap.
+  static const double _fabScrollClearance = 56 + 16 + 16;
+
+  /// How often the "Synced · 2 min" age is repainted while it shows.
+  static const Duration _syncAgeRefresh = Duration(seconds: 30);
+
+  /// Where the query outlives the pane. The narrow layout disposes the home
+  /// list while a terminal shows; back must return to the list as it was
+  /// (10 §10.6), so the query and the scroll offset are kept in the route's
+  /// page storage, which outlives the swap.
+  static const String _queryStorageId = 'servers.filter.query';
+
+  final _filterFocus = FocusNode();
+  String _query = '';
+  bool _queryRestored = false;
+
+  /// Opened by [ServerListPane.revealFilter] on a list below the threshold;
+  /// Esc on an empty field closes it again.
+  bool _filterOpen = false;
+
+  Timer? _syncAgeTicker;
+
+  @override
+  void initState() {
+    super.initState();
+    ServerListPane._mounted.add(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_queryRestored) return;
+    _queryRestored = true;
+    final saved = PageStorage.maybeOf(
+      context,
+    )?.readState(context, identifier: _queryStorageId);
+    if (saved is String) _query = saved;
+  }
+
+  @override
+  void dispose() {
+    ServerListPane._mounted.remove(this);
+    _syncAgeTicker?.cancel();
+    _filterFocus.dispose();
+    super.dispose();
+  }
+
+  void _setQuery(String value) {
+    setState(() => _query = value);
+    PageStorage.maybeOf(
+      context,
+    )?.writeState(context, value, identifier: _queryStorageId);
+  }
+
+  void _clearQuery() => _setQuery('');
+
+  /// Opens and focuses the field; false, with nothing latched, while the
+  /// list is empty (see [ServerListPane.revealFilter]).
+  bool _revealFilter() {
+    if (AppScope.of(context).servers.isEmpty) return false;
+    setState(() => _filterOpen = true);
+    // The field may be mounting in this very frame: focus it after.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _filterFocus.requestFocus();
+    });
+    return true;
+  }
+
+  /// Esc: a live query clears first; an empty field then hands control back
+  /// (and closes, if it was only open on request).
+  void _dismissFilter() {
+    if (_query.isNotEmpty) {
+      _clearQuery();
+      return;
+    }
+    setState(() => _filterOpen = false);
+    _filterFocus.unfocus();
+  }
+
+  /// Drop a stale query once the list it filtered is empty, so adding a server
+  /// afterwards shows it instead of "No servers match", and end a reveal with
+  /// it, so the field does not come back unasked with that server. Deferred to
+  /// after the frame because this is observed from inside a build.
+  void _dropStaleQuery() {
+    if (_query.isEmpty && !_filterOpen) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_query.isNotEmpty) _clearQuery();
+      if (_filterOpen) setState(() => _filterOpen = false);
+    });
+  }
+
+  /// Open the first match — the fast path for "type three letters, hit return,
+  /// you're on the box". Deliberately works with several matches too.
+  ///
+  /// Matches are recomputed here rather than captured from the build that
+  /// wired this up: typing and submitting inside one frame would otherwise act
+  /// on a list one keystroke out of date.
+  ///
+  /// "First" is the first row the user can *see*, which is why this goes
+  /// through the same sectioning the list renders rather than taking the head
+  /// of the filtered list: pinning floats a match to the top and grouping
+  /// sorts groups by name, so store order is not what the eye reads. A live
+  /// query overrides every collapsed section (see [_serverList]), so no row
+  /// counted here is folded away.
+  void _openFirstMatch() {
+    if (_query.isEmpty) return;
+    final state = AppScope.of(context);
+    final rows = serverListRows(
+      sections: _sections(state, filterServers(state.servers, _query)),
+      collapsedKeys: const {},
+    );
+    final first = rows.whereType<ServerRow>().firstOrNull;
+    if (first == null) return;
+    _filterFocus.unfocus();
+    widget.onOpen(first.server);
+  }
+
+  /// The sections the list is drawn from.
+  ///
+  /// One definition, because "the first row" has to mean the same thing to
+  /// [_openFirstMatch] as to the eye reading [_serverList] — and pinning is
+  /// exactly what makes those two orders differ from the store's.
+  ServerSidebarSections _sections(AppState state, List<ServerConfig> servers) =>
+      groupServers(servers, pinnedIds: state.pinnedServerIds);
+
+  bool get _home => widget.posture == ServerListPosture.home;
+
+  /// The phone home at [density] (the kit's [sidebarHomeLayout]): an
+  /// Android list when comfortable, the same list Poltergeist's Home uses
+  /// (sibling contract §10.6), and one-line touch rows when compact. The
+  /// rail, on a desktop or a tablet, and a narrow desktop window are
+  /// rail-drawn at either density.
+  SidebarKitLayout _layoutFor(BuildContext context, SidebarKitDensity density) {
+    final touch = switch (Theme.of(context).platform) {
+      TargetPlatform.android ||
+      TargetPlatform.iOS ||
+      TargetPlatform.fuchsia => true,
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows => false,
+    };
+    return _home && touch ? sidebarHomeLayout(density) : SidebarKitLayout.rail;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final chrome = SeanceChrome.of(context);
+    final background = _home
+        ? Theme.of(context).colorScheme.surface
+        : chrome.sidebarBackground;
+    final body = ListenableBuilder(
+      listenable: state,
+      builder: (context, _) {
+        // The one density gate: every posture follows the preference, and
+        // the kit derives what each density draws from it.
+        final density = state.serverListDensity.kit;
+        return SidebarKitScope(
+          strings: serverSidebarStrings,
+          background: background,
+          layout: _layoutFor(context, density),
+          density: density,
+          child: Builder(builder: (context) => _body(context, state)),
+        );
+      },
+    );
+    // A Material rather than a bare fill: the filter field and the kit's
+    // buttons ink on it, and the rail must not depend on a Scaffold above.
+    if (!_home) return Material(color: background, child: body);
+    return Scaffold(
+      backgroundColor: background,
+      appBar: AppBar(
+        title: const Text('Séance'),
+        actions: [
+          ListenableBuilder(
+            listenable: state,
+            builder: (context, _) =>
+                _SyncIndicator(state: state, onRetry: () => _syncNow(state)),
+          ),
+          // The kit's switch, as the rail's bottom bar draws it. The app
+          // bar sits outside the list's scope, so it gets one of its own
+          // for the switch's strings and the current density.
+          ListenableBuilder(
+            listenable: state,
+            builder: (context, _) => SidebarKitScope(
+              strings: serverSidebarStrings,
+              density: state.serverListDensity.kit,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Center(
+                  child: SidebarDensitySwitch(
+                    key: const ValueKey('servers.density'),
+                    onChanged: (density) => _setDensity(state, density),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Import SSH config',
+            icon: const Icon(Icons.download_outlined),
+            onPressed: () => _importConfig(context, state),
+          ),
+          IconButton(
+            tooltip: serverSidebarStrings.settings,
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => _openSettings(context),
+          ),
+        ],
+      ),
+      body: body,
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'New server',
+        onPressed: () => _editServer(context, state, null),
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context, AppState state) {
+    final servers = state.servers;
+    if (servers.isEmpty) _dropStaleQuery();
+    final matches = filterServers(servers, _query);
+    // Kept once a query is active even if the match count drops below the
+    // threshold, or filtering would strand an uneditable filter with no way
+    // to clear it. Never above the onboarding empty state: a filter box
+    // beside "No servers yet" reads as "your servers are hidden" rather than
+    // "you have none".
+    final showFilter =
+        servers.isNotEmpty &&
+        (servers.length >= ServerListPane.filterThreshold ||
+            _query.isNotEmpty ||
+            _filterOpen);
+    final Widget list;
+    if (servers.isEmpty) {
+      list = _EmptyState(
+        onNewServer: () => _editServer(context, state, null),
+        onImport: () => _importConfig(context, state),
+      );
+    } else {
+      list = _serverList(context, state, matches);
+    }
+    final update = state.updateInfo;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // A newer release exists: a dismissible banner above the list.
+        if (update != null)
+          _UpdateBanner(info: update, onDismiss: state.dismissUpdateNotice),
+        // Proposals from connected apps wait here for review.
+        InboxBanner(state: state),
+        // This machine, above the servers and outside the filter: it is
+        // not a server, so it is not a search result either, and it must
+        // not vanish behind a query the way a filtered-out host does.
+        // Also above the onboarding empty state — with no servers yet it
+        // is the one thing here that can actually be opened.
+        if (state.localShellAvailable && widget.onOpenLocal != null) ...[
+          Builder(
+            builder: (context) {
+              final tabs = state
+                  .tabsForServer(kLocalShellServerId)
+                  .whereType<TerminalSession>()
+                  .toList();
+              return LocalShellTile(
+                dot: serverDotFor(
+                  session: aggregateSessionStatus(tabs),
+                  probe: ProbeStatus.unknown,
+                ),
+                tabCount: tabs.length,
+                shellName: state.services.localShell.shellName,
+                selected: state.activeServerId == kLocalShellServerId,
+                onTap: widget.onOpenLocal!,
+                onNewTab: state.newLocalTab,
+                onCloseAll: () =>
+                    state.closeAllTabsForServer(kLocalShellServerId),
+              );
+            },
+          ),
+          const Divider(height: 1, thickness: 2),
+        ],
+        if (showFilter)
+          SidebarFilterField(
+            key: const ValueKey('servers.filter'),
+            fieldKey: const ValueKey('servers.filter.field'),
+            query: _query,
+            focusNode: _filterFocus,
+            onChanged: _setQuery,
+            onDismiss: _dismissFilter,
+            // A no-op on an empty query, so Enter in an empty field cannot
+            // connect to whichever server is first.
+            onSubmitted: _openFirstMatch,
+            // Enter opens nothing without a match, so the hint is only
+            // offered when it would.
+            countText: _query.isEmpty
+                ? null
+                : matches.isEmpty
+                ? '0 of ${servers.length}'
+                : '${matches.length} of ${servers.length} · ↵ opens the first',
+          ),
+        Expanded(child: list),
+        if (!_home)
+          SidebarBottomBar(
+            key: const ValueKey('servers.bottomBar'),
+            addKey: const ValueKey('servers.add'),
+            settingsKey: const ValueKey('servers.settings'),
+            addEntries: () => [
+              SidebarMenuAction(
+                key: const ValueKey('servers.add.newServer'),
+                label: 'New server…',
+                onSelected: () => _editServer(context, state, null),
+              ),
+              SidebarMenuAction(
+                key: const ValueKey('servers.add.import'),
+                label: 'Import SSH config…',
+                onSelected: () => _importConfig(context, state),
+              ),
+            ],
+            sync: _syncChip(state),
+            onDensityChanged: (density) => _setDensity(state, density),
+            densityKey: const ValueKey('servers.density'),
+            onSettings: () => _openSettings(context),
+          ),
+      ],
+    );
+  }
+
+  /// The list drawn for [servers], the query's matches (every server while
+  /// there is no query), with "No servers match" when none are left.
+  Widget _serverList(
+    BuildContext context,
+    AppState state,
+    List<ServerConfig> servers,
+  ) {
+    final whole = _sections(state, state.servers);
+    final rows = serverListRows(
+      sections: _sections(state, servers),
+      // A live query overrides every collapsed section. Otherwise the filter
+      // would report "3 of 12" and show one row, with the other two folded
+      // away behind a header the user never opened — which reads as the filter
+      // being broken rather than as the list being tidy.
+      collapsedKeys: _query.isEmpty ? state.collapsedServerGroups : const {},
+      // A section the query empties keeps its header while a live server is
+      // among what it hid, so that server's dot still has somewhere to show.
+      keptSections: _query.isEmpty
+          ? const {}
+          : sectionsHoldingLive(
+              whole,
+              (server) => _liveDot(state, [server]) != null,
+            ),
+    );
+    // Nothing matched and nothing live is hidden: the copy alone.
+    if (rows.isEmpty) return _NoMatches(onClear: _clearQuery);
+    // What each header folds or filters out of view, measured against the
+    // whole list, so a hidden live session still shows on its header.
+    final hidden = hiddenByHeader(sections: whole, rows: rows);
+    final hiddenLive = {
+      for (final MapEntry(:key, :value) in hidden.entries)
+        key: _hiddenLive(context, state, value),
+    };
+    // The home screen lets the ListView take the ambient insets (the
+    // gesture-nav bar on Android) and extends the bottom one by the floating
+    // button's clearance; an explicit EdgeInsets must neither drop the
+    // bottom inset nor add side insets the default never had.
+    final safeAreaInsets = MediaQuery.paddingOf(context);
+    final padding = _home
+        ? safeAreaInsets.copyWith(
+            left: 0,
+            right: 0,
+            top: safeAreaInsets.top + 4,
+            bottom: safeAreaInsets.bottom + _fabScrollClearance,
+          )
+        : const EdgeInsets.only(top: 4, bottom: 8);
+    // Built eagerly, not lazily: the rows move focus with ↑/↓ through the
+    // focus tree, and a row a lazy list has not built is not in it.
+    return ListView(
+      // Restores the scroll offset when the home list comes back from a
+      // terminal (see [_queryStorageId]).
+      key: PageStorageKey<String>('servers.list.${widget.posture.name}'),
+      padding: padding,
+      children: [
+        for (final row in rows)
+          switch (row) {
+            ServerSectionRow(
+              :final title,
+              :final key,
+              :final count,
+              :final collapsed,
+            ) =>
+              SidebarSectionHeader(
+                key: ValueKey('servers.section.$key'),
+                headerKey: ValueKey('servers.section.header.$key'),
+                title: title,
+                count: count,
+                collapsed: collapsed,
+                status: hiddenLive[key]?.dot,
+                statusLabel: hiddenLive[key]?.label,
+                onToggle: () => state.toggleServerGroup(key),
+                // SERVERS' "+" adds to it; the shortlist is filled from a
+                // row's menu, so PINNED has none. The home screen's floating
+                // "+" already does this, so a second one is left off there.
+                onAdd: key == kServersKey && !_home
+                    ? () => _editServer(context, state, null)
+                    : null,
+                addKey: const ValueKey('servers.section.add'),
+                addTooltip: 'New server',
+              ),
+            ServerGroupHeaderRow(
+              :final name,
+              :final key,
+              :final count,
+              :final collapsed,
+            ) =>
+              SidebarSectionHeader(
+                key: ValueKey('servers.group.$key'),
+                headerKey: ValueKey('servers.group.header.$key'),
+                nested: true,
+                title: name,
+                count: count,
+                collapsed: collapsed,
+                status: hiddenLive[key]?.dot,
+                statusLabel: hiddenLive[key]?.label,
+                onToggle: () => state.toggleServerGroup(key),
+              ),
+            ServerRow(:final server, :final depth) => _tile(
+              context,
+              state,
+              server,
+              depth,
+            ),
+          },
+        // Nothing matched, but a header stayed for a live server the filter
+        // hid. It is not a match, so the miss is still said, under it.
+        if (servers.isEmpty) _NoMatches(onClear: _clearQuery),
+      ],
+    );
+  }
+
+  /// A header's dot for the live sessions it keeps out of view (see
+  /// [_liveDot]), and its words for a screen reader.
+  ({SidebarStatusDot dot, String label})? _hiddenLive(
+    BuildContext context,
+    AppState state,
+    List<ServerConfig> servers,
+  ) {
+    final dot = _liveDot(state, servers);
+    if (dot == null) return null;
+    return (
+      dot: SidebarStatusDot(dot.color(context)!, style: dot.style),
+      // The row's own word for the state, said of a server out of view.
+      label: '${dot.description} server hidden',
+    );
+  }
+
+  /// What a header says for [servers] out of view: connected while one of
+  /// them is, else connecting while one is, else null, as nothing there is
+  /// live. A failure is left to its row: folding a group is a choice not to
+  /// look, and what must not vanish with it is a connection still open.
+  ServerDot? _liveDot(AppState state, Iterable<ServerConfig> servers) {
+    final live = {
+      for (final server in servers)
+        for (final tab in state.tabsForServer(server.id))
+          if (tab is TerminalSession) tab.status,
+    };
+    return live.contains(TerminalStatus.connected)
+        ? ServerDot.connected
+        : live.contains(TerminalStatus.connecting)
+        ? ServerDot.connecting
+        : null;
+  }
+
+  Widget _tile(
+    BuildContext context,
+    AppState state,
+    ServerConfig server,
+    int depth,
+  ) {
+    final tabs = state.tabsForServer(server.id);
+    final terminals = tabs.whereType<TerminalSession>().toList();
+    final session = aggregateSessionStatus(terminals);
+    final live = terminals.where((t) => t.status == TerminalStatus.connected);
+    final dead =
+        terminals.length == 1 &&
+        (session == TerminalStatus.disconnected ||
+            session == TerminalStatus.error);
+    return ServerTile(
+      // Stable identity so a background sync replacing the list reconciles
+      // each row to its server instead of by position.
+      key: ValueKey(server.id),
+      server: server,
+      dot: serverDotFor(
+        session: session,
+        probe: state.statuses[server.id] ?? ProbeStatus.unknown,
+        hostKeyBlocked: terminals.any(
+          (t) => t.status == TerminalStatus.error && t.hostKeyBlocked,
+        ),
+      ),
+      tabCount: tabs.length,
+      selected: server.id == state.activeServerId,
+      pinned: state.isServerPinned(server.id),
+      depth: depth,
+      onOpen: () => widget.onOpen(server),
+      onNewTab: () => state.newTab(server),
+      onEdit: () => _editServer(context, state, server),
+      onDuplicate: () => _duplicateServer(context, state, server),
+      onDelete: () => _deleteServer(context, state, server),
+      onTogglePin: () => state.toggleServerPin(server.id),
+      // Disconnect every live terminal; reconnect the lone dead one.
+      onDisconnect: live.isEmpty
+          ? null
+          : () {
+              for (final t in live.toList()) {
+                state.disconnect(t.id);
+              }
+            },
+      onReconnect: dead ? () => state.reconnect(terminals.single.id) : null,
+    );
+  }
+
+  /// The switch's pick, persisted on this device (the list rebuilds from
+  /// the state it notifies).
+  void _setDensity(AppState state, SidebarKitDensity density) =>
+      unawaited(state.setServerListDensity(ServerListDensity.fromKit(density)));
+
+  /// One sync round now: the chip's retry. The outcome lands in the shared
+  /// sync status the chip repaints from, so nothing is lost by not awaiting
+  /// the error here.
+  void _syncNow(AppState state) {
+    unawaited(
+      state.syncNow().then<void>(
+        (_) {},
+        onError: (Object error, StackTrace stackTrace) {
+          developer.log(
+            'Sync from the server list failed',
+            name: 'seance.app',
+            level: 800,
+            error: error,
+            stackTrace: stackTrace,
+          );
+        },
+      ),
+    );
+  }
+
+  /// The bottom bar's sync status (10 §5): "Synced · 2 min", a spinner, or
+  /// a red "Sync failed" whose click retries; "Sync off" leads to setting it
+  /// up.
+  SidebarSyncChipData _syncChip(AppState state) {
+    const key = ValueKey('servers.syncChip');
+    final ageShown =
+        state.services.isSyncConfigured &&
+        !state.syncing &&
+        state.lastSyncError == null &&
+        state.lastSyncAt != null;
+    _tickSyncAge(ageShown);
+    if (!state.services.isSyncConfigured) {
+      return SidebarSyncChipData(
+        key: key,
+        label: 'Sync off',
+        tone: SidebarSyncTone.muted,
+        tooltip: 'Set up sync',
+        onPressed: () => openSettings(SettingsTab.sync),
+      );
+    }
+    if (state.syncing) {
+      return const SidebarSyncChipData(
+        key: key,
+        label: 'Syncing…',
+        tone: SidebarSyncTone.busy,
+      );
+    }
+    final error = state.lastSyncError;
+    if (error != null) {
+      return SidebarSyncChipData(
+        key: key,
+        label: 'Sync failed',
+        tone: SidebarSyncTone.error,
+        tooltip: '$error\nClick to retry',
+        onPressed: () => _syncNow(state),
+      );
+    }
+    final last = state.lastSyncAt;
+    return SidebarSyncChipData(
+      key: key,
+      label: last == null
+          ? 'Not synced yet'
+          : 'Synced · ${syncAgeLabel(DateTime.now().difference(last))}',
+      tone: SidebarSyncTone.normal,
+      tooltip: 'Sync now',
+      onPressed: () => _syncNow(state),
+    );
+  }
+
+  /// "2 min" goes stale between rounds; a slow ticker repaints it while it
+  /// shows, and stops when it does not.
+  void _tickSyncAge(bool shown) {
+    if (!shown) {
+      _syncAgeTicker?.cancel();
+      _syncAgeTicker = null;
+      return;
+    }
+    _syncAgeTicker ??= Timer.periodic(_syncAgeRefresh, (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  static void _openSettings(
+    BuildContext context, [
+    SettingsTab tab = SettingsTab.general,
+  ]) => openSettings(tab);
+
+  Future<void> _editServer(
+    BuildContext context,
+    AppState state,
+    ServerConfig? server,
+  ) async {
+    await showServerEditor(context, state, server);
+  }
+
+  /// Copy a server, then offer the editor — duplicating is almost always the
+  /// first half of "…and change one thing", and the toast's action is a
+  /// shorter route back than finding the new row and reopening its menu.
+  Future<void> _duplicateServer(
+    BuildContext context,
+    AppState state,
+    ServerConfig server,
+  ) async {
+    final ServerConfig copy;
+    try {
+      copy = await state.duplicateServer(server);
+    } on SourceServerChanged catch (error) {
+      // Verbatim: this one is written as a whole sentence *for* this toast,
+      // and "Could not duplicate: …Nothing was created." says it twice.
+      if (context.mounted) {
+        showTopToastIn(context, message: '$error');
+      } else {
+        // Nowhere to show it. Logged so the refusal is not the failure that
+        // vanished — the same reason the branch below logs.
+        developer.log(
+          'Could not duplicate "${server.label}": $error',
+          name: 'seance.app',
+          level: 900,
+          error: error,
+        );
+      }
+      return;
+    } catch (error, stackTrace) {
+      // The vault throws when the OS keyring is locked. Say so rather than
+      // leaving the menu looking like it did nothing — and name the server,
+      // because a toast is all the user gets and two rows can fail apart.
+      // The error itself stays verbatim: `VaultLockedException.toString()` is
+      // the sentence that says what to do about it.
+      final message = 'Could not duplicate "${server.label}": $error';
+      // Logged whether or not there is a toast to show: the toast and the
+      // log are for different readers. With the trace, because this catch is
+      // broad, and for the failures it was not written for the message names
+      // the server and nothing else — no throw site to tell a locked keyring
+      // from a bug in the vault.
+      developer.log(
+        message,
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (context.mounted) showTopToastIn(context, message: message);
+      return;
+    }
+    if (!context.mounted) return;
+    showTopToastIn(
+      context,
+      message: 'Duplicated as "${copy.label}"',
+      actionLabel: 'Edit',
+      // Checked again inside the closure, not only before showing the toast:
+      // the action fires whenever the user taps it, which can be after this
+      // pane is gone, and a defunct context reaches showDialog as an ancestor
+      // lookup on a deactivated widget.
+      onAction: () {
+        if (context.mounted) _editServer(context, state, copy);
+      },
+    );
+  }
+
+  Future<void> _deleteServer(
+    BuildContext context,
+    AppState state,
+    ServerConfig server,
+  ) async {
+    final localCopyCount = state
+        .tabsForServer(server.id)
+        .whereType<TerminalSession>()
+        .fold<int>(
+          0,
+          (count, session) =>
+              count +
+              (session.files?.localCopies.length ?? 0) +
+              session.retainedLocalCopies.length,
+        );
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Delete "${server.label}"?'),
+        content: Text(
+          localCopyCount == 0
+              ? 'This removes the server and any stored secret.'
+              : 'This removes the server, its stored secret, and '
+                    '$localCopyCount managed local '
+                    '${localCopyCount == 1 ? 'edit' : 'edits'}. Any changes not '
+                    'uploaded to the server will be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) await state.deleteServer(server.id);
+  }
+
+  Future<void> _importConfig(BuildContext context, AppState state) async {
+    final controller = TextEditingController();
+    final text = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Import SSH config'),
+        content: SizedBox(
+          width: 480,
+          child: TextField(
+            controller: controller,
+            maxLines: 12,
+            style: const TextStyle(fontFamily: 'monospace'),
+            decoration: const InputDecoration(
+              hintText: 'Paste the contents of ~/.ssh/config …',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    if (text != null && text.trim().isNotEmpty) {
+      final n = await state.importSshConfig(text);
+      if (context.mounted) {
+        showTopToastIn(context, message: 'Imported $n host(s)');
+      }
+    }
+  }
+}
+
+/// The pinned "this machine" row above the servers.
+///
+/// Deliberately shaped like a [ServerTile] — the same mark shape, the same
+/// status dot, the same `\u00d7N` tab count and verbs menu — because it
+/// opens into the same terminal pane and behaves the same way once it does.
+/// What it drops is what a local shell has no answer for: there is no
+/// reachability probe (this machine is here), no colour, nothing to edit,
+/// and nothing to delete.
+class LocalShellTile extends StatelessWidget {
+  /// The dot for the aggregate of its tabs' statuses ([serverDotFor] with
+  /// no probe and no host-key block): connected while one runs, connecting
+  /// while one starts, failed if one died, none while none is open or all
+  /// have exited.
+  final ServerDot dot;
+  final int tabCount;
+  final String shellName;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onNewTab;
+  final VoidCallback onCloseAll;
+
+  const LocalShellTile({
+    super.key,
+    required this.dot,
+    required this.tabCount,
+    required this.shellName,
+    required this.selected,
+    required this.onTap,
+    required this.onNewTab,
+    required this.onCloseAll,
+  });
+
+  String get _closeLabel => tabCount > 1 ? 'Close all shells' : 'Close';
+
+  @override
+  Widget build(BuildContext context) {
+    return SidebarRow(
+      mark: const LocalShellRailMark(),
+      // The ring is what the eye reads as "live" in this list; a local
+      // shell that is connected wears it like a connected server does.
+      markRing: dot == ServerDot.connected
+          ? StatusColors.online(context)
+          : null,
+      title: 'Local shell',
+      status: switch (dot.color(context)) {
+        final color? => SidebarStatusDot(color, style: dot.style),
+        null => null,
+      },
+      subtitle: '$shellName \u00b7 this machine',
+      trailingText: tabCount > 1 ? '\u00d7$tabCount' : null,
+      selected: selected,
+      onActivate: (_) => onTap(),
+      menuEntries: () => [
+        SidebarMenuAction(
+          key: const ValueKey('localShell.menu.newShell'),
+          label: 'New shell',
+          onSelected: onNewTab,
+        ),
+        // Kept while nothing is open, greyed out, so the menu's shape does
+        // not shift under the pointer with the state.
+        SidebarMenuAction(
+          key: const ValueKey('localShell.menu.closeAll'),
+          label: _closeLabel,
+          onSelected: tabCount > 0 ? onCloseAll : null,
+        ),
+      ],
+      tooltip: 'Local shell\n$shellName \u00b7 this machine',
+      semanticLabel: [
+        'Local shell',
+        '$shellName \u00b7 this machine',
+        ?dot.description,
+        if (tabCount > 1) '$tabCount tabs',
+      ].join(', '),
+    );
+  }
+}
+
+/// How long ago a sync round finished, as the chip says it: "just now",
+/// "2 min", "3 h", "2 d".
+String syncAgeLabel(Duration age) {
+  if (age.inMinutes < 1) return 'just now';
+  if (age.inHours < 1) return '${age.inMinutes} min';
+  if (age.inDays < 1) return '${age.inHours} h';
+  return '${age.inDays} d';
+}
+
+/// The home screen's app-bar sync affordance: a spinner while a round runs,
+/// an error badge if the last one failed (tapping retries, as the rail's
+/// chip does). Hidden when idle and healthy: the gear beside it
+class _SyncIndicator extends StatelessWidget {
+  final AppState state;
+  final VoidCallback onRetry;
+  const _SyncIndicator({required this.state, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    if (state.syncing) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 14),
+        child: Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    if (state.lastSyncError != null) {
+      return IconButton(
+        tooltip: 'Sync failed — tap to retry',
+        icon: Icon(
+          Icons.sync_problem,
+          color: Theme.of(context).colorScheme.error,
+        ),
+        onPressed: onRetry,
+      );
+    }
+    return const SizedBox.shrink();
+  }
+}
+
+/// A dismissible banner above the server list when a newer release exists on
+/// GitHub. It only offers a link to the releases page — Séance never
+/// downloads or installs an update; the user decides. Compact, because the
+/// rail it sits in can be 200 px wide.
+class _UpdateBanner extends StatelessWidget {
+  final UpdateInfo info;
+  final VoidCallback onDismiss;
+  const _UpdateBanner({required this.info, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ink = scheme.onSecondaryContainer;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 6, 6, 2),
+      child: Material(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(10, 4, 2, 4),
+          child: Row(
+            children: [
+              Icon(Icons.system_update_outlined, size: 16, color: ink),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Séance ${info.latestVersion} is available.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: ink),
+                ),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                onPressed: () => launchUrl(
+                  info.releasesUrl,
+                  mode: LaunchMode.externalApplication,
+                ),
+                child: const Text('View release'),
+              ),
+              IconButton(
+                tooltip: 'Dismiss',
+                iconSize: 16,
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.close, color: ink),
+                onPressed: onDismiss,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown when a filter excludes every server — distinct from having no
+/// servers at all, which needs the onboarding empty state instead.
+class _NoMatches extends StatelessWidget {
+  final VoidCallback onClear;
+  const _NoMatches({required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = SeanceChrome.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_off, size: 32, color: chrome.secondaryText),
+            const SizedBox(height: 8),
+            Text(
+              'No servers match',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            TextButton(onPressed: onClear, child: const Text('Clear filter')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The onboarding state: no servers yet. Every way in is a visible button,
+/// because the rail's "+" and gear are small, and a fresh install —
+/// especially on a phone — needs an obvious path to the sync-server setup.
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onNewServer;
+  final VoidCallback onImport;
+  const _EmptyState({required this.onNewServer, required this.onImport});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final chrome = SeanceChrome.of(context);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.dns_outlined, size: 40, color: chrome.secondaryText),
+            const SizedBox(height: 12),
+            Text('No servers yet', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Add one, import your ~/.ssh/config, or sign in to sync.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: chrome.secondaryText,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: onNewServer,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('New server'),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: onImport,
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('Import SSH config'),
+            ),
+            TextButton.icon(
+              onPressed: () => openSettings(),
+              icon: const Icon(Icons.settings_outlined, size: 18),
+              label: const Text('Sync & settings'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

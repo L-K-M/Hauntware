@@ -1,0 +1,166 @@
+diff --cc docs/STATUS.md
+index f351d96,27194ba..0000000
+--- a/docs/STATUS.md
++++ b/docs/STATUS.md
+@@@ -3652,15 -3563,20 +3700,30 @@@ pass. Final-head native CI and review a
+      or newer schemas. The store currently reports `FormatException` without
+      changing the section; `reset(location)` cannot bypass that validation.
+  
+++<<<<<<< HEAD
+ +19. **2026-09-13: M3 Windows ancestor rename detection (#92).** The backend
+ +    watches the shown directory and its immediate parent. Renaming a higher
+ +    ancestor can leave both handles following the moved tree without an
+ +    event; metadata checks run only on setup and qualifying events. Before
+ +    pane wiring, close this remaining invalidation gap without recursive
+ +    subtree watches or remote polling. Direct root deletion/rename coverage
+ +    does not establish higher-ancestor detection.
+++=======
++ 18. **2026-09-13: M3 ancestor invalidation follow-up (OPEN).** PR #93
++     corrects an unsupported Windows premise without changing production.
++     Native ancestor moves on the tested Windows runner/SDK are refused while
++     descendant watches remain live; another supported mechanism would need
++     its own permitted-move reproducer before a loss fix is justified.
++     **Separate Linux/macOS follow-up:** baseline `7afbefc`, CI `34762015179`,
++     misses loss after permitted ancestor renames. Preserve those regressions
++     from `archive/task20-ancestor-candidate-6366437` and `tasks/task20-logs/`;
++     the recreate case must recreate the full watched path to test masking.
++     Address detection without regressing traverse-only ancestor access or
++     silently increasing watch resources. No fix or closure is claimed here.
++     Keep #92's root-loss/cancellation behavior; Linux overflow remains item 14.
+++>>>>>>> origin/main
+  
+ -19. **2026-09-13: Windows incident-store test intermittency (#92 CI).**
+ +20. **2026-09-13: Windows incident-store test intermittency (#92 CI).**
+      `a declined incident survives a real store round-trip on disk` failed
+      on [job 103721821421](
+      https://github.com/L-K-M/Poltergeist/actions/runs/34756562117/job/103721821421)
+diff --git a/app/poltergeist_app/lib/services/pane_controller.dart b/app/poltergeist_app/lib/services/pane_controller.dart
+index 08b3f07..f91eea9 100644
+--- a/app/poltergeist_app/lib/services/pane_controller.dart
++++ b/app/poltergeist_app/lib/services/pane_controller.dart
+@@ -170,6 +170,12 @@ class PaneController extends ChangeNotifier {
+ 
+   Future<void> connectRemote(Bookmark bookmark, {String? initialPath}) async {
+     if (_disposed || _lanes == null) return;
++    // A pending path belongs to the bookmark that set it: switching
++    // servers must not carry srv-1's intended directory into srv-2's
++    // first listing.
++    if (bookmark.id != _pendingRemote?.id) {
++      _pendingRemotePath = null;
++    }
+     _pendingRemote = bookmark;
+     _pendingRemotePath = initialPath ?? _pendingRemotePath;
+     await _bind(
+@@ -231,8 +237,11 @@ class PaneController extends ChangeNotifier {
+           target,
+           channel,
+         );
+-        // The landing directory is consumed by the bind that used it.
+-        _pendingRemotePath = null;
++        // The landing directory is consumed by the bind that used it —
++        // only the live attempt may consume it, never a superseded one.
++        if (attempt == _bindAttempt) {
++          _pendingRemotePath = null;
++        }
+       },
+     );
+   }
+diff --git a/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart b/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+index a530bd2..2692cf0 100644
+--- a/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
++++ b/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+@@ -89,15 +89,15 @@ RemoteFileEntry _entry(String name) => RemoteFileEntry(
+   type: RemoteFileType.file,
+ );
+ 
+-Bookmark _remoteBookmark() {
++Bookmark _remoteBookmark({String id = 'srv-1', String host = 'web.example.com'}) {
+   final now = DateTime.utc(2026, 9, 12);
+   return Bookmark(
+-    id: 'srv-1',
++    id: id,
+     kind: BookmarkKind.remotePath,
+-    label: 'web.example.com',
++    label: host,
+     server: BookmarkServerRef(
+       identity: EmbeddedHostIdentity(
+-        host: 'web.example.com',
++        host: host,
+         port: 22,
+         username: 'tester',
+         authMethod: AuthMethod.password,
+@@ -305,6 +305,61 @@ void registerRound15Tests() {
+       controller.location,
+       const RemotePaneLocation('srv-1', '/srv/www'),
+     );
++    // A successful retry fully clears the failed attempt's error: the
++    // pane must not browse with a stale error surface underneath.
++    expect(controller.error, isNull);
++    controller.dispose();
++  });
++
++  // ── round-17 regressions ──────────────────────────────────────────────
++
++  test('a stale pending path never leaks into another bookmark', () async {
++    final lanes = FakePaneLanes();
++    final channel = FakePaneChannel('/srv/home');
++    channel.listings['/srv/home'] = [_entry('root.txt')];
++    lanes.nextRemoteChannel = channel;
++    final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
++    await controller.connectRemote(_remoteBookmark());
++    await _settle();
++
++    // Transport severs mid-navigation; retry captures /srv/www as the
++    // pending path, but the reconnect bind itself fails.
++    channel.failure = const RemoteFileException(
++      kind: RemoteFileErrorKind.disconnected,
++      operation: 'list',
++      message: 'Connection closed.',
++    );
++    controller.navigate('/srv/www');
++    await _settle();
++    expect(controller.error?.kind, RemoteFileErrorKind.disconnected);
++
++    lanes.remoteOpenFailure = const RemoteFileException(
++      kind: RemoteFileErrorKind.disconnected,
++      operation: 'connect',
++      message: 'unreachable',
++    );
++    await controller.retry(); // the reconnect bind fails; /srv/www stays pending
++    await _settle();
++    expect(controller.phase, PanePhase.connectingRemote);
++    expect(controller.error, isNotNull);
++
++    // The user gives up on srv-1 and opens a DIFFERENT server: its bind
++    // must land on its own home, not on srv-1's pending directory.
++    lanes.remoteOpenFailure = null;
++    final other = FakePaneChannel('/srv/other/home');
++    other.listings['/srv/other/home'] = [_entry('readme.txt')];
++    lanes.nextRemoteChannel = other;
++    await controller.connectRemote(
++      _remoteBookmark(id: 'srv-2', host: 'other.example.com'),
++    );
++    await _settle();
++
++    expect(other.listCalls, ['/srv/other/home'],
++        reason: 'a pending path from srv-1 must not leak into srv-2');
++    expect(
++      controller.location,
++      const RemotePaneLocation('srv-2', '/srv/other/home'),
++    );
+     controller.dispose();
+   });
+ 
+diff --git a/docs/plan/03-ARCHITECTURE.md b/docs/plan/03-ARCHITECTURE.md
+index 7a4bf7d..bed1deb 100644
+--- a/docs/plan/03-ARCHITECTURE.md
++++ b/docs/plan/03-ARCHITECTURE.md
+@@ -1999,7 +1999,7 @@ the new binding. Pool channels answer an explicit typed refusal — remote
+ watching would be a polling feature the engine does not have. The pane
+ policy above (active-tab-only, retarget on navigation, drop on
+ launcher/remote) is app-side wiring over that seam. One known backend
+-limitation is recorded in STATUS (open item 14): Linux's inotify queue
++limitation is recorded in STATUS (open item 15): Linux's inotify queue
+ overflow is invisible through dart:io, so the `IN_Q_OVERFLOW` clause
+ rests on the drain-promptly mitigation until a compatible FFI backend
+ surfaces it through the same seam.

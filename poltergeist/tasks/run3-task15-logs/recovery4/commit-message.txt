@@ -1,0 +1,11 @@
+Refresh toolbar enablement with pane state
+
+Keep browse commands usable after asynchronous binding and update
+selection commands when focus or listing state changes. Limit rebuilds
+to the toolbar and retain red-first regressions plus readable captures.
+
+Refute the route-presence review premise with pinned SDK and runtime
+proof; preserve the existing pop ownership guards and core contracts.
+
+Co-authored-by: pi <reply@localhost>
+Session: paseo://agents/7cfee75c-9dd1-45ca-b684-1b4529c851c5

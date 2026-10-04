@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Not sandboxed — see Release.entitlements for why, and for what it
+	     costs. Every sandbox-only key that used to be here went with it.
+
+	     allow-jit stays: it is a Hardened Runtime entitlement, nothing to do
+	     with the sandbox, and Flutter's debug build needs a JIT-capable Dart
+	     VM. Without it a debug build dies at launch. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+</dict>
+</plist>

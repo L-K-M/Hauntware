@@ -1,0 +1,974 @@
+// 04 §3.3/§4.4 service-level coverage: enrollment over the #166 seams,
+// the manual round, sign-out/delete, and the B→A switch driver — every
+// durable effect asserted against the real seams (in-memory record store,
+// fake transport/server, temp-dir SettingsStore) rather than mocked
+// internals.
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:poltergeist_app/services/bookmark_backup_service.dart';
+import 'package:poltergeist_app/services/server_duplication.dart';
+import 'package:poltergeist_app/services/settings_store.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
+
+import '../support/fake_sync_backup.dart';
+
+final _fixedNow = DateTime.utc(2026, 1, 1, 12);
+
+Bookmark _bookmark(String id) => Bookmark(
+      id: id,
+      kind: BookmarkKind.remotePath,
+      label: id,
+      server: const BookmarkServerRef(
+        identity: EmbeddedHostIdentity(
+          host: 'web.example.com',
+          port: 22,
+          username: 'deploy',
+          authMethod: AuthMethod.privateKey,
+        ),
+      ),
+      remotePath: '/',
+      sortKey: id,
+      createdAt: _fixedNow,
+      updatedAt: _fixedNow,
+    );
+
+HostKey _pin(String host, String fingerprint) => HostKey(
+      host: host,
+      type: 'ssh-ed25519',
+      fingerprintSha256: fingerprint,
+      pinnedAt: 1000,
+    );
+
+final class _Harness {
+  _Harness(Directory root)
+      : settings = SettingsStore(path: '${root.path}/settings.json');
+
+  final server = FakeSyncServer();
+  final transports = <FakeSyncTransport>[];
+  final credentials = FakeSyncCredentialStore();
+  final retained = FakeRetainedSyncTokenStore();
+  final state = FakeSyncEnrollmentState();
+  final SettingsStore settings;
+  final bookmarks = FakeSyncTrackingBookmarkStore();
+  final servers = FakeSyncTrackingServerStore();
+  final vaultStore = InMemoryVaultStore();
+  final hostKeys = InMemoryConflictAwareHostKeyStore();
+  final pinVerdicts = InMemoryPinVerdictStore();
+  final tripwires = InMemorySyncTripwireStore();
+  var records = InMemorySyncRecordStore();
+  var clock = _fixedNow;
+  Future<List<int>?> Function()? vaultKeyOverride;
+  void Function(List<ServerConfig> snapshot)? catalogPublisher;
+
+  late final service = BookmarkBackupService(
+    credentials: credentials,
+    retainedTokens: retained,
+    enrollmentState: state,
+    records: records,
+    resetRecords: () async => records = InMemorySyncRecordStore(),
+    bookmarks: bookmarks,
+    hostKeys: hostKeys,
+    pinVerdicts: pinVerdicts,
+    tripwires: tripwires,
+    transportFactory: fakeTransportFactory(server, transports),
+    vaultKey: () async {
+      final override = vaultKeyOverride;
+      if (override != null) return override();
+
+      return credentials.vaultKey;
+    },
+    servers: servers,
+    vaultStore: vaultStore,
+    serverCatalogPublisher: (snapshot) => catalogPublisher?.call(snapshot),
+    settings: settings,
+    now: () => clock,
+  );
+
+  /// The shared-mode starting point — catalog, server store and vault
+  /// all live once the service loads.
+  Future<void> enrollSharedDirectly() async {
+    state.enrolled = const SyncAccount(
+      baseUrl: 'https://sync.example',
+      username: 'fleet',
+      mode: SyncAccountMode.shared,
+    );
+    credentials.token = 'shared-token';
+    credentials.vaultKey = List.filled(32, 9);
+    await service.load();
+  }
+
+  /// The switch tests' separate-mode starting point — a live token and
+  /// a vault key under an enrolled separate-mode account.
+  Future<void> enrollSeparateDirectly() async {
+    state.enrolled = const SyncAccount(
+      baseUrl: 'https://sync.example',
+      username: 'old',
+      mode: SyncAccountMode.separate,
+    );
+    credentials.token = 'sep-token';
+    credentials.vaultKey = List.filled(32, 7);
+    await service.load();
+  }
+
+  /// Seal [record] under the vault key the shared login will derive —
+  /// the password and passphrase are deliberately the same string so the
+  /// enrollment runs Argon2 once (the test still pays the minimum).
+  Future<EncryptedRecord> fleetSealed(
+    DecryptedRecord record, {
+    int seq = 7,
+  }) async {
+    final keys = await VaultCrypto.deriveKeys(
+      passphrase: 'pw',
+      salt: List.filled(16, 0),
+      params: const Argon2Params(),
+    );
+    final sealed = await RecordCrypto(RecordCodec(keys.vaultKey))
+        .seal(record);
+    return sealed.withSeq(seq);
+  }
+}
+
+void main() {
+  late Directory temp;
+  late _Harness h;
+
+  setUp(() {
+    temp = Directory.systemTemp.createTempSync('backup-service-test');
+    h = _Harness(temp);
+  });
+
+  tearDown(() {
+    temp.deleteSync(recursive: true);
+  });
+
+  group('enrollment (04 §4.1/§4.5)', () {
+    test('registerSeparate persists token, vault key, and the separate '
+        'account', () async {
+      await h.service.registerSeparate(
+        baseUrl: 'https://sync.example',
+        username: 'ghost-abcd1234',
+        // Same string twice → one Argon2 run (the minimum params still
+        // run for real).
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+
+      expect(h.server.registerCalls, 1);
+      expect(h.credentials.token, 'token-ghost-abcd1234');
+      expect(h.credentials.vaultKey, hasLength(32));
+      final account = h.service.account!;
+      expect(account.mode, SyncAccountMode.separate);
+      expect(account.username, 'ghost-abcd1234');
+      expect(h.service.passphraseUnverified, isFalse);
+      // Every transport the service made was released.
+      expect(
+        h.transports,
+        everyElement(
+            predicate<FakeSyncTransport>((t) => t.closed)),
+      );
+    });
+
+    test('loginAccount holds pushes when the trial-decrypt fails', () async {
+      // A record no key can open: the trial-decrypt candidate.
+      h.server.records.add(EncryptedRecord(
+        id: 'bookmark:foreign',
+        updatedAt: 1,
+        deviceId: 'other',
+        deleted: false,
+        seq: 3,
+        blob: Uint8List.fromList([1, 2, 3]),
+      ));
+
+      final result = await h.service.loginAccount(
+        baseUrl: 'https://sync.example',
+        username: 'shared-user',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+        mode: SyncAccountMode.shared,
+      );
+
+      expect(result.passphraseUnverified, isTrue);
+      expect(result.passphraseWarning, syncPassphraseCheckFailedMessage);
+      expect(h.service.passphraseUnverified, isTrue);
+      expect(
+          h.service.notices, contains(syncNoticePassphraseCheckFailed));
+      expect(h.service.account!.mode, SyncAccountMode.shared);
+      // Shared mode materializes the Séance server catalog.
+      expect(h.service.catalog, isNotNull);
+      // §4.5's hold: a dirty local record must not reach the server
+      // while the passphrase is unverified.
+      final bookmark = _bookmark('held');
+      final crypto =
+          RecordCrypto(RecordCodec(h.credentials.vaultKey!));
+      await h.records.putLocal(await crypto.seal(DecryptedRecord(
+        id: 'bookmark:held',
+        kind: RecordKind.bookmark,
+        updatedAt: _fixedNow.millisecondsSinceEpoch,
+        deviceId: 'test-device',
+        data: bookmark.toJson(),
+      )));
+      await h.service.backUpNow();
+      expect(h.server.pushed.map((r) => r.id),
+          isNot(contains('bookmark:held')));
+    });
+
+    test('a below-minimum prelogin refuses to derive (KDF downgrade)',
+        () async {
+      h.server.argonParams = const Argon2Params.fast();
+      await expectLater(
+        h.service.loginAccount(
+          baseUrl: 'https://sync.example',
+          username: 'u',
+          password: 'pw',
+          encryptionPassphrase: 'pw',
+          mode: SyncAccountMode.separate,
+        ),
+        throwsA(isA<KdfDowngradeException>()),
+      );
+      expect(h.state.enrolled, isNull);
+      expect(h.credentials.token, isNull);
+    });
+
+    test('a closed registration surfaces the §4.3 exception', () async {
+      h.server.registrationClosed = true;
+      await expectLater(
+        h.service.registerSeparate(
+          baseUrl: 'https://sync.example',
+          username: 'u',
+          password: 'pw',
+          encryptionPassphrase: 'pw',
+        ),
+        throwsA(isA<RegistrationClosedException>()),
+      );
+    });
+  });
+
+  group('round, sign-out, delete (04 §3.3/§4.1/§4.2)', () {
+    test('backUpNow returns null while unenrolled', () async {
+      await h.service.load();
+      expect(await h.service.backUpNow(), isNull);
+    });
+
+    test('a round pushes the dirty set and stamps lastSyncAt', () async {
+      await h.enrollSeparateDirectly();
+      // A dirty record, sealed under the enrolled key exactly like the
+      // coordinator's onBookmarkSaved does for a local edit.
+      final bookmark = _bookmark('b1');
+      final crypto =
+          RecordCrypto(RecordCodec(h.credentials.vaultKey!));
+      await h.records.putLocal(await crypto.seal(DecryptedRecord(
+        id: 'bookmark:b1',
+        kind: RecordKind.bookmark,
+        updatedAt: _fixedNow.millisecondsSinceEpoch,
+        deviceId: 'test-device',
+        data: bookmark.toJson(),
+      )));
+
+      final result = await h.service.backUpNow();
+      expect(result, isNotNull);
+      expect(h.server.pushed.map((r) => r.id), ['bookmark:b1']);
+      expect(h.service.lastSyncAt, _fixedNow);
+      expect(h.service.lastSyncError, isNull);
+      // A separate-mode success never arms the §4.4 delete offer.
+      expect(h.service.deleteSeparateOffered, isFalse);
+    });
+
+    test('a 401 round raises the durable dead-account notice', () async {
+      await h.enrollSeparateDirectly();
+      h.server.unauthorized = true;
+      final result = await h.service.backUpNow();
+      expect(result, isNotNull);
+      expect(result!.authFailed, isTrue);
+      expect(h.service.notices, contains(syncNoticeAccountAuthFailed));
+    });
+
+    test('signOut forgets the token, account, and last-round status',
+        () async {
+      await h.enrollSeparateDirectly();
+      final bookmark = _bookmark('b1');
+      final crypto =
+          RecordCrypto(RecordCodec(h.credentials.vaultKey!));
+      await h.records.putLocal(await crypto.seal(DecryptedRecord(
+        id: 'bookmark:b1',
+        kind: RecordKind.bookmark,
+        updatedAt: _fixedNow.millisecondsSinceEpoch,
+        deviceId: 'test-device',
+        data: bookmark.toJson(),
+      )));
+      await h.service.backUpNow();
+      expect(h.service.lastSyncAt, isNotNull);
+
+      await h.service.signOut();
+      expect(h.credentials.token, isNull);
+      expect(h.service.account, isNull);
+      // The old account's bookkeeping must not leak into the next
+      // enrollment's status line.
+      expect(h.service.lastSyncAt, isNull);
+      expect(h.service.lastSyncError, isNull);
+    });
+
+    test('resolvePinConflict throws when nothing is enrolled', () async {
+      await h.service.load();
+      final pin = _pin('conflict.example.com', 'SHA256:x');
+      await expectLater(
+        h.service.resolvePinConflict(
+          HostKeyConflict(
+            locator: pin.locator,
+            local: pin,
+            pulled: pin,
+          ),
+          keepLocal: true,
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('deleteSeparateAccount requires the typed account name', () async {
+      await h.enrollSeparateDirectly();
+      await expectLater(
+        h.service.deleteSeparateAccount(confirmedName: 'not-old'),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(h.server.deleteAccountCalls, 0);
+
+      await h.service.deleteSeparateAccount(confirmedName: 'old');
+      expect(h.server.deleteAccountCalls, 1);
+      // The delete transport authenticated with the live session token.
+      expect(h.transports.last.token, 'sep-token');
+      expect(h.service.account, isNull);
+      expect(h.credentials.token, isNull);
+    });
+
+    test('account deletion does not exist in shared mode', () async {
+      h.state.enrolled = const SyncAccount(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        mode: SyncAccountMode.shared,
+      );
+      h.credentials.token = 't';
+      h.credentials.vaultKey = List.filled(32, 1);
+      await h.service.load();
+      await expectLater(
+        h.service.deleteSeparateAccount(confirmedName: 'fleet'),
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
+
+  group('B→A switch (04 §4.4)', () {
+    test('requires a separate-mode account', () async {
+      await h.service.load();
+      await expectLater(
+        h.service.switchToShared(
+          baseUrl: 'https://sync.example',
+          username: 'u',
+          password: 'pw',
+          encryptionPassphrase: 'pw',
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('the full sequence: retain → wipe → shared login → dirty-mark → '
+        're-seal non-held pins → hold the conflict', () async {
+      await h.enrollSeparateDirectly();
+      h.bookmarks.inner.bookmarks = [_bookmark('b1')];
+      h.hostKeys.put(_pin('conflict.example.com', 'SHA256:local'));
+      h.hostKeys.put(_pin('quiet.example.com', 'SHA256:quiet'));
+      // A legacy record the wipe must destroy.
+      await h.records.putLocal(EncryptedRecord(
+        id: 'bookmark:legacy',
+        updatedAt: 1,
+        deviceId: 'test-device',
+        deleted: false,
+        seq: null,
+        blob: Uint8List.fromList([9]),
+      ));
+      // The fleet's conflicting pin for the same locator, sealed under
+      // the vault key the shared login derives.
+      h.server.records.add(await h.fleetSealed(DecryptedRecord(
+        id: 'hostkey:conflict.example.com:22',
+        kind: RecordKind.hostKey,
+        updatedAt: 4000,
+        deviceId: 'fleet-device',
+        data: _pin('conflict.example.com', 'SHA256:fleet').toJson(),
+      )));
+      h.server.seq = 7;
+
+      final outcome = await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+
+      // 1. The separate token was parked before the enrollment write.
+      expect(h.retained.token, 'sep-token');
+      expect(h.service.retainedAccount!.username, 'old');
+      // 2. The live slot now holds the shared session.
+      expect(h.credentials.token, 'token-fleet');
+      expect(h.service.account!.mode, SyncAccountMode.shared);
+      // 3. The login pulled since=0 (full pull) and the trial-decrypt
+      //    verified the passphrase against the fleet record.
+      expect(h.server.pullSinces, contains(0));
+      expect(outcome.passphraseUnverified, isFalse);
+      // 4. The quarantined conflict is held, unresolved.
+      expect(outcome.held.map((c) => c.locator),
+          ['conflict.example.com:22']);
+      expect(h.service.pinConflicts, hasLength(1));
+      // 5. The delete offer waits on a proven shared sync.
+      expect(h.service.deleteSeparateOffered, isFalse);
+
+      // 6. Push what the switch dirtied: the local bookmark and the
+      //    non-held pin — never the held locator, never the wiped legacy.
+      await h.service.backUpNow();
+      final pushedIds = h.server.pushed.map((r) => r.id).toSet();
+      expect(pushedIds, containsAll(
+          ['bookmark:b1', 'hostkey:quiet.example.com:22']));
+      expect(pushedIds, isNot(contains('hostkey:conflict.example.com:22')));
+      expect(pushedIds, isNot(contains('bookmark:legacy')));
+
+      // 7. The proven shared sync arms the delete offer.
+      expect(h.service.deleteSeparateOffered, isTrue);
+    });
+
+    test('adopt-fleet installs the pulled pin without re-pushing it',
+        () async {
+      await h.enrollSeparateDirectly();
+      h.hostKeys.put(_pin('conflict.example.com', 'SHA256:local'));
+      h.server.records.add(await h.fleetSealed(DecryptedRecord(
+        id: 'hostkey:conflict.example.com:22',
+        kind: RecordKind.hostKey,
+        updatedAt: 4000,
+        deviceId: 'fleet-device',
+        data: _pin('conflict.example.com', 'SHA256:fleet').toJson(),
+      )));
+
+      var outcome = await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+      // Adopt the fleet pin: installed locally, no re-push needed.
+      await h.service.resolvePinConflict(outcome.held.single,
+          keepLocal: false);
+      expect(h.service.pinConflicts, isEmpty);
+      expect(
+        (await h.hostKeys.get('conflict.example.com', 22))!
+            .fingerprintSha256,
+        'SHA256:fleet',
+      );
+      // The fleet record is already on the server — the next round must
+      // not push it back as a local write.
+      await h.service.backUpNow();
+      expect(h.server.pushed.map((r) => r.id),
+          isNot(contains('hostkey:conflict.example.com:22')));
+    });
+
+    test('adopt-fleet ignores a stale conflict decision', () async {
+      await h.enrollSeparateDirectly();
+      await h.hostKeys.put(_pin('conflict.example.com', 'SHA256:local'));
+      h.server.records.add(
+        await h.fleetSealed(
+          DecryptedRecord(
+            id: 'hostkey:conflict.example.com:22',
+            kind: RecordKind.hostKey,
+            updatedAt: 4000,
+            deviceId: 'fleet-device',
+            data: _pin('conflict.example.com', 'SHA256:fleet').toJson(),
+          ),
+        ),
+      );
+
+      final outcome = await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+      final displayed = outcome.held.single;
+      await h.records.putRemote(
+        await h.fleetSealed(
+          DecryptedRecord(
+            id: 'hostkey:conflict.example.com:22',
+            kind: RecordKind.hostKey,
+            updatedAt: 5000,
+            deviceId: 'newer-device',
+            data: _pin('conflict.example.com', 'SHA256:newer').toJson(),
+          ),
+          seq: 8,
+        ),
+      );
+
+      await h.service.resolvePinConflict(displayed, keepLocal: false);
+
+      expect(
+        (await h.hostKeys.get('conflict.example.com', 22))!.fingerprintSha256,
+        'SHA256:local',
+      );
+      expect(
+        h.service.pinConflicts.single.pulled.fingerprintSha256,
+        'SHA256:newer',
+      );
+    });
+
+    test('keep-local records the kept verdict and re-pushes the pin',
+        () async {
+      await h.enrollSeparateDirectly();
+      h.hostKeys.put(_pin('conflict.example.com', 'SHA256:local'));
+      h.server.records.add(await h.fleetSealed(DecryptedRecord(
+        id: 'hostkey:conflict.example.com:22',
+        kind: RecordKind.hostKey,
+        updatedAt: 4000,
+        deviceId: 'fleet-device',
+        data: _pin('conflict.example.com', 'SHA256:fleet').toJson(),
+      )));
+
+      final outcome = await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+      await h.service.resolvePinConflict(outcome.held.single,
+          keepLocal: true);
+
+      expect(h.service.pinConflicts, isEmpty);
+      // The durable verdict names the rejected fingerprint.
+      expect(
+        await h.pinVerdicts
+            .rejectedFingerprintFor('conflict.example.com:22'),
+        'SHA256:fleet',
+      );
+      // The kept pin re-sealed dirty → the next round re-pushes it.
+      await h.service.backUpNow();
+      expect(h.server.pushed.map((r) => r.id),
+          contains('hostkey:conflict.example.com:22'));
+      expect(
+        (await h.hostKeys.get('conflict.example.com', 22))!
+            .fingerprintSha256,
+        'SHA256:local',
+      );
+    });
+
+    test('keep-local ignores a stale conflict decision', () async {
+      await h.enrollSeparateDirectly();
+      await h.hostKeys.put(_pin('conflict.example.com', 'SHA256:local'));
+      h.server.records.add(
+        await h.fleetSealed(
+          DecryptedRecord(
+            id: 'hostkey:conflict.example.com:22',
+            kind: RecordKind.hostKey,
+            updatedAt: 4000,
+            deviceId: 'fleet-device',
+            data: _pin('conflict.example.com', 'SHA256:fleet').toJson(),
+          ),
+        ),
+      );
+
+      final outcome = await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+      final displayed = outcome.held.single;
+      await h.hostKeys.put(_pin('conflict.example.com', 'SHA256:newer-local'));
+
+      await h.service.resolvePinConflict(displayed, keepLocal: true);
+
+      expect(
+        await h.pinVerdicts.rejectedFingerprintFor(displayed.locator),
+        isNull,
+      );
+      expect(
+        h.service.pinConflicts.single.local.fingerprintSha256,
+        'SHA256:newer-local',
+      );
+    });
+
+    test('the retained delete uses the parked token and needs the typed '
+        'name; declining drops the token without deleting', () async {
+      await h.enrollSeparateDirectly();
+      await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+      await h.service.backUpNow(); // prove the switch → arm the offer
+
+      // Decline: token dropped, account untouched, offer gone.
+      await h.service.declineRetainedDelete();
+      expect(h.retained.token, isNull);
+      expect(h.service.retainedAccount, isNull);
+      expect(h.service.deleteSeparateOffered, isFalse);
+      expect(h.server.deleteAccountCalls, 0);
+    });
+
+    test('a proven switch can delete the retained account by typed name',
+        () async {
+      await h.enrollSeparateDirectly();
+      await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+      await h.service.backUpNow();
+      expect(h.service.deleteSeparateOffered, isTrue);
+
+      await expectLater(
+        h.service.deleteRetainedSeparateAccount(confirmedName: 'nope'),
+        throwsA(isA<ArgumentError>()),
+      );
+      await h.service.deleteRetainedSeparateAccount(confirmedName: 'old');
+      expect(h.server.deleteAccountCalls, 1);
+      // The delete transport carried the PARKED token, not the live one.
+      expect(h.transports.last.token, 'sep-token');
+      expect(h.retained.token, isNull);
+      expect(h.service.retainedAccount, isNull);
+    });
+
+    test('a switch failure retains the separate account facts', () async {
+      await h.enrollSeparateDirectly();
+      h.server.unauthorized = true; // shared login will 401
+      await expectLater(
+        h.service.switchToShared(
+          baseUrl: 'https://sync.example',
+          username: 'fleet',
+          password: 'pw',
+          encryptionPassphrase: 'pw',
+        ),
+        throwsA(isA<ApiError>()),
+      );
+      // The retained token was parked before the failed enrollment and
+      // the separate session was restored — the old account still works.
+      expect(h.retained.token, 'sep-token');
+      expect(h.credentials.token, 'sep-token');
+      expect(h.service.account!.mode, SyncAccountMode.separate);
+      expect(h.service.retainedAccount!.username, 'old');
+      expect(h.service.deleteSeparateOffered, isFalse);
+    });
+  });
+
+  group('shared-mode server writes (04 §4.2, amended)', () {
+    ServerConfig config(
+      String id, {
+      String? ref,
+      bool syncSecret = false,
+    }) =>
+        ServerConfig(
+          id: id,
+          label: id,
+          host: '$id.example.com',
+          username: 'u',
+          secretRef: ref,
+          syncSecret: syncSecret,
+          createdAt: 1,
+          updatedAt: 1,
+        );
+
+    test('saveServer persists the row, seals its record, and refreshes '
+        'the catalog', () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(config('web'));
+
+      expect((await h.servers.byId('web'))!.label, 'web');
+      final record = (await h.records.allRecords()).single;
+      expect(record.id, 'web');
+      expect(record.deleted, isFalse);
+      expect(h.service.catalog!.byId('web'), isNotNull);
+    });
+
+    test('save and delete notify complete catalog snapshots', () async {
+      await h.enrollSharedDirectly();
+      final snapshots = <List<String>>[];
+      void capture() => snapshots.add([
+        for (final server in h.service.catalog?.servers ?? const []) server.id,
+      ]);
+      h.service.addListener(capture);
+      addTearDown(() => h.service.removeListener(capture));
+
+      await h.service.saveServer(config('web'));
+      await h.service.deleteServer(config('web'));
+
+      expect(snapshots, [
+        ['web'],
+        <String>[],
+      ]);
+    });
+
+    test('publishes each catalog mutation before its operation returns',
+        () async {
+      await h.enrollSharedDirectly();
+      final snapshots = <List<String>>[];
+      final completedAtPublish = <bool>[];
+      var operationCompleted = false;
+      h.catalogPublisher = (snapshot) {
+        snapshots.add([for (final server in snapshot) server.id]);
+        completedAtPublish.add(operationCompleted);
+      };
+
+      await h.service.saveServer(config('web')).then((_) {
+        operationCompleted = true;
+      });
+      operationCompleted = false;
+      await h.service.deleteServer(config('web')).then((_) {
+        operationCompleted = true;
+      });
+
+      expect(snapshots, [
+        ['web'],
+        <String>[],
+      ]);
+      expect(completedAtPublish, [isFalse, isFalse]);
+    });
+
+    test('publishes an empty catalog before sign-out returns', () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(config('web'));
+      final staleCatalog = h.service.catalog!;
+      final snapshots = <List<String>>[];
+      var signOutCompleted = false;
+      h.catalogPublisher = (snapshot) {
+        snapshots.add([for (final server in snapshot) server.id]);
+        expect(signOutCompleted, isFalse);
+      };
+
+      await h.service.signOut().then((_) {
+        signOutCompleted = true;
+      });
+      staleCatalog.replace([config('stale')]);
+
+      expect(snapshots, [<String>[]]);
+    });
+
+    test('saveServer seals a jump route into the pushed record', () async {
+      // The editor hands over the route it does not show (X-02); the
+      // re-stamp and the seal must carry it on to Séance's devices.
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(ServerConfig(
+        id: 'db',
+        label: 'db',
+        host: 'db.internal',
+        username: 'u',
+        jumpHostId: 'bastion',
+        createdAt: 1,
+        updatedAt: 1,
+      ));
+
+      final record = (await h.records.dirtyRecords()).single;
+      final opened = await RecordCrypto(
+        RecordCodec(h.credentials.vaultKey!),
+      ).open(record);
+      expect(opened.data['jumpHostId'], 'bastion');
+      expect((await h.servers.byId('db'))!.jumpHostId, 'bastion');
+    });
+
+    test('deleteServer drops the row and seals the tombstone', () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(config('web'));
+      await h.service.deleteServer(config('web'));
+
+      expect(await h.servers.byId('web'), isNull);
+      expect((await h.records.getRecord('web'))!.deleted, isTrue);
+      expect(h.service.catalog!.byId('web'), isNull);
+      // The tombstone tuple survives locally, blocking stale revivals.
+      expect((await h.servers.syncTupleOf('web'))!.deleted, isTrue);
+    });
+
+    test('saveServerSecret writes the vault and publishes the record '
+        'while a synced server opts it in', () async {
+      await h.enrollSharedDirectly();
+      await h.service.setSyncSecrets(true);
+      await h.service.saveServer(
+          config('web', ref: 's1', syncSecret: true));
+      const secret = Secret(
+          id: 's1', kind: SecretKind.password, value: 'hunter2');
+      await h.service.saveServerSecret(secret);
+
+      expect((await h.service.serverSecretById('s1'))!.value, 'hunter2');
+      final record = await h.records.getRecord('secret:s1');
+      expect(record, isNotNull);
+      expect(record!.deleted, isFalse);
+    });
+
+    test('the device-level switch is off by default: an opted-in '
+        'credential stays local', () async {
+      await h.enrollSharedDirectly();
+      expect(h.service.syncSecrets, isFalse);
+      await h.service.saveServer(
+          config('web', ref: 's1', syncSecret: true));
+      const secret = Secret(
+          id: 's1', kind: SecretKind.password, value: 'hunter2');
+      await h.service.saveServerSecret(secret);
+
+      expect((await h.service.serverSecretById('s1'))!.value, 'hunter2');
+      expect(await h.records.getRecord('secret:s1'), isNull);
+    });
+
+    test('a shared rebind keeps its live catalog until replacement',
+        () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(config('web'));
+      final catalog = h.service.catalog;
+      final snapshots = <List<String>>[];
+      h.catalogPublisher = (snapshot) {
+        snapshots.add([for (final server in snapshot) server.id]);
+      };
+
+      await h.service.setSyncSecrets(true);
+
+      expect(identical(h.service.catalog, catalog), isTrue);
+      expect(snapshots, [
+        ['web'],
+      ]);
+    });
+
+    test('an older rebuild cannot replace a newer account binding', () async {
+      const oldAccount = SyncAccount(
+        baseUrl: 'https://old.example',
+        username: 'old',
+        mode: SyncAccountMode.shared,
+      );
+      const newAccount = SyncAccount(
+        baseUrl: 'https://new.example',
+        username: 'new',
+        mode: SyncAccountMode.shared,
+      );
+      final oldKey = List<int>.filled(32, 1);
+      final newKey = List<int>.filled(32, 2);
+      final firstStarted = Completer<void>();
+      final releaseFirst = Completer<void>();
+      var vaultKeyCalls = 0;
+      h.state.enrolled = oldAccount;
+      h.credentials.vaultKey = oldKey;
+      h.vaultKeyOverride = () async {
+        vaultKeyCalls += 1;
+        if (vaultKeyCalls != 1) return h.credentials.vaultKey;
+
+        firstStarted.complete();
+        await releaseFirst.future;
+        return oldKey;
+      };
+
+      final olderLoad = h.service.load();
+      await firstStarted.future;
+      h.state.enrolled = newAccount;
+      h.credentials.vaultKey = newKey;
+      await h.service.load();
+      final newerCatalog = h.service.catalog;
+
+      releaseFirst.complete();
+      await olderLoad;
+
+      expect(h.service.account, newAccount);
+      expect(identical(h.service.catalog, newerCatalog), isTrue);
+      await h.service.saveServer(config('new-route'));
+      final record = await h.records.getRecord('new-route');
+      final opened = await RecordCrypto(RecordCodec(newKey)).open(record!);
+      expect(opened.id, 'new-route');
+    });
+
+    test('turning the switch on persists and publishes what it held back',
+        () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServer(
+          config('web', ref: 's1', syncSecret: true));
+      await h.service.saveServerSecret(const Secret(
+          id: 's1', kind: SecretKind.password, value: 'hunter2'));
+      expect(await h.records.getRecord('secret:s1'), isNull);
+
+      await h.service.setSyncSecrets(true);
+      expect(h.service.syncSecrets, isTrue);
+      expect((await h.records.getRecord('secret:s1'))!.deleted, isFalse);
+      // Persisted per device: a restart reads it back.
+      await h.service.load();
+      expect(h.service.syncSecrets, isTrue);
+
+      await h.service.setSyncSecrets(false);
+      await h.service.load();
+      expect(h.service.syncSecrets, isFalse);
+    });
+
+    test('saveServerSecret stays local while no synced server opts the '
+        'credential in', () async {
+      await h.enrollSharedDirectly();
+      // No server references s1 — the vault write lands but no record
+      // publishes.
+      const secret = Secret(
+          id: 's1', kind: SecretKind.password, value: 'hunter2');
+      await h.service.saveServerSecret(secret);
+      expect(await h.service.serverSecretById('s1'), isNotNull);
+      expect(await h.records.getRecord('secret:s1'), isNull);
+    });
+
+    test('the server verbs are honest when no vault exists', () async {
+      // Unenrolled: no coordinator, no vault — a no-op for row writes,
+      // a loud failure for a credential save, null for a read.
+      await h.service.load();
+      await h.service.saveServer(config('web'));
+      await h.service.deleteServer(config('web'));
+      expect(await h.servers.load(), isEmpty);
+      expect(await h.service.serverSecretById('s1'), isNull);
+      await expectLater(
+        () => h.service.saveServerSecret(const Secret(
+            id: 's1', kind: SecretKind.password, value: 'x')),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('duplicateServer copies the row and its credential under new ids',
+        () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServerSecret(const Secret(
+          id: 's1', kind: SecretKind.password, value: 'hunter2'));
+      await h.service.saveServer(config('web', ref: 's1'));
+
+      final copy = await h.service.duplicateServer(config('web', ref: 's1'));
+
+      expect(copy.id, isNot('web'));
+      expect(copy.label, 'web copy');
+      expect(copy.secretRef, isNotNull);
+      expect(copy.secretRef, isNot('s1'));
+      // The copied credential is a vault entry of its own, not a shared ref.
+      expect(
+        (await h.service.serverSecretById(copy.secretRef!))!.value,
+        'hunter2',
+      );
+      expect(await h.servers.byId(copy.id), isNotNull);
+      expect(h.service.catalog!.byId(copy.id), isNotNull);
+      // And the copy seals its own serverConfig record for the next round.
+      expect((await h.records.getRecord(copy.id))!.deleted, isFalse);
+    });
+
+    test('duplicateServer refuses a stale source instead of copying a ghost',
+        () async {
+      await h.enrollSharedDirectly();
+      await h.service.saveServerSecret(const Secret(
+          id: 's1', kind: SecretKind.password, value: 'hunter2'));
+      await h.service.saveServer(config('web', ref: 's1'));
+
+      // The stored row points at s1; a source snapshot naming s2 has been
+      // overtaken — the credential the plan would read is not the one the
+      // menu tapped.
+      await expectLater(
+        () => h.service.duplicateServer(config('web', ref: 's2')),
+        throwsA(isA<SourceServerChanged>()),
+      );
+      // And a deleted source is the same refusal.
+      await h.service.deleteServer(config('web', ref: 's1'));
+      await expectLater(
+        () => h.service.duplicateServer(config('web', ref: 's1')),
+        throwsA(isA<SourceServerChanged>()),
+      );
+      // Nothing was created: the tombstoned original leaves no live rows.
+      expect(await h.servers.load(), isEmpty);
+    });
+  });
+}

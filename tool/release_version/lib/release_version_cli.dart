@@ -1,0 +1,216 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+
+import 'release_version.dart';
+
+const int _successExitCode = 0;
+const int _failureExitCode = 1;
+const int _usageExitCode = 64;
+const String _usage =
+    'usage: release_version <validate|sync|check|check-tag|check-order'
+    '|pubspecs|preflight|post-bump> '
+    '[--version VERSION] [--tag TAG] [--prior-tag TAG]... [--root PATH]';
+
+typedef ReleaseVersionLineWriter = void Function(String line);
+
+/// Runs the deterministic suite release-version command without exiting
+/// the process.
+int runReleaseVersionCommand(
+  List<String> arguments, {
+  Directory? workingDirectory,
+  ReleaseVersionLineWriter? writeOutput,
+  ReleaseVersionLineWriter? writeError,
+}) {
+  final output = writeOutput ?? stdout.writeln;
+  final error = writeError ?? stderr.writeln;
+  final parsed = _CommandArguments.parse(arguments);
+  if (parsed == null) {
+    error(_usage);
+    return _usageExitCode;
+  }
+
+  try {
+    final base = workingDirectory ?? Directory.current;
+    final root = _resolveDirectory(base, parsed.root ?? '.');
+
+    switch (parsed.command) {
+      case _ReleaseVersionCommand.validate:
+        final version = ReleaseVersion.parse(parsed.version!);
+        output(version.appVersion);
+      case _ReleaseVersionCommand.sync:
+        final version = ReleaseVersion.parse(parsed.version!);
+        SuiteReleaseWorkspace(root).syncAppMetadata(version: version);
+        output('Synced suite app metadata to ${version.appVersion}');
+      case _ReleaseVersionCommand.check:
+        final expected = parsed.version == null
+            ? null
+            : ReleaseVersion.parse(parsed.version!);
+        final report = SuiteReleaseWorkspace(root).check(expected: expected);
+        output(_renderReport(report));
+      case _ReleaseVersionCommand.checkTag:
+        final report = SuiteReleaseWorkspace(root).checkTag(parsed.tag!);
+        output('${parsed.tag}: ${_renderReport(report)}');
+      case _ReleaseVersionCommand.checkOrder:
+        final target = parsed.version == null
+            ? null
+            : ReleaseVersion.parse(parsed.version!);
+        final checked = SuiteReleaseWorkspace(
+          root,
+        ).checkReleaseOrder(target: target, priorTags: parsed.priorTags);
+        output('${checked.appVersion} preserves release order');
+      case _ReleaseVersionCommand.pubspecs:
+        output(SuiteReleaseWorkspace(root).bumpPubspecPaths().join(' '));
+      case _ReleaseVersionCommand.preflight:
+        final target = parsed.version == null
+            ? null
+            : ReleaseVersion.parse(parsed.version!);
+        final checked = SuiteReleaseWorkspace(root).preflight(target: target);
+        output('${checked.appVersion} preserves release order');
+      case _ReleaseVersionCommand.postBump:
+        final version = ReleaseVersion.parse(parsed.version!);
+        SuiteReleaseWorkspace(root).postBump(version);
+        output('Synchronized suite release metadata to ${version.appVersion}');
+    }
+
+    return _successExitCode;
+  } on ReleaseVersionFormatException catch (exception) {
+    error(exception.message);
+    return _failureExitCode;
+  } on ReleaseVersionStateException catch (exception) {
+    error(exception.message);
+    return _failureExitCode;
+  } on FileSystemException catch (exception) {
+    error(exception.toString());
+    return _failureExitCode;
+  }
+}
+
+String _renderReport(ReleaseVersionReport report) {
+  return '${report.version.appVersion} synchronized across '
+      '${report.pubspecCount} pubspecs and '
+      '${report.lockedPackageCount} path locks';
+}
+
+Directory _resolveDirectory(Directory base, String path) {
+  if (p.isAbsolute(path)) return Directory(p.normalize(path));
+
+  return Directory(p.normalize(p.join(base.path, path)));
+}
+
+enum _ReleaseVersionCommand {
+  validate,
+  sync,
+  check,
+  checkTag,
+  checkOrder,
+  pubspecs,
+  preflight,
+  postBump,
+}
+
+final class _CommandArguments {
+  final _ReleaseVersionCommand command;
+  final String? version;
+  final String? tag;
+  final List<String> priorTags;
+  final String? root;
+
+  const _CommandArguments({
+    required this.command,
+    required this.version,
+    required this.tag,
+    required this.priorTags,
+    required this.root,
+  });
+
+  static _CommandArguments? parse(List<String> arguments) {
+    if (arguments.isEmpty) return null;
+
+    final command = switch (arguments.first) {
+      'validate' => _ReleaseVersionCommand.validate,
+      'sync' => _ReleaseVersionCommand.sync,
+      'check' => _ReleaseVersionCommand.check,
+      'check-tag' => _ReleaseVersionCommand.checkTag,
+      'check-order' => _ReleaseVersionCommand.checkOrder,
+      'pubspecs' => _ReleaseVersionCommand.pubspecs,
+      'preflight' => _ReleaseVersionCommand.preflight,
+      'post-bump' => _ReleaseVersionCommand.postBump,
+      _ => null,
+    };
+    if (command == null) return null;
+
+    final values = <String, String>{};
+    final priorTags = <String>[];
+    for (var index = 1; index < arguments.length; index += 2) {
+      if (index + 1 >= arguments.length) return null;
+
+      final option = arguments[index];
+      if (!const {
+        '--version',
+        '--tag',
+        '--prior-tag',
+        '--root',
+      }.contains(option)) {
+        return null;
+      }
+      if (arguments[index + 1].startsWith('--')) return null;
+
+      if (option == '--prior-tag') {
+        priorTags.add(arguments[index + 1]);
+        continue;
+      }
+      if (values.containsKey(option)) return null;
+
+      values[option] = arguments[index + 1];
+    }
+
+    final parsed = _CommandArguments(
+      command: command,
+      version: values['--version'],
+      tag: values['--tag'],
+      priorTags: List.unmodifiable(priorTags),
+      root: values['--root'],
+    );
+    return parsed._hasValidShape ? parsed : null;
+  }
+
+  bool get _hasValidShape {
+    final present = <String>{
+      if (version != null) '--version',
+      if (tag != null) '--tag',
+      if (priorTags.isNotEmpty) '--prior-tag',
+      if (root != null) '--root',
+    };
+
+    return switch (command) {
+      _ReleaseVersionCommand.validate =>
+        version != null &&
+            present.difference(const {'--version', '--root'}).isEmpty,
+      _ReleaseVersionCommand.sync =>
+        version != null &&
+            present.difference(const {'--version', '--root'}).isEmpty,
+      _ReleaseVersionCommand.check => present.difference(const {
+        '--version',
+        '--root',
+      }).isEmpty,
+      _ReleaseVersionCommand.checkTag =>
+        tag != null && present.difference(const {'--tag', '--root'}).isEmpty,
+      _ReleaseVersionCommand.checkOrder => present.difference(const {
+        '--version',
+        '--prior-tag',
+        '--root',
+      }).isEmpty,
+      _ReleaseVersionCommand.pubspecs => present.difference(const {
+        '--root',
+      }).isEmpty,
+      _ReleaseVersionCommand.preflight => present.difference(const {
+        '--version',
+        '--root',
+      }).isEmpty,
+      _ReleaseVersionCommand.postBump =>
+        version != null &&
+            present.difference(const {'--version', '--root'}).isEmpty,
+    };
+  }
+}

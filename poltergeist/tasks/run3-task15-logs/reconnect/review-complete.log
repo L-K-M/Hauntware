@@ -1,0 +1,73 @@
+Review PR with GLM 5.3	Set up job	﻿2026-09-13T19:04:05.2256622Z Current runner version: '2.337.0'
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2277520Z ##[group]Runner Image Provisioner
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2278623Z Hosted Compute Agent
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2279280Z Version: 20260828.587
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2279992Z Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2281128Z Build Date: 2026-08-28T16:44:25Z
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2282180Z Worker ID: {895adeb8-23b4-4ed4-a19f-594a0949693c}
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2283188Z Azure Region: centralus
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2283923Z ##[endgroup]
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2285473Z ##[group]Operating System
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2286304Z Ubuntu
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2286957Z 24.04.5
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2287707Z LTS
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2288356Z ##[endgroup]
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2288995Z ##[group]Runner Image
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2289751Z Image: ubuntu-24.04
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2290461Z Version: 20260907.300.1
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2291859Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260907.300/images/ubuntu/Ubuntu2404-Readme.md
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2294192Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260907.300
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2295378Z ##[endgroup]
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2297024Z ##[group]GITHUB_TOKEN Permissions
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2299832Z Contents: read
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2300558Z Issues: write
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2301240Z Metadata: read
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2301904Z PullRequests: write
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2302749Z ##[endgroup]
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2305325Z Secret source: Actions
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2306538Z Cache mode: read
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2307855Z Prepare workflow directory
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2798586Z Prepare all required actions
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.2858053Z Getting action download info
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:05.5208220Z Download action repository 'L-K-M/zai-code-review@8e718ac45f13c5ae0e57b19a00afd54d42e5b8f7' (SHA:8e718ac45f13c5ae0e57b19a00afd54d42e5b8f7)
+Review PR with GLM 5.3	Set up job	2026-09-13T19:04:06.0509451Z Complete job name: Review PR with GLM 5.3
+Review PR with GLM 5.3	Record when the review started	﻿2026-09-13T19:04:06.0966720Z ##[group]Run echo "REVIEW_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+Review PR with GLM 5.3	Record when the review started	2026-09-13T19:04:06.0967668Z ^[[36;1mecho "REVIEW_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"^[[0m
+Review PR with GLM 5.3	Record when the review started	2026-09-13T19:04:06.0991442Z shell: /usr/bin/bash -e {0}
+Review PR with GLM 5.3	Record when the review started	2026-09-13T19:04:06.0992346Z env:
+Review PR with GLM 5.3	Record when the review started	2026-09-13T19:04:06.0993066Z   ZAI_API_KEY: ***
+Review PR with GLM 5.3	Record when the review started	2026-09-13T19:04:06.0993520Z ##[endgroup]
+Review PR with GLM 5.3	Z.ai Code Review	﻿2026-09-13T19:04:06.1299381Z ##[group]Run L-K-M/zai-code-review@8e718ac45f13c5ae0e57b19a00afd54d42e5b8f7
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1300180Z with:
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1300841Z   ZAI_API_KEY: ***
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1301333Z   ZAI_MODEL: glm-5.3
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1301839Z   ZAI_REASONING_EFFORT: high
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1302866Z   ZAI_MAX_OUTPUT_TOKENS: 32768
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1303411Z   ZAI_REQUEST_TIMEOUT_SECONDS: 900
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1303928Z   ZAI_REVIEW_MODE: hybrid
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1304411Z   MAX_CHUNK_CHARS: 25000
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1304911Z   ZAI_REVIEWER_NAME: GLM 5.3 Code Review
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1308085Z   GITHUB_TOKEN: ***
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1309721Z   ZAI_SYSTEM_PROMPT: You are an expert code reviewer. Review the provided code changes and give clear, actionable feedback. When you have a high-confidence inline replacement for code that appears in the diff, emit it as [[suggestion:path:<file path>:line:<new file line>:<short summary>:<replacement code>]].
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1311638Z   EXCLUDE_PATTERNS: *.lock,package-lock.json,yarn.lock,pnpm-lock.yaml
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1312612Z   MAX_DIFF_CHARS: 0
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1313096Z   ZAI_UNCHANGED_AUDIT_CHARS: 25000
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1313633Z   ZAI_THREAD_SIMILARITY_THRESHOLD: 0.6
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1314144Z   ZAI_COMMIT_FEEDBACK: false
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1314638Z env:
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1315208Z   ZAI_API_KEY: ***
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1315662Z   REVIEW_STARTED_AT: 1789326246
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1316151Z ##[endgroup]
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.1990179Z Fetching changed files for PR #95...
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.8312912Z Selected full review scope: 12 delta/full file(s), 0 rotating audit section(s).
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.8337530Z Processing 12 file(s) in 3 chunk(s) with high reasoning, 32768 max output tokens, 25000 max patch characters, streaming enabled, and a 900s inactivity timeout.
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:04:06.8340465Z Processing chunk 1/3 (8 file section(s))...
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:11:23.8009766Z Z.ai stream completed in 436966ms, first token in 2855ms, 132133 reasoning chars, 4278 review chars, finish stop, 37605 total tokens, request fb20f7bf-0748-49cf-9768-6e39ef4aff4d.
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:11:23.8023256Z Processing chunk 2/3 (3 file section(s))...
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:16:16.7728540Z Z.ai stream completed in 292970ms, first token in 2193ms, 93685 reasoning chars, 4573 review chars, finish stop, 30552 total tokens, request f5f3dc4b-c118-445f-8f90-b2281c31f8fa.
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:16:16.7737647Z Processing chunk 3/3 (1 file section(s))...
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:18:00.8423838Z Z.ai stream completed in 104068ms, first token in 1999ms, 36610 reasoning chars, 3175 review chars, finish stop, 10436 total tokens, request 9e9b9bbb-7b2b-4ba6-8cfd-e4923922dd00.
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:18:00.8426932Z Combined 3 successful review chunk(s) into single comment.
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:18:01.7147541Z Review comment posted.
+Review PR with GLM 5.3	Z.ai Code Review	2026-09-13T19:18:03.0750697Z Posted 3 inline suggestion(s).
+Review PR with GLM 5.3	Complete job	﻿2026-09-13T19:18:03.0926688Z Cleaning up orphan processes

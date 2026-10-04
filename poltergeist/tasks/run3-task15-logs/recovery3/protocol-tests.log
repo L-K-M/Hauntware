@@ -1,0 +1,53 @@
+00:00 +0: loading tool/protocol_guard/test/protocol_guard_test.dart
+00:00 +0: tool/protocol_guard/test/protocol_guard_test.dart: accepts data fields, methods, getters, comments, and strings
+00:02 +1: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: late Function callback;
+00:03 +2: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: late Function? callback;
+00:03 +3: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: late void Function() callback;
+00:04 +4: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: late Callback callback;
+00:04 +5: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: final callback = () {};
+00:05 +6: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: final callback = tearOff;
+00:05 +7: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: static final callback = tearOff;
+00:06 +8: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: late T callback;
+00:06 +9: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: late List<Callback> callback;
+00:07 +10: tool/protocol_guard/test/protocol_guard_test.dart: rejects resolved callback field: late ({Callback callback, int bytes}) callback;
+00:07 +11: tool/protocol_guard/test/protocol_guard_test.dart: allows only the named internal class in its exact file
+00:08 +12: tool/protocol_guard/test/protocol_guard_test.dart: an allowlisted class cannot become a protocol subtype
+00:08 +13: tool/protocol_guard/test/protocol_guard_test.dart: probe callbacks stay confined to the internal owner
+00:09 +14: tool/protocol_guard/test/protocol_guard_test.dart: probe callback owner cannot become a protocol payload
+00:09 +15: tool/protocol_guard/test/protocol_guard_test.dart: the connect-log coalescer cannot become a protocol subtype either
+00:10 +16: tool/protocol_guard/test/protocol_guard_test.dart: rejects relocated protocol subtype: class Escaped extends EngineEvent {}
+00:10 +17: tool/protocol_guard/test/protocol_guard_test.dart: rejects relocated protocol subtype: class Escaped implements EngineRequest {}
+00:10 +18: tool/protocol_guard/test/protocol_guard_test.dart: rejects relocated protocol subtype: class Escaped extends Intermediate {}
+00:11 +19: tool/protocol_guard/test/protocol_guard_test.dart: rejects relocated protocol subtype: typedef Alias = EngineEvent; class Escaped extends Alias {}
+00:11 +20: tool/protocol_guard/test/protocol_guard_test.dart: rejects relocated protocol subtype: mixin Helper {} class Escaped = EngineEvent with Helper;
+00:12 +21: tool/protocol_guard/test/protocol_guard_test.dart: rejects relocated protocol subtype: enum Escaped implements EngineEvent { value }
+00:12 +22: tool/protocol_guard/test/protocol_guard_test.dart: rejects relocated protocol subtype: extension type Escaped(Intermediate value) implements EngineEvent {}
+00:12 +23: tool/protocol_guard/test/protocol_guard_test.dart: rejects an extension type callback representation
+00:13 +24: tool/protocol_guard/test/protocol_guard_test.dart: rejects external callback wrapper field: CallbackWrapper
+00:13 +25: tool/protocol_guard/test/protocol_guard_test.dart: rejects external callback wrapper field: Nested
+00:14 +26: tool/protocol_guard/test/protocol_guard_test.dart: rejects external callback wrapper field: Generic<int>
+00:14 +27: tool/protocol_guard/test/protocol_guard_test.dart: rejects external callback wrapper field: Container<CallbackWrapper>
+00:15 +28: tool/protocol_guard/test/protocol_guard_test.dart: rejects external callback wrapper field: List<CallbackWrapper>
+00:15 +29: tool/protocol_guard/test/protocol_guard_test.dart: rejects external callback wrapper field: ({CallbackWrapper value, int bytes})
+00:16 +30: tool/protocol_guard/test/protocol_guard_test.dart: allows a phantom callback argument with an integer representation
+00:16 +31: tool/protocol_guard/test/protocol_guard_test.dart: rejects inherited callback storage: class Data extends Base {}
+00:16 +32: tool/protocol_guard/test/protocol_guard_test.dart: rejects inherited callback storage: class Data with Hooks {}
+00:17 +33: tool/protocol_guard/test/protocol_guard_test.dart: rejects inherited callback storage: class Data extends Base<void Function()> {}
+00:17 +34: tool/protocol_guard/test/protocol_guard_test.dart: rejects inherited callback storage: class Data extends Middle<void Function()> {}
+00:18 +35: tool/protocol_guard/test/protocol_guard_test.dart: rejects inherited callback storage: class Data extends Base { @override void Function() get callback => () {}; }
+00:18 +36: tool/protocol_guard/test/protocol_guard_test.dart: rejects inherited private callback storage
+00:19 +37: tool/protocol_guard/test/protocol_guard_test.dart: allows static superclass callbacks and computed getters
+00:19 +38: tool/protocol_guard/test/protocol_guard_test.dart: allows interface-only callback fields implemented by getters
+00:19 +39: tool/protocol_guard/test/protocol_guard_test.dart: an allowlisted payload cannot use inherited callbacks
+00:20 +40: tool/protocol_guard/test/protocol_guard_test.dart: detects relocation into app despite unresolved Flutter imports
+00:20 +41: tool/protocol_guard/test/protocol_guard_test.dart: finds callbacks in mixins and source directories named build
+00:21 +42: tool/protocol_guard/test/protocol_guard_test.dart: ignores generated outputs and the benchmark harness
+00:21 +43: tool/protocol_guard/test/protocol_guard_test.dart: fails closed without packages
+00:21 +44: tool/protocol_guard/test/protocol_guard_test.dart: fails closed without app
+00:21 +45: tool/protocol_guard/test/protocol_guard_test.dart: fails closed without packages/poltergeist_core/lib/src/engine
+00:21 +46: tool/protocol_guard/test/protocol_guard_test.dart: fails closed on an empty engine directory
+00:21 +47: tool/protocol_guard/test/protocol_guard_test.dart: fails closed on malformed Dart
+00:21 +48: tool/protocol_guard/test/protocol_guard_test.dart: fails closed on an unresolved engine field type
+00:22 +49: tool/protocol_guard/test/protocol_guard_test.dart: fails closed on linked engine input
+00:22 +50: tool/protocol_guard/test/protocol_guard_test.dart: CLI exits distinguish clean, violations, and scan failures
+00:49 +51: All tests passed!

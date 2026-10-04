@@ -1,0 +1,995 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
+
+import 'application_error_reporter.dart';
+import 'connection_state_bridge.dart';
+import 'file_stores.dart';
+import 'identity_audit_log.dart';
+import 'identity_file_reader.dart';
+import 'pane_engine_lanes.dart';
+import 'prompt_coordinator.dart';
+import 'trash_channel.dart';
+
+/// File names inside the app-support directory, one store per file (03 §6):
+/// pin and incident storage stay app-owned; the engine seeds from them at
+/// spawn and mirrors every mutation back.
+/// The app-support file name behind [EngineSession.pinStore] — public so
+/// `main.dart`'s backup composition falls back to the same path when no
+/// engine session exists.
+const kPinStoreFileName = 'host_keys.json';
+const _pinStoreFileName = kPinStoreFileName;
+const _incidentStoreFileName = 'incidents.json';
+const _identityAuditLogFileName = 'identity_reads.jsonl';
+
+/// The audit file's name — public so `main.dart`'s server-editor backend
+/// points its own IdentityFileReader at the same append-only log (a
+/// second instance is safe: the format is one line per write).
+const kIdentityAuditLogFileName = _identityAuditLogFileName;
+
+/// The pane-tab id the blocked-key review registers its browse channel
+/// under (03 §3.2): a review connect is not a pane session, and the id
+/// exists only for attribution.
+const kHostKeyReviewPaneTabId = 'review';
+
+/// The engine surface the app composition consumes: [EngineClient]'s
+/// connection, prompt, probe, and trust lanes. Production code names the
+/// concrete client nowhere but here; tests substitute a scripted fake, so
+/// the composition is drivable without an isolate.
+abstract interface class AppEngine
+    implements PromptBridge, ProbeBridge, PaneEngineLanes {
+  /// Host keys the engine pinned; the app persists them (one store owner).
+  Stream<HostKeyPinnedEvent> get hostKeyPins;
+
+  /// Trust-incident mutations the engine decided; the app persists them.
+  Stream<IncidentStoreEvent> get incidentChanges;
+
+  /// One server's connection status, current value first (03 §3.2).
+  @override
+  Stream<ServerStatus> watchServer(String serverId);
+
+  /// Terminal recovery failures, independent of any watch (03 §3.3).
+  Stream<RecoveryFailedEvent> get recoveryFailures;
+
+  /// Live connect transcript lines (03 §5).
+  Stream<ConnectionLogEvent> get connectionLog;
+
+  @override
+  Future<AppBrowseChannel> openBrowseChannel({
+    required String serverId,
+    required String paneTabId,
+    required ServerConfig config,
+  });
+
+  @override
+  Future<void> disconnectServer(String serverId);
+
+  /// Replaces the engine's authoritative catalog without acquiring a channel.
+  /// Implementations enqueue the snapshot before returning the [Future]; later
+  /// connection calls rely on that FIFO ordering, not acknowledgement order.
+  Future<void> replaceServerCatalog(List<ServerConfig> configs);
+
+  /// The bookmark-removal cascade (03 §6's delete path): drops the pool
+  /// reference and every trust-incident record the engine holds for
+  /// [serverId]. The app calls this AFTER the store delete — the engine's
+  /// cascade is designed never to be retried once the record is gone.
+  Future<void> removeBookmark(String serverId);
+
+  /// Orderly engine shutdown (03 §5: orderly, then kill).
+  Future<void> shutdown();
+
+  /// The bridged transfer-lease seam (protocol v13, STATUS item 23): a
+  /// [ConnectionManager] whose leases are engine-held pool channels and
+  /// whose `fs` proxies every VFS call and byte stream across the port.
+  /// The transfer queue, the checkout manager, the preview producer, and
+  /// the sync endpoints all lease through it; [configs] answers the
+  /// server config each lease dials with. Builds a new manager per call —
+  /// the composition root calls it once.
+  ConnectionManager transferConnections(ServerConfigSource configs);
+
+  /// The engine-side D15 local trash (03 §7.3) — the UI-isolate transfer
+  /// queue's trash backend, so `gio` spawns and the channel relay stay in
+  /// the engine (D8).
+  LocalTrashBackend get localTrash;
+}
+
+/// One opened browse channel, mirrored UI-side. [EngineClient]'s channel
+/// implements the same shape; the review flow needs only [close].
+abstract interface class AppBrowseChannel {
+  String get homePath;
+
+  /// Invalidation signals for the one directory this channel watches
+  /// (03 §7.5): broadcast, unbuffered, live across retargets. Local
+  /// channels only.
+  Stream<DirectoryWatchEvent> get directoryChanges;
+
+  Future<List<RemoteFileEntry>> listDirectory(String path);
+
+  /// Starts or atomically retargets this channel's single
+  /// non-recursive watch on [path] (03 §7.5). Subscribe to
+  /// [directoryChanges] first: an immediate `lost` precedes the reply.
+  /// A remote channel answers the typed `unsupported` refusal.
+  Future<void> watchDirectory(String path);
+
+  /// Releases this channel's watch without a signal; idempotent on
+  /// local channels. Closing the channel releases it too.
+  Future<void> unwatchDirectory();
+
+  /// Renames one entry inside its directory (02 §2.6's inline rename):
+  /// [oldPath] and [newPath] share a parent, and a destination that
+  /// exists fails with the typed conflict error — never an overwrite.
+  Future<void> rename(String oldPath, String newPath);
+
+  /// Sets [path]'s POSIX permission bits (02 §2.6's Get Info editor,
+  /// D28): [permissions] is the full twelve-bit mode `0..0xFFF`,
+  /// leading octal digit included. The VFS lstat-guards the path — a
+  /// symlink target refuses typed (`unsupported`) rather than being
+  /// followed — and filesystems without POSIX modes refuse
+  /// `unsupported` too. Recursive apply is the app-side walker behind
+  /// "Apply to enclosed items…", not a flag on this call.
+  Future<void> setPermissions(String path, int permissions);
+
+  /// Opens [path] in the operating system's default application (02
+  /// §2.6's Open on a local file): the engine owns the launcher process
+  /// (D8 — the UI isolate never spawns). Local channels only; a remote
+  /// channel answers the typed `unsupported` refusal.
+  Future<void> openInDefaultApp(String path);
+
+  /// Creates the directory [path] (02 §8.3's `file.newFolder`): a typed
+  /// failure when it exists or the parent is missing.
+  Future<void> createDirectory(String path);
+
+  /// Creates an empty regular file at [path] (`file.newFile`) — an
+  /// existing path is the typed conflict, never an overwrite.
+  Future<RemoteFileEntry> createEmptyFile(String path);
+
+  /// Stats [path] without following a final symlink — a `notFound`
+  /// failure means the name is free (the pane verbs' name probe).
+  Future<RemoteFileEntry> stat(String path);
+
+  Future<void> close();
+}
+
+typedef AppEngineSpawner = Future<AppEngine> Function(EngineConfig config);
+
+/// The endpoint identity a connect dials with: the bookmark's embedded
+/// identity mapped through the pinned model (04 §2.1 — the vault
+/// reference and the "reference, don't store" key path cross so
+/// credential resolution can answer). Shared by the review connect and
+/// the panes' remote bindings. The returned config's id is the bookmark
+/// id, so callers must pass that same value as the engine's serverId.
+/// createdAt/updatedAt mirror the bookmark's edit times (not connect
+/// time), so every caller derives a stable, identical config for one
+/// bookmark.
+/// A bookmark without an embedded identity fails fast here — never an
+/// empty-host dial (both call sites list identity-backed rows only).
+ServerConfig serverConfigForBookmark(Bookmark bookmark) {
+  final identity = bookmark.server?.identity;
+  if (identity == null) {
+    throw ArgumentError.value(
+      bookmark.id,
+      'bookmark.id',
+      'bookmark has no embedded server identity',
+    );
+  }
+  return ServerConfig(
+    id: bookmark.id,
+    label: bookmark.label,
+    host: identity.host,
+    port: identity.port,
+    username: identity.username,
+    authMethod: identity.authMethod,
+    secretRef: identity.secretRef,
+    identityFilePath: identity.identityFilePath,
+    createdAt: bookmark.createdAt.millisecondsSinceEpoch,
+    updatedAt: bookmark.updatedAt.millisecondsSinceEpoch,
+  );
+}
+
+/// The production spawner: the real engine isolate behind [AppEngine].
+Future<AppEngine> spawnAppEngine(EngineConfig config) async =>
+    _EngineClientAppEngine(await EngineClient.spawn(config));
+
+final class _EngineClientAppEngine implements AppEngine {
+  _EngineClientAppEngine(this._client);
+
+  final EngineClient _client;
+
+  @override
+  Stream<EnginePromptEvent> get prompts => _client.prompts;
+
+  @override
+  Stream<PromptDismissedEvent> get promptDismissals => _client.promptDismissals;
+
+  @override
+  void replyPrompt(String promptId, EnginePromptKind kind, PromptReply reply) =>
+      _client.replyPrompt(promptId, kind, reply);
+
+  @override
+  Stream<HostKeyPinnedEvent> get hostKeyPins => _client.hostKeyPins;
+
+  @override
+  Stream<IncidentStoreEvent> get incidentChanges => _client.incidentChanges;
+
+  @override
+  Stream<ServerStatus> watchServer(String serverId) =>
+      _client.watchServer(serverId);
+
+  @override
+  Stream<RecoveryFailedEvent> get recoveryFailures => _client.recoveryFailures;
+
+  @override
+  Stream<ConnectionLogEvent> get connectionLog => _client.connectionLog;
+
+  @override
+  Stream<ProbeStatusesEvent> get probeStatuses => _client.probeStatuses;
+
+  @override
+  Future<void> setProbeTargets(List<ServerConfig> targets) =>
+      _client.setProbeTargets(targets);
+
+  @override
+  Future<void> setProbeActivity(ProbeActivity activity) =>
+      _client.setProbeActivity(activity);
+
+  @override
+  Future<AppBrowseChannel> openBrowseChannel({
+    required String serverId,
+    required String paneTabId,
+    required ServerConfig config,
+  }) async => _EngineClientChannel(
+    await _client.openBrowseChannel(
+      serverId: serverId,
+      paneTabId: paneTabId,
+      config: config,
+    ),
+  );
+
+  @override
+  Future<AppBrowseChannel> openLocalChannel({required String rootPath}) async =>
+      _EngineClientChannel(await _client.openLocalChannel(rootPath: rootPath));
+
+  @override
+  Future<void> disconnectServer(String serverId) =>
+      _client.disconnectServer(serverId);
+
+  @override
+  Future<void> replaceServerCatalog(List<ServerConfig> configs) =>
+      _client.replaceServerCatalog(configs);
+
+  @override
+  Future<void> removeBookmark(String serverId) =>
+      _client.removeBookmark(serverId);
+
+  @override
+  Future<void> shutdown() => _client.shutdown();
+
+  @override
+  ConnectionManager transferConnections(ServerConfigSource configs) =>
+      EngineConnectionManager(_client, configs: configs);
+
+  @override
+  late final LocalTrashBackend localTrash = EngineTrashBackend(_client);
+}
+
+/// [EngineClient]'s channel behind the app composition's seam
+/// (interfaces stay nominal across the port).
+final class _EngineClientChannel implements AppBrowseChannel {
+  _EngineClientChannel(this._channel);
+
+  final EngineBrowseChannel _channel;
+
+  @override
+  String get homePath => _channel.homePath;
+
+  @override
+  Stream<DirectoryWatchEvent> get directoryChanges => _channel.directoryChanges;
+
+  @override
+  Future<List<RemoteFileEntry>> listDirectory(String path) =>
+      _channel.listDirectory(path);
+
+  @override
+  Future<void> watchDirectory(String path) => _channel.watchDirectory(path);
+
+  @override
+  Future<void> unwatchDirectory() => _channel.unwatchDirectory();
+
+  @override
+  Future<void> rename(String oldPath, String newPath) =>
+      _channel.rename(oldPath, newPath);
+
+  @override
+  Future<void> setPermissions(String path, int permissions) {
+    assert(
+      permissions >= 0 && permissions <= 0xFFF,
+      'permissions must be a twelve-bit mode (0x000-0xFFF)',
+    );
+    return _channel.setPermissions(path, permissions);
+  }
+
+  @override
+  Future<void> openInDefaultApp(String path) => _channel.openInDefaultApp(path);
+
+  @override
+  Future<void> createDirectory(String path) => _channel.createDirectory(path);
+
+  @override
+  Future<RemoteFileEntry> createEmptyFile(String path) =>
+      _channel.createEmptyFile(path);
+
+  @override
+  Future<RemoteFileEntry> stat(String path) => _channel.stat(path);
+
+  @override
+  Future<void> close() => _channel.close();
+}
+
+/// The app's long-lived engine owner: spawns once at startup with the
+/// app-owned persistence seeded together (03 §5's `EngineConfig` — pins
+/// and incidents cross as one message, audit finding A), answers its
+/// prompts through one app-level coordinator, mirrors its trust mutations
+/// back into the stores, and shuts it down when the app exits.
+///
+/// ```
+/// FileHostKeyStore ──all()───┐
+/// FileIncidentStore ─load()──┤
+///                            ▼
+///                     EngineConfig (both seeds)
+///                            ▼
+///               EngineClient.spawn ──► AppEngine
+///                            │
+///     ┌──────────────────────┼──────────────────────┐
+///     ▼                      ▼                      ▼
+/// PromptCoordinator    pin/incident mirrors    ConnectionStateBridge
+/// (dialogs on the     (engine decides,        (the Connections
+///  root navigator)     the app stores)          surface's lanes)
+/// ```
+///
+/// The engine decides, the app stores: the mirrors write what the engine
+/// decided and never send anything back, so a mirrored event can never
+/// re-seed the engine.
+final class EngineSession {
+  EngineSession._({
+    required AppEngine engine,
+    required HostKeyStore pinStore,
+    required this._incidentStore,
+    required this._bookmarks,
+    required this._errors,
+    required Iterable<HostKey> initialPins,
+    required GlobalKey<NavigatorState> navigatorKey,
+    required GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey,
+    required IdentityFileReader identityReader,
+    SecretVault? vault,
+    this._trashServer,
+  }) : _engine = engine,
+       _pinStore = _ObservedHostKeyStore(pinStore, initialPins) {
+    // One prompt coordinator per engine (02 §10): a second subscriber
+    // would render every prompt twice.
+    _prompts = PromptCoordinator(
+      engine: engine,
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: scaffoldMessengerKey,
+      identityReader: identityReader,
+      vault: vault,
+      errorReporter: _errors,
+    );
+    // Prompts subscribe before the session is returned: a connect that
+    // raises one can only come from a caller, and no caller exists yet —
+    // the mirrors join in the same step so no lane opens unwatched.
+    _prompts.start();
+    _pinMirror = _engine.hostKeyPins.listen(_onPinPinned);
+    _incidentMirror = _engine.incidentChanges.listen(_onIncidentChange);
+  }
+
+  final AppEngine _engine;
+  final _ObservedHostKeyStore _pinStore;
+  final IncidentStore _incidentStore;
+  final BookmarkRepository _bookmarks;
+  final ApplicationErrorReporter _errors;
+
+  /// The UI-isolate end of the D15 trash channel (03 §7.1): serves the
+  /// engine's channel invocations on the SendPort the spawn config
+  /// carried. Null off macOS/Windows or when binding failed — the
+  /// engine-side backends then report unavailable, honestly.
+  final TrashChannelServer? _trashServer;
+  late final PromptCoordinator _prompts;
+
+  StreamSubscription<HostKeyPinnedEvent>? _pinMirror;
+  StreamSubscription<IncidentStoreEvent>? _incidentMirror;
+
+  /// Incident-mirror writes join a tail of their own: store events do
+  /// not await their handlers, and mirror mutations — like the engine's
+  /// own unawaited writes — must observe issue order against the
+  /// store's serialized chain (a removal issued after a newer store must
+  /// never overtake it).
+  Future<void> _incidentTail = Future<void>.value();
+
+  Listenable? _serverCatalogChanges;
+  VoidCallback? _serverCatalogListener;
+  Map<String, ServerConfig> _serverCatalogById = const {};
+  bool _hasPublishedServerCatalog = false;
+
+  bool _reviewInFlight = false;
+  Future<void>? _shutdownFuture;
+
+  /// The one prompt coordinator for this engine (02 §10: dialogs never
+  /// stack, one coordinator per engine — a second subscriber would render
+  /// every prompt twice). Started at construction.
+  PromptCoordinator get prompts => _prompts;
+
+  /// The Connections surface's state lanes: a stable instance across
+  /// rebuilds, because the shell keys its controller lifecycle on seam
+  /// identity.
+  late final ConnectionStateBridge connectionLanes = _AppConnectionLanes(
+    _engine,
+  );
+
+  /// The browsing panes' engine lanes (03 §6's PaneController seam): the
+  /// two channel opens, the per-server state lane, and the disconnect
+  /// the pane banner cancels recovery through. Stable across rebuilds
+  /// for the same reason as [connectionLanes].
+  late final PaneEngineLanes paneLanes = _engine;
+
+  /// Keeps the engine's cached routes aligned with the shared server catalog.
+  ///
+  /// Updates retire stale pool references without opening the replacement
+  /// route. A live route must not recover after sync changes its hops.
+  void publishServerCatalog(List<ServerConfig> configs) {
+    if (_shutdownFuture != null) return;
+    if (_isPublishedServerCatalog(configs)) return;
+
+    final snapshot = List<ServerConfig>.unmodifiable(configs);
+    _serverCatalogById = Map.unmodifiable({
+      for (final config in snapshot) config.id: config,
+    });
+    _hasPublishedServerCatalog = true;
+
+    // EngineClient sends before returning its Future. Catalog publication
+    // therefore precedes later connection requests on the same FIFO port,
+    // even while this acknowledgement is pending.
+    _errors.observe(_engine.replaceServerCatalog(snapshot));
+  }
+
+  bool _isPublishedServerCatalog(List<ServerConfig> configs) {
+    if (!_hasPublishedServerCatalog ||
+        configs.length != _serverCatalogById.length) {
+      return false;
+    }
+
+    // The publisher and notifier expose the same materialized objects.
+    // Rematerialized configs still cross so field changes are never guessed.
+    for (final config in configs) {
+      if (!identical(_serverCatalogById[config.id], config)) return false;
+    }
+    return true;
+  }
+
+  void bindServerCatalog({
+    required Listenable changes,
+    required Iterable<ServerConfig> Function() read,
+  }) {
+    if (_shutdownFuture != null) return;
+    final previousListener = _serverCatalogListener;
+    if (previousListener != null) {
+      _serverCatalogChanges?.removeListener(previousListener);
+    }
+
+    void refresh() {
+      if (_shutdownFuture != null) return;
+      final List<ServerConfig> configs;
+      try {
+        configs = List.unmodifiable(read());
+      } on Object catch (error, stackTrace) {
+        _errors.report(error, stackTrace);
+        return;
+      }
+      publishServerCatalog(configs);
+    }
+
+    _serverCatalogChanges = changes;
+    _serverCatalogListener = refresh;
+    changes.addListener(refresh);
+    refresh();
+  }
+
+  /// The bridged transfer-lease seam (see [AppEngine.transferConnections]):
+  /// the transfer queue session, the checkout session, and the sync
+  /// environment share the one manager the composition root builds.
+  ConnectionManager transferConnections(ServerConfigSource configs) =>
+      _engine.transferConnections(configs);
+
+  /// The engine-side local trash backend (see [AppEngine.localTrash]).
+  LocalTrashBackend get localTrash => _engine.localTrash;
+
+  /// The pin store the engine's mirror writes to — also the backup
+  /// coordinator's TOFU truth (04 §3.2): one instance over
+  /// `host_keys.json`, since two file stores on one path would race
+  /// their caches (FileHostKeyStore loads once, then writes blind).
+  ConflictAwareHostKeyStore get pinStore => _pinStore;
+
+  /// The probe bridge the sidebar's reachability owner configures (02
+  /// §4's favorites dots). Stable across rebuilds; the owner subscribes
+  /// to `probeStatuses` before any targets cross, per the #55 ordering
+  /// rule [ProbeController] already enforces.
+  late final ProbeBridge probeLanes = _engine;
+
+  void _onPinPinned(HostKeyPinnedEvent event) {
+    final key = event.key;
+    _pinStore.observe(key);
+    _errors.observe(_pinStore.persist(key));
+  }
+
+  void _onIncidentChange(IncidentStoreEvent event) {
+    // Removals apply idempotently (both shipped stores treat an absent
+    // record as a no-op), including for a record the app just seeded that
+    // the engine dropped because its pin was gone.
+    _incidentTail = _incidentTail
+        .then((_) {
+          final Future<void> operation = switch (event) {
+            IncidentRecordStoredEvent(:final record) => _incidentStore.put(
+              record,
+            ),
+            IncidentRecordRemovedEvent(:final serverId, :final endpoint) =>
+              endpoint == null
+                  ? _incidentStore.removeAllFor(serverId)
+                  : _incidentStore.removeFor(serverId, endpoint),
+          };
+          return operation;
+        })
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) {
+            // A failed write is reported, never thrown into the stream, and
+            // must not break the chain for later mutations.
+            _errors.report(error, stackTrace);
+          },
+        );
+  }
+
+  /// Forwards the app lifecycle. Only [AppLifecycleState.detached] — the
+  /// app is exiting — matters here: the session owns no probe activity
+  /// (the demo session owns the only probe wiring, 03 §3.4), so hidden
+  /// states have nothing to pause.
+  void forwardLifecycle(AppLifecycleState? state) {
+    if (state == AppLifecycleState.detached) {
+      unawaited(shutdown());
+    }
+  }
+
+  /// The engine half of a favorite delete (03 §6's removeBookmark
+  /// cascade): the pool reference and every trust-incident record for
+  /// [serverId] drop. The store's delete lands first — this must never
+  /// be retried for a record that is already gone.
+  Future<void> removeBookmark(String serverId) =>
+      _engine.removeBookmark(serverId);
+
+  /// Leads a blocked server to the changed-key review (D18): the review is
+  /// the pool's own prompt, raised by a connect attempt through this
+  /// engine with prompting enabled — never a re-pin, never a silent lift.
+  ///
+  /// On approval the pin and incident mirrors have already persisted the
+  /// outcomes; on decline the row's state lane carries the block (the
+  /// user's answer, not a fault). Either way the reference is dropped —
+  /// a review is not a session.
+  Future<void> reviewBlockedHostKey(String serverId) async {
+    if (_shutdownFuture != null || _reviewInFlight) return;
+    _reviewInFlight = true;
+    try {
+      final bookmarks = await _bookmarks.load();
+      // Recheck after the await: shutdown may have started while the
+      // store read was in flight (09 §3.1).
+      if (_shutdownFuture != null) return;
+
+      Bookmark? bookmark;
+      for (final candidate in bookmarks) {
+        if (candidate.id == serverId) {
+          bookmark = candidate;
+          break;
+        }
+      }
+      final ServerConfig reviewConfig;
+      if (bookmark == null) {
+        final catalogConfig = _serverCatalogById[serverId];
+        if (catalogConfig == null) return;
+        reviewConfig = catalogConfig;
+      } else {
+        final ref = bookmark.server;
+        if (ref == null) return;
+        final catalogId = ref.serverConfigId;
+        if (catalogId != null) {
+          final catalogConfig = _serverCatalogById[catalogId];
+          // Never reconstruct a catalog route from its embedded fallback.
+          if (catalogConfig == null) return;
+          reviewConfig = catalogConfig;
+        } else {
+          if (ref.identity == null) return;
+          reviewConfig = serverConfigForBookmark(bookmark);
+        }
+      }
+
+      try {
+        // serverId is the row and pane alias; config.id may be a catalog id.
+        final channel = await _engine.openBrowseChannel(
+          serverId: serverId,
+          paneTabId: kHostKeyReviewPaneTabId,
+          config: reviewConfig,
+        );
+        // Approved or the pinned key returned: close the channel and let
+        // the finally below drop the reference.
+        try {
+          await channel.close();
+        } on Object catch (error, stackTrace) {
+          _errors.report(error, stackTrace);
+        }
+      } on RemoteFileException {
+        // The review failed the connect (a decline keeps the block; a
+        // network failure carries its own state-lane detail): the row is
+        // the user-facing channel, so this is not reported as a fault.
+      } on Object catch (error, stackTrace) {
+        // Non-VFS faults (a dying engine, a broken seam) are reported.
+        _errors.report(error, stackTrace);
+      } finally {
+        try {
+          await _engine.disconnectServer(serverId);
+        } on Object catch (error, stackTrace) {
+          _errors.report(error, stackTrace);
+        }
+      }
+    } on Object catch (error, stackTrace) {
+      // A fault before the review connect (the bookmark store read) is
+      // reported like every other unexpected fault — never rethrown to a
+      // fire-and-forget caller.
+      _errors.report(error, stackTrace);
+    } finally {
+      _reviewInFlight = false;
+    }
+  }
+
+  /// Awaits the pending mirror writes (pin and incident tails). Called
+  /// by the app's exit hook — the one framework-awaited path — so the
+  /// last trust decision is durable before the process exits. Kept
+  /// separate from [shutdown]: awaiting the tails inside the shutdown
+  /// closure deadlocks flutter_test's teardown zone (see its doc), while
+  /// this plain await of the tails completes everywhere.
+  Future<void> flushWrites() =>
+      Future.wait([_pinStore.flushWrites(), _incidentTail]);
+
+  /// Orderly engine shutdown, idempotent: prompts close, mirrors cancel,
+  /// the engine stops (03 §5: orderly, then kill). The mirror
+  /// cancellations are fire-and-forget — they only stop store writes, so
+  /// nothing downstream depends on their completion.
+  ///
+  /// The write tails (pin-store and [_incidentTail]) are deliberately NOT
+  /// awaited here: an awaited instance-field future as this closure's
+  /// first suspension deadlocks flutter_test's teardown zone (reproduced
+  /// in isolation — the identical test passes without the await and
+  /// hangs with it, even with an already-completed `Future.value` tail),
+  /// and no production exit path awaits this future anyway (the
+  /// lifecycle forward is unawaited; `onExitRequested` returns without
+  /// gating on it). Queued mirror writes are app-side file operations
+  /// that complete independently of the engine isolate and drain while
+  /// the process lives — the same durability window every persisted
+  /// store here has.
+  Future<void> shutdown() {
+    final pending = _shutdownFuture;
+    if (pending != null) return pending;
+    return _shutdownFuture = () async {
+      final catalogListener = _serverCatalogListener;
+      if (catalogListener != null) {
+        _serverCatalogChanges?.removeListener(catalogListener);
+      }
+      _serverCatalogChanges = null;
+      _serverCatalogListener = null;
+      try {
+        _prompts.dispose();
+      } on Object catch (error, stackTrace) {
+        // A throwing coordinator teardown must not skip the engine's
+        // own shutdown.
+        _errors.report(error, stackTrace);
+      }
+      unawaited(_pinMirror?.cancel());
+      unawaited(_incidentMirror?.cancel());
+      _pinMirror = null;
+      _incidentMirror = null;
+      final trashServer = _trashServer;
+      if (trashServer != null) {
+        try {
+          await trashServer.close();
+        } on Object catch (error, stackTrace) {
+          _errors.report(error, stackTrace);
+        }
+      }
+      try {
+        await _engine.shutdown();
+      } on Object {
+        // EngineClient.shutdown is already fail-safe; even a throwing
+        // seam must complete the session's own teardown.
+      }
+    }();
+  }
+}
+
+/// Builds the production engine session over the app-support directory
+/// (main.dart's wiring; tests substitute the spawner and a temp
+/// directory). Returns null — after reporting — when the isolate cannot
+/// spawn: the app still runs, with every surface reading "no engine"
+/// instead of failing to boot.
+///
+/// [pinStore] and [incidentStore] default to the app-support file stores;
+/// widget tests inject the in-memory pair, whose reads complete without
+/// real IO inside the test zone's fake async.
+///
+/// [fallbackHome] is where local panes open `~` when the environment
+/// names no home ([EngineConfig.fallbackHome]).
+Future<EngineSession?> startEngineSession({
+  required String supportDirectoryPath,
+  required BookmarkRepository bookmarks,
+  String? fallbackHome,
+  required GlobalKey<NavigatorState> navigatorKey,
+  GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey,
+  AppEngineSpawner spawn = spawnAppEngine,
+  HostKeyStore? pinStore,
+  IncidentStore? incidentStore,
+  SecretVault? vault,
+  TrashChannelServer? Function()? trashServerBinder,
+  void Function(Object error, StackTrace)? onError,
+}) async {
+  final errors = onError == null
+      ? ApplicationErrorReporter()
+      : ApplicationErrorReporter(sink: onError);
+  final separator = Platform.pathSeparator;
+  final pinsStore =
+      pinStore ??
+      FileHostKeyStore(
+        File('$supportDirectoryPath$separator$_pinStoreFileName'),
+      );
+  final incidentsStore =
+      incidentStore ??
+      FileIncidentStore(
+        File('$supportDirectoryPath$separator$_incidentStoreFileName'),
+        // Load failures are local diagnostics, never telemetry (D19).
+        onLoadError: (error) => errors.report(error, StackTrace.current),
+      );
+
+  // Both seeds are read before the spawn so they cross as one message:
+  // an incident never reaches the engine without the pin list it names
+  // (audit finding A). Each store read is fail-safe by its own contract —
+  // unreadable storage seeds empty, never blocks startup — and any
+  // contract violation (an unexpected fault type out of a store read, a
+  // failing spawn) reports and returns null: the app boots engine-less
+  // rather than dying before its first frame.
+  final List<HostKey> pins;
+  final List<IncidentRecord> incidents;
+  try {
+    pins = await pinsStore.all();
+    incidents = await incidentsStore.load();
+  } on Object catch (error, stackTrace) {
+    errors.report(error, stackTrace);
+    return null;
+  }
+
+  // The D15 trash channel's UI-isolate server (03 §7.1): bound before
+  // the spawn so its SendPort crosses inside EngineConfig — the engine's
+  // channel backends then invoke through it. bind() returns null on
+  // platforms whose trash needs no channel (Linux's gio spawn runs
+  // in-isolate) and a null port leaves the engine-side backends honestly
+  // unavailable — never a silent permanent delete.
+  final trashServer =
+      (trashServerBinder ??
+      () => TrashChannelServer.bind(onError: errors.report))();
+  final AppEngine engine;
+  try {
+    engine = await spawn(
+      EngineConfig(
+        hostKeyPins: pins,
+        incidents: incidents,
+        trashRequests: trashServer?.requests,
+        fallbackHome: fallbackHome,
+      ),
+    );
+  } on Object catch (error, stackTrace) {
+    errors.report(error, stackTrace);
+    unawaited(trashServer?.close());
+    return null;
+  }
+
+  // The session object itself is guarded too: a throwing coordinator
+  // construction must not leak the freshly spawned isolate behind an
+  // escaped exception — the caller sees null, the engine dies.
+  try {
+    return EngineSession._(
+      engine: engine,
+      pinStore: pinsStore,
+      incidentStore: incidentsStore,
+      bookmarks: bookmarks,
+      errors: errors,
+      initialPins: pins,
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: scaffoldMessengerKey,
+      identityReader: IdentityFileReader(
+        IdentityAuditLog(
+          File('$supportDirectoryPath$separator$_identityAuditLogFileName'),
+        ),
+      ),
+      vault: vault,
+      trashServer: trashServer,
+    );
+  } on Object catch (error, stackTrace) {
+    errors.report(error, stackTrace);
+    unawaited(trashServer?.close());
+    try {
+      await engine.shutdown();
+    } on Object {
+      // Best effort: the isolate dies with the process regardless.
+    }
+    return null;
+  }
+}
+
+String _exactHostKeyLocator(String host, int port) => '$host:$port';
+
+/// One accepted-key view for engine events and backup/sync writers.
+final class _ObservedHostKeyStore implements ConflictAwareHostKeyStore {
+  _ObservedHostKeyStore(this._delegate, Iterable<HostKey> initialKeys) {
+    for (final key in initialKeys) {
+      final locator = _exactHostKeyLocator(key.host, key.port);
+      _accepted[locator] = key;
+      _acceptedSequences[locator] = 0;
+    }
+  }
+
+  final HostKeyStore _delegate;
+  final Map<String, HostKey> _accepted = {};
+  final Map<String, int> _acceptedSequences = {};
+  var _nextSequence = 0;
+  Future<void> _writeTail = Future<void>.value();
+
+  void observe(HostKey key) {
+    final sequence = ++_nextSequence;
+    _accept(key, sequence);
+  }
+
+  Future<void> persist(HostKey key) => _enqueue(key);
+
+  Future<void> flushWrites() => _writeTail;
+
+  @override
+  Future<HostKey?> get(String host, int port) async {
+    final locator = _exactHostKeyLocator(host, port);
+    final accepted = _accepted[locator];
+    if (accepted != null) return accepted;
+
+    final stored = await _delegate.get(host, port);
+    final observed = _accepted[locator];
+    if (observed != null) return observed;
+
+    if (stored != null) _acceptStored(stored);
+    return stored;
+  }
+
+  @override
+  Future<List<HostKey>> all() async {
+    final stored = await _delegate.all();
+    for (final key in stored) {
+      _acceptStored(key);
+    }
+
+    return _accepted.values.toList(growable: false);
+  }
+
+  @override
+  Future<void> put(HostKey key) async {
+    final sequence = ++_nextSequence;
+    await _enqueue(key);
+
+    final locator = _exactHostKeyLocator(key.host, key.port);
+    final acceptedSequence = _acceptedSequences[locator] ?? -1;
+    if (acceptedSequence > sequence) return;
+
+    _accept(key, sequence);
+  }
+
+  Future<void> _enqueue(HostKey key) {
+    return _enqueueOperation(() => _delegate.put(key));
+  }
+
+  Future<T> _enqueueOperation<T>(Future<T> Function() write) {
+    final operation = _writeTail.then((_) => write());
+    _writeTail = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
+
+  @override
+  Future<HostKeyInstallResult> putIfNoConflict(HostKey key) {
+    final sequence = ++_nextSequence;
+    final locator = _exactHostKeyLocator(key.host, key.port);
+
+    return _enqueueOperation(() async {
+      var current = _accepted[locator];
+      if (current == null) {
+        final stored = await _delegate.get(key.host, key.port);
+        current = _accepted[locator] ?? stored;
+        if (stored != null) _acceptStored(stored);
+      }
+      if (current != null && current.conflictsWith(key)) {
+        return HostKeyInstallResult.conflict;
+      }
+
+      await _delegate.put(key);
+      final acceptedSequence = _acceptedSequences[locator] ?? -1;
+      if (acceptedSequence <= sequence) _accept(key, sequence);
+      return HostKeyInstallResult.installed;
+    });
+  }
+
+  @override
+  Future<HostKeyInstallResult> replaceIfCurrent(
+    HostKey expected,
+    HostKey replacement,
+  ) {
+    if (expected.locator != replacement.locator) {
+      throw ArgumentError.value(
+        replacement.locator,
+        'replacement',
+        'must use the expected host-key locator',
+      );
+    }
+
+    final sequence = ++_nextSequence;
+    final locator = expected.locator;
+
+    return _enqueueOperation(() async {
+      var current = _accepted[locator];
+      if (current == null) {
+        final stored = await _delegate.get(expected.host, expected.port);
+        current = _accepted[locator] ?? stored;
+        if (stored != null) _acceptStored(stored);
+      }
+      if (current == null ||
+          current.fingerprintSha256 != expected.fingerprintSha256) {
+        return HostKeyInstallResult.conflict;
+      }
+
+      await _delegate.put(replacement);
+      final acceptedSequence = _acceptedSequences[locator] ?? -1;
+      if (acceptedSequence > sequence) return HostKeyInstallResult.conflict;
+
+      _accept(replacement, sequence);
+      return HostKeyInstallResult.installed;
+    });
+  }
+
+  void _acceptStored(HostKey key) {
+    final locator = _exactHostKeyLocator(key.host, key.port);
+    if (_accepted.containsKey(locator)) return;
+
+    _accepted[locator] = key;
+    _acceptedSequences[locator] = 0;
+  }
+
+  void _accept(HostKey key, int sequence) {
+    final locator = _exactHostKeyLocator(key.host, key.port);
+    _accepted[locator] = key;
+    _acceptedSequences[locator] = sequence;
+  }
+}
+
+/// The Connections surface's two state lanes over [AppEngine].
+final class _AppConnectionLanes implements ConnectionStateBridge {
+  _AppConnectionLanes(this._engine);
+
+  final AppEngine _engine;
+
+  @override
+  Stream<ServerStatus> watchServer(String serverId) =>
+      _engine.watchServer(serverId);
+
+  @override
+  Stream<RecoveryFailedEvent> get recoveryFailures => _engine.recoveryFailures;
+}

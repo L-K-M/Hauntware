@@ -1,0 +1,1327 @@
+name: Release
+
+# Tag a version (the root release tool, or a manual vX.Y.Z tag) to
+# test, build, and publish ONE coordinated Hauntware release: every
+# Planchette, Séance and Poltergeist artifact under one GitHub Release
+# — 13 client targets (3 Planchette desktop, 5 Séance, 5 Poltergeist)
+# plus the Séance sync-server binaries for three OSes and the GHCR
+# image. Asset names are product-prefixed (scripts/release-manifest.txt
+# is the contract) so the three products' files can never collide.
+#
+# Atomic publication: the release is created hidden while the build
+# legs attach their assets, the GHCR image is pushed only after every
+# build leg succeeds, and the single publish job flips the draft to
+# public only once the manifest floor, SHA256SUMS and the notes are
+# verified — a public release is never partial, per-app, or sum-less.
+# Recovery from a failed run: delete the release, never the tag.
+#
+# Signing/secrets inventory (explicit): the only repo secrets are
+# GITHUB_TOKEN and ZAI_API_KEY (review workflow). No signing secrets
+# exist — desktop bundles are unsigned (macOS: ad-hoc — right-click ▸
+# Open; Windows: SmartScreen ▸ Run anyway), the Android APKs sign with
+# the committed debug-grade keystores, and the iOS IPAs must be
+# re-signed to sideload. Do not add signing inputs without a decision.
+#
+# No tag handy? The workflow_dispatch trigger below cuts the same
+# release from a chosen commit and creates the tag for you (see its
+# comment).
+
+on:
+  push:
+    tags: ['v*']        # e.g. v1.1.0
+  # Cut a release without pushing a tag — for environments whose credential
+  # can push branches but not tag refs (e.g. remote agent sessions). The tag
+  # is created at the dispatched commit by the first gh-release step; the
+  # input must match the committed pubspec `version:` fields (the release
+  # tool's lockstep contract), since the bundles bake that version in.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v1.1.0 (created here if it doesn't exist)"
+        required: true
+        type: string
+
+concurrency:
+  # Keyed on the tag alone, not the full ref: a tag push and a manual
+  # workflow_dispatch for the same tag must serialize behind one another,
+  # because both create the same release and the release-existence guard
+  # below is check-then-act, not atomic. Queuing, never cancel-in-progress —
+  # cancelling a mid-flight publish would leave a half-attached draft.
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # create the GitHub Release
+  packages: write       # push the image to GHCR
+
+env:
+  FLUTTER_VERSION: '3.47.2'
+
+jobs:
+  # Gate the release on every pure-Dart suite and tool guard across the
+  # three subtrees, the unified version check, and the dispatch-provenance
+  # and release-existence guards. A tag on a broken commit must not
+  # publish anything; a version/pubspec mismatch must not either.
+  test:
+    name: Test (release gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Deliberately NOT scoped down to contents: read: the guard below
+    # lists releases, and GitHub shows draft releases only to tokens
+    # with write access (REST docs: "Only users with push access will
+    # receive listings for draft releases") — a read-scoped token would
+    # be blind to leftover drafts and let a re-dispatch update them.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Dispatch provenance: an unpinned checkout on workflow_dispatch
+      # builds the dispatch ref's tip while the release labels its assets
+      # with the tag. Resolve the checkout ref first: an existing tag
+      # checks out itself, so a workflow-only fix recovers by dispatching
+      # from the fixed ref without moving the tag; a dispatch whose tag
+      # does not exist yet falls back to the dispatched commit, where the
+      # first gh-release step then creates it. Lookup failures fail loud —
+      # never silently build the wrong tree.
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned: the publish path must not follow a mutable tag)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+          fetch-depth: 0
+      # Releases are created once and never updated: action-gh-release's
+      # default when a release for the tag exists is to update it
+      # (overwriting same-named assets), so fail first — for drafts as well
+      # as published releases. Check-then-act is safe because the
+      # workflow-level concurrency group serializes every run for the tag.
+      # Recovery from a failed run: delete the release, never the tag (no
+      # --cleanup-tag — the tag is pushed history). A surviving tag is
+      # fine: the checkout-ref pin above builds the tag's own commit, so a
+      # workflow-only fix recovers by deleting the draft and dispatching
+      # from the fixed ref. Delete the tag as well only when the tag's
+      # tree itself is broken — the dispatch then recreates it at the
+      # fixed commit (target_commitish is ignored while the tag exists).
+      - name: Refuse to overwrite an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          existing="$(
+            gh api --paginate "repos/$REPO/releases" \
+              --jq ".[] | select(.tag_name == \"$RELEASE_TAG\")
+                        | .html_url + \" (draft=\" + (.draft|tostring) + \")\""
+          )"
+          if [[ -n "$existing" ]]; then
+            {
+              echo "a release for $RELEASE_TAG already exists:"
+              echo "$existing"
+              echo "delete it first, then re-run this workflow"
+            } >&2
+            exit 1
+          fi
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1 (SHA-pinned)
+        with:
+          sdk: stable
+      # The committed versions at the tagged commit are the source of
+      # truth; the tag only names the Release. The root release_version
+      # tool owns the lockstep contract: the root `hauntware` manifest is
+      # the first RELEASE_PUBSPEC and every owned package/app pubspec
+      # across the three subtrees must carry the shared version — plus
+      # the README version markers and Apple bundle metadata (vendored
+      # third_party forks and test/fixture trees are excluded by the
+      # tool itself).
+      - name: Verify release tag and versions
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || {
+            echo "invalid release tag: $RELEASE_TAG" >&2
+            exit 1
+          }
+          # Root resolution: the suite tool is a pure-Dart package
+          # rooted at pubspec.yaml (not a pub workspace member).
+          dart pub get
+          dart run tool/release_version/bin/release_version.dart \
+            check-tag --tag "$RELEASE_TAG"
+
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            tag_commit="$(
+              git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}"
+            )" || {
+              echo "release tag does not point at a commit" >&2
+              exit 1
+            }
+            checkout_commit="$(git rev-parse HEAD)"
+            if [[ "$tag_commit" != "$checkout_commit" ]]; then
+              echo "release tag points at $tag_commit, not $checkout_commit" >&2
+              exit 1
+            fi
+          else
+            show_ref_status=$?
+            if (( show_ref_status > 1 )); then
+              echo "could not inspect release tag" >&2
+              exit "$show_ref_status"
+            fi
+          fi
+      # Frozen provenance gate: a release tag must contain every
+      # imported source ref and the byte-exact annotated-tag metadata.
+      # (fetch-depth: 0 above — the validator walks the full graph.)
+      - name: Verify preserved history
+        run: python3 scripts/check-history.py
+      # Tag ordering: monotonic releases only. The tool owns the
+      # semantics (prior-tag list); zero prior tags is vacuously fine.
+      - name: Verify tag ordering
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          order_arguments=(
+            check-order
+            --version "${RELEASE_TAG#v}"
+          )
+          tag_output="$(git tag --list 'v*')" || {
+            echo "could not read release tag history" >&2
+            exit 1
+          }
+          while IFS= read -r tag; do
+            [[ -n "$tag" ]] || continue
+            [[ "$tag" == "$RELEASE_TAG" ]] && continue
+            order_arguments+=(--prior-tag "$tag")
+          done <<< "$tag_output"
+
+          dart run tool/release_version/bin/release_version.dart \
+            "${order_arguments[@]}"
+      - name: Planchette — resolve, analyze, test core
+        working-directory: planchette/packages/planchette_core
+        run: |
+          dart pub get
+          dart analyze
+          dart test
+      - name: Install libsqlite3
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-0
+      - name: Séance — resolve, analyze, test pure-Dart packages
+        working-directory: seance
+        run: |
+          dart pub get
+          dart analyze \
+            packages/seance_protocol packages/seance_core packages/seance_sync_server
+          dart test \
+            packages/seance_protocol packages/seance_core packages/seance_sync_server
+      - name: Poltergeist — resolve, analyze, test packages and tools
+        working-directory: poltergeist
+        run: |
+          set -euo pipefail
+          dart pub get
+          (cd packages/poltergeist_bench && dart pub get)
+          (cd tool/bench && dart pub get)
+          for package in packages/*; do
+            [[ -d "$package" ]] || continue
+            dart analyze "$package"
+          done
+          dirs=()
+          for package in packages/*; do
+            [[ -d "$package/test" ]] || continue
+            [[ "$package" == 'packages/poltergeist_bench' ]] && continue
+            dirs+=("$package")
+          done
+          if [[ ${#dirs[@]} -eq 0 ]]; then
+            echo "no package has a test/ directory yet"; exit 1
+          fi
+          dart test "${dirs[@]}"
+      - name: Poltergeist — analyze and test tools
+        working-directory: poltergeist
+        run: |
+          set -euo pipefail
+          dart analyze tool/import_guard
+          dart test tool/import_guard/test
+          bash scripts/check-imports.sh
+          dart analyze tool/protocol_guard
+          dart test tool/protocol_guard/test
+          dart run tool/protocol_guard/bin/check.dart .
+          dart analyze tool/license_gate
+          dart analyze tool/release_version
+          dart analyze tool/seance_pin_audit
+          dart test tool/license_gate/test
+          dart test tool/release_version/test
+          dart run tool/release_version/bin/release_version.dart check
+          dart test tool/seance_pin_audit/test
+          (cd packages/poltergeist_bench && dart analyze && dart test test)
+          dart analyze test/benchmarks
+          dart analyze test/integration
+          dart test test/benchmarks
+          dart test test/integration
+          test/integration/test-fixture-safety.sh
+          source test/integration/lib/fixture.sh
+          check_rendered_config
+          # Marker-only in the gate like PR CI: the full license check
+          # runs inside the client legs that ship binaries.
+          dart run tool/license_gate/bin/check.dart --marker-only
+
+  # The Flutter gate: every app and shared Flutter package's analyze+test
+  # must pass before any client leg builds a release artifact.
+  flutter:
+    name: Flutter tests (release gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # three apps plus shared packages
+    permissions:
+      contents: read
+    steps:
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Resolve Planchette packages
+        run: |
+          (cd planchette/packages/planchette_core && dart pub get)
+          (cd planchette/packages/ghost_ui && flutter pub get)
+          (cd planchette/packages/planchette_editor && flutter pub get)
+          (cd planchette/packages/ghost_desktop && flutter pub get)
+          (cd planchette/app/planchette_app && flutter pub get)
+      - name: Planchette — analyze and test shared packages and app
+        run: |
+          (cd planchette/packages/ghost_ui && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/planchette_editor && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/packages/ghost_desktop && flutter analyze --no-pub && flutter test --no-pub)
+          (cd planchette/app/planchette_app && flutter analyze --no-pub && flutter test --no-pub)
+      - name: Séance — analyze and test app and vendored xterm fork
+        run: |
+          (cd seance/app/seance_app && flutter pub get && flutter analyze --no-pub && flutter test --no-pub)
+          (cd seance/third_party/xterm && flutter pub get && flutter test --no-pub)
+      - name: Poltergeist — analyze and test app
+        working-directory: poltergeist/app/poltergeist_app
+        run: |
+          flutter pub get
+          flutter analyze --no-pub
+          flutter test --no-pub
+
+  # Sync-server binary per desktop platform (`dart compile exe` is
+  # host-native; there is no cross-compilation). Linux/macOS need
+  # libsqlite3 at runtime.
+  server:
+    name: Server binary (${{ matrix.platform }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: macos-latest
+            platform: macos-arm64
+          - os: windows-latest
+            platform: windows-x64
+    steps:
+      # Same dispatch-provenance pin as the other build legs.
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1 (SHA-pinned)
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        working-directory: seance
+        run: dart pub get
+      - name: Compile
+        working-directory: seance
+        shell: bash
+        run: |
+          mkdir -p dist
+          exe=seance-sync
+          if [ "${{ runner.os }}" = "Windows" ]; then exe=seance-sync.exe; fi
+          dart compile exe packages/seance_sync_server/bin/seance_sync_server.dart -o "dist/$exe"
+      - name: Package
+        shell: bash
+        run: tar -czf seance-sync-${{ matrix.platform }}.tar.gz -C seance/dist .
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
+        with:
+          # On a tag push these two resolve to the pushed tag (and the
+          # commitish is ignored); on workflow_dispatch they make the first
+          # job to get here create the tag at the dispatched commit.
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          # Hidden while the matrix legs attach; the sums job publishes
+          # after the floor check, so a public release is never partial.
+          draft: true
+          prerelease: >-
+            ${{ startsWith(inputs.tag || github.ref_name, 'v0.') }}
+          files: seance-sync-${{ matrix.platform }}.tar.gz
+          fail_on_unmatched_files: true
+
+  # The apps, once per client platform — `flutter build` is host-locked,
+  # hence a matrix over runners per product. fail-fast stays off so one
+  # platform's breakage doesn't cancel the others: each leg attaches its
+  # own assets to the shared draft. CI compiles the same matrices on
+  # main/PRs (ci.yml — keep the two in step), so a tag should never be
+  # the first time a client platform builds.
+  client_planchette:
+    name: Planchette client (${{ matrix.target }})
+    needs: [test, flutter]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The .deb, AppImage and Flatpak ride along with the plain bundle
+          # (four assets); the .deb keeps its versioned Debian filename, hence the
+          # glob. x64 only: Flutter publishes no linux-arm64 host artifacts
+          # (releases_linux.json is x64-only), so an arm runner can't build it.
+          - os: ubuntu-latest
+            target: linux
+            build: linux --release
+            flavor: x64
+            files: |
+              planchette-linux-x64.tar.gz
+              planchette_*.deb
+              planchette-linux-x64.AppImage
+          - os: macos-latest
+            target: macos
+            build: macos --release
+            files: planchette-macos-universal.zip
+          - os: windows-latest
+            target: windows
+            build: windows --release
+            files: planchette-windows-x64.zip
+    steps:
+      # Same dispatch-provenance pin as the test job: build the tag's own
+      # commit whenever the tag already exists (see the resolve step
+      # there for the full rationale).
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend; imagemagick/file feed
+      # scripts/package-linux.sh (icon resize, appimagetool).
+      - name: Install Linux desktop toolchain
+        if: startsWith(matrix.target, 'linux')
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+          dpkg-dev binutils
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # If the committed project signs Release with a developer identity the
+      # runner doesn't have, switch to ad-hoc — the signing class the app is
+      # designed to support (entitlements and keychain use chosen to work
+      # ad-hoc-signed, per the Séance lesson). Harmless when the project
+      # already specifies ad-hoc signing (sed simply matches nothing).
+      - name: Switch macOS signing to ad-hoc (runner has no certificate)
+        if: matrix.target == 'macos'
+        run: |
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
+            planchette/app/planchette_app/macos/Runner.xcodeproj/project.pbxproj
+      - name: Resolve workspace
+        working-directory: planchette
+        run: dart pub get
+      - name: Resolve app dependencies
+        working-directory: planchette/app/planchette_app
+        run: flutter pub get
+      - name: Build
+        working-directory: planchette/app/planchette_app
+        # Resolve against committed locks, then refuse dependency drift.
+        shell: bash
+        run: |
+          flutter build ${{ matrix.build }}
+          drift="$(git -C "$GITHUB_WORKSPACE" status --porcelain -- pubspec.lock '**/pubspec.lock')"
+          if [ -n "$drift" ]; then
+            drift_flat="$(printf '%s' "$drift" | tr '\r\n' '  ')"
+            echo "::error::pubspec.lock drift after build: $drift_flat" >&2
+            exit 1
+          fi
+      - name: Native keyboard modifiers
+        if: matrix.target == 'macos'
+        working-directory: planchette
+        run: scripts/test-macos-keyboard.sh
+      - name: Native Finder document delivery
+        if: matrix.target == 'macos'
+        working-directory: planchette
+        run: bash scripts/test-macos-documents.sh
+      - name: Native accessibility lifecycle
+        if: matrix.target == 'macos'
+        working-directory: planchette
+        run: scripts/test-macos-accessibility.sh
+      # Stage each platform's product under its release asset name: product +
+      # platform, no version (the release page already carries the version) —
+      # except the .deb, whose filename is Debian's versioned convention.
+      # Planchette is ASCII, so unlike Séance no post-build bundle rename is
+      # needed anywhere.
+      - name: Package
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            linux)
+              mv "$(ls -d planchette/app/planchette_app/build/linux/*/release/bundle)" \
+                 "planchette-linux-${{ matrix.flavor }}"
+              tar -czf "planchette-linux-${{ matrix.flavor }}.tar.gz" "planchette-linux-${{ matrix.flavor }}"
+              # The mv above renamed the bundle out of Flutter's layout, so
+              # point the packager at it explicitly (--bundle asks the ELF for
+              # its arch).
+              planchette/scripts/package-linux.sh --bundle "planchette-linux-${{ matrix.flavor }}" --output-dir .
+              ;;
+            macos)
+              # ditto keeps the bundle's symlinks and metadata intact inside
+              # the zip.
+              cd planchette/app/planchette_app/build/macos/Build/Products/Release
+              ditto -c -k --keepParent "$(ls -d *.app | head -1)" \
+                "$GITHUB_WORKSPACE/planchette-macos-universal.zip"
+              ;;
+            windows)
+              mv "$(ls -d planchette/app/planchette_app/build/windows/*/runner/Release)" planchette-windows-x64
+              7z a -bd planchette-windows-x64.zip planchette-windows-x64
+              ;;
+          esac
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned: a retargeted tag would be arbitrary code with contents: write)
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          draft: true
+          prerelease: >-
+            ${{ startsWith(inputs.tag || github.ref_name, 'v0.') }}
+          files: ${{ matrix.files }}
+          fail_on_unmatched_files: true
+
+  # Repack the Planchette Linux .deb as a Flatpak bundle — the same
+  # files the .deb installs, relaid under the /app prefix. A separate
+  # leg (as in the module workflow): the flatpak builder needs its own
+  # toolchain and the client leg already ships three assets.
+  flatpak_planchette:
+    name: Planchette Linux Flatpak
+    needs: [test, flutter]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend; flatpak-builder repacks
+      # the .deb.
+      - name: Install Linux desktop toolchain
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+          flatpak flatpak-builder elfutils
+          && { sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true; }
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Resolve workspace
+        working-directory: planchette
+        run: dart pub get
+      - name: Resolve app dependencies
+        working-directory: planchette/app/planchette_app
+        run: flutter pub get
+      - name: Build
+        working-directory: planchette/app/planchette_app
+        run: flutter build linux --release
+      - name: Package and repack
+        working-directory: planchette
+        shell: bash
+        run: |
+          scripts/package-linux.sh \
+            --bundle "$(ls -d app/planchette_app/build/linux/*/release/bundle)" \
+            --output-dir . --skip-appimage
+          scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+          mv dist/planchette-linux-x64.flatpak "$GITHUB_WORKSPACE/"
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          draft: true
+          prerelease: >-
+            ${{ startsWith(inputs.tag || github.ref_name, 'v0.') }}
+          files: planchette-linux-x64.flatpak
+          fail_on_unmatched_files: true
+
+  client_seance:
+    name: Séance client (${{ matrix.target }})
+    needs: [test, flutter]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The APK signs with the keystore committed at
+          # android/app/ci-release.jks — deliberately public, debug-grade trust
+          # (personal tool, no Play Store), but STABLE, so each release's APK
+          # upgrades the installed app in place instead of demanding an
+          # uninstall. No signing secrets needed — the Android SDK ships on
+          # ubuntu-latest.
+          - os: ubuntu-latest
+            target: android
+            build: apk --release
+            files: seance-android.apk
+          # The .deb, AppImage and Flatpak ride along with the plain bundle
+          # (four assets); the .deb keeps its versioned Debian filename, hence the
+          # glob. x64 only: Flutter publishes no linux-arm64 host artifacts
+          # (releases_linux.json is x64-only), so an arm runner can't build it.
+          - os: ubuntu-latest
+            target: linux
+            build: linux --release
+            flavor: x64
+            files: |
+              seance-linux-x64.tar.gz
+              seance_*.deb
+              seance-linux-x64.AppImage
+              seance-linux-x64.flatpak
+          - os: macos-latest
+            target: macos
+            build: macos --release
+            files: seance-macos-universal.zip
+          # No Apple Developer account: built unsigned (--no-codesign) and
+          # shipped as an IPA for users who re-sign and sideload.
+          - os: macos-latest
+            target: ios
+            build: ios --release --no-codesign
+            files: seance-ios-unsigned.ipa
+          - os: windows-latest
+            target: windows
+            build: windows --release
+            files: seance-windows-x64.zip
+    steps:
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      # Match the app's compileOptions (JavaVersion.VERSION_17) so the Gradle
+      # build is deterministic rather than tracking the runner's default JDK.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6 (SHA-pinned)
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend; imagemagick/file feed
+      # scripts/package-linux.sh (icon resize, appimagetool).
+      - name: Install Linux desktop toolchain
+        if: startsWith(matrix.target, 'linux')
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # The committed project signs Release with the owner's "Apple
+      # Development" identity (the scripts/build.sh local path). The runner has
+      # no such certificate, so point the build at ad-hoc signing instead — the
+      # signing class AGENTS.md §3 documents the app supports (entitlements and
+      # keychain use are chosen to work ad-hoc-signed).
+      - name: Switch macOS signing to ad-hoc (runner has no certificate)
+        if: matrix.target == 'macos'
+        run: |
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
+            seance/app/seance_app/macos/Runner.xcodeproj/project.pbxproj
+      - name: Resolve workspace
+        working-directory: seance
+        run: dart pub get
+      - name: Resolve app dependencies
+        working-directory: seance/app/seance_app
+        run: flutter pub get
+      - name: Build
+        working-directory: seance/app/seance_app
+        # Resolve against committed locks, then refuse dependency drift.
+        shell: bash
+        run: |
+          flutter build ${{ matrix.build }}
+          drift="$(git -C "$GITHUB_WORKSPACE" status --porcelain -- pubspec.lock '**/pubspec.lock')"
+          if [ -n "$drift" ]; then
+            drift_flat="$(printf '%s' "$drift" | tr '\r\n' '  ')"
+            echo "::error::pubspec.lock drift after build: $drift_flat" >&2
+            exit 1
+          fi
+      # A release must prove the compiled PTY releases its owned resources.
+      - name: Test native local-shell lifecycle
+        if: matrix.target == 'linux'
+        working-directory: seance/app/seance_app
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/seance/app/seance_app/build/linux/x64/release/bundle/lib
+          SEANCE_NATIVE_PTY_REQUIRED: '1'
+        run: flutter test --no-pub test/local_shell_native_test.dart
+      - name: Test native accessibility lifecycle
+        if: matrix.target == 'macos'
+        working-directory: seance
+        run: scripts/test-macos-accessibility.sh
+      - name: Test native keyboard modifiers
+        if: matrix.target == 'macos'
+        working-directory: seance
+        run: scripts/test-macos-keyboard.sh
+      # Stage each platform's product under its release asset name. Names
+      # match the sync-server tarballs: product + platform, no version (the
+      # release page already carries the version) — except the .deb, whose
+      # filename is Debian's versioned convention.
+      - name: Package
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            android)
+              cp seance/app/seance_app/build/app/outputs/flutter-apk/app-release.apk \
+                 seance-android.apk
+              ;;
+            linux)
+              mv "$(ls -d seance/app/seance_app/build/linux/*/release/bundle)" \
+                 "seance-linux-${{ matrix.flavor }}"
+              tar -czf "seance-linux-${{ matrix.flavor }}.tar.gz" "seance-linux-${{ matrix.flavor }}"
+              # The mv above renamed the bundle out of Flutter's layout, so
+              # point the packager at it explicitly (--bundle asks the ELF for
+              # its arch).
+              seance/scripts/package-linux.sh --bundle "seance-linux-${{ matrix.flavor }}" --output-dir .
+              # The .flatpak is the same .deb's payload staged under /app —
+              # one packaging path, four assets.
+              sudo apt-get update
+              sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+              # Ubuntu 24.04 denies the unprivileged user namespaces
+              # bubblewrap (flatpak's sandbox helper) builds in.
+              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+              deb="$(find . -maxdepth 1 -name 'seance_*.deb' -type f -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+              [ -n "$deb" ] || { echo "::error::no seance_*.deb found" >&2; exit 1; }
+              seance/scripts/build-flatpak.sh "$deb"
+              mv seance/dist/seance-linux-x64.flatpak .
+              ;;
+            macos)
+              # Xcode builds the ASCII "Seance.app" (codesign rejects accented
+              # file names); rename the wrapper for users — same move as
+              # scripts/build.sh, and the wrapper name isn't part of the
+              # signature seal. ditto keeps the bundle's symlinks and metadata
+              # intact inside the zip.
+              cd seance/app/seance_app/build/macos/Build/Products/Release
+              mv "$(ls -d *.app | head -1)" "Séance.app"
+              ditto -c -k --keepParent "Séance.app" \
+                "$GITHUB_WORKSPACE/seance-macos-universal.zip"
+              ;;
+            ios)
+              # An IPA is Payload/<app>.app zipped. Unsigned — installing it
+              # means re-signing (AltStore / Sideloadly / Xcode free account).
+              mkdir Payload
+              mv seance/app/seance_app/build/ios/iphoneos/Runner.app Payload/
+              zip -qry seance-ios-unsigned.ipa Payload
+              ;;
+            windows)
+              mv "$(ls -d seance/app/seance_app/build/windows/*/runner/Release)" seance-windows-x64
+              7z a -bd seance-windows-x64.zip seance-windows-x64
+              ;;
+          esac
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          draft: true
+          prerelease: >-
+            ${{ startsWith(inputs.tag || github.ref_name, 'v0.') }}
+          files: ${{ matrix.files }}
+          fail_on_unmatched_files: true
+
+  client_poltergeist:
+    name: Poltergeist client (${{ matrix.target }})
+    needs: [test, flutter]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The APK signs with a committed, deliberately public,
+          # debug-grade keystore (Séance's ci-release.jks pattern — personal
+          # tool, no Play Store) so each release's APK upgrades the installed
+          # app in place instead of demanding an uninstall. No signing
+          # secrets are needed either way.
+          - os: ubuntu-latest
+            target: android
+            build: apk --release
+            files: poltergeist-android.apk
+          # The .deb, AppImage and Flatpak ride along with the plain bundle
+          # (four assets); the .deb keeps its versioned Debian filename, hence the
+          # glob. x64 only: Flutter publishes no linux-arm64 host artifacts
+          # (releases_linux.json is x64-only), so an arm runner can't build it.
+          - os: ubuntu-latest
+            target: linux
+            build: linux --release
+            flavor: x64
+            files: |
+              poltergeist-linux-x64.tar.gz
+              poltergeist_*.deb
+              poltergeist-linux-x64.AppImage
+              poltergeist-linux-x64.flatpak
+          - os: macos-latest
+            target: macos
+            build: macos --release
+            files: poltergeist-macos-universal.zip
+          # No Apple Developer account: built unsigned (--no-codesign) and
+          # shipped as an IPA for users who re-sign and sideload. `build ipa`
+          # stops at the unsigned .xcarchive — the Package step below zips
+          # the IPA out of it explicitly.
+          - os: macos-latest
+            target: ios
+            build: ipa --release --no-codesign
+            files: poltergeist-ios-unsigned.ipa
+          - os: windows-latest
+            target: windows
+            build: windows --release
+            files: poltergeist-windows-x64.zip
+    steps:
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      # Pin the JDK so the Gradle build is deterministic rather than tracking
+      # the runner's default; keep in step with the app's compileOptions.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6 (SHA-pinned)
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend; imagemagick/file feed
+      # scripts/package-linux.sh (icon resize, appimagetool).
+      - name: Install Linux desktop toolchain
+        if: startsWith(matrix.target, 'linux')
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # If the committed project signs Release with a developer identity the
+      # runner doesn't have, switch to ad-hoc — the signing class the app is
+      # designed to support (entitlements and keychain use chosen to work
+      # ad-hoc-signed, per the Séance lesson). Harmless when the project
+      # already specifies ad-hoc signing (sed simply matches nothing).
+      - name: Switch macOS signing to ad-hoc (runner has no certificate)
+        if: matrix.target == 'macos'
+        run: |
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
+            poltergeist/app/poltergeist_app/macos/Runner.xcodeproj/project.pbxproj
+      - name: Resolve workspace
+        working-directory: poltergeist
+        run: dart pub get
+      - name: Resolve M0 benchmark harness
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: dart pub get
+      - name: Resolve app dependencies
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter pub get
+      - name: Verify pinned Séance licenses
+        working-directory: poltergeist
+        run: dart run tool/license_gate/bin/check.dart # SEANCE_LICENSE_GATE_V1
+      - name: Build
+        working-directory: poltergeist/app/poltergeist_app
+        # Building with pub (against the committed lock) lets the
+        # tool regenerate GeneratedPluginRegistrant for the release
+        # dependency set; with --no-pub the registrant from the
+        # earlier plain `flutter pub get` kept the dev-dep
+        # integration_test entry and release javac failed twice
+        # identically (runs 35898272663, 35907981194). The gate
+        # now permits this: pub with a committed lock is
+        # deterministic and cannot drift the verified pin.
+        shell: bash
+        run: |
+          flutter build ${{ matrix.build }}
+          drift="$(git -C "$GITHUB_WORKSPACE" status --porcelain -- pubspec.lock '**/pubspec.lock')"
+          if [ -n "$drift" ]; then
+            drift_flat="$(printf '%s' "$drift" | tr '\r\n' '  ')"
+            echo "::error::pubspec.lock drift after build: $drift_flat" >&2
+            exit 1
+          fi
+      - name: Verify native macOS keyboard compatibility
+        if: matrix.target == 'macos'
+        working-directory: poltergeist
+        run: bash scripts/test-macos-keyboard.sh
+      # Prove Gradle consumed the synchronized pubspec code in the real APK.
+      - name: Verify Android version code
+        if: matrix.target == 'android'
+        working-directory: poltergeist/app/poltergeist_app
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/poltergeist/scripts/verify-android-version.sh"
+      # Stage each platform's product under its release asset name: product +
+      # platform, no version (the release page already carries the version) —
+      # except the .deb, whose filename is Debian's versioned convention.
+      # Poltergeist is ASCII, so unlike Séance no post-build bundle rename is
+      # needed anywhere.
+      - name: Package
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            android)
+              cp poltergeist/app/poltergeist_app/build/app/outputs/flutter-apk/app-release.apk \
+                 poltergeist-android.apk
+              ;;
+            linux)
+              mv "$(ls -d poltergeist/app/poltergeist_app/build/linux/*/release/bundle)" \
+                 "poltergeist-linux-${{ matrix.flavor }}"
+              tar -czf "poltergeist-linux-${{ matrix.flavor }}.tar.gz" "poltergeist-linux-${{ matrix.flavor }}"
+              # The mv above renamed the bundle out of Flutter's layout, so
+              # point the packager at it explicitly (--bundle asks the ELF for
+              # its arch).
+              poltergeist/scripts/package-linux.sh --bundle "poltergeist-linux-${{ matrix.flavor }}" --output-dir .
+              # The .flatpak is the same .deb's payload staged under /app —
+              # one packaging path, four assets.
+              sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+              # Ubuntu 24.04 denies the unprivileged user namespaces
+              # bubblewrap (flatpak's sandbox helper) builds in.
+              sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+              poltergeist/scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'poltergeist_*.deb' -print -quit)"
+              mv poltergeist/dist/poltergeist-linux-x64.flatpak .
+              ;;
+            macos)
+              # ditto keeps the bundle's symlinks and metadata intact inside
+              # the zip.
+              cd poltergeist/app/poltergeist_app/build/macos/Build/Products/Release
+              ditto -c -k --keepParent "$(ls -d *.app | head -1)" \
+                "$GITHUB_WORKSPACE/poltergeist-macos-universal.zip"
+              ;;
+            ios)
+              # An IPA is Payload/<app>.app zipped. `flutter build ipa
+              # --no-codesign` stops at the unsigned .xcarchive and emits no
+              # .ipa on its own, so zip the archive's app bundle explicitly
+              # (D23's step) — unsigned; installing it means re-signing
+              # (AltStore / Sideloadly / Xcode free account).
+              app_dir="poltergeist/app/poltergeist_app/build/ios/archive/Runner.xcarchive/Products/Applications"
+              app="$(ls -d "$app_dir"/*.app | head -1)"
+              [[ -n "$app" ]] || { echo "no .app under $app_dir" >&2; exit 1; }
+              mkdir Payload
+              cp -R "$app" Payload/
+              zip -qry poltergeist-ios-unsigned.ipa Payload
+              ;;
+            windows)
+              mv "$(ls -d poltergeist/app/poltergeist_app/build/windows/*/runner/Release)" poltergeist-windows-x64
+              7z a -bd poltergeist-windows-x64.zip poltergeist-windows-x64
+              ;;
+          esac
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3 (SHA-pinned)
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          target_commitish: ${{ github.sha }}
+          draft: true
+          prerelease: >-
+            ${{ startsWith(inputs.tag || github.ref_name, 'v0.') }}
+          files: ${{ matrix.files }}
+          fail_on_unmatched_files: true
+
+  # Container image to GitHub Container Registry. It pushes only after
+  # EVERY build leg succeeded — an image must never publish for a
+  # release whose client floor failed. Deployments build from source;
+  # this image is the release artifact for everyone else.
+  docker:
+    name: Docker image
+    needs:
+      - test
+      - server
+      - client_planchette
+      - client_seance
+      - client_poltergeist
+      - flatpak_planchette
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Same dispatch-provenance pin as the test job: build the tag's own
+      # commit whenever the tag already exists — the image bakes sources,
+      # not just metadata.
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4 (SHA-pinned)
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 (SHA-pinned)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6 (SHA-pinned)
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # `value` feeds the semver parser the tag on workflow_dispatch runs
+          # (where the git ref is a branch, not the tag); on tag pushes it is
+          # the pushed tag itself, same as deriving from the ref.
+          tags: |
+            type=semver,pattern={{version}},value=${{ inputs.tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.tag || github.ref_name }}
+            type=raw,value=latest
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (SHA-pinned)
+        with:
+          # Build context is the seance subtree root so its pub
+          # workspace resolves (same contract as the Dockerfile header).
+          context: seance/
+          file: seance/packages/seance_sync_server/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Every release carries SHA-256 checksums for all assets — SHA256SUMS
+  # beside the assets, the same sums in the notes — computed by CI after
+  # all assets attach and the GHCR image is published (an integrity
+  # channel, not an origin one). Runs only when every leg succeeded:
+  # sums over a partial asset set would certify a broken release, and
+  # the manifest floor check makes even a silent upload miss loud.
+  sums:
+    name: Checksums and publish
+    needs:
+      - server
+      - client_planchette
+      - client_seance
+      - client_poltergeist
+      - flatpak_planchette
+      - docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      # The floor manifest is versioned like the rest of the pipeline —
+      # check out the tag's own commit for it.
+      - name: Resolve the checkout ref
+        id: checkout-ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/git/ref/tags/$RELEASE_TAG")
+          case "$code" in
+            200) echo "ref=$RELEASE_TAG" >> "$GITHUB_OUTPUT" ;;
+            404) echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT" ;;
+            *)
+              echo "tag ref lookup failed for $RELEASE_TAG (HTTP $code)" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+        with:
+          ref: ${{ steps.checkout-ref.outputs.ref }}
+      - name: Compute SHA256SUMS over the release's assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          assets_dir="$(mktemp -d)"
+          gh release download "$RELEASE_TAG" --repo "$REPO" \
+            --dir "$assets_dir" --clobber
+
+          # Manifest floor: every entry in scripts/release-manifest.txt
+          # must have a downloaded match — 25 product assets across the
+          # three apps plus the sync-server tarballs. A missing leg's
+          # asset can never sneak into a public release.
+          floor_missing=()
+          while IFS= read -r asset; do
+            [[ -z "$asset" || "$asset" =~ ^# ]] && continue
+            compgen -G "$assets_dir/$asset" >/dev/null \
+              || floor_missing+=("$asset")
+          done < scripts/release-manifest.txt
+          if ((${#floor_missing[@]} > 0)); then
+            echo "floor asset(s) missing from the release: ${floor_missing[*]}" >&2
+            exit 1
+          fi
+
+          ( cd "$assets_dir" && sha256sum -- * ) > SHA256SUMS
+
+          # The notes own the install-relevant labels beside the artifacts
+          # (the desktop bundles are unsigned/ad-hoc, the iOS IPAs unsigned)
+          # and the sums users verify downloads against.
+          {
+            cat <<'NOTES'
+          **Planchette** — desktop bundles for Linux (.deb, AppImage,
+          Flatpak, plain bundle, x64), macOS and Windows.
+          **Séance** — Android APK (sideload, upgrades in place), Linux
+          packages (x64), macOS/Windows bundles, an unsigned iOS IPA, and
+          the sync-server binaries (linux-x64, macos-arm64, windows-x64).
+          **Poltergeist** — same client matrix as Séance (no server).
+          Desktop bundles are unsigned; first launch needs the usual
+          unidentified-developer step (macOS: right-click ▸ Open; Windows:
+          SmartScreen ▸ Run anyway). The iOS IPAs must be re-signed to
+          install (AltStore / Sideloadly / Xcode with a free Apple ID).
+          The sync server also ships as `ghcr.io/<owner>/hauntware` image.
+
+          `SHA256SUMS` ships beside the assets; the same sums follow below.
+
+          ## SHA256 checksums
+
+          NOTES
+            cat SHA256SUMS
+          } > RELEASE_NOTES.md
+
+          # Never mutate a published release: a re-run after a
+          # publish-step timeout would otherwise clobber SHA256SUMS and
+          # the notes on the live release. The draft probe fails loud:
+          # an errored view must not read as empty ("published").
+          is_draft=$(gh release view "$RELEASE_TAG" --repo "$REPO" \
+            --json isDraft --jq .isDraft) || exit 1
+          if [ "$is_draft" = true ]; then
+            gh release upload "$RELEASE_TAG" --repo "$REPO" SHA256SUMS --clobber
+            gh release edit "$RELEASE_TAG" --repo "$REPO" \
+              --notes-file RELEASE_NOTES.md
+          else
+            echo "release already published; leaving assets and notes untouched" >&2
+          fi
+      # What the removed human ceremony did by hand, CI does here —
+      # re-download the full set and check every digest against the
+      # uploaded sums, catching corruption that appears between the two
+      # downloads (storage rot, a bad mirror, in-transit corruption).
+      # An asset corrupted at upload time is not caught: the sums
+      # certify whatever the release serves. Build-side digests from
+      # the client legs would close that gap.
+      - name: Verify the uploaded asset set before publishing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p verify && cd verify
+          gh release download "$RELEASE_TAG" --repo "$REPO" --clobber
+          # Sums and files must be a bijection: sha256sum -c alone passes
+          # on a truncated sums list, leaving assets unchecked. Compare
+          # name sets, not counts -- a duplicate line balances the tally.
+          listed=$(sed -E 's/^[0-9a-f]{64} [ *]?//' SHA256SUMS | awk 'NF' | sort)
+          files=$(find . -maxdepth 1 -type f ! -name SHA256SUMS \
+            -printf '%f\n' | sort)
+          if ! diff -u <(printf '%s\n' "$files") <(printf '%s\n' "$listed"); then
+            echo "SHA256SUMS and the downloaded asset set are not a bijection" >&2
+            exit 1
+          fi
+          sha256sum -c --strict SHA256SUMS
+      # The publish itself: no human step, but only now that the floor
+      # check passed, the image is pushed, and the sums are attached and
+      # verified. Idempotent for re-runs: if a prior attempt already
+      # flipped the release public (e.g. a timeout after a successful
+      # call), there is nothing to do -- created-once is the guard job's
+      # invariant, not this step's failure mode, and a spurious red here
+      # would push a healthy published release down the delete-and-retag
+      # path.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Fails loud: an errored probe reading as empty would take the
+          # else branch and exit 0 -- a green run over an unpublished
+          # draft.
+          draft=$(gh release view "$RELEASE_TAG" --repo "$REPO" \
+            --json isDraft --jq .isDraft) || exit 1
+          if [ "$draft" = true ]; then
+            # The rehearsal checklist's flag check, automated: a v0.* tag
+            # must publish as a pre-release. Fail loud rather than publish
+            # a mis-flagged release.
+            case "$RELEASE_TAG" in v0.*) want=true ;; *) want=false ;; esac
+            got=$(gh release view "$RELEASE_TAG" --repo "$REPO" \
+              --json isPrerelease --jq .isPrerelease) || exit 1
+            [ "$got" = "$want" ] || {
+              echo "prerelease flag is '$got', expected '$want' for $RELEASE_TAG" >&2
+              exit 1
+            }
+            gh release edit "$RELEASE_TAG" --repo "$REPO" --draft=false
+            # Post-publish probe: the edit returning 0 proves nothing —
+            # re-read the flag so a silently no-op publish can never
+            # report green over a release that is still a hidden draft.
+            still=$(gh release view "$RELEASE_TAG" --repo "$REPO" \
+              --json isDraft --jq .isDraft) || exit 1
+            [ "$still" = false ] || {
+              echo "publish call succeeded but $RELEASE_TAG is still a draft" >&2
+              exit 1
+            }
+          else
+            echo "release already published; nothing to do" >&2
+          fi

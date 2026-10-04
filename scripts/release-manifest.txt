@@ -1,0 +1,54 @@
+# Expected assets on a coordinated Hauntware release.
+#
+# The release workflow's checksum/publish job downloads every asset
+# attached to the draft release and requires ONE downloaded match per
+# entry below before it computes SHA256SUMS or flips the release
+# public — the rehearsal floor: a silently missing product build can
+# never certify. Entries are shell glob patterns matched against the
+# asset file names; the .deb entries keep Debian's versioned filename
+# convention, hence the glob.
+#
+# Asset names are product-prefixed, so Planchette, Séance (app and
+# sync server), and Poltergeist files can never collide on the single
+# shared release. scripts/check-workflows.sh verifies that every
+# asset glob the release legs attach is represented here — keep the
+# manifest and the workflow's `files:` lists in step.
+#
+# Desktop bundles are unsigned (macOS: ad-hoc); first launch needs the
+# usual unidentified-developer step. iOS IPAs are unsigned and must be
+# re-signed to sideload. There is no linux-arm64 client: Flutter
+# publishes no linux-arm64 host artifacts.
+
+# --- Planchette desktop clients (3 targets, 4 assets)
+planchette-linux-x64.tar.gz
+planchette_*.deb
+planchette-linux-x64.AppImage
+planchette-linux-x64.flatpak
+planchette-macos-universal.zip
+planchette-windows-x64.zip
+
+# --- Séance app clients (5 targets, 8 assets)
+seance-android.apk
+seance-linux-x64.tar.gz
+seance_*.deb
+seance-linux-x64.AppImage
+seance-linux-x64.flatpak
+seance-macos-universal.zip
+seance-ios-unsigned.ipa
+seance-windows-x64.zip
+
+# --- Séance sync server (3 OS binaries; the GHCR image is not a
+# release asset and is published by the docker job after all legs)
+seance-sync-linux-x64.tar.gz
+seance-sync-macos-arm64.tar.gz
+seance-sync-windows-x64.tar.gz
+
+# --- Poltergeist clients (5 targets, 8 assets)
+poltergeist-android.apk
+poltergeist-linux-x64.tar.gz
+poltergeist_*.deb
+poltergeist-linux-x64.AppImage
+poltergeist-linux-x64.flatpak
+poltergeist-macos-universal.zip
+poltergeist-ios-unsigned.ipa
+poltergeist-windows-x64.zip

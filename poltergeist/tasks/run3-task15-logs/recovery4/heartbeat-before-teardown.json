@@ -1,0 +1,53 @@
+{
+  "id": "adfa2d5c",
+  "name": "PR84 attempt4 check-in",
+  "prompt": "Check PR84 attempt4 evidence/review dependency; preserve workspace and report precise checkpoint, no polling loop.",
+  "cadence": {
+    "type": "cron",
+    "expression": "0 * * * *"
+  },
+  "target": {
+    "type": "agent",
+    "agentId": "7cfee75c-9dd1-45ca-b684-1b4529c851c5"
+  },
+  "status": "active",
+  "createdAt": "2026-09-13T17:45:59.106Z",
+  "updatedAt": "2026-09-13T18:01:23.238Z",
+  "nextRunAt": "2026-09-13T21:00:00.000Z",
+  "lastRunAt": "2026-09-13T18:01:23.238Z",
+  "pausedAt": null,
+  "expiresAt": "2026-09-14T05:45:59.100Z",
+  "maxRuns": null,
+  "runs": [
+    {
+      "id": "843ed7a4-78bc-49ed-8c98-bdeb81ffba3b",
+      "scheduledFor": "2026-09-13T18:00:00.000Z",
+      "startedAt": "2026-09-13T18:00:03.890Z",
+      "endedAt": "2026-09-13T18:00:03.934Z",
+      "status": "failed",
+      "agentId": null,
+      "output": null,
+      "error": "Agent 7cfee75c-9dd1-45ca-b684-1b4529c851c5 already has an active run"
+    },
+    {
+      "id": "ce5ee49a-da97-44c5-b8ce-de485f84c927",
+      "scheduledFor": "2026-09-13T18:00:00.000Z",
+      "startedAt": "2026-09-13T18:00:01.890Z",
+      "endedAt": "2026-09-13T18:00:09.455Z",
+      "status": "failed",
+      "agentId": null,
+      "output": null,
+      "error": "Agent 7cfee75c-9dd1-45ca-b684-1b4529c851c5 already has an active run"
+    },
+    {
+      "id": "340e53e1-8b00-4b94-9f35-792655d43752",
+      "scheduledFor": "2026-09-13T18:00:00.000Z",
+      "startedAt": "2026-09-13T18:00:02.890Z",
+      "endedAt": "2026-09-13T18:01:23.238Z",
+      "status": "failed",
+      "agentId": null,
+      "output": null,
+      "error": "Agent 7cfee75c-9dd1-45ca-b684-1b4529c851c5 already has an active run"
+    }
+  ]
+}

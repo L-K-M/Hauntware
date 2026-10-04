@@ -1,0 +1,45 @@
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+00:00 +0: retry on a severed remote channel reopens instead of looping
+00:00 +1: a failed reconnect still preserves the user directory on the next retry
+00:00 +2: a stale pending path never leaks into another bookmark
+00:00 +2 -1: a stale pending path never leaks into another bookmark [E]
+  Expected: ['/srv/other/home']
+    Actual: ['/srv/www']
+     Which: at location [0] is '/srv/www' instead of '/srv/other/home'
+  a pending path from srv-1 must not leak into srv-2
+  
+  package:matcher                                        expect
+  package:flutter_test/src/widget_tester.dart 473:18     expect
+  test/services/pane_cancel_regressions_test.dart 360:5  registerRound15Tests.<fn>
+  
+00:00 +2 -1: an old listing cannot consume a newer failed bind landing path
+00:00 +3 -1: a dead status lane cannot latch the connection-lost banner
+00:00 +4 -1: a cleanly closed status lane cannot latch the connection-lost banner
+00:00 +5 -1: cancelRecovery during an in-flight connect invalidates the bind
+00:00 +6 -1: a failed bind clears the stale connection-lost banner
+00:00 +7 -1: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: a stale pending path never leaks into another bookmark

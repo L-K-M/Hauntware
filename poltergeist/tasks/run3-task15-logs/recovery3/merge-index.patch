@@ -1,0 +1,300 @@
+* Unmerged path docs/STATUS.md
+diff --git a/docs/plan/03-ARCHITECTURE.md b/docs/plan/03-ARCHITECTURE.md
+index 75c39db..7a4bf7d 100644
+--- a/docs/plan/03-ARCHITECTURE.md
++++ b/docs/plan/03-ARCHITECTURE.md
+@@ -2012,16 +2012,25 @@ the logical watch. Parent watching alone cannot detect delete-pending roots:
+ Windows may retain the directory entry while its child watch holds a handle.
+ Dart also drops a synchronous `ReadDirectoryChangesW` failure when re-arming
+ after child events. Therefore the backend checks root type asynchronously
+-after subscribing and after events from the child watch. A non-directory
+-result or check failure loses the watch. Checks run one at a time; events
+-during a check require a trailing check, and cancellation waits for both
+-subscriptions and the outstanding check. This is event-driven metadata
+-validation, with no timer, recursive scan, or remote polling. The check after
++after subscribing, after child-watch events, and after qualifying parent-watch
++events. A non-directory result or check failure loses the watch. Checks run
++one at a time; events during a check require a trailing check. Cancellation
++waits for both subscriptions and the outstanding check. This is event-driven
++metadata validation, with no timer, recursive scan, or remote polling. The check after
+ subscription covers disappearance during native watch setup. The old blanket
+ claim that empty-root removal never signals is incorrect: Windows can report
+ it as an asynchronous watch error. Native regression tests cover both empty
+ and populated deletion; STATUS records evidence and remaining limitations.
+ 
++Linux/macOS retain a single leaf subscription, without requiring watch access
++to every ancestor. Ancestor-move notification guarantees require native evidence
++of a successful move: an OS refusal is not a missing notification. The tested
++Windows runner/SDK refuses ancestor moves with live descendant watch handles,
++even with `FILE_SHARE_DELETE`, and permits them after cancellation. This does
++not establish that every Windows filesystem or move mechanism refuses them.
++STATUS item 18 separates that boundary from Linux/macOS missing-loss evidence;
++neither justifies silently expanding ancestor permissions or watch resources.
++
+ ## 8. Code-sharing mechanics (D2)
+ 
+ ### 8.1 Git-pinned Séance packages
+diff --git a/packages/poltergeist_core/lib/src/engine/local_watch_backend.dart b/packages/poltergeist_core/lib/src/engine/local_watch_backend.dart
+index 15667e5..1b6563c 100644
+--- a/packages/poltergeist_core/lib/src/engine/local_watch_backend.dart
++++ b/packages/poltergeist_core/lib/src/engine/local_watch_backend.dart
+@@ -14,8 +14,9 @@ abstract interface class LocalWatchBackend {
+   Stream<FileSystemEvent> watch(String directory);
+ }
+ 
+-/// Non-recursive native events suffice on Linux and macOS, except for
+-/// dart:io's documented Linux overflow gap (STATUS item 14).
++/// Non-recursive native events cover watched-directory self-loss on
++/// Linux/macOS. Permitted ancestor renames can go undetected (STATUS item 18);
++/// Linux inotify queue overflow also remains unreported (item 14).
+ final class DartIoWatchBackend implements LocalWatchBackend {
+   const DartIoWatchBackend();
+ 
+diff --git a/packages/poltergeist_core/lib/src/engine/protocol.dart b/packages/poltergeist_core/lib/src/engine/protocol.dart
+index 78af817..b0a9f10 100644
+--- a/packages/poltergeist_core/lib/src/engine/protocol.dart
++++ b/packages/poltergeist_core/lib/src/engine/protocol.dart
+@@ -199,23 +199,19 @@ final class IncidentRecordRemovedEvent extends IncidentStoreEvent {
+ /// Why a watched local directory invalidated (03 §7.5).
+ enum DirectoryWatchSignal {
+   /// An ordinary change in the watched directory — coalesced (debounced
+-  /// 300 ms) engine-side. The consumer rescans the directory. On Windows a
+-  /// rescan answering `notFound` must be handled as an implicit loss
+-  /// (see the [lost] variant): the OS reports a removed root only through
+-  /// its children's removal, never as a lost signal.
++  /// 300 ms) engine-side. The consumer rescans the directory. A rescan
++  /// answering `notFound` must still be handled as an implicit loss (see
++  /// the [lost] variant): dropped native events (Linux's inotify queue
++  /// overflow, STATUS item 14) can leave the path gone before any lost
++  /// signal arrives.
+   changed,
+ 
+-  /// The watch is gone: the watched directory was removed or renamed away,
+-  /// or the watcher backend failed or closed. Delivered immediately, never
+-  /// silently, and the watch is released — a consumer must rescan or
+-  /// retarget; more signals for this path will not arrive without a new
+-  /// [WatchLocalDirectoryRequest]. One backend exception: on Windows,
+-  /// removing the watched directory itself defers (delete-pending while
+-  /// the watch holds its handle) and yields no lost signal — a non-empty
+-  /// directory's children-removal [DirectoryWatchSignal.changed] and its
+-  /// rescan are the observable path there, but an empty (or
+-  /// already-emptied) watched directory yields nothing observable
+-  /// (STATUS open item 16).
++  /// The backend reported root loss, failure, or closure. Delivered
++  /// immediately; the watch is released, so the consumer must rescan or
++  /// retarget. More signals require a new [WatchLocalDirectoryRequest].
++  /// Windows event-driven checks also detect delete-pending roots whose
++  /// loss dart:io may omit. Ancestor-move detection remains platform-dependent
++  /// (STATUS item 18); a refused filesystem mutation does not imply loss.
+   lost,
+ }
+ 
+@@ -454,13 +450,10 @@ final class ListDirectoryRequest extends EngineRequest {
+ /// typed for an empty path, a missing root (the local funnel's `notFound`),
+ /// or a non-directory target. A watch that dies after establishment
+ /// surfaces as a [DirectoryWatchEvent] with [DirectoryWatchSignal.lost]
+-/// immediately and releases the watch — never as a silent stop; the one
+-/// backend exception is Windows, where removing the watched directory
+-/// itself defers (delete-pending while the watch holds its handle) and
+-/// yields no loss signal — a non-empty directory's children-removal
+-/// [DirectoryWatchSignal.changed] and its rescan are the observable path
+-/// there, but an empty (or already-emptied) watched directory yields
+-/// nothing observable (STATUS open item 16). A second watch on the same
++/// immediately and releases the watch. Windows event-driven checks cover
++/// delete-pending root loss; ancestor-move delivery remains platform-dependent
++/// (STATUS item 18). A refused rename is not a watch-loss event.
++/// A second watch on the same
+ /// channel replaces the first: stale
+ /// callbacks from the replaced watch cannot invalidate the new binding,
+ /// and a watch superseded (by a later watch or unwatch) before it finished
+diff --git a/packages/poltergeist_core/test/engine/local_watch_permission_test.dart b/packages/poltergeist_core/test/engine/local_watch_permission_test.dart
+new file mode 100644
+index 0000000..6ce5f47
+--- /dev/null
++++ b/packages/poltergeist_core/test/engine/local_watch_permission_test.dart
+@@ -0,0 +1,60 @@
++@TestOn('linux')
++library;
++
++import 'dart:async';
++import 'dart:io';
++
++import 'package:path/path.dart' as p;
++import 'package:poltergeist_core/src/engine/local_watch_backend.dart';
++import 'package:test/test.dart';
++
++void main() {
++  test(
++    'a leaf watch works below a traverse-only ancestor',
++    () async {
++      final temporary = await Directory.systemTemp.createTemp('pg-watch-mode-');
++      addTearDown(() => temporary.delete(recursive: true));
++      final ancestor = await Directory(
++        p.join(temporary.path, 'ancestor'),
++      ).create();
++      final root = await Directory(
++        p.join(ancestor.path, 'parent', 'root'),
++      ).create(recursive: true);
++      addTearDown(() async {
++        final restored = await Process.run('chmod', ['0700', ancestor.path]);
++        expect(restored.exitCode, 0, reason: 'fixture mode restore failed');
++      });
++      final restricted = await Process.run('chmod', ['0111', ancestor.path]);
++      expect(restricted.exitCode, 0, reason: 'fixture mode restriction failed');
++      // Prove the ancestor cannot be listed, while its leaf remains usable.
++      await expectLater(
++        ancestor.list().toList(),
++        throwsA(isA<FileSystemException>()),
++      );
++
++      final marker = p.join(root.path, 'created');
++      final observed = Completer<Object>();
++      final subscription = LocalWatchBackend.platform()
++          .watch(root.path)
++          .listen(
++            (event) {
++              if (p.equals(event.path, marker) && !observed.isCompleted) {
++                observed.complete(event);
++              }
++            },
++            onError: (Object error) {
++              if (!observed.isCompleted) observed.complete(error);
++            },
++          );
++      addTearDown(subscription.cancel);
++      await File(marker).writeAsString('native event');
++      expect(
++        await observed.future.timeout(const Duration(seconds: 5)),
++        isA<FileSystemCreateEvent>(),
++      );
++    },
++    skip: Process.runSync('id', ['-u']).stdout.toString().trim() == '0'
++        ? 'mode-bit refusal requires a non-root user'
++        : false,
++  );
++}
+diff --git a/packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart b/packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart
+new file mode 100644
+index 0000000..75c6b51
+--- /dev/null
++++ b/packages/poltergeist_core/test/engine/native_ancestor_rename_test.dart
+@@ -0,0 +1,119 @@
++import 'dart:async';
++import 'dart:convert';
++import 'dart:io';
++
++import 'package:path/path.dart' as p;
++import 'package:test/test.dart';
++
++const _deadline = Duration(seconds: 10);
++
++enum _Handles { none, root, rootAndParent }
++
++enum _Move { root, parent, higherAncestor, reparentAncestor, caseOnlyAncestor }
++
++/// Isolate native rename permission from notification delivery. These probes
++/// do not assert that a refused rename demonstrates a missing loss signal.
++void main() {
++  for (final handles in _Handles.values) {
++    for (final move in _Move.values) {
++      test('native rename boundary: ${handles.name}/${move.name}', () async {
++        final temporary = await Directory.systemTemp.createTemp('pg-rename-');
++        final base = await temporary.resolveSymbolicLinks();
++        final root = Directory(p.join(base, 'ancestor', 'parent', 'root'));
++        await root.create(recursive: true);
++        final subscriptions = <StreamSubscription<FileSystemEvent>>[];
++        final events = <String>[];
++        final errors = <String>[];
++        final paths = switch (handles) {
++          _Handles.none => <String>[],
++          _Handles.root => [root.path],
++          _Handles.rootAndParent => [root.parent.path, root.path],
++        };
++        final ready = Completer<void>();
++        final marker = p.join(root.path, 'ready');
++
++        try {
++          // Match production's parent-first Windows installation order.
++          for (final path in paths) {
++            subscriptions.add(
++              Directory(path).watch().listen((event) {
++                events.add('$path: $event');
++                if (p.equals(event.path, marker) && !ready.isCompleted) {
++                  ready.complete();
++                }
++              }, onError: (Object error) => errors.add(error.toString())),
++            );
++          }
++
++          // A real child event proves handles are live before the mutation.
++          await File(marker).writeAsString('ready');
++          if (paths.isNotEmpty) {
++            await ready.future.timeout(
++              _deadline,
++              onTimeout: () => fail(
++                'No marker event for $marker; errors: $errors; events: $events',
++              ),
++            );
++          }
++          expect(errors, isEmpty);
++          events.clear();
++
++          final ancestor = Directory(p.join(base, 'ancestor'));
++          final source = switch (move) {
++            _Move.root => root,
++            _Move.parent => root.parent,
++            _Move.higherAncestor ||
++            _Move.reparentAncestor ||
++            _Move.caseOnlyAncestor => ancestor,
++          };
++          final destination = switch (move) {
++            _Move.reparentAncestor => p.join(base, 'destination', 'ancestor'),
++            _Move.caseOnlyAncestor => p.join(base, 'ANCESTOR'),
++            _ => '${source.path}-moved',
++          };
++          if (move == _Move.reparentAncestor) {
++            await Directory(p.dirname(destination)).create();
++          }
++
++          FileSystemException? refusal;
++          try {
++            await source.rename(destination);
++          } on FileSystemException catch (error) {
++            refusal = error;
++          }
++          if (refusal != null) {
++            expect(await source.exists(), isTrue);
++          }
++
++          await Future.wait(subscriptions.map((s) => s.cancel()));
++          subscriptions.clear();
++          // Same fixture, permissions and operation after releasing handles:
++          // success here distinguishes a live-handle restriction from ACLs.
++          if (refusal != null) await source.rename(destination);
++          expect(await Directory(destination).exists(), isTrue);
++          print(
++            jsonEncode({
++              'os': Platform.operatingSystem,
++              'osVersion': Platform.operatingSystemVersion,
++              'dart': Platform.version,
++              'handles': handles.name,
++              'move': move.name,
++              'watchedPaths': paths,
++              'liveRename': refusal == null ? 'permitted' : 'refused',
++              'error': refusal?.toString(),
++              'errorCode': refusal?.osError?.errorCode,
++              'renameAfterRelease': refusal == null
++                  ? 'not needed'
++                  : 'permitted',
++              'eventsBeforeRelease': events,
++              'watchErrorsAfterMutation': errors,
++            }),
++          );
++        } finally {
++          await Future.wait(subscriptions.map((s) => s.cancel()));
++          await temporary.delete(recursive: true);
++        }
++      }, timeout: const Timeout(Duration(seconds: 30)));
++    }
++  }
++}

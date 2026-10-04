@@ -1,0 +1,1 @@
+{"body": "Deferred as a prose-only nit under the inherited >10-round stabilization rule. No optional source push. Runtime reds exposed the assumption; the implementation repaired it. Full disposition is appended to the PR body."}

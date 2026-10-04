@@ -1,0 +1,1391 @@
+import 'dart:async';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:crypto/crypto.dart';
+import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
+import 'package:seance_core/seance_core.dart';
+
+import 'local_copy_pump.dart';
+import 'local_fs_safety.dart';
+
+/// The local half of the one VFS (D3): a second *implementation* of
+/// `seance_core`'s pinned `RemoteFileSystem` contract over `dart:io` —
+/// never a wrapper, never a second interface. Panes, the transfer queue,
+/// and the sync engine treat local and remote filesystems identically.
+///
+/// Error taxonomy, message shapes, and the download/upload integrity
+/// protocols mirror the pinned dartssh2 adapter so callers cannot tell
+/// which implementation they are talking to except by latency: every
+/// failure surfaces as a typed `RemoteFileException` shaped
+/// /// `Could not <op> "<path>": <detail>` (03 §2.2's funnel). Like the
+/// adapter, precondition failures (a bad permissions range, a missing
+/// name argument, an unsafe destination name) throw raw
+/// `RangeError`/`ArgumentError`/`FormatException` synchronously instead.
+///
+/// Deletion here is the raw VFS primitive — one entry, no recursion, a
+/// non-empty directory fails with Séance's wording. The trash/confirm
+/// decision (D15) belongs to the caller, above this seam.
+///
+/// One documented parity exception: `setTimes` cannot set a
+/// directory's timestamps on any platform (dart:io limitation — 03
+/// §2.2's precision edit records why; 05 §4 never needs it), where the
+/// SFTP adapter's setStat can.
+class LocalFileSystem implements RemoteFileSystem {
+  /// Creates a local filesystem.
+  ///
+  /// [environment] backs `~` expansion in [canonicalize] (defaults to
+  /// `Platform.environment`) and is the inherited base for the `chmod`/
+  /// `chown` subprocesses (`PATH` survives; `LC_ALL: C` pins their stderr
+  /// to deterministic English). Injecting both makes subprocess-exit
+  /// mapping and home resolution testable (a test may prepend a fake
+  /// `chmod` directory to `PATH`).
+  /// [localCopyPump] is D26's native fast-path seam (00 D26, 07 §3.10):
+  /// the mechanism [copyLocalFile] moves bytes with — `copy_file_range`
+  /// on Linux, the streamed loop elsewhere. A pump returning `false`
+  /// declines its mechanism and the copy restarts through the streamed
+  /// pump; pass [streamedLocalCopyPump] to pin the fallback shape (tests).
+  LocalFileSystem({
+    Map<String, String>? environment,
+    bool? isMacOS,
+    LocalCopyPump? localCopyPump,
+  }) : _environment = environment ?? Platform.environment,
+       _isMacOS = isMacOS ?? Platform.isMacOS,
+       localCopyPump = localCopyPump ?? platformLocalCopyPump();
+
+  final Map<String, String> _environment;
+  final bool _isMacOS;
+  final Random _random = Random.secure();
+
+  /// The local→local byte mover (00 D26's copy seam). Mutable so a test
+  /// fake can reseat its scripted faults without a constructor that
+  /// forwards through `super`.
+  LocalCopyPump localCopyPump;
+
+  // Temp siblings: `.poltergeist-` everywhere Séance uses
+  // `.seance-` — the one deliberate rename 03 §2.2 ships for this
+  // adapter (Séance-side sweeps matching `.seance-` never see these;
+  // Poltergeist's own ignore rules exclude `.poltergeist*` per D15).
+  // Backup siblings and their crash-recovery sweep live in
+  // local_fs_safety.dart — one shape, one owner.
+  static const String _transferPrefix = '.poltergeist-';
+  static const String _tempSuffix = '.tmp';
+  static const int _randomSuffixLength = 8;
+  static const int _maxTempAttempts = 5;
+  static const int _maxUint32 = 0xFFFFFFFF;
+
+  // Errnos as dart:io reports them on POSIX hosts. All are portable
+  // across Linux/macOS EXCEPT ENOTEMPTY: 39 on Linux, 66 on Darwin —
+  // both are accepted wherever the not-empty classification reads it.
+  static const int _enoent = 2;
+  static const int _eperm = 1;
+  static const int _eacces = 13;
+  static const int _eexist = 17;
+  static const int _exdev = 18;
+  static const int _enotdir = 20;
+  static const int _enotemptyLinux = 39;
+  static const int _enotemptyDarwin = 66;
+
+  // Windows GetLastError values (OSError.errorCode carries these there,
+  // never POSIX errnos).
+  static const int _winFileNotFound = 2;
+  static const int _winPathNotFound = 3;
+  static const int _winAccessDenied = 5;
+  // Numerically POSIX EEXIST — the platform gate in
+  // [isCrossDeviceRenameError] keeps the two apart.
+  static const int _winNotSameDevice = 17;
+  static const int _winSharingViolation = 32;
+  static const int _winFileExists = 80;
+  static const int _winPrivilegeNotHeld = 1314;
+  static const int _winAlreadyExists = 183;
+  static const int _winDirNotEmpty = 145;
+
+  @override
+  Future<String> canonicalize(String path) => _guard('resolve', path, () async {
+    final expanded = expandHomePath(
+      path,
+      environment: _environment,
+      isMacOS: _isMacOS,
+    );
+    final absolute = _normalizedAbsolute(expanded);
+    try {
+      return await Directory(expanded).resolveSymbolicLinks();
+    } on FileSystemException catch (error) {
+      // A missing path is not an error here (matches the realpath use
+      // for home resolution): ENOENT/ENOTDIR fall back to the lexical
+      // form. On Windows the codes are Win32: ERROR_FILE_NOT_FOUND (2,
+      // numerically ENOENT) and ERROR_PATH_NOT_FOUND (3) — both must
+      // take the same fallback.
+      final code = error.osError?.errorCode;
+      if (code == _enoent ||
+          code == _enotdir ||
+          code == _winFileNotFound ||
+          code == _winPathNotFound) {
+        return absolute;
+      }
+      rethrow;
+    }
+  });
+
+  @override
+  Future<List<RemoteFileEntry>> listDirectory(String path) => _guard(
+    'list',
+    path,
+    () async {
+      final entries = <RemoteFileEntry>[];
+      await for (final entity in Directory(path).list(followLinks: false)) {
+        final name = p.basename(entity.path);
+        if (name == '.' || name == '..') continue;
+        // followLinks: false reports a symlink as a Link instance, so
+        // link detection needs no extra syscall — and links are never
+        // statted (a stat would follow and report the target's identity
+        // as the link's own).
+        if (entity is Link) {
+          entries.add(
+            RemoteFileEntry(
+              path: entity.path,
+              name: name,
+              type: RemoteFileType.symbolicLink,
+            ),
+          );
+          continue;
+        }
+        final stat = await FileStat.stat(entity.path);
+        if (stat.type == FileSystemEntityType.notFound) continue;
+        entries.add(_entryFromStat(entity.path, name, stat));
+      }
+      return entries;
+    },
+  );
+
+  @override
+  Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) =>
+      _guard('inspect', path, () async {
+        if (!followLinks) {
+          final type = await FileSystemEntity.type(path, followLinks: false);
+          if (type == FileSystemEntityType.notFound) {
+            await _throwIfNotActuallyMissing(path);
+            throw _notFound('inspect', path);
+          }
+          if (type == FileSystemEntityType.link) {
+            return RemoteFileEntry(
+              path: path,
+              name: p.basename(path),
+              type: RemoteFileType.symbolicLink,
+            );
+          }
+        }
+        // FileStat.stat follows links — the requested behavior for
+        // followLinks: true, and the identity for an already-unlinked
+        // non-link path.
+        final stat = await FileStat.stat(path);
+        if (stat.type == FileSystemEntityType.notFound) {
+          await _throwIfNotActuallyMissing(path);
+          throw _notFound('inspect', path);
+        }
+        return _entryFromStat(path, p.basename(path), stat);
+      });
+
+  @override
+  Future<void> setMode(String path, int permissions) {
+    RangeError.checkValueInInterval(permissions, 0, 0xFFF, 'permissions');
+    if (Platform.isWindows) {
+      // Thrown inside the guarded action (async), so every caller's
+      // `await … catch` path sees it — never a synchronous escape from
+      // a Future-returning method. Only raw precondition failures
+      // (RangeError above) throw synchronously, like the adapter's.
+      return _guard('change permissions for', path, () async {
+        throw _unsupportedOnWindows('change permissions for', path);
+      });
+    }
+    return _guard('change permissions for', path, () async {
+      final before = await _lstatNonLink(path, 'permissions');
+      final result = await _runUtility(
+        'chmod',
+        [permissions.toRadixString(8), path],
+      );
+      _throwForUtilityExit(result, 'change permissions for', path);
+      await _verifySameType(path, before, 'permissions');
+    });
+  }
+
+  @override
+  Future<void> setTimes(
+    String path, {
+    DateTime? accessedAt,
+    DateTime? modifiedAt,
+  }) {
+    if (accessedAt == null && modifiedAt == null) {
+      throw ArgumentError(
+        'at least one of accessedAt or modifiedAt must be given',
+      );
+    }
+    return _guard('change timestamps for', path, () async {
+      final before = await _lstatNonLink(path, 'timestamps');
+      // dart:io cannot set a directory's timestamps (its implementation
+      // opens the path for writing — EISDIR), and any other non-regular
+      // target is worse: a FIFO would block that open forever, and
+      // device nodes have open side effects. The sync engine never
+      // needs these (05 §4 compares directories by existence only).
+      if (before != FileSystemEntityType.file) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.unsupported,
+          operation: 'change timestamps for',
+          path: path,
+          message:
+              'Could not change timestamps for "$path": '
+              'only regular files support timestamp changes',
+        );
+      }
+      if (modifiedAt != null) {
+        await File(path).setLastModified(modifiedAt);
+      }
+      if (accessedAt != null) {
+        await File(path).setLastAccessed(accessedAt);
+      }
+      await _verifySameType(path, before, 'timestamps');
+    });
+  }
+
+  @override
+  Future<void> setOwner(String path, {int? uid, int? gid}) {
+    if (uid == null && gid == null) {
+      throw ArgumentError('at least one of uid or gid must be given');
+    }
+    if (uid != null) {
+      RangeError.checkValueInInterval(uid, 0, _maxUint32, 'uid');
+    }
+    if (gid != null) {
+      RangeError.checkValueInInterval(gid, 0, _maxUint32, 'gid');
+    }
+    if (Platform.isWindows) {
+      // Async for the same reason as setMode's Windows branch.
+      return _guard('change owner for', path, () async {
+        throw _unsupportedOnWindows('change owner for', path);
+      });
+    }
+    return _guard('change owner for', path, () async {
+      // A bare chown dereferences a symlink and changes the target's
+      // owner — an attribute write must never escape its tree that way.
+      final before = await _lstatNonLink(path, 'ownership');
+      final spec = uid == null
+          ? ':$gid'
+          : gid == null
+          ? '$uid'
+          : '$uid:$gid';
+      final result = await _runUtility('chown', [spec, path]);
+      _throwForUtilityExit(result, 'change owner for', path);
+      await _verifySameType(path, before, 'ownership');
+    });
+  }
+
+  @override
+  Future<String> readSymbolicLink(String path) =>
+      _guard('read symbolic link', path, () => Link(path).target());
+
+  @override
+  Future<void> createSymbolicLink(String linkPath, String targetPath) =>
+      _guard('create symbolic link', linkPath, () async {
+        if (await FileSystemEntity.type(linkPath, followLinks: false) !=
+            FileSystemEntityType.notFound) {
+          throw _conflictExists('create symbolic link', linkPath);
+        }
+        try {
+          await Link(linkPath).create(targetPath);
+        } on FileSystemException catch (error) {
+          // Windows needs Developer Mode or elevation for symlink
+          // creation; the raw OS error would read as a bare access
+          // denial without the hint.
+          final code = error.osError?.errorCode;
+          if (Platform.isWindows &&
+              (code == _winAccessDenied || code == _winPrivilegeNotHeld)) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.permissionDenied,
+              operation: 'create symbolic link',
+              path: linkPath,
+              message:
+                  'Could not create symbolic link "$linkPath": creating '
+                  'symbolic links on Windows requires Developer Mode or '
+                  'administrator privileges',
+              cause: error,
+            );
+          }
+          // A create racing an external one throws the plain EEXIST
+          // form (the typed PathNotFoundException sibling never
+          // appears), closing the preflight gap through the funnel.
+          if (code == _eexist || code == _winAlreadyExists) {
+            throw _conflictExists('create symbolic link', linkPath);
+          }
+          rethrow;
+        }
+      });
+
+  @override
+  Future<void> createDirectory(String path) => _guard(
+    'create directory',
+    path,
+    () async {
+      // dart:io's create() is a silent no-op on an existing directory;
+      // the contract (and the funnel's EEXIST→conflict rule) calls that
+      // a conflict instead.
+      // dart:io's create() is a silent no-op when a *directory* takes
+      // the path mid-race (undetectable without O_EXCL semantics); a
+      // racing *file* throws the plain EEXIST form, which becomes the
+      // typed conflict here instead of the funnel's generic shape.
+      if (await FileSystemEntity.type(path, followLinks: false) !=
+          FileSystemEntityType.notFound) {
+        throw _conflictExists('create directory', path);
+      }
+      try {
+        await Directory(path).create(recursive: false);
+      } on FileSystemException catch (error) {
+        final code = error.osError?.errorCode;
+        if (code == _eexist || code == _winAlreadyExists) {
+          throw _conflictExists('create directory', path);
+        }
+        rethrow;
+      }
+    },
+  );
+
+  @override
+  Future<void> rename(
+    String oldPath,
+    String newPath, {
+    bool overwrite = false,
+  }) => _guard('rename', oldPath, () async {
+    // dart:io's renames are type-checked per class (File.rename refuses
+    // a directory with EISDIR, Directory.rename a file with ENOTDIR),
+    // so dispatch on the source's own type; the nofollow stat never
+    // follows a link.
+    final sourceType = await FileSystemEntity.type(oldPath, followLinks: false);
+    if (sourceType == FileSystemEntityType.notFound) {
+      await _throwIfNotActuallyMissing(oldPath);
+      throw _notFound('rename', oldPath);
+    }
+    if (_isCaseOnlyVariant(oldPath, newPath) &&
+        !await _isDistinctEntry(oldPath, newPath)) {
+      // Same entry, different case (or a not-yet-existing name that
+      // differs only by case): a direct rename would collide with
+      // itself on a case-insensitive volume, so go through a unique
+      // sibling (D26's two-step).
+      await _renameCaseOnly(sourceType, oldPath, newPath, overwrite: overwrite);
+      return;
+    }
+    final destinationType = await FileSystemEntity.type(
+      newPath,
+      followLinks: false,
+    );
+    if (destinationType != FileSystemEntityType.notFound && !overwrite) {
+      throw _conflictExists('rename', newPath);
+    }
+    await _renameInPlace(sourceType, oldPath, newPath, overwrite: overwrite);
+  });
+
+  /// Whether [newPath] names [oldPath] with a different case — or would,
+  /// once the rename lands, on a case-insensitive volume. On a
+  /// case-sensitive host a same-lowercase pair can still be two distinct
+  /// entries; the caller resolves that with [_isDistinctEntry].
+  bool _isCaseOnlyVariant(String oldPath, String newPath) =>
+      oldPath != newPath &&
+      oldPath.toLowerCase() == newPath.toLowerCase();
+
+  /// Whether two same-lowercase paths are different entries (only
+  /// possible on a case-sensitive volume). Missing paths canonicalize
+  /// lexically, so a missing destination never counts as distinct.
+  Future<bool> _isDistinctEntry(String oldPath, String newPath) async {
+    final oldReal = await _tryResolve(oldPath);
+    final newReal = await _tryResolve(newPath);
+    return oldReal != null && newReal != null && oldReal != newReal;
+  }
+
+  Future<String?> _tryResolve(String path) async {
+    try {
+      return await Directory(path).resolveSymbolicLinks();
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Renames via a unique sibling so a case-only rename works on
+  /// case-insensitive filesystems (D26), where old and new name collide.
+  Future<void> _renameCaseOnly(
+    FileSystemEntityType sourceType,
+    String oldPath,
+    String newPath, {
+    required bool overwrite,
+  }) async {
+    final sibling = await _uniqueSiblingPath(oldPath);
+    await _renameInPlace(sourceType, oldPath, sibling, overwrite: false);
+    try {
+      // Same preflight as the main path: an entry that took the target
+      // name between the two steps must conflict, not be silently
+      // replaced — POSIX rename(2) would clobber it.
+      if (!overwrite &&
+          await FileSystemEntity.type(newPath, followLinks: false) !=
+              FileSystemEntityType.notFound) {
+        throw _conflictExists('rename', newPath);
+      }
+      await _renameInPlace(sourceType, sibling, newPath, overwrite: overwrite);
+    } on Object {
+      // Restore the original name rather than stranding the entry under
+      // a hidden temp name — but only if nothing else took the old name
+      // meanwhile (POSIX rename would silently clobber a taker); if even
+      // the restore fails, the temp keeps the data.
+      try {
+        if (await FileSystemEntity.type(oldPath, followLinks: false) ==
+            FileSystemEntityType.notFound) {
+          await _renameInPlace(sourceType, sibling, oldPath, overwrite: false);
+        }
+      } on Object {
+        // Best effort only — the rethrow below carries the real failure.
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> _renameInPlace(
+    FileSystemEntityType sourceType,
+    String oldPath,
+    String newPath, {
+    required bool overwrite,
+  }) async {
+    final entity = switch (sourceType) {
+      FileSystemEntityType.directory => Directory(oldPath),
+      FileSystemEntityType.link => Link(oldPath),
+      _ => File(oldPath),
+    };
+    try {
+      await entity.rename(newPath);
+    } on FileSystemException catch (error) {
+      // EXDEV — the paths sit on different mounted filesystems — is not
+      // a rename failure: it is the one outcome the caller degrades to
+      // a durable copy+delete (00 D26). It must stay a distinct type,
+      // or the generic guard below would flatten it into `other` and
+      // the engine could never tell "use the pipe" from "the move
+      // failed".
+      if (isCrossDeviceRenameError(
+        error.osError?.errorCode,
+        windows: Platform.isWindows,
+      )) {
+        throw LocalCrossDeviceRenameException(path: oldPath, newPath: newPath);
+      }
+      // POSIX rename replaces an existing target atomically; Windows
+      // cannot, so an overwrite of a regular file falls back to the
+      // backup-rename dance — never delete-then-rename, which strands
+      // the user with neither file when the second step fails.
+      // Directories and links rethrow: the dance is a regular-file
+      // protocol and would coerce them through File. So does a failure
+      // with no regular-file destination — a vanished path is an
+      // unrelated error, and an existing directory/link destination
+      // mirrors POSIX rename(file → dir)'s own EISDIR failure.
+      if (!overwrite ||
+          !Platform.isWindows ||
+          sourceType != FileSystemEntityType.file) {
+        rethrow;
+      }
+      if (await FileSystemEntity.type(newPath, followLinks: false) !=
+          FileSystemEntityType.file) {
+        rethrow;
+      }
+      await replaceLocalFile(File(oldPath), File(newPath));
+    }
+  }
+
+  @override
+  Future<void> delete(RemoteFileEntry entry) => _guard(
+    'delete',
+    entry.path,
+    () async {
+      try {
+        switch (entry.type) {
+          // Directory.delete(recursive: false) refuses a non-empty
+          // directory; recursion stays app-level by contract.
+          case RemoteFileType.directory:
+            await Directory(entry.path).delete(recursive: false);
+          case RemoteFileType.symbolicLink:
+            await Link(entry.path).delete();
+          default:
+            await File(entry.path).delete();
+        }
+      } on FileSystemException catch (error) {
+        final code = error.osError?.errorCode;
+        final nonEmpty = code == _enotemptyLinux ||
+            code == _enotemptyDarwin ||
+            code == _eexist ||
+            code == _winDirNotEmpty ||
+            code == _winAlreadyExists;
+        if (nonEmpty) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.other,
+            operation: 'delete',
+            path: entry.path,
+            message:
+                'Could not delete "${entry.path}": '
+                'Only an empty directory can be deleted.',
+            cause: error,
+          );
+        }
+        rethrow;
+      }
+    },
+  );
+
+  @override
+  Future<RemoteFileEntry> download(
+    String path,
+    StreamSink<List<int>> destination, {
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) => _guard(
+    'download',
+    path,
+    () async {
+      cancellation?.throwIfCancelled();
+      final pathType = await FileSystemEntity.type(path, followLinks: false);
+      if (pathType == FileSystemEntityType.notFound) {
+        await _throwIfNotActuallyMissing(path);
+        throw _notFound('download', path);
+      }
+      if (pathType != FileSystemEntityType.file) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.unsupported,
+          operation: 'download',
+          path: path,
+          message: 'Only regular local files can be downloaded.',
+        );
+      }
+      final initial = await FileStat.stat(path);
+      // FileStat.size is non-nullable — a size is always reported.
+      final length = initial.size;
+      var transferred = 0;
+      final digestSink = computeHash ? _DigestSink() : null;
+      final hashInput = digestSink == null
+          ? null
+          : sha256.startChunkedConversion(digestSink);
+      await destination.addStream(
+        _cancelWhenRequested(File(path).openRead(), cancellation).map((chunk) {
+          hashInput?.add(chunk);
+          transferred += chunk.length;
+          onProgress?.call(transferred, length);
+          return chunk;
+        }),
+      );
+      hashInput?.close();
+      cancellation?.throwIfCancelled();
+      if (transferred != length) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.conflict,
+          operation: 'download',
+          path: path,
+          message:
+              'The local file changed while it was downloading '
+              '($transferred of $length bytes received).',
+        );
+      }
+      final finalStat = await FileStat.stat(path);
+      if (!_sameSnapshot(initial, finalStat)) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.conflict,
+          operation: 'download',
+          path: path,
+          message: 'The local file changed while it was downloading.',
+        );
+      }
+      return _copyEntryWithDigest(
+        _entryFromStat(path, p.basename(path), finalStat),
+        digestSink?.value.toString(),
+      );
+    },
+    cancellation: cancellation,
+  );
+
+  @override
+  Future<RemoteFileEntry> upload(
+    String path,
+    Stream<List<int>> content, {
+    int? length,
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) {
+    // The leaf of an upload destination is remote-derived input (a name
+    // from the other pane's listing); validate it before it touches the
+    // disk — the lexical half of the traversal defense, thrown raw like
+    // every other precondition failure.
+    validateLocalName(p.basename(path));
+    return _guard(
+      'upload',
+      path,
+      () async {
+        final existing = await _statOrNull(path);
+        if (existing != null && !overwrite) {
+          throw _conflictExists('upload', path);
+        }
+        if (expectedTarget != null &&
+            (existing == null ||
+                !await _matchesExpectedTarget(existing, expectedTarget, path))) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'upload',
+            path: path,
+            message:
+                '"${p.basename(path)}" changed on disk before the upload started.',
+          );
+        }
+
+        cancellation?.throwIfCancelled();
+        final tempPath = await _createExclusiveTemp(path);
+        final temp = File(tempPath);
+        try {
+          final sink = temp.openWrite(mode: FileMode.append);
+          var transferred = 0;
+          final digestSink = computeHash ? _DigestSink() : null;
+          final hashInput = digestSink == null
+              ? null
+              : sha256.startChunkedConversion(digestSink);
+          try {
+            await for (final chunk
+                in _cancelWhenRequested(content, cancellation)) {
+              cancellation?.throwIfCancelled();
+              if (chunk.isEmpty) continue;
+              hashInput?.add(chunk);
+              sink.add(chunk);
+              // Await each chunk's drain: IOSink.add alone never
+              // applies backpressure, and a fast source onto a slow
+              // disk would buffer the whole transfer in memory.
+              await sink.flush();
+              transferred += chunk.length;
+              onProgress?.call(transferred, length);
+            }
+            hashInput?.close();
+            cancellation?.throwIfCancelled();
+            await sink.flush();
+          } finally {
+            await sink.close();
+          }
+          if (length != null && transferred != length) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.other,
+              operation: 'upload',
+              path: path,
+              message: 'Upload ended after $transferred of $length bytes.',
+            );
+          }
+
+          final mode = preserveMode ?? existing?.mode;
+          if (mode != null && !Platform.isWindows) {
+            final result = await _runUtility('chmod', [
+              (mode & 0xFFF).toRadixString(8),
+              tempPath,
+            ]);
+            _throwForUtilityExit(result, 'upload', tempPath);
+          }
+
+          final latest = await _statOrNull(path);
+          if (!overwrite && latest != null) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.conflict,
+              operation: 'upload',
+              path: path,
+              message:
+                  'A local item named "${p.basename(path)}" was created '
+                  'while the upload was running.',
+            );
+          }
+          if (expectedTarget != null &&
+              (latest == null ||
+                  !await _matchesExpectedTarget(latest, expectedTarget, path))) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.conflict,
+              operation: 'upload',
+              path: path,
+              message:
+                  '"${p.basename(path)}" changed on disk while the upload '
+                  'was running.',
+            );
+          }
+          await replaceLocalFile(temp, File(path));
+
+          final uploaded = await stat(path, followLinks: false);
+          return digestSink == null
+              ? uploaded
+              : _copyEntryWithDigest(uploaded, digestSink.value.toString());
+        } catch (_) {
+          // The temp never survives a failed upload — commit or cleanup.
+          try {
+            if (await temp.exists()) await temp.delete();
+          } on Object {
+            // Cleanup must not mask the original failure.
+          }
+          rethrow;
+        }
+      },
+      cancellation: cancellation,
+    );
+  }
+
+  /// D26's local→local file copy (00 D26, 07 §3.10): the fast path the
+  /// transfer queue takes when both legs resolve to this filesystem —
+  /// bytes move through [localCopyPump] (`copy_file_range` on Linux,
+  /// the streamed loop as fallback and elsewhere) instead of round-
+  /// tripping the whole file through `download`→`upload`'s bounded pipe.
+  ///
+  /// The commit protocol is `upload`'s verbatim: the destination's
+  /// conflict policy is checked before and after the byte move, the
+  /// copy lands in an exclusive sibling temp, [replaceLocalFile] swaps
+  /// it in atomically, and a failed copy deletes the temp — never the
+  /// destination. The source side mirrors `download`'s integrity rules:
+  /// regular files only, and a snapshot that changed mid-copy is a
+  /// `conflict`, not a silently torn result. Progress reports cumulative
+  /// bytes per pump chunk; cancellation is honored between chunks (the
+  /// kernel pump's 16 MiB stride keeps cancel latency sub-second on
+  /// rotational media). mtime is NOT set here — `_postCommit` owns the
+  /// setTimes fixup (and the move verb's fsync+delete ordering) for
+  /// every local destination alike.
+  Future<RemoteFileEntry> copyLocalFile(
+    String sourcePath,
+    String destinationPath, {
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+  }) {
+    // Same leaf-validation as upload: a remote-derived name is checked
+    // before it touches the disk.
+    validateLocalName(p.basename(destinationPath));
+    return _guard(
+      'copy',
+      destinationPath,
+      () async {
+        final existing = await _statOrNull(destinationPath);
+        if (existing != null && !overwrite) {
+          throw _conflictExists('copy', destinationPath);
+        }
+        if (expectedTarget != null &&
+            (existing == null ||
+                !await _matchesExpectedTarget(
+                  existing,
+                  expectedTarget,
+                  destinationPath,
+                ))) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.conflict,
+            operation: 'copy',
+            path: destinationPath,
+            message:
+                '"${p.basename(destinationPath)}" changed on disk before '
+                'the copy started.',
+          );
+        }
+
+        cancellation?.throwIfCancelled();
+        final sourceType = await FileSystemEntity.type(
+          sourcePath,
+          followLinks: false,
+        );
+        if (sourceType == FileSystemEntityType.notFound) {
+          await _throwIfNotActuallyMissing(sourcePath);
+          throw _notFound('copy', sourcePath);
+        }
+        if (sourceType != FileSystemEntityType.file) {
+          throw RemoteFileException(
+            kind: RemoteFileErrorKind.unsupported,
+            operation: 'copy',
+            path: sourcePath,
+            message: 'Only regular local files can be copied.',
+          );
+        }
+        final initial = await FileStat.stat(sourcePath);
+        // FileStat.size is non-nullable — a size is always reported.
+        final length = initial.size;
+
+        final tempPath = await _createExclusiveTemp(destinationPath);
+        final temp = File(tempPath);
+        try {
+          var transferred = 0;
+          void chunkProgress(int bytes) {
+            transferred += bytes;
+            onProgress?.call(transferred, length);
+          }
+
+          final pumped = await localCopyPump(
+            sourcePath,
+            tempPath,
+            length: length,
+            cancellation: cancellation,
+            onBytes: chunkProgress,
+          );
+          if (!pumped) {
+            // The mechanism declined (EXDEV, EOPNOTSUPP, ENOSYS, …):
+            // restart through the streamed pump — it truncates the
+            // temp's partial bytes itself.
+            transferred = 0;
+            await streamedLocalCopyPump(
+              sourcePath,
+              tempPath,
+              length: length,
+              cancellation: cancellation,
+              onBytes: chunkProgress,
+            );
+          }
+          cancellation?.throwIfCancelled();
+          if (transferred != length) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.conflict,
+              operation: 'copy',
+              path: sourcePath,
+              message:
+                  'The local file changed while it was copying '
+                  '($transferred of $length bytes received).',
+            );
+          }
+          final finalStat = await FileStat.stat(sourcePath);
+          if (!_sameSnapshot(initial, finalStat)) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.conflict,
+              operation: 'copy',
+              path: sourcePath,
+              message: 'The local file changed while it was copying.',
+            );
+          }
+
+          final mode = preserveMode ?? existing?.mode;
+          if (mode != null && !Platform.isWindows) {
+            final result = await _runUtility('chmod', [
+              (mode & 0xFFF).toRadixString(8),
+              tempPath,
+            ]);
+            _throwForUtilityExit(result, 'copy', tempPath);
+          }
+
+          final latest = await _statOrNull(destinationPath);
+          if (!overwrite && latest != null) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.conflict,
+              operation: 'copy',
+              path: destinationPath,
+              message:
+                  'A local item named "${p.basename(destinationPath)}" '
+                  'was created while the copy was running.',
+            );
+          }
+          if (expectedTarget != null &&
+              (latest == null ||
+                  !await _matchesExpectedTarget(
+                    latest,
+                    expectedTarget,
+                    destinationPath,
+                  ))) {
+            throw RemoteFileException(
+              kind: RemoteFileErrorKind.conflict,
+              operation: 'copy',
+              path: destinationPath,
+              message:
+                  '"${p.basename(destinationPath)}" changed on disk while '
+                  'the copy was running.',
+            );
+          }
+          await replaceLocalFile(temp, File(destinationPath));
+
+          return await stat(destinationPath, followLinks: false);
+        } catch (_) {
+          // The temp never survives a failed copy — commit or cleanup.
+          try {
+            if (await temp.exists()) await temp.delete();
+          } on Object {
+            // Cleanup must not mask the original failure.
+          }
+          rethrow;
+        }
+      },
+      cancellation: cancellation,
+    );
+  }
+
+  /// dart:io's stat/type fold every probe failure — including EACCES
+  /// under an unreadable ancestor — into `notFound`. Re-probe with a
+  /// throwing call so a permission failure reaches the funnel as
+  /// permissionDenied instead of masquerading as a missing path; only
+  /// genuinely missing codes fall through to the caller's notFound.
+  Future<void> _throwIfNotActuallyMissing(String path) async {
+    try {
+      await Directory(path).resolveSymbolicLinks();
+    } on FileSystemException catch (error) {
+      final code = error.osError?.errorCode;
+      final missing = code == _enoent ||
+          code == _enotdir ||
+          code == _winFileNotFound ||
+          code == _winPathNotFound;
+      if (!missing) rethrow;
+    }
+  }
+
+  /// The refuse-symlinks-first check shared by every attribute write:
+  /// chmod/chown/setLastModified all dereference, so a write aimed at a
+  /// synced tree must never land on a link's target instead.
+  Future<FileSystemEntityType> _lstatNonLink(
+    String path,
+    String subject,
+  ) async {
+    final type = await FileSystemEntity.type(path, followLinks: false);
+    if (type == FileSystemEntityType.notFound) {
+      await _throwIfNotActuallyMissing(path);
+      throw _notFound('change $subject for', path);
+    }
+    if (type == FileSystemEntityType.link) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: 'change $subject for',
+        path: path,
+        message: 'Symbolic link $subject cannot be changed safely.',
+      );
+    }
+    return type;
+  }
+
+  /// Post-write half of the refuse-first check: a path swapped to a
+  /// symlink between the check and the write had its change applied
+  /// through the link — fail loudly (never `conflict`: this is a safety
+  /// violation, not "both sides changed", and conflict resolution must
+  /// never auto-accept it), carrying where the write actually landed.
+  Future<void> _verifySameType(
+    String path,
+    FileSystemEntityType before,
+    String subject,
+  ) async {
+    final after = await FileSystemEntity.type(path, followLinks: false);
+    if (after == before) return;
+    var landed = path;
+    try {
+      landed = await Directory(path).resolveSymbolicLinks();
+    } on Object {
+      // The type changed again mid-check; report the raw path.
+    }
+    throw LocalPathTypeChangedException(
+      path: path,
+      targetPath: landed,
+      operation: 'change $subject for',
+    );
+  }
+
+  /// Runs chmod/chown with `--` (a path starting with `-` must never
+  /// parse as an option) and `LC_ALL=C` over the inherited environment
+  /// (so stderr stays deterministic English — chmod localizes via
+  /// strerror — and `PATH` survives).
+  Future<ProcessResult> _runUtility(String name, List<String> arguments) {
+    return Process.run(name, [
+      '--',
+      ...arguments,
+    ], environment: {..._environment, 'LC_ALL': 'C'});
+  }
+
+  /// Maps a non-zero chmod/chown exit to the typed taxonomy from the
+  /// trailing strerror segment after the final `': '` in the last stderr
+  /// line — never a substring match across the whole line, since the
+  /// user-controlled path is embedded in that same line and a file
+  /// legally named e.g. `Operation not permitted` would otherwise
+  /// misclassify by matching its own name.
+  void _throwForUtilityExit(
+    ProcessResult result,
+    String operation,
+    String path,
+  ) {
+    if (result.exitCode == 0) return;
+    final stderrText = result.stderr is String ? result.stderr as String : '';
+    // trimRight strips a CRLF line ending (Windows-hosted coreutils)
+    // before the trailing-segment match below.
+    final lines = stderrText
+        .split('\n')
+        .map((line) => line.trimRight())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    final lastLine = lines.isEmpty ? '' : lines.last;
+    final separator = lastLine.lastIndexOf(': ');
+    final detail = separator < 0
+        ? (lastLine.isEmpty ? 'exit code ${result.exitCode}' : lastLine)
+        : lastLine.substring(separator + 2);
+    final kind = switch (detail) {
+      'Operation not permitted' || 'Permission denied' =>
+        RemoteFileErrorKind.permissionDenied,
+      'No such file or directory' => RemoteFileErrorKind.notFound,
+      _ => RemoteFileErrorKind.other,
+    };
+    throw RemoteFileException(
+      kind: kind,
+      operation: operation,
+      path: path,
+      message: _message(operation, path, detail),
+    );
+  }
+
+  Future<String> _createExclusiveTemp(String path) async {
+    // dart:io's opened-for-writing File.open/FileMode.write creates or
+    // truncates unconditionally; File.create(exclusive: true) is the
+    // only primitive that refuses an existing path. On the rare
+    // collision, regenerate the random suffix and retry.
+    for (var attempt = 0; attempt < _maxTempAttempts; attempt++) {
+      final tempPath = _siblingPath(path, _tempSuffix);
+      try {
+        await File(tempPath).create(exclusive: true);
+        return tempPath;
+      } on FileSystemException catch (error) {
+        final code = error.osError?.errorCode;
+        // dart:io surfaces the collision as EEXIST on POSIX and either
+        // ERROR_ALREADY_EXISTS or ERROR_FILE_EXISTS on Windows
+        // (exclusive creates report the latter).
+        if (code != _eexist &&
+            code != _winAlreadyExists &&
+            code != _winFileExists) {
+          rethrow;
+        }
+      }
+    }
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.other,
+      operation: 'upload',
+      path: path,
+      message: 'Could not allocate a temporary file next to "$path".',
+    );
+  }
+
+  /// `<dir>/.poltergeist-<8 hex><suffix>` — the pinned adapter's
+  /// `.seance-upload-<8 hex>.tmp` shape with Poltergeist's prefix.
+  String _siblingPath(String path, String suffix) {
+    final name = _transferPrefix + _randomHexString() + suffix;
+    return p.join(p.dirname(path), name);
+  }
+
+  /// A collision-proof sibling for the case-only rename two-step.
+  /// Check-then-use by design, with the same advisory gap 03 §2.2
+  /// documents for rename itself: a creator racing into the checked
+  /// name is silently replaced on POSIX (rename(2) clobbers) and only
+  /// surfaces as a typed failure on Windows.
+  Future<String> _uniqueSiblingPath(String path) async {
+    for (var attempt = 0; attempt < _maxTempAttempts; attempt++) {
+      final sibling = _siblingPath(path, _tempSuffix);
+      if (await FileSystemEntity.type(sibling, followLinks: false) ==
+          FileSystemEntityType.notFound) {
+        return sibling;
+      }
+    }
+    throw RemoteFileException(
+      kind: RemoteFileErrorKind.other,
+      operation: 'rename',
+      path: path,
+      message: 'Could not allocate a temporary name next to "$path".',
+    );
+  }
+
+  String _randomHexString() => List.generate(
+    _randomSuffixLength,
+    (_) => _random.nextInt(16).toRadixString(16),
+  ).join();
+
+  Future<RemoteFileEntry?> _statOrNull(String path) async {
+    try {
+      return await stat(path, followLinks: false);
+    } on RemoteFileException catch (error) {
+      if (error.kind == RemoteFileErrorKind.notFound) return null;
+      rethrow;
+    }
+  }
+
+  /// The pinned adapter's expected-target check: a snapshot mismatch is
+  /// an instant conflict; a matching snapshot with a declared digest
+  /// re-reads the content so a same-size-same-mtime swap still fails.
+  Future<bool> _matchesExpectedTarget(
+    RemoteFileEntry current,
+    RemoteFileEntry expected,
+    String path,
+  ) async {
+    if (current.type != expected.type ||
+        current.size != expected.size ||
+        current.modifiedAt != expected.modifiedAt ||
+        current.mode != expected.mode) {
+      return false;
+    }
+    final expectedDigest = expected.contentSha256;
+    if (expectedDigest == null) return true;
+    return await _localContentSha256(path) == expectedDigest;
+  }
+
+  Future<String> _localContentSha256(String path) async {
+    final digest = await sha256.bind(File(path).openRead()).first;
+    return digest.toString();
+  }
+
+  RemoteFileEntry _entryFromStat(String path, String name, FileStat stat) =>
+      RemoteFileEntry(
+        path: path,
+        name: name,
+        type: switch (stat.type) {
+          FileSystemEntityType.file => RemoteFileType.file,
+          FileSystemEntityType.directory => RemoteFileType.directory,
+          FileSystemEntityType.link => RemoteFileType.symbolicLink,
+          _ => RemoteFileType.other,
+        },
+        // dart:io's FileStat carries no uid/gid; callers treat them as
+        // optional (03 §2.2). mode is synthetic on Windows — populated
+        // best-effort, never authoritative there.
+        size: stat.size,
+        accessedAt: stat.accessed.toUtc(),
+        modifiedAt: stat.modified.toUtc(),
+        mode: stat.mode,
+      );
+
+  static RemoteFileEntry _copyEntryWithDigest(
+    RemoteFileEntry entry,
+    String? digest,
+  ) => RemoteFileEntry(
+    path: entry.path,
+    name: entry.name,
+    type: entry.type,
+    size: entry.size,
+    uid: entry.uid,
+    gid: entry.gid,
+    accessedAt: entry.accessedAt,
+    modifiedAt: entry.modifiedAt,
+    mode: entry.mode,
+    contentSha256: digest,
+  );
+
+  /// Snapshot identity for the transfer integrity checks: type, size,
+  /// mtime, mode — the same tuple the pinned adapter compares.
+  static bool _sameSnapshot(FileStat a, FileStat b) =>
+      a.type == b.type &&
+      a.size == b.size &&
+      a.modified == b.modified &&
+      a.mode == b.mode;
+
+  String _normalizedAbsolute(String path) {
+    final context = p.context;
+    final absolute = context.isAbsolute(path)
+        ? path
+        : context.join(Directory.current.path, path);
+    return context.normalize(absolute);
+  }
+
+  static RemoteFileException _unsupportedOnWindows(String operation, String path) =>
+      RemoteFileException(
+        kind: RemoteFileErrorKind.unsupported,
+        operation: operation,
+        path: path,
+        message: _message(operation, path, 'not supported on Windows'),
+      );
+
+  static RemoteFileException _notFound(String operation, String path) =>
+      RemoteFileException(
+        kind: RemoteFileErrorKind.notFound,
+        operation: operation,
+        path: path,
+        message: _message(operation, path, 'No such file or directory'),
+      );
+
+  static RemoteFileException _conflictExists(String operation, String path) =>
+      RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: operation,
+        path: path,
+        message: 'A local item named "${p.basename(path)}" already exists.',
+      );
+
+  static String _message(String operation, String? path, String detail) {
+    final target = path == null ? '' : ' "$path"';
+    return 'Could not $operation$target: $detail';
+  }
+
+  /// The funnel: every failure surfaces typed, with the pinned
+  /// adapter's message shape. [cancellation] classifies a rethrown
+  /// internal cancellation token (its exception type is private to the
+  /// pinned library) as `cancelled` — the completion contract 09 §3.3
+  /// pins.
+  Future<T> _guard<T>(
+    String operation,
+    String? path,
+    Future<T> Function() action, {
+    RemoteTransferCancellation? cancellation,
+  }) async {
+    try {
+      return await action();
+    } on RemoteFileException {
+      rethrow;
+    } on FileSystemException catch (error) {
+      throw RemoteFileException(
+        kind: _errorKind(error),
+        operation: operation,
+        path: path,
+        message: _message(operation, path, _detailFor(error)),
+        cause: error,
+      );
+    } on ProcessException catch (error) {
+      // The utility binary itself could not be launched.
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.other,
+        operation: operation,
+        path: path,
+        message: _message(operation, path, error.message),
+        cause: error,
+      );
+    } catch (error) {
+      if (cancellation?.isCancelled ?? false) {
+        throw RemoteFileException(
+          kind: RemoteFileErrorKind.cancelled,
+          operation: operation,
+          path: path,
+          message: 'Transfer cancelled.',
+          cause: error,
+        );
+      }
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.other,
+        operation: operation,
+        path: path,
+        message: _message(operation, path, error.toString()),
+        cause: error,
+      );
+    }
+  }
+
+  static RemoteFileErrorKind _errorKind(FileSystemException error) {
+    final code = error.osError?.errorCode;
+    if (error is PathNotFoundException || code == _enoent) {
+      return RemoteFileErrorKind.notFound;
+    }
+    if (Platform.isWindows) {
+      return switch (code) {
+        _winFileNotFound || _winPathNotFound => RemoteFileErrorKind.notFound,
+        _winAlreadyExists => RemoteFileErrorKind.conflict,
+        _winAccessDenied => RemoteFileErrorKind.permissionDenied,
+        _ => RemoteFileErrorKind.other,
+      };
+    }
+    return switch (code) {
+      _eexist => RemoteFileErrorKind.conflict,
+      _eacces || _eperm => RemoteFileErrorKind.permissionDenied,
+      _ => RemoteFileErrorKind.other,
+    };
+  }
+
+  static String _detailFor(FileSystemException error) {
+    final code = error.osError?.errorCode;
+    if (Platform.isWindows && code == _winSharingViolation) {
+      // A lock, not a permission denial.
+      return 'file is in use by another process';
+    }
+    return error.osError?.message ?? error.message;
+  }
+
+  /// Whether a failed `rename`'s error code means "the paths sit on
+  /// different filesystems": POSIX EXDEV, or — on Windows only — the
+  /// raw Win32 ERROR_NOT_SAME_DEVICE that dart:io surfaces unmapped.
+  /// The Win32 code numerically equals POSIX EEXIST, so it must never
+  /// match off Windows, where 17 is a name collision. `_exdev` is
+  /// deliberately still matched on Windows: raw Win32 18 is
+  /// ERROR_NO_MORE_FILES, which `MoveFileEx` never produces, and the
+  /// match preserves coverage if dart:io ever errno-maps the failure.
+  @visibleForTesting
+  static bool isCrossDeviceRenameError(
+    int? errorCode, {
+    required bool windows,
+  }) =>
+      errorCode == _exdev ||
+      (windows && errorCode == _winNotSameDevice);
+}
+
+/// An attribute write (setMode/setOwner/setTimes) whose path was swapped
+/// to a different type — almost always a symlink — between the
+/// refuse-links-first check and the write itself. The change already
+/// landed through the swapped-in link on [targetPath], potentially
+/// outside the caller's tree entirely: a safety violation, deliberately
+/// not `conflict`, so automated conflict resolution can never
+/// auto-accept it (03 §2.2).
+///
+/// At the current pin `RemoteFileErrorKind` carries no `pathTypeChanged`
+/// member, so distinctness rides the subtype; `on RemoteFileException`
+/// handlers still catch it.
+class LocalPathTypeChangedException extends RemoteFileException {
+  /// The dereferenced path the write actually landed on.
+  final String targetPath;
+
+  LocalPathTypeChangedException({
+    required this.targetPath,
+    required super.path,
+    required super.operation,
+  }) : super(
+         kind: RemoteFileErrorKind.other,
+         message:
+             'Could not $operation "$path": the item changed type while '
+             'being changed, and the write landed on "$targetPath"',
+       );
+}
+
+/// `rename(2)` refused because [path] and [newPath] live on different
+/// mounted filesystems (EXDEV). Not a failure — the one rename outcome
+/// the transfer engine degrades to a durable copy+delete inside the
+/// same queue task (00 D26), so it must survive the adapter's guard as
+/// a distinct type instead of flattening into `other`. `kind` stays
+/// `other` on purpose: it is not a name collision, and the conflict
+/// model must never auto-resolve it.
+class LocalCrossDeviceRenameException extends RemoteFileException {
+  /// The destination the same-device rename could not reach.
+  final String newPath;
+
+  LocalCrossDeviceRenameException({
+    required super.path,
+    required this.newPath,
+  }) : super(
+         kind: RemoteFileErrorKind.other,
+         operation: 'rename',
+         message:
+             'Could not rename "$path" to "$newPath": the paths are on '
+             'different filesystems',
+       );
+}
+
+/// Racer with the same semantics as the pinned adapter's: check before
+/// every pull, race the pull against cancellation, and never let
+/// cancellation cleanup escape after completion.
+Stream<T> _cancelWhenRequested<T>(
+  Stream<T> source,
+  RemoteTransferCancellation? cancellation,
+) async* {
+  final iterator = StreamIterator<T>(source);
+  try {
+    while (true) {
+      cancellation?.throwIfCancelled();
+      final hasNext = cancellation == null
+          ? await iterator.moveNext()
+          : await Future.any([
+              iterator.moveNext(),
+              cancellation.whenCancelled.then<bool>((_) {
+                cancellation.throwIfCancelled();
+                return false;
+              }),
+            ]);
+      if (!hasNext) return;
+      yield iterator.current;
+    }
+  } finally {
+    // Completion releases the source handle, including Windows file locks.
+    await iterator.cancel().catchError((_) {});
+  }
+}
+
+class _DigestSink implements Sink<Digest> {
+  Digest? _value;
+
+  Digest get value => _value ?? (throw StateError('Digest is not complete'));
+
+  @override
+  void add(Digest data) => _value = data;
+
+  @override
+  void close() {}
+}

@@ -1,0 +1,452 @@
+[
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGa",
+    "disposition": "decline",
+    "reason": "Internal invariant; config derives from this bookmark. Keep assert and single call site, not a release crash/silent return."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGc",
+    "disposition": "decline",
+    "reason": "No-engine panes deliberately show unavailable; shell registers no connect callback without a session."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGe",
+    "disposition": "apply",
+    "reason": "Runtime veto and covering-route tests were red. Guard route.isCurrent before maybePop and route.isActive after it; boolean suggestions are incorrect."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGi",
+    "disposition": "apply",
+    "reason": "Existing CommandChordScope skips unmodified activators before duplicate diagnostics."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGk",
+    "disposition": "defer",
+    "reason": "Comment/locale/path-contract polish; stabilization. Typed-path normalization remains with path editing."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGl",
+    "disposition": "defer",
+    "reason": "Comment/locale/path-contract polish; stabilization. Typed-path normalization remains with path editing."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGm",
+    "disposition": "refute",
+    "reason": "loading is false during channel-open phases; existing exclusion cannot hide the connecting spinner."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGo",
+    "disposition": "apply",
+    "reason": "Existing path bar initState/didUpdateWidget seed and reset the tail reveal."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGq",
+    "disposition": "refute",
+    "reason": "loading is false during channel-open phases; existing exclusion cannot hide the connecting spinner."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGs",
+    "disposition": "apply",
+    "reason": "Existing path bar initState/didUpdateWidget seed and reset the tail reveal."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGw",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGy",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cG2",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cG4",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cG5",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cG-",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cHB",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cHD",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h043i",
+    "disposition": "defer",
+    "reason": "Equivalent loading predicates; consolidation is optional, not a correctness fix."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h044H",
+    "disposition": "decline",
+    "reason": "Teardown failures remain diagnostic after disposal; reporting does not mutate pane state."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h044l",
+    "disposition": "apply",
+    "reason": "Runtime veto and covering-route tests were red. Guard route.isCurrent before maybePop and route.isActive after it; boolean suggestions are incorrect."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h045g",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h046c",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h046x",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0467",
+    "disposition": "defer",
+    "reason": "Comment/locale/path-contract polish; stabilization. Typed-path normalization remains with path editing."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h047H",
+    "disposition": "apply",
+    "reason": "Reconciled by identity, not suggested numbers: main IDs remain cancellation12/raw-name13/overflow14/QuickSelect15/root16/prefs17/ancestor18/incident19; pane-location20."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h047a",
+    "disposition": "apply",
+    "reason": "Reconciled by identity, not suggested numbers: main IDs remain cancellation12/raw-name13/overflow14/QuickSelect15/root16/prefs17/ancestor18/incident19; pane-location20."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h047p",
+    "disposition": "apply",
+    "reason": "Reconciled by identity, not suggested numbers: main IDs remain cancellation12/raw-name13/overflow14/QuickSelect15/root16/prefs17/ancestor18/incident19; pane-location20."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1goB",
+    "disposition": "refute",
+    "reason": "AppEngine implements PaneEngineLanes; openLocalChannel is inherited and all app tests compile."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1goP",
+    "disposition": "refute",
+    "reason": "_beginBinding and _releaseBinding cancel/null the prior watch before the new subscribe; rebind test checks ownership."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gob",
+    "disposition": "defer",
+    "reason": "Only SingleActivator/CharacterActivator are registered. Unknown activator policy is speculative API hardening."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gpL",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gpn",
+    "disposition": "refute",
+    "reason": "PaneController.navigate returns void; wrapping in unawaited would not compile."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gp2",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gqC",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gqI",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gqi",
+    "disposition": "apply",
+    "reason": "STATUS explicitly keeps cancellation12 and unwired models/watch; pane-location20 now qualifies bookmark-sourced raw paths."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gqu",
+    "disposition": "apply",
+    "reason": "STATUS explicitly keeps cancellation12 and unwired models/watch; pane-location20 now qualifies bookmark-sourced raw paths."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OZJ",
+    "disposition": "decline",
+    "reason": "Internal invariant; config derives from this bookmark. Keep assert and single call site, not a release crash/silent return."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OZe",
+    "disposition": "refute",
+    "reason": "Dart specializes int.clamp(int,int) to int. Existing analyzed controller and runtime cursor tests establish compilation and behavior."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OZ-",
+    "disposition": "refute",
+    "reason": "Dart specializes int.clamp(int,int) to int. Existing analyzed controller and runtime cursor tests establish compilation and behavior."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oaw",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2ObU",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Ob7",
+    "disposition": "decline",
+    "reason": "Null binding means a retired/no-op callback; no user action requires a new reported fault."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oca",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oc2",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OdZ",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Odr",
+    "disposition": "refute",
+    "reason": "Existing semantics test executes successfully; widget configuration finders do not prove the live exclusion tree. Overlay tests separately inspect exclusion and keyboard behavior."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OeM",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oea",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oex",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OfB",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OfY",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Ofy",
+    "disposition": "apply",
+    "reason": "STATUS explicitly keeps cancellation12 and unwired models/watch; pane-location20 now qualifies bookmark-sourced raw paths."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sD-",
+    "disposition": "defer",
+    "reason": "Comment/locale/path-contract polish; stabilization. Typed-path normalization remains with path editing."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sEa",
+    "disposition": "apply",
+    "reason": "Runtime veto and covering-route tests were red. Guard route.isCurrent before maybePop and route.isActive after it; boolean suggestions are incorrect."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sE3",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sFO",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sFa",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sF3",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sGJ",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sGa",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sG2",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sHD",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sHZ",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sH-",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sIV",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-kH",
+    "disposition": "decline",
+    "reason": "Internal invariant; config derives from this bookmark. Keep assert and single call site, not a release crash/silent return."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-kY",
+    "disposition": "apply",
+    "reason": "Existing cancel/status repairs remain; recovery adds red-first replacement-bind cancellation guard and reruns all status regressions."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-kp",
+    "disposition": "apply",
+    "reason": "Existing cancel/status repairs remain; recovery adds red-first replacement-bind cancellation guard and reruns all status regressions."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-ky",
+    "disposition": "defer",
+    "reason": "Equivalent loading predicates; consolidation is optional, not a correctness fix."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-lE",
+    "disposition": "decline",
+    "reason": "D21/02 shortcut table stays primary; never-reserved secondary and Tab remain. No shortcut-policy redesign here."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-lO",
+    "disposition": "decline",
+    "reason": "D21/02 shortcut table stays primary; never-reserved secondary and Tab remain. No shortcut-policy redesign here."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-la",
+    "disposition": "refute",
+    "reason": "Pane-local ExcludeSemantics already excludes stale rows. BlockSemantics risks hiding the sibling pane; keep existing boundary."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-lm",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-lr",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-l2",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mAV",
+    "disposition": "refute",
+    "reason": "Dart specializes int.clamp(int,int) to int. Existing analyzed controller and runtime cursor tests establish compilation and behavior."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mAh",
+    "disposition": "refute",
+    "reason": "Dart specializes int.clamp(int,int) to int. Existing analyzed controller and runtime cursor tests establish compilation and behavior."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mAq",
+    "disposition": "apply",
+    "reason": "Existing cancel/status repairs remain; recovery adds red-first replacement-bind cancellation guard and reruns all status regressions."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mA1",
+    "disposition": "defer",
+    "reason": "Both sealed subclasses implement equality already. Additional abstract API requirements belong to location composition, item20."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mA9",
+    "disposition": "refute",
+    "reason": "A backslash can be POSIX filename data. Last-separator detection would corrupt such paths; existing paneSeparator pins the leading-slash rule."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mBS",
+    "disposition": "defer",
+    "reason": "Loading footer already announces the state. Additional progress semantics is optional presentation work."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mBg",
+    "disposition": "defer",
+    "reason": "Optional test/helper/formatting hardening; no confirmed behavior defect. Stabilization excludes cosmetic repair rounds."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mBx",
+    "disposition": "defer",
+    "reason": "Per-test temp cleanup remains worthwhile test-harness hygiene; no production leak. No unrelated cleanup during stabilization."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mCm",
+    "disposition": "apply",
+    "reason": "Reconciled by identity, not suggested numbers: main IDs remain cancellation12/raw-name13/overflow14/QuickSelect15/root16/prefs17/ancestor18/incident19; pane-location20."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h5EV7",
+    "disposition": "apply",
+    "reason": "Existing cancel/status repairs remain; recovery adds red-first replacement-bind cancellation guard and reruns all status regressions."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h5EWZ",
+    "disposition": "apply",
+    "reason": "Existing UNC self-parent branches return the original spelling; pane_location tests retain strict no-op cases."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h5yXe",
+    "disposition": "apply",
+    "reason": "Reconciled by identity, not suggested numbers: main IDs remain cancellation12/raw-name13/overflow14/QuickSelect15/root16/prefs17/ancestor18/incident19; pane-location20."
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h5yXk",
+    "disposition": "apply",
+    "reason": "Reconciled by identity, not suggested numbers: main IDs remain cancellation12/raw-name13/overflow14/QuickSelect15/root16/prefs17/ancestor18/incident19; pane-location20."
+  }
+]

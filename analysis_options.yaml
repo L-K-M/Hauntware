@@ -1,0 +1,3 @@
+# Root analysis options for the suite tooling under tool/.
+# The projects keep their own analysis_options per subtree.
+include: package:lints/recommended.yaml

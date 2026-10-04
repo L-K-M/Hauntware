@@ -1,0 +1,5 @@
+# Historical documentation prose; no credential appears at this location.
+108ccea5605f92f6591fa1e7a3242fe86af0080a:tmp.md:generic-api-key:362
+# Explicit synthetic tokens in the original redaction tests.
+a4473d69aaa3316fd23ef5dd1f393e6fb694bd9f:packages/seance_core/test/llm_test.dart:github-pat:262
+a4473d69aaa3316fd23ef5dd1f393e6fb694bd9f:packages/seance_core/test/pure_logic_test.dart:github-pat:153

@@ -1,0 +1,65 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:poltergeist_app/app.dart';
+import 'package:poltergeist_app/services/archive_queue_tasks.dart';
+import 'package:poltergeist_app/ui/adaptive_shell.dart';
+import 'package:poltergeist_app/ui/workspace_shell.dart';
+
+void main() {
+  testWidgets('renders localized two-pane workspace with quiet chrome', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1180, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const PoltergeistApp());
+
+    expect(find.byKey(AdaptiveShell.primaryPaneKey), findsOneWidget);
+    expect(find.byKey(AdaptiveShell.secondaryPaneKey), findsOneWidget);
+    expect(find.byKey(AdaptiveShell.splitterKey), findsOneWidget);
+    // D32's chrome (10 §3): the header toolbar with the active
+    // location's title (the product title no longer sits in the
+    // chrome), the inspector column, and no status bar or menu strip.
+    expect(find.byKey(const ValueKey('header.title')), findsOneWidget);
+    expect(find.byKey(const ValueKey('inspector.region')), findsOneWidget);
+    expect(find.byType(MenuBar), findsNothing);
+    expect(find.text('Poltergeist'), findsNothing);
+    // No engine session in this composition: both panes render the honest
+    // no-engine state instead of placeholder prompts (M3's real panes).
+    expect(find.textContaining('Browsing is unavailable'), findsNWidgets(2));
+
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.theme?.visualDensity, VisualDensity.compact);
+    expect(app.darkTheme?.visualDensity, VisualDensity.compact);
+  });
+
+  testWidgets('reports the first rendered content size', (tester) async {
+    final sizes = <Size>[];
+    tester.view.physicalSize = const Size(1180, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(PoltergeistApp(onContentSizeChanged: sizes.add));
+    await tester.pump();
+
+    expect(sizes, [const Size(1180, 760)]);
+  });
+
+  testWidgets('passes the archive registry into the workspace shell', (
+    tester,
+  ) async {
+    final archives = ArchiveQueueTasks.forTesting(
+      createZip: ({required sourcePaths, required destinationPath}) =>
+          throw StateError('unexpected ZIP creation'),
+      extractZip: ({required archivePath, required destinationPath}) =>
+          throw StateError('unexpected ZIP extraction'),
+    );
+    addTearDown(archives.dispose);
+
+    await tester.pumpWidget(PoltergeistApp(archiveTasks: archives));
+
+    final shell = tester.widget<WorkspaceShell>(find.byType(WorkspaceShell));
+    expect(shell.archiveTasks, same(archives));
+  });
+}

@@ -1,0 +1,98 @@
+name: seance_app
+description: "Séance — a personal cross-platform SSH client."
+publish_to: none
+version: 1.1.0+1010099
+
+environment:
+  sdk: ^3.12.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  ghost_ui:
+    path: ../../../planchette/packages/ghost_ui
+  planchette_core:
+    path: ../../../planchette/packages/planchette_core
+  planchette_editor:
+    path: ../../../planchette/packages/planchette_editor
+  ghost_desktop:
+    path: ../../../planchette/packages/ghost_desktop
+  characters: ^1.4.0
+  flutter:
+    sdk: flutter
+  # The entire client core lives here (SSH, TOFU, sync, LLM, vault); the app is
+  # a thin UI over it. Re-exports seance_protocol.
+  seance_core:
+    path: ../../packages/seance_core
+  # Terminal widget — Séance's vendored fork of xterm.dart 4.0.0 (selection
+  # fixes upstream's private gesture wiring makes unreachable from the app;
+  # see third_party/xterm/PATCHES.md). libghostty swaps in behind
+  # seance_core's TerminalEngine seam when it tags a release.
+  xterm:
+    path: ../../third_party/xterm
+  # Pseudo-terminals for the optional local shell, from the same publisher as
+  # xterm.dart. An FFI plugin: it adds a small native target to every platform
+  # it declares, but Séance only opens a local shell on Linux and macOS (see
+  # `localShellSupportedOn` in seance_core for why the others are refused).
+  # Vendored fork of flutter_pty 0.4.2 — upstream leaks the master fd and
+  # both worker threads per session and offers no close API; ours adds
+  # Pty.close() (see third_party/flutter_pty/PATCHES.md).
+  flutter_pty:
+    path: ../../third_party/flutter_pty
+  # OS keystore for the vault master key and LLM API keys.
+  flutter_secure_storage: ^10.0.0
+  path_provider: ^2.1.0
+  # The running app version (compared against the latest GitHub release to
+  # offer an update notification — never to download or install anything).
+  package_info_plus: ^8.0.0
+  # Streams Android document-provider selections through a cached file instead
+  # of requiring a stable filesystem path or loading the whole file into Dart.
+  file_picker: ^11.0.2
+  cross_file: ^0.3.5+4
+  # Hashes managed local edits without loading them into memory.
+  crypto: ^3.0.6
+  # Local-file drops on desktop (and Android drag/drop where the OS provides it).
+  desktop_drop: ^0.7.1
+  # Opens a downloaded cache file with the platform's associated application.
+  open_file: ^4.0.0
+  # Native share sheets for exported remote files.
+  share_plus: ^12.0.2
+  # Opens the releases page in the browser when an update is available.
+  url_launcher: ^6.3.0
+  # Persists/restores the desktop window's frame, monitor, and maximized/
+  # full-screen state across launches (lib/services/window_state.dart).
+  window_manager: ^0.5.2
+  # Enumerates connected displays so a frame saved on a now-disconnected
+  # monitor falls back to the default placement instead of opening off-screen.
+  screen_retriever: ^0.2.2
+  # The macOS integrated titlebar: a transparent titlebar over full-size
+  # content with an empty unified toolbar, and click passthrough for the
+  # header's buttons inside it (lib/services/macos_titlebar.dart). Pinned to
+  # the version Poltergeist runs, whose titlebar this one follows.
+  macos_window_utils: 1.9.1
+  # Owner-only mode bits for path-bearing local files (identity audit log);
+  # the calls are guarded to desktop POSIX, other platforms use storage ACLs.
+  posix: ^6.5.0
+  # Rasterizes an SVG picked as a server badge image; the engine's own codecs
+  # read only bitmaps (lib/services/badge_image.dart).
+  flutter_svg: ^2.3.0
+
+dev_dependencies:
+  # Mock network lifetimes at the AppServices boundary.
+  http: ^1.6.0
+  # The errors a real handshake fails with, for tests that replay one at
+  # AppState's SSH boundary. Pinned to the version seance_core pins.
+  dartssh2: 3.0.2
+  # Deterministic timer control for the termination-watchdog tests —
+  # real-time waits race under a loaded CI runner.
+  fake_async: ^1.3.3
+  flutter_lints: ^5.0.0
+  # Regenerates every platform's launcher icon from media-sources/seance-icon.png
+  # (config in flutter_launcher_icons.yaml): dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  # Bundles the Material Icons font — without it every Icons.* glyph renders
+  # as the missing-glyph "?" box.
+  uses-material-design: true

@@ -1,0 +1,8 @@
+test/services/pane_controller_test.dart:6:8: Error: Error when reading 'lib/services/pane_controller.dart': No such file or directory
+test/services/pane_controller_test.dart:10:32: Error: Type 'PaneEngineLanes' not found.
+test/services/pane_controller_test.dart:163:24: Error: Method not found: 'PaneController'.
+test/services/pane_controller_test.dart:169:30: Error: Undefined name 'PanePhase'.
+test/services/pane_controller_test.dart:170:39: Error: Couldn't find constructor 'LocalPaneLocation'.
+test/services/pane_controller_test.dart:188:24: Error: Method not found: 'PaneController'.
+test/services/pane_controller_test.dart:205:24: Error: Method not found: 'PaneController'.
+test/services/pane_controller_test.dart:211:39: Error: Couldn't find constructor 'LocalPaneLocation'.

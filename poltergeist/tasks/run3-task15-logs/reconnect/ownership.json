@@ -1,0 +1,422 @@
+[
+  {
+    "id": "f3e1bc38-dfce-4b0d-9507-d387698998de",
+    "shortId": "f3e1bc3",
+    "name": "dl-tool verify: recovery",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "max",
+    "status": "running",
+    "cwd": "~/.paseo/worktrees/0a6udotz/audit-verification-1db1f543-2698-4706-ac8f",
+    "created": "13 minutes ago"
+  },
+  {
+    "id": "7cfee75c-9dd1-45ca-b684-1b4529c851c5",
+    "shortId": "7cfee75",
+    "name": "Finish existing Run3 task15/PR84, attempt4. Use SAME workspa",
+    "provider": "pi/openai-codex/gpt-6-astra",
+    "thinking": "medium",
+    "status": "running",
+    "cwd": "~/workspace/Poltergeist",
+    "created": "43 minutes ago"
+  },
+  {
+    "id": "14eed242-bd2b-49a4-abc9-e4ad453df76a",
+    "shortId": "14eed24",
+    "name": "Please review all open PRs and merge/combine/fix/discard the",
+    "provider": "claude/claude-opus-4-6",
+    "thinking": "high",
+    "status": "running",
+    "cwd": "~/.paseo/worktrees/2likbo55/potent-flamingo",
+    "created": "1 hours ago"
+  },
+  {
+    "id": "848f97b5-2a23-4d05-90b8-39244c495068",
+    "shortId": "848f97b",
+    "name": "Run3 task21, lane B: report Linux inotify queue overflow thr",
+    "provider": "pi/zai/glm-5.3-flash",
+    "thinking": "medium",
+    "status": "running",
+    "cwd": "~/.paseo/worktrees/05x9obgu/m3-linux-watch-overflow",
+    "created": "2 hours ago"
+  },
+  {
+    "id": "f051204b-7a91-4eb7-827a-a6d93af9229f",
+    "shortId": "f051204",
+    "name": "EBICS console completion",
+    "provider": "codex/gpt-5.6-terra",
+    "thinking": "high",
+    "status": "running",
+    "cwd": "~/.paseo/worktrees/32pt8qrf/impolite-mule",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "4bc3eca7-07ae-4550-81e8-1c2a7cf74e7a",
+    "shortId": "4bc3eca",
+    "name": "Read the plan at ../goodvantage.ner/EBICS_REWRITE_PLAN.md. I",
+    "provider": "pi/openai-codex/gpt-6-astra",
+    "thinking": "medium",
+    "status": "running",
+    "cwd": "~/.paseo/worktrees/32pt8qrf/impolite-mule",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "d1b15bd8-bc90-4f1c-b110-1a6c4b8ed56a",
+    "shortId": "d1b15bd",
+    "name": "Can you use the loop skill, and run the following prompt in",
+    "provider": "pi/openai-codex/gpt-6-astra",
+    "thinking": "high",
+    "status": "running",
+    "cwd": "~/.paseo/worktrees/05x9obgu/amazing-toad",
+    "created": "10 days ago"
+  },
+  {
+    "id": "d74f5e37-a8d2-4d52-9344-2d8a1e505334",
+    "shortId": "d74f5e3",
+    "name": "Are you there?",
+    "provider": "antigravity/gemini-3.8-flash-high",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/0a6udotz/unlucky-fireant",
+    "created": "6 minutes ago"
+  },
+  {
+    "id": "a058b2f5-598d-4553-a6dc-c2e4cd7f26b9",
+    "shortId": "a058b2f",
+    "name": "EBICS service safety audit",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/32pt8qrf/impolite-mule",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "44a67a8e-5344-4165-8ef0-31511c4706ac",
+    "shortId": "44a67a8",
+    "name": "EBICS protocol completion",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/32pt8qrf/impolite-mule",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "0cb3a016-b97a-48d4-b8c4-fe89df3a7675",
+    "shortId": "0cb3a01",
+    "name": "Read the plan at /home/paseo/workspace/SHAREPOINT-TO-GOODDRI",
+    "provider": "pi/openai-codex/gpt-6-astra",
+    "thinking": "medium",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/3sz1nehf/gifted-frog",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "55ea351b-6ece-4547-8c75-d3e005d5df45",
+    "shortId": "55ea351",
+    "name": "[Committee] Android background sync contrast",
+    "provider": "claude/claude-opus-5",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "8 days ago"
+  },
+  {
+    "id": "927449de-6b10-4687-a03d-641c00a1f966",
+    "shortId": "927449d",
+    "name": "[Committee] Android background sync research",
+    "provider": "codex/gpt-6-astra",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "8 days ago"
+  },
+  {
+    "id": "f970fcf7-9eab-4a5e-9124-4f8d6565263a",
+    "shortId": "f970fcf",
+    "name": "[Committee] Android durable ownership",
+    "provider": "codex/gpt-6-astra",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "8 days ago"
+  },
+  {
+    "id": "25dbfcad-9297-494b-9a0a-a77405c4f13e",
+    "shortId": "25dbfca",
+    "name": "[Committee] Android lifecycle critique",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "8 days ago"
+  },
+  {
+    "id": "63af4ab6-8ebe-47e5-988e-a1fe4f46aa45",
+    "shortId": "63af4ab",
+    "name": "[Committee] Delete sync invariants",
+    "provider": "claude/claude-opus-5",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "8 days ago"
+  },
+  {
+    "id": "0d20b0d9-d8ae-4a23-b397-32f6fa313b3d",
+    "shortId": "0d20b0d",
+    "name": "Pull first. Use the paseo-loop skill. Run the following prom",
+    "provider": "pi/openai-codex/gpt-6-astra",
+    "thinking": "high",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/0a6udotz/elegant-baboon",
+    "created": "11 days ago"
+  },
+  {
+    "id": "908039c6-48fa-400f-9737-eeda0606f3e9",
+    "shortId": "908039c",
+    "name": "Can you make a docker compose version of qrat.love from powe",
+    "provider": "codex/gpt-5.6-sol",
+    "thinking": "ultra",
+    "status": "idle",
+    "cwd": "~/workspace",
+    "created": "17 days ago"
+  },
+  {
+    "id": "9670d9f1-4262-41c3-98bc-6ad7bb7fccf3",
+    "shortId": "9670d9f",
+    "name": "Can you please push the most recent version of the ZAI revie",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "max",
+    "status": "idle",
+    "cwd": "~/workspace",
+    "created": "20 days ago"
+  },
+  {
+    "id": "a4fe477f-ed87-468c-b6eb-d7b2b6670bdd",
+    "shortId": "a4fe477",
+    "name": "Start by pulling the repo.",
+    "provider": "pi/kimi-coding/k3",
+    "thinking": "medium",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/27a9td5b/jubilant-chipmunk",
+    "created": "23 days ago"
+  },
+  {
+    "id": "6210e467-c714-4c95-81d6-8f87d0bf5301",
+    "shortId": "6210e46",
+    "name": "Please git pull before doing anything else.",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "max",
+    "status": "idle",
+    "cwd": "~/.paseo/worktrees/1dvdrxud/mean-fly",
+    "created": "25 days ago"
+  },
+  {
+    "id": "2d840033-9b83-4c4b-8018-70dcb78a22f9",
+    "shortId": "2d84003",
+    "name": "Independent archive release review",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "medium",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/3sz1nehf/gifted-frog",
+    "created": "2 hours ago"
+  },
+  {
+    "id": "b6ba95fd-a851-4611-823b-d0bbb452f643",
+    "shortId": "b6ba95f",
+    "name": "Connector runtime monitoring port",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/3sz1nehf/gifted-frog",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "fc84679e-6f6f-4b77-a3ea-6300d4aa38e6",
+    "shortId": "fc84679",
+    "name": "Connector operator workflows",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/3sz1nehf/gifted-frog",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "89be6e54-9f76-4da6-bb92-0a1417a4709e",
+    "shortId": "89be6e5",
+    "name": "EBICS migration gap audit",
+    "provider": "codex/gpt-5.6-sol",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/32pt8qrf/impolite-mule",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "5217f45a-0f2a-44b5-be51-048898251708",
+    "shortId": "5217f45",
+    "name": "Can you review the open worktrees and remove anything obsole",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "max",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/2likbo55/grateful-goose",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "2d549ffc-47f4-4547-a46f-3387f9edb490",
+    "shortId": "2d549ff",
+    "name": "Connector adapter and security hardening",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/3sz1nehf/gifted-frog",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "c9370091-72f0-4f9f-a6d5-03a3c4b673e5",
+    "shortId": "c937009",
+    "name": "Connector capture audit",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "medium",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/3sz1nehf/gifted-frog",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "7aa12d21-44b6-4a3d-9254-540e63c5b7b8",
+    "shortId": "7aa12d2",
+    "name": "Connector compatibility gate",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/3sz1nehf/gifted-frog",
+    "created": "4 hours ago"
+  },
+  {
+    "id": "72d8612e-11d3-4d90-b6be-72d118635128",
+    "shortId": "72d8612",
+    "name": "Closing a video preview by clicking outside the video into t",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "max",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/19fp5qtj/quick-skunk",
+    "created": "6 hours ago"
+  },
+  {
+    "id": "cd27b89c-e219-46d7-b661-35823f9b9fd4",
+    "shortId": "cd27b89",
+    "name": "dl-tool recovery 147",
+    "provider": "pi/openai-codex/gpt-6-astra",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/0a6udotz/recovery-dltool-147-1789299944",
+    "created": "6 hours ago"
+  },
+  {
+    "id": "c489c56c-96ce-4e34-a541-1e215c9883cf",
+    "shortId": "c489c56",
+    "name": "Review verifier quota failover",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "max",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/0a6udotz/elegant-baboon",
+    "created": "9 hours ago"
+  },
+  {
+    "id": "c3b62b79-3a2a-4aed-9660-c66a539e8e2b",
+    "shortId": "c3b62b7",
+    "name": "Sol verifier availability",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "max",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/0a6udotz/elegant-baboon",
+    "created": "9 hours ago"
+  },
+  {
+    "id": "e130ea8d-c58f-4d79-a7f0-21899bb7ff25",
+    "shortId": "e130ea8",
+    "name": "GLM verifier availability",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "max",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/0a6udotz/elegant-baboon",
+    "created": "9 hours ago"
+  },
+  {
+    "id": "caaff522-507c-4514-81a6-18251b7271ba",
+    "shortId": "caaff52",
+    "name": "dl-tool loop: T101",
+    "provider": "pi/openai-codex/gpt-6-astra",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/0a6udotz/task-t101-boot-conformance",
+    "created": "20 hours ago"
+  },
+  {
+    "id": "0da1affa-aebf-41ef-96dc-9f5f609b467a",
+    "shortId": "0da1aff",
+    "name": "How can I migrate a GoodDrive docker compose installation fr",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "max",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/19fp5qtj/tearful-goose",
+    "created": "2 days ago"
+  },
+  {
+    "id": "6997179a-6c4c-4582-89ea-f9ebf1e72520",
+    "shortId": "6997179",
+    "name": "[Committee] Portable blob contract — GLM",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "6 days ago"
+  },
+  {
+    "id": "8ed154dc-4131-49ab-b3b4-98106858a283",
+    "shortId": "8ed154d",
+    "name": "[Committee] Portable blob contract — Codex",
+    "provider": "codex/gpt-6-astra",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "6 days ago"
+  },
+  {
+    "id": "a051c7b8-96c7-4639-b0d3-2ee5367ea551",
+    "shortId": "a051c7b",
+    "name": "[Committee] Android background ownership",
+    "provider": "codex/gpt-5.4",
+    "thinking": "xhigh",
+    "status": "error",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "8 days ago"
+  },
+  {
+    "id": "933032aa-5806-402f-aa6d-ba227a257d8f",
+    "shortId": "933032a",
+    "name": "[Committee] Delete sync protocol",
+    "provider": "codex/gpt-6-astra",
+    "thinking": "high",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "8 days ago"
+  },
+  {
+    "id": "c334c108-de06-4ee4-af1b-7d41e5eb813d",
+    "shortId": "c334c10",
+    "name": "Please pull, then review all open PRs and merge/combnie/upda",
+    "provider": "pi/zai/glm-5.3",
+    "thinking": "max",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/2ibj7wpm/lucid-elephant",
+    "created": "8 days ago"
+  },
+  {
+    "id": "5922a6af-4bc8-48a3-8ff5-974dde885d2f",
+    "shortId": "5922a6a",
+    "name": "Continue implementing Tiltburst per",
+    "provider": "opencode/zai-coding-plan/glm-5.3",
+    "thinking": "max",
+    "status": "closed",
+    "cwd": "~/.paseo/worktrees/364d4zjl/outgoing-peacock",
+    "created": "18 days ago"
+  }
+]

@@ -1,0 +1,4 @@
+Pre-implementation run (flutter test probe suites): compilation failed —
+the suites reference the not-yet-written services
+(lib/services/probe_settings_store.dart, app_lifecycle_forwarder.dart,
+probe_coordinator.dart). Expected first observation; implementation follows.

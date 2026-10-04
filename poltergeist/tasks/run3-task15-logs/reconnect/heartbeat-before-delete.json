@@ -1,0 +1,53 @@
+{
+  "id": "06703144",
+  "name": "Task15 reconnect repair",
+  "prompt": "Check task15 reconnect companion PR gates and ownership; no polling loop, preserve workspace.",
+  "cadence": {
+    "type": "cron",
+    "expression": "0 * * * *"
+  },
+  "target": {
+    "type": "agent",
+    "agentId": "7cfee75c-9dd1-45ca-b684-1b4529c851c5"
+  },
+  "status": "active",
+  "createdAt": "2026-09-13T18:30:11.292Z",
+  "updatedAt": "2026-09-13T19:01:16.393Z",
+  "nextRunAt": "2026-09-13T22:00:00.000Z",
+  "lastRunAt": "2026-09-13T19:01:16.393Z",
+  "pausedAt": null,
+  "expiresAt": "2026-09-14T06:30:11.283Z",
+  "maxRuns": null,
+  "runs": [
+    {
+      "id": "c4bfe849-999d-4309-b00c-6d661ef55517",
+      "scheduledFor": "2026-09-13T19:00:00.000Z",
+      "startedAt": "2026-09-13T19:00:02.630Z",
+      "endedAt": "2026-09-13T19:00:02.651Z",
+      "status": "failed",
+      "agentId": null,
+      "output": null,
+      "error": "Agent 7cfee75c-9dd1-45ca-b684-1b4529c851c5 already has an active run"
+    },
+    {
+      "id": "46daab5e-0658-4f0f-bb5c-46960d190920",
+      "scheduledFor": "2026-09-13T19:00:00.000Z",
+      "startedAt": "2026-09-13T19:00:00.630Z",
+      "endedAt": "2026-09-13T19:00:08.223Z",
+      "status": "failed",
+      "agentId": null,
+      "output": null,
+      "error": "Agent 7cfee75c-9dd1-45ca-b684-1b4529c851c5 already has an active run"
+    },
+    {
+      "id": "d7606f94-8432-459c-88ac-cd0a01015ea4",
+      "scheduledFor": "2026-09-13T19:00:00.000Z",
+      "startedAt": "2026-09-13T19:00:01.630Z",
+      "endedAt": "2026-09-13T19:01:16.393Z",
+      "status": "failed",
+      "agentId": null,
+      "output": null,
+      "error": "Agent 7cfee75c-9dd1-45ca-b684-1b4529c851c5 already has an active run"
+    }
+  ]
+}

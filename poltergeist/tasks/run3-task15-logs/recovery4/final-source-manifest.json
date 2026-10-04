@@ -1,0 +1,11 @@
+{
+  "head": "03f58198089c1020b54be3347df78d369ed14d95",
+  "blobs": {
+    "app/poltergeist_app/lib/ui/workspace_shell.dart": "9e6591d46ff2eb119b88dc6b9dea4d786b137623",
+    "app/poltergeist_app/test/ui/panes/workspace_panes_test.dart": "110aa315bc72d2e7d13bf8910e977c8279e9ee2f",
+    "app/poltergeist_app/lib/ui/connections/connections_view.dart": "1aa8731a988ba628b8c80a6fe13390b8196508ec",
+    "app/poltergeist_app/lib/services/pane_controller.dart": "d2a927d76303034ff156c0455008560920d55810",
+    "packages": "0a1c69d2550951bf454b24f1cd2b0637b81648ac",
+    "docs/STATUS.md": "99df4121aefd4354a8f9798745e43eefeaac5ca0"
+  }
+}
