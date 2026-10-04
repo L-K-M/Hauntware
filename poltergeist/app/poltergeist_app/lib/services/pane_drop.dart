@@ -59,6 +59,16 @@ class PaneEntryDrag {
   final ValueNotifier<TransferOperation?> verb =
       ValueNotifier<TransferOperation?>(null);
 
+  /// Escape cancellation for the gesture carrying this payload (02
+  /// §5.1): while set, every drop target refuses the drag, hovers and
+  /// spring-load timers clear, the avatar hides, and the release lands
+  /// nothing. State ownership: the source pane's row state is the only
+  /// writer (it marks this on Escape and resets it when the next drag
+  /// starts, since an un-rebuilt row's second drag reuses the payload);
+  /// targets and the avatar only read and listen. Sticky within one
+  /// gesture: a cancel is never un-cancelled by a later hover.
+  final ValueNotifier<bool> cancelled = ValueNotifier<bool>(false);
+
   /// The OS drag-out hand-off in flight for this payload (D14's
   /// amendment), resolving to whether a native session took the drag.
   Future<bool>? _handOff;
@@ -92,6 +102,9 @@ class PaneEntryDrag {
   /// discarded: that session carries the items, and landing both would
   /// transfer them twice.
   void landInApp(VoidCallback drop) {
+    // An Escape-cancelled drag lands nothing: the release after the
+    // cancel is not a drop, whichever target it is over.
+    if (cancelled.value) return;
     final pending = _handOff;
     if (pending == null) {
       drop();

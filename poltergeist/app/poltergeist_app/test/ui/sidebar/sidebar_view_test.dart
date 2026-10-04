@@ -2515,6 +2515,50 @@ void main() {
       expect(spec.operation, TransferOperation.copy);
     });
 
+    testWidgets('a cancelled pane-row drag clears the device hover at '
+        'rest and copies nothing', (tester) async {
+      final queue = FakeAppTransferQueue();
+      final volumes = _FakeVolumes()..volumes = const [_home, _usb];
+      final drag = PaneEntryDrag(
+        source: const ServerFsLocation('srv'),
+        rootPaths: ['/srv/report.pdf'],
+      );
+      await pumpSidebar(
+        tester,
+        volumes: volumes,
+        dropDelegate: PaneDropDelegate(queue: queue),
+        dragSource: Center(
+          child: Draggable<Object>(
+            data: drag,
+            feedback: const SizedBox(width: 4, height: 4),
+            child: const Text('drag-me'),
+          ),
+        ),
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('drag-me')),
+      );
+      await tester.pump();
+      await gesture.moveTo(
+        tester.getCenter(
+          find.byKey(const ValueKey('sidebar.device./Volumes/STICK')),
+        ),
+      );
+      await tester.pump();
+      expect(drag.verb.value, TransferOperation.copy);
+
+      // The source pane's Escape marks the payload; the pointer stays
+      // put, so only the cancel itself can clear the hover.
+      drag.cancelled.value = true;
+      await tester.pump();
+      expect(drag.verb.value, isNull);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(queue.enqueuedSpecs, isEmpty);
+    });
+
     testWidgets('a pane-row drop waits out an OS drag-out hand-off in '
         'flight', (tester) async {
       final queue = FakeAppTransferQueue();

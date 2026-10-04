@@ -14,7 +14,7 @@ import 'window_drop_target.dart';
 
 /// The D14 spring-load delay (02 §5.1): a folder row held under a drag
 /// for this long opens in place.
-const paneSpringLoadDelay = Duration(seconds: 1);
+const paneSpringLoadDelay = Duration(milliseconds: 1500);
 
 /// The effective drop modifiers (02 §5.1): macOS maps ⌥→copy and
 /// ⌘→move; Windows/Linux map Ctrl→copy and Shift→move. Read live so a
@@ -122,7 +122,23 @@ class _PaneDropAreaState extends State<PaneDropArea> {
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKeyEvent);
     _springTimer?.cancel();
+    _activeDrag?.cancelled.removeListener(_onActiveDragCancelled);
     super.dispose();
+  }
+
+  /// Tracks the hovering drag and watches its Escape cancellation, so a
+  /// cancel with the pointer at rest still drops the hover at once.
+  void _setActiveDrag(PaneEntryDrag? drag) {
+    if (identical(drag, _activeDrag)) return;
+    _activeDrag?.cancelled.removeListener(_onActiveDragCancelled);
+    _activeDrag = drag;
+    drag?.cancelled.addListener(_onActiveDragCancelled);
+  }
+
+  /// Escape cancelled the hovering drag: the overlay and any armed
+  /// spring-load go now, not at the next pointer move.
+  void _onActiveDragCancelled() {
+    if (_activeDrag?.cancelled.value ?? false) _clearHover();
   }
 
   /// A modifier flip while a payload hovers — HardwareKeyboard's
@@ -161,6 +177,9 @@ class _PaneDropAreaState extends State<PaneDropArea> {
       return (dir: location.path, folderRow: null);
     }
     final local = listObject.globalToLocal(global);
+    // Above the rows (the column header shares the zone): the current
+    // directory, never a row scrolled out of view above the viewport.
+    if (local.dy < 0) return (dir: location.path, folderRow: null);
     final scrollOffset = widget.scrollController.hasClients
         ? widget.scrollController.offset
         : 0.0;
@@ -204,7 +223,14 @@ class _PaneDropAreaState extends State<PaneDropArea> {
   /// legal copy) re-arms the affordance — the accept path re-checks
   /// regardless, so a stale "allowed" can never slip a refused drop in.
   bool _updateInAppHover(PaneEntryDrag drag, Offset global) {
-    _activeDrag = drag;
+    if (drag.cancelled.value) {
+      // An Escape-cancelled drag refuses everywhere: clear the badge
+      // and any armed spring-load, and never re-resolve the verb.
+      drag.verb.value = null;
+      _clearHover();
+      return false;
+    }
+    _setActiveDrag(drag);
     _activeHoverGlobal = global;
     final delegate = widget.delegate;
     final resolved = _resolveDrop(global);
@@ -244,7 +270,7 @@ class _PaneDropAreaState extends State<PaneDropArea> {
   }
 
   void _clearHover() {
-    _activeDrag = null;
+    _setActiveDrag(null);
     _activeHoverGlobal = null;
     _setHover(label: null, folderRow: null);
   }
@@ -274,8 +300,9 @@ class _PaneDropAreaState extends State<PaneDropArea> {
     });
   }
 
-  /// 02 §5.1's spring-load: a folder row held under a drag for a second
-  /// opens in place, so nested drops reach without abandoning the drag.
+  /// 02 §5.1's spring-load: a folder row held under a drag for 1.5
+  /// seconds opens in place, so nested drops reach without abandoning
+  /// the drag.
   /// Re-checks the row at fire time — a listing that changed mid-hover
   /// must not navigate into an entry that moved.
   void _springLoad() {
@@ -311,6 +338,7 @@ class _PaneDropAreaState extends State<PaneDropArea> {
     final destination = _destinationFs;
     drag.verb.value = null;
     _clearHover();
+    if (drag.cancelled.value) return null;
     if (resolved == null || delegate == null || destination == null) {
       return null;
     }
@@ -425,7 +453,7 @@ class _PaneDropAreaState extends State<PaneDropArea> {
       // honest resolution.
       onWillAcceptWithDetails: (details) {
         _updateInAppHover(details.data, details.offset);
-        return widget.delegate != null;
+        return widget.delegate != null && !details.data.cancelled.value;
       },
       onMove: (details) => _updateInAppHover(details.data, details.offset),
       onLeave: (data) {

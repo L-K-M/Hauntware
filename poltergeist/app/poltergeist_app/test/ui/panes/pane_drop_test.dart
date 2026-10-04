@@ -590,6 +590,69 @@ void main() {
     expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other');
   });
 
+  dndWidgets('a row drag onto the column header lands in the pane’s '
+      'current directory', (tester) async {
+    // The right listing overflows its scroll area, so every visible
+    // pixel is a row and only the header can take a current-dir drop.
+    // Every row is a folder and the list is scrolled: a header point
+    // read as a row offset would land in the folder scrolled off above.
+    final leftChannel = controller_test.FakePaneChannel('/home/tester');
+    leftChannel.listings['/home/tester'] = [
+      _entryAt('/home/tester', 'report.txt', size: 2048),
+    ];
+    lanes.nextLocalChannel = leftChannel;
+    await left.openLocalHome();
+
+    rightChannel = controller_test.FakePaneChannel('/home/tester');
+    rightChannel.listings['/srv/other'] = [
+      for (var i = 0; i < 60; i++)
+        _entryAt('/srv/other', 'd$i', type: RemoteFileType.directory),
+    ];
+    lanes.nextLocalChannel = rightChannel;
+    await right.openLocalAt('/srv/other');
+    await pumpShell(tester);
+    final rightListing = find.descendant(
+      of: find.byWidgetPredicate((w) => w is PaneView && w.controller == right),
+      matching: find.byWidgetPredicate(
+        (w) => w is ListView && w.scrollDirection == Axis.vertical,
+      ),
+    );
+    tester.widget<ListView>(rightListing).controller!.jumpTo(28 * 10);
+    await tester.pump();
+    // The premise: the first folders are scrolled off, not just offset.
+    expect(find.text('d0').hitTestable(), findsNothing);
+
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('report.txt'),
+      tester.getCenter(find.byKey(const ValueKey('pane.right.column.name'))),
+    );
+    await endDrag(tester, gesture);
+
+    expect(queue.enqueuedSpecs, hasLength(1));
+    final spec = queue.enqueuedSpecs.single;
+    expect(spec.operation, TransferOperation.move);
+    expect(spec.rootPaths, ['/home/tester/report.txt']);
+    expect(spec.destinationDir, '/srv/other');
+  });
+
+  dndWidgets('a row drag onto its own directory’s header refuses the '
+      'move', (tester) async {
+    await bindLocals();
+    await pumpShell(tester);
+
+    // The left header is the rows' own directory: a move is the same
+    // parent no-op the background drop refuses.
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('report.txt'),
+      tester.getCenter(find.byKey(const ValueKey('pane.left.column.name'))),
+    );
+    await endDrag(tester, gesture);
+
+    expect(queue.enqueuedSpecs, isEmpty);
+  });
+
   dndWidgets('a drop onto the rows’ own directory refuses a move but '
       'accepts the copy modifier', (tester) async {
     await bindLocals();
@@ -694,6 +757,71 @@ void main() {
     await endDrag(tester, gesture);
   });
 
+  dndWidgets('escape cancels an in-app row drag: nothing enqueues, '
+      'no spring-load, the avatar goes', (tester) async {
+    await bindLocals();
+    await pumpShell(tester);
+
+    // A live filter pins the Focus-tier half of "consumed": the pane
+    // owns Escape for it while idle, so it must survive a drag-cancel.
+    left.setFilterQuery('rep');
+    leftNode.requestFocus();
+    await tester.pump();
+    expect(left.filterActive, isTrue);
+
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('report.txt'),
+      tester.getCenter(find.text('images')),
+    );
+    await tester.pump();
+    expect(find.text('Move to /srv/other/images'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    // The drag is cancelled with the pointer at rest: the hover
+    // affordance and the avatar clear at once.
+    expect(find.text('Move to /srv/other/images'), findsNothing);
+    expect(find.byType(PaneEntryDragAvatar), findsNothing);
+    // The Focus tiers never saw the key: the filter survives.
+    expect(left.filterActive, isTrue);
+
+    // The armed spring-load dies with the hover: past the dwell the
+    // folder stays closed.
+    await tester.pump(const Duration(milliseconds: 1700));
+    expect(right.location, const LocalPaneLocation('/srv/other'));
+
+    // Releasing over the other pane's background enqueues nothing.
+    await gesture.moveTo(rightPaneBackground(tester));
+    await tester.pump();
+    await endDrag(tester, gesture);
+
+    expect(find.byType(PaneEntryDragAvatar), findsNothing);
+    expect(queue.enqueuedSpecs, isEmpty);
+    expect(left.filterActive, isTrue);
+  });
+
+  dndWidgets('escape with no drag active keeps its existing behavior', (
+    tester,
+  ) async {
+    await bindLocals();
+    await pumpShell(tester);
+
+    left.setFilterQuery('rep');
+    leftNode.requestFocus();
+    await tester.pump();
+    expect(left.filterActive, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    // The pane's below-navigation tier still owns idle Escape: the
+    // filter clears instead of being swallowed.
+    expect(left.filterActive, isFalse);
+    expect(queue.enqueuedSpecs, isEmpty);
+  });
+
   dndWidgets('macOS maps ⌥ to copy', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     await bindLocals();
@@ -725,7 +853,13 @@ void main() {
       find.text('report.txt'),
       tester.getCenter(find.text('images')),
     );
-    await tester.pump(const Duration(seconds: 1, milliseconds: 200));
+    // Just under the dwell the folder must stay closed.
+    await tester.pump(const Duration(milliseconds: 1400));
+    await tester.pump();
+    expect(right.location, const LocalPaneLocation('/srv/other'));
+
+    // Past the dwell it spring-loads open.
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pump();
 
     expect(
@@ -1099,6 +1233,45 @@ void main() {
     await endDrag(tester, gesture);
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
+  });
+
+  dndWidgets('escape over a tab header disarms its activation', (
+    tester,
+  ) async {
+    await bindLocals();
+    final second = PaneController(
+      paneTabId: 'pane.right.tab2',
+      lanes: lanes,
+    );
+    final secondTab = rightStrip.addTab(second);
+    final secondChannel =
+        controller_test.FakePaneChannel('/home/tester');
+    secondChannel.listings['/srv/else'] = [
+      _entryAt('/srv/else', 'readme.md'),
+    ];
+    lanes.nextLocalChannel = secondChannel;
+    await second.openLocalAt('/srv/else');
+    rightStrip.activateTab(rightStrip.tabs.first);
+    await pumpShell(tester, rightTabs: true);
+
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('report.txt'),
+      tester.getCenter(find.text('else')),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    // The drag is live, so the assertions below cannot pass vacuously.
+    expect(find.byType(PaneEntryDragAvatar), findsOneWidget);
+
+    // Escape with the pointer at rest: the armed activation dies with
+    // the drag, so the tab stays put past the 700 ms dwell.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump();
+    expect(rightStrip.activeTab, isNot(secondTab));
+
+    await endDrag(tester, gesture);
+    expect(queue.enqueuedSpecs, isEmpty);
   });
 
   dndWidgets('a hover gone refused mid-drag cancels the tab activation', (

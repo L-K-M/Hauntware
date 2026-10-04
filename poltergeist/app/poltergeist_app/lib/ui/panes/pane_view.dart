@@ -361,6 +361,8 @@ class _PaneViewState extends State<PaneView> {
   @override
   void dispose() {
     _disposed = true;
+    HardwareKeyboard.instance.removeHandler(_onDragKeyEvent);
+    FocusManager.instance.removeEarlyKeyEventHandler(_onDragFocusKey);
     widget.workspace.removeListener(_onWorkspaceChanged);
     _workspacePresentation.dispose();
     _graceTimer?.cancel();
@@ -922,7 +924,69 @@ class _PaneViewState extends State<PaneView> {
   /// the drag rebuilds the dragged row with another row's payload.
   PaneEntryDrag? _rowDrag;
 
-  void _onRowDragStarted(PaneEntryDrag drag) => _rowDrag = drag;
+  void _onRowDragStarted(PaneEntryDrag drag) {
+    // The payload outlives its gesture (an un-rebuilt row's second drag
+    // reuses it), so a previous cancel must not leak into this drag.
+    drag.cancelled.value = false;
+    _rowDrag = drag;
+    // Remove first, so a start without a matching end never stacks a
+    // second copy of the handlers.
+    HardwareKeyboard.instance.removeHandler(_onDragKeyEvent);
+    FocusManager.instance.removeEarlyKeyEventHandler(_onDragFocusKey);
+    HardwareKeyboard.instance.addHandler(_onDragKeyEvent);
+    FocusManager.instance.addEarlyKeyEventHandler(_onDragFocusKey);
+  }
+
+  /// The drag's end in every case (accept, refuse, or pointer-cancel):
+  /// the Escape handlers belong to the gesture, never the pane.
+  void _onRowDragEnded() {
+    HardwareKeyboard.instance.removeHandler(_onDragKeyEvent);
+    FocusManager.instance.removeEarlyKeyEventHandler(_onDragFocusKey);
+    _rowDrag = null;
+  }
+
+  /// Cancels the active row drag (Escape): marks the payload so every
+  /// drop target refuses it, clears its verb badge, and swallows the
+  /// key. Returns whether a drag was in flight. Idempotent: a second
+  /// Escape (or the other handler for the same key) changes nothing.
+  bool _cancelActiveRowDrag() {
+    final drag = _rowDrag;
+    if (drag == null) return false;
+    if (!drag.cancelled.value) {
+      drag.cancelled.value = true;
+      drag.verb.value = null;
+    }
+    return true;
+  }
+
+  /// Escape while a row drag is in flight cancels the drag (02 §5.1):
+  /// the flag refuses every target, clears hovers and the avatar, and
+  /// blocks the native hand-off and the release. True marks the event
+  /// handled for the engine; the Focus tiers are stopped by
+  /// [_onDragFocusKey] instead: a HardwareKeyboard true cannot stop
+  /// them, it only reports to the engine. False while idle, so Escape
+  /// keeps its existing behavior when no drag runs.
+  bool _onDragKeyEvent(KeyEvent event) {
+    if (event is KeyUpEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.escape) return false;
+    return _cancelActiveRowDrag();
+  }
+
+  /// The Focus half of the drag-cancel: HardwareKeyboard handlers all
+  /// run without stopping Focus dispatch, so without this the focused
+  /// pane's own Escape tiers (rename, navigation, filter, type-ahead)
+  /// and the preview/filter-field tiers would fire under the cancelled
+  /// drag. Registered only while a drag is in flight, so idle Escape
+  /// still reaches every tier below.
+  KeyEventResult _onDragFocusKey(KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    if (event.logicalKey != LogicalKeyboardKey.escape) {
+      return KeyEventResult.ignored;
+    }
+    return _cancelActiveRowDrag()
+        ? KeyEventResult.handled
+        : KeyEventResult.ignored;
+  }
 
   /// D14's drag-out amendment: the row drag's pointer left the window.
   /// Only a position outside the view counts: every in-app target sits
@@ -931,6 +995,9 @@ class _PaneViewState extends State<PaneView> {
     final dragOut = widget.dragOut;
     final drag = _rowDrag;
     if (dragOut == null || drag == null || _dragOutDecided) return;
+    // An Escape-cancelled drag never reaches the native backend: the
+    // gesture is over for every target, only the release is pending.
+    if (drag.cancelled.value) return;
     final view = View.of(context);
     final bounds = Offset.zero & (view.physicalSize / view.devicePixelRatio);
     if (bounds.contains(details.globalPosition)) return;
@@ -1335,9 +1402,8 @@ class _PaneViewState extends State<PaneView> {
                       },
                       onListingPointerDown: _onListingPointerDown,
                       onDisclosurePointerDown: _onDisclosurePointerDown,
-                      onDragStarted: widget.dragOut == null
-                          ? null
-                          : _onRowDragStarted,
+                      onDragStarted: _onRowDragStarted,
+                      onDragEnded: _onRowDragEnded,
                       onDragUpdate: widget.dragOut == null
                           ? null
                           : _onRowDragUpdate,
@@ -1370,6 +1436,7 @@ class _RowGestures {
     required this.onListingPointerDown,
     required this.onDisclosurePointerDown,
     this.onDragStarted,
+    this.onDragEnded,
     this.onDragUpdate,
   });
 
@@ -1397,8 +1464,12 @@ class _RowGestures {
   onDisclosurePointerDown;
 
   /// A row drag began carrying this payload (the avatar's for the whole
-  /// gesture); set together with [onDragUpdate].
+  /// gesture); [onDragEnded] brings the gesture's Escape handlers down.
   final void Function(PaneEntryDrag drag)? onDragStarted;
+
+  /// A row drag ended in any way (accept, refuse, or pointer-cancel):
+  /// the gesture-scoped Escape handlers come down here.
+  final void Function()? onDragEnded;
 
   /// A row drag's moves, for the OS drag-out hand-off at the window
   /// edge (D14's amendment); null leaves the row `Draggable` exactly as
@@ -1579,23 +1650,11 @@ class _PaneSurface extends StatelessWidget {
             onClosed: onQuickSelectClosed,
           ),
         ..._bannerSlot(context),
-        // D32 §6's column header: outside the listing's scroll view,
-        // so the drop zone's list origin stays row 0.
-        if (_listingShown && controller.viewMode == PaneViewMode.details)
-          PaneColumnHeader(
-            paneTabId: controller.paneTabId,
-            sortKey: controller.sortKey,
-            sortDirection: controller.sortDirection,
-            onSort: controller.sortByColumn,
-            enabled:
-                !controller.connectionLost &&
-                !controller.restoredPending &&
-                !controller.staleRows,
-          ),
-        // D14's drop zone wraps the listing body only — the header,
-        // banners, and column header stay outside it. The OS-drop gate
-        // resolves per build: a busy or unbound pane advertises no
-        // droppable bounds at all.
+        // D14's drop zone wraps the column header and the listing body;
+        // the location header and banners stay outside it. The column
+        // header is a current-directory target, the only one left when
+        // the rows overflow the viewport. The OS-drop gate resolves per build: a
+        // busy or unbound pane advertises no droppable bounds at all.
         Expanded(
           child: PaneDropArea(
             controller: controller,
@@ -1606,7 +1665,26 @@ class _PaneSurface extends StatelessWidget {
             onHoverFolderRow: onDropHoverRow,
             dragOut: dragOut,
             supportsOsDrop: supportsOsDrop ?? _isDesktopPlatform(),
-            child: _body(context, l10n),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // D32 §6's column header: outside the listing's scroll
+                // view, so the list origin stays row 0.
+                if (_listingShown &&
+                    controller.viewMode == PaneViewMode.details)
+                  PaneColumnHeader(
+                    paneTabId: controller.paneTabId,
+                    sortKey: controller.sortKey,
+                    sortDirection: controller.sortDirection,
+                    onSort: controller.sortByColumn,
+                    enabled:
+                        !controller.connectionLost &&
+                        !controller.restoredPending &&
+                        !controller.staleRows,
+                  ),
+                Expanded(child: _body(context, l10n)),
+              ],
+            ),
           ),
         ),
       ],
@@ -2084,6 +2162,7 @@ class _PaneSurface extends StatelessWidget {
       entries: grabbed,
     );
     final onDragStarted = gestures.onDragStarted;
+    final onDragEnded = gestures.onDragEnded;
     return Draggable<PaneEntryDrag>(
       data: drag,
       // The pointer anchor keeps DragTargetDetails.offset equal to the
@@ -2094,8 +2173,22 @@ class _PaneSurface extends StatelessWidget {
       // The start reports this build's payload, the one the avatar
       // takes; a later build of this row may carry another.
       onDragStarted: onDragStarted == null ? null : () => onDragStarted(drag),
+      // The Escape handlers belong to the gesture: an accepted drop
+      // completes, anything else cancels. Unlike onDragEnd, both fire
+      // even after a mid-drag rebuild unmounted this row.
+      onDraggableCanceled: onDragEnded == null
+          ? null
+          : (_, _) => onDragEnded(),
+      onDragCompleted: onDragEnded,
       onDragUpdate: gestures.onDragUpdate,
-      feedback: PaneEntryDragAvatar(drag: drag),
+      // An Escape-cancelled drag paints no avatar: only the pointer
+      // release is still pending.
+      feedback: ValueListenableBuilder<bool>(
+        valueListenable: drag.cancelled,
+        builder: (context, cancelled, avatar) =>
+            cancelled ? const SizedBox.shrink() : avatar!,
+        child: PaneEntryDragAvatar(drag: drag),
+      ),
       childWhenDragging: Opacity(opacity: 0.4, child: row),
       // Desktop rows handle clicks through raw pointer events. Without a
       // tap contender, the mouse drag wins the gesture arena on press,
