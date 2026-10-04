@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -571,20 +572,21 @@ void main() {
     final toFolder = byId(kGoToFolderCommandId);
     final editPath = byId(kGoEditPathCommandId);
 
-    // 02 §8.3's table: ⌘[/⌘] on macOS, Alt+Left/Right elsewhere.
+    // 02 §8.3's table: ⌘[/⌘] plus ⌘←/⌘→ on macOS, Alt+Left/Right
+    // elsewhere. The bracket chord stays first: menus show and bind it.
     expect(back.scope, CommandScope.pane);
-    expect(
-      back.activators!(TargetPlatform.macOS),
-      [const SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true)],
-    );
+    expect(back.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true),
+      const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true),
+    ]);
     expect(
       back.activators!(TargetPlatform.linux),
       [const SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true)],
     );
-    expect(
-      forward.activators!(TargetPlatform.macOS),
-      [const SingleActivator(LogicalKeyboardKey.bracketRight, meta: true)],
-    );
+    expect(forward.activators!(TargetPlatform.macOS), [
+      const SingleActivator(LogicalKeyboardKey.bracketRight, meta: true),
+      const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true),
+    ]);
     expect(
       forward.activators!(TargetPlatform.windows),
       [const SingleActivator(LogicalKeyboardKey.arrowRight, alt: true)],
@@ -666,6 +668,92 @@ void main() {
     expect(back.enabled(), isFalse);
     expect(editPath.enabled(), isFalse);
     expect(toFolder.enabled(), isFalse);
+  });
+
+  testWidgets('go.back and go.forward answer Cmd+Left/Right on macOS, '
+      'but stay out of text fields', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final lanes = controller_test.FakePaneLanes();
+      final channel = controller_test.FakePaneChannel('/home/tester');
+      channel.listings['/home/tester'] = [_entry('a')];
+      channel.listings['/home/tester/a'] = [_entry('inner')];
+      final left = PaneController(paneTabId: 'pane.left', lanes: lanes);
+      final leftStrip = testPaneStrip(left);
+      final workspace = WorkspaceController(
+        left: leftStrip,
+        right: testPaneStrip(
+          PaneController(paneTabId: 'pane.right', lanes: lanes),
+        ),
+      );
+      addTearDown(workspace.dispose);
+      lanes.nextLocalChannel = channel;
+      await left.openLocalHome();
+      await tester.pump();
+      workspace.setActivePane(leftStrip);
+
+      final commands = buildPaneCommands(
+        workspace: workspace,
+        focusLeft: () {},
+        focusRight: () {},
+        swapFocus: () {},
+      );
+      final fieldNode = FocusNode();
+      final listingNode = FocusNode();
+      addTearDown(fieldNode.dispose);
+      addTearDown(listingNode.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: CommandChordScope(
+            commands: commands,
+            child: Scaffold(
+              body: Column(
+                children: [
+                  TextField(focusNode: fieldNode),
+                  Focus(
+                    focusNode: listingNode,
+                    child: const SizedBox(height: 10),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      Future<void> pressMetaArrow(LogicalKeyboardKey arrow) async {
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(arrow);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        await tester.pump();
+      }
+
+      left.navigate('/home/tester/a');
+      await tester.pump();
+      expect(left.location?.path, '/home/tester/a');
+
+      // From the listing, Cmd+Left goes back and Cmd+Right goes forward.
+      listingNode.requestFocus();
+      await tester.pump();
+      await pressMetaArrow(LogicalKeyboardKey.arrowLeft);
+      expect(left.location?.path, '/home/tester');
+      await pressMetaArrow(LogicalKeyboardKey.arrowRight);
+      expect(left.location?.path, '/home/tester/a');
+
+      // From a text field, Cmd+Left keeps its caret meaning: the chord
+      // layer stands down (02 §8.2 field-first) and history does not move.
+      fieldNode.requestFocus();
+      await tester.pump();
+      await pressMetaArrow(LogicalKeyboardKey.arrowLeft);
+      expect(left.location?.path, '/home/tester/a');
+      await pressMetaArrow(LogicalKeyboardKey.arrowRight);
+      expect(left.location?.path, '/home/tester/a');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('go.home browses the binding\'s home with ⇧⌘H / '
