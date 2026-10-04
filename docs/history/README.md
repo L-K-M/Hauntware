@@ -40,7 +40,7 @@ the project's source main from the table above with the original path:
 ```bash
 # Since the import
 git log -- seance/packages/seance_core/pubspec.yaml
-# Before it
+# Before it, from Séance's source main
 git log 75b1e84bf231d149d64c295430a9dda9dc7f4ffb -- packages/seance_core/pubspec.yaml
 ```
 

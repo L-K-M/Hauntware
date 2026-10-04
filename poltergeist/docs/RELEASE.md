@@ -2,7 +2,8 @@
 
 How a Hauntware suite release ships: one `vX.Y.Z` tag builds and publishes
 Planchette, Séance (apps, sync-server binaries and image) and Poltergeist
-together. Releases publish straight from CI with **no human step** (00 D23, decision change 2026-09-03): no signatures, no
+together. Releases publish straight from CI with **no human step**
+(00 D23, decision change 2026-09-03): no signatures, no
 maintainer key. The checksums are an integrity channel — they catch
 corrupted downloads, not a compromised pipeline.
 
@@ -15,7 +16,8 @@ From the repository root (`poltergeist/scripts/release.sh` forwards there):
 The version grammar is stable `X.Y.Z` only; the tag is a plain annotated
 tag. Pushing it triggers [`release.yml`](../../.github/workflows/release.yml):
 the release-existence guard, the test gate, every product's client builds,
-the sync-server binaries and image, and the sums job. `v0.*` tags publish as pre-releases automatically.
+the sync-server binaries and image, and the sums job. `v0.*` tags publish
+as pre-releases automatically.
 
 ## 2. What CI does, in order
 
@@ -25,7 +27,7 @@ the sync-server binaries and image, and the sums job. `v0.*` tags publish as pre
    zipped out of the `--no-codesign` `.xcarchive` — and the sync-server
    tarballs). Asset names carry the product prefix.
 2. Once every leg is green, the sums job downloads the full asset set,
-   enforces the manifest floor (every entry in
+   enforces the manifest floor (every entry in the repository root's
    `scripts/release-manifest.txt` must be present; a missing asset is a
    pipeline bug), attaches `SHA256SUMS`, writes
    the same sums plus the platform labels (the Android APK's sideload
