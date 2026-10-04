@@ -263,6 +263,34 @@ void main() {
     );
   });
 
+  test('sync changes only app release metadata', () {
+    _bump(root, 'seance/app/seance_app/pubspec.yaml', '0.9.2');
+    _replace(
+      root,
+      'poltergeist/app/poltergeist_app/ios/Runner/Info.plist',
+      '<string>2.1.0</string>',
+      '<string>2.0.1</string>',
+    );
+    final others = [
+      for (final file in root.listSync(recursive: true).whereType<File>())
+        p.relative(file.path, from: root.path),
+    ]..removeWhere(_syncTargets.contains);
+    expect(others, isNotEmpty);
+    final before = _snapshot(root, others);
+
+    SuiteReleaseWorkspace(
+      root,
+    ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1'));
+
+    expect(
+      _pubspecVersion(root, 'seance/app/seance_app/pubspec.yaml'),
+      '1.1.1+1010199',
+    );
+    // Package pubspecs, lockfiles, READMEs and Flutter-variable plists
+    // belong to post-bump and the release engine, not to sync.
+    expect(_snapshot(root, others), before);
+  });
+
   test('checkReleaseOrder accepts a target ahead of tree and tags', () {
     final checked = SuiteReleaseWorkspace(root).checkReleaseOrder(
       target: ReleaseVersion.parse('1.1.1'),
@@ -360,6 +388,21 @@ void main() {
         target: ReleaseVersion.parse('1.1.0'),
         priorTags: const ['v1.1.0'],
       ),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('must exceed prior tag v1.1.0'),
+        ),
+      ),
+    );
+  });
+
+  test('checkReleaseOrder without a target refuses re-tagging the tree', () {
+    expect(
+      () => SuiteReleaseWorkspace(
+        root,
+      ).checkReleaseOrder(priorTags: const ['v1.1.0']),
       throwsA(
         isA<ReleaseVersionStateException>().having(
           (e) => e.message,
