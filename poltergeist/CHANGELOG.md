@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- **Escape cancels a drag.** Pressing Escape while dragging files ends
+  the drag: nothing is copied or moved when you let go, and no folder or
+  tab opens under the pointer.
+- **Drop on the column header.** Dropping files on a pane's column header
+  puts them in that pane's folder, so a listing too long to leave empty
+  space still takes a drop.
+- **Folders spring open more slowly.** Holding a drag over a folder opens
+  it after 1.5 seconds instead of 1, so passing over folders opens them
+  less often by accident.
+
 ## 1.9.0 — first suite release (2026-10-04)
 
 - **Import server bookmarks from other apps.** The Server menu now imports

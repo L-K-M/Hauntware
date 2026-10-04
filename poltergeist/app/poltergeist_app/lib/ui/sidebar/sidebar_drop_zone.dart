@@ -114,6 +114,8 @@ _DropPlan? _transferPlan(
 }) {
   final delegate = view.dropDelegate;
   if (delegate == null || data is! PaneEntryDrag) return null;
+  // An Escape-cancelled drag refuses everywhere, including the rail.
+  if (data.cancelled.value) return null;
   const destination = LocalFsLocation();
   final modifiers = paneDropModifiers(context);
   final verb = paneDropVerb(
@@ -169,7 +171,8 @@ _DropPlan? _addFavoritePlan(
     _ => (const <String>[], false),
   };
   // A pane-row drag may carry files; without a way to tell folders from
-  // files there is nothing safe to add.
+  // files there is nothing safe to add. A cancelled drag adds nothing.
+  if (data is PaneEntryDrag && data.cancelled.value) return null;
   if (paths.isEmpty || (checkFolders && view.volumes == null)) return null;
   return _DropPlan(
     indicator,

@@ -976,6 +976,21 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
   /// Whether the currently hovering payload may land (drives the ring).
   bool _accepting = false;
 
+  /// The hovering drag, watched so an Escape cancel disarms the chip
+  /// even with the pointer at rest.
+  PaneEntryDrag? _hoverDrag;
+
+  void _watch(PaneEntryDrag? drag) {
+    if (identical(drag, _hoverDrag)) return;
+    _hoverDrag?.cancelled.removeListener(_onHoverDragCancelled);
+    _hoverDrag = drag;
+    drag?.cancelled.addListener(_onHoverDragCancelled);
+  }
+
+  void _onHoverDragCancelled() {
+    if (_hoverDrag?.cancelled.value ?? false) _disarm();
+  }
+
   /// The chip's destination endpoint + directory: the tab's bound
   /// location, null while the tab is unbound or its pane is inert
   /// (loading, error, connection-lost — same eligibility as the
@@ -991,10 +1006,13 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
   /// Whether this payload may land on the chip right now — verb and
   /// containment resolved exactly as the listing zone resolves them.
   bool _accepts(PaneEntryDrag drag) {
+    _watch(drag);
     final delegate = widget.delegate;
     final destination = _destination;
     var allowed = false;
-    if (delegate != null && destination != null) {
+    if (delegate != null &&
+        destination != null &&
+        !drag.cancelled.value) {
       final modifiers = paneDropModifiers(context);
       final verb = paneDropVerb(
         source: drag.source,
@@ -1038,6 +1056,7 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
   }
 
   void _disarm() {
+    _watch(null);
     _activateTimer?.cancel();
     _activateTimer = null;
     if (_accepting) setState(() => _accepting = false);
@@ -1049,7 +1068,11 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
     final delegate = widget.delegate;
     final destination = _destination;
     drag.verb.value = null;
-    if (delegate == null || destination == null) return;
+    if (delegate == null ||
+        destination == null ||
+        drag.cancelled.value) {
+      return;
+    }
     final modifiers = paneDropModifiers(context);
     final verb = paneDropVerb(
       source: drag.source,
@@ -1084,6 +1107,7 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
   @override
   void dispose() {
     _activateTimer?.cancel();
+    _hoverDrag?.cancelled.removeListener(_onHoverDragCancelled);
     super.dispose();
   }
 
@@ -1100,7 +1124,7 @@ class _TabEntryDropState extends State<_TabEntryDrop> {
         // a chip that becomes eligible mid-hover (tab finished
         // loading) must still accept the release; _accept re-resolves
         // the destination honestly at drop time.
-        return widget.delegate != null;
+        return widget.delegate != null && !details.data.cancelled.value;
       },
       onMove: (details) => _accepts(details.data),
       onLeave: (data) {
