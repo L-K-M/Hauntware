@@ -44,8 +44,12 @@ enum _ArchiveCommand { create, extract }
 
 /// The project pages the Help menu links to (D19: links only — the app
 /// never downloads or phones home).
-final _releasesPage = Uri.parse('https://github.com/L-K-M/Poltergeist/releases');
-final _issuesPage = Uri.parse('https://github.com/L-K-M/Poltergeist/issues');
+final _releasesPage = Uri.parse(
+  'https://github.com/$poltergeistUpdateRepo/releases',
+);
+final _issuesPage = Uri.parse(
+  'https://github.com/$poltergeistUpdateRepo/issues',
+);
 
 List<ShortcutActivator> Function(TargetPlatform) _perPlatform({
   required List<ShortcutActivator> macOS,

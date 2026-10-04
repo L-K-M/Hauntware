@@ -128,7 +128,7 @@ void main() {
       await tester.tap(find.text('View Release'));
       await tester.pumpAndSettle();
       expect(opened, [
-        Uri.parse('https://github.com/L-K-M/Poltergeist/releases/latest'),
+        Uri.parse('https://github.com/L-K-M/Hauntware/releases/latest'),
       ]);
     });
 

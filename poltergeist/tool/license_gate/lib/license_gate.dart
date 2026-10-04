@@ -30,7 +30,18 @@ const Set<String> _licenseFileNames = {
   'COPYING',
 };
 const Set<String> _seancePackageNames = {'seance_core', 'seance_protocol'};
+const String _seanceComponent = 'seance';
 const Set<String> _permittedCopyrightHolders = {'L-K-M'};
+const Set<String> _vendoredDirectoryNames = {
+  'third_party',
+  'third-party',
+  'vendor',
+  'vendors',
+  'node_modules',
+  'ext',
+  'external',
+  'deps',
+};
 const Set<String> _ignoredDirectoryNames = {
   '.dart_tool',
   '.git',
@@ -61,7 +72,8 @@ enum LicenseGateMode {
   /// Checks the CI marker and declaration-to-lock resolution only.
   markerOnly,
 
-  /// Also validates every pinned tree against the SPDX allowlist.
+  /// Also validates every resolved component tree against the SPDX
+  /// allowlist.
   release,
 }
 
@@ -82,12 +94,12 @@ final class LicenseGateSettings {
 
 final class LicenseGateReport {
   final int declarationCount;
-  final int pinnedRevisionCount;
+  final int lockedSourceCount;
   final Set<String> matchedLicenseIds;
 
   const LicenseGateReport({
     required this.declarationCount,
-    required this.pinnedRevisionCount,
+    required this.lockedSourceCount,
     required this.matchedLicenseIds,
   });
 }
@@ -101,7 +113,8 @@ final class LicenseGateException implements Exception {
   String toString() => message;
 }
 
-/// Verifies the D30 marker, lock resolution, and pinned-tree license content.
+/// Verifies the D30 marker, lock resolution, and the licenses of the local
+/// Séance component sources those locks resolve.
 Future<LicenseGateReport> verifySeanceLicenseGate({
   required Directory repositoryRoot,
   required LicenseGateMode mode,
@@ -114,72 +127,123 @@ Future<LicenseGateReport> verifySeanceLicenseGate({
 
   final pubspecFiles = _findFiles(root, 'pubspec.yaml');
   final lockFiles = _findFiles(root, 'pubspec.lock');
-  final declarations = <_GitDeclaration>[
-    for (final pubspec in pubspecFiles) ..._readDeclarations(pubspec),
+  final worktree = await _worktreeRoot(root);
+  final declarations = <_LocalDeclaration>[
+    for (final pubspec in pubspecFiles) ..._readDeclarations(pubspec, worktree),
   ];
   final workspaceLocks = _readWorkspaceLocks(pubspecFiles);
   final locks = <String, _LockFile>{
     for (final file in lockFiles)
-      p.normalize(p.absolute(file.path)): _readLock(file),
+      p.normalize(p.absolute(file.path)): _readLock(file, worktree),
   };
 
   _verifyDeclarationResolution(declarations, locks, workspaceLocks);
 
-  final pins = <_GitPin>{for (final lock in locks.values) ...lock.seancePins};
+  final sources = <_LocalPin>{
+    for (final lock in locks.values) ...lock.seanceSources,
+  };
   await _verifyCommittedLocks(root, declarations, locks, workspaceLocks);
-  _verifyWorkflowGate(root, declarations.isNotEmpty || pins.isNotEmpty);
+  _verifyWorkflowGate(
+    root,
+    worktree,
+    declarations.isNotEmpty || sources.isNotEmpty,
+  );
 
-  if (mode == LicenseGateMode.markerOnly || pins.isEmpty) {
+  if (mode == LicenseGateMode.markerOnly || sources.isEmpty) {
     return LicenseGateReport(
       declarationCount: declarations.length,
-      pinnedRevisionCount: pins.length,
+      lockedSourceCount: sources.length,
       matchedLicenseIds: const {},
     );
   }
 
   final canonical = await _loadCanonicalLicenses(settings);
   final matchedLicenseIds = <String>{};
-  for (final pin in pins) {
-    final snapshot = await _GitSnapshot.fetch(pin.url, pin.revision);
-    try {
-      final found = <String>[];
-      for (final fileName in _licenseFileNames) {
-        final text = await snapshot.read(fileName);
-        if (text == null) continue;
+  final components = <String>{
+    for (final source in sources) source.componentRel,
+  };
+  for (final componentRel in components.toList()..sort()) {
+    final tree = _ComponentTree(worktree!, componentRel);
+    await tree.requireClean();
+    final found = <String>[];
+    for (final candidate in await tree.licenseFiles()) {
+      final text = await tree.read(candidate.path);
+      if (text == null) continue;
 
-        found.add(fileName);
-        final licenseId = _matchLicense(
-          text,
-          canonical,
-          settings.permittedCopyrightHolders,
-        );
-        if (licenseId == null) {
-          throw LicenseGateException(
-            '${pin.packageName} at ${pin.revision} has a non-permitted '
-            '$fileName',
-          );
-        }
-        matchedLicenseIds.add(licenseId);
-      }
-
-      if (found.isEmpty) {
+      found.add(candidate.path);
+      final licenseId = _matchLicense(
+        text,
+        canonical,
+        candidate.vendored ? const {} : settings.permittedCopyrightHolders,
+        allowAnyCopyrightHolder: candidate.vendored,
+      );
+      if (licenseId == null) {
         throw LicenseGateException(
-          '${pin.packageName} at ${pin.revision} has no recognized license '
-          'file',
+          '$componentRel has a non-permitted ${candidate.path}',
         );
       }
-    } finally {
-      await snapshot.dispose();
+      matchedLicenseIds.add(licenseId);
+    }
+
+    if (found.isEmpty) {
+      throw LicenseGateException(
+        'the $componentRel component has no recognized license file',
+      );
     }
   }
 
   return LicenseGateReport(
     declarationCount: declarations.length,
-    pinnedRevisionCount: pins.length,
+    lockedSourceCount: sources.length,
     matchedLicenseIds: matchedLicenseIds,
   );
 }
 
+/// The gate runs against the worktree that contains the scan root, so a
+/// component directory (for example `poltergeist/` inside the monorepo)
+/// resolves against the monorepo toplevel while a standalone project keeps
+/// working as its own toplevel.
+Future<Directory?> _worktreeRoot(Directory root) async {
+  final result = await Process.run(
+    'git',
+    ['-C', root.path, 'rev-parse', '--show-toplevel'],
+    stdoutEncoding: utf8,
+    stderrEncoding: utf8,
+  );
+  if (result.exitCode != 0) return null;
+
+  final toplevel = p.normalize(
+    await Directory('${result.stdout}'.trim()).resolveSymbolicLinks(),
+  );
+  final resolvedRoot = p.normalize(await root.resolveSymbolicLinks());
+  if (resolvedRoot != toplevel && !p.isWithin(toplevel, resolvedRoot)) {
+    throw LicenseGateException(
+      'repository root escapes its Git worktree: ${root.path}',
+    );
+  }
+
+  return Directory(toplevel);
+}
+
+bool _isWithinWorktree(Directory worktree, String resolved) =>
+    p.equals(worktree.path, resolved) || p.isWithin(worktree.path, resolved);
+
+/// The top-level component a worktree path belongs to, or null outside it.
+String? _componentOf(Directory worktree, String resolved) {
+  if (!_isWithinWorktree(worktree, resolved) ||
+      p.equals(worktree.path, resolved)) {
+    return null;
+  }
+  final segments = p.split(p.relative(resolved, from: worktree.path));
+  if (segments.isEmpty) return null;
+
+  return segments.first;
+}
+
+/// Séance sources are local path dependencies that resolve inside this
+/// worktree's `seance/` component, or packages whose names claim the
+/// `seance_` prefix. Anything else — a git pin, a hosted version, a path
+/// escaping the worktree or the component — is a fail-closed violation.
 List<File> _findFiles(Directory root, String fileName) {
   final found = <File>[];
   final pending = <Directory>[root];
@@ -243,9 +307,9 @@ bool _containsTrackedFiles(Directory root, Directory directory) {
   );
 }
 
-List<_GitDeclaration> _readDeclarations(File pubspec) {
+List<_LocalDeclaration> _readDeclarations(File pubspec, Directory? worktree) {
   final document = _readYamlMap(pubspec);
-  final declarations = <_GitDeclaration>[];
+  final declarations = <_LocalDeclaration>[];
 
   for (final sectionName in const {
     'dependencies',
@@ -258,48 +322,79 @@ List<_GitDeclaration> _readDeclarations(File pubspec) {
     for (final entry in section.entries) {
       final packageName = entry.key;
       final specification = _asMap(entry.value);
-      if (packageName is! String || specification == null) continue;
+      if (packageName is! String) continue;
 
-      final git = specification['git'];
-      if (git == null) continue;
-
-      final url = switch (git) {
-        final String value => value,
-        final Map<Object?, Object?> value => value['url'],
-        _ => null,
-      };
-      if (url is! String) {
-        if (_seancePackageNames.contains(packageName)) {
+      if (specification == null) {
+        if (_isSeancePackage(packageName)) {
           throw LicenseGateException(
-            '${pubspec.path}: $packageName has a git dependency without a '
-            'URL',
+            '${pubspec.path}: $packageName must use a local path source',
           );
         }
         continue;
       }
-      if (!_isSeanceDependency(packageName, url)) continue;
 
-      final gitDetails = _asMap(git);
-      final ref = gitDetails?['ref'];
-      final path = gitDetails?['path'];
-      if (ref is! String || ref.isEmpty) {
+      final git = specification['git'];
+      if (git != null) {
+        final url = switch (git) {
+          final String value => value,
+          final Map<Object?, Object?> value => value['url'],
+          _ => null,
+        };
+        if (url is! String && !_isSeancePackage(packageName)) continue;
+        if (url is String && !_isSeanceDependency(packageName, url)) {
+          continue;
+        }
+
         throw LicenseGateException(
-          '${pubspec.path}: $packageName must pin a git ref',
+          '${pubspec.path}: $packageName resolves from an external git '
+          'source; Séance packages must use a local path dependency',
         );
       }
-      if (path is! String || path.isEmpty) {
+
+      final declaredPath = specification['path'];
+      if (declaredPath is! String || declaredPath.isEmpty) {
+        if (_isSeancePackage(packageName)) {
+          throw LicenseGateException(
+            '${pubspec.path}: $packageName must use a local path source',
+          );
+        }
+        continue;
+      }
+
+      final resolved = p.normalize(
+        p.isAbsolute(declaredPath)
+            ? declaredPath
+            : p.join(pubspec.parent.path, declaredPath),
+      );
+      final componentRel = worktree == null
+          ? null
+          : _componentOf(worktree, resolved);
+      if (!_isSeancePackage(packageName) && componentRel != _seanceComponent) {
+        continue;
+      }
+      if (worktree == null) {
         throw LicenseGateException(
-          '${pubspec.path}: $packageName must select a package path',
+          '${pubspec.path}: $packageName resolves outside a Git worktree',
+        );
+      }
+      if (!_isWithinWorktree(worktree, resolved)) {
+        throw LicenseGateException(
+          '${pubspec.path}: $packageName resolves outside the worktree',
+        );
+      }
+      if (componentRel != _seanceComponent) {
+        throw LicenseGateException(
+          '${pubspec.path}: $packageName resolves outside the '
+          '$_seanceComponent component',
         );
       }
 
       declarations.add(
-        _GitDeclaration(
+        _LocalDeclaration(
           packageName: packageName,
           pubspec: pubspec,
-          url: url,
-          ref: ref,
-          path: path,
+          resolved: resolved,
+          componentRel: componentRel!,
         ),
       );
     }
@@ -308,45 +403,89 @@ List<_GitDeclaration> _readDeclarations(File pubspec) {
   return declarations;
 }
 
-_LockFile _readLock(File file) {
+_LockFile _readLock(File file, Directory? worktree) {
   final document = _readYamlMap(file);
   final packages = _asMap(document['packages']);
   if (packages == null) {
     throw LicenseGateException('${file.path}: missing packages map');
   }
 
-  final pins = <_GitPin>[];
+  final sources = <_LocalPin>[];
   for (final entry in packages.entries) {
     final packageName = entry.key;
     final specification = _asMap(entry.value);
     if (packageName is! String || specification == null) continue;
-    if (specification['source'] != 'git') continue;
+    final source = specification['source'];
+    if (source == 'git') {
+      final description = _asMap(specification['description']);
+      final url = description?['url'];
+      if (url is String && !_isSeanceDependency(packageName, url)) continue;
+      if (url is! String && !_isSeancePackage(packageName)) continue;
+
+      throw LicenseGateException(
+        '${file.path}: $packageName pins an external git source',
+      );
+    }
+    if (source != 'path') {
+      if (_isSeancePackage(packageName)) {
+        throw LicenseGateException(
+          '${file.path}: $packageName resolves from an unexpected source',
+        );
+      }
+      continue;
+    }
 
     final description = _asMap(specification['description']);
-    final url = description?['url'];
-    if (url is! String || !_isSeanceDependency(packageName, url)) continue;
-
-    final revision = description?['resolved-ref'];
-    if (revision is! String || !_gitRevisionPattern.hasMatch(revision)) {
+    final resolved = _resolveLockPath(file, description);
+    final componentRel = worktree == null || resolved == null
+        ? null
+        : _componentOf(worktree, resolved);
+    if (!_isSeancePackage(packageName) && componentRel != _seanceComponent) {
+      continue;
+    }
+    if (worktree == null || resolved == null) {
       throw LicenseGateException(
-        '${file.path}: $packageName has no full resolved-ref',
+        '${file.path}: $packageName has no usable path resolution',
+      );
+    }
+    if (!_isWithinWorktree(worktree, resolved)) {
+      throw LicenseGateException(
+        '${file.path}: $packageName resolves outside the worktree',
+      );
+    }
+    if (componentRel != _seanceComponent) {
+      throw LicenseGateException(
+        '${file.path}: $packageName resolves outside the '
+        '$_seanceComponent component',
       );
     }
 
-    pins.add(
-      _GitPin(
+    sources.add(
+      _LocalPin(
         packageName: packageName,
-        url: url,
-        revision: revision.toLowerCase(),
+        resolved: resolved,
+        componentRel: componentRel!,
       ),
     );
   }
 
-  return _LockFile(file: file, packages: packages, seancePins: pins);
+  return _LockFile(file: file, packages: packages, seanceSources: sources);
+}
+
+String? _resolveLockPath(File lock, Map<Object?, Object?>? description) {
+  final path = description?['path'];
+  if (path is! String || path.isEmpty) return null;
+  final relative = description?['relative'];
+  if (p.isAbsolute(path)) return p.normalize(path);
+  // `relative: false` marks an absolute path; a non-absolute value here is
+  // not a usable resolution.
+  if (relative is bool && !relative) return null;
+
+  return p.normalize(p.join(lock.parent.path, path));
 }
 
 void _verifyDeclarationResolution(
-  List<_GitDeclaration> declarations,
+  List<_LocalDeclaration> declarations,
   Map<String, _LockFile> locks,
   Map<String, String> workspaceLocks,
 ) {
@@ -361,20 +500,14 @@ void _verifyDeclarationResolution(
     }
 
     final specification = _asMap(lock.packages[declaration.packageName]);
-    final description = _asMap(specification?['description']);
-    final lockedUrl = description?['url'];
-    final lockedRef = description?['ref'];
-    final lockedPath = description?['path'];
-    final revision = description?['resolved-ref'];
-    final resolved =
-        specification?['source'] == 'git' &&
-        lockedUrl is String &&
-        lockedUrl == declaration.url &&
-        lockedRef == declaration.ref &&
-        lockedPath == declaration.path &&
-        revision is String &&
-        _gitRevisionPattern.hasMatch(revision);
-    if (resolved) continue;
+    final resolved = _resolveLockPath(
+      lock.file,
+      _asMap(specification?['description']),
+    );
+    if (specification?['source'] == 'path' &&
+        resolved == declaration.resolved) {
+      continue;
+    }
 
     throw LicenseGateException(
       '${declaration.pubspec.path}: ${declaration.packageName} is not '
@@ -384,7 +517,7 @@ void _verifyDeclarationResolution(
 }
 
 String _lockPathForDeclaration(
-  _GitDeclaration declaration,
+  _LocalDeclaration declaration,
   Map<String, String> workspaceLocks,
 ) {
   final pubspecDirectory = p.normalize(
@@ -421,7 +554,7 @@ Map<String, String> _readWorkspaceLocks(List<File> pubspecFiles) {
 
 Future<void> _verifyCommittedLocks(
   Directory root,
-  List<_GitDeclaration> declarations,
+  List<_LocalDeclaration> declarations,
   Map<String, _LockFile> locks,
   Map<String, String> workspaceLocks,
 ) async {
@@ -429,7 +562,8 @@ Future<void> _verifyCommittedLocks(
     for (final declaration in declarations)
       p.normalize(_lockPathForDeclaration(declaration, workspaceLocks)),
     for (final lock in locks.values)
-      if (lock.seancePins.isNotEmpty) p.normalize(p.absolute(lock.file.path)),
+      if (lock.seanceSources.isNotEmpty)
+        p.normalize(p.absolute(lock.file.path)),
   };
   if (relevantPaths.isEmpty) return;
 
@@ -437,9 +571,13 @@ Future<void> _verifyCommittedLocks(
     'rev-parse',
     '--show-toplevel',
   ])).trim();
-  if (p.normalize(p.absolute(topLevel)) != root.path) {
+  final resolvedTopLevel = p.normalize(
+    await Directory(topLevel).resolveSymbolicLinks(),
+  );
+  if (resolvedTopLevel != root.path &&
+      !p.isWithin(resolvedTopLevel, root.path)) {
     throw const LicenseGateException(
-      'repository root must be the Git worktree root',
+      'repository root escapes the Git worktree root',
     );
   }
 
@@ -482,8 +620,12 @@ Future<String> _runRepositoryGit(Directory root, List<String> arguments) async {
   );
 }
 
-void _verifyWorkflowGate(Directory root, bool required) {
-  final workflow = File(p.join(root.path, _releaseWorkflowPath));
+void _verifyWorkflowGate(Directory root, Directory? worktree, bool required) {
+  // The release pipeline lives at the worktree toplevel: inside the
+  // monorepo that is the root `.github`, while a standalone repository is
+  // its own toplevel.
+  final base = worktree ?? root;
+  final workflow = File(p.join(base.path, _releaseWorkflowPath));
   if (!workflow.existsSync()) {
     if (!required) return;
 
@@ -639,15 +781,17 @@ Future<Map<String, String>> _loadCanonicalLicenses(
   }
 }
 
-
 String? _matchLicense(
   String text,
   Map<String, String> canonical,
-  Set<String> permittedCopyrightHolders,
-) {
+  Set<String> permittedCopyrightHolders, {
+  bool allowAnyCopyrightHolder = false,
+}) {
   final normalized = _normalizeLicense(
     text,
-    copyrightSource: _CopyrightSource.candidate,
+    copyrightSource: allowAnyCopyrightHolder
+        ? _CopyrightSource.canonical
+        : _CopyrightSource.candidate,
     permittedCopyrightHolders: permittedCopyrightHolders,
   );
   for (final entry in canonical.entries) {
@@ -740,11 +884,12 @@ List<Object?>? _asList(Object? value) {
   return null;
 }
 
+bool _isSeancePackage(String packageName) =>
+    _seancePackageNames.contains(packageName) ||
+    packageName.startsWith('seance_');
+
 bool _isSeanceDependency(String packageName, String url) {
-  if (_seancePackageNames.contains(packageName) ||
-      packageName.startsWith('seance_')) {
-    return true;
-  }
+  if (_isSeancePackage(packageName)) return true;
 
   final normalized = url.replaceAll('\\', '/').toLowerCase();
   return normalized.endsWith('/seance') ||
@@ -753,53 +898,149 @@ bool _isSeanceDependency(String packageName, String url) {
       normalized == 'seance.git';
 }
 
-final class _GitDeclaration {
+final class _LocalDeclaration {
   final String packageName;
   final File pubspec;
-  final String url;
-  final String ref;
-  final String path;
+  final String resolved;
+  final String componentRel;
 
-  const _GitDeclaration({
+  const _LocalDeclaration({
     required this.packageName,
     required this.pubspec,
-    required this.url,
-    required this.ref,
-    required this.path,
+    required this.resolved,
+    required this.componentRel,
   });
 }
 
 final class _LockFile {
   final File file;
   final Map<Object?, Object?> packages;
-  final List<_GitPin> seancePins;
+  final List<_LocalPin> seanceSources;
 
   const _LockFile({
     required this.file,
     required this.packages,
-    required this.seancePins,
+    required this.seanceSources,
   });
 }
 
-final class _GitPin {
+final class _LocalPin {
   final String packageName;
-  final String url;
-  final String revision;
+  final String resolved;
+  final String componentRel;
 
-  const _GitPin({
+  const _LocalPin({
     required this.packageName,
-    required this.url,
-    required this.revision,
+    required this.resolved,
+    required this.componentRel,
   });
 
   @override
   bool operator ==(Object other) =>
-      other is _GitPin && other.url == url && other.revision == revision;
+      other is _LocalPin &&
+      other.resolved == resolved &&
+      other.packageName == packageName;
 
   @override
-  int get hashCode => Object.hash(url, revision);
+  int get hashCode => Object.hash(packageName, resolved);
 }
 
+/// A license file inside the component: first-party files carry the
+/// project's copyright holder, while vendored files keep upstream holders
+/// and erase notices against any holder.
+final class _LicenseCandidate {
+  final String path;
+  final bool vendored;
+
+  const _LicenseCandidate(this.path, this.vendored);
+}
+
+/// The committed component tree inside this worktree. License evidence is
+/// read from `HEAD:<component>` objects — never from the working tree —
+/// and the component must be clean so the resolved sources match exactly
+/// what the gate certifies.
+final class _ComponentTree {
+  final Directory _worktree;
+  final String _componentRel;
+
+  const _ComponentTree(this._worktree, this._componentRel);
+
+  Future<void> requireClean() async {
+    final tree = await _runGit([
+      'rev-parse',
+      '--verify',
+      'HEAD:$_componentRel',
+    ]);
+    if (!_gitRevisionPattern.hasMatch(tree.trim())) {
+      throw LicenseGateException(
+        'HEAD does not contain the $_componentRel component',
+      );
+    }
+    final status = await _runGit([
+      'status',
+      '--porcelain=v1',
+      '--untracked-files=all',
+      '--',
+      _componentRel,
+    ]);
+    if (status.trim().isNotEmpty) {
+      throw LicenseGateException(
+        'the $_componentRel component has uncommitted changes',
+      );
+    }
+  }
+
+  /// Component-root license names plus vendored license files under the
+  /// vendored directory names, in deterministic tree order.
+  Future<List<_LicenseCandidate>> licenseFiles() async {
+    final listing = await _runGit([
+      'ls-tree',
+      '-r',
+      '--name-only',
+      'HEAD:$_componentRel',
+    ]);
+    final candidates = <_LicenseCandidate>[];
+    for (final path in listing.split('\n')) {
+      if (path.isEmpty) continue;
+      final segments = p.posix.split(path);
+      final name = segments.last;
+      if (!_licenseFileNames.contains(name)) continue;
+      if (segments.length == 1) {
+        candidates.add(_LicenseCandidate(path, false));
+        continue;
+      }
+      final vendored = segments
+          .sublist(0, segments.length - 1)
+          .any(_vendoredDirectoryNames.contains);
+      if (vendored) candidates.add(_LicenseCandidate(path, true));
+    }
+
+    return candidates;
+  }
+
+  Future<String?> read(String path) async {
+    final result = await Process.run(
+      'git',
+      ['-C', _worktree.path, 'show', 'HEAD:$_componentRel/$path'],
+      stdoutEncoding: utf8,
+      stderrEncoding: utf8,
+    );
+    if (result.exitCode == 0) return result.stdout as String;
+
+    final stderr = result.stderr as String;
+    if (stderr.contains('does not exist in') ||
+        stderr.contains('exists on disk, but not in')) {
+      return null;
+    }
+    throw LicenseGateException('git show failed for $path: ${stderr.trim()}');
+  }
+
+  Future<String> _runGit(List<String> arguments) =>
+      _runRepositoryGit(_worktree, arguments);
+}
+
+/// The canonical SPDX corpus still comes from the pinned upstream
+/// repository — the gate's reference data, not a dependency source.
 final class _GitSnapshot {
   final Directory _directory;
 

@@ -9,7 +9,7 @@ Windows, Linux, and Android. Built as a sibling of
 
 *The ghost that moves your files.*
 
-**Current version:** v<!-- version -->1.0.1<!-- /version --> · [Downloads and first-launch steps](docs/INSTALL.md) · [Releases](https://github.com/L-K-M/Poltergeist/releases)
+**Current version:** v<!-- version -->1.1.0<!-- /version --> · [Downloads and first-launch steps](docs/INSTALL.md) · [Releases](https://github.com/L-K-M/Poltergeist/releases)
 
 
 ## Known issues

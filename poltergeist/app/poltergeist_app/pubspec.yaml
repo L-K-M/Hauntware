@@ -1,7 +1,7 @@
 name: poltergeist_app
 description: Poltergeist cross-platform file transfer client.
 publish_to: none
-version: 1.0.1+1000199
+version: 1.1.0+1010099
 
 environment:
   sdk: ^3.12.0
@@ -10,12 +10,9 @@ environment:
 dependencies:
   # Cross-platform delivery for the desktop URL schemes in 04 §7.1.
   app_links: 7.2.1
-  # Keep all Planchette Git dependencies on the same full revision.
+  # All hosts consume the same local shared widgets.
   ghost_ui:
-    git:
-      url: https://github.com/L-K-M/Planchette.git
-      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
-      path: packages/ghost_ui
+    path: ../../../planchette/packages/ghost_ui
   # SHA-256 key identification for the vault re-key journal (the same use
   # Séance's FileVaultStore makes of it).
   crypto: 3.0.7
@@ -44,19 +41,11 @@ dependencies:
   path_provider: 2.1.6
   # Applies owner-only mode bits to path-bearing local audit files.
   posix: 6.5.2
-  # Shared editor surface: git-pinned to Planchette, never forked or copied,
-  # at the same reviewed revision as planchette_core in poltergeist_core and
-  # as Séance's pin. Bump both pins together and re-run the editor tests.
+  # Share the editor and document layer directly; no host-owned fork.
   planchette_editor:
-    git:
-      url: https://github.com/L-K-M/Planchette.git
-      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
-      path: packages/planchette_editor
+    path: ../../../planchette/packages/planchette_editor
   ghost_desktop:
-    git:
-      url: https://github.com/L-K-M/Planchette.git
-      ref: 442965d0dfbc20b264c39611543fd3200fd01ade
-      path: packages/ghost_desktop
+    path: ../../../planchette/packages/ghost_desktop
   poltergeist_core:
     path: ../../packages/poltergeist_core
   poltergeist_sync:

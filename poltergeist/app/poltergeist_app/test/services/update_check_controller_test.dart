@@ -75,7 +75,7 @@ void main() {
         expect(request.method, 'GET');
         expect(
           request.url.toString(),
-          'https://api.github.com/repos/L-K-M/Poltergeist/releases/latest',
+          'https://api.github.com/repos/L-K-M/Hauntware/releases/latest',
         );
         expect(request.url.query, isEmpty);
         // A link-only check carries nothing to compare against server-
@@ -83,7 +83,7 @@ void main() {
         expect((request as http.Request).body, isEmpty);
         expect(
           controller.update!.releasesUrl.toString(),
-          'https://github.com/L-K-M/Poltergeist/releases/latest',
+          'https://github.com/L-K-M/Hauntware/releases/latest',
         );
       },
     );

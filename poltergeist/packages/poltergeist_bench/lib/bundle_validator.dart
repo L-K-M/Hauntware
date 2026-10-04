@@ -35,6 +35,12 @@ const _measurementAffectingPaths = [
   'test/integration',
   'tool/bench',
 ];
+
+/// Top-level component the project tree lives under inside the monorepo.
+/// Imported standalone commits keep the original root layout; monorepo
+/// commits keep it under `poltergeist/`.
+const _componentPrefix = 'poltergeist';
+const _componentPrefixPath = '$_componentPrefix/';
 const _reportResultHeader = '| Scenario | Bytes | Elapsed µs | Note |';
 const _reportResultDivider = '|---|---:|---:|---|';
 final _evidenceStateMarker = RegExp(
@@ -99,15 +105,21 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
       repositoryRoot,
       reportPath,
     );
-    final evidenceBoundary = await _resolveEvidenceBoundary(
+    final boundary = await _resolveEvidenceBoundary(
       repositoryRoot: repositoryRoot,
       canonicalRelative: canonicalRelative,
       reportRelative: reportRelative,
     );
+    final recordedPrefix = await _projectTreePrefix(
+      repositoryRoot,
+      recordedSha,
+      'Recorded measurement commit',
+    );
     final recordedFixtureTree = await _requireGitOutput(repositoryRoot, [
       'rev-parse',
       '--verify',
-      '$recordedSha:test/integration',
+      '$recordedSha:$recordedPrefix'
+          'test/integration',
     ], 'Recorded fixture tree does not exist.');
     if (recordedFixtureTree != fixtureTree) {
       throw const BundleValidationException(
@@ -118,12 +130,12 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
       'merge-base',
       '--is-ancestor',
       recordedSha,
-      evidenceBoundary,
+      boundary.measurement,
     ], 'Evidence predates the recorded measurement commit.');
     await _requireGitSuccess(repositoryRoot, [
       'merge-base',
       '--is-ancestor',
-      evidenceBoundary,
+      boundary.stability,
       'HEAD',
     ], 'Evidence introduction commit is not an ancestor of HEAD.');
     final diff = await Process.run('git', [
@@ -131,8 +143,8 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
       repositoryRoot,
       'diff',
       '--quiet',
-      recordedSha,
-      evidenceBoundary,
+      _treeSpec(recordedSha, recordedPrefix),
+      _treeSpec(boundary.measurement, boundary.measurementPrefix),
       '--',
       ..._measurementAffectingPaths,
     ]);
@@ -146,12 +158,37 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
         'git diff failed: ${'${diff.stderr}'.trim()}.',
       );
     }
+    if (boundary.componentIntroduction != null) {
+      // The imported bundle must be byte-identical across the era change:
+      // compare the standalone-era bundle directory against the same
+      // directory inside the component subtree of the introduction commit.
+      final importDiff = await Process.run('git', [
+        '-C',
+        repositoryRoot,
+        'diff',
+        '--quiet',
+        boundary.componentIntroduction!,
+        '${boundary.stability}:$_componentPrefix',
+        '--',
+        _parentGitPath(boundary.componentCanonicalRelative!),
+      ]);
+      if (importDiff.exitCode == 1) {
+        throw const BundleValidationException(
+          'Imported evidence differs from its standalone capture.',
+        );
+      }
+      if (importDiff.exitCode != 0) {
+        throw BundleValidationException(
+          'git import diff failed: ${'${importDiff.stderr}'.trim()}.',
+        );
+      }
+    }
     final bundleDiff = await Process.run('git', [
       '-C',
       repositoryRoot,
       'diff',
       '--quiet',
-      evidenceBoundary,
+      boundary.stability,
       '--',
       _parentGitPath(canonicalRelative),
     ]);
@@ -167,6 +204,46 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
     }
   }
 }
+
+/// Resolves which Git object the measurement-era checks compare against for
+/// a commit: the commit's own tree (standalone layout) or its component
+/// subtree (monorepo layout).
+Future<String> _projectTreePrefix(
+  String repositoryRoot,
+  String revision,
+  String description,
+) async {
+  var rootLayout = false;
+  var componentLayout = false;
+  for (final path in _measurementAffectingPaths) {
+    if (await _gitObjectExists(repositoryRoot, '$revision:$path')) {
+      rootLayout = true;
+    }
+    if (await _gitObjectExists(
+      repositoryRoot,
+      '$revision:$_componentPrefixPath$path',
+    )) {
+      componentLayout = true;
+    }
+  }
+  if (rootLayout && componentLayout) {
+    throw BundleValidationException(
+      '$description has an ambiguous project layout.',
+    );
+  }
+  if (componentLayout) return _componentPrefixPath;
+  if (rootLayout) return '';
+
+  throw BundleValidationException('$description has no project tree.');
+}
+
+String _treeSpec(String revision, String prefix) =>
+    prefix.isEmpty ? revision : '$revision:$_componentPrefix';
+
+String _componentRelative(String relative) =>
+    relative.startsWith(_componentPrefixPath)
+    ? relative.substring(_componentPrefixPath.length)
+    : relative;
 
 Future<BundleValidationOutcome> validateCommittedEvidence({
   required String bundleDirectory,
@@ -518,33 +595,135 @@ Future<void> _reaggregate(
   }
 }
 
-Future<String> _resolveEvidenceBoundary({
+/// The introduction commit(s) for the committed evidence, resolved across
+/// the standalone and monorepo path layouts.
+final class _EvidenceBoundary {
+  /// Commit the measurement-era checks compare against — the standalone
+  /// capture commit when one exists, otherwise the worktree-path
+  /// introduction commit.
+  final String measurement;
+
+  /// Project-tree prefix (`''` or `poltergeist/`) at [measurement].
+  final String measurementPrefix;
+
+  /// Commit that introduced the canonical path in the current worktree
+  /// layout; the working-tree stability diff starts here.
+  final String stability;
+
+  /// The standalone-era introduction commit, when the bundle predates the
+  /// monorepo layout. Enables the cross-era content check.
+  final String? componentIntroduction;
+
+  /// Component-relative canonical path when [componentIntroduction] is set.
+  final String? componentCanonicalRelative;
+
+  const _EvidenceBoundary({
+    required this.measurement,
+    required this.measurementPrefix,
+    required this.stability,
+    this.componentIntroduction,
+    this.componentCanonicalRelative,
+  });
+}
+
+Future<_EvidenceBoundary> _resolveEvidenceBoundary({
   required String repositoryRoot,
   required String canonicalRelative,
   required String reportRelative,
 }) async {
-  // The canonical file is added once, when pending evidence becomes durable.
-  final output = await _requireGitOutput(repositoryRoot, [
-    'log',
-    '--format=%H',
-    '--diff-filter=A',
-    'HEAD',
-    '--',
-    canonicalRelative,
-  ], 'Canonical evidence has no introduction commit.');
-  final additions = const LineSplitter()
-      .convert(output)
-      .where((line) => line.isNotEmpty)
-      .toList();
-  if (additions.length != 1 || !_gitObjectPattern.hasMatch(additions.single)) {
-    throw const BundleValidationException(
-      'Canonical evidence needs one introduction commit.',
+  final canonicalComponent = _componentRelative(canonicalRelative);
+  final reportComponent = _componentRelative(reportRelative);
+  if (canonicalComponent == canonicalRelative) {
+    // Standalone layout: the canonical file is added once, when pending
+    // evidence becomes durable.
+    final additions = await _nonMergeAdditions(
+      repositoryRoot,
+      canonicalRelative,
+    );
+    if (additions.length != 1) {
+      throw const BundleValidationException(
+        'Canonical evidence needs one introduction commit.',
+      );
+    }
+    final boundary = additions.single;
+    await _requireReportAt(repositoryRoot, boundary, reportRelative);
+    return _EvidenceBoundary(
+      measurement: boundary,
+      measurementPrefix: '',
+      stability: boundary,
     );
   }
-  final boundary = additions.single;
+
+  // Monorepo layout: the committed path is introduced by the import merge
+  // or by a regular monorepo commit. Merge introductions are invisible to
+  // --diff-filter=A, so find the earliest first-parent touch that adds it.
+  final introduction = await _firstParentIntroduction(
+    repositoryRoot,
+    canonicalRelative,
+  );
+  if (introduction == null) {
+    throw const BundleValidationException(
+      'Canonical evidence has no introduction commit.',
+    );
+  }
+  final directAdditions = await _nonMergeAdditions(
+    repositoryRoot,
+    canonicalRelative,
+  );
+  if (directAdditions.isNotEmpty &&
+      !(directAdditions.length == 1 &&
+          directAdditions.single == introduction)) {
+    throw const BundleValidationException(
+      'Canonical evidence has an ambiguous introduction history.',
+    );
+  }
+  final componentAdditions = await _nonMergeAdditions(
+    repositoryRoot,
+    canonicalComponent,
+  );
+  if (componentAdditions.length > 1) {
+    throw const BundleValidationException(
+      'Canonical evidence has an ambiguous introduction history.',
+    );
+  }
+  if (componentAdditions.isEmpty) {
+    // Evidence first committed inside the monorepo: a single era.
+    await _requireReportAt(repositoryRoot, introduction, reportRelative);
+    return _EvidenceBoundary(
+      measurement: introduction,
+      measurementPrefix: _componentPrefixPath,
+      stability: introduction,
+    );
+  }
+
+  // Dual era: the standalone commit captured the evidence and the import
+  // carried it under the component path. The measurement boundary stays at
+  // the standalone capture; the stability boundary is the import.
+  final standalone = componentAdditions.single;
+  await _requireGitSuccess(repositoryRoot, [
+    'merge-base',
+    '--is-ancestor',
+    standalone,
+    introduction,
+  ], 'Standalone evidence commit is not an ancestor of its import.');
+  await _requireReportAt(repositoryRoot, standalone, reportComponent);
+  return _EvidenceBoundary(
+    measurement: standalone,
+    measurementPrefix: '',
+    stability: introduction,
+    componentIntroduction: standalone,
+    componentCanonicalRelative: canonicalComponent,
+  );
+}
+
+Future<void> _requireReportAt(
+  String repositoryRoot,
+  String commit,
+  String reportRelative,
+) async {
   final reportAtBoundary = await _requireGitOutput(repositoryRoot, [
     'show',
-    '$boundary:$reportRelative',
+    '$commit:$reportRelative',
   ], 'Evidence report is absent from its introduction commit.');
   if (_parseReportEvidenceState(reportAtBoundary) !=
       _ReportEvidenceState.required) {
@@ -552,8 +731,108 @@ Future<String> _resolveEvidenceBoundary({
       'Evidence report was not required at its introduction commit.',
     );
   }
+}
 
-  return boundary;
+/// Non-merge commits that added [relative], per `--diff-filter=A`. Merge
+/// commits are never flagged, so an import merge does not count as a re-add.
+/// Full history is required: standalone-era additions sit off the
+/// first-parent chain that default simplification prunes away.
+Future<List<String>> _nonMergeAdditions(
+  String repositoryRoot,
+  String relative,
+) async {
+  final additions = await _gitLines(repositoryRoot, [
+    'log',
+    '--format=%H',
+    '--diff-filter=A',
+    '--full-history',
+    'HEAD',
+    '--',
+    relative,
+  ]);
+  for (final commit in additions) {
+    if (!_gitObjectPattern.hasMatch(commit)) {
+      throw const BundleValidationException(
+        'Canonical evidence has an ambiguous introduction history.',
+      );
+    }
+  }
+
+  return additions;
+}
+
+/// The most recent first-parent commit where [relative] was absent in its
+/// first parent and present in its own tree — the point where the current
+/// content entered the mainline, including merge introductions.
+Future<String?> _firstParentIntroduction(
+  String repositoryRoot,
+  String relative,
+) async {
+  final touches = await _gitLines(repositoryRoot, [
+    'log',
+    '--first-parent',
+    '--format=%H',
+    'HEAD',
+    '--',
+    relative,
+  ]);
+  for (final commit in touches) {
+    if (!_gitObjectPattern.hasMatch(commit)) {
+      throw const BundleValidationException(
+        'Canonical evidence has an ambiguous introduction history.',
+      );
+    }
+    final hasParent = await _gitRevisionExists(repositoryRoot, '$commit^1');
+    final presentBefore =
+        hasParent &&
+        await _gitObjectExists(repositoryRoot, '$commit^1:$relative');
+    if (!presentBefore) return commit;
+  }
+
+  return null;
+}
+
+/// Runs a `git log`-style query whose answer may legitimately be empty.
+Future<List<String>> _gitLines(
+  String repositoryRoot,
+  List<String> arguments,
+) async {
+  final result = await Process.run('git', ['-C', repositoryRoot, ...arguments]);
+  if (result.exitCode != 0) {
+    throw BundleValidationException(
+      'git ${arguments.first} failed: ${'${result.stderr}'.trim()}.',
+    );
+  }
+
+  return const LineSplitter()
+      .convert('${result.stdout}'.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+}
+
+Future<bool> _gitObjectExists(String repositoryRoot, String object) async {
+  final result = await Process.run('git', [
+    '-C',
+    repositoryRoot,
+    'cat-file',
+    '-e',
+    object,
+  ]);
+
+  return result.exitCode == 0;
+}
+
+Future<bool> _gitRevisionExists(String repositoryRoot, String revision) async {
+  final result = await Process.run('git', [
+    '-C',
+    repositoryRoot,
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    revision,
+  ]);
+
+  return result.exitCode == 0;
 }
 
 Future<String> _repositoryRelativeFile(

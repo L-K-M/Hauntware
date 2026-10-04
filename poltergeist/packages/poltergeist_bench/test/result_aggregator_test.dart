@@ -24,10 +24,13 @@ const _hundredMbDigest =
 const _oneGbDigest =
     'bc17f06f9d9b5f6f79ca189a1772b1a3a38d6e40c45bec50f9c4f28144efddca';
 
-// Stand-ins for a pin the live constants have moved past: committed M0
-// evidence was measured on revisions later re-pins superseded.
+// Stand-ins for a source the live identity has moved past: committed M0
+// evidence was measured on revisions later superseded.
 const _supersededDartssh2 = '9.9.9';
-const _supersededSeance = 'ffffffffffffffffffffffffffffffffffffffff';
+const _supersededSeance = 'seance@ffffffffffffffffffffffffffffffffffffffff';
+
+/// The live Séance source identity the harness resolves in this worktree.
+final liveSeanceRevision = resolveLocalSeanceRevision();
 
 void main() {
   test('writes 78 canonical rows, raw sources, and sorted digests', () async {
@@ -41,7 +44,7 @@ void main() {
       expectedRunAttempt: _runAttempt,
       expectedGitSha: _sha,
       expectedDartssh2Version: resolvedDartssh2Version,
-      expectedSeanceRevision: pinnedSeanceRevision,
+      expectedSeanceRevision: liveSeanceRevision,
     );
 
     expect(bundle.results, hasLength(m0ScenarioCount));
@@ -335,8 +338,7 @@ void main() {
     addTearDown(fixture.delete);
     final sourceId = isolatedSourceSpecs.first.id;
     final source = await fixture.read(sourceId);
-    ((source['rows']! as List).first as Map)['seanceRev'] =
-        pinnedSeanceRevision;
+    ((source['rows']! as List).first as Map)['seanceRev'] = liveSeanceRevision;
     await fixture.write(sourceId, source);
 
     await expectLater(
@@ -355,17 +357,26 @@ void main() {
     final fixture = await _EvidenceFixture.create();
     addTearDown(fixture.delete);
 
-    // A tag-like revision is exactly the typo the SHA guard exists to
-    // catch: the lock's resolved-ref is always a commit SHA, never a tag.
+    // A tag-like revision is exactly the typo the guard exists to catch:
+    // the source identity is `seance@<tree>` or a commit SHA, never a tag.
     await expectLater(
       fixture.aggregate(expectedSeanceRevision: 'v0.4.0'),
       throwsA(
         isA<ResultAggregationException>().having(
           (error) => error.message,
           'message',
-          contains('Invalid expected Seance revision pin'),
+          contains('Invalid expected Seance source identity'),
         ),
       ),
+    );
+    // A foreign source descriptor that is not the local seance/ tree is
+    // rejected even though its digest portion is well-formed.
+    await expectLater(
+      fixture.aggregate(
+        expectedSeanceRevision:
+            'upstream@0000000000000000000000000000000000000000',
+      ),
+      throwsA(isA<ResultAggregationException>()),
     );
     for (final version in [' ', ' 3.0.2 ']) {
       await expectLater(
@@ -426,8 +437,9 @@ class _EvidenceFixture {
 
   static Future<_EvidenceFixture> create({
     String dartssh2Version = resolvedDartssh2Version,
-    String seanceRevision = pinnedSeanceRevision,
+    String? seanceRevision,
   }) async {
+    seanceRevision ??= liveSeanceRevision;
     final root = await Directory.systemTemp.createTemp('m0-aggregate-');
     final fixture = _EvidenceFixture(
       root,
@@ -468,7 +480,7 @@ class _EvidenceFixture {
 
   Future<CanonicalEvidenceBundle> aggregate({
     String expectedDartssh2Version = resolvedDartssh2Version,
-    String expectedSeanceRevision = pinnedSeanceRevision,
+    String? expectedSeanceRevision,
   }) => aggregateEvidenceDirectory(
     inputRoot: input.path,
     outputDirectory: output.path,
@@ -476,7 +488,7 @@ class _EvidenceFixture {
     expectedRunAttempt: _runAttempt,
     expectedGitSha: _sha,
     expectedDartssh2Version: expectedDartssh2Version,
-    expectedSeanceRevision: expectedSeanceRevision,
+    expectedSeanceRevision: expectedSeanceRevision ?? liveSeanceRevision,
   );
 
   Future<void> delete() => root.delete(recursive: true);
@@ -485,8 +497,9 @@ class _EvidenceFixture {
 Map<String, Object?> _sourceEnvelope(
   M0SourceSpec source, {
   String dartssh2Version = resolvedDartssh2Version,
-  String seanceRevision = pinnedSeanceRevision,
+  String? seanceRevision,
 }) {
+  seanceRevision ??= liveSeanceRevision;
   final attempts = <Map<String, Object?>>[];
   final primes = <String, Map<String, Object?>>{};
   final rows = <Map<String, Object?>>[];
@@ -635,8 +648,9 @@ Map<String, Object?> _row(
   String sourceId, {
   List<Map<String, Object?>>? bundles,
   String dartssh2Version = resolvedDartssh2Version,
-  String seanceRevision = pinnedSeanceRevision,
+  String? seanceRevision,
 }) {
+  seanceRevision ??= liveSeanceRevision;
   final elapsed = bundles == null
       ? (scenario.startsWith('algorithm-client-support-') ? 0 : 10)
       : bundles.length == 1

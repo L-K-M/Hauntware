@@ -1,0 +1,1255 @@
+name: CI
+
+# Coordinated CI for the Hauntware monorepo: every gate the three
+# module workflows enforced, run over the subtrees planchette/,
+# seance/ and poltergeist/. Each subtree keeps its own pub workspace
+# (root pubspecs are untouched), so dependency resolution stays
+# per-subtree — pure-Dart workspaces resolve with `dart pub get`,
+# Flutter packages and apps with `flutter pub get`, never mixed.
+# scripts/test.sh mirrors the test steps below for local runs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      skip_m0:
+        description: Skip the historical M0 SSH measurements
+        type: boolean
+        required: false
+        default: false
+
+# Least privilege: the jobs only need to read the repo. Jobs that
+# diff a PR against its base (the paths-filter detectors) widen to
+# pull-requests: read individually.
+permissions:
+  contents: read
+
+env:
+  # Keep in step with every module's app pubspec constraint and the
+  # release workflow.
+  FLUTTER_VERSION: '3.47.2'
+
+# Cancel an in-progress run when a *PR branch* is pushed again — but never cancel an
+# in-progress run on main, or that commit is left with a permanently "cancelled"
+# status (masking breakage and putting holes in CI-status bisection). GitHub can
+# still supersede a *queued* main run with a newer queued one — only the running
+# run is protected.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Workflow/tool contract checks: actionlint over the root workflows,
+  # then the repository's own structural gates (job timeouts, pinned
+  # actions, release-manifest coverage, script syntax, GLM canonical
+  # identity). Guarding the guards — a workflow that drops a timeout
+  # or an asset glob must not merge green.
+  contracts:
+    name: Workflow and tool contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The history gate walks every preserved source graph; a
+          # shallow checkout cannot reach the M0-era objects.
+          fetch-depth: 0
+      - uses: rhysd/actionlint@v1.7.9
+      - name: Check workflow contracts
+        run: scripts/check-workflows.sh
+      # Frozen provenance: all imported source refs must be ancestors
+      # of HEAD and the historical annotated-tag bytes must hash back
+      # exactly (docs/history/source-refs.json is the contract).
+      - name: Verify preserved history
+        run: python3 scripts/check-history.py
+
+  # ---- Suite tooling ----------------------------------------------------
+  # The root release_version tool is the suite's version contract: the
+  # root `hauntware` manifest is the single versioned artifact and every
+  # owned package/app pubspec, README version marker and Apple bundle
+  # declaration must track it. `check` proves the tree is in lockstep;
+  # the tool's own tests prove the contract itself.
+  suite_tool:
+    name: Suite release tool
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve root tooling
+        run: dart pub get
+      - name: Verify suite version lockstep
+        run: |
+          dart run tool/release_version/bin/release_version.dart check
+      - name: Test suite release tool
+        run: dart test tool/release_version/test
+
+  # ---- Planchette -------------------------------------------------------
+  planchette_core:
+    name: Planchette core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        working-directory: planchette/packages/planchette_core
+        run: dart pub get
+      - name: Analyze
+        working-directory: planchette/packages/planchette_core
+        run: dart analyze
+      - name: Test
+        working-directory: planchette/packages/planchette_core
+        run: dart test
+
+  # ---- Séance -----------------------------------------------------------
+  seance_dart:
+    name: Séance pure-Dart packages (analyze + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: seance
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      # The SQLite storage test loads libsqlite3 at runtime.
+      - name: Install libsqlite3
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-0
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Analyze
+        run: >-
+          dart analyze
+          packages/seance_protocol
+          packages/seance_core
+          packages/seance_sync_server
+      - name: Test
+        run: >-
+          dart test
+          packages/seance_protocol
+          packages/seance_core
+          packages/seance_sync_server
+
+  # ---- Poltergeist ------------------------------------------------------
+  poltergeist_dart:
+    name: Poltergeist pure-Dart packages (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: poltergeist
+        # Git Bash on Windows; never interpret the package loops as PowerShell.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        run: dart pub get
+      # The harness resolves standalone (frozen pins outside the workspace
+      # lock), so its loop entries below need their own package config.
+      - name: Resolve M0 benchmark harness
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: dart pub get
+      # Discover packages, but keep every analyze/test path explicit.
+      - name: Analyze
+        run: |
+          set -euo pipefail
+          for package in packages/*; do
+            [[ -d "$package" ]] || continue
+            dart analyze "$package"
+          done
+      - name: Test
+        run: |
+          set -euo pipefail
+          dirs=()
+          for package in packages/*; do
+            [[ -d "$package/test" ]] || continue
+            # The harness suite is Linux-bound (monotonic evidence reads
+            # /proc/uptime), so dart_tools (Ubuntu) owns its tests; this
+            # multi-OS loop runs the host-neutral package suites.
+            if [[ "$package" == 'packages/poltergeist_bench' ]]; then
+              continue
+            fi
+            dirs+=("$package")
+          done
+          if [[ ${#dirs[@]} -eq 0 ]]; then
+            echo "no package has a test/ directory yet"; exit 1
+          fi
+          dart test --reporter expanded "${dirs[@]}"
+
+  # These guards use POSIX tools, Docker, or GNU timeout, not native contracts.
+  dart_tools:
+    name: Poltergeist Dart tooling (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: poltergeist
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Resolve M0 benchmark harness
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: dart pub get
+      - name: Resolve legacy bench entrypoint
+        working-directory: poltergeist/tool/bench
+        run: dart pub get
+      - name: Analyze dependency guard
+        run: dart analyze tool/import_guard
+      - name: Test dependency guard
+        run: dart test tool/import_guard/test
+      # Contract: the script must exit non-zero on any 03 §1 violation —
+      # including scan errors and a missing scan root — so this gate fails
+      # closed.
+      - name: Check dependency boundaries (03 §1)
+        run: bash scripts/check-imports.sh
+      - name: Analyze engine protocol guard
+        run: dart analyze tool/protocol_guard
+      - name: Test engine protocol guard
+        run: dart test tool/protocol_guard/test
+      - name: Check engine protocol boundaries (08 §3.3)
+        run: dart run tool/protocol_guard/bin/check.dart .
+      - name: Analyze release gate
+        run: dart analyze tool/license_gate
+      - name: Analyze release version tool
+        run: dart analyze tool/release_version
+      - name: Analyze Séance pin audit
+        run: dart analyze tool/seance_pin_audit
+      - name: Analyze M0 benchmark harness
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: dart analyze
+      - name: Analyze benchmark contract tests
+        run: dart analyze test/benchmarks
+      - name: Analyze integration fixture tools
+        run: dart analyze test/integration
+      - name: Test release gate
+        run: dart test tool/license_gate/test
+      - name: Test release version tool
+        run: dart test tool/release_version/test
+      - name: Verify release versions
+        run: dart run tool/release_version/bin/release_version.dart check
+      - name: Test Séance pin audit
+        run: dart test tool/seance_pin_audit/test
+      - name: Test M0 benchmark harness
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: dart test test
+      - name: Validate committed M0 evidence
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: >-
+          dart run benchmark/validate_bundle.dart
+          --bundle ../../docs/evidence/m0
+          --report ../../docs/M0-DARTSSH2-REPORT.md
+          --repo ../..
+      - name: Test benchmark contract tests
+        run: dart test test/benchmarks
+      - name: Test integration fixture tools
+        run: dart test test/integration
+      - name: Validate rendered integration fixture
+        run: |
+          test/integration/test-fixture-safety.sh
+          source test/integration/lib/fixture.sh
+          check_rendered_config
+      # D30 allows pre-license pins in development, so PR CI checks the
+      # fail-closed release wiring without requiring the upstream license yet.
+      - name: Guard Séance release gate
+        run: dart run tool/license_gate/bin/check.dart --marker-only
+
+  seance_pin_audit:
+    name: Séance pin audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        if: github.event_name != 'workflow_dispatch'
+        id: changes
+        with:
+          filters: |
+            pin:
+              - 'poltergeist/pubspec.yaml'
+              - 'poltergeist/pubspec.lock'
+              - 'poltergeist/**/pubspec.yaml'
+              - 'poltergeist/**/pubspec.lock'
+              - 'poltergeist/docs/PORTS.md'
+              - 'poltergeist/scripts/audit-seance-pin.sh'
+              - 'poltergeist/tool/seance_pin_audit/**'
+              - '.github/workflows/ci.yml'
+      - uses: dart-lang/setup-dart@v1
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          steps.changes.outputs.pin == 'true'
+        with:
+          sdk: stable
+      - name: Resolve audit dependencies
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          steps.changes.outputs.pin == 'true'
+        working-directory: poltergeist
+        run: dart pub get
+      # The script audits the recorded Séance pin — the git ref the
+      # dependency was reviewed at. With a path dependency it fails
+      # closed until main reconciles the audit's subject, which is the
+      # intended behavior for the transition.
+      - name: Verify recorded Séance pin audit
+        if: >-
+          github.event_name == 'workflow_dispatch' ||
+          steps.changes.outputs.pin == 'true'
+        working-directory: poltergeist
+        run: scripts/audit-seance-pin.sh
+
+  detect_integration:
+    name: Detect SSH integration changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.fixture.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        if: github.event_name == 'pull_request'
+        id: changes
+        with:
+          filters: |
+            integration:
+              - 'poltergeist/pubspec.yaml'
+              - 'poltergeist/pubspec.lock'
+              - 'poltergeist/packages/**/lib/**'
+              - 'poltergeist/packages/**/test/**'
+              - 'poltergeist/packages/**/pubspec.yaml'
+              - 'poltergeist/test/integration/**'
+              - '.github/workflows/ci.yml'
+            fixture:
+              - 'poltergeist/test/integration/**'
+              - '.github/workflows/ci.yml'
+      - name: Require fixture when its lifecycle changes
+        id: fixture
+        if: >-
+          github.event_name != 'pull_request' ||
+          steps.changes.outputs.integration == 'true'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FIXTURE_CHANGED: ${{ steps.changes.outputs.fixture }}
+        run: |
+          readonly fixture_path='poltergeist/test/integration/docker-compose.yml'
+          if [[ -f "$fixture_path" ]]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Source-only PRs may precede the fixture; deletion must fail closed.
+          if [[ "$EVENT_NAME" != 'pull_request' || "$FIXTURE_CHANGED" == 'true' ]]; then
+            echo "::error::Missing integration fixture: $fixture_path"
+            exit 1
+          fi
+
+          echo 'run=false' >> "$GITHUB_OUTPUT"
+
+  integration:
+    name: SSH integration tests
+    needs: detect_integration
+    if: needs.detect_integration.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        working-directory: poltergeist
+        run: dart pub get
+      # run.sh owns readiness, serialized tests, and teardown on every exit.
+      - name: Run SSH integration fixture
+        working-directory: poltergeist
+        run: test/integration/run.sh
+
+  # The convergence criterion runs the sync server in Docker. The
+  # server builds from wherever pub resolved seance_core — a pub-cache
+  # git checkout under a pin, or the sibling subtree under a path
+  # dependency — so the protocol pair cannot skew.
+  sync_integration:
+    name: Sync-server integration tests
+    needs: detect_integration
+    if: needs.detect_integration.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve workspace
+        working-directory: poltergeist
+        run: dart pub get
+      - name: Build and start the resolved seance_sync_server in Docker
+        working-directory: poltergeist
+        run: |
+          set -euo pipefail
+          # The resolved Séance checkout, wherever pub put it — read from the
+          # resolved package config rather than guessing a cache path.
+          src="$(python3 - <<'PY'
+          import json, sys
+          pc = json.load(open(".dart_tool/package_config.json"))
+          match = next((p for p in pc["packages"] if p["name"] == "seance_core"), None)
+          if match is None:
+              sys.exit("seance_core not found in .dart_tool/package_config.json; did dart pub get resolve the dependency?")
+          print(match["rootUri"].removeprefix("file://").removesuffix("/packages/seance_core"))
+          PY
+          )"
+          docker build \
+            -f "$src/packages/seance_sync_server/Dockerfile" \
+            -t seance-sync-test "$src"
+          # SEANCE_DB_PATH emptied: in-memory storage — the fixture is
+          # ephemeral and the slim image needs no sqlite volume.
+          docker run -d --name seance-sync \
+            -e SEANCE_OPEN_REGISTRATION=1 \
+            -e SEANCE_BIND=0.0.0.0 \
+            -e SEANCE_PORT=8787 \
+            -e SEANCE_DB_PATH= \
+            -p 127.0.0.1:8799:8787 \
+            seance-sync-test
+          ready=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8799/healthz >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            exit 1
+          fi
+      - name: Run sync-server integration tests
+        working-directory: poltergeist
+        env:
+          POLTERGEIST_SYNC_SERVER: http://127.0.0.1:8799
+        run: dart test --concurrency=1 -t integration packages/poltergeist_core
+      - name: Dump fixture logs
+        if: ${{ !success() }}
+        run: docker logs seance-sync || true
+      - name: Stop the fixture
+        if: always()
+        run: docker rm -f seance-sync || true
+
+  detect_bench:
+    name: Detect bench-relevant changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.fixture.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        if: github.event_name == 'pull_request'
+        id: changes
+        with:
+          filters: |
+            bench:
+              - 'poltergeist/pubspec.yaml'
+              - 'poltergeist/pubspec.lock'
+              - 'poltergeist/packages/**/lib/**'
+              - 'poltergeist/packages/**/test/**'
+              - 'poltergeist/packages/**/benchmark/**'
+              - 'poltergeist/packages/**/pubspec.yaml'
+              - 'poltergeist/test/benchmarks/**'
+              - 'poltergeist/test/integration/**'
+              - 'poltergeist/scripts/bench-tier-a.sh'
+              - 'poltergeist/scripts/bench-tier-b.sh'
+              - 'poltergeist/scripts/merge_bench_results.dart'
+              - 'poltergeist/app/poltergeist_app/pubspec.yaml'
+              - 'poltergeist/app/poltergeist_app/lib/bench/**'
+              - 'poltergeist/app/poltergeist_app/integration_test/**'
+              - 'poltergeist/app/poltergeist_app/test_driver/**'
+              - '.github/workflows/ci.yml'
+      # A matching PR, a main push, or a dispatch always runs the job;
+      # an absent fixture fails those runs loudly instead of silently
+      # disabling the benchmark. The step only executes for a
+      # bench-relevant reason, so a missing fixture is always an error
+      # here — never a silent skip.
+      - name: Require fixture when its lifecycle changes
+        id: fixture
+        if: >-
+          github.event_name != 'pull_request' ||
+          steps.changes.outputs.bench == 'true'
+        run: |
+          readonly fixture_path='poltergeist/test/integration/docker-compose.yml'
+          if [[ ! -f "$fixture_path" ]]; then
+            echo "::error::Missing integration fixture: $fixture_path"
+            exit 1
+          fi
+
+          echo 'run=true' >> "$GITHUB_OUTPUT"
+
+  # D12 benchmarks (08 §5/§6): the tier-A collectors compile AOT and run
+  # against the §5 sshd fixture on loopback; the tier-B suites drive the
+  # real app in profile mode under Xvfb (`flutter drive --profile`) and
+  # capture raster timing through SchedulerBinding.addTimingsCallback.
+  # Both legs merge their per-scenario documents into one
+  # bench-results.json that check.dart grades. The tier-A scenarios are
+  # landed and calibrated against the CI fingerprint, and the evaluate
+  # step forwards the BENCH_ENFORCE_A repo variable to the checker, so
+  # tier-A budget overruns gate once that variable is set (tier-A drift
+  # skips stay exit-zero in every mode per 08 §6). M9 landed the tier-B
+  # trend gate: P1/P2/P4 are landed in budgets.json and the evaluate
+  # step forwards BENCH_ENFORCE_B, so a >25% regression against the
+  # committed tier-B baseline reddens main/dispatch runs once the
+  # variable is set; P6 stays unlanded (its suite only ever produced
+  # insufficient-frame error rows, so there is no honest median to
+  # trend against — the checker reports its rows but never judges them).
+  # The evaluate step also wires the 08 §6 drift-state store (restored
+  # from actions/cache before grading, saved on main-branch runs after
+  # it) and the one automatic tier-B rerun before red.
+  # Calibration changes ride the dedicated baseline-refresh procedure
+  # (08 §6), and PR runs never touch drift state — which is also why the
+  # tier-B leg runs only on main pushes and manual dispatch, never on
+  # PRs, and why the evaluate step scopes --tiers to what the event
+  # actually ran.
+  bench:
+    name: D12 benchmarks
+    needs: detect_bench
+    if: needs.detect_bench.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          # Match budgets.json's calibration; update through recalibration.
+          sdk: '3.13.4'
+      - name: Resolve workspace
+        working-directory: poltergeist
+        run: dart pub get
+      # runnerImage is a controlled fingerprint axis: record the runner
+      # image so a rotation surfaces as a loud drift notice, not a silent
+      # cross-image comparison.
+      - name: Run tier-A collectors against the sshd fixture
+        working-directory: poltergeist
+        run: |
+          export POLTERGEIST_BENCH_RUNNER_IMAGE="ubuntu-latest@${ImageVersion:-unreported}"
+          test/integration/run.sh --lifecycle-only -- scripts/bench-tier-a.sh
+      # Tier-B: profile-mode UI benchmarks under Xvfb (main/dispatch only
+      # — PR invocations must not write drift state, and frame-timing
+      # noise on shared runners must not gate PRs). !cancelled() so a
+      # failed tier-A leg does not silently drop
+      # the tier-B evidence a main run is expected to produce, while a
+      # cancelled run skips the leg instead of running it anyway.
+      - name: Install Flutter toolchain
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # GTK toolchain for the embedder build; xvfb plus the Mesa stack for
+      # a headless display with real GLES (llvmpipe via
+      # LIBGL_ALWAYS_SOFTWARE) so Impeller produces genuine raster timings.
+      - name: Install Linux desktop + headless display toolchain
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev
+          xvfb libegl1 libgles2 libgl1-mesa-dri
+      - name: Resolve app dependencies
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter pub get
+      - name: Run tier-B collectors under Xvfb
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        working-directory: poltergeist
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          export POLTERGEIST_BENCH_RUNNER_IMAGE="ubuntu-latest@${ImageVersion:-unreported}"
+          scripts/bench-tier-b.sh
+      # Drift state (08 §6) rides an actions/cache entry: the restore
+      # resolves the newest `d12-drift-state-*` save via restore-keys (a
+      # cache is visible to the branch that wrote it and the default
+      # branch, so PRs read main's streaks but the save step below only
+      # ever runs on main). A missing entry means unknown history — the
+      # checker counts conservatively at the escalation threshold.
+      - name: Restore drift state
+        if: always()
+        uses: actions/cache/restore@v6
+        with:
+          path: poltergeist/bench-drift-state.json
+          key: d12-drift-state-${{ github.run_id }}
+          restore-keys: |
+            d12-drift-state-
+      # if: always() so partial results flushed by a failed run are still
+      # graded; a missing results file is a check.dart I/O failure, which
+      # keeps a fixture-start failure red instead of skipping silently.
+      # --tiers mirrors what the event ran: `a` on PRs (tier B never ran),
+      # `ab` on main pushes and dispatch. The first evaluation is
+      # read-only so a failed run's automatic tier-B rerun cannot
+      # double-count one run's drift; the trailing pass on main regrades
+      # identical inputs with --update-drift-state and is the verdict
+      # (its exit equals the read-only one it re-runs).
+      - name: Evaluate results
+        if: always()
+        working-directory: poltergeist
+        env:
+          # Repo Actions variables; unset/empty reads as unenforced, and a
+          # non-boolean value fails closed in the checker (usage exit).
+          BENCH_ENFORCE_A: ${{ vars.BENCH_ENFORCE_A }}
+          BENCH_ENFORCE_B: ${{ vars.BENCH_ENFORCE_B }}
+          DRIFT_STATE: bench-drift-state.json
+        # `bash` on Actions is -eo pipefail: the tees below capture the
+        # report for the annotation step without swallowing the checker's
+        # exit code. `set +e` keeps -o pipefail but drops -e — a failed
+        # evaluation must fall through to the rerun and drift-update
+        # passes rather than abort the script mid-step.
+        shell: bash
+        run: |
+          set +e
+          tiers=ab
+          if [ "${{ github.event_name }}" = 'pull_request' ]; then
+            tiers=a
+          fi
+          evaluate() {
+            dart run test/benchmarks/check.dart \
+              --results bench-results.json \
+              --tiers "$tiers" \
+              --drift-state "$DRIFT_STATE" \
+              "$@"
+          }
+          evaluate 2>&1 | tee evaluate.log
+          rc=${PIPESTATUS[0]}
+          # 08 §6: one automatic tier-B rerun before red. The collector
+          # script clears every bench-results-*.json on entry, so the
+          # tier-A documents are held aside and re-merged afterwards;
+          # the rerun replaces tier-B rows wholesale (noise is what the
+          # retry exists to flush out).
+          if [ "$rc" -ne 0 ] && [ "$tiers" = ab ] && [ -f bench-results.json ]; then
+            echo "::warning::evaluation failed — re-running tier-B collectors once before red (08 §6)"
+            export LIBGL_ALWAYS_SOFTWARE=1
+            export POLTERGEIST_BENCH_RUNNER_IMAGE="ubuntu-latest@${ImageVersion:-unreported}"
+            for s in p3 p5 p7; do
+              [ -f "bench-results-$s.json" ] && mv "bench-results-$s.json" ".bench-results-$s.json.saved"
+            done
+            scripts/bench-tier-b.sh || true
+            inputs=()
+            for s in p1 p2 p4 p6 p3 p5 p7; do
+              if [ -f ".bench-results-$s.json.saved" ]; then
+                mv ".bench-results-$s.json.saved" "bench-results-$s.json"
+              fi
+              [ -f "bench-results-$s.json" ] && inputs+=("bench-results-$s.json")
+            done
+            if [ "${#inputs[@]}" -gt 0 ]; then
+              dart run scripts/merge_bench_results.dart \
+                --output bench-results.json "${inputs[@]}"
+            fi
+            evaluate 2>&1 | tee -a evaluate.log
+            rc=${PIPESTATUS[0]}
+          fi
+          # Main-branch runs record the outcome (08 §6): push to main or
+          # dispatch on main only — PR runs and dispatch on a side branch
+          # never write drift state.
+          if [ "${{ github.ref }}" = 'refs/heads/main' ]; then
+            evaluate --update-drift-state 2>&1 | tee -a evaluate.log
+            rc=${PIPESTATUS[0]}
+          fi
+          exit "$rc"
+      - name: Save drift state
+        if: >-
+          always() && github.ref == 'refs/heads/main' &&
+          hashFiles('poltergeist/bench-drift-state.json') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: poltergeist/bench-drift-state.json
+          key: d12-drift-state-${{ github.run_id }}
+      # A landed tier-A row that drift-skips is a green job with an inert
+      # gate — the only signal would otherwise be text in the log. Surface
+      # it as an annotation so a fingerprint rotation is visible without
+      # changing 08 §6's exit-zero drift policy.
+      - name: Annotate inert tier-A enforcement
+        if: always()
+        env:
+          BENCH_ENFORCE_A: ${{ vars.BENCH_ENFORCE_A }}
+        # ${var,,} is a Bash >= 4 expansion — pin the shell rather than
+        # relying on the runner's implicit default.
+        shell: bash
+        run: |
+          # -n would warn even when the variable is deliberately falsy;
+          # match the checker's truthy set (1/true, case-insensitive).
+          if { [ "${BENCH_ENFORCE_A,,}" = "true" ] || [ "$BENCH_ENFORCE_A" = "1" ]; } && [ -f poltergeist/evaluate.log ] && grep -qE '^P[0-9]+[[:space:]]+a[[:space:]].*skipped: hardware drift' poltergeist/evaluate.log; then
+            echo "::warning::BENCH_ENFORCE_A is set but tier-A rows drift-skipped — enforcement is inert until budgets.json is recalibrated on the rotated fingerprint (08 §6)"
+          fi
+      - name: Upload bench results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-results
+          path: |
+            poltergeist/bench-results.json
+            poltergeist/bench-results-*.json
+            poltergeist/bench-drift-state.json
+            poltergeist/evaluate.log
+          if-no-files-found: error
+          retention-days: 30
+
+  # M0 measurements are expensive and historical, not a standing PR budget.
+  # Dispatch a branch commit so the durable evidence keeps an ancestor SHA.
+  m0_bench:
+    name: M0 SSH fitness measurements (${{ matrix.shard }})
+    needs: [poltergeist_dart, dart_tools, seance_pin_audit]
+    if: github.event_name == 'workflow_dispatch' && !inputs.skip_m0
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - standard
+          - rtt100-1gb-download-dart-hash-on-r1
+          - rtt100-1gb-download-dart-hash-on-r2
+          - rtt100-1gb-download-dart-hash-off-r1
+          - rtt100-1gb-download-dart-hash-off-r2
+          - rtt100-1gb-download-openssh-r1
+          - rtt100-1gb-download-openssh-r2
+          - rtt100-1gb-upload-dart-hash-on-r1
+          - rtt100-1gb-upload-dart-hash-on-r2
+          - rtt100-1gb-upload-dart-hash-off-r1
+          - rtt100-1gb-upload-dart-hash-off-r2
+          - rtt100-1gb-upload-openssh-r1
+          - rtt100-1gb-upload-openssh-r2
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve benchmark harness
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: dart pub get
+      - name: Start M0 source evidence
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: |
+          readonly microseconds_per_second=1000000
+          read -r monotonic_seconds _ < /proc/uptime
+          monotonic_whole="${monotonic_seconds%%.*}"
+          monotonic_fraction="${monotonic_seconds#*.}000000"
+          monotonic_fraction="${monotonic_fraction:0:6}"
+          POLTERGEIST_M0_STARTED_AT_EPOCH_MS="$(date +%s%3N)"
+          POLTERGEIST_M0_STARTED_AT_MONOTONIC_US="$((
+            10#$monotonic_whole * microseconds_per_second +
+            10#$monotonic_fraction
+          ))"
+          export POLTERGEIST_M0_STARTED_AT_EPOCH_MS
+          export POLTERGEIST_M0_STARTED_AT_MONOTONIC_US
+          printf '%s\n%s\n' \
+            "POLTERGEIST_M0_STARTED_AT_EPOCH_MS=$POLTERGEIST_M0_STARTED_AT_EPOCH_MS" \
+            "POLTERGEIST_M0_STARTED_AT_MONOTONIC_US=$POLTERGEIST_M0_STARTED_AT_MONOTONIC_US" \
+            >> "$GITHUB_ENV"
+          dart run benchmark/package_source.dart start \
+            --output bench-shard.json \
+            --shard "${{ matrix.shard }}"
+      - name: Run fixture and measurements
+        id: measurements
+        timeout-minutes: 330
+        working-directory: poltergeist
+        run: packages/poltergeist_bench/run-ci-shard.sh "${{ matrix.shard }}"
+      # JSON evidence contains no Séance code or executable artifact (D30).
+      - uses: actions/upload-artifact@v7
+        id: upload_shard
+        if: always()
+        continue-on-error: true
+        with:
+          name: m0-bench-source-${{ matrix.shard }}
+          path: poltergeist/packages/poltergeist_bench/bench-shard.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+      - name: Retry shard evidence upload
+        if: always() && steps.upload_shard.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: m0-bench-source-${{ matrix.shard }}
+          path: poltergeist/packages/poltergeist_bench/bench-shard.json
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+
+  m0_bench_aggregate:
+    name: M0 SSH fitness evidence
+    needs: m0_bench
+    if: >-
+      always() &&
+      needs.m0_bench.result == 'success' &&
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve benchmark harness
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: dart pub get
+      - name: Download M0 source evidence
+        uses: actions/download-artifact@v8
+        with:
+          pattern: m0-bench-source-*
+          path: poltergeist/packages/poltergeist_bench/shards
+          merge-multiple: false
+      - name: Aggregate M0 measurements
+        working-directory: poltergeist/packages/poltergeist_bench
+        run: |
+          dart run benchmark/aggregate.dart \
+            --input-root shards \
+            --output-dir evidence \
+            --run-id "${{ github.run_id }}" \
+            --run-attempt "${{ github.run_attempt }}" \
+            --git-sha "${{ github.sha }}"
+      - name: Upload canonical M0 evidence
+        id: upload_evidence
+        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: m0-bench-results
+          path: poltergeist/packages/poltergeist_bench/evidence
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+      - name: Retry canonical M0 evidence upload
+        if: always() && steps.upload_evidence.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: m0-bench-results
+          path: poltergeist/packages/poltergeist_bench/evidence
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 14
+
+  # ---- Flutter suites ---------------------------------------------------
+  planchette_flutter:
+    name: Planchette editor and app (analyze + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # Formatting needs each package's language version resolved first —
+      # unresolved, the formatter guesses and reports phantom diffs.
+      - name: Resolve packages
+        run: |
+          (cd planchette/packages/planchette_core && dart pub get)
+          (cd planchette/packages/ghost_ui && flutter pub get)
+          (cd planchette/packages/planchette_editor && flutter pub get)
+          (cd planchette/packages/ghost_desktop && flutter pub get)
+          (cd planchette/app/planchette_app && flutter pub get)
+      - name: Shared UI primitives
+        working-directory: planchette/packages/ghost_ui
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Shared editor
+        working-directory: planchette/packages/planchette_editor
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Shared desktop window lifecycle
+        working-directory: planchette/packages/ghost_desktop
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+      - name: Standalone app
+        working-directory: planchette/app/planchette_app
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub
+      # After the tests, so a formatting slip never hides their results.
+      - name: Format
+        run: >-
+          dart format --set-exit-if-changed --output=none
+          planchette/packages/planchette_core planchette/packages/planchette_editor
+          planchette/packages/ghost_ui planchette/packages/ghost_desktop
+          planchette/app/planchette_app
+
+  seance_flutter:
+    name: Séance app (analyze + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # first run downloads the Flutter toolchain
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Resolve app dependencies
+        working-directory: seance/app/seance_app
+        run: flutter pub get
+      - name: Analyze
+        working-directory: seance/app/seance_app
+        run: flutter analyze
+      - name: Test
+        working-directory: seance/app/seance_app
+        run: flutter test
+      # App tests do not discover the vendored selection/IME/parser suite.
+      - name: Resolve terminal fork dependencies
+        working-directory: seance/third_party/xterm
+        run: flutter pub get
+      - name: Test terminal fork
+        working-directory: seance/third_party/xterm
+        run: flutter test
+
+  poltergeist_flutter:
+    name: Poltergeist app (analyze + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # first run downloads the Flutter toolchain
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Resolve app dependencies
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter pub get
+      - name: Analyze
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter analyze
+      - name: Test
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter test
+
+  # ---- Client build matrices (keep in step with release.yml) ------------
+  # Compile every client the release workflow ships — 3 Planchette
+  # desktop + 5 Séance + 5 Poltergeist targets — and run the Linux
+  # packaging steps and the native fixtures, so a platform- or
+  # packaging-breaking change is caught here, not when a tag tries to
+  # publish. Mirrors release.yml's client jobs minus publishing.
+
+  planchette_client:
+    name: Planchette client (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+          - os: macos-latest
+            target: macos
+          - os: windows-latest
+            target: windows
+    steps:
+      - uses: actions/checkout@v7
+      - name: Linux toolchain
+        if: matrix.target == 'linux'
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          dpkg-dev file binutils imagemagick
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Resolve app
+        working-directory: planchette/app/planchette_app
+        run: flutter pub get
+      - name: Build
+        working-directory: planchette/app/planchette_app
+        run: flutter build ${{ matrix.target }} --release
+      - name: Native-platform app regressions
+        if: matrix.target != 'linux'
+        working-directory: planchette/app/planchette_app
+        run: flutter test --no-pub
+      - name: Linux packages
+        if: matrix.target == 'linux'
+        working-directory: planchette
+        run: scripts/package-linux.sh --appimage=required
+      - name: Linux Flatpak bundle
+        if: matrix.target == 'linux'
+        working-directory: planchette
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+          # (flatpak's sandbox helper) builds in.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          scripts/build-flatpak.sh "$(find dist -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+      - name: Native keyboard modifiers
+        if: matrix.target == 'macos'
+        working-directory: planchette
+        run: scripts/test-macos-keyboard.sh
+      - name: Native Finder document delivery
+        if: matrix.target == 'macos'
+        working-directory: planchette
+        run: bash scripts/test-macos-documents.sh
+      - name: Native accessibility lifecycle
+        if: matrix.target == 'macos'
+        working-directory: planchette
+        run: scripts/test-macos-accessibility.sh
+
+  seance_client:
+    name: Séance client (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: android
+            build: apk --release
+          - os: ubuntu-latest
+            target: linux
+            build: linux --release
+            flavor: x64
+          # NOTE: no linux-arm64 entry, on purpose — Flutter does not publish
+          # linux-arm64 host artifacts (releases_linux.json is x64-only), so
+          # `flutter build linux` cannot run on the arm runners at all. Revisit
+          # when Flutter ships arm64 Linux host builds; until then arm64 Linux
+          # users have no native client.
+          - os: macos-latest
+            target: macos
+            build: macos --release
+          - os: macos-latest
+            target: ios
+            build: ios --release --no-codesign
+          - os: windows-latest
+            target: windows
+            build: windows --release
+    steps:
+      - uses: actions/checkout@v7
+      # Match the app's compileOptions (JavaVersion.VERSION_17) so the Gradle
+      # build is deterministic rather than tracking the runner's default JDK.
+      - uses: actions/setup-java@v6
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend. imagemagick/file: the
+      # packaging step resizes the launcher icon and appimagetool needs `file`.
+      - name: Install Linux desktop toolchain
+        if: startsWith(matrix.target, 'linux')
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # Same ad-hoc switch as the release build: the committed project signs
+      # Release with the owner's "Apple Development" identity, which no runner
+      # has — and CI must exercise the exact signing path the release uses.
+      - name: Switch macOS signing to ad-hoc (runner has no certificate)
+        if: matrix.target == 'macos'
+        run: |
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
+            seance/app/seance_app/macos/Runner.xcodeproj/project.pbxproj
+      - name: Resolve app dependencies
+        working-directory: seance/app/seance_app
+        run: flutter pub get
+      - name: Build
+        working-directory: seance/app/seance_app
+        run: flutter build ${{ matrix.build }}
+      # Exercise the compiled PTY, including child and descriptor cleanup.
+      # The vendored plugin must be built first — the flag makes a missing
+      # native library a failure, never a skip.
+      - name: Test native local-shell lifecycle
+        if: matrix.target == 'linux'
+        working-directory: seance/app/seance_app
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/seance/app/seance_app/build/linux/x64/release/bundle/lib
+          SEANCE_NATIVE_PTY_REQUIRED: '1'
+        run: flutter test --no-pub test/local_shell_native_test.dart
+      - name: Test native accessibility lifecycle
+        if: matrix.target == 'macos'
+        working-directory: seance
+        run: scripts/test-macos-accessibility.sh
+      - name: Test native keyboard modifiers
+        if: matrix.target == 'macos'
+        working-directory: seance
+        run: scripts/test-macos-keyboard.sh
+      # Exercise the same packaging the release workflow ships (keep the two
+      # in step) and expose the artifacts for inspection on every CI run.
+      - name: Package Linux artifacts (.deb + AppImage)
+        if: startsWith(matrix.target, 'linux')
+        working-directory: seance
+        run: scripts/package-linux.sh --output-dir dist-packages
+      # Repack the same .deb as a Flatpak bundle; rides the same upload.
+      - name: Flatpak bundle
+        if: startsWith(matrix.target, 'linux')
+        working-directory: seance
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+          # (flatpak's sandbox helper) builds in.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          deb="$(find dist-packages -maxdepth 1 -type f -name 'seance_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
+          [ -n "$deb" ] || { echo "::error::no seance_*.deb in dist-packages" >&2; exit 1; }
+          scripts/build-flatpak.sh "$deb"
+          mv dist/seance-linux-x64.flatpak dist-packages/
+      - name: Upload Linux packages
+        if: startsWith(matrix.target, 'linux')
+        uses: actions/upload-artifact@v7
+        with:
+          name: seance-linux-${{ matrix.flavor }}-packages
+          path: seance/dist-packages/*
+          if-no-files-found: error
+
+  poltergeist_client:
+    name: Poltergeist client (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45   # first run downloads the Flutter toolchain
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: android
+            build: apk --release
+          - os: ubuntu-latest
+            target: linux
+            build: linux --release
+            flavor: x64
+          # NOTE: no linux-arm64 entry, on purpose — Flutter does not publish
+          # linux-arm64 host artifacts (releases_linux.json is x64-only), so
+          # `flutter build linux` cannot run on the arm runners at all. Revisit
+          # when Flutter ships arm64 Linux host builds; until then arm64 Linux
+          # users have no native client.
+          - os: macos-latest
+            target: macos
+            build: macos --release
+          - os: macos-latest
+            target: ios
+            # Lockstep with release.yml's ios leg: `build ipa --no-codesign`
+            # stops at the unsigned .xcarchive, the asset release.yml zips.
+            build: ipa --release --no-codesign
+          - os: windows-latest
+            target: windows
+            build: windows --release
+    steps:
+      - uses: actions/checkout@v7
+      # Pin the JDK so the Gradle build is deterministic rather than tracking
+      # the runner's default; keep in step with the app's compileOptions.
+      - uses: actions/setup-java@v6
+        if: matrix.target == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      # GTK toolchain for the Flutter Linux embedder, plus libsecret/jsoncpp
+      # for flutter_secure_storage's keyring backend. imagemagick/file: the
+      # packaging step resizes the launcher icon and appimagetool needs `file`.
+      - name: Install Linux desktop toolchain
+        if: startsWith(matrix.target, 'linux')
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+          libsecret-1-dev libjsoncpp-dev imagemagick file
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      # If the committed project signs Release with a developer identity the
+      # runner doesn't have, switch to ad-hoc — CI must exercise the exact
+      # signing path the release uses. Harmless when the project already
+      # specifies ad-hoc signing (sed simply matches nothing).
+      - name: Switch macOS signing to ad-hoc (runner has no certificate)
+        if: matrix.target == 'macos'
+        run: |
+          sed -i '' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            -e 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/' \
+            poltergeist/app/poltergeist_app/macos/Runner.xcodeproj/project.pbxproj
+      - name: Resolve app dependencies
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter pub get
+      - name: Build
+        working-directory: poltergeist/app/poltergeist_app
+        run: flutter build ${{ matrix.build }}
+      - name: Verify native macOS keyboard compatibility
+        if: matrix.target == 'macos'
+        working-directory: poltergeist
+        run: bash scripts/test-macos-keyboard.sh
+      # Prove Gradle consumed the synchronized pubspec code in the real APK.
+      - name: Verify Android version code
+        if: matrix.target == 'android'
+        working-directory: poltergeist/app/poltergeist_app
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/poltergeist/scripts/verify-android-version.sh"
+      # Exercise the same packaging the release workflow ships. Do not upload
+      # binaries from ordinary CI: a build may embed code whose grants to
+      # recipients are not yet audited for distribution.
+      - name: Package Linux artifacts (.deb + AppImage)
+        if: startsWith(matrix.target, 'linux')
+        working-directory: poltergeist
+        run: scripts/package-linux.sh --output-dir dist-packages
+      # Repack the same .deb as a Flatpak bundle; no upload — ordinary CI
+      # does not publish binaries (see the comment above).
+      - name: Flatpak bundle (build check only)
+        if: startsWith(matrix.target, 'linux')
+        working-directory: poltergeist
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+          # (flatpak's sandbox helper) builds in.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          scripts/build-flatpak.sh "$(find dist-packages -maxdepth 1 -type f -name 'poltergeist_*.deb' -print -quit)"
+
+  # ---- Séance sync server image -----------------------------------------
+  docker:
+    name: Sync server Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      # Build context is the seance subtree root so its pub workspace
+      # resolves (same contract as the Dockerfile header).
+      - name: Build image
+        run: docker build -f seance/packages/seance_sync_server/Dockerfile -t seance-sync:ci seance/

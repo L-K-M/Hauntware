@@ -14,6 +14,8 @@
 /// `package:seance_core/...` import.
 library;
 
+import 'src/update/update_check.dart' show poltergeistUpdateRepo;
+
 export 'src/archive/local_archive_service.dart'
     show
         LocalArchiveErrorKind,
@@ -593,4 +595,4 @@ const String productName = 'Poltergeist';
 const String productTagline = 'The ghost that moves your files.';
 
 /// Home of the source repository, referenced by packaging metadata.
-const String productHomepage = 'https://github.com/L-K-M/Poltergeist';
+const String productHomepage = 'https://github.com/$poltergeistUpdateRepo';

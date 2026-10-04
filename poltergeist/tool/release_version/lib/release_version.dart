@@ -122,7 +122,9 @@ final class ReleaseVersion {
   String get appVersion => '$semantic+$androidVersionCode';
 
   // Offset zero-major releases because Apple's first component is positive.
-  String get _appleBundleVersion => '${_major + 1}.$_minor.$_patch';
+  // Public so the Hauntware suite tool can apply the same formula at
+  // monorepo scope instead of inventing a second mapping.
+  String get appleBundleVersion => '${_major + 1}.$_minor.$_patch';
 }
 
 final class ReleaseVersionFormatException implements Exception {
@@ -259,7 +261,7 @@ final class ReleaseVersionWorkspace {
     final file = _resolveInsideRoot(path);
     final original = _readRequiredFile(file, 'Apple Info.plist $path');
     final match = _appleBundleVersionMatch(original, path);
-    final expected = version._appleBundleVersion;
+    final expected = version.appleBundleVersion;
     final rewritten = original.replaceRange(
       match.start,
       match.end,
@@ -642,11 +644,11 @@ final class ReleaseVersionWorkspace {
       final file = _resolveInsideRoot(path);
       final contents = _readRequiredFile(file, 'Apple Info.plist $path');
       final actual = _appleBundleVersionMatch(contents, path)[2];
-      if (actual == expected._appleBundleVersion) continue;
+      if (actual == expected.appleBundleVersion) continue;
 
       throw ReleaseVersionStateException(
         'Apple bundle version in $path is "$actual"; expected '
-        '"${expected._appleBundleVersion}"',
+        '"${expected.appleBundleVersion}"',
       );
     }
   }

@@ -12,19 +12,16 @@ const _strandedEmail = 'stranded@example.test';
 const _unknownEmail = 'unknown@example.test';
 const _unrelatedEmail = 'unrelated@example.test';
 const _replacementEmail = 'replacement@example.test';
-const _bmpSortName = '\uE000';
-const _nonBmpSortName = '\u{10000}';
-
-enum _CheckoutSource { fixture, arguments }
-
-enum _TagState { valid, missing, moved }
+const _bmpSortName = '';
+const _nonBmpSortName = '𐀀';
+const _component = 'seance';
 
 void main() {
   late Directory sandbox;
   late _Fixture fixture;
 
   setUp(() async {
-    sandbox = await Directory.systemTemp.createTemp('seance-pin-audit-test-');
+    sandbox = await Directory.systemTemp.createTemp('seance-audit-test-');
     fixture = await _Fixture.create(sandbox.path);
   });
 
@@ -47,6 +44,7 @@ void main() {
       expect(output, contains('docs/café.txt'));
       expect(output, contains('NOTICE.md'));
       expect(output, contains('packages/seance_core/lib/core.dart'));
+      expect(output, contains(fixture.componentTree));
       expect(
         output.indexOf(_bmpSortName),
         lessThan(output.indexOf(_nonBmpSortName)),
@@ -73,6 +71,16 @@ void main() {
     expect(output, contains('$_authorEmail\t${fixture.authorCommit}'));
     expect(output, contains('$_committerEmail\t${fixture.committerCommit}'));
     expect(output, contains('$_trailerEmail\t${fixture.trailerCommit}'));
+  });
+
+  test('records the imported lineage tip in the record', () async {
+    final record = await _audit(fixture, ['--print-record']);
+
+    expect(record.exitCode, 0, reason: record.stderr as String);
+    final output = record.stdout as String;
+    expect(output, contains('Lineage: `${fixture.standaloneTip}`'));
+    expect(output, contains('Component: `seance/` tree'));
+    expect(output, contains('(path dependency)'));
   });
 
   test('fails when any recorded audit section changes', () async {
@@ -111,36 +119,103 @@ void main() {
     }
   });
 
-  test('rejects shallow checkouts and manifest-lock drift', () async {
+  test('rejects a shallow worktree', () async {
     final shallow = Directory(p.join(sandbox.path, 'shallow'));
     await _run('git', [
       'clone',
       '--depth=1',
-      fixture.repository.uri.toString(),
+      fixture.worktree.uri.toString(),
       shallow.path,
     ]);
 
-    final shallowResult = await _audit(fixture, [
-      '--checkout',
-      shallow.path,
+    final result = await _audit(fixture, [
+      '--root',
+      p.join(shallow.path, 'poltergeist'),
       '--print-record',
-    ], _CheckoutSource.arguments);
-    expect(shallowResult.exitCode, isNot(0));
-    expect(shallowResult.stderr, contains('non-shallow'));
+    ]);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('non-shallow'));
+  });
 
+  test('fails when manifest and lock Séance paths differ', () async {
     final manifest = File(
       p.join(fixture.root.path, 'tool', 'bench', 'pubspec.yaml'),
     );
     await manifest.writeAsString(
       (await manifest.readAsString()).replaceFirst(
-        fixture.pin,
-        '0000000000000000000000000000000000000000',
+        'seance/packages/seance_core',
+        'seance/packages/seance_protocol',
       ),
     );
 
     final drift = await _audit(fixture, ['--print-record']);
     expect(drift.exitCode, isNot(0));
     expect(drift.stderr, contains('manifest and lock'));
+  });
+
+  test('rejects an external git Séance declaration', () async {
+    final manifest = File(
+      p.join(fixture.root.path, 'tool', 'bench', 'pubspec.yaml'),
+    );
+    await manifest.writeAsString('''name: fixture
+dependencies:
+  seance_core:
+    git:
+      url: "${fixture.worktree.uri}"
+      ref: HEAD
+      path: packages/seance_core
+''');
+
+    final result = await _audit(fixture, ['--print-record']);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('external git source'));
+  });
+
+  test('rejects a Séance declaration without a path source', () async {
+    final manifest = File(
+      p.join(fixture.root.path, 'tool', 'bench', 'pubspec.yaml'),
+    );
+    await manifest.writeAsString('''name: fixture
+dependencies:
+  seance_core: ^1.1.0
+''');
+
+    final result = await _audit(fixture, ['--print-record']);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('without a path source'));
+  });
+
+  test('rejects a Séance path outside the worktree', () async {
+    final manifest = File(
+      p.join(fixture.root.path, 'tool', 'bench', 'pubspec.yaml'),
+    );
+    await manifest.writeAsString('''name: fixture
+dependencies:
+  seance_core:
+    path: ../../../../seance/packages/seance_core
+''');
+
+    final result = await _audit(fixture, ['--print-record']);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('outside the worktree'));
+  });
+
+  test('rejects a Séance path outside the component', () async {
+    final manifest = File(
+      p.join(fixture.root.path, 'tool', 'bench', 'pubspec.yaml'),
+    );
+    await manifest.writeAsString('''name: fixture
+dependencies:
+  seance_core:
+    path: ../bench_lib
+''');
+    await Directory(
+      p.join(fixture.root.path, 'tool', 'bench_lib'),
+    ).create(recursive: true);
+
+    final result = await _audit(fixture, ['--print-record']);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('outside the $_component component'));
   });
 
   test('rejects unaudited gitlinks', () async {
@@ -156,7 +231,9 @@ void main() {
       p.join(fixture.root.path, 'tool', 'bench', 'pubspec.lock'),
     );
     final decoy = File(p.join(fixture.root.path, 'pubspec.lock'));
-    await decoy.writeAsString(await benchLock.readAsString());
+    await decoy.writeAsString(
+      (await benchLock.readAsString()).replaceAll('../../../', '../'),
+    );
     await benchLock.delete();
 
     final result = await _audit(fixture, ['--print-record']);
@@ -164,44 +241,27 @@ void main() {
     expect(result.stderr, contains('has no resolving lock'));
   });
 
-  test('audits a tag ref at its exact resolved revision', () async {
-    await fixture.useTagRef(_TagState.valid);
+  test('rejects uncommitted changes inside the component', () async {
+    await File(
+      p.join(fixture.worktree.path, 'seance', 'dirty.txt'),
+    ).writeAsString('uncommitted\n');
 
     final result = await _audit(fixture, ['--print-record']);
-    expect(result.exitCode, 0, reason: result.stderr as String);
-    expect(result.stdout, contains(fixture.pin));
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('uncommitted changes'));
   });
-
-  for (final state in [_TagState.missing, _TagState.moved]) {
-    test('rejects a ${state.name} tag ref', () async {
-      await fixture.useTagRef(state);
-
-      final result = await _audit(fixture, ['--print-record']);
-      expect(result.exitCode, isNot(0));
-      expect(result.stderr, contains('does not resolve'));
-    });
-  }
 }
 
 Future<ProcessResult> _audit(
   _Fixture fixture, [
   List<String> extraArguments = const [],
-  _CheckoutSource checkoutSource = _CheckoutSource.fixture,
 ]) {
   final script = p.join(
     Directory.current.path,
     'scripts',
     'audit-seance-pin.sh',
   );
-  final arguments = <String>[
-    '--root',
-    fixture.root.path,
-    if (checkoutSource == _CheckoutSource.fixture) ...[
-      '--checkout',
-      fixture.repository.path,
-    ],
-    ...extraArguments,
-  ];
+  final arguments = <String>['--root', fixture.root.path, ...extraArguments];
 
   return Process.run(
     script,
@@ -231,19 +291,24 @@ Future<ProcessResult> _run(
   return result;
 }
 
+/// A monorepo-shaped worktree: `seance/` arrives through a subtree merge
+/// whose extra parent is the standalone-era tip, while the consuming
+/// `poltergeist/tool/bench` package declares local path dependencies.
 final class _Fixture {
+  final Directory worktree;
   final Directory root;
-  final Directory repository;
-  final String pin;
+  final String standaloneTip;
+  final String componentTree;
   final String authorCommit;
   final String committerCommit;
   final String trailerCommit;
   final String strandedCommit;
 
   const _Fixture({
+    required this.worktree,
     required this.root,
-    required this.repository,
-    required this.pin,
+    required this.standaloneTip,
+    required this.componentTree,
     required this.authorCommit,
     required this.committerCommit,
     required this.trailerCommit,
@@ -251,92 +316,102 @@ final class _Fixture {
   });
 
   static Future<_Fixture> create(String sandboxPath) async {
-    final root = Directory(p.join(sandboxPath, 'poltergeist'))
-      ..createSync(recursive: true);
-    final repository = Directory(p.join(sandboxPath, 'seance'))
+    final worktree = Directory(p.join(sandboxPath, 'worktree'))
       ..createSync(recursive: true);
 
+    await _run('git', ['init', '-b', 'main'], workingDirectory: worktree.path);
+    await _write(worktree, 'README.md', 'worktree\n');
+    await _commit(worktree, 'Base');
+    final base = await _head(worktree);
+
+    // Standalone era: the component's own history at un-prefixed paths.
     await _run('git', [
-      'init',
-      '-b',
-      'main',
-    ], workingDirectory: repository.path);
-    await _run('git', [
-      'config',
-      'grep.patternType',
-      'fixed',
-    ], workingDirectory: repository.path);
-    await _run('git', [
-      'config',
-      'core.quotepath',
-      'true',
-    ], workingDirectory: repository.path);
+      'checkout',
+      '--orphan',
+      'seance-standalone',
+    ], workingDirectory: worktree.path);
+    await _run('git', ['rm', '-rf', '.'], workingDirectory: worktree.path);
 
     await _write(
-      repository,
+      worktree,
       '.mailmap',
       'Laundered <laundered@example.test> <$_ownerEmail>\n',
     );
     await _write(
-      repository,
+      worktree,
       'LICENSE',
       'This work is dedicated to the public domain.\n',
     );
-    await _write(repository, 'NOTICE.md', 'Licence inventory.\n');
-    await _write(repository, 'docs/café.txt', 'fixture\n');
+    await _write(worktree, 'NOTICE.md', 'Licence inventory.\n');
+    await _write(worktree, 'docs/café.txt', 'fixture\n');
     await _write(
-      repository,
+      worktree,
+      'packages/seance_core/pubspec.yaml',
+      'name: seance_core\n',
+    );
+    await _write(
+      worktree,
       'packages/seance_core/lib/core.dart',
       'const core = 1;\n',
     );
     await _write(
-      repository,
+      worktree,
+      'packages/seance_protocol/pubspec.yaml',
+      'name: seance_protocol\n',
+    );
+    await _write(
+      worktree,
       'packages/seance_protocol/lib/protocol.dart',
       'const protocol = 1;\n',
     );
-    await _commit(repository, 'Initial fixture');
+    await _write(
+      worktree,
+      'third_party/vendored/LICENSE',
+      'Vendored licence.\n',
+    );
+    await _commit(worktree, 'Initial fixture');
 
-    await _write(repository, 'bmp-sort.txt', 'bmp\n');
+    await _write(worktree, 'bmp-sort.txt', 'bmp\n');
     await _commit(
-      repository,
+      worktree,
       'BMP sort fixture',
       authorName: _bmpSortName,
       authorEmail: 'bmp@example.test',
     );
 
-    await _write(repository, 'non-bmp-sort.txt', 'non-bmp\n');
+    await _write(worktree, 'non-bmp-sort.txt', 'non-bmp\n');
     await _commit(
-      repository,
+      worktree,
       'Non-BMP sort fixture',
       authorName: _nonBmpSortName,
       authorEmail: 'non-bmp@example.test',
     );
 
-    await _write(repository, 'author.txt', 'author\n');
+    await _write(worktree, 'author.txt', 'author\n');
     final authorCommit = await _commit(
-      repository,
+      worktree,
       'Author-only change',
       authorName: 'Author Only',
       authorEmail: _authorEmail,
     );
 
-    await _write(repository, 'committer.txt', 'committer\n');
+    await _write(worktree, 'committer.txt', 'committer\n');
     final committerCommit = await _commit(
-      repository,
+      worktree,
       'Committer-only change',
       committerName: 'Committer Only',
       committerEmail: _committerEmail,
     );
 
-    await _write(repository, 'trailer.txt', 'trailer\n');
+    await _write(worktree, 'trailer.txt', 'trailer\n');
     final trailerCommit = await _commit(
-      repository,
+      worktree,
       'Trailer-only change\n\nCo-authored-by: Trailer Only <$_trailerEmail>',
     );
 
-    await _write(repository, 'stranded.txt', 'stranded\n');
+    await _write(worktree, 'stranded.txt', 'stranded\n');
     final strandedCommit = await _commit(
-      repository,
+      worktree,
       'Stranded attribution\n\n'
       'Co-Authored-By: Trailer Only <$_trailerEmail>\n'
       'Reported-by: Stranded Person <$_strandedEmail>\n'
@@ -344,30 +419,31 @@ final class _Fixture {
       'Mentored-by: Bare Name\n\n'
       'This paragraph strands the attribution.',
     );
-    final pin = await _head(repository);
+    final tip = await _head(worktree);
 
     await _run('git', [
       'checkout',
       '-b',
       'unrelated',
-    ], workingDirectory: repository.path);
-    await _write(repository, 'unrelated.txt', 'unrelated\n');
+    ], workingDirectory: worktree.path);
+    await _write(worktree, 'unrelated.txt', 'unrelated\n');
     await _commit(
-      repository,
+      worktree,
       'Unrelated branch',
       authorName: 'Unrelated',
       authorEmail: _unrelatedEmail,
     );
-    await _run('git', ['checkout', 'main'], workingDirectory: repository.path);
 
-    final tree = (await _run('git', [
+    // A replacement object must never reach the evidence: the audit pins
+    // --no-replace-objects on every Git read.
+    final tipTree = (await _run('git', [
       'rev-parse',
-      '$pin^{tree}',
-    ], workingDirectory: repository.path)).stdout.toString().trim();
+      '$tip^{tree}',
+    ], workingDirectory: worktree.path)).stdout.toString().trim();
     final replacement = (await _run(
       'git',
-      ['commit-tree', tree, '-m', 'Replacement commit'],
-      workingDirectory: repository.path,
+      ['commit-tree', tipTree, '-m', 'Replacement commit'],
+      workingDirectory: worktree.path,
       environment: _identityEnvironment(
         authorName: 'Replacement',
         authorEmail: _replacementEmail,
@@ -377,16 +453,102 @@ final class _Fixture {
     )).stdout.toString().trim();
     await _run('git', [
       'replace',
-      pin,
+      tip,
       replacement,
-    ], workingDirectory: repository.path);
+    ], workingDirectory: worktree.path);
 
-    await _writePinFiles(root, repository.path, pin);
+    // Import merge: main carries the standalone tree under `seance/` with
+    // the standalone tip as the second parent — the imported lineage.
+    await _run('git', ['checkout', 'main'], workingDirectory: worktree.path);
+    await _run('git', [
+      'read-tree',
+      '--empty',
+    ], workingDirectory: worktree.path);
+    await _run('git', ['read-tree', base], workingDirectory: worktree.path);
+    await _run('git', [
+      'read-tree',
+      '--prefix=seance/',
+      tip,
+    ], workingDirectory: worktree.path);
+    final mergeTree = (await _run('git', [
+      'write-tree',
+    ], workingDirectory: worktree.path)).stdout.toString().trim();
+    final imported = (await _run(
+      'git',
+      [
+        'commit-tree',
+        mergeTree,
+        '-p',
+        base,
+        '-p',
+        tip,
+        '-m',
+        'Import Séance history',
+      ],
+      workingDirectory: worktree.path,
+      environment: _identityEnvironment(
+        authorName: _ownerName,
+        authorEmail: _ownerEmail,
+        committerName: _ownerName,
+        committerEmail: _ownerEmail,
+      ),
+    )).stdout.toString().trim();
+    await _run('git', [
+      'update-ref',
+      'refs/heads/main',
+      imported,
+    ], workingDirectory: worktree.path);
+    await _run('git', ['reset', '--hard'], workingDirectory: worktree.path);
+
+    // Post-import era: a commit inside the prefixed component plus the
+    // consuming package's local path declaration and lock.
+    await _write(
+      worktree,
+      'seance/packages/seance_core/lib/post_import.dart',
+      'const postImport = 1;\n',
+    );
+    await _write(
+      worktree,
+      'poltergeist/tool/bench/pubspec.yaml',
+      '''name: fixture
+dependencies:
+  seance_core:
+    path: ../../../seance/packages/seance_core
+''',
+    );
+    await _write(worktree, 'poltergeist/tool/bench/pubspec.lock', '''packages:
+  seance_core:
+    dependency: "direct main"
+    description:
+      path: "../../../seance/packages/seance_core"
+      relative: true
+    source: path
+    version: "1.1.0"
+  seance_protocol:
+    dependency: transitive
+    description:
+      path: "../../../seance/packages/seance_protocol"
+      relative: true
+    source: path
+    version: "1.1.0"
+''');
+    await _commit(
+      worktree,
+      'Wire local Séance sources',
+      authorName: _ownerName,
+      authorEmail: _ownerEmail,
+    );
+
+    final componentTree = (await _run('git', [
+      'rev-parse',
+      'HEAD:seance',
+    ], workingDirectory: worktree.path)).stdout.toString().trim();
 
     return _Fixture(
-      root: root,
-      repository: repository,
-      pin: pin,
+      worktree: worktree,
+      root: Directory(p.join(worktree.path, 'poltergeist')),
+      standaloneTip: tip,
+      componentTree: componentTree,
       authorCommit: authorCommit,
       committerCommit: committerCommit,
       trailerCommit: trailerCommit,
@@ -399,12 +561,12 @@ final class _Fixture {
       'update-index',
       '--add',
       '--cacheinfo',
-      '160000,$pin,external/module',
-    ], workingDirectory: repository.path);
+      '160000,$standaloneTip,$_component/external/module',
+    ], workingDirectory: worktree.path);
     await _run(
       'git',
       ['commit', '-m', 'Add gitlink'],
-      workingDirectory: repository.path,
+      workingDirectory: worktree.path,
       environment: _identityEnvironment(
         authorName: _ownerName,
         authorEmail: _ownerEmail,
@@ -412,68 +574,29 @@ final class _Fixture {
         committerEmail: _ownerEmail,
       ),
     );
-    final advancedPin = await _head(repository);
-    await _writePinFiles(root, repository.path, advancedPin);
+
+    // A satisfied gitlink keeps the component clean so the audit reaches
+    // the tree scan instead of the dirty-worktree guard.
+    final module = Directory(
+      p.join(worktree.path, _component, 'external', 'module'),
+    );
+    await _run('git', ['init', module.path]);
+    await _run('git', [
+      '-C',
+      module.path,
+      'fetch',
+      worktree.path,
+      'refs/heads/seance-standalone',
+    ]);
+    await _run('git', [
+      '-C',
+      module.path,
+      'checkout',
+      '--quiet',
+      '--detach',
+      'FETCH_HEAD',
+    ]);
   }
-
-  Future<void> useTagRef(_TagState state) async {
-    const tag = 'v0.8.0';
-    final target = switch (state) {
-      _TagState.valid => pin,
-      _TagState.moved => '$pin^',
-      _TagState.missing => null,
-    };
-    if (target != null) {
-      await _run('git', [
-        '--no-replace-objects',
-        'tag',
-        tag,
-        target,
-      ], workingDirectory: repository.path);
-    }
-
-    for (final relative in [
-      'tool/bench/pubspec.yaml',
-      'tool/bench/pubspec.lock',
-    ]) {
-      final file = File(p.join(root.path, relative));
-      final contents = await file.readAsString();
-      await file.writeAsString(
-        contents.replaceAll('\n      ref: $pin\n', '\n      ref: $tag\n'),
-      );
-    }
-  }
-}
-
-Future<void> _writePinFiles(Directory root, String url, String pin) async {
-  await _write(root, 'tool/bench/pubspec.yaml', '''name: fixture
-dependencies:
-  seance_core:
-    git:
-      url: "$url"
-      ref: $pin
-      path: packages/seance_core
-''');
-  await _write(root, 'tool/bench/pubspec.lock', '''packages:
-  seance_core:
-    dependency: "direct main"
-    description:
-      path: packages/seance_core
-      ref: $pin
-      resolved-ref: $pin
-      url: "$url"
-    source: git
-    version: "0.0.0"
-  seance_protocol:
-    dependency: transitive
-    description:
-      path: packages/seance_protocol
-      ref: $pin
-      resolved-ref: $pin
-      url: "$url"
-    source: git
-    version: "0.0.0"
-''');
 }
 
 Future<void> _write(

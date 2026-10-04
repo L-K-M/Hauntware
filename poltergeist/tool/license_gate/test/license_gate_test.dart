@@ -47,16 +47,13 @@ void main() {
     final report = await _verify(project, spdx, LicenseGateMode.markerOnly);
 
     expect(report.declarationCount, 0);
-    expect(report.pinnedRevisionCount, 0);
+    expect(report.lockedSourceCount, 0);
   });
 
   test('requires the marker when a declaration is added', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
       includeMarker: false,
     );
 
@@ -73,12 +70,9 @@ void main() {
   });
 
   test('fails closed when a declaration has no lock entry', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
       includeLockEntry: false,
     );
 
@@ -94,20 +88,11 @@ void main() {
     );
   });
 
-  test('fails closed when a git lock omits its resolved commit', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
+  test('fails closed when the lock resolves a different path', () async {
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
-    );
-    final lock = File(p.join(project.directory.path, 'pubspec.lock'));
-    lock.writeAsStringSync(
-      lock.readAsStringSync().replaceFirst(
-        '      resolved-ref: ${seance.revision}\n',
-        '',
-      ),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+      lockPath: 'seance/packages/seance_protocol',
     );
 
     await expectLater(
@@ -116,21 +101,183 @@ void main() {
         isA<LicenseGateException>().having(
           (error) => error.message,
           'message',
-          contains('no full resolved-ref'),
+          contains('is not resolved'),
+        ),
+      ),
+    );
+  });
+
+  test('fails closed on an external git declaration', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    _write(project.directory, 'pubspec.yaml', '''
+name: fixture
+dependencies:
+  seance_core:
+    git:
+      url: https://example.invalid/seance.git
+      ref: v0.8.0
+      path: packages/seance_core
+''');
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('external git source'),
+        ),
+      ),
+    );
+  });
+
+  test('fails closed on a git lock source', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    _write(project.directory, 'pubspec.lock', '''
+packages:
+  seance_core:
+    dependency: "direct main"
+    description:
+      path: packages/seance_core
+      ref: v0.8.0
+      resolved-ref: ${'f' * 40}
+      url: https://example.invalid/seance.git
+    source: git
+    version: "0.8.0"
+''');
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('external git source'),
+        ),
+      ),
+    );
+  });
+
+  test('fails closed when the declaration escapes the worktree', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+      manifestPath: '../../outside/seance_core',
+      lockPath: '/nonexistent/seance_core',
+    );
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('outside the worktree'),
+        ),
+      ),
+    );
+  });
+
+  test('fails closed when the declaration leaves the component', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+      manifestPath: 'other/seance_core',
+      lockPath: 'other/seance_core',
+    );
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('outside the seance component'),
+        ),
+      ),
+    );
+  });
+
+  test('treats any path into seance/ as a Séance source', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+      includeMarker: false,
+    );
+    _write(project.directory, 'pubspec.yaml', '''
+name: fixture
+dependencies:
+  core:
+    path: ../seance/packages/seance_core
+''');
+    _write(project.directory, 'pubspec.lock', '''
+packages:
+  core:
+    dependency: "direct main"
+    description:
+      path: ../seance/packages/seance_core
+      relative: true
+    source: path
+    version: "0.8.0"
+''');
+    _commitProjectChanges(project.worktree);
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('missing the required'),
+        ),
+      ),
+    );
+  });
+
+  test('fails closed when a lock path entry has no usable path', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    _write(project.directory, 'pubspec.lock', '''
+packages:
+  seance_core:
+    dependency: "direct main"
+    description:
+      path: ../seance/packages/seance_core
+      relative: false
+    source: path
+    version: "0.8.0"
+''');
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('no usable path resolution'),
         ),
       ),
     );
   });
 
   test('fails closed when the resolving lock is untracked', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _git(project.directory, const ['rm', '--cached', 'pubspec.lock']);
+    _git(project.worktree, const [
+      'rm',
+      '--cached',
+      'poltergeist/pubspec.lock',
+    ]);
 
     await expectLater(
       _verify(project, spdx, LicenseGateMode.markerOnly),
@@ -145,12 +292,9 @@ void main() {
   });
 
   test('fails closed when dependency resolution changes the lock', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
     final lock = File(p.join(project.directory.path, 'pubspec.lock'));
     lock.writeAsStringSync('${lock.readAsStringSync()}# changed by pub get\n');
@@ -187,21 +331,15 @@ void main() {
   });
 
   test('does not let a root lock cover a standalone package', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
     _write(project.directory, 'tool/bench/pubspec.yaml', '''
 name: bench
 dependencies:
   seance_core:
-    git:
-      url: ${seance.directory.path}
-      ref: ${seance.revision}
-      path: packages/seance_core
+    path: ../../../seance/packages/seance_core
 ''');
 
     await expectLater(
@@ -218,12 +356,9 @@ dependencies:
 
   for (final fileName in const ['pubspec.yaml', 'pubspec.lock']) {
     test('rejects a symlinked $fileName', () async {
-      final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-        'LICENSE': _canonicalUnlicense,
-      });
       final project = _ProjectFixture.create(
         p.join(sandbox.path, 'project'),
-        seance: seance,
+        seanceFiles: const {'LICENSE': _canonicalUnlicense},
       );
       final file = File(p.join(project.directory.path, fileName));
       final targetName = 'real-$fileName';
@@ -243,10 +378,7 @@ dependencies:
     });
   }
 
-  test('requires the marker for a lock-only Séance pin', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
+  test('requires the marker for a lock-only Séance source', () async {
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
       includeMarker: false,
@@ -256,14 +388,12 @@ packages:
   seance_protocol:
     dependency: transitive
     description:
-      path: packages/seance_protocol
-      ref: v0.8.0
-      resolved-ref: ${seance.revision}
-      url: ${seance.directory.path}
-    source: git
+      path: ../seance/packages/seance_protocol
+      relative: true
+    source: path
     version: "0.8.0"
 ''');
-    _commitProjectChanges(project.directory);
+    _commitProjectChanges(project.worktree);
 
     await expectLater(
       _verify(project, spdx, LicenseGateMode.markerOnly),
@@ -278,35 +408,28 @@ packages:
   });
 
   test('scans tracked manifests under generated directory names', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
       includeMarker: false,
     );
     _write(project.directory, 'build/pubspec.yaml', '''
 name: nested
 dependencies:
   seance_core:
-    git:
-      url: ${seance.directory.path}
-      ref: v0.8.0
-      path: packages/seance_core
+    path: ../../seance/packages/seance_core
 ''');
     _write(project.directory, 'build/pubspec.lock', '''
 packages:
   seance_core:
     dependency: "direct main"
     description:
-      path: packages/seance_core
-      ref: v0.8.0
-      resolved-ref: ${seance.revision}
-      url: ${seance.directory.path}
-    source: git
+      path: ../../seance/packages/seance_core
+      relative: true
+    source: path
     version: "0.8.0"
 ''');
-    _commitProjectChanges(project.directory);
+    _commitProjectChanges(project.worktree);
 
     await expectLater(
       _verify(project, spdx, LicenseGateMode.markerOnly),
@@ -341,13 +464,9 @@ packages:
       for (final entry in licenses.entries)
         'text/${entry.key}.txt': entry.value,
     });
-    final seance = _GitFixture.create(
-      p.join(sandbox.path, 'Seance'),
-      licenseFiles,
-    );
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: licenseFiles,
     );
 
     final report = await _verify(
@@ -364,18 +483,17 @@ packages:
     final customSpdx = _GitFixture.create(p.join(sandbox.path, 'spdx-custom'), {
       'text/Unlicense.txt': 'first term\nsecond term',
     });
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': '''
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {
+        'LICENSE': '''
 Copyright 2024 Before
 first term
 Copyright (c) 2025 Middle
 second term
 Copyright © 2026 After
 ''',
-    });
-    final project = _ProjectFixture.create(
-      p.join(sandbox.path, 'project'),
-      seance: seance,
+      },
     );
 
     final report = await _verify(
@@ -392,16 +510,15 @@ Copyright © 2026 After
     final customSpdx = _GitFixture.create(p.join(sandbox.path, 'spdx-custom'), {
       'text/Unlicense.txt': 'first term\nsecond term',
     });
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': '''
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {
+        'LICENSE': '''
 first term
 Copyright © 2026 Example disallows redistribution.
 second term
 ''',
-    });
-    final project = _ProjectFixture.create(
-      p.join(sandbox.path, 'project'),
-      seance: seance,
+      },
     );
 
     await expectLater(
@@ -420,16 +537,15 @@ second term
     final customSpdx = _GitFixture.create(p.join(sandbox.path, 'spdx-custom'), {
       'text/Unlicense.txt': 'first term\nsecond term',
     });
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': '''
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {
+        'LICENSE': '''
 first term
 Copyright © 2026 Example grants use only for evaluation.
 second term
 ''',
-    });
-    final project = _ProjectFixture.create(
-      p.join(sandbox.path, 'project'),
-      seance: seance,
+      },
     );
 
     await expectLater(
@@ -449,17 +565,16 @@ second term
         p.join(sandbox.path, 'spdx-custom'),
         {'text/Unlicense.txt': 'first term\nsecond term'},
       );
-      final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-        'LICENSE':
-            '''
+      final project = _ProjectFixture.create(
+        p.join(sandbox.path, 'project'),
+        seanceFiles: {
+          'LICENSE':
+              '''
 first term
 Copyright 2026 $restriction
 second term
 ''',
-      });
-      final project = _ProjectFixture.create(
-        p.join(sandbox.path, 'project'),
-        seance: seance,
+        },
       );
 
       await expectLater(
@@ -477,16 +592,15 @@ Copyright [yyyy] [name of copyright owner]
 second term
 ''',
     });
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': '''
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {
+        'LICENSE': '''
 first term
 Copyright 2026 Example
 second term
 ''',
-    });
-    final project = _ProjectFixture.create(
-      p.join(sandbox.path, 'project'),
-      seance: seance,
+      },
     );
 
     final report = await _verify(
@@ -500,28 +614,100 @@ second term
     expect(report.matchedLicenseIds, {'Apache-2.0'});
   });
 
-  test('accepts the canonical Unlicense from the pinned tree', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
+  test('accepts the canonical Unlicense from the component tree', () async {
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
 
     final report = await _verify(project, spdx, LicenseGateMode.release);
 
-    expect(report.pinnedRevisionCount, 1);
+    expect(report.lockedSourceCount, 1);
     expect(report.matchedLicenseIds, {'Unlicense'});
   });
 
-  test('rejects a missing license in the pinned tree', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'README.md': 'No license yet.',
+  test('keeps upstream holders on vendored licenses', () async {
+    final mitSpdx = _GitFixture.create(p.join(sandbox.path, 'spdx-mit'), {
+      'text/Unlicense.txt': _canonicalUnlicense,
+      'text/MIT.txt': 'mit terms',
     });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {
+        'LICENSE': _canonicalUnlicense,
+        'third_party/flutter_pty/LICENSE':
+            'Copyright 2024 Upstream Author\nmit terms',
+      },
+    );
+
+    final report = await _verify(
+      project,
+      mitSpdx,
+      LicenseGateMode.release,
+      permittedLicenseIds: {'Unlicense', 'MIT'},
+    );
+
+    expect(report.matchedLicenseIds, {'Unlicense', 'MIT'});
+  });
+
+  test('rejects a restrictive vendored license', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {
+        'LICENSE': _canonicalUnlicense,
+        'third_party/widget/LICENSE': 'GNU GENERAL PUBLIC LICENSE Version 3',
+      },
+    );
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.release),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('non-permitted third_party/widget/LICENSE'),
+        ),
+      ),
+    );
+  });
+
+  test('ignores license-looking names outside vendored directories', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {
+        'LICENSE': _canonicalUnlicense,
+        'docs/sample/LICENSE': 'not a real license at all',
+      },
+    );
+
+    final report = await _verify(project, spdx, LicenseGateMode.release);
+
+    expect(report.matchedLicenseIds, {'Unlicense'});
+  });
+
+  test('rejects uncommitted changes inside the component', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    _write(project.worktree, 'seance/LICENSE', 'now uncommitted\n');
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.release),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('uncommitted changes'),
+        ),
+      ),
+    );
+  });
+
+  test('rejects a missing license in the component', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'README.md': 'No license yet.'},
     );
 
     await expectLater(
@@ -537,12 +723,9 @@ second term
   });
 
   test('rejects restrictive content under a recognized name', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'COPYING': 'GNU GENERAL PUBLIC LICENSE Version 3',
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'COPYING': 'GNU GENERAL PUBLIC LICENSE Version 3'},
     );
 
     await expectLater(
@@ -557,32 +740,38 @@ second term
     );
   });
 
-  test('checks the locked revision rather than repository HEAD', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'README.md': 'No license yet.',
-    });
-    final unlicensedRevision = seance.revision;
-    seance.commit({'LICENSE': _canonicalUnlicense});
+  test('checks the committed component tree, not the working tree', () async {
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
-      lockedRevision: unlicensedRevision,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    // An uncommitted restrictive COPYING is ignored by the scan, but the
+    // dirty component itself still fails closed.
+    _write(
+      project.worktree,
+      'seance/COPYING',
+      'GNU GENERAL PUBLIC LICENSE Version 3',
     );
 
     await expectLater(
       _verify(project, spdx, LicenseGateMode.release),
-      throwsA(isA<LicenseGateException>()),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('uncommitted changes'),
+        ),
+      ),
     );
   });
 
   test('rejects a second restrictive license candidate', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-      'COPYING': 'GNU GENERAL PUBLIC LICENSE Version 3',
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {
+        'LICENSE': _canonicalUnlicense,
+        'COPYING': 'GNU GENERAL PUBLIC LICENSE Version 3',
+      },
     );
 
     await expectLater(
@@ -597,17 +786,16 @@ second term
     );
   });
 
-  test('rejects one restrictive revision among multiple pins', () async {
-    final core = _GitFixture.create(p.join(sandbox.path, 'Seance-core'), {
-      'LICENSE': _canonicalUnlicense,
-    });
-    final protocol = _GitFixture.create(
-      p.join(sandbox.path, 'Seance-protocol'),
-      {'LICENSE': 'Copyright holders prohibit redistribution.'},
-    );
+  test('rejects a restrictive source among multiple locks', () async {
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: core,
+      seanceFiles: const {
+        'LICENSE': _canonicalUnlicense,
+        'packages/seance_protocol/pubspec.yaml':
+            'name: seance_protocol\nversion: 0.8.0\n',
+        'third_party/bad/LICENSE': 'Copyright holders prohibit redistribution.',
+      },
+      lockPath: 'seance/packages/seance_core',
     );
     final lock = File(p.join(project.directory.path, 'pubspec.lock'));
     lock.writeAsStringSync('''
@@ -615,14 +803,12 @@ ${lock.readAsStringSync()}
   seance_protocol:
     dependency: transitive
     description:
-      path: packages/seance_protocol
-      ref: v0.8.0
-      resolved-ref: ${protocol.revision}
-      url: ${protocol.directory.path}
-    source: git
+      path: ../seance/packages/seance_protocol
+      relative: true
+    source: path
     version: "0.8.0"
 ''');
-    _commitProjectChanges(project.directory);
+    _commitProjectChanges(project.worktree);
 
     await expectLater(
       _verify(project, spdx, LicenseGateMode.release),
@@ -630,21 +816,18 @@ ${lock.readAsStringSync()}
         isA<LicenseGateException>().having(
           (error) => error.message,
           'message',
-          contains('seance_protocol'),
+          contains('non-permitted'),
         ),
       ),
     );
   });
 
   test('rejects a gate that runs before dependency resolution', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   gate:
     steps:
@@ -665,14 +848,11 @@ jobs:
   });
 
   test('rejects a publisher that bypasses the gate job', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   gate:
     steps:
@@ -697,14 +877,11 @@ jobs:
   });
 
   test('rejects a disabled gate step', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -721,14 +898,11 @@ jobs:
   });
 
   test('rejects a soft-failing gate step', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -745,14 +919,11 @@ jobs:
   });
 
   test('rejects a commented marker paired with an echo', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -769,14 +940,11 @@ jobs:
   });
 
   test('rejects a same-job gate after publishing', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -791,16 +959,12 @@ jobs:
     );
   });
 
-  test('allows a post-gate flutter build against the committed lock',
-      () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
+  test('allows a post-gate flutter build against the committed lock', () async {
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -813,18 +977,15 @@ jobs:
     final report = await _verify(project, spdx, LicenseGateMode.markerOnly);
     // The workflow this test verifies carries a real post-gate
     // `flutter build` step; the gate must accept it.
-    expect(report.pinnedRevisionCount, greaterThan(0));
+    expect(report.lockedSourceCount, greaterThan(0));
   });
 
   test('rejects pub add after the gate', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -847,14 +1008,11 @@ jobs:
   });
 
   test('rejects pub in backticks and subshells', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -877,14 +1035,11 @@ jobs:
   });
 
   test('rejects pub chained after another command', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -907,14 +1062,11 @@ jobs:
   });
 
   test('rejects dependency resolution after the gate', () async {
-    final seance = _GitFixture.create(p.join(sandbox.path, 'Seance'), {
-      'LICENSE': _canonicalUnlicense,
-    });
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
-      seance: seance,
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
     );
-    _write(project.directory, '.github/workflows/release.yml', '''
+    _write(project.worktree, '.github/workflows/release.yml', '''
 jobs:
   publish:
     steps:
@@ -954,21 +1106,30 @@ Future<LicenseGateReport> _verify(
   ),
 );
 
+/// A monorepo-shaped fixture: a Git worktree whose root holds the `seance/`
+/// component, the `.github` release pipeline, and the `poltergeist/` scan
+/// root the gate runs against.
 final class _ProjectFixture {
+  /// The directory passed as `repositoryRoot` — `poltergeist/` inside the
+  /// worktree, matching the release job's working directory.
   final Directory directory;
 
-  const _ProjectFixture._(this.directory);
+  /// The Git worktree toplevel.
+  final Directory worktree;
+
+  const _ProjectFixture._(this.directory, this.worktree);
 
   static _ProjectFixture create(
     String path, {
-    _GitFixture? seance,
+    Map<String, String>? seanceFiles,
     bool includeMarker = true,
     bool includeLockEntry = true,
-    String? lockedRevision,
+    String manifestPath = '../seance/packages/seance_core',
+    String lockPath = 'seance/packages/seance_core',
   }) {
-    final directory = Directory(path)..createSync(recursive: true);
+    final worktree = Directory(path)..createSync(recursive: true);
     _write(
-      directory,
+      worktree,
       '.github/workflows/release.yml',
       includeMarker
           ? '''
@@ -981,26 +1142,32 @@ jobs:
 '''
           : 'name: Release\n',
     );
+    final project = Directory(p.join(worktree.path, 'poltergeist'));
 
-    if (seance == null) {
-      _write(directory, 'pubspec.yaml', 'name: fixture\n');
-      _write(directory, 'pubspec.lock', 'packages: {}\n');
-      _commitProject(directory);
-      return _ProjectFixture._(directory);
+    if (seanceFiles == null) {
+      _write(project, 'pubspec.yaml', 'name: fixture\n');
+      _write(project, 'pubspec.lock', 'packages: {}\n');
+      _commitProject(worktree);
+      return _ProjectFixture._(project, worktree);
     }
 
-    final revision = lockedRevision ?? seance.revision;
-    _write(directory, 'pubspec.yaml', '''
+    _write(
+      worktree,
+      'seance/packages/seance_core/pubspec.yaml',
+      'name: seance_core\nversion: 0.8.0\n',
+    );
+    for (final entry in seanceFiles.entries) {
+      _write(worktree, p.join('seance', entry.key), entry.value);
+    }
+
+    _write(project, 'pubspec.yaml', '''
 name: fixture
 dependencies:
   seance_core:
-    git:
-      url: ${seance.directory.path}
-      ref: $revision
-      path: packages/seance_core
+    path: $manifestPath
 ''');
     _write(
-      directory,
+      project,
       'pubspec.lock',
       includeLockEntry
           ? '''
@@ -1008,17 +1175,15 @@ packages:
   seance_core:
     dependency: "direct main"
     description:
-      path: packages/seance_core
-      ref: $revision
-      resolved-ref: $revision
-      url: ${seance.directory.path}
-    source: git
+      path: ${p.isAbsolute(lockPath) ? lockPath : '../$lockPath'}
+      relative: ${p.isAbsolute(lockPath) ? 'false' : 'true'}
+    source: path
     version: "0.8.0"
 '''
           : 'packages: {}\n',
     );
-    _commitProject(directory);
-    return _ProjectFixture._(directory);
+    _commitProject(worktree);
+    return _ProjectFixture._(project, worktree);
   }
 }
 

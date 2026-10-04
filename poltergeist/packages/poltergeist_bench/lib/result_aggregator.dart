@@ -48,6 +48,7 @@ const _attemptFields = {
 const _bundleFields = {'sourcePrime', 'warmupSourcePrime', 'warmup', 'trial'};
 const _rttProbeSampleCount = 7;
 final _gitShaPattern = RegExp(r'^[0-9a-f]{40}$');
+final _seanceSourcePattern = RegExp(r'^(?:seance@)?[0-9a-f]{40}$');
 final _sha256Pattern = RegExp(r'^[0-9a-f]{64}$');
 final _workflowRunPattern = RegExp(r'^[0-9]+$');
 final _imageIdPattern = RegExp(r'^(?:sha256:)?[0-9a-f]{12,64}$');
@@ -111,10 +112,13 @@ Future<CanonicalEvidenceBundle> aggregateEvidenceDirectory({
       'Invalid expected dartssh2 version pin.',
     );
   }
-  if (_gitShaPattern.stringMatch(expectedSeanceRevision) !=
+  // Live runs identify the shared source as seance@<tree> (the committed
+  // seance/ subtree); frozen evidence retains its measured 40-char revision.
+  if (_seanceSourcePattern.stringMatch(expectedSeanceRevision) !=
       expectedSeanceRevision) {
     throw const ResultAggregationException(
-      'Invalid expected Seance revision pin; expected a 40-char commit SHA.',
+      'Invalid expected Seance source identity; expected `seance@<tree>` '
+      'or a 40-char revision SHA.',
     );
   }
 

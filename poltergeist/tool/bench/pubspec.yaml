@@ -4,16 +4,16 @@ description: >-
   itself lives at packages/poltergeist_bench since the M3 relocation
   (07 §3.4); everything here forwards to it.
 publish_to: none
-version: 1.0.1
+version: 1.1.0
 
 environment:
   sdk: ^3.12.0
 
 dependencies:
-  # Path dependency: the bench package keeps its own frozen resolution
-  # (dartssh2 3.0.2, seance_core at the benchmark package's exact revision)
+  # Path dependency: the bench package keeps its own resolution
+  # (dartssh2 3.0.2, seance_core as a seance/ sibling path)
   # outside the root workspace.
-  # Keep this shim out of any root pub workspace so that frozen git-pinned
-  # resolution is never merged into the root solver.
+  # Keep this shim out of any root pub workspace so that resolution is
+  # never merged into the root solver.
   poltergeist_m0_bench:
     path: ../../packages/poltergeist_bench

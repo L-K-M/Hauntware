@@ -1769,8 +1769,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'help.keyboardShortcuts'",
     "'help.releaseNotes'",
     "'help.reportIssue'",
-    "'https://github.com/L-K-M/Poltergeist/releases'",
-    "'https://github.com/L-K-M/Poltergeist/issues'",
+    r"'https://github.com/$poltergeistUpdateRepo/releases'",
+    r"'https://github.com/$poltergeistUpdateRepo/issues'",
   },
   // The shortcuts sheet's key and the typographic joiner between a
   // command's alternative chords (glyph strings, not prose).

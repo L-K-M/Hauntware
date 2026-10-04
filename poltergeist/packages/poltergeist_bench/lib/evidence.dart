@@ -211,7 +211,8 @@ class SourceIdentity {
             : '$localIdentityPrefix$label');
 
     return SourceIdentity(
-      poltergeistSha: values['GITHUB_SHA'] ?? 'local-uncommitted',
+      poltergeistSha:
+          values['GITHUB_SHA'] ?? resolveHeadRevision() ?? 'local-uncommitted',
       workflowRunId: values['GITHUB_RUN_ID'] ?? 'local-run',
       workflowRunAttempt: attempt,
       workflowJob: values['GITHUB_JOB'] ?? 'local-job',
@@ -227,9 +228,9 @@ class SourceIdentity {
         runnerImageVersion:
             values['ImageVersion'] ?? 'local-unknown-image-version',
       ),
-      dependencies: const DependencyIdentity(
+      dependencies: DependencyIdentity(
         dartssh2Version: resolvedDartssh2Version,
-        seanceRevision: pinnedSeanceRevision,
+        seanceRevision: resolveLocalSeanceRevision(environment: values),
       ),
       fixture: FixtureIdentity(
         tree: fixtureValue(

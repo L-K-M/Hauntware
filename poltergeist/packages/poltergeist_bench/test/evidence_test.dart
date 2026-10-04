@@ -467,7 +467,7 @@ SourceIdentity _identity({String shardId = standardSourceId}) => SourceIdentity(
   ),
   dependencies: DependencyIdentity(
     dartssh2Version: resolvedDartssh2Version,
-    seanceRevision: pinnedSeanceRevision,
+    seanceRevision: resolveLocalSeanceRevision(),
   ),
   fixture: FixtureIdentity(
     tree: 'fedcba9876543210fedcba9876543210fedcba98',

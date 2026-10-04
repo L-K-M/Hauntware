@@ -81,7 +81,7 @@ BenchResult _result(String scenario) => BenchResult(
   bytes: 1,
   elapsed: const Duration(microseconds: 1),
   dartssh2Version: resolvedDartssh2Version,
-  seanceRev: pinnedSeanceRevision,
+  seanceRev: resolveLocalSeanceRevision(),
   timestampUtc: DateTime.utc(2026),
   host: 'test',
 );

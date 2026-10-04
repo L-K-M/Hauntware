@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 
 import 'version.dart';
 
+/// The shared release repository for all Hauntware applications.
+const hauntwareUpdateRepo = 'L-K-M/Hauntware';
+
 /// The result of an update check.
 class UpdateInfo {
   /// The latest published version tag (e.g. `0.3.0`), normalized (no leading
@@ -18,7 +21,7 @@ class UpdateInfo {
   const UpdateInfo({required this.latestVersion, required this.releasesUrl});
 }
 
-/// Checks GitHub for a newer Séance release than the one running.
+/// Checks GitHub for a newer suite release than the one running.
 ///
 /// This is read-only and best-effort: it only ever *reports* that a newer
 /// version exists and points the user at the releases page. It never fetches
@@ -32,7 +35,7 @@ class UpdateChecker {
   final String repo;
 
   UpdateChecker({
-    this.repo = 'L-K-M/Seance',
+    this.repo = hauntwareUpdateRepo,
     http.Client? client,
     this.timeout = const Duration(seconds: 15),
   }) : _client = client ?? http.Client();

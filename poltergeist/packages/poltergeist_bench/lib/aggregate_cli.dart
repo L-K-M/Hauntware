@@ -46,10 +46,10 @@ Future<void> aggregateMain(List<String> arguments) async {
       expectedRunId: runId,
       expectedRunAttempt: runAttempt,
       expectedGitSha: gitSha,
-      // Measurement aggregation always binds to the live pins: a fresh run
-      // must be produced by the revisions the harness currently declares.
+      // Measurement aggregation always binds to the live source identity: a
+      // fresh run must be produced by the local source the harness resolves.
       expectedDartssh2Version: resolvedDartssh2Version,
-      expectedSeanceRevision: pinnedSeanceRevision,
+      expectedSeanceRevision: resolveLocalSeanceRevision(),
     );
   } on ResultAggregationException catch (error) {
     _fail('$error', _dataExitCode);

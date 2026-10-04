@@ -55,7 +55,7 @@ void main() {
       return UpdateChecker(
         client: MockClient((req) async {
           expect(req.url.toString(),
-              'https://api.github.com/repos/L-K-M/Seance/releases/latest');
+              'https://api.github.com/repos/L-K-M/Hauntware/releases/latest');
           expect(req.headers['User-Agent'], isNotNull); // GitHub 403s without it
           return http.Response(body, status);
         }),
@@ -68,7 +68,7 @@ void main() {
       expect(info, isNotNull);
       expect(info!.latestVersion, '0.3.0');
       expect(info.releasesUrl.toString(),
-          'https://github.com/L-K-M/Seance/releases/latest');
+          'https://github.com/L-K-M/Hauntware/releases/latest');
     });
 
     test('reports nothing when up to date', () async {

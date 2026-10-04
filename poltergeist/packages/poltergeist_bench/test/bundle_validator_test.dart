@@ -289,6 +289,73 @@ void main() {
       throwsA(isA<BundleValidationException>()),
     );
   });
+
+  test('validates imported evidence across the monorepo layout', () async {
+    const checker = GitMeasurementDiffChecker();
+    final fixture = await _MonoEvidenceFixture.create();
+    addTearDown(fixture.delete);
+
+    await fixture.ensureUnchanged(checker);
+
+    // Post-import standalone changes must not reopen the frozen boundary.
+    await fixture.changeStandaloneMeasurementInputs('post-import');
+    await fixture.ensureUnchanged(checker);
+  });
+
+  test('rejects monorepo working-tree tampering with the bundle', () async {
+    const checker = GitMeasurementDiffChecker();
+    final fixture = await _MonoEvidenceFixture.create();
+    addTearDown(fixture.delete);
+
+    await fixture.canonical.writeAsString('{"tampered":true}\n');
+    await expectLater(
+      fixture.ensureUnchanged(checker),
+      throwsA(isA<BundleValidationException>()),
+    );
+  });
+
+  test('rejects evidence modified during the monorepo import', () async {
+    const checker = GitMeasurementDiffChecker();
+    final fixture = await _MonoEvidenceFixture.create(tamperImport: true);
+    addTearDown(fixture.delete);
+
+    await expectLater(
+      fixture.ensureUnchanged(checker),
+      throwsA(
+        isA<BundleValidationException>().having(
+          (error) => error.message,
+          'message',
+          contains('Imported evidence differs'),
+        ),
+      ),
+    );
+  });
+
+  test('rejects an ambiguous project layout at the recorded commit', () async {
+    const checker = GitMeasurementDiffChecker();
+    final fixture = await _MonoEvidenceFixture.create();
+    addTearDown(fixture.delete);
+
+    // A commit carrying measurement paths in both layouts cannot be
+    // classified as one era.
+    final ambiguous = await fixture.commitAmbiguousLayout();
+    await expectLater(
+      checker.ensureUnchanged(
+        repositoryRoot: fixture.root.path,
+        recordedSha: ambiguous,
+        fixtureTree: fixture.fixtureTree,
+        canonicalPath: fixture.canonical.path,
+        reportPath: fixture.report.path,
+      ),
+      throwsA(
+        isA<BundleValidationException>().having(
+          (error) => error.message,
+          'message',
+          contains('ambiguous project layout'),
+        ),
+      ),
+    );
+  });
 }
 
 Future<ProcessResult> _git(String repository, List<String> arguments) async {
@@ -418,6 +485,158 @@ class _GitEvidenceFixture {
 }
 
 enum _BoundaryReportState { pending, required }
+
+/// A two-era fixture: standalone-era commits on an orphan branch, then an
+/// import merge that carries the whole tree under `poltergeist/` — the same
+/// shape as the imported repository history.
+class _MonoEvidenceFixture {
+  final Directory root;
+  final File canonical;
+  final File report;
+  final String recordedSha;
+  final String fixtureTree;
+  final String _standaloneBranch;
+
+  const _MonoEvidenceFixture({
+    required this.root,
+    required this.canonical,
+    required this.report,
+    required this.recordedSha,
+    required this.fixtureTree,
+    required String standaloneBranch,
+  }) : _standaloneBranch = standaloneBranch;
+
+  static Future<_MonoEvidenceFixture> create({
+    bool tamperImport = false,
+  }) async {
+    const standalone = 'standalone-era';
+    final root = await Directory.systemTemp.createTemp('m0-mono-diff-');
+    await _git(root.path, ['init', '--quiet']);
+    await _git(root.path, ['config', 'user.email', 'test@example.invalid']);
+    await _git(root.path, ['config', 'user.name', 'M0 test']);
+    await _git(root.path, ['checkout', '--quiet', '--orphan', standalone]);
+
+    Future<void> writeFile(String path, String contents) async {
+      final file = File('${root.path}/$path');
+      await file.parent.create(recursive: true);
+      await file.writeAsString(contents);
+    }
+
+    await writeFile('tool/bench/input.txt', 'measured\n');
+    await writeFile('.github/workflows/ci.yml', 'measured workflow\n');
+    await writeFile('test/integration/fixture.txt', 'fixture\n');
+    await writeFile('docs/plan/00-OVERVIEW.md', 'D9: pending measurement\n');
+    await _git(root.path, ['add', '.']);
+    await _git(root.path, ['commit', '--quiet', '-m', 'Measured']);
+    final recordedSha = (await _git(root.path, [
+      'rev-parse',
+      'HEAD',
+    ])).stdout.toString().trim();
+    final fixtureTree = (await _git(root.path, [
+      'rev-parse',
+      '$recordedSha:test/integration',
+    ])).stdout.toString().trim();
+
+    await writeFile('docs/evidence/m0/$canonicalEvidenceFileName', '{}\n');
+    await writeFile(
+      'docs/M0-DARTSSH2-REPORT.md',
+      '$reportEvidenceRequiredMarker\n',
+    );
+    await writeFile('docs/plan/00-OVERVIEW.md', 'D9: measured decision\n');
+    await _git(root.path, ['add', '.']);
+    await _git(root.path, ['commit', '--quiet', '-m', 'Record evidence']);
+    final captured = (await _git(root.path, [
+      'rev-parse',
+      'HEAD',
+    ])).stdout.toString().trim();
+
+    await _git(root.path, ['checkout', '--quiet', '--orphan', 'mono-base']);
+    await _git(root.path, ['rm', '-rf', '--quiet', '.']);
+    await writeFile('README.md', 'monorepo base\n');
+    await _git(root.path, ['add', '.']);
+    await _git(root.path, ['commit', '--quiet', '-m', 'Base']);
+    final base = (await _git(root.path, [
+      'rev-parse',
+      'HEAD',
+    ])).stdout.toString().trim();
+
+    // Import merge: index gets the base tree plus the standalone tree under
+    // poltergeist/, then commit-tree creates a two-parent commit.
+    await _git(root.path, ['read-tree', '--empty']);
+    await _git(root.path, ['read-tree', base]);
+    await _git(root.path, ['read-tree', '--prefix=poltergeist/', captured]);
+    if (tamperImport) {
+      await writeFile(
+        'poltergeist/docs/evidence/m0/$canonicalEvidenceFileName',
+        '{"tampered":true}\n',
+      );
+      await _git(root.path, [
+        'add',
+        'poltergeist/docs/evidence/m0/$canonicalEvidenceFileName',
+      ]);
+    }
+    final mergeTree = (await _git(root.path, [
+      'write-tree',
+    ])).stdout.toString().trim();
+    final imported = (await _git(root.path, [
+      'commit-tree',
+      mergeTree,
+      '-p',
+      base,
+      '-p',
+      captured,
+      '-m',
+      'Import component history',
+    ])).stdout.toString().trim();
+    await _git(root.path, ['update-ref', 'refs/heads/main', imported]);
+    await _git(root.path, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
+    await _git(root.path, ['reset', '--quiet', '--hard']);
+
+    return _MonoEvidenceFixture(
+      root: root,
+      canonical: File(
+        '${root.path}/poltergeist/docs/evidence/m0/'
+        '$canonicalEvidenceFileName',
+      ),
+      report: File('${root.path}/poltergeist/docs/M0-DARTSSH2-REPORT.md'),
+      recordedSha: recordedSha,
+      fixtureTree: fixtureTree,
+      standaloneBranch: standalone,
+    );
+  }
+
+  Future<void> ensureUnchanged(MeasurementDiffChecker checker) =>
+      checker.ensureUnchanged(
+        repositoryRoot: root.path,
+        recordedSha: recordedSha,
+        fixtureTree: fixtureTree,
+        canonicalPath: canonical.path,
+        reportPath: report.path,
+      );
+
+  Future<void> changeStandaloneMeasurementInputs(String value) async {
+    await _git(root.path, ['checkout', '--quiet', _standaloneBranch]);
+    final file = File('${root.path}/tool/bench/input.txt');
+    await file.writeAsString('$value measurement\n');
+    await _git(root.path, ['add', '.']);
+    await _git(root.path, ['commit', '--quiet', '-m', 'Advance standalone']);
+    await _git(root.path, ['checkout', '--quiet', 'main']);
+  }
+
+  Future<String> commitAmbiguousLayout() async {
+    final file = File('${root.path}/tool/bench/input.txt');
+    await file.parent.create(recursive: true);
+    await file.writeAsString('root layout\n');
+    await _git(root.path, ['add', '.']);
+    await _git(root.path, ['commit', '--quiet', '-m', 'Ambiguous']);
+    return (await _git(root.path, [
+      'rev-parse',
+      'HEAD',
+    ])).stdout.toString().trim();
+  }
+
+  Future<void> delete() => root.delete(recursive: true);
+}
 
 class _InvalidBundleFixture {
   static const _recordedSha = '0123456789abcdef0123456789abcdef01234567';

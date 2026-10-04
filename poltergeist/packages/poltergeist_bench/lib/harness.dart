@@ -4,10 +4,69 @@ import 'throughput_attempt.dart';
 
 const resolvedDartssh2Version = '3.0.2';
 
-/// Live harness pin; frozen M0 evidence retains its measured revisions.
-/// The harness test keeps this aligned with its manifest and resolved lock.
-/// This revision bridge returns to a containing Séance release tag.
-const pinnedSeanceRevision = '76e466fbcbfe5dc90b4fa399e5dfac990b23c30d';
+/// Descriptor prefix for the resolved local Séance source. The live harness
+/// no longer pins an external git revision: `seance@<tree>` names the
+/// committed `HEAD:seance` subtree — the content the `path:` dependency
+/// actually resolves to.
+const localSeanceSourcePrefix = 'seance@';
+
+/// Optional environment override supplying the `HEAD:seance` tree id (as
+/// `seance@<tree>` or a bare 40-hex tree) where benchmark runs lack git
+/// metadata. A malformed override is a configuration error, not a fallback.
+const seanceTreeEnvironmentVariable = 'POLTERGEIST_M0_SEANCE_TREE';
+
+final _revisionPattern = RegExp(r'^[0-9a-f]{40}$');
+final _seanceSourcePattern = RegExp(r'^(?:seance@)?([0-9a-f]{40})$');
+
+/// The deterministic identity of the shared local Séance source for the
+/// live harness: `seance@<tree>` where `<tree>` is `git rev-parse
+/// HEAD:seance` in the enclosing worktree. Frozen M0 evidence retains its
+/// measured revisions; only live runs use this resolution. Environments
+/// with no tree metadata fall back to a `local-` placeholder that
+/// aggregation rejects, so an unidentified source can never be reported
+/// as a real dependency revision.
+String resolveLocalSeanceRevision({
+  Map<String, String>? environment,
+  String? repositoryRoot,
+}) {
+  final override =
+      (environment ?? Platform.environment)[seanceTreeEnvironmentVariable];
+  if (override != null && override.trim().isNotEmpty) {
+    final match = _seanceSourcePattern.firstMatch(override.trim());
+    if (match == null) {
+      throw ArgumentError.value(
+        override,
+        seanceTreeEnvironmentVariable,
+        'expected `seance@<40-hex>` or a 40-hex tree id',
+      );
+    }
+    return '$localSeanceSourcePrefix${match.group(1)}';
+  }
+  final tree = _gitObjectRevision(repositoryRoot, 'HEAD:seance');
+  if (tree == null) return 'local-unresolved-seance-tree';
+
+  return '$localSeanceSourcePrefix$tree';
+}
+
+/// The enclosing worktree's HEAD commit, or null without git metadata.
+/// Local runs attribute the real repository commit instead of claiming an
+/// external pin.
+String? resolveHeadRevision({String? repositoryRoot}) =>
+    _gitObjectRevision(repositoryRoot, 'HEAD');
+
+String? _gitObjectRevision(String? repositoryRoot, String revision) {
+  final result = Process.runSync('git', [
+    '-C',
+    repositoryRoot ?? Directory.current.path,
+    'rev-parse',
+    '--verify',
+    revision,
+  ]);
+  if (result.exitCode != 0) return null;
+
+  final sha = result.stdout.toString().trim();
+  return _revisionPattern.hasMatch(sha) ? sha : null;
+}
 
 /// One attributable measurement row. Rates stay derived from raw values.
 class BenchResult {
@@ -54,13 +113,14 @@ class BenchResult {
     int? rttMs,
     RttEvidence? rttEvidence,
     List<ThroughputTrialEvidence>? throughputTrials,
+    String? seanceRev,
   }) => BenchResult(
     scenario: scenario,
     bytes: bytes,
     elapsed: elapsed,
     note: note,
     dartssh2Version: resolvedDartssh2Version,
-    seanceRev: pinnedSeanceRevision,
+    seanceRev: seanceRev ?? resolveLocalSeanceRevision(),
     rttMs: rttMs,
     rttEvidence: rttEvidence,
     throughputTrials: throughputTrials,

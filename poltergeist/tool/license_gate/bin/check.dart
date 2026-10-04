@@ -27,7 +27,7 @@ Future<void> main(List<String> arguments) async {
     );
     stdout.writeln(
       'Séance license gate passed: ${report.declarationCount} declarations, '
-      '${report.pinnedRevisionCount} pinned revisions'
+      '${report.lockedSourceCount} locked path sources'
       '${report.matchedLicenseIds.isEmpty ? '' : ', licenses '
                 '${report.matchedLicenseIds.join(', ')}'}',
     );

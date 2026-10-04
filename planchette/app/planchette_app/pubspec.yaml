@@ -1,7 +1,7 @@
 name: planchette_app
 description: A focused desktop text editor built with the shared Planchette editor.
 publish_to: none
-version: 0.1.0+1
+version: 1.1.0+1010099
 
 environment:
   sdk: ^3.12.0

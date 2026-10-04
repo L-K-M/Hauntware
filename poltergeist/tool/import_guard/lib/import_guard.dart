@@ -21,9 +21,9 @@ enum _Area { packages, app }
 
 /// The M0 SSH fitness harness is the sanctioned dartssh2 consumer outside
 /// poltergeist_core (07 §3.4 relocated it from tool/bench into packages/).
-/// It keeps a standalone frozen resolution — dartssh2 3.0.2 and the Séance
-/// rev pinned outside the workspace lock — so it resolves through its own
-/// package config, verified like any other scanned package.
+/// It keeps a standalone resolution — dartssh2 3.0.2 and the Séance package
+/// via a seance/ sibling path, outside the workspace lock — so it resolves
+/// through its own package config, verified like any other scanned package.
 const _benchPackage = 'packages/poltergeist_bench';
 
 /// Checks product code only; the relocated M0 harness is a sanctioned SSH
@@ -90,7 +90,7 @@ Future<List<String>> checkImports(String rootPath) async {
 }
 
 /// Resolves [relative] against the workspace graph, except the harness's
-/// standalone package which resolves through its own frozen config.
+/// standalone package which resolves through its own package config.
 DependencyGraph _graphFor(
   String relative,
   DependencyGraph workspace,

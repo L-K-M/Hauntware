@@ -1,0 +1,25 @@
+# Hauntware suite manifest.
+#
+# This is the one versioned artifact at the repository root: the shared
+# lkm-release engine reads the suite version from here (it is the first
+# entry in RELEASE_PUBSPECS) and keeps every owned package/app pubspec in
+# lockstep through scripts/release.sh.
+#
+# It is deliberately NOT a pub workspace: each project keeps its own
+# pure-Dart workspace resolved per subtree (planchette/, seance/,
+# poltergeist/), and the Flutter apps stay outside those workspaces.
+# The dev dependencies below exist so tool/release_version can resolve
+# `package:path`, `package:yaml` and `package:test` against this root —
+# run `dart pub get` here before using the tool or its tests.
+name: hauntware
+publish_to: none
+version: 1.1.0
+
+environment:
+  sdk: ^3.12.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  path: ^1.9.1
+  test: ^1.25.0
+  yaml: ^3.1.4

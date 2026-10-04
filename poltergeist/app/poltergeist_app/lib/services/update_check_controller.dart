@@ -1,6 +1,6 @@
 // The D19 link-only update check's app-side owner (00 D19/D23,
 // 07 §3.10, 01 §6): once per launch the checker asks GitHub for
-// Poltergeist's latest release tag — a plain GET of the static endpoint,
+// Hauntware's latest release tag — a plain GET of the static endpoint,
 // no version string, platform hint, or identifier on the wire — and the
 // response is compared locally. The banner it feeds only ever links to
 // the releases page; nothing here downloads or installs an update.

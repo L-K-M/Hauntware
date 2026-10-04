@@ -5,16 +5,16 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
-const _recordStart = '<!-- SEANCE_PIN_AUDIT_V1:START -->';
-const _recordEnd = '<!-- SEANCE_PIN_AUDIT_V1:END -->';
+const _recordStart = '<!-- SEANCE_PIN_AUDIT_V2:START -->';
+const _recordEnd = '<!-- SEANCE_PIN_AUDIT_V2:END -->';
 const _portsPath = 'docs/PORTS.md';
 const _successExitCode = 0;
 const _failureExitCode = 1;
 const _noMatchesExitCode = 1;
-const _unknownRevisionExitCode = 128;
 const _shaLength = 40;
 const _missingEmailMarker = '(no-email)';
 const _gitlinkModePrefix = '160000 ';
+const _seanceComponent = 'seance';
 
 const _seancePackages = {'seance_core', 'seance_protocol'};
 const _dependencySections = {
@@ -78,15 +78,16 @@ final _emailAttributionPattern = RegExp(
 
 enum _OutputMode { verify, printRecord, printFindings }
 
-/// Runs the deterministic Séance pin audit command.
+/// Runs the deterministic Séance local-source audit command.
 Future<int> runSeancePinAudit(List<String> arguments) async {
   try {
     final options = _Options.parse(arguments);
-    final pins = _readLockedPins(options.root);
-    _verifyManifestPins(options.root, pins);
+    final worktree = await _worktreeRoot(options.root);
+    final sources = _readLockedSources(options.root, worktree);
+    _verifyManifestSources(options.root, worktree, sources);
 
-    final evidence = await _collectEvidence(options, pins);
-    final record = _renderRecord(pins, evidence);
+    final evidence = await _collectEvidence(options, worktree, sources);
+    final record = _renderRecord(sources, evidence);
 
     if (options.outputMode == _OutputMode.printRecord) {
       stdout.write(record);
@@ -98,152 +99,221 @@ Future<int> runSeancePinAudit(List<String> arguments) async {
     }
 
     _verifyRecord(options.root, record);
-    stdout.writeln('Séance pin audit matches $_portsPath');
+    stdout.writeln('Séance source audit matches $_portsPath');
     return _successExitCode;
   } on _AuditFailure catch (error) {
-    stderr.writeln('Séance pin audit failed: ${error.message}');
+    stderr.writeln('Séance source audit failed: ${error.message}');
     return _failureExitCode;
   } on FormatException catch (error) {
-    stderr.writeln('Séance pin audit failed: ${error.message}');
+    stderr.writeln('Séance source audit failed: ${error.message}');
     return _failureExitCode;
   }
+}
+
+/// The scan root must sit inside a Git worktree; the audited component tree
+/// and lineage both come from that worktree's history.
+Future<Directory> _worktreeRoot(Directory root) async {
+  final result = await Process.run(
+    'git',
+    ['-C', root.path, '--no-replace-objects', 'rev-parse', '--show-toplevel'],
+    stdoutEncoding: utf8,
+    stderrEncoding: utf8,
+  );
+  if (result.exitCode != 0) {
+    throw _AuditFailure('scan root is not inside a Git worktree: ${root.path}');
+  }
+  final toplevel = p.normalize(
+    await Directory('${result.stdout}'.trim()).resolveSymbolicLinks(),
+  );
+  final resolvedRoot = p.normalize(await root.resolveSymbolicLinks());
+  if (resolvedRoot != toplevel && !p.isWithin(toplevel, resolvedRoot)) {
+    throw _AuditFailure('scan root escapes its Git worktree: ${root.path}');
+  }
+
+  final shallow = await Process.run(
+    'git',
+    [
+      '-C',
+      toplevel,
+      '--no-replace-objects',
+      'rev-parse',
+      '--is-shallow-repository',
+    ],
+    stdoutEncoding: utf8,
+    stderrEncoding: utf8,
+  );
+  if (shallow.stdout.trim() == 'true') {
+    throw _AuditFailure('audit requires a non-shallow worktree: ${root.path}');
+  }
+
+  return Directory(toplevel);
 }
 
 Future<_Evidence> _collectEvidence(
   _Options options,
-  List<_LockedPin> pins,
+  Directory worktree,
+  List<_LocalSource> sources,
 ) async {
-  final temporaryDirectories = <Directory>[];
-  final checkouts = <String, Directory>{};
+  final components = <String>{
+    for (final source in sources) source.componentRel,
+  }.toList()..sort();
 
-  try {
-    for (final url in pins.map((pin) => pin.url).toSet()) {
-      if (options.checkout case final checkout?) {
-        if (checkouts.isNotEmpty) {
-          throw const _AuditFailure(
-            '--checkout supports one Séance repository URL',
-          );
-        }
-        checkouts[url] = checkout;
-        continue;
-      }
-
-      final temporary = await Directory.systemTemp.createTemp(
-        'poltergeist-seance-audit-',
-      );
-      temporaryDirectories.add(temporary);
-      final checkout = Directory(p.join(temporary.path, 'repository'));
-      await _cloneFullRepository(url, checkout, pins);
-      checkouts[url] = checkout;
-    }
-
-    final audits = <_PinEvidence>[];
-    for (final pin in pins) {
-      final checkout = checkouts[pin.url]!;
-      await _verifyCheckout(checkout, pin);
-      audits.add(await _auditPin(checkout, pin));
-    }
-
-    return _Evidence(audits);
-  } finally {
-    for (final temporary in temporaryDirectories) {
-      await temporary.delete(recursive: true);
-    }
+  final audits = <_ComponentEvidence>[];
+  for (final componentRel in components) {
+    final sourcesInComponent = sources
+        .where((source) => source.componentRel == componentRel)
+        .toList();
+    await _verifyComponent(worktree, componentRel, sourcesInComponent);
+    audits.add(await _auditComponent(worktree, componentRel));
   }
+
+  return _Evidence(audits);
 }
 
-Future<void> _cloneFullRepository(
-  String url,
-  Directory checkout,
-  List<_LockedPin> pins,
+/// The audited surface is the committed component tree at HEAD, so the
+/// worktree must not drift from it: an uncommitted change under the
+/// component is exactly the ambiguity the record cannot certify.
+Future<void> _verifyComponent(
+  Directory worktree,
+  String componentRel,
+  List<_LocalSource> sources,
 ) async {
-  await _run('git', [
-    'clone',
-    '--no-checkout',
-    '--no-single-branch',
-    url,
-    checkout.path,
-  ]);
-
-  // The explicit fetch proves the exact locked object is reachable.
-  for (final pin in pins.where((pin) => pin.url == url)) {
-    await _run('git', [
-      '-C',
-      checkout.path,
-      'fetch',
-      '--no-tags',
-      '--force',
-      'origin',
-      pin.revision,
-    ]);
-  }
-}
-
-Future<void> _verifyCheckout(Directory checkout, _LockedPin pin) async {
-  final shallow = await _runGit(checkout, [
-    'rev-parse',
-    '--is-shallow-repository',
-  ]);
-  if (shallow.stdout.trim() != 'false') {
-    throw const _AuditFailure('Séance checkout must be full and non-shallow');
-  }
-
-  final resolved = await _runGit(checkout, [
+  final tree = await _runGit(worktree, [
     'rev-parse',
     '--verify',
-    '${pin.revision}^{commit}',
+    'HEAD:$componentRel',
   ]);
-  if (resolved.stdout.trim() != pin.revision) {
-    throw _AuditFailure(
-      'checkout does not contain exact locked pin ${pin.revision}',
-    );
+  if (!_shaPattern.hasMatch(tree.stdout.trim())) {
+    throw _AuditFailure('HEAD does not contain the $componentRel component');
   }
 
-  if (_shaPattern.hasMatch(pin.requestedRef)) {
-    if (pin.requestedRef == pin.revision) return;
-
-    throw _AuditFailure(
-      'requested SHA ${pin.requestedRef} differs from ${pin.revision}',
-    );
+  for (final source in sources) {
+    final manifest = File(p.join(worktree.path, source.depRel, 'pubspec.yaml'));
+    if (!manifest.existsSync()) {
+      throw _AuditFailure(
+        '${source.package} resolves to ${source.depRel} without a pubspec',
+      );
+    }
+    final document = loadYaml(manifest.readAsStringSync());
+    final name = document is YamlMap ? document['name']?.toString() : null;
+    if (name != source.package) {
+      throw _AuditFailure(
+        '${source.package} resolves to ${source.depRel} whose package is '
+        '$name',
+      );
+    }
   }
 
-  await _runGit(checkout, [
-    'check-ref-format',
-    'refs/tags/${pin.requestedRef}',
+  final status = await _runGit(worktree, [
+    'status',
+    '--porcelain=v1',
+    '--untracked-files=all',
+    '--',
+    componentRel,
   ]);
-  final tag = await _runGit(
-    checkout,
-    ['rev-parse', '--verify', 'refs/tags/${pin.requestedRef}^{commit}'],
-    acceptedExitCodes: {_successExitCode, _unknownRevisionExitCode},
-  );
-  if (tag.stdout.trim() != pin.revision) {
-    throw _AuditFailure(
-      'tag ${pin.requestedRef} does not resolve to ${pin.revision}',
-    );
+  if (status.stdout.trim().isNotEmpty) {
+    throw _AuditFailure('the $componentRel component has uncommitted changes');
   }
 }
 
-Future<_PinEvidence> _auditPin(Directory checkout, _LockedPin pin) async {
-  final identity = await _identityAudit(checkout, pin.revision);
-  final companion = await _companionAudit(checkout, pin.revision, identity);
-  final license = await _licenseAudit(checkout, pin.revision);
-  final tree = await _treeAudit(checkout, pin.revision);
+/// Séance lineage inside the monorepo has two eras: post-import commits
+/// touching `seance/` and the imported standalone history. Subtree merges
+/// that introduced or refreshed the component carry the standalone tip as
+/// an extra parent; each tip's ancestry is the component's own history.
+Future<List<String>> _lineageTips(
+  Directory worktree,
+  String componentRel,
+) async {
+  final merges = await _runGit(worktree, [
+    'log',
+    '--merges',
+    '--format=%H',
+    'HEAD',
+    '--',
+    '$componentRel/',
+  ]);
+  final tips = <String>{};
+  for (final merge in _nonEmptyLines(merges.stdout)) {
+    final parents = await _runGit(worktree, [
+      'rev-list',
+      '--parents',
+      '-n',
+      '1',
+      merge,
+    ]);
+    final fields = parents.stdout.trim().split(RegExp(r'\s+'));
+    if (fields.length < 3) continue;
+    tips.addAll(fields.skip(2));
+  }
+
+  return tips.toList()..sort();
+}
+
+/// Runs `git log` over both lineage eras and returns the unioned output.
+/// The standalone tips take no pathspec — their trees predate the
+/// monorepo prefix — while post-import commits are selected by the
+/// component path.
+Future<_CommandResult> _lineageLog(
+  Directory worktree,
+  String componentRel,
+  List<String> tips,
+  List<String> arguments,
+) async {
+  final imported = tips.isEmpty
+      ? const _CommandResult('', '')
+      : await _runGit(worktree, [...arguments, ...tips]);
+  final postImport = await _runGit(worktree, [
+    ...arguments,
+    'HEAD',
+    '--',
+    '$componentRel/',
+  ]);
+
+  return _CommandResult(
+    '${imported.stdout}\n${postImport.stdout}',
+    '${imported.stderr}\n${postImport.stderr}',
+  );
+}
+
+Future<_ComponentEvidence> _auditComponent(
+  Directory worktree,
+  String componentRel,
+) async {
+  final tips = await _lineageTips(worktree, componentRel);
+  final treeRevision = (await _runGit(worktree, [
+    'rev-parse',
+    '--verify',
+    'HEAD:$componentRel',
+  ])).stdout.trim();
+
+  final identity = await _identityAudit(worktree, componentRel, tips);
+  final companion = await _companionAudit(
+    worktree,
+    componentRel,
+    tips,
+    identity,
+  );
+  final license = await _licenseAudit(worktree, componentRel);
+  final tree = await _treeAudit(worktree, componentRel);
   final vendored = _vendoredPaths(tree);
   final gitlinks = _gitlinks(tree);
   if (gitlinks.isNotEmpty) {
     throw _AuditFailure(
-      'pin ${pin.revision} contains gitlinks requiring a separate audit',
+      'component $componentRel contains gitlinks requiring a separate audit',
     );
   }
   final pinpoints = await _pinpointAudit(
-    checkout,
-    pin.revision,
+    worktree,
+    componentRel,
+    tips,
     identity,
     companion.orphans,
   );
 
-  return _PinEvidence(
-    pin: pin,
+  return _ComponentEvidence(
+    componentRel: componentRel,
+    treeRevision: treeRevision,
+    lineageTips: tips,
     identity: identity,
     companion: companion.output,
     companionOrphans: companion.orphans,
@@ -255,14 +325,17 @@ Future<_PinEvidence> _auditPin(Directory checkout, _LockedPin pin) async {
   );
 }
 
-Future<String> _identityAudit(Directory checkout, String pin) async {
-  final result = await _runGit(checkout, [
+Future<String> _identityAudit(
+  Directory worktree,
+  String componentRel,
+  List<String> tips,
+) async {
+  final result = await _lineageLog(worktree, componentRel, tips, [
     '-c',
     'log.mailmap=false',
     '-c',
     'i18n.logOutputEncoding=utf-8',
     'log',
-    pin,
     '--format=%an <%ae>%n%cn <%ce>%n%(trailers)',
   ]);
 
@@ -270,11 +343,12 @@ Future<String> _identityAudit(Directory checkout, String pin) async {
 }
 
 Future<_CompanionEvidence> _companionAudit(
-  Directory checkout,
-  String pin,
+  Directory worktree,
+  String componentRel,
+  List<String> tips,
   String identity,
 ) async {
-  final arguments = <String>[
+  final result = await _lineageLog(worktree, componentRel, tips, [
     '-c',
     'grep.patternType=basic',
     '-c',
@@ -282,13 +356,11 @@ Future<_CompanionEvidence> _companionAudit(
     '-c',
     'i18n.logOutputEncoding=utf-8',
     'log',
-    pin,
     '-i',
     for (final pattern in _companionPatterns) '--grep=$pattern',
     r'--grep=<[^>]*@[^>]*>',
     '--format=%H %an <%ae>',
-  ];
-  final result = await _runGit(checkout, arguments);
+  ]);
   final identityAttributions = identity
       .split('\n')
       .where(_isAttribution)
@@ -296,9 +368,10 @@ Future<_CompanionEvidence> _companionAudit(
       .toSet();
   final orphans = <String>[];
 
-  for (final summary in _nonEmptyLines(result.stdout)) {
+  final summaries = _sortUnique(result.stdout);
+  for (final summary in _nonEmptyLines(summaries)) {
     final commit = summary.substring(0, _shaLength);
-    final message = await _runGit(checkout, [
+    final message = await _runGit(worktree, [
       '-c',
       'log.mailmap=false',
       '-c',
@@ -323,39 +396,40 @@ Future<_CompanionEvidence> _companionAudit(
   }
 
   return _CompanionEvidence(
-    _normalize(result.stdout),
+    _sortUnique(result.stdout),
     _sortUnique(orphans.join('\n')),
   );
 }
 
-Future<String> _licenseAudit(Directory checkout, String pin) async {
-  final arguments = <String>[
-    '-c',
-    'grep.patternType=basic',
-    '-c',
-    'core.quotepath=false',
-    'grep',
-    '-I',
-    '-i',
-    for (final pattern in _licensePatterns) ...['-e', pattern],
-    pin,
-  ];
+Future<String> _licenseAudit(Directory worktree, String componentRel) async {
   final result = await _runGit(
-    checkout,
-    arguments,
+    worktree,
+    [
+      '-c',
+      'grep.patternType=basic',
+      '-c',
+      'core.quotepath=false',
+      'grep',
+      '-I',
+      '-i',
+      for (final pattern in _licensePatterns) ...['-e', pattern],
+      'HEAD',
+      '--',
+      '$componentRel/',
+    ],
     acceptedExitCodes: {_successExitCode, _noMatchesExitCode},
   );
 
   return _normalize(result.stdout);
 }
 
-Future<String> _treeAudit(Directory checkout, String pin) async {
-  final result = await _runGit(checkout, [
+Future<String> _treeAudit(Directory worktree, String componentRel) async {
+  final result = await _runGit(worktree, [
     '-c',
     'core.quotepath=false',
     'ls-tree',
     '-r',
-    pin,
+    'HEAD:$componentRel',
   ]);
 
   return _normalize(result.stdout);
@@ -382,8 +456,9 @@ String _gitlinks(String tree) => _nonEmptyLines(
 ).where((line) => line.startsWith(_gitlinkModePrefix)).join('\n');
 
 Future<String> _pinpointAudit(
-  Directory checkout,
-  String pin,
+  Directory worktree,
+  String componentRel,
+  List<String> tips,
   String identity,
   String orphans,
 ) async {
@@ -407,7 +482,7 @@ Future<String> _pinpointAudit(
       '--committer=$escaped',
       '--grep=$escaped',
     ]) {
-      final result = await _runGit(checkout, [
+      final result = await _lineageLog(worktree, componentRel, tips, [
         '-c',
         'grep.patternType=basic',
         '-c',
@@ -415,7 +490,6 @@ Future<String> _pinpointAudit(
         '-c',
         'i18n.logOutputEncoding=utf-8',
         'log',
-        pin,
         '-i',
         limiter,
         '--format=%H',
@@ -435,7 +509,7 @@ Future<String> _pinpointAudit(
 
     final attribution = fields.skip(2).join('\t');
     final escaped = _escapeBasicExpression(attribution);
-    final result = await _runGit(checkout, [
+    final result = await _lineageLog(worktree, componentRel, tips, [
       '-c',
       'grep.patternType=basic',
       '-c',
@@ -443,7 +517,6 @@ Future<String> _pinpointAudit(
       '-c',
       'i18n.logOutputEncoding=utf-8',
       'log',
-      pin,
       '-i',
       '--grep=$escaped',
       '--format=%H',
@@ -489,8 +562,12 @@ bool _isAttribution(String value) =>
     _byAttributionPattern.hasMatch(value) ||
     _emailAttributionPattern.hasMatch(value);
 
-List<_LockedPin> _readLockedPins(Directory root) {
-  final pins = <_LockedPin>{};
+/// Séance sources are the locked `path` dependencies that resolve inside
+/// this worktree's `seance/` component. Any other source — a git pin, a
+/// hosted version, an SDK dep, or a path that escapes the worktree or the
+/// component — is a fail-closed violation, never an ambiguity.
+List<_LocalSource> _readLockedSources(Directory root, Directory worktree) {
+  final sources = <_LocalSource>{};
   for (final file in _findFiles(root, 'pubspec.lock')) {
     final yaml = loadYaml(file.readAsStringSync());
     if (yaml is! YamlMap) continue;
@@ -500,40 +577,119 @@ List<_LockedPin> _readLockedPins(Directory root) {
     for (final entry in packages.entries) {
       final package = entry.key?.toString() ?? '';
       final details = entry.value;
-      if (details is! YamlMap || details['source'] != 'git') continue;
+      if (details is! YamlMap) continue;
+      final source = details['source']?.toString() ?? '';
+      if (source == 'git') {
+        final description = details['description'];
+        final url = description is YamlMap
+            ? description['url']?.toString() ?? ''
+            : '';
+        if (!_isSeanceDependency(package, url)) continue;
+
+        throw _AuditFailure(
+          '${p.relative(file.path, from: root.path)} pins $package to an '
+          'external git source',
+        );
+      }
+      if (source != 'path') {
+        if (_isSeancePackage(package)) {
+          throw _AuditFailure(
+            '${p.relative(file.path, from: root.path)} resolves $package '
+            'from an unexpected source',
+          );
+        }
+        continue;
+      }
+
       final description = details['description'];
       if (description is! YamlMap) continue;
-      final url = description['url']?.toString() ?? '';
-      if (!_isSeanceDependency(package, url)) continue;
-
-      final ref = description['ref']?.toString() ?? '';
-      final revision = description['resolved-ref']?.toString() ?? '';
-      if (ref.isEmpty || !_shaPattern.hasMatch(revision)) {
+      final resolved = _resolveLockPath(file, description);
+      if (resolved == null) {
+        if (_isSeancePackage(package)) {
+          throw _AuditFailure(
+            '${p.relative(file.path, from: root.path)} resolves $package '
+            'without a usable path',
+          );
+        }
+        continue;
+      }
+      final withinWorktree = _isWithinWorktree(worktree, resolved);
+      final componentRel = withinWorktree
+          ? _componentOf(worktree, resolved)
+          : null;
+      if (!_isSeancePackage(package) && componentRel != _seanceComponent) {
+        continue;
+      }
+      if (!withinWorktree) {
         throw _AuditFailure(
-          '${p.relative(file.path, from: root.path)} must resolve an exact 40-hex Séance SHA',
+          '${p.relative(file.path, from: root.path)} resolves $package '
+          'outside the worktree',
+        );
+      }
+      if (componentRel != _seanceComponent) {
+        throw _AuditFailure(
+          '${p.relative(file.path, from: root.path)} resolves $package '
+          'outside the $_seanceComponent component',
         );
       }
 
-      pins.add(_LockedPin(url, ref, revision));
+      sources.add(
+        _LocalSource(
+          package: package,
+          depRel: p.posix.joinAll(
+            p.split(p.relative(resolved, from: worktree.path)),
+          ),
+          componentRel: componentRel!,
+        ),
+      );
     }
   }
 
-  if (pins.isEmpty) {
-    throw const _AuditFailure('no locked Séance pin found');
+  if (sources.isEmpty) {
+    throw const _AuditFailure('no locked Séance source found');
   }
 
-  final sorted = pins.toList()
+  final sorted = sources.toList()
     ..sort((left, right) {
-      final byUrl = left.url.compareTo(right.url);
-      if (byUrl != 0) return byUrl;
-      final byRevision = left.revision.compareTo(right.revision);
-      if (byRevision != 0) return byRevision;
-      return left.requestedRef.compareTo(right.requestedRef);
+      final byPackage = left.package.compareTo(right.package);
+      if (byPackage != 0) return byPackage;
+      return left.depRel.compareTo(right.depRel);
     });
   return sorted;
 }
 
-void _verifyManifestPins(Directory root, List<_LockedPin> pins) {
+String? _resolveLockPath(File lock, YamlMap description) {
+  final path = description['path']?.toString();
+  if (path == null || path.isEmpty) return null;
+  final relative = description['relative'];
+  if (p.isAbsolute(path)) return p.normalize(path);
+  // `relative: false` marks an absolute path; a non-absolute value here is
+  // not a usable resolution.
+  if (relative is bool && !relative) return null;
+
+  return p.normalize(p.join(lock.parent.path, path));
+}
+
+bool _isWithinWorktree(Directory worktree, String resolved) =>
+    p.equals(worktree.path, resolved) || p.isWithin(worktree.path, resolved);
+
+/// The top-level component a worktree path belongs to, or null outside it.
+String? _componentOf(Directory worktree, String resolved) {
+  if (!_isWithinWorktree(worktree, resolved) ||
+      p.equals(worktree.path, resolved)) {
+    return null;
+  }
+  final segments = p.split(p.relative(resolved, from: worktree.path));
+  if (segments.isEmpty) return null;
+
+  return segments.first;
+}
+
+void _verifyManifestSources(
+  Directory root,
+  Directory worktree,
+  List<_LocalSource> sources,
+) {
   var declarationCount = 0;
   for (final file in _findFiles(root, 'pubspec.yaml')) {
     final yaml = loadYaml(file.readAsStringSync());
@@ -546,37 +702,93 @@ void _verifyManifestPins(Directory root, List<_LockedPin> pins) {
       for (final entry in section.entries) {
         final package = entry.key?.toString() ?? '';
         final details = entry.value;
-        if (details is! YamlMap) continue;
+        if (details is! YamlMap) {
+          if (_isSeancePackage(package)) {
+            throw _AuditFailure(
+              '${p.relative(file.path, from: root.path)} declares $package '
+              'without a path source',
+            );
+          }
+          continue;
+        }
+
         final git = details['git'];
-        if (git is! YamlMap) continue;
-        final url = git['url']?.toString() ?? '';
-        if (!_isSeanceDependency(package, url)) continue;
+        if (git != null) {
+          final url = git is YamlMap
+              ? git['url']?.toString() ?? ''
+              : git?.toString() ?? '';
+          if (!_isSeanceDependency(package, url)) continue;
+
+          throw _AuditFailure(
+            '${p.relative(file.path, from: root.path)} declares $package '
+            'on an external git source',
+          );
+        }
+
+        final declaredPath = details['path']?.toString();
+        if (declaredPath == null || declaredPath.isEmpty) {
+          if (_isSeancePackage(package)) {
+            throw _AuditFailure(
+              '${p.relative(file.path, from: root.path)} declares $package '
+              'without a path source',
+            );
+          }
+          continue;
+        }
+        final resolved = p.normalize(
+          p.isAbsolute(declaredPath)
+              ? declaredPath
+              : p.join(file.parent.path, declaredPath),
+        );
+        final withinWorktree = _isWithinWorktree(worktree, resolved);
+        final componentRel = withinWorktree
+            ? _componentOf(worktree, resolved)
+            : null;
+        if (!_isSeancePackage(package) && componentRel != _seanceComponent) {
+          continue;
+        }
+        if (!withinWorktree) {
+          throw _AuditFailure(
+            '${p.relative(file.path, from: root.path)} declares $package '
+            'outside the worktree',
+          );
+        }
+        if (componentRel != _seanceComponent) {
+          throw _AuditFailure(
+            '${p.relative(file.path, from: root.path)} declares $package '
+            'outside the $_seanceComponent component',
+          );
+        }
 
         declarationCount++;
-        final ref = git['ref']?.toString() ?? '';
         final lock = _resolvingLock(root, file);
         if (lock == null) {
           throw _AuditFailure(
             '${p.relative(file.path, from: root.path)} has no resolving lock',
           );
         }
-        final lockedPin = _lockedPackagePin(lock, package);
+        final lockedSource = _lockedPackageSource(lock, package);
+        final depRel = p.posix.joinAll(
+          p.split(p.relative(resolved, from: worktree.path)),
+        );
         final matches =
-            lockedPin != null &&
-            lockedPin.url == url &&
-            lockedPin.requestedRef == ref &&
-            pins.contains(lockedPin.pin);
+            lockedSource != null &&
+            lockedSource.resolved == resolved &&
+            sources.any(
+              (source) => source.package == package && source.depRel == depRel,
+            );
         if (matches) continue;
 
         throw _AuditFailure(
-          '${p.relative(file.path, from: root.path)} manifest and lock Séance pins differ',
+          '${p.relative(file.path, from: root.path)} manifest and lock '
+          'Séance paths differ',
         );
       }
     }
   }
 
   if (declarationCount == 0) {
-    throw const _AuditFailure('no Séance git dependency declared');
+    throw const _AuditFailure('no Séance path dependency declared');
   }
 }
 
@@ -610,22 +822,20 @@ File? _resolvingLock(Directory root, File manifest) {
   return null;
 }
 
-_LockedPackagePin? _lockedPackagePin(File lock, String package) {
+_LockedPackageSource? _lockedPackageSource(File lock, String package) {
   final yaml = loadYaml(lock.readAsStringSync());
   if (yaml is! YamlMap) return null;
   final packages = yaml['packages'];
   if (packages is! YamlMap) return null;
   final details = packages[package];
-  if (details is! YamlMap || details['source'] != 'git') return null;
+  if (details is! YamlMap || details['source'] != 'path') return null;
   final description = details['description'];
   if (description is! YamlMap) return null;
 
-  final url = description['url']?.toString() ?? '';
-  final ref = description['ref']?.toString() ?? '';
-  final revision = description['resolved-ref']?.toString() ?? '';
-  if (ref.isEmpty || !_shaPattern.hasMatch(revision)) return null;
+  final resolved = _resolveLockPath(lock, description);
+  if (resolved == null) return null;
 
-  return _LockedPackagePin(url, ref, revision);
+  return _LockedPackageSource(resolved);
 }
 
 Iterable<File> _findFiles(Directory root, String name) sync* {
@@ -641,35 +851,44 @@ Iterable<File> _findFiles(Directory root, String name) sync* {
   }
 }
 
+bool _isSeancePackage(String package) =>
+    _seancePackages.contains(package) || package.startsWith('seance_');
+
 bool _isSeanceDependency(String package, String url) {
-  if (_seancePackages.contains(package) || package.startsWith('seance_')) {
-    return true;
-  }
+  if (_isSeancePackage(package)) return true;
 
   final normalized = url.toLowerCase().replaceAll(RegExp(r'/+$'), '');
   return normalized.endsWith('/seance') || normalized.endsWith('/seance.git');
 }
 
-String _renderRecord(List<_LockedPin> pins, _Evidence evidence) {
+String _renderRecord(List<_LocalSource> sources, _Evidence evidence) {
   final buffer = StringBuffer()
     ..writeln(_recordStart)
-    ..writeln('## Séance pin audit')
+    ..writeln('## Séance source audit')
     ..writeln()
-    ..writeln('Full, non-shallow ancestor and tree audit. Raw streams are')
-    ..writeln('content-addressed by SHA-256; line counts aid review. Use')
-    ..writeln(
-      '`--print-findings` to reproduce them without adding names to docs.',
-    )
+    ..writeln('Deterministic local-source audit. Séance packages resolve')
+    ..writeln('by path inside this worktree; evidence binds the committed')
+    ..writeln('component tree and its full lineage (imported standalone')
+    ..writeln('ancestry included). Raw streams are content-addressed by')
+    ..writeln('SHA-256; line counts aid review. Use `--print-findings` to')
+    ..writeln('reproduce them without adding names to docs.')
     ..writeln();
-  for (final pin in pins) {
-    // Distinct lock tuples can resolve to one revision — a tag pin
-    // (`ref: v0.9.1`) and its transitive path dep (`ref: <sha>`) — so
-    // render the requested ref when it differs from the revision;
-    // otherwise two identical-looking lines read as a paste error.
-    final suffix = pin.requestedRef == pin.revision
-        ? ''
-        : ' (requested ref: `${pin.requestedRef}`)';
-    buffer.writeln('- Pin: `${pin.revision}` from `${pin.url}`$suffix');
+  for (final source in sources) {
+    buffer.writeln(
+      '- Source: `${source.package}` at `${source.depRel}` '
+      '(path dependency)',
+    );
+  }
+  for (final audit in evidence.audits) {
+    buffer.writeln(
+      '- Component: `${audit.componentRel}/` tree '
+      '`${audit.treeRevision}` at `HEAD`',
+    );
+    if (audit.lineageTips.isNotEmpty) {
+      buffer.writeln(
+        '- Lineage: ${audit.lineageTips.map((tip) => '`$tip`').join(', ')}',
+      );
+    }
   }
   buffer
     ..writeln(
@@ -703,7 +922,7 @@ String _renderRecord(List<_LockedPin> pins, _Evidence evidence) {
 void _verifyRecord(Directory root, String expected) {
   final file = File(p.join(root.path, _portsPath));
   if (!file.existsSync()) {
-    throw const _AuditFailure('$_portsPath is missing the pin audit record');
+    throw const _AuditFailure('$_portsPath is missing the source audit record');
   }
 
   final contents = file.readAsStringSync();
@@ -713,7 +932,9 @@ void _verifyRecord(Directory root, String expected) {
       start >= 0 && contents.indexOf(_recordStart, start + 1) >= 0;
   final duplicateEnd = end >= 0 && contents.indexOf(_recordEnd, end + 1) >= 0;
   if (start < 0 || end < start || duplicateStart || duplicateEnd) {
-    throw const _AuditFailure('$_portsPath must contain one pin audit record');
+    throw const _AuditFailure(
+      '$_portsPath must contain one source audit record',
+    );
   }
 
   final actual = '${contents.substring(start, end + _recordEnd.length)}\n';
@@ -725,12 +946,12 @@ void _verifyRecord(Directory root, String expected) {
 }
 
 Future<_CommandResult> _runGit(
-  Directory checkout,
+  Directory worktree,
   List<String> arguments, {
   Set<int> acceptedExitCodes = const {_successExitCode},
 }) => _run('git', [
   '-C',
-  checkout.path,
+  worktree.path,
   '--no-replace-objects',
   ...arguments,
 ], acceptedExitCodes: acceptedExitCodes);
@@ -791,28 +1012,21 @@ Iterable<String> _nonEmptyLines(String value) =>
 
 final class _Options {
   final Directory root;
-  final Directory? checkout;
   final _OutputMode outputMode;
 
-  const _Options(this.root, this.checkout, this.outputMode);
+  const _Options(this.root, this.outputMode);
 
   factory _Options.parse(List<String> arguments) {
     var root = Directory.current;
-    Directory? checkout;
     var outputMode = _OutputMode.verify;
 
     for (var index = 0; index < arguments.length; index++) {
       final argument = arguments[index];
-      if (argument == '--root' || argument == '--checkout') {
+      if (argument == '--root') {
         if (index + 1 >= arguments.length) {
           throw FormatException('$argument requires a path');
         }
-        final directory = Directory(p.absolute(arguments[++index]));
-        if (argument == '--root') {
-          root = directory;
-        } else {
-          checkout = directory;
-        }
+        root = Directory(p.absolute(arguments[++index]));
         continue;
       }
       if (argument == '--print-record') {
@@ -836,44 +1050,41 @@ final class _Options {
     if (!root.existsSync()) {
       throw FormatException('root does not exist: ${root.path}');
     }
-    if (checkout != null && !checkout.existsSync()) {
-      throw FormatException('checkout does not exist: ${checkout.path}');
-    }
 
-    return _Options(root, checkout, outputMode);
+    return _Options(root, outputMode);
   }
 }
 
-final class _LockedPin {
-  final String url;
-  final String requestedRef;
-  final String revision;
+final class _LocalSource {
+  final String package;
+  final String depRel;
+  final String componentRel;
 
-  const _LockedPin(this.url, this.requestedRef, this.revision);
+  const _LocalSource({
+    required this.package,
+    required this.depRel,
+    required this.componentRel,
+  });
 
   @override
   bool operator ==(Object other) =>
-      other is _LockedPin &&
-      other.url == url &&
-      other.requestedRef == requestedRef &&
-      other.revision == revision;
+      other is _LocalSource &&
+      other.package == package &&
+      other.depRel == depRel &&
+      other.componentRel == componentRel;
 
   @override
-  int get hashCode => Object.hash(url, requestedRef, revision);
+  int get hashCode => Object.hash(package, depRel, componentRel);
 }
 
-final class _LockedPackagePin {
-  final String url;
-  final String requestedRef;
-  final String revision;
+final class _LockedPackageSource {
+  final String resolved;
 
-  const _LockedPackagePin(this.url, this.requestedRef, this.revision);
-
-  _LockedPin get pin => _LockedPin(url, requestedRef, revision);
+  const _LockedPackageSource(this.resolved);
 }
 
 final class _Evidence {
-  final List<_PinEvidence> audits;
+  final List<_ComponentEvidence> audits;
 
   const _Evidence(this.audits);
 
@@ -886,13 +1097,13 @@ final class _Evidence {
   _Section get vendored => _combine((audit) => audit.vendored);
   _Section get gitlinks => _combine((audit) => audit.gitlinks);
 
-  _Section _combine(String Function(_PinEvidence) select) {
+  _Section _combine(String Function(_ComponentEvidence) select) {
     final buffer = StringBuffer();
     var lineCount = 0;
     for (final audit in audits) {
       final output = select(audit);
       buffer
-        ..writeln('${audit.pin.url}@${audit.pin.revision}')
+        ..writeln('${audit.componentRel}@${audit.treeRevision}')
         ..writeln(output);
       lineCount += _countLines(output);
     }
@@ -902,7 +1113,9 @@ final class _Evidence {
   String renderFindings() {
     final buffer = StringBuffer();
     for (final audit in audits) {
-      buffer.writeln('[pin]\n${audit.pin.url}@${audit.pin.revision}');
+      buffer.writeln(
+        '[component]\n${audit.componentRel}@${audit.treeRevision}',
+      );
       for (final section in audit.sections.entries) {
         buffer.writeln('[${section.key}]\n${section.value}');
       }
@@ -911,8 +1124,10 @@ final class _Evidence {
   }
 }
 
-final class _PinEvidence {
-  final _LockedPin pin;
+final class _ComponentEvidence {
+  final String componentRel;
+  final String treeRevision;
+  final List<String> lineageTips;
   final String identity;
   final String companion;
   final String companionOrphans;
@@ -922,8 +1137,10 @@ final class _PinEvidence {
   final String gitlinks;
   final String pinpoints;
 
-  const _PinEvidence({
-    required this.pin,
+  const _ComponentEvidence({
+    required this.componentRel,
+    required this.treeRevision,
+    required this.lineageTips,
     required this.identity,
     required this.companion,
     required this.companionOrphans,
