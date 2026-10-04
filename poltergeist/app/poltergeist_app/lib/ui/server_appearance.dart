@@ -151,8 +151,6 @@ class ServerTint {
   factory ServerTint.custom(Color color) =>
       ServerTint(named: nearestServerColor(color), custom: color);
 
-  bool get isNone => named == null && custom == null;
-
   /// The two field values a `ServerConfig` stores for this tint: the inverse
   /// of [ServerTint.of], so an editor holds one tint and writes both.
   ({ServerColor? color, String? customColor}) get stored => (

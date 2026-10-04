@@ -1149,13 +1149,6 @@ class AppServices {
     if (backends.isEmpty) return null;
     return backends.length == 1 ? backends.single : CompositeSearch(backends);
   }
-
-  /// A caller-owned sync client, or null if sync isn't set up. Close after use.
-  HttpSyncClient? buildSyncClient() {
-    final url = settings.syncBaseUrl;
-    if (url == null || url.isEmpty) return null;
-    return HttpSyncClient(baseUrl: url);
-  }
 }
 
 const String _plainNotFound = 'http_404';

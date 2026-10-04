@@ -200,19 +200,6 @@ class MasterKeyManager {
   Future<void> setKeystoreKey(List<int> key) =>
       _write(_keyName, base64.encode(key), what: 'the vault master key');
 
-  /// Derive the vault key from a master passphrase (fallback / sync enrolment).
-  /// The returned [VaultKeys.vaultKey] unlocks the local vault; the
-  /// [VaultKeys.authVerifier] authenticates to the sync server.
-  Future<VaultKeys> deriveFromPassphrase(
-    String passphrase,
-    List<int> salt, {
-    Argon2Params params = const Argon2Params(),
-  }) => VaultCrypto.deriveKeys(
-    passphrase: passphrase,
-    salt: salt,
-    params: params,
-  );
-
   /// Store an API key (LLM provider) in the OS keystore under [name]. Never
   /// synced. Throws [KeystoreException] when the keystore is unavailable —
   /// a caller saving user input must be able to say the save failed.
