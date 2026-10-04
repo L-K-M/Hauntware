@@ -650,6 +650,76 @@ second term
     expect(report.matchedLicenseIds, {'Unlicense', 'MIT'});
   });
 
+  test('matches vendored licenses with a different title line', () async {
+    // Vendored files carry their own heading ("The MIT License (MIT)")
+    // while the SPDX corpus prints "MIT License"; the license body is
+    // what must match.
+    const body = 'Permission is hereby granted to deal in the Software.';
+    final mitSpdx = _GitFixture.create(p.join(sandbox.path, 'spdx-mit'), {
+      'text/Unlicense.txt': _canonicalUnlicense,
+      'text/MIT.txt':
+          'MIT License\n\nCopyright (c) <year> <copyright holders>\n\n$body',
+    });
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {
+        'LICENSE': _canonicalUnlicense,
+        'third_party/flutter_pty/LICENSE':
+            'The MIT License (MIT)\n\nCopyright (c) 2022 xuty\n\n$body',
+      },
+    );
+
+    final report = await _verify(
+      project,
+      mitSpdx,
+      LicenseGateMode.release,
+      permittedLicenseIds: {'Unlicense', 'MIT'},
+    );
+
+    expect(report.matchedLicenseIds, {'Unlicense', 'MIT'});
+  });
+
+  test('rejects a restricted title line over an MIT body', () async {
+    // The title alias list is exact: a restricted or foreign heading
+    // must stay part of the body comparison instead of being stripped.
+    const body = 'Permission is hereby granted to deal in the Software.';
+    final mitSpdx = _GitFixture.create(p.join(sandbox.path, 'spdx-mit'), {
+      'text/Unlicense.txt': _canonicalUnlicense,
+      'text/MIT.txt':
+          'MIT License\n\nCopyright (c) <year> <copyright holders>\n\n$body',
+    });
+    for (final title in const [
+      'MIT License - Non-Commercial Only',
+      'Acme Proprietary License',
+    ]) {
+      final project = _ProjectFixture.create(
+        p.join(sandbox.path, 'project-$title'),
+        seanceFiles: {
+          'LICENSE': _canonicalUnlicense,
+          'third_party/flutter_pty/LICENSE':
+              '$title\n\nCopyright (c) 2022 xuty\n\n$body',
+        },
+      );
+
+      await expectLater(
+        _verify(
+          project,
+          mitSpdx,
+          LicenseGateMode.release,
+          permittedLicenseIds: {'Unlicense', 'MIT'},
+        ),
+        throwsA(
+          isA<LicenseGateException>().having(
+            (error) => error.message,
+            'message',
+            contains('non-permitted third_party/flutter_pty/LICENSE'),
+          ),
+        ),
+        reason: title,
+      );
+    }
+  });
+
   test('rejects a restrictive vendored license', () async {
     final project = _ProjectFixture.create(
       p.join(sandbox.path, 'project'),
@@ -858,8 +928,11 @@ jobs:
     steps:
       - run: dart pub get
       - run: dart run tool/license_gate/bin/check.dart # $seanceLicenseGateMarker
+  build:
+    steps:
+      - run: echo build
   publish:
-    needs: gate
+    needs: build
     steps:
       - uses: softprops/action-gh-release@v2
 ''');
@@ -874,6 +947,188 @@ jobs:
         ),
       ),
     );
+  });
+
+  test('accepts the monorepo draft-attach/publish-point graph', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    // Mirrors the root release.yml shape: build legs attach to the
+    // hidden draft in parallel with the job carrying the full gate,
+    // while the draft flip and the image push sit behind needs chains
+    // that include the gate job.
+    _write(project.worktree, '.github/workflows/release.yml', '''
+jobs:
+  test:
+    steps:
+      - run: dart pub get
+      - run: dart run tool/license_gate/bin/check.dart --marker-only
+  server:
+    needs: test
+    steps:
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+  client:
+    needs: test
+    steps:
+      - run: dart pub get
+      - run: dart run tool/license_gate/bin/check.dart # $seanceLicenseGateMarker
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+  docker:
+    needs:
+      - test
+      - server
+      - client
+    steps:
+      - uses: docker/build-push-action@v7
+        with:
+          push: true
+  sums:
+    needs:
+      - server
+      - client
+      - docker
+    steps:
+      - run: gh release edit "\$TAG" --draft=false
+''');
+
+    final report = await _verify(project, spdx, LicenseGateMode.markerOnly);
+    expect(report.lockedSourceCount, greaterThan(0));
+  });
+
+  test('rejects an ungated draft-flip publish point', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    _write(project.worktree, '.github/workflows/release.yml', '''
+jobs:
+  gate:
+    steps:
+      - run: dart pub get
+      - run: dart run tool/license_gate/bin/check.dart # $seanceLicenseGateMarker
+  attach:
+    needs: gate
+    steps:
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+  sums:
+    steps:
+      - run: gh release edit "\$TAG" --draft=false
+''');
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('bypasses the license gate'),
+        ),
+      ),
+    );
+  });
+
+  test('rejects a draft-flip flag hidden on a continued line', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    _write(project.worktree, '.github/workflows/release.yml', '''
+jobs:
+  gate:
+    steps:
+      - run: dart pub get
+      - run: dart run tool/license_gate/bin/check.dart # $seanceLicenseGateMarker
+  attach:
+    needs: gate
+    steps:
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+  sums:
+    steps:
+      - run: |
+          gh release edit "\$TAG" \\
+            --draft=false
+''');
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('bypasses the license gate'),
+        ),
+      ),
+    );
+  });
+
+  test('rejects an ungated container-image push', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    _write(project.worktree, '.github/workflows/release.yml', '''
+jobs:
+  gate:
+    steps:
+      - run: dart pub get
+      - run: dart run tool/license_gate/bin/check.dart # $seanceLicenseGateMarker
+  attach:
+    needs: gate
+    steps:
+      - uses: softprops/action-gh-release@v3
+        with:
+          draft: true
+  build:
+    steps:
+      - run: echo build
+  docker:
+    needs: build
+    steps:
+      - uses: docker/build-push-action@v7
+        with:
+          push: true
+''');
+
+    await expectLater(
+      _verify(project, spdx, LicenseGateMode.markerOnly),
+      throwsA(
+        isA<LicenseGateException>().having(
+          (error) => error.message,
+          'message',
+          contains('bypasses the license gate'),
+        ),
+      ),
+    );
+  });
+
+  test('accepts a direct publish leg that needs the gate job', () async {
+    final project = _ProjectFixture.create(
+      p.join(sandbox.path, 'project'),
+      seanceFiles: const {'LICENSE': _canonicalUnlicense},
+    );
+    _write(project.worktree, '.github/workflows/release.yml', '''
+jobs:
+  gate:
+    steps:
+      - run: dart pub get
+      - run: dart run tool/license_gate/bin/check.dart # $seanceLicenseGateMarker
+  publish:
+    needs: gate
+    steps:
+      - uses: softprops/action-gh-release@v3
+''');
+
+    final report = await _verify(project, spdx, LicenseGateMode.markerOnly);
+    expect(report.lockedSourceCount, greaterThan(0));
   });
 
   test('rejects a disabled gate step', () async {

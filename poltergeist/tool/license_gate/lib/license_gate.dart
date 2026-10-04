@@ -11,6 +11,7 @@ const String seanceLicenseGateMarker = 'SEANCE_LICENSE_GATE_V1';
 const String _releaseWorkflowPath = '.github/workflows/release.yml';
 const String _gateInvocation = 'dart run tool/license_gate/bin/check.dart';
 const String _releaseAction = 'softprops/action-gh-release@';
+const String _imagePushAction = 'docker/build-push-action@';
 const String _spdxRepository = 'https://github.com/spdx/license-list-data.git';
 const String _spdxRevision = 'c4a7237ec8f4654e867546f9f409749300f1bf4c';
 const Set<String> _permittedLicenseIds = {
@@ -713,32 +714,143 @@ void _verifyWorkflowGate(Directory root, Directory? worktree, bool required) {
     );
   }
 
+  final directNeeds = <String, Set<String>>{};
+  for (final entry in jobs.entries) {
+    final jobName = entry.key;
+    final job = _asMap(entry.value);
+    if (jobName is! String || job == null) continue;
+    directNeeds[jobName] = _jobNeeds(job);
+  }
+
   for (final entry in jobs.entries) {
     final jobName = entry.key;
     final job = _asMap(entry.value);
     if (jobName is! String || job == null) continue;
     final steps = _asList(job['steps']);
     if (steps == null) continue;
+    // A job skipped by `needs` on a failed gate can never reach its
+    // publish step; the transitive closure covers needs chains of any
+    // depth (build legs behind the flip job, and so on).
+    final needsReachGate = _transitiveNeeds(
+      jobName,
+      directNeeds,
+    ).contains(gateJobName);
     for (var stepIndex = 0; stepIndex < steps.length; stepIndex++) {
       final step = _asMap(steps[stepIndex]);
-      final uses = step?['uses'];
-      if (uses is! String || !uses.startsWith(_releaseAction)) continue;
+      if (step == null) continue;
+      final surface = _releaseSurface(step);
+      if (surface == _ReleaseSurface.none) continue;
 
       if (job['if'] != null ||
           job['continue-on-error'] != null ||
-          step?['if'] != null ||
-          step?['continue-on-error'] != null) {
+          step['if'] != null ||
+          step['continue-on-error'] != null) {
         throw LicenseGateException(
           'release publisher job $jobName can bypass failed prerequisites',
         );
       }
-      if (jobName == gateJobName && stepIndex > gateStepIndex) continue;
+      // Draft-only attachments are inert while the release stays hidden:
+      // the surfaces that expose anything (a non-draft release upload,
+      // the draft flip, a registry push) carry the gating requirement.
+      if (surface == _ReleaseSurface.attach) continue;
+      final gated = jobName == gateJobName
+          ? stepIndex > gateStepIndex
+          : needsReachGate;
+      if (gated) continue;
 
       throw LicenseGateException(
         'release publisher job $jobName bypasses the license gate',
       );
     }
   }
+}
+
+enum _ReleaseSurface { none, attach, publish }
+
+/// Whether a workflow step can expose release artifacts publicly:
+/// attaching files to the hidden draft is inert, while publishing the
+/// release, flipping its draft flag, or pushing an image is not.
+_ReleaseSurface _releaseSurface(Map<Object?, Object?> step) {
+  final uses = step['uses'];
+  if (uses is String) {
+    if (uses.startsWith(_releaseAction)) {
+      final withMap = _asMap(step['with']);
+      return _isTruthy(withMap?['draft'])
+          ? _ReleaseSurface.attach
+          : _ReleaseSurface.publish;
+    }
+    if (uses.startsWith(_imagePushAction)) {
+      final withMap = _asMap(step['with']);
+      final push = withMap?['push'];
+      if (push == null || push == false || push == 'false') {
+        return _ReleaseSurface.none;
+      }
+      return _ReleaseSurface.publish;
+    }
+    return _ReleaseSurface.none;
+  }
+  final run = step['run'];
+  if (run is String && _runsReleasePublish(run)) {
+    return _ReleaseSurface.publish;
+  }
+  return _ReleaseSurface.none;
+}
+
+bool _isTruthy(Object? value) => value == true || value == 'true';
+
+/// Publish commands embedded in `run` scripts: `gh release create`
+/// without a draft flag, `gh release edit --draft=false` (the flip),
+/// `gh api` calls that mutate `draft`, and Docker pushes.
+bool _runsReleasePublish(String command) {
+  final editFlip = RegExp(
+    r'\bgh\s+release\s+edit\b[^\n]*--draft\s*[= ]\s*false\b',
+  );
+  final create = RegExp(r'\bgh\s+release\s+create\b');
+  // `--draft` keeps `gh release create` hidden unless it is explicitly
+  // set to a false value (`--draft=false`, `--draft false`).
+  final draftKeeps = RegExp(r'''--draft(?!\s*[= ]\s*["']?false\b)''');
+  final apiDraft = RegExp(r'\bgh\s+api\b[^\n]*\bdraft\b');
+  final dockerPush = RegExp(
+    r'\bdocker\s+(?:push\b|(?:buildx\s+)?build\b[^\n]*--push\b)',
+  );
+
+  // Fold backslash continuations first so a flag cannot hide on the
+  // next physical line of a `run: |` block.
+  final logical = command.replaceAll(RegExp(r'\\\r?\n'), ' ');
+  for (final rawLine in logical.split(RegExp(r'\r?\n'))) {
+    final line = rawLine.trim();
+    if (line.isEmpty || line.startsWith('#')) continue;
+    if (editFlip.hasMatch(line) ||
+        apiDraft.hasMatch(line) ||
+        dockerPush.hasMatch(line)) {
+      return true;
+    }
+    if (create.hasMatch(line) && !draftKeeps.hasMatch(line)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+Set<String> _jobNeeds(Map<Object?, Object?> job) {
+  final needs = job['needs'];
+  if (needs is String) return {needs};
+  final list = _asList(needs);
+  if (list == null) return const {};
+  return {
+    for (final need in list)
+      if (need is String) need,
+  };
+}
+
+Set<String> _transitiveNeeds(String job, Map<String, Set<String>> direct) {
+  final seen = <String>{};
+  final queue = [...?direct[job]];
+  while (queue.isNotEmpty) {
+    final need = queue.removeLast();
+    if (seen.add(need)) queue.addAll(direct[need] ?? const {});
+  }
+  return seen;
 }
 
 bool _runsDependencyResolution(String command) {
@@ -809,12 +921,40 @@ String _normalizeLicense(
 }) {
   final withoutBom = text.startsWith('\ufeff') ? text.substring(1) : text;
   final lines = withoutBom.split(RegExp(r'\r\n?|\n'));
-  final substantive = lines.where(
-    (line) =>
-        !_isCopyrightNotice(line, copyrightSource, permittedCopyrightHolders),
-  );
+  final substantive = lines
+      .where(
+        (line) => !_isCopyrightNotice(
+          line,
+          copyrightSource,
+          permittedCopyrightHolders,
+        ),
+      )
+      .toList();
+  // License files conventionally open with a bare title line; only the
+  // exact titles the SPDX corpus prints for the permitted ids (plus the
+  // vendored spellings actually in use) may be dropped — a restricted or
+  // foreign heading like "MIT License - Non-Commercial Only" stays part
+  // of the body comparison and fails closed.
+  for (var index = 0; index < substantive.length; index++) {
+    if (substantive[index].trim().isEmpty) continue;
+    if (_licenseTitles.contains(substantive[index].trim().toLowerCase())) {
+      substantive.removeAt(index);
+    }
+    break;
+  }
   return substantive.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 }
+
+/// Title lines the SPDX corpus prints for the permitted licenses plus
+/// the vendored variants in the tree (`The MIT License (MIT)`).
+const _licenseTitles = {
+  'apache license',
+  'bsd 2-clause license',
+  'bsd 3-clause license',
+  'isc license',
+  'mit license',
+  'the mit license (mit)',
+};
 
 bool _isCopyrightNotice(
   String line,
