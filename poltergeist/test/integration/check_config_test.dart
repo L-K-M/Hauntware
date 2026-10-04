@@ -167,19 +167,31 @@ void main() {
     for (final variable in [
       'POLTERGEIST_M0_STARTED_AT_EPOCH_MS',
       'POLTERGEIST_M0_FIXTURE_IMAGE_ID',
-      'POLTERGEIST_M0_FIXTURE_TREE',
       'POLTERGEIST_M0_OPENSSH_CLIENT_VERSION',
       'POLTERGEIST_M0_OPENSSH_SERVER_VERSION',
     ]) {
       expect(runner, contains('export $variable='), reason: variable);
     }
+    // Assigned before export, so a failed lookup stops the run.
+    expect(runner, contains('POLTERGEIST_M0_FIXTURE_TREE="\$('));
+    expect(runner, contains('export POLTERGEIST_M0_FIXTURE_TREE\n'));
     expect(runner, contains('compose images --quiet sshd-modern'));
     expect(
       runner,
-      contains(r'git -C "$repo_root" rev-parse HEAD:test/integration'),
+      contains(r'git -C "$repo_root" rev-parse HEAD:./test/integration'),
     );
     expect(runner, contains("ssh -V"));
     expect(runner, contains("apk info --verbose openssh-server-pam"));
+  });
+
+  test('the fixture tree lookup resolves inside the monorepo', () {
+    // run.sh runs `git -C "$repo_root" rev-parse <spec>` with $repo_root
+    // the Poltergeist subtree, which is this suite's working directory.
+    final runner = File('test/integration/run.sh').readAsStringSync();
+    final spec = RegExp(r'rev-parse (HEAD:\S+)').firstMatch(runner)!.group(1)!;
+    final result = Process.runSync('git', ['rev-parse', '--verify', spec]);
+
+    expect(result.exitCode, 0, reason: '${result.stderr}');
   });
 
   test('runs the generic lifecycle finalizer after fixture teardown', () {

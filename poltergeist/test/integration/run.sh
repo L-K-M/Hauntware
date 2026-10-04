@@ -98,9 +98,13 @@ for service_name in "${services[@]}"; do
 done
 
 export POLTERGEIST_M0_FIXTURE_IMAGE_ID="$(compose images --quiet sshd-modern)"
-export POLTERGEIST_M0_FIXTURE_TREE="$(
-  git -C "$repo_root" rev-parse HEAD:test/integration
+# `./` resolves against $repo_root (the Poltergeist subtree), not the
+# Git top level. Assigned before export so a failed lookup stops the
+# run instead of exporting an empty tree id.
+POLTERGEIST_M0_FIXTURE_TREE="$(
+  git -C "$repo_root" rev-parse HEAD:./test/integration
 )"
+export POLTERGEIST_M0_FIXTURE_TREE
 export POLTERGEIST_M0_OPENSSH_CLIENT_VERSION="$(ssh -V 2>&1)"
 export POLTERGEIST_M0_OPENSSH_SERVER_VERSION="$(
   compose exec -T sshd-modern apk info --verbose openssh-server-pam
