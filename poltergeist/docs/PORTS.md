@@ -741,12 +741,12 @@ counterpart is ported here.
 - Source: app/seance_app/lib/ui/server_grouping.dart
 - Séance commit: 8326f41f574fabce11986ea16137917626f67958
 - Ported: 2026-09-24
-- Divergences: none — carried verbatim (imports re-pointed). The file is
-  deliberately Flutter-free upstream; the catalog section renders pulled
-  `ServerConfig`s through the same sectioning Séance uses, so identical
-  data produces identical placement. Re-synced 2026-09-29 so a filter keeps
-  an otherwise-empty top-level section when it contains a hidden live server;
-  the header remains the place that connection's status is exposed.
+- Divergences: since 2026-10-04 only `existingServerGroups` is carried
+  (see Pruned below). Until then the file was carried verbatim (imports
+  re-pointed); it is deliberately Flutter-free upstream. Re-synced
+  2026-09-29 so a filter keeps an otherwise-empty top-level section when
+  it contains a hidden live server; the header remains the place that
+  connection's status is exposed.
 - Pruned: 2026-10-04. The catalog stopped using this sectioning on
   2026-09-24 (`477be0a4`) and groups its servers inline, so only
   `existingServerGroups`, behind the server editor's group chips, is
@@ -770,8 +770,10 @@ counterpart is ported here.
 - Source: app/seance_app/test/server_grouping_test.dart
 - Séance commit: 8326f41f574fabce11986ea16137917626f67958
 - Ported: 2026-09-24
-- Divergences: none — carried verbatim (imports re-pointed), including the
-  kept-section and `sectionsHoldingLive` regressions re-synced 2026-09-29.
+- Divergences: since 2026-10-04 only the `existingServerGroups` group is
+  carried (see Pruned below). Until then it was carried verbatim (imports
+  re-pointed), including the kept-section and `sectionsHoldingLive`
+  regressions re-synced 2026-09-29.
 - Pruned: 2026-10-04, with the library above: only the
   `existingServerGroups` group and its `_server` fixture are carried.
 - Port-back candidates: none.
