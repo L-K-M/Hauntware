@@ -331,6 +331,65 @@ void main() {
     );
   });
 
+  test('resolves the repository root when a component path is given', () async {
+    const checker = GitMeasurementDiffChecker();
+    final fixture = await _MonoEvidenceFixture.create();
+    addTearDown(fixture.delete);
+
+    // The committed-path classification must anchor at the worktree
+    // toplevel even when callers name the component directory.
+    await checker.ensureUnchanged(
+      repositoryRoot: '${fixture.root.path}/poltergeist',
+      recordedSha: fixture.recordedSha,
+      fixtureTree: fixture.fixtureTree,
+      canonicalPath: fixture.canonical.path,
+      reportPath: fixture.report.path,
+    );
+  });
+
+  test('validates imported evidence across a merge inheriting it', () async {
+    const checker = GitMeasurementDiffChecker();
+    final fixture = await _MonoEvidenceFixture.create(syntheticMerge: true);
+    addTearDown(fixture.delete);
+
+    // A pull-request merge brings the component in through its second
+    // parent without touching it — the real introduction still applies.
+    await fixture.ensureUnchanged(checker);
+    await checker.ensureUnchanged(
+      repositoryRoot: '${fixture.root.path}/poltergeist',
+      recordedSha: fixture.recordedSha,
+      fixtureTree: fixture.fixtureTree,
+      canonicalPath: fixture.canonical.path,
+      reportPath: fixture.report.path,
+    );
+  });
+
+  test(
+    'rejects pre-merge evidence drift through the true introduction',
+    () async {
+      const checker = GitMeasurementDiffChecker();
+      final fixture = await _MonoEvidenceFixture.create(
+        syntheticMerge: true,
+        tamperPrEvidence: true,
+      );
+      addTearDown(fixture.delete);
+
+      // The synthetic merge must not become the stability boundary: drift
+      // committed on the merged-in branch is post-introduction tampering,
+      // not an import mismatch.
+      await expectLater(
+        fixture.ensureUnchanged(checker),
+        throwsA(
+          isA<BundleValidationException>().having(
+            (error) => error.message,
+            'message',
+            contains('changed after its introduction commit'),
+          ),
+        ),
+      );
+    },
+  );
+
   test('rejects an ambiguous project layout at the recorded commit', () async {
     const checker = GitMeasurementDiffChecker();
     final fixture = await _MonoEvidenceFixture.create();
@@ -358,13 +417,31 @@ void main() {
   });
 }
 
-Future<ProcessResult> _git(String repository, List<String> arguments) async {
-  final result = await Process.run('git', ['-C', repository, ...arguments]);
-  if (result.exitCode != 0) {
-    throw StateError('git ${arguments.join(' ')} failed: ${result.stderr}');
+Future<ProcessResult> _git(
+  String repository,
+  List<String> arguments, {
+  String? stdin,
+}) async {
+  if (stdin == null) {
+    final result = await Process.run('git', ['-C', repository, ...arguments]);
+    if (result.exitCode != 0) {
+      throw StateError('git ${arguments.join(' ')} failed: ${result.stderr}');
+    }
+
+    return result;
   }
 
-  return result;
+  final process = await Process.start('git', ['-C', repository, ...arguments]);
+  process.stdin.write(stdin);
+  await process.stdin.close();
+  final stdout = await process.stdout.transform(utf8.decoder).join();
+  final stderr = await process.stderr.transform(utf8.decoder).join();
+  final exitCode = await process.exitCode;
+  if (exitCode != 0) {
+    throw StateError('git ${arguments.join(' ')} failed: $stderr');
+  }
+
+  return ProcessResult(process.pid, exitCode, stdout, stderr);
 }
 
 class _NoDiffChecker implements MeasurementDiffChecker {
@@ -508,6 +585,8 @@ class _MonoEvidenceFixture {
 
   static Future<_MonoEvidenceFixture> create({
     bool tamperImport = false,
+    bool syntheticMerge = false,
+    bool tamperPrEvidence = false,
   }) async {
     const standalone = 'standalone-era';
     final root = await Directory.systemTemp.createTemp('m0-mono-diff-');
@@ -591,6 +670,59 @@ class _MonoEvidenceFixture {
     await _git(root.path, ['update-ref', 'refs/heads/main', imported]);
     await _git(root.path, ['symbolic-ref', 'HEAD', 'refs/heads/main']);
     await _git(root.path, ['reset', '--quiet', '--hard']);
+
+    if (syntheticMerge) {
+      if (tamperPrEvidence) {
+        await writeFile(
+          'poltergeist/docs/evidence/m0/$canonicalEvidenceFileName',
+          '{"tampered":true}\n',
+        );
+        await _git(root.path, ['add', '.']);
+        await _git(root.path, [
+          'commit',
+          '--quiet',
+          '-m',
+          'Drift the evidence',
+        ]);
+      }
+      final prHead = (await _git(root.path, [
+        'rev-parse',
+        'HEAD',
+      ])).stdout.toString().trim();
+      // A pull-request merge shape: an unrelated base (no component tree)
+      // merged with the component-bearing head. The merged tree equals the
+      // head tree, so the merge inherits every path through its second
+      // parent.
+      final emptyTree = (await _git(root.path, [
+        'hash-object',
+        '-t',
+        'tree',
+        '--stdin',
+      ], stdin: '')).stdout.toString().trim();
+      final prBase = (await _git(root.path, [
+        'commit-tree',
+        emptyTree,
+        '-m',
+        'Pull-request base',
+      ])).stdout.toString().trim();
+      final prHeadTree = (await _git(root.path, [
+        'rev-parse',
+        '$prHead^{tree}',
+      ])).stdout.toString().trim();
+      final merged = (await _git(root.path, [
+        'commit-tree',
+        prHeadTree,
+        '-p',
+        prBase,
+        '-p',
+        prHead,
+        '-m',
+        'Merge pull request',
+      ])).stdout.toString().trim();
+      await _git(root.path, ['update-ref', 'refs/heads/integration', merged]);
+      await _git(root.path, ['symbolic-ref', 'HEAD', 'refs/heads/integration']);
+      await _git(root.path, ['reset', '--quiet', '--hard']);
+    }
 
     return _MonoEvidenceFixture(
       root: root,

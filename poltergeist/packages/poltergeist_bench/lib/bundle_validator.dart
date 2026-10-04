@@ -92,30 +92,31 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
         'Recorded commit and fixture tree must be Git object IDs.',
       );
     }
-    await _requireGitSuccess(repositoryRoot, [
+    final repository = await _repositoryToplevel(repositoryRoot);
+    await _requireGitSuccess(repository, [
       'cat-file',
       '-e',
       '$recordedSha^{commit}',
     ], 'Recorded measurement commit does not exist.');
     final canonicalRelative = await _repositoryRelativeFile(
-      repositoryRoot,
+      repository,
       canonicalPath,
     );
     final reportRelative = await _repositoryRelativeFile(
-      repositoryRoot,
+      repository,
       reportPath,
     );
     final boundary = await _resolveEvidenceBoundary(
-      repositoryRoot: repositoryRoot,
+      repositoryRoot: repository,
       canonicalRelative: canonicalRelative,
       reportRelative: reportRelative,
     );
     final recordedPrefix = await _projectTreePrefix(
-      repositoryRoot,
+      repository,
       recordedSha,
       'Recorded measurement commit',
     );
-    final recordedFixtureTree = await _requireGitOutput(repositoryRoot, [
+    final recordedFixtureTree = await _requireGitOutput(repository, [
       'rev-parse',
       '--verify',
       '$recordedSha:$recordedPrefix'
@@ -126,13 +127,13 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
         'Canonical fixture tree does not match the recorded commit.',
       );
     }
-    await _requireGitSuccess(repositoryRoot, [
+    await _requireGitSuccess(repository, [
       'merge-base',
       '--is-ancestor',
       recordedSha,
       boundary.measurement,
     ], 'Evidence predates the recorded measurement commit.');
-    await _requireGitSuccess(repositoryRoot, [
+    await _requireGitSuccess(repository, [
       'merge-base',
       '--is-ancestor',
       boundary.stability,
@@ -140,7 +141,7 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
     ], 'Evidence introduction commit is not an ancestor of HEAD.');
     final diff = await Process.run('git', [
       '-C',
-      repositoryRoot,
+      repository,
       'diff',
       '--quiet',
       _treeSpec(recordedSha, recordedPrefix),
@@ -164,7 +165,7 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
       // directory inside the component subtree of the introduction commit.
       final importDiff = await Process.run('git', [
         '-C',
-        repositoryRoot,
+        repository,
         'diff',
         '--quiet',
         boundary.componentIntroduction!,
@@ -185,7 +186,7 @@ class GitMeasurementDiffChecker implements MeasurementDiffChecker {
     }
     final bundleDiff = await Process.run('git', [
       '-C',
-      repositoryRoot,
+      repository,
       'diff',
       '--quiet',
       boundary.stability,
@@ -656,8 +657,9 @@ Future<_EvidenceBoundary> _resolveEvidenceBoundary({
 
   // Monorepo layout: the committed path is introduced by the import merge
   // or by a regular monorepo commit. Merge introductions are invisible to
-  // --diff-filter=A, so find the earliest first-parent touch that adds it.
-  final introduction = await _firstParentIntroduction(
+  // --diff-filter=A, so find the newest commit where no parent carried the
+  // path.
+  final introduction = await _introductionCommit(
     repositoryRoot,
     canonicalRelative,
   );
@@ -761,17 +763,22 @@ Future<List<String>> _nonMergeAdditions(
   return additions;
 }
 
-/// The most recent first-parent commit where [relative] was absent in its
-/// first parent and present in its own tree — the point where the current
-/// content entered the mainline, including merge introductions.
-Future<String?> _firstParentIntroduction(
+/// The most recent commit that introduces [relative]: the path is present
+/// in its own tree but absent from every parent's tree. A merge whose side
+/// parent already carries the path merely inherits it — a synthetic
+/// pull-request merge, for example — and the real introduction lies in
+/// that parent's history. `--full-history` is required so the search sees
+/// introductions reached through non-first parents; `--topo-order` keeps
+/// the newest-first scan deterministic.
+Future<String?> _introductionCommit(
   String repositoryRoot,
   String relative,
 ) async {
   final touches = await _gitLines(repositoryRoot, [
     'log',
-    '--first-parent',
     '--format=%H',
+    '--full-history',
+    '--topo-order',
     'HEAD',
     '--',
     relative,
@@ -782,14 +789,42 @@ Future<String?> _firstParentIntroduction(
         'Canonical evidence has an ambiguous introduction history.',
       );
     }
-    final hasParent = await _gitRevisionExists(repositoryRoot, '$commit^1');
-    final presentBefore =
-        hasParent &&
-        await _gitObjectExists(repositoryRoot, '$commit^1:$relative');
-    if (!presentBefore) return commit;
+    final line = await _requireGitOutput(repositoryRoot, [
+      'rev-list',
+      '--parents',
+      '--max-count=1',
+      commit,
+    ], 'Canonical evidence has an ambiguous introduction history.');
+    var presentInParent = false;
+    for (final parent in line.split(' ').skip(1)) {
+      if (await _gitObjectExists(repositoryRoot, '$parent:$relative')) {
+        presentInParent = true;
+        break;
+      }
+    }
+    if (!presentInParent) return commit;
   }
 
   return null;
+}
+
+/// The worktree root enclosing [repositoryRoot]. Callers may name any
+/// directory inside the worktree — the component directory included —
+/// while path classification and history pathspecs anchor at the toplevel.
+Future<String> _repositoryToplevel(String repositoryRoot) async {
+  final result = await Process.run('git', [
+    '-C',
+    repositoryRoot,
+    'rev-parse',
+    '--show-toplevel',
+  ]);
+  if (result.exitCode != 0) {
+    throw const BundleValidationException(
+      'Evidence repository is not a Git worktree.',
+    );
+  }
+
+  return Directory('${result.stdout}'.trim()).resolveSymbolicLinks();
 }
 
 /// Runs a `git log`-style query whose answer may legitimately be empty.
@@ -817,19 +852,6 @@ Future<bool> _gitObjectExists(String repositoryRoot, String object) async {
     'cat-file',
     '-e',
     object,
-  ]);
-
-  return result.exitCode == 0;
-}
-
-Future<bool> _gitRevisionExists(String repositoryRoot, String revision) async {
-  final result = await Process.run('git', [
-    '-C',
-    repositoryRoot,
-    'rev-parse',
-    '--verify',
-    '--quiet',
-    revision,
   ]);
 
   return result.exitCode == 0;
