@@ -26,8 +26,7 @@ packages/
 app/
   planchette_app/         Flutter client — NOT a workspace member (it needs
                           the Flutter SDK; members must not).
-scripts/                  build.sh, release.sh, package-linux.sh,
-                          verify-android-version.sh
+scripts/                  build.sh, release.sh, package-linux.sh
 ```
 
 The layout deliberately mirrors the siblings' proven shape (`packages/` +
