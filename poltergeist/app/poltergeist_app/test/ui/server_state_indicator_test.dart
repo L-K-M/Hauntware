@@ -307,13 +307,12 @@ void main() {
             }
           }))!;
           final context = tester.element(find.byType(ServerStateGlyph));
-          final scheme = Theme.of(context).colorScheme;
+          // The tokens ServerStateGlyph paints, as its decoration tests pin.
+          final chrome = PoltergeistChrome.of(context);
           final expected = switch (glyph) {
-            ServerIndicatorGlyph.connected => PoltergeistChrome.of(
-              context,
-            ).statusConnected,
-            ServerIndicatorGlyph.failed => scheme.error,
-            _ => scheme.outline,
+            ServerIndicatorGlyph.connected => chrome.statusConnected,
+            ServerIndicatorGlyph.failed => chrome.statusFailed,
+            _ => chrome.statusUnknown,
           };
           final name = '${glyph.name} (${brightness.name})';
 

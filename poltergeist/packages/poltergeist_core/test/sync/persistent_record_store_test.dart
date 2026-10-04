@@ -216,6 +216,7 @@ void main() {
       final restored = await store.settlePush(local, rejected);
       expect(restored, isNotNull);
       expect(restored!.updatedAt, 200);
+      expect(restored.seq, 5);
       await put;
       expect(await store.dirtyRecords(), isEmpty);
       expect(await store.displacedRecords(), isEmpty);

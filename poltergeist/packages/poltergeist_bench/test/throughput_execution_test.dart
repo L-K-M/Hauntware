@@ -171,30 +171,37 @@ void main() {
   );
 
   test('OpenSSH trials ignore driver-reported bytes and digests', () async {
-    for (final report in [
-      _DriverReport.staleDigest,
-      _DriverReport.wrongBytes,
-    ]) {
-      final fixture = await _ExecutionFixture.create();
-      addTearDown(fixture.close);
-      final evidence = await fixture.runtime.runTrial(
-        driver: _RecordingDriver(
-          variant: ThroughputVariant.openssh,
-          uploadRoot: fixture.uploads,
-          report: report,
-        ),
-        scenario: 'openssh-download',
-        direction: ThroughputLeg.download,
-        payload: fixture.trialPayload,
-        warmupPayload: fixture.warmupPayload,
-        ordinal: 1,
-        replicate: ThroughputReplicate.first,
-        warmupTimeout: () => _transferTimeout,
-        trialTimeout: () => _transferTimeout,
-      );
+    for (final direction in ThroughputLeg.values) {
+      for (final report in [
+        _DriverReport.staleDigest,
+        _DriverReport.wrongBytes,
+      ]) {
+        final fixture = await _ExecutionFixture.create();
+        addTearDown(fixture.close);
+        final evidence = await fixture.runtime.runTrial(
+          driver: _RecordingDriver(
+            variant: ThroughputVariant.openssh,
+            uploadRoot: fixture.uploads,
+            report: report,
+          ),
+          scenario: 'openssh-${direction.name}',
+          direction: direction,
+          payload: fixture.trialPayload,
+          warmupPayload: fixture.warmupPayload,
+          ordinal: 1,
+          replicate: ThroughputReplicate.first,
+          warmupTimeout: () => _transferTimeout,
+          trialTimeout: () => _transferTimeout,
+        );
+        final name = '${report.name} ${direction.name}';
 
-      expect(evidence.trial.status, ThroughputAttemptStatus.success);
-      expect(evidence.trial.integrity.isVerified, isTrue);
+        expect(
+          evidence.trial.status,
+          ThroughputAttemptStatus.success,
+          reason: name,
+        );
+        expect(evidence.trial.integrity.isVerified, isTrue, reason: name);
+      }
     }
   });
 }
@@ -450,6 +457,8 @@ class _RecordingDriver implements ThroughputExecutionDriver {
     final misreport = payload.label == 'trial'
         ? report
         : _DriverReport.faithful;
+    // A misreport wins over OpenSSH's faithful null, deliberately: the
+    // OpenSSH test needs a driver that does report wrong values.
     final bytes = switch (misreport) {
       _DriverReport.wrongBytes => payload.bytes + 1,
       _ when variant == ThroughputVariant.openssh => null,
