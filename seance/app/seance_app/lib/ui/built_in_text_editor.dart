@@ -92,10 +92,13 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
       // preflight follows the managed save's conditional fold.
       normalization: TextNormalization.preserve,
       saveNormalizationForLineEnding: seanceSaveNormalization,
-      loadDocument: () => loadTextDocument(
-        widget.file,
-        normalization: TextNormalization.preserve,
-      ),
+      // An explicit buffer overrides file loading.
+      loadDocument: widget.initialText == null
+          ? () => loadTextDocument(
+              widget.file,
+              normalization: TextNormalization.preserve,
+            )
+          : null,
       saveDocument: (text, baseline) async {
         final customSave = widget.saveDocument;
         if (customSave != null) {

@@ -98,7 +98,10 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
   late final pe.EditorController _editor = pe.EditorController(
     displayPath: _displayPath,
     initialText: widget.initialText,
-    loadDocument: () => loadBuiltInTextDocumentDetails(widget.file),
+    // An explicit buffer overrides file loading.
+    loadDocument: widget.initialText == null
+        ? () => loadBuiltInTextDocumentDetails(widget.file)
+        : null,
     saveDocument: (text, baseline) {
       final customSave = widget.saveDocument;
       if (customSave != null) return customSave(widget.file, text);

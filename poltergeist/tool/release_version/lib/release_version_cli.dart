@@ -21,8 +21,8 @@ int runReleaseVersionCommand(
   ReleaseVersionLineWriter? writeOutput,
   ReleaseVersionLineWriter? writeError,
 }) {
-  final output = writeOutput ?? stdout.writeln;
-  final error = writeError ?? stderr.writeln;
+  final ReleaseVersionLineWriter output = writeOutput ?? stdout.writeln;
+  final ReleaseVersionLineWriter error = writeError ?? stderr.writeln;
   final parsed = _CommandArguments.parse(arguments);
   if (parsed == null) {
     error(_usage);
@@ -32,6 +32,16 @@ int runReleaseVersionCommand(
   try {
     final base = workingDirectory ?? Directory.current;
     final root = _resolveDirectory(base, parsed.root ?? '.');
+
+    // Inside the Hauntware monorepo the module-scoped tree checks can't
+    // resolve the app's path dependencies — they point at sibling module
+    // trees. Forward tree checks to the suite tool at the actual root.
+    if (_forwardsToSuite(parsed.command)) {
+      final suite = _findSuiteRoot(root);
+      if (suite != null) {
+        return _forwardToSuite(suite, arguments, output: output, error: error);
+      }
+    }
 
     switch (parsed.command) {
       case _ReleaseVersionCommand.validate:
@@ -85,6 +95,79 @@ Directory _resolveDirectory(Directory base, String path) {
   if (p.isAbsolute(path)) return Directory(p.normalize(path));
 
   return Directory(p.normalize(p.join(base.path, path)));
+}
+
+const String _suiteToolPath = 'tool/release_version/bin/release_version.dart';
+final RegExp _suiteManifestName = RegExp(
+  r'^name:[ \t]*hauntware[ \t]*$',
+  multiLine: true,
+);
+
+bool _forwardsToSuite(_ReleaseVersionCommand command) => switch (command) {
+  _ReleaseVersionCommand.check ||
+  _ReleaseVersionCommand.checkTag ||
+  _ReleaseVersionCommand.checkOrder => true,
+  _ => false,
+};
+
+/// The Hauntware suite root enclosing [root], if any: an ancestor whose
+/// `poltergeist/` module contains [root], that carries the suite tool
+/// and a `hauntware` manifest.
+Directory? _findSuiteRoot(Directory root) {
+  final rootPath = p.normalize(root.absolute.path);
+  var candidate = p.dirname(rootPath);
+  while (true) {
+    final module = p.join(candidate, 'poltergeist');
+    if ((p.isWithin(module, rootPath) || p.equals(module, rootPath)) &&
+        File(p.join(candidate, _suiteToolPath)).existsSync() &&
+        _isSuiteManifest(File(p.join(candidate, 'pubspec.yaml')))) {
+      return Directory(candidate);
+    }
+
+    final parent = p.dirname(candidate);
+    if (p.equals(parent, candidate)) return null;
+    candidate = parent;
+  }
+}
+
+bool _isSuiteManifest(File pubspec) {
+  if (!pubspec.existsSync()) return false;
+  return _suiteManifestName.hasMatch(pubspec.readAsStringSync());
+}
+
+/// Runs the suite tool against the suite root, forwarding the command
+/// and its output verbatim. Any `--root` is replaced — the suite check
+/// always evaluates the whole suite.
+int _forwardToSuite(
+  Directory suite,
+  List<String> arguments, {
+  required ReleaseVersionLineWriter output,
+  required ReleaseVersionLineWriter error,
+}) {
+  final forwarded = <String>[];
+  var skipValue = false;
+  for (final argument in arguments) {
+    if (skipValue) {
+      skipValue = false;
+      continue;
+    }
+    if (argument == '--root') {
+      skipValue = true;
+      continue;
+    }
+    forwarded.add(argument);
+  }
+  forwarded.addAll(['--root', suite.path]);
+
+  final result = Process.runSync(Platform.resolvedExecutable, [
+    p.join(suite.path, _suiteToolPath),
+    ...forwarded,
+  ]);
+  final stdout = (result.stdout as String).trimRight();
+  final stderr = (result.stderr as String).trimRight();
+  if (stdout.isNotEmpty) output(stdout);
+  if (stderr.isNotEmpty) error(stderr);
+  return result.exitCode;
 }
 
 enum _ReleaseVersionCommand { validate, sync, check, checkTag, checkOrder }
