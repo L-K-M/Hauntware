@@ -619,6 +619,8 @@ void main() {
     );
     tester.widget<ListView>(rightListing).controller!.jumpTo(28 * 10);
     await tester.pump();
+    // The premise: the first folders are scrolled off, not just offset.
+    expect(find.text('d0').hitTestable(), findsNothing);
 
     final gesture = await dragRowOnto(
       tester,
@@ -1258,6 +1260,8 @@ void main() {
       tester.getCenter(find.text('else')),
     );
     await tester.pump(const Duration(milliseconds: 300));
+    // The drag is live, so the assertions below cannot pass vacuously.
+    expect(find.byType(PaneEntryDragAvatar), findsOneWidget);
 
     // Escape with the pointer at rest: the armed activation dies with
     // the drag, so the tab stays put past the 700 ms dwell.

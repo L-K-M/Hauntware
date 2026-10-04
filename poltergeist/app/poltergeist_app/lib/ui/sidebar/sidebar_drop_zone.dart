@@ -44,6 +44,28 @@ class _SidebarDropZoneState extends State<_SidebarDropZone> {
 
   SidebarDropIndicator _indicator = SidebarDropIndicator.none;
 
+  /// The hovering pane-row drag, watched so an Escape cancel clears the
+  /// indicator even with the pointer at rest.
+  PaneEntryDrag? _hoverDrag;
+
+  void _watch(PaneEntryDrag? drag) {
+    if (identical(drag, _hoverDrag)) return;
+    _hoverDrag?.cancelled.removeListener(_onHoverDragCancelled);
+    _hoverDrag = drag;
+    drag?.cancelled.addListener(_onHoverDragCancelled);
+  }
+
+  void _onHoverDragCancelled() {
+    final drag = _hoverDrag;
+    if (drag != null && drag.cancelled.value) _clear(drag);
+  }
+
+  @override
+  void dispose() {
+    _hoverDrag?.cancelled.removeListener(_onHoverDragCancelled);
+    super.dispose();
+  }
+
   _DropPlan? _resolve(Object data, Offset global) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize || box.size.height == 0) return null;
@@ -53,12 +75,16 @@ class _SidebarDropZoneState extends State<_SidebarDropZone> {
   }
 
   void _show(_DropPlan? plan, Object data) {
-    if (data is PaneEntryDrag) data.verb.value = plan?.verb;
+    if (data is PaneEntryDrag) {
+      _watch(data);
+      data.verb.value = plan?.verb;
+    }
     final indicator = plan?.indicator ?? SidebarDropIndicator.none;
     if (indicator != _indicator) setState(() => _indicator = indicator);
   }
 
   void _clear(Object? data) {
+    _watch(null);
     if (data is PaneEntryDrag) data.verb.value = null;
     if (_indicator != SidebarDropIndicator.none) {
       setState(() => _indicator = SidebarDropIndicator.none);

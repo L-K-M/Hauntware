@@ -929,6 +929,10 @@ class _PaneViewState extends State<PaneView> {
     // reuses it), so a previous cancel must not leak into this drag.
     drag.cancelled.value = false;
     _rowDrag = drag;
+    // Remove first, so a start without a matching end never stacks a
+    // second copy of the handlers.
+    HardwareKeyboard.instance.removeHandler(_onDragKeyEvent);
+    FocusManager.instance.removeEarlyKeyEventHandler(_onDragFocusKey);
     HardwareKeyboard.instance.addHandler(_onDragKeyEvent);
     FocusManager.instance.addEarlyKeyEventHandler(_onDragFocusKey);
   }
