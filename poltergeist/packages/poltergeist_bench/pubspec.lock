@@ -279,14 +279,14 @@ packages:
       path: "../../../seance/packages/seance_core"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "1.9.0"
   seance_protocol:
     dependency: transitive
     description:
       path: "../../../seance/packages/seance_protocol"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "1.9.0"
   shelf:
     dependency: transitive
     description:

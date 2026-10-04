@@ -301,14 +301,14 @@ packages:
       path: "../../../planchette/packages/ghost_desktop"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "1.9.0"
   ghost_ui:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/ghost_ui"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "1.9.0"
   hooks:
     dependency: transitive
     description:
@@ -643,14 +643,14 @@ packages:
       path: "../../../planchette/packages/planchette_core"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "1.9.0"
   planchette_editor:
     dependency: "direct main"
     description:
       path: "../../../planchette/packages/planchette_editor"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "1.9.0"
   platform:
     dependency: transitive
     description:
@@ -753,14 +753,14 @@ packages:
       path: "../../packages/seance_core"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "1.9.0"
   seance_protocol:
     dependency: transitive
     description:
       path: "../../packages/seance_protocol"
       relative: true
     source: path
-    version: "1.1.0"
+    version: "1.9.0"
   share_plus:
     dependency: "direct main"
     description:

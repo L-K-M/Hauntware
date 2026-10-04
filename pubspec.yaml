@@ -13,7 +13,7 @@
 # run `dart pub get` here before using the tool or its tests.
 name: hauntware
 publish_to: none
-version: 1.1.0
+version: 1.9.0
 
 environment:
   sdk: ^3.12.0

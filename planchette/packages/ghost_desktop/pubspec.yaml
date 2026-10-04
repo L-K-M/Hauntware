@@ -3,7 +3,7 @@ description: >-
   Shared desktop window state for Planchette, Poltergeist, and Seance:
   remembered frame, missing-monitor fallback, maximized/full-screen restore,
   and the intercepted close path behind host-owned adapters.
-version: 1.1.0
+version: 1.9.0
 publish_to: none
 
 environment:

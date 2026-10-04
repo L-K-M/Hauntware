@@ -4,7 +4,7 @@ description: >-
   itself lives at packages/poltergeist_bench since the M3 relocation
   (07 §3.4); everything here forwards to it.
 publish_to: none
-version: 1.1.0
+version: 1.9.0
 
 environment:
   sdk: ^3.12.0
