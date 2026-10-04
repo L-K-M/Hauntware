@@ -1,5 +1,17 @@
 # Séance ports and pin audits
 
+## Hauntware local-source integration (2026-10-04)
+
+Live shared packages now resolve by local path from the reviewed source
+mains recorded in `../../docs/history/README.md`. No implementation is
+copied. Versions follow the suite; historical measurements and the
+standalone pin/copy records below retain their original meaning.
+
+The current deterministic audit binds the committed `seance/` tree and
+imported lineage. Dirty, shallow, outside-component and gitlink sources
+remain refused. The live legacy benchmark entrypoint forwards to the
+current harness; only historical evidence stays frozen.
+
 ## Current-core compatibility audit (2026-10-03)
 
 Both live declarations, all four lockfiles and the benchmark identity move
@@ -1826,20 +1838,26 @@ behaviour, and is not repeated below.
 - Port-back candidates: the frozen whole-`ThemeData` comparison, which
   would catch a component theme Séance's key-colour list does not name.
 
-<!-- SEANCE_PIN_AUDIT_V1:START -->
-## Séance pin audit
+<!-- SEANCE_PIN_AUDIT_V2:START -->
+## Séance source audit
 
-Full, non-shallow ancestor and tree audit. Raw streams are
-content-addressed by SHA-256; line counts aid review. Use
-`--print-findings` to reproduce them without adding names to docs.
+Deterministic local-source audit. Séance packages resolve
+by path inside this worktree; evidence binds the committed
+component tree and its full lineage (imported standalone
+ancestry included). Raw streams are content-addressed by
+SHA-256; line counts aid review. Use `--print-findings` to
+reproduce them without adding names to docs.
 
-- Pin: `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d` from `https://github.com/L-K-M/Seance.git`
-- Identity: 98 lines; `sha256:700ba96e534ce7fa27677ab76e36c854b233fb49b798b9a4d70d59fa0a70df34`
-- Companion: 697 lines; `sha256:e464b644c6bb8ac06588a65c902dd2964bda72af6add8693535e90fef2f8680c`
-- Companion orphans: 2 lines; `sha256:ca27552aa9e845c3e204322fb910499296f92013133a843ed144bbf62e1496cb`
-- Pinpoints: 1289 lines; `sha256:0640cfbd3b731b98821fc9bb4695f700559f560840e9f7ee46da9d90b6580007`
-- License scan: 40 lines; `sha256:ebe2060489c73a14330b6d77b4e298ace808ac0c71759c6fa4760dbccb9c25c2`
-- Vendored paths: 244 lines; `sha256:f88780ae9f7fedfccf34d6ba5dbc3a0dbd2ca583845ee8e717f097e12dee8d98`
-- Gitlinks: 0 lines; `sha256:c612a2c16ba3f9066203b8bc4af6ebe67beffa1ac2d7340230cd7af7533dc173`
-- Tree: 637 lines; `sha256:9c6a7cadb72ba08c238c1fe0e62f54004b9b797a1886306e61f1f78a35b639e4`
-<!-- SEANCE_PIN_AUDIT_V1:END -->
+- Source: `seance_core` at `seance/packages/seance_core` (path dependency)
+- Source: `seance_protocol` at `seance/packages/seance_protocol` (path dependency)
+- Component: `seance/` tree `4f0b41a71136fdcad433d424d05250844d1ded29` at `HEAD`
+- Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
+- Identity: 109 lines; `sha256:701e7d5b29c3a7b15a65ceb642c484d0a42496601fe3dd3ebfc642679dc1cdf6`
+- Companion: 731 lines; `sha256:9decf34ba941abad470daac6e1ee587a3d9834de152005891373033c58d5d4d1`
+- Companion orphans: 2 lines; `sha256:a0138ee2fe46b11a8fccf644b750e6d9f58b6b84d9f1da67bbfee4566f390ecc`
+- Pinpoints: 1342 lines; `sha256:655d9a4d26d0137e6a5c1284f6502074e64c6c3a599ed316305aa2c6377574d3`
+- License scan: 63 lines; `sha256:7209df5cc876eea851944159a821ede9e55f96ac276211e7e0cfec825829a60c`
+- Vendored paths: 280 lines; `sha256:dd0b7482f3b7c9f01a1694ace4ee3690c597e6ca79ac4bc87a631d2dd53b6fdc`
+- Gitlinks: 0 lines; `sha256:2aa4da7830c0c479be5ebdff2812f2976a23b0546b8cfbd34709177b928d26dd`
+- Tree: 680 lines; `sha256:06e73266d15a772089f7e03721d9a7b31b5579b025b5d47ccf14e01959e6954d`
+<!-- SEANCE_PIN_AUDIT_V2:END -->
