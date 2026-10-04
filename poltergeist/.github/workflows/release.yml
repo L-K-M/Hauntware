@@ -1,3 +1,9 @@
+# Frozen copy of the standalone Poltergeist workflow. GitHub runs only the
+# repository-root .github/workflows, so this file never executes. It stays
+# as the fixture that poltergeist/tool/release_version/test and
+# poltergeist/test/integration read; paths in it, such as the removed
+# tool/release_version/bin, are not kept current.
+
 name: Release
 
 # Tag a version (scripts/release.sh X.Y.Z --push) to test, build, and publish
