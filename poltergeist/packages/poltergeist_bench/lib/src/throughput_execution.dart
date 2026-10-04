@@ -13,6 +13,18 @@ const _hostUploadDirectory = 'host';
 
 typedef ThroughputExecutionTimeout = Duration Function();
 
+/// Package-internal mirrored `ABCCBA` trial order for every standard cell
+/// (07 §M0): each variant runs twice, and the result manifest the
+/// aggregator validates against expects exactly this sequence.
+const throughputTrialOrder = [
+  ThroughputVariant.dartHashOn,
+  ThroughputVariant.openssh,
+  ThroughputVariant.dartHashOff,
+  ThroughputVariant.dartHashOff,
+  ThroughputVariant.openssh,
+  ThroughputVariant.dartHashOn,
+];
+
 /// Package-internal payload identity used by every throughput driver.
 class ThroughputExecutionPayload {
   final String label;
