@@ -43,8 +43,6 @@ enum CompactKey {
   breadcrumb,
   listing,
   row,
-  rowMore,
-  rowCheck,
   loading,
   selectionBar,
   selectionClose,

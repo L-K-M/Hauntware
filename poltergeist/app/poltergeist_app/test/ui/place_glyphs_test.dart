@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show ghostFileKindGlyph;
 import 'package:poltergeist_app/services/local_volumes.dart';
 import 'package:poltergeist_app/theme/family_hues.dart';
-import 'package:poltergeist_app/ui/panes/kind_glyph.dart';
 import 'package:poltergeist_app/ui/panes/pane_format.dart';
 import 'package:poltergeist_app/ui/place_glyphs.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
@@ -11,11 +11,11 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 /// glyph and hue. The hues are the vocabulary the sibling apps share, so
 /// a folder is the places blue and a PDF the destructive red in both.
 void main() {
-  group('kindGlyph', () {
+  group('ghostFileKindGlyph', () {
     test('each listing kind wears its family hue', () {
       final hues = {
         for (final category in PaneKindCategory.values)
-          category: kindGlyph(category).$2,
+          category: ghostFileKindGlyph(category).$2,
       };
       expect(hues, {
         PaneKindCategory.folder: FamilyHue.blue,
@@ -34,7 +34,7 @@ void main() {
     test('kinds that share a hue never share a glyph', () {
       final glyphs = {
         for (final category in PaneKindCategory.values)
-          kindGlyph(category).$1,
+          ghostFileKindGlyph(category).$1,
       };
       expect(glyphs, hasLength(PaneKindCategory.values.length));
     });
