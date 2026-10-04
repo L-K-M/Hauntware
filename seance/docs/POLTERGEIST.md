@@ -215,6 +215,10 @@ of it:
   relative paths so the two files diff cleanly. The kit's one seam,
   `_chrome()`, returns `SeanceChrome` (the same token names as
   `PoltergeistChrome`); `middle_ellipsis_text.dart` was already shared.
+- **Retired (2026-10-04):** with the kit in `ghost_ui`, its test is
+  `planchette/packages/ghost_ui/test/sidebar_kit_test.dart`, and both app
+  copies of the test are removed. `test/theme_build_test.dart` checks
+  that the theme hands the kit `SeanceChrome`'s tokens.
 
 Séance-side changes, each worth porting back (all in the kit file, with
 tests in the kit test):

@@ -140,6 +140,8 @@ changed source set are:
   Its test re-diffs at `3a9fd8c` with those theme/import changes plus
   Poltergeist's touch-affordance and `SidebarKitLayout.list` cases. Those
   cases remain a port-back candidate.
+  (Superseded 2026-10-04: the kit test lives only in `ghost_ui`, which
+  carries those cases; both app copies are removed.)
 - Séance #126's Settings runners are contained by merge `86455d7`. The
   exact-pin re-diff confirms the Open-failure and negative-monitor review
   fixes already match locally; only the recorded product names, channels,
