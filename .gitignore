@@ -1,0 +1,29 @@
+# Root build + tool artifacts. The projects keep their own .gitignore per
+# subtree; pubspec.lock is intentionally NOT ignored — the root lock pins
+# the release_version tool's resolution and is committed like the
+# projects' locks.
+
+# Dart / Pub
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+pubspec_overrides.yaml
+
+# Root build + dist
+build/
+/dist/
+
+# Nested worktrees
+.worktrees/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Flutter host-local config
+local.properties
+**/android/local.properties
+
+.DS_Store

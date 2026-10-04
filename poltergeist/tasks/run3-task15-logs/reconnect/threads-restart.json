@@ -1,0 +1,80 @@
+[
+  {
+    "id": "PRRT_kwDOUIzfcM6h7RdV",
+    "isResolved": false,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 542,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxOToxODowMlrO7nRHFA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7udEcU",
+          "databaseId": 4000597780,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/95#discussion_r4000597780",
+          "body": "Resume healing from failed recovery when transport reports connected\n```suggestion\n(_recovery == _RecoveryPhase.waiting ||\n            _recovery == _RecoveryPhase.failed)) {\n```",
+          "createdAt": "2026-09-13T19:18:02Z",
+          "updatedAt": "2026-09-13T19:18:02Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h7RdX",
+    "isResolved": false,
+    "isOutdated": false,
+    "path": "docs/STATUS.md",
+    "line": 2666,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxOToxODowMlrO7nRHGg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7udEca",
+          "databaseId": 4000597786,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/95#discussion_r4000597786",
+          "body": "Insert blank line between paragraphs\n```suggestion\ntests and analysis pass.\n\nBounded logs/exits and seven inspected readable widget captures live under\n```",
+          "createdAt": "2026-09-13T19:18:02Z",
+          "updatedAt": "2026-09-13T19:18:02Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h7RdZ",
+    "isResolved": false,
+    "isOutdated": false,
+    "path": "docs/STATUS.md",
+    "line": 2664,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxOToxODowMlrO7nRHHA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7udEcc",
+          "databaseId": 4000597788,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/95#discussion_r4000597788",
+          "body": "Clarify that runtime reds exposed the flawed assumption\n```suggestion\nstate and single-overlay rendering. Three status-watch runtime reds exposed the\nold assumption that EOF/error could dismiss unhealed loss; the repair corrected\nit. Full app 566 tests and analysis pass.\n```",
+          "createdAt": "2026-09-13T19:18:02Z",
+          "updatedAt": "2026-09-13T19:18:02Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  }
+]

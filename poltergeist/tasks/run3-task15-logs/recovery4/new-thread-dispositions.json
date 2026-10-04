@@ -1,0 +1,32 @@
+[
+  {
+    "id": "PRRT_kwDOUIzfcM6h6kpO",
+    "disposition": "refute",
+    "reason": "Pinned SDK entry-presence implementation and runtime animated/veto/local-history/covering-route evidence; retain isActive guard.",
+    "isResolved": true
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6kpd",
+    "disposition": "defer",
+    "reason": "Duplicate-open assert is optional fake maintenance during stabilization.",
+    "isResolved": true
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6kp1",
+    "disposition": "defer",
+    "reason": "Grammar nit deferred during stabilization; stable item identities retained.",
+    "isResolved": true
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6zu0",
+    "disposition": "defer",
+    "reason": "Extra held-path fake coverage is optional; sibling refresh regression already asserts exact paths and isolation.",
+    "isResolved": true
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6zvz",
+    "disposition": "defer",
+    "reason": "Future enablement-source comment is optional; current pane/workspace/session sources verified.",
+    "isResolved": true
+  }
+]

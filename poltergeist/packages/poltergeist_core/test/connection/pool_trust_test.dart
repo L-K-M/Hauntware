@@ -1,0 +1,626 @@
+import 'dart:async';
+
+import 'package:poltergeist_core/poltergeist_core.dart';
+import 'package:test/test.dart';
+
+import 'pool_fakes.dart';
+
+const _originalKey = 'SHA256:original';
+const _changedKey = 'SHA256:changed';
+const _hostKeyType = 'ssh-ed25519';
+const _primaryServerId = 's1';
+const _siblingServerId = 's2';
+const _policy = PoolPolicy(
+  maxTransports: 2,
+  maxTransferChannelsPerTransport: 1,
+  maxChannelsPerTransport: 3,
+);
+
+enum _GrowthRace { oldKey, authChallenge, delayedKey, interactiveRetry }
+
+Future<PoolHarness> _harness(List<String> fingerprints) async {
+  final harness =
+      PoolHarness(
+          policy: _policy,
+          opener: FakeTransportOpener(presentedFingerprints: fingerprints),
+        )
+        ..addServer(_primaryServerId)
+        ..addServer(_siblingServerId);
+  addTearDown(() => _disconnectAll(harness));
+  final config = harness.servers[_primaryServerId]!;
+  await harness.store.put(
+    HostKey(
+      host: config.host,
+      port: config.port,
+      type: _hostKeyType,
+      fingerprintSha256: _originalKey,
+      pinnedAt: 0,
+    ),
+  );
+  return harness;
+}
+
+Future<void> _disconnectAll(PoolHarness harness) async {
+  await harness.manager.disconnectServer(_primaryServerId);
+  await harness.manager.disconnectServer(_siblingServerId);
+}
+
+Future<void> _blockViaGrowth(PoolHarness harness) async {
+  await harness.manager.openBrowseChannel(_primaryServerId, paneTabId: 'one');
+  await harness.manager.openBrowseChannel(_siblingServerId, paneTabId: 'two');
+  await harness.manager.leaseTransferChannel(_primaryServerId);
+  await expectLater(
+    harness.manager.leaseTransferChannel(_primaryServerId),
+    throwsA(isA<RemoteFileException>()),
+  );
+  for (final id in [_primaryServerId, _siblingServerId]) {
+    final status = await harness.manager.watchServer(id).first;
+    expect(status.state, ServerConnectionState.blocked);
+  }
+}
+
+void main() {
+  test('leases retain the key authenticated by their own pool', () async {
+    final harness = PoolHarness(
+      opener: FakeTransportOpener(
+        presentedFingerprints: [_originalKey, _changedKey],
+      ),
+    )
+      ..addServer(_primaryServerId, username: 'first')
+      ..addServer(_siblingServerId, username: 'second');
+    addTearDown(() => _disconnectAll(harness));
+    await harness.store.put(
+      const HostKey(
+        host: 'example.com',
+        port: 22,
+        type: _hostKeyType,
+        fingerprintSha256: _originalKey,
+        pinnedAt: 0,
+      ),
+    );
+
+    final originalLease = await harness.manager.leaseTransferChannel(
+      _primaryServerId,
+    );
+    harness.onHostKey = (decision) async =>
+        decision.verdict == HostKeyVerdict.changed;
+    final changedLease = await harness.manager.leaseTransferChannel(
+      _siblingServerId,
+    );
+
+    expect(originalLease.endpointIdentity.fingerprintSha256, _originalKey);
+    expect(originalLease.endpointIdentity.username, 'first');
+    expect(changedLease.endpointIdentity.fingerprintSha256, _changedKey);
+    expect(changedLease.endpointIdentity.username, 'second');
+  });
+
+  test('a transfer request cannot prompt or clear a blocked pool', () async {
+    final harness = await _harness([_originalKey, _changedKey]);
+    await _blockViaGrowth(harness);
+    var prompts = 0;
+    harness.onHostKey = (_) async {
+      prompts++;
+      return true;
+    };
+    final connectCount = harness.opener.calls.length;
+
+    await expectLater(
+      harness.manager.leaseTransferChannel(_siblingServerId),
+      throwsA(isA<RemoteFileException>()),
+    );
+    expect(prompts, 0);
+    expect(harness.opener.calls, hasLength(connectCount));
+    expect(harness.store.pins.values.single.fingerprintSha256, _originalKey);
+  });
+
+  test(
+    'a presented key returning to the pinned key lifts the declined block',
+    () async {
+      final harness = await _harness([_originalKey, _changedKey, _originalKey]);
+      await _blockViaGrowth(harness);
+      var prompts = 0;
+      harness.onHostKey = (_) async {
+        prompts++;
+        return true;
+      };
+
+      // Owner decision 1a: the key the server presents again matches the
+      // pinned one, so the declined block lifts — no new verdict, no prompt.
+      final pane = await harness.manager.openBrowseChannel(
+        _primaryServerId,
+        paneTabId: 'retry',
+      );
+      expect(prompts, 0);
+      expect(harness.store.pins.values.single.fingerprintSha256, _originalKey);
+      final status = await harness.manager.watchServer(_primaryServerId).first;
+      expect(status.state, ServerConnectionState.connected);
+      // Both bookmarks still reference the shared pool, so the live
+      // transport serves both once the block lifts.
+      expect(await harness.manager.connectedServerIds(), {
+        _primaryServerId,
+        _siblingServerId,
+      });
+      await pane.close();
+    },
+  );
+
+  test('a mid-attempt block is never lifted by that attempt', () async {
+    final harness = await _harness([_originalKey]);
+    harness.onHostKey = (_) async => false;
+
+    // One attempt, three verifications: the pinned key (trusted, silent), a
+    // changed key the user declines — installing the block and bumping the
+    // pool's trust epoch — then the pinned key again. No production opener
+    // verifies twice in one attempt; the shape pins what 1a's epoch guard
+    // exists for: a lift applies only to the block that existed when the
+    // attempt started, never to one the same attempt just declined.
+    final verdicts = <HostKeyVerdict>[];
+    harness.opener.reverify = (call, tofu) async {
+      HostKey key(String fingerprint) => HostKey(
+        host: call.config.host,
+        port: call.config.port,
+        type: _hostKeyType,
+        fingerprintSha256: fingerprint,
+        pinnedAt: 0,
+      );
+
+      final declined = await tofu.check(key(_changedKey));
+      verdicts.add(declined.verdict);
+      await call.onHostKey(declined);
+      verdicts.add((await tofu.check(key(_originalKey))).verdict);
+    };
+
+    await expectLater(
+      harness.manager.openBrowseChannel(_primaryServerId, paneTabId: 'mid'),
+      throwsA(isA<RemoteFileException>()),
+    );
+
+    expect(verdicts, [HostKeyVerdict.changed, HostKeyVerdict.trusted]);
+    // The decline stands: still blocked, nothing pinned, no channel opened.
+    final status = await harness.manager.watchServer(_primaryServerId).first;
+    expect(status.state, ServerConnectionState.blocked);
+    expect(harness.store.pins.values.single.fingerprintSha256, _originalKey);
+    expect(harness.openChannels, isEmpty);
+    expect(await harness.manager.connectedServerIds(), isEmpty);
+  });
+
+  test('the pool is blocked while a changed-key review is pending', () async {
+    final harness = await _harness([_changedKey]);
+    final entered = Completer<void>();
+    final decision = Completer<bool>();
+    harness.onHostKey = (_) {
+      entered.complete();
+      return decision.future;
+    };
+    final opening = harness.manager.openBrowseChannel(
+      _primaryServerId,
+      paneTabId: 'tab',
+    );
+    final outcome = expectLater(opening, throwsA(isA<RemoteFileException>()));
+    await entered.future;
+    final state = await harness.manager.watchServer(_primaryServerId).first;
+    decision.complete(false);
+    await outcome;
+
+    expect(state.state, ServerConnectionState.blocked);
+    expect(harness.store.pins.values.single.fingerprintSha256, _originalKey);
+  });
+
+  test('changed-key approval survives a subsequent auth failure', () async {
+    final harness = await _harness([_changedKey]);
+    const failure = RemoteFileException(
+      kind: RemoteFileErrorKind.permissionDenied,
+      operation: 'connect',
+      message: 'Authentication failed after host-key approval.',
+    );
+    harness.opener.connectFailure = failure;
+    var prompts = 0;
+    harness.onHostKey = (_) async {
+      prompts++;
+      return true;
+    };
+    Object? firstFailure;
+    await harness.manager
+        .openBrowseChannel(_primaryServerId, paneTabId: 'auth-fails')
+        .then<void>(
+          (_) => fail('unexpected authenticated connection'),
+          onError: (Object error) {
+            firstFailure = error;
+          },
+        );
+    expect(harness.store.pins.values.single.fingerprintSha256, _changedKey);
+
+    // TOFU pinned the approved key; retries must not need another verdict.
+    harness.opener.connectFailure = null;
+    await harness.manager.openBrowseChannel(
+      _primaryServerId,
+      paneTabId: 'retry',
+    );
+    expect(firstFailure, same(failure));
+    expect(prompts, 1);
+    final status = await harness.manager.watchServer(_primaryServerId).first;
+    expect(status.state, ServerConnectionState.connected);
+  });
+
+  test(
+    'the pinned key returning after pool retirement reconnects normally',
+    () async {
+      final harness = await _harness([_originalKey, _changedKey, _originalKey]);
+      await _blockViaGrowth(harness);
+      await _disconnectAll(harness);
+      var prompts = 0;
+      harness.onHostKey = (_) async {
+        prompts++;
+        return true;
+      };
+
+      // The inherited block ends when the trusted key reappears (1a) —
+      // even in a replacement session, without a review prompt.
+      final pane = await harness.manager.openBrowseChannel(
+        _primaryServerId,
+        paneTabId: 'returned',
+      );
+      expect(prompts, 0);
+      expect(harness.store.pins.values.single.fingerprintSha256, _originalKey);
+      expect(await harness.manager.connectedServerIds(), {_primaryServerId});
+      await pane.close();
+    },
+  );
+
+  test(
+    'the changed key still blocks a replacement session after retirement',
+    () async {
+      final harness = await _harness([_originalKey, _changedKey]);
+      await _blockViaGrowth(harness);
+      await _disconnectAll(harness);
+      var prompts = 0;
+      harness.onHostKey = (_) async {
+        prompts++;
+        return false;
+      };
+
+      await expectLater(
+        harness.manager.openBrowseChannel(
+          _primaryServerId,
+          paneTabId: 'returned',
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+      expect(prompts, 1);
+      final status = await harness.manager.watchServer(_primaryServerId).first;
+      expect(status.state, ServerConnectionState.blocked);
+      expect(harness.store.pins.values.single.fingerprintSha256, _originalKey);
+      expect(await harness.manager.connectedServerIds(), isEmpty);
+      expect(harness.openChannels, isEmpty);
+    },
+  );
+
+  test(
+    'workers cannot review an incident inherited by a replacement pool',
+    () async {
+      final harness = await _harness([_originalKey, _changedKey]);
+      await _blockViaGrowth(harness);
+      await _disconnectAll(harness);
+      var prompts = 0;
+      harness.onHostKey = (_) async {
+        prompts++;
+        return true;
+      };
+      final connectCount = harness.opener.calls.length;
+
+      await expectLater(
+        harness.manager.leaseTransferChannel(_primaryServerId),
+        throwsA(isA<RemoteFileException>()),
+      );
+      expect(prompts, 0);
+      expect(harness.opener.calls, hasLength(connectCount));
+      expect(harness.store.pins.values.single.fingerprintSha256, _originalKey);
+    },
+  );
+
+  test(
+    'current approval clears an inherited incident across later sessions',
+    () async {
+      final harness = await _harness([_originalKey, _changedKey]);
+      await _blockViaGrowth(harness);
+      await _disconnectAll(harness);
+      var prompts = 0;
+      harness.onHostKey = (_) async {
+        prompts++;
+        return true;
+      };
+
+      await harness.manager.openBrowseChannel(
+        _primaryServerId,
+        paneTabId: 'review',
+      );
+      expect(harness.store.pins.values.single.fingerprintSha256, _changedKey);
+      await _disconnectAll(harness);
+      final lease = await harness.manager.leaseTransferChannel(
+        _primaryServerId,
+      );
+      expect(prompts, 1);
+      expect(await harness.manager.connectedServerIds(), {_primaryServerId});
+      await lease.release();
+    },
+  );
+
+  test(
+    'a retired approval cannot pin or clear a replacement incident',
+    () async {
+      final harness = await _harness([_changedKey]);
+      final entered = Completer<void>();
+      final decision = Completer<bool>();
+      var prompts = 0;
+      harness.onHostKey = (_) {
+        prompts++;
+        if (prompts != 1) return Future.value(false);
+        entered.complete();
+        return decision.future;
+      };
+      Object? retiredError;
+      final retired = harness.manager
+          .openBrowseChannel(_primaryServerId, paneTabId: 'retired')
+          .then<void>(
+            (_) => fail('retired connection succeeded'),
+            onError: (Object error) {
+              retiredError = error;
+            },
+          );
+      await entered.future;
+      await _disconnectAll(harness);
+
+      // Same fingerprints, different incident: equality is not authority.
+      await expectLater(
+        harness.manager.openBrowseChannel(
+          _primaryServerId,
+          paneTabId: 'replacement',
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+      decision.complete(true);
+      await retired;
+
+      expect(harness.store.pins.values.single.fingerprintSha256, _originalKey);
+      expect(
+        retiredError,
+        isA<RemoteFileException>().having(
+          (error) => error.kind,
+          'kind',
+          RemoteFileErrorKind.disconnected,
+        ),
+      );
+      final status = await harness.manager.watchServer(_primaryServerId).first;
+      expect(status.state, ServerConnectionState.blocked);
+      expect(await harness.manager.connectedServerIds(), isEmpty);
+    },
+  );
+
+  test(
+    'a fresh transfer first connect may still request trust review',
+    () async {
+      final harness = await _harness([_changedKey]);
+      var prompts = 0;
+      harness.onHostKey = (_) async {
+        prompts++;
+        return false;
+      };
+
+      await expectLater(
+        harness.manager.leaseTransferChannel(_primaryServerId),
+        throwsA(isA<RemoteFileException>()),
+      );
+      expect(prompts, 1);
+      expect(harness.opener.calls.single.prompting, ConnectPrompting.enabled);
+      final status = await harness.manager.watchServer(_primaryServerId).first;
+      expect(status.state, ServerConnectionState.blocked);
+    },
+  );
+
+  test(
+    'live watchers retain an inherited block during review and teardown',
+    () async {
+      final harness = await _harness([_originalKey, _changedKey]);
+      await _blockViaGrowth(harness);
+      await _disconnectAll(harness);
+      final statuses = <ServerStatus>[];
+      final subscription = harness.manager
+          .watchServer(_primaryServerId)
+          .listen(statuses.add);
+      addTearDown(subscription.cancel);
+      final entered = Completer<void>();
+      final decision = Completer<bool>();
+      harness.onHostKey = (_) {
+        entered.complete();
+        return decision.future;
+      };
+      final outcome = expectLater(
+        harness.manager.openBrowseChannel(
+          _primaryServerId,
+          paneTabId: 'review',
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+      await entered.future;
+      await Future<void>.delayed(Duration.zero);
+      final pendingStatus = statuses.last;
+      decision.complete(false);
+      await outcome;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(pendingStatus.state, ServerConnectionState.blocked);
+      expect(pendingStatus.detail, contains('has changed'));
+      expect(statuses.first.state, ServerConnectionState.disconnected);
+      expect(
+        statuses.skip(1).map((status) => status.state),
+        everyElement(ServerConnectionState.blocked),
+      );
+    },
+  );
+
+  test(
+    'removing a pin cannot permit first-use approval of a hard block',
+    () async {
+      final harness = await _harness([_originalKey, _changedKey]);
+      await _blockViaGrowth(harness);
+      harness.store.pins.clear();
+      var prompts = 0;
+      harness.onHostKey = (_) async {
+        prompts++;
+        return true;
+      };
+
+      await expectLater(
+        harness.manager.openBrowseChannel(
+          _primaryServerId,
+          paneTabId: 'no-pin',
+        ),
+        throwsA(isA<RemoteFileException>()),
+      );
+      expect([prompts, harness.store.pins.length], [0, 0]);
+      final status = await harness.manager.watchServer(_primaryServerId).first;
+      expect(status.state, ServerConnectionState.blocked);
+    },
+  );
+
+  for (final race in _GrowthRace.values) {
+    test(
+      'late growth ${race.name} respects the replacement connection',
+      () async {
+        final retryKey = race == _GrowthRace.interactiveRetry
+            ? _originalKey
+            : _changedKey;
+        final growthKey = race == _GrowthRace.delayedKey
+            ? _changedKey
+            : _originalKey;
+        final harness = await _harness([_originalKey, growthKey, retryKey]);
+        final originalPane = await harness.manager.openBrowseChannel(
+          _primaryServerId,
+          paneTabId: 'one',
+        );
+        final siblingPane = await harness.manager.openBrowseChannel(
+          _siblingServerId,
+          paneTabId: 'two',
+        );
+        final original = harness.opener.transports.single;
+        final channelGate = Completer<void>();
+        original.openGate = channelGate;
+        PaneChannel? third;
+        final errors = <Object>[];
+        final browsing = harness.manager
+            .openBrowseChannel(_primaryServerId, paneTabId: 'three')
+            .then<void>((channel) {
+              third = channel;
+            }, onError: errors.add);
+        await Future<void>.delayed(Duration.zero);
+        final gate = Completer<void>();
+        if (race == _GrowthRace.delayedKey) {
+          harness.opener.growthVerificationGate = gate;
+        } else {
+          harness.opener.growthGate = gate;
+        }
+        TransferChannelLease? granted;
+        final pending = harness.manager
+            .leaseTransferChannel(_primaryServerId)
+            .then<void>((lease) {
+              granted = lease;
+            }, onError: errors.add);
+        await Future<void>.delayed(Duration.zero);
+        final growthCall = harness.opener.calls.singleWhere(
+          (call) => call.prompting == ConnectPrompting.disabled,
+        );
+
+        // Only the old growth result remains parked; recovery gets fresh
+        // handshakes while it verifies the replacement trust/auth mode.
+        harness.opener.growthGate = null;
+        harness.opener.growthVerificationGate = null;
+        if (race == _GrowthRace.interactiveRetry) {
+          harness.opener.failureForCall = (call) =>
+              call.prompting == ConnectPrompting.disabled
+              ? const AuthChallengeRequiredError('Auth now requires 2FA')
+              : null;
+        }
+
+        // Evict the dead slot while its growth replacement is still in flight.
+        original.closed = true;
+        channelGate.completeError(
+          const RemoteFileException(
+            kind: RemoteFileErrorKind.disconnected,
+            operation: 'open SFTP',
+            message: 'The original transport disconnected mid-open.',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+        if (race == _GrowthRace.interactiveRetry) {
+          harness.opener.authKind = AuthKind.keyboardInteractive;
+        }
+
+        // Background recovery must block a changed key before a new explicit
+        // browse request may approve it. Same-key auth recovery may prompt.
+        if (race != _GrowthRace.interactiveRetry) {
+          await expectLater(
+            harness.manager.openBrowseChannel(
+              _siblingServerId,
+              paneTabId: 'review',
+            ),
+            throwsA(isA<RemoteFileException>()),
+          );
+        }
+        final approved = await harness.manager.openBrowseChannel(
+          _siblingServerId,
+          paneTabId: 'new-key',
+        );
+        final currentTransport = harness.opener.calls.last.transport;
+        harness.opener.failureForCall = null;
+        expect(harness.store.pins.values.single.fingerprintSha256, retryKey);
+        if (race == _GrowthRace.authChallenge) {
+          harness.opener.connectFailure = const AuthChallengeRequiredError(
+            'An obsolete growth attempt requires interaction.',
+          );
+        }
+        // Same-key recovery kept these tabs alive; release their capacity
+        // before waiting for the old acquisitions to resume.
+        await originalPane.close();
+        await siblingPane.close();
+        gate.complete();
+        await Future.wait([browsing, pending]);
+        if (race != _GrowthRace.interactiveRetry) {
+          expect(errors, [
+            isA<RemoteFileException>().having(
+              (error) => error.message,
+              'message',
+              contains('blocked'),
+            ),
+          ]);
+          errors.clear();
+        }
+        final oldHandshakeClosed = growthCall.transport?.closed ?? true;
+        final liveAfterGrowth = harness.opener.transports
+            .where((transport) => !transport.closed)
+            .toList();
+        harness.opener.connectFailure = null;
+
+        // The stale result must neither supply a slot nor change the current cap.
+        TransferChannelLease? additional;
+        final callsBeforeProbe = harness.opener.calls.length;
+        final probe = harness.manager
+            .leaseTransferChannel(_primaryServerId)
+            .then<void>((lease) {
+              additional = lease;
+            }, onError: errors.add);
+        await Future<void>.delayed(Duration.zero);
+        final probeGrew = harness.opener.calls.length > callsBeforeProbe;
+        await third?.close();
+        await approved.close();
+        await granted?.release();
+        await probe;
+        await additional?.release();
+
+        expect(errors, isEmpty);
+        expect(oldHandshakeClosed, isTrue);
+        expect(liveAfterGrowth, [currentTransport]);
+        expect(probeGrew, race != _GrowthRace.interactiveRetry);
+      },
+    );
+  }
+}

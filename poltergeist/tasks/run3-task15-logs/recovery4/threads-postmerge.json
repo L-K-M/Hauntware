@@ -1,0 +1,2505 @@
+[
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGa",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/engine_session.dart",
+    "line": 367,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMFrO7kt8qw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3yr",
+          "databaseId": 3997924523,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924523",
+          "body": "Replace release-stripped assert with a StateError guard\n```suggestion\nif (reviewConfig.id != serverId) {\n          throw StateError(\n            'review-connect serverId ($serverId) must equal bookmark.id '\n            '(${reviewConfig.id})',\n          );\n        }\n```",
+          "createdAt": "2026-09-12T23:01:20Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGc",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 172,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMFrO7kt8sA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3yw",
+          "databaseId": 3997924528,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924528",
+          "body": "Report engine-less connectRemote instead of silent no-op\n```suggestion\nif (_disposed) return;\n    if (_lanes == null) {\n      // Shell wiring bug: engine-less panes render the no-engine state and\n      // must not offer connect. Surface it rather than swallowing the call.\n      _report(\n        StateError('connectRemote(${bookmark.id}) on a pane with no engine'),\n        StackTrace.current,\n      );\n      return;\n    }\n```",
+          "createdAt": "2026-09-12T23:01:20Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGe",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/connections/connections_view.dart",
+    "line": 248,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMFrO7kt8tQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3y1",
+          "databaseId": 3997924533,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924533",
+          "body": "Gate the open-in-pane on a successful pop\n```suggestion\nfinal didPop =\n    await Navigator.of(context, rootNavigator: true).maybePop();\nif (!didPop) return;\nonOpenInPane?.call(server);\n```",
+          "createdAt": "2026-09-12T23:01:20Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGi",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_commands.dart",
+    "line": 198,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8uQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3y5",
+          "databaseId": 3997924537,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924537",
+          "body": "Skip unmodified activators before duplicate-chord diagnostics\n```suggestion\nfor (final activator in activators) {\n        // Unmodified keys \u2014 any activator type \u2014 stay with the pane focus\n        // nodes (02 \u00a78.2), not only SingleActivator spellings.\n        final bool unmodified = activator is SingleActivator\n            ? !activator.control && !activator.meta && !activator.alt\n            : activator is CharacterActivator &&\n                  !activator.control &&\n                  !activator.meta &&\n                  !activator.alt;\n        if (unmodified) {\n          continue;\n        }\n        // Two commands claiming one chord is a registration bug; debug\n        // builds fail it immediately (release keeps later-command-wins,\n        // the documented fallback).\n        assert(\n          !bindings.containsKey(activator),\n          'Duplicate shortcut activator $activator: later command wins',\n        );\n        // Release builds keep later-command-wins silently by design; the\n        // print keeps user-reported \"shortcut does nothing\" diagnosable.\n        if (bindings.containsKey(activator)) {\n          debugPrint(\n            'Duplicate shortcut activator $activator: later command wins',\n          );\n        }\n        bindings[activator] = () {\n          if (!command.enabled()) return;\n          command.run(context);\n        };\n      }\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGk",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_format.dart",
+    "line": 57,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8uw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3y7",
+          "databaseId": 3997924539,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924539",
+          "body": "Fix comment to match future-mtime rendering\n```suggestion\n// Same calendar day \u2192 \"today\". Only mtimes beyond tomorrow fall\n    // through to the absolute format; same-day clock skew still reads\n    // as today.\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGl",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_format.dart",
+    "line": 43,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8vQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3y9",
+          "databaseId": 3997924541,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924541",
+          "body": "Document intl symbol initialization precondition\n```suggestion\n/// (02 \u00a72.3). Links and unevaluated sizes carry null metadata \u2014 the dash.\n/// Callers must have loaded date symbols for [localeName] (see\n/// initializeDateFormatting) before invoking this.\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGm",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_view.dart",
+    "line": 89,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8vg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3y-",
+          "databaseId": 3997924542,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924542",
+          "body": "Scope semantics exclusion to the stale browsing listing\n```suggestion\nexcluding:\n                controller.connectionLost ||\n                (controller.loading &&\n                    graceVisible &&\n                    controller.phase == PanePhase.browsing),\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGo",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_view.dart",
+    "line": 235,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8wA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zA",
+          "databaseId": 3997924544,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924544",
+          "body": "Reveal path tail on first mount, not only on updates\n```suggestion\n@override\n  void initState() {\n    super.initState();\n    _revealedPath = widget.controller.location?.path;\n    if (_revealedPath != null) {\n      WidgetsBinding.instance.addPostFrameCallback((_) {\n        if (!mounted || !_segmentScroll.hasClients) return;\n        _segmentScroll.jumpTo(_segmentScroll.position.maxScrollExtent);\n      });\n    }\n  }\n\n  @override\n  void dispose() {\n    _segmentScroll.dispose();\n    super.dispose();\n  }\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGq",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_view.dart",
+    "line": 113,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8ww=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zD",
+          "databaseId": 3997924547,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924547",
+          "body": "Only scrim the stale browsing listing\n```suggestion\nif (controller.loading &&\n            graceVisible &&\n            controller.phase == PanePhase.browsing)\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGs",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_view.dart",
+    "line": 248,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8xQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zF",
+          "databaseId": 3997924549,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924549",
+          "body": "Also re-reveal when the controller instance changes\n```suggestion\nfinal path = widget.controller.location?.path;\n    if (path == _revealedPath &&\n        identical(oldWidget.controller, widget.controller)) {\n      return;\n    }\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGw",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 182,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8yQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zJ",
+          "databaseId": 3997924553,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924553",
+          "body": "Register disposal via addTearDown so cleanup runs even when assertions fail\n```suggestion\nfinal controller = PaneController(paneTabId: 'pane.left', lanes: lanes);\n    addTearDown(controller.dispose);\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cGy",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 80,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt8zA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zM",
+          "databaseId": 3997924556,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924556",
+          "body": "Fail fast when emitting state for an unwatched server\n```suggestion\nvoid emitState(String serverId, ServerStatus status) {\n    final states = statesControllers[serverId];\n    assert(states != null, 'emitState($serverId) before watchServer($serverId)');\n    states?.add(status);\n  }\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cG2",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 457,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt80A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zQ",
+          "databaseId": 3997924560,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924560",
+          "body": "Wrap over-length expect to satisfy dart format\n```suggestion\nexpect(\n      controller.location,\n      const RemotePaneLocation('srv-2', '/other/home'),\n    );\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cG4",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 566,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt80w=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zT",
+          "databaseId": 3997924563,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924563",
+          "body": "Wrap over-length list assignment to satisfy dart format\n```suggestion\nchannel.listings['/home/tester'] = [\n      _entry('sub', type: RemoteFileType.directory),\n    ];\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cG5",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/pane_commands_test.dart",
+    "line": 124,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt81A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zU",
+          "databaseId": 3997924564,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924564",
+          "body": "Add fall-through test for unmatched chords\n```suggestion\n```dart\n    testWidgets('an unmatched chord falls through to outer scopes', (\n      tester,\n    ) async {\n      var outerSawKey = false;\n\n      await tester.pumpWidget(\n        MaterialApp(\n          localizationsDelegates: AppLocalizations.localizationsDelegates,\n          supportedLocales: AppLocalizations.supportedLocales,\n          home: CallbackShortcuts(\n            bindings: {activator: () => outerSawKey = true},\n            child: CommandChordScope(\n              commands: [\n                command(\n                  'x',\n                  activators: (_) => [\n                    SingleActivator(LogicalKeyboardKey.keyS, control: true),\n                  ],\n                ),\n              ],\n              child: const Scaffold(\n                body: Focus(autofocus: true, child: SizedBox.expand()),\n              ),\n            ),\n          ),\n        ),\n      );\n      await tester.pump();\n\n      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);\n      await tester.sendKeyEvent(LogicalKeyboardKey.keyR);\n      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);\n      await tester.pump();\n\n      // No command claims Ctrl+R, so the command layer must let it\n      // escape to the outer scope rather than swallowing every chord.\n      expect(outerSawKey, isTrue);\n    });\n}```\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cG-",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 62,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt82Q=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zZ",
+          "databaseId": 3997924569,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924569",
+          "body": "Clean up temp support directory\n```suggestion\nfinal supportDir = Directory.systemTemp\n        .createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cHB",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 139,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt83A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zc",
+          "databaseId": 3997924572,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924572",
+          "body": "Clean up temp support directory\n```suggestion\nfinal supportDir = Directory.systemTemp\n        .createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0cHD",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 189,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xMlQyMzowMToyMVrO7kt84A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uS3zg",
+          "databaseId": 3997924576,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3997924576",
+          "body": "Clean up temp support directory\n```suggestion\nfinal supportDir = Directory.systemTemp\n        .createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-12T23:01:21Z",
+          "updatedAt": "2026-09-12T23:01:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h043i",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 125,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNjo1M1rO7k4y3g=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjLe",
+          "databaseId": 3998102238,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102238",
+          "body": "Delegate loading getter to _loadingActive\n```suggestion\nbool get loading => _loadingActive();\n```",
+          "createdAt": "2026-09-13T00:16:53Z",
+          "updatedAt": "2026-09-13T00:16:53Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h044H",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 606,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNjo1NFrO7k4zCg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjMK",
+          "databaseId": 3998102282,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102282",
+          "body": "Guard post-dispose teardown error reporting\n```suggestion\n} on Object catch (error, stackTrace) {\n        if (!_disposed) {\n          _report(error, stackTrace);\n        }\n      }\n```",
+          "createdAt": "2026-09-13T00:16:54Z",
+          "updatedAt": "2026-09-13T00:16:54Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h044l",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/connections/connections_view.dart",
+    "line": 242,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNjo1NVrO7k4zMw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjMz",
+          "databaseId": 3998102323,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102323",
+          "body": "Honor maybePop result before opening in pane\n```suggestion\nonPressed: () async {\n                // Pop before the open runs: maybePop only pops after\n                // awaiting willPop (a microtask later), so a synchronous\n                // push from the open (e.g. the changed-key review) would\n                // otherwise become the pop's target instead of this\n                // route, and the session guard releases with the pop.\n                final popped = await Navigator.of(\n                  context,\n                  rootNavigator: true,\n                ).maybePop();\n                // A vetoed pop leaves this route on top and the\n                // session guard held; don't start the open then.\n                if (!popped) return;\n                onOpenInPane?.call(server);\n              },\n```",
+          "createdAt": "2026-09-13T00:16:55Z",
+          "updatedAt": "2026-09-13T00:16:55Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h045g",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/engine_session_test.dart",
+    "line": 199,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0MFrO7lH9DA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjN8",
+          "databaseId": 3998102396,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102396",
+          "body": "Include rootPath in the unscripted-channel error message\n```suggestion\nthrow StateError('no local browse channel scripted for rootPath: $rootPath');\n```",
+          "createdAt": "2026-09-13T00:16:56Z",
+          "updatedAt": "2026-09-13T00:16:57Z",
+          "author": {
+            "login": "github-actions"
+          }
+        },
+        {
+          "id": "PRRC_kwDOUIzfcM7uUf0M",
+          "databaseId": 3998350604,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350604",
+          "body": "Additional context: Include the requested rootPath in the unscripted-channel error\n```suggestion\nthrow StateError('no local browse channel scripted for $rootPath');\n```",
+          "createdAt": "2026-09-13T02:07:40Z",
+          "updatedAt": "2026-09-13T02:07:40Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h046c",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 569,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNjo1OFrO7k4zyw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjPL",
+          "databaseId": 3998102475,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102475",
+          "body": "Select the non-directory by name, not by index\n```suggestion\ncontroller.openEntry(controller.entries.firstWhere((e) => e.name == 'file.txt'));\n```",
+          "createdAt": "2026-09-13T00:16:58Z",
+          "updatedAt": "2026-09-13T00:16:58Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h046x",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 579,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNjo1OVrO7k4z6A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjPo",
+          "databaseId": 3998102504,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102504",
+          "body": "Select the directory by name, not by index\n```suggestion\ncontroller.openEntry(controller.entries.firstWhere((e) => e.name == 'folder'));\n```",
+          "createdAt": "2026-09-13T00:16:59Z",
+          "updatedAt": "2026-09-13T00:16:59Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h0467",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_location_test.dart",
+    "line": 35,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNzowMFrO7k4z_g=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjP-",
+          "databaseId": 3998102526,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102526",
+          "body": "Document the drive-root separator exception\n```suggestion\n// Forward-slash Windows forms keep their separator, except drive\n    // roots, which normalize to the canonical backslash form.\n```",
+          "createdAt": "2026-09-13T00:17:00Z",
+          "updatedAt": "2026-09-13T00:17:00Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h047H",
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "docs/STATUS.md",
+    "line": null,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNzowMFrO7k40FA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjQU",
+          "databaseId": 3998102548,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102548",
+          "body": "renumber duplicate open item to 14\n```suggestion\n14. **2026-09-12 \u2014 M3: `PaneLocation`'s home is `poltergeist_core` (02\n```",
+          "createdAt": "2026-09-13T00:17:00Z",
+          "updatedAt": "2026-09-13T00:17:00Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h047a",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "docs/STATUS.md",
+    "line": 37,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNzowMVrO7k40LA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjQs",
+          "databaseId": 3998102572,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102572",
+          "body": "update intro cross-reference to item 14\n```suggestion\nlanded 2026-09-12 (dated section below; open item 14 tracks the\n```",
+          "createdAt": "2026-09-13T00:17:01Z",
+          "updatedAt": "2026-09-13T00:17:01Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h047p",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "docs/STATUS.md",
+    "line": 2477,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMDoxNzowMlrO7k40QQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uTjRB",
+          "databaseId": 3998102593,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998102593",
+          "body": "update section cross-reference to item 14\n```suggestion\nitem 14 with the NFC/case-fold keying rule.\n```",
+          "createdAt": "2026-09-13T00:17:02Z",
+          "updatedAt": "2026-09-13T00:17:02Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1goB",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/engine_session.dart",
+    "line": 54,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzozOFrO7lH80A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUfzQ",
+          "databaseId": 3998350544,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350544",
+          "body": "Declare openLocalChannel on AppEngine\n```suggestion\n});\n\n  /// A local-filesystem browse channel rooted at [rootPath] (03 \u00a76).\n  @override\n  Future<AppBrowseChannel> openLocalChannel({required String rootPath});\n```",
+          "createdAt": "2026-09-13T02:07:38Z",
+          "updatedAt": "2026-09-13T02:07:38Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1goP",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 186,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzozOVrO7lH84Q=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUfzh",
+          "databaseId": 3998350561,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350561",
+          "body": "Cancel prior status watch before re-subscribing\n```suggestion\nawait _statusWatch?.cancel();\n        _statusWatch = lanes\n```",
+          "createdAt": "2026-09-13T02:07:39Z",
+          "updatedAt": "2026-09-13T02:07:39Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gob",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_commands.dart",
+    "line": 203,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0MFrO7lH89Q=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUfz1",
+          "databaseId": 3998350581,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350581",
+          "body": "Default unknown activator types to unmodified (skip)\n```suggestion\n```dart\n        bool isChord;\n        if (activator is SingleActivator) {\n          isChord =\n              activator.control || activator.meta || activator.alt;\n        } else if (activator is CharacterActivator) {\n          isChord =\n              activator.control || activator.meta || activator.alt;\n        } else {\n          // Unknown spellings cannot be proven modified; they stay\n          // with the pane focus nodes (02 \u00a78.2) rather than risk a\n          // global capture.\n          isChord = false;\n        }\n        if (!isChord) {\n          continue;\n        }\n```\n```",
+          "createdAt": "2026-09-13T02:07:40Z",
+          "updatedAt": "2026-09-13T02:07:40Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gpL",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 80,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0MVrO7lH9NA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUf00",
+          "databaseId": 3998350644,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350644",
+          "body": "Close fake's broadcast controllers\n```suggestion\n<pre>  void emitState(String serverId, ServerStatus status) {\n    statesControllers[serverId]?.add(status);\n  }\n\n  void dispose() {\n    for (final controller in statesControllers.values) {\n      controller.close();\n    }\n  }\n}</pre>\n```",
+          "createdAt": "2026-09-13T02:07:41Z",
+          "updatedAt": "2026-09-13T02:07:41Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gpn",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/pane_view_test.dart",
+    "line": 193,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0MlrO7lH9VA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUf1U",
+          "databaseId": 3998350676,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350676",
+          "body": "Wrap un-awaited navigate in unawaited\n```suggestion\nunawaited(left.navigate('/home/tester/gone'));\n```",
+          "createdAt": "2026-09-13T02:07:42Z",
+          "updatedAt": "2026-09-13T02:07:42Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gp2",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 64,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0M1rO7lH9ZA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUf1k",
+          "databaseId": 3998350692,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350692",
+          "body": "Hoist temp dir and register cleanup\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T02:07:43Z",
+          "updatedAt": "2026-09-13T02:07:43Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gqC",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 139,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0NFrO7lH9eA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUf14",
+          "databaseId": 3998350712,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350712",
+          "body": "Hoist temp dir and register cleanup\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T02:07:44Z",
+          "updatedAt": "2026-09-13T02:07:44Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gqI",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 189,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0NFrO7lH9gw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUf2D",
+          "databaseId": 3998350723,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350723",
+          "body": "Hoist temp dir and register cleanup\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T02:07:44Z",
+          "updatedAt": "2026-09-13T02:07:44Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gqi",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "docs/STATUS.md",
+    "line": 38,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0NVrO7lH9pw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUf2n",
+          "databaseId": 3998350759,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350759",
+          "body": "Keep the open cancellable-listings blocker visible in the milestone summary\n```suggestion\nlocation type's move into core, and the upstream cancellable-listings VFS change remains open); the next M3 slices are recorded\n```",
+          "createdAt": "2026-09-13T02:07:45Z",
+          "updatedAt": "2026-09-13T02:07:45Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h1gqu",
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "docs/STATUS.md",
+    "line": null,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMjowNzo0NVrO7lH9uA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uUf24",
+          "databaseId": 3998350776,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998350776",
+          "body": "Qualify the raw-path claim to cover bookmark-sourced initial paths\n```suggestion\ncase-insensitive volumes) ahead of `==`/hashCode. Today the type\n    compares raw paths; listing-derived navigation arrives canonical,\n    but the remote pane's initial `remotePath` comes from a bookmark,\n    so variant spellings can compare unequal until the rule lands.\n```",
+          "createdAt": "2026-09-13T02:07:45Z",
+          "updatedAt": "2026-09-13T02:07:46Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OZJ",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/engine_session.dart",
+    "line": 367,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToxM1rO7laEOA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoQ4",
+          "databaseId": 3998647352,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647352",
+          "body": "Enforce serverId == bookmark.id in release builds too\n```suggestion\nif (reviewConfig.id != serverId) {\n          throw StateError(\n            'review-connect serverId ($serverId) must equal bookmark.id '\n            '(${reviewConfig.id})',\n          );\n        }\n```",
+          "createdAt": "2026-09-13T03:49:13Z",
+          "updatedAt": "2026-09-13T03:49:13Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OZe",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 355,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToxNFrO7laEWw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoRb",
+          "databaseId": 3998647387,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647387",
+          "body": "Clamp returns num; add toInt() for int assignment\n```suggestion\nfinal clamped = index.clamp(0, _entries.length - 1).toInt();\n```",
+          "createdAt": "2026-09-13T03:49:14Z",
+          "updatedAt": "2026-09-13T03:49:14Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OZ-",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 349,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToxNVrO7laEhg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoSG",
+          "databaseId": 3998647430,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647430",
+          "body": "Clamp returns num; add toInt() before int parameter\n```suggestion\nsetCursorIndex(next.clamp(0, _entries.length - 1).toInt());\n```",
+          "createdAt": "2026-09-13T03:49:15Z",
+          "updatedAt": "2026-09-13T03:49:15Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oaw",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/workspace_shell.dart",
+    "line": 116,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToxNlrO7laExA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoTE",
+          "databaseId": 3998647492,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647492",
+          "body": "Reuse _disposeWorkspace helper in didUpdateWidget\n```suggestion\n```dart\n      _disposeWorkspace();\n      _buildWorkspace();\n```\n```",
+          "createdAt": "2026-09-13T03:49:16Z",
+          "updatedAt": "2026-09-13T03:49:16Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2ObU",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/workspace_shell.dart",
+    "line": 164,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToxN1rO7laE8g=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoTy",
+          "databaseId": 3998647538,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647538",
+          "body": "Rename shadowed focus locals to leftNode/rightNode\n```suggestion\n```dart\n      final leftNode = _leftFocus;\n      final rightNode = _rightFocus;\n      if (leftNode == null || rightNode == null) return;\n      // Claim initial focus only when nothing else holds it: a session\n      // rebind mid-interaction must not yank focus from a toolbar\n      // control or field back to the left listing.\n      final primary = FocusManager.instance.primaryFocus;\n      final focusElsewhere =\n          primary != null && primary != FocusManager.instance.rootScope;\n      if (!focusElsewhere) {\n        leftNode.requestFocus();\n      }\n```\n```",
+          "createdAt": "2026-09-13T03:49:17Z",
+          "updatedAt": "2026-09-13T03:49:17Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Ob7",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/workspace_shell.dart",
+    "line": 319,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToxOFrO7laFKg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoUq",
+          "databaseId": 3998647594,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647594",
+          "body": "Report unreachable null-binding cancel instead of silent no-op\n```suggestion\nfinal serverId = pane.remoteBookmark?.id;\n    if (serverId == null) {\n      // Should be unreachable while a recovery banner is visible; surface\n      // the broken invariant instead of a silent dead button.\n      ApplicationErrorReporter().report(\n        StateError('cancelPaneRecovery: pane has no pending binding'),\n        StackTrace.current,\n      );\n      return;\n    }\n```",
+          "createdAt": "2026-09-13T03:49:18Z",
+          "updatedAt": "2026-09-13T03:49:18Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oca",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/engine_session_test.dart",
+    "line": 245,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToxOFrO7laFVg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoVW",
+          "databaseId": 3998647638,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647638",
+          "body": "Add unscripted-listing diagnostics to the fake\n```suggestion\n```dart\n  final listCalls = <String>[];\n\n  /// Paths requested without a scripted listing \u2014 non-empty usually means\n  /// the test scripted a different path form than the pane requested\n  /// (trailing separator, expanded home anchor).\n  List<String> get unscriptedListings =>\n      listCalls.where((path) => !listings.containsKey(path)).toList();\n```\n```",
+          "createdAt": "2026-09-13T03:49:18Z",
+          "updatedAt": "2026-09-13T03:49:18Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oc2",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 187,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToxOVrO7laFjg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoWO",
+          "databaseId": 3998647694,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647694",
+          "body": "pin the full engine call log\n```suggestion\nexpect(lanes.calls, ['openLocal:~']);\n```",
+          "createdAt": "2026-09-13T03:49:19Z",
+          "updatedAt": "2026-09-13T03:49:19Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OdZ",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 355,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToyMFrO7laFzg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoXO",
+          "databaseId": 3998647758,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647758",
+          "body": "mark the deliberately un-awaited retry\n```suggestion\nunawaited(controller.retry()); // in flight, will succeed when released\n```",
+          "createdAt": "2026-09-13T03:49:20Z",
+          "updatedAt": "2026-09-13T03:49:20Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Odr",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/pane_view_test.dart",
+    "line": 870,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToyMVrO7laF7Q=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoXt",
+          "databaseId": 3998647789,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647789",
+          "body": "Enable semantics before bySemanticsLabel lookup\n```suggestion\nfinal semanticsHandle = tester.ensureSemantics();\n    addTearDown(semanticsHandle.dispose);\n    localChannelWithEntries();\n```",
+          "createdAt": "2026-09-13T03:49:21Z",
+          "updatedAt": "2026-09-13T03:49:21Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OeM",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 66,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToyMlrO7laGHg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoYe",
+          "databaseId": 3998647838,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647838",
+          "body": "Delete the per-test temp dir in teardown\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T03:49:22Z",
+          "updatedAt": "2026-09-13T03:49:22Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oea",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 139,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozNFrO7mR4vA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoY-",
+          "databaseId": 3998647870,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647870",
+          "body": "Delete the per-test temp dir in teardown\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T03:49:23Z",
+          "updatedAt": "2026-09-13T03:49:23Z",
+          "author": {
+            "login": "github-actions"
+          }
+        },
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHi8",
+          "databaseId": 3999561916,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561916",
+          "body": "Additional context: Delete temp support dir in teardown\n```suggestion\n```dart\n    final supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```\n```",
+          "createdAt": "2026-09-13T12:02:34Z",
+          "updatedAt": "2026-09-13T12:02:34Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Oex",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 189,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozNVrO7mR42w=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoZn",
+          "databaseId": 3998647911,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647911",
+          "body": "Delete the per-test temp dir in teardown\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T03:49:23Z",
+          "updatedAt": "2026-09-13T03:49:23Z",
+          "author": {
+            "login": "github-actions"
+          }
+        },
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHjb",
+          "databaseId": 3999561947,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561947",
+          "body": "Additional context: Delete temp support dir in teardown\n```suggestion\n```dart\n    final supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```\n```",
+          "createdAt": "2026-09-13T12:02:35Z",
+          "updatedAt": "2026-09-13T12:02:35Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OfB",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/workspace_panes_test.dart",
+    "line": 11,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToyNFrO7laGfw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoZ_",
+          "databaseId": 3998647935,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647935",
+          "body": "Import the connections command constants\n```suggestion\nimport 'package:poltergeist_app/ui/connections/connections_command.dart';\nimport 'package:poltergeist_app/ui/panes/pane_commands.dart';\n```",
+          "createdAt": "2026-09-13T03:49:24Z",
+          "updatedAt": "2026-09-13T03:49:24Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2OfY",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/workspace_panes_test.dart",
+    "line": 40,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToyNVrO7laGow=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVoaj",
+          "databaseId": 3998647971,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998647971",
+          "body": "Use the command ID constant instead of a literal\n```suggestion\nconst ValueKey('command.$kConnectionsCommandId'),\n```",
+          "createdAt": "2026-09-13T03:49:25Z",
+          "updatedAt": "2026-09-13T03:49:25Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h2Ofy",
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "docs/STATUS.md",
+    "line": null,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwMzo0OToyNlrO7laGxw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uVobH",
+          "databaseId": 3998648007,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3998648007",
+          "body": "Watch seam can't feed the controller while unwired\n```suggestion\nimplemented below and feed the pane controller's transitions; the\nengine-side local directory watch seam is likewise in place, though its\npane refresh wiring remains open.\n```",
+          "createdAt": "2026-09-13T03:49:26Z",
+          "updatedAt": "2026-09-13T03:49:26Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sD-",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_location.dart",
+    "line": 70,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1MFrO7l8m2Q=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXybZ",
+          "databaseId": 3999213273,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213273",
+          "body": "Document forward-slash drive-path contract\n```suggestion\n/// defaults to '/'. One definition, shared by parent and label logic.\n///\n/// Inputs must already be canonical: a drive-letter path using '/'\n/// separators ('C:/Users') is treated as POSIX here and its parent\n/// comes back in '\\' form \u2014 Windows producers must emit '\\'.\n```",
+          "createdAt": "2026-09-13T08:27:50Z",
+          "updatedAt": "2026-09-13T08:27:50Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sEa",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/connections/connections_view.dart",
+    "line": 248,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1MVrO7l8m_Q=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXyb9",
+          "databaseId": 3999213309,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213309",
+          "body": "Gate onOpenInPane on maybePop result\n```suggestion\nfinal popped =\n    await Navigator.of(context, rootNavigator: true).maybePop();\n// Only fire the open once this surface has actually popped, so a\n// rejected pop never stacks the open's route on the still-present list.\nif (popped) onOpenInPane?.call(server);\n```",
+          "createdAt": "2026-09-13T08:27:51Z",
+          "updatedAt": "2026-09-13T08:27:51Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sE3",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/workspace_shell.dart",
+    "line": 169,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1NFrO7l8nKg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXycq",
+          "databaseId": 3999213354,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213354",
+          "body": "Rename shadowing focus-node locals\n```suggestion\n```dart\n      final leftNode = _leftFocus;\n      final rightNode = _rightFocus;\n      if (leftNode == null || rightNode == null) return;\n      // Claim initial focus only when nothing else holds it: a session\n      // rebind mid-interaction must not yank focus from a toolbar\n      // control or field back to the left listing.\n      final primary = FocusManager.instance.primaryFocus;\n      final focusElsewhere =\n          primary != null && primary != FocusManager.instance.rootScope;\n      if (!focusElsewhere) {\n        leftNode.requestFocus();\n      }\n```\n```",
+          "createdAt": "2026-09-13T08:27:54Z",
+          "updatedAt": "2026-09-13T08:27:54Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sFO",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/engine_session_test.dart",
+    "line": 199,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1NVrO7l8nSw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXydL",
+          "databaseId": 3999213387,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213387",
+          "body": "Include the requested rootPath in the fake's failure message\n```suggestion\nthrow StateError('no local browse channel scripted for rootPath: $rootPath');\n```",
+          "createdAt": "2026-09-13T08:27:55Z",
+          "updatedAt": "2026-09-13T08:27:55Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sFa",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 44,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1NVrO7l8nYA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXydg",
+          "databaseId": 3999213408,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213408",
+          "body": "Park on hold before throwing so holdRemoteOpen is never orphaned\n```suggestion\nfinal hold = holdRemoteOpen;\n    if (hold != null) {\n      holdRemoteOpen = null;\n      await hold.future;\n    }\n    final failure = remoteOpenFailure;\n    if (failure != null) throw failure;\n```",
+          "createdAt": "2026-09-13T08:27:55Z",
+          "updatedAt": "2026-09-13T08:27:55Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sF3",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 666,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1NlrO7l8ngw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXyeD",
+          "databaseId": 3999213443,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213443",
+          "body": "Pin the in-flight first listing with holdNext before cancelling\n```suggestion\nfinal firstListing = Completer<void>();\n    channel.holdNext = firstListing;\n    await controller.connectRemote(_remoteBookmark());\n```",
+          "createdAt": "2026-09-13T08:27:56Z",
+          "updatedAt": "2026-09-13T08:27:56Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sGJ",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 678,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1N1rO7l8nnQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXyed",
+          "databaseId": 3999213469,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213469",
+          "body": "Release the parked first listing and assert it is dropped as stale\n```suggestion\nexpect(controller.entries.single.name, 'www.txt');\n\n    // Release the parked first listing; it must be dropped as stale.\n    firstListing.complete();\n    await Future<void>.delayed(Duration.zero);\n    expect(controller.entries.single.name, 'www.txt');\n```",
+          "createdAt": "2026-09-13T08:27:57Z",
+          "updatedAt": "2026-09-13T08:27:57Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sGa",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/pane_format_test.dart",
+    "line": 111,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1OFrO7l8nuQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXye5",
+          "databaseId": 3999213497,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213497",
+          "body": "Add year-rollover \"yesterday\" coverage\n```suggestion\n// DST boundaries are untestable in this fixed-UTC container, but\\n      // calendar rollovers are: Dec 31 -> Jan 1 is still \"yesterday\".\\n      expect(\\n        formatPaneModified(\\n          DateTime(2026, 12, 31, 23, 0),\\n          now: DateTime(2027, 1, 1, 0, 30),\\n          localeName: 'en',\\n          today: (t) => 'T($t)',\\n          yesterday: (t) => 'Y($t)',\\n        ),\\n        startsWith('Y('),\\n      );\n```",
+          "createdAt": "2026-09-13T08:27:58Z",
+          "updatedAt": "2026-09-13T08:27:58Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sG2",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/pane_view_test.dart",
+    "line": 325,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyNzo1OVrO7l8n3A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXyfc",
+          "databaseId": 3999213532,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213532",
+          "body": "Assert cursor moved before pressing Enter on macOS\n```suggestion\nexpect(left.cursorIndex, 0);\n      await tester.sendKeyEvent(LogicalKeyboardKey.enter);\n```",
+          "createdAt": "2026-09-13T08:27:59Z",
+          "updatedAt": "2026-09-13T08:27:59Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sHD",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/pane_view_test.dart",
+    "line": 704,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyODowMFrO7l8n7A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXyfs",
+          "databaseId": 3999213548,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213548",
+          "body": "Use .single so the listing finder fails loudly instead of picking an arbitrary ListView\n```suggestion\nfinal listing = tester\n        .widgetList<ListView>(find.byType(ListView))\n        .where((view) => view.controller != null)\n        .single;\n```",
+          "createdAt": "2026-09-13T08:28:00Z",
+          "updatedAt": "2026-09-13T08:28:00Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sHZ",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 62,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyODowMFrO7l8oBg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXygG",
+          "databaseId": 3999213574,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213574",
+          "body": "Delete temp support dir in teardown (site 1)\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() {\n      if (supportDir.existsSync()) supportDir.deleteSync(recursive: true);\n    });\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T08:28:00Z",
+          "updatedAt": "2026-09-13T08:28:01Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sH-",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 139,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyODowMVrO7l8oMg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXygy",
+          "databaseId": 3999213618,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213618",
+          "body": "Delete temp support dir in teardown (site 2)\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() {\n      if (supportDir.existsSync()) supportDir.deleteSync(recursive: true);\n    });\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T08:28:01Z",
+          "updatedAt": "2026-09-13T08:28:02Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3sIV",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 189,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwODoyODowMlrO7l8oTQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uXyhN",
+          "databaseId": 3999213645,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999213645",
+          "body": "Delete temp support dir in teardown (site 3)\n```suggestion\nfinal supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() {\n      if (supportDir.existsSync()) supportDir.deleteSync(recursive: true);\n    });\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```",
+          "createdAt": "2026-09-13T08:28:02Z",
+          "updatedAt": "2026-09-13T08:28:02Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-kH",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/engine_session.dart",
+    "line": 367,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1MlrO7mDqVA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOpU",
+          "databaseId": 3999328852,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999328852",
+          "body": "Add release-safe guard alongside the assert\n```suggestion\nassert(\n          reviewConfig.id == serverId,\n          'review-connect serverId must equal bookmark.id',\n        );\n        if (reviewConfig.id != serverId) return;\n```",
+          "createdAt": "2026-09-13T09:59:52Z",
+          "updatedAt": "2026-09-13T09:59:53Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-kY",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 371,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1M1rO7mDqag=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOpq",
+          "databaseId": 3999328874,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999328874",
+          "body": "Route cancelRecovery through detachRemote when a connect is in flight\n```suggestion\nFuture<void> cancelRecovery() async {\n  final lanes = _lanes;\n  final serverId = _pendingRemote?.id;\n  if (_disposed || lanes == null || serverId == null) return;\n  if (_phase == PanePhase.connectingRemote) {\n    // A cancelled server must not re-bind through the in-flight\n    // connect: detach invalidates the attempt and resets the binding.\n    await detachRemote();\n  }\n  try {\n    await lanes.disconnectServer(serverId);\n  } on Object catch (error, stackTrace) {\n    _report(error, stackTrace);\n  }\n}\n```",
+          "createdAt": "2026-09-13T09:59:53Z",
+          "updatedAt": "2026-09-13T09:59:53Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-kp",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 477,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1NFrO7mDqgg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOqC",
+          "databaseId": 3999328898,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999328898",
+          "body": "Clear stale connection status when the bind-failure path drops the watch\n```suggestion\nvoid _dropStatusWatch() {\n  unawaited(_statusWatch?.cancel());\n  _statusWatch = null;\n  _connectionStatus = null;\n}\n```",
+          "createdAt": "2026-09-13T09:59:54Z",
+          "updatedAt": "2026-09-13T09:59:54Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-ky",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 125,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1NVrO7mDqlA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOqU",
+          "databaseId": 3999328916,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999328916",
+          "body": "Delegate loading to _loadingActive to keep one definition\n```suggestion\nbool get loading => _loadingActive();\n```",
+          "createdAt": "2026-09-13T09:59:55Z",
+          "updatedAt": "2026-09-13T09:59:55Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-lE",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_commands.dart",
+    "line": 105,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1NlrO7mDqqw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOqr",
+          "databaseId": 3999328939,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999328939",
+          "body": "Put never-reserved Ctrl+PageUp first as advertised primary\n```suggestion\n```dart\n        other: const [\n          // Ctrl+PageUp is the deliverable primary: Ctrl+Alt+arrows is\n          // OS-reserved on stock installs (Intel/AMD display rotation on\n          // Windows, virtual-desktop switching on KDE/X11), so the spec\n          // chord can silently never arrive. Keep it as the secondary\n          // until the settings slice allows rebinding.\n          SingleActivator(LogicalKeyboardKey.pageUp, control: true),\n          SingleActivator(\n            LogicalKeyboardKey.arrowLeft,\n            control: true,\n            alt: true,\n          ),\n        ],\n```\n```",
+          "createdAt": "2026-09-13T09:59:56Z",
+          "updatedAt": "2026-09-13T09:59:56Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-lO",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_commands.dart",
+    "line": 133,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1NlrO7mDqvQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOq9",
+          "databaseId": 3999328957,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999328957",
+          "body": "Mirror focusLeft\n```suggestion\nlist Ctrl+PageDown first:```dart\n        other: const [\n          // Mirror pane.focusLeft: the never-reserved Ctrl+PageDown is\n          // the deliverable primary; the OS-reserved spec chord stays\n          // secondary until rebinding lands.\n          SingleActivator(LogicalKeyboardKey.pageDown, control: true),\n          SingleActivator(\n            LogicalKeyboardKey.arrowRight,\n            control: true,\n            alt: true,\n          ),\n        ],\n```\n```",
+          "createdAt": "2026-09-13T09:59:56Z",
+          "updatedAt": "2026-09-13T09:59:57Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-la",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_view.dart",
+    "line": 302,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1N1rO7mDqzQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOrN",
+          "databaseId": 3999328973,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999328973",
+          "body": "Wrap banner overlay in BlockSemantics\n```suggestion\nreturn BlockSemantics(\n      // AbsorbPointer only claims pointer events; semantic activation\n      // bypasses hit testing, so the stale listing under the scrim must\n      // also be dropped from the semantics tree (the ModalBarrier\n      // pattern). This widget's own subtree stays exposed.\n      child: Column(\n        children: [\n          Container(\n            key: const ValueKey('pane.banner'),\n            width: double.infinity,\n            padding: const EdgeInsetsDirectional.symmetric(\n              horizontal: 12,\n              vertical: 8,\n            ),\n            color: colors.errorContainer,\n            child: Row(\n              children: [\n                Icon(\n                  Icons.cloud_off_outlined,\n                  size: 16,\n                  color: colors.onErrorContainer,\n                ),\n                const SizedBox(width: 8),\n                Expanded(\n                  // Live region: the banner's appearance is announced to\n                  // assistive tech (the stale content beneath is now fully\n                  // blocked from semantics, so the banner is the only signal).\n                  child: Semantics(\n                    liveRegion: true,\n                    child: Text(\n                      l10n.paneConnectionLost(label),\n                      style: Theme.of(context).textTheme.bodySmall?.copyWith(\n                        color: colors.onErrorContainer,\n                      ),\n                    ),\n                  ),\n                ),\n                TextButton(\n                  key: const ValueKey('pane.banner.cancel'),\n                  onPressed: onCancel,\n                  style: TextButton.styleFrom(\n                    foregroundColor: colors.onErrorContainer,\n                  ),\n                  child: Text(l10n.paneConnectionLostCancel),\n                ),\n              ],\n            ),\n          ),\n          Expanded(\n            // Absorb, not ignore: the stale listing under the scrim must\n            // not take interactions while the transport is down (the\n            // banner above the scrim stays reachable).\n            child: AbsorbPointer(\n              child: ColoredBox(\n                color: colors.surfaceContainerLowest.withValues(alpha: 0.6),\n              ),\n            ),\n          ),\n        ],\n      ),\n    );\n```",
+          "createdAt": "2026-09-13T09:59:57Z",
+          "updatedAt": "2026-09-13T09:59:57Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-lm",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/workspace_shell.dart",
+    "line": 115,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1OFrO7mDq4A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOrg",
+          "databaseId": 3999328992,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999328992",
+          "body": "Use _disposeWorkspace helper instead of inline teardown\n```suggestion\n[[suggestion\n```",
+          "createdAt": "2026-09-13T09:59:58Z",
+          "updatedAt": "2026-09-13T09:59:58Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-lr",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 569,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QwOTo1OTo1OVrO7mDq7Q=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOrt",
+          "databaseId": 3999329005,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999329005",
+          "body": "Select the plain file by name instead of index\n```suggestion\ncontroller.openEntry(\n      controller.entries.firstWhere((e) => e.name == 'file.txt'),\n    );\n    expect(channel.listCalls, ['/home/tester']);\n```",
+          "createdAt": "2026-09-13T09:59:59Z",
+          "updatedAt": "2026-09-13T09:59:59Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h3-l2",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_location_test.dart",
+    "line": 49,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMDowMDowMFrO7mDq_A=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uYOr8",
+          "databaseId": 3999329020,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999329020",
+          "body": "Add empty-string case to paneLastSegment test\n```suggestion\nexpect(paneLastSegment(null), '');\n    expect(paneLastSegment(''), '');\n```",
+          "createdAt": "2026-09-13T10:00:00Z",
+          "updatedAt": "2026-09-13T10:00:00Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mAV",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 349,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjoyOVrO7mR4HA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHgc",
+          "databaseId": 3999561756,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561756",
+          "body": "Pass raw index \u2014 setCursorIndex clamps internally (avoids num-returning clamp)\n```suggestion\nsetCursorIndex(next);\n```",
+          "createdAt": "2026-09-13T12:02:29Z",
+          "updatedAt": "2026-09-13T12:02:29Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mAh",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 355,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjoyOVrO7mR4Lg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHgu",
+          "databaseId": 3999561774,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561774",
+          "body": "clamp returns num \u2014 add .toInt()\n```suggestion\nfinal clamped = index.clamp(0, _entries.length - 1).toInt();\n```",
+          "createdAt": "2026-09-13T12:02:29Z",
+          "updatedAt": "2026-09-13T12:02:30Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mAq",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 194,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozMFrO7mR4QA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHhA",
+          "databaseId": 3999561792,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561792",
+          "body": "Clear frozen status on stream error so the banner can't latch\n```suggestion\nonError: (Object error, StackTrace stackTrace) {\n                if (_disposed || attempt != _bindAttempt) return;\n                _report(error, stackTrace);\n                _connectionStatus = null;\n                notifyListeners();\n              },\n```",
+          "createdAt": "2026-09-13T12:02:30Z",
+          "updatedAt": "2026-09-13T12:02:30Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mA1",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_location.dart",
+    "line": 22,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozMVrO7mR4Ug=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHhS",
+          "databaseId": 3999561810,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561810",
+          "body": "Enforce the value-equality contract on subclasses\n```suggestion\nString get path;\n\n  /// Subclasses must compare by value (see class docs): redeclared\n  /// abstract so no subclass can silently inherit identity equality.\n  @override\n  bool operator ==(Object other);\n  @override\n  int get hashCode;\n}\n```",
+          "createdAt": "2026-09-13T12:02:31Z",
+          "updatedAt": "2026-09-13T12:02:31Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mA9",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_view.dart",
+    "line": 176,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozMlrO7mR4Xg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHhe",
+          "databaseId": 3999561822,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561822",
+          "body": "Pick separator from path content instead of leading slash\n```suggestion\n<final separator = path.lastIndexOf('\\\\') > path.lastIndexOf('/') ? '\\\\' : '/';>\n```",
+          "createdAt": "2026-09-13T12:02:32Z",
+          "updatedAt": "2026-09-13T12:02:32Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mBS",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/panes/pane_view.dart",
+    "line": 163,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozMlrO7mR4gA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHiA",
+          "databaseId": 3999561856,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561856",
+          "body": "Add semantics label to the loading progress line\n```suggestion\n<if (controller.loading && widget.loadingVisible)\n          SizedBox(\n            key: ValueKey('${controller.paneTabId}.progress'),\n            height: 2,\n            child: Semantics(\n              label: l10n.paneLoadingFolder(\n                paneLastSegment(controller.location?.path),\n              ),\n              child: const LinearProgressIndicator(),\n            ),\n          ),>\n```",
+          "createdAt": "2026-09-13T12:02:32Z",
+          "updatedAt": "2026-09-13T12:02:32Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mBg",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/services/pane_controller_test.dart",
+    "line": 233,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozM1rO7mR4kA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHiQ",
+          "databaseId": 3999561872,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561872",
+          "body": "use settle() helper\n```suggestion\nawait settle();\n```",
+          "createdAt": "2026-09-13T12:02:33Z",
+          "updatedAt": "2026-09-13T12:02:33Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mBx",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/production_engine_wiring_test.dart",
+    "line": 67,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozNFrO7mR4qg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHiq",
+          "databaseId": 3999561898,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561898",
+          "body": "Delete temp support dir in teardown\n```suggestion\n```dart\n    final supportDir =\n        Directory.systemTemp.createTempSync('pg-engine-session-');\n    addTearDown(() => supportDir.deleteSync(recursive: true));\n    final session = await startEngineSession(\n      supportDirectoryPath: supportDir.path,\n```\n```",
+          "createdAt": "2026-09-13T12:02:34Z",
+          "updatedAt": "2026-09-13T12:02:34Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h4mCm",
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "docs/STATUS.md",
+    "line": null,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMjowMjozNlrO7mR5BA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZHkE",
+          "databaseId": 3999561988,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999561988",
+          "body": "Renumber Quick Select open item from 17 to 16\n```suggestion\n16. **2026-09-13: M3 Quick Select performance at pane wiring (#85 review).**\n```",
+          "createdAt": "2026-09-13T12:02:36Z",
+          "updatedAt": "2026-09-13T12:02:36Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h5EV7",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/services/pane_controller.dart",
+    "line": 203,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMzoyOTo0MVrO7mdGIg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZ0Yi",
+          "databaseId": 3999745570,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999745570",
+          "body": "also clear the banner when the status lane closes cleanly\n```suggestion\n},\n              onDone: () {\n                if (_disposed || attempt != _bindAttempt) return;\n                // A lane that closes cleanly must not pin the banner on\n                // its last state either (same rule as a dead lane).\n                _connectionStatus = null;\n                notifyListeners();\n              },\n            );\n```",
+          "createdAt": "2026-09-13T13:29:41Z",
+          "updatedAt": "2026-09-13T13:29:41Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h5EWZ",
+    "isResolved": true,
+    "isOutdated": true,
+    "path": "app/poltergeist_app/lib/services/pane_location.dart",
+    "line": null,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxMzoyOTo0MlrO7mdGTw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7uZ0ZP",
+          "databaseId": 3999745615,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r3999745615",
+          "body": "Make bare-UNC self-parent a strict no-op\n```suggestion\nreturn path;\n```",
+          "createdAt": "2026-09-13T13:29:42Z",
+          "updatedAt": "2026-09-13T13:29:43Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h5yXe",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "docs/STATUS.md",
+    "line": 3111,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxNTozNDoxMFrO7muAVQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7ua4BV",
+          "databaseId": 4000022613,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r4000022613",
+          "body": "Point the incident-store retry reference at item 20\n```suggestion\npassed on retry (item 20). Higher-ancestor renames remain item 19; Linux\n```",
+          "createdAt": "2026-09-13T15:34:10Z",
+          "updatedAt": "2026-09-13T15:34:10Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h5yXk",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "docs/STATUS.md",
+    "line": 3112,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxNTozNDoxMVrO7muAZw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7ua4Bn",
+          "databaseId": 4000022631,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r4000022631",
+          "body": "Point the Linux overflow reference at item 15\n```suggestion\noverflow remains item 15. M3 stays open.\n```",
+          "createdAt": "2026-09-13T15:34:11Z",
+          "updatedAt": "2026-09-13T15:34:11Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6kpO",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/connections/connections_view.dart",
+    "line": 249,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxNzozNDoxOVrO7nAkcw=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7ucCRz",
+          "databaseId": 4000326771,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r4000326771",
+          "body": "Check isCurrent, not isActive\n```suggestion\nif (route.isCurrent) return;\n```",
+          "createdAt": "2026-09-13T17:34:19Z",
+          "updatedAt": "2026-09-13T17:34:19Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6kpd",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart",
+    "line": 47,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxNzozNDoyMFrO7nAkjA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7ucCSM",
+          "databaseId": 4000326796,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r4000326796",
+          "body": "Guard duplicate pending opens\n```suggestion\nassert(\n      !pending.containsKey(serverId),\n      'Duplicate openBrowseChannel for $serverId while a prompt is pending',\n    );\n    final result = pending[serverId] = Completer<AppBrowseChannel>();\n```",
+          "createdAt": "2026-09-13T17:34:20Z",
+          "updatedAt": "2026-09-13T17:34:20Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6kp1",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "docs/STATUS.md",
+    "line": 3724,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxNzozNDoyMVrO7nAksA=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7ucCSw",
+          "databaseId": 4000326832,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r4000326832",
+          "body": "Fix verb agreement in item cross-reference\n```suggestion\nancestor invalidation remains item 18; Linux overflow remains item 14.\n```",
+          "createdAt": "2026-09-13T17:34:21Z",
+          "updatedAt": "2026-09-13T17:34:21Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6zu0",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/test/ui/panes/workspace_panes_test.dart",
+    "line": 28,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxODowOTozMFrO7nGJyQ=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7ucYnJ",
+          "databaseId": 4000418249,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r4000418249",
+          "body": "Record and expose the held listing's requested path\n```suggestion\nCompleter<List<RemoteFileEntry>>? nextListing;\n\n  /// Path of the most recent held request, so tests can assert it.\n  String? heldPath;\n\n  @override\n  Future<List<RemoteFileEntry>> listDirectory(String path) {\n    final held = nextListing;\n    nextListing = null;\n    if (held == null) return super.listDirectory(path);\n    heldPath = path;\n    return held.future;\n  }\n```",
+          "createdAt": "2026-09-13T18:09:30Z",
+          "updatedAt": "2026-09-13T18:09:30Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "PRRT_kwDOUIzfcM6h6zvz",
+    "isResolved": true,
+    "isOutdated": false,
+    "path": "app/poltergeist_app/lib/ui/workspace_shell.dart",
+    "line": 240,
+    "comments": {
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOnYyOpK0MjAyNi0wOS0xM1QxODowOTozMVrO7nGKHg=="
+      },
+      "nodes": [
+        {
+          "id": "PRRC_kwDOUIzfcM7ucYoe",
+          "databaseId": 4000418334,
+          "url": "https://github.com/L-K-M/Poltergeist/pull/84#discussion_r4000418334",
+          "body": "Document the enablement-source invariant\n```suggestion\n// Re-evaluate enablement without rebuilding the pane listings.\n// Every notifier that feeds command enablement must be merged here;\n// a missing source reintroduces stale toolbar state.\n```",
+          "createdAt": "2026-09-13T18:09:31Z",
+          "updatedAt": "2026-09-13T18:09:31Z",
+          "author": {
+            "login": "github-actions"
+          }
+        }
+      ]
+    }
+  }
+]

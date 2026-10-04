@@ -1,0 +1,31 @@
+# Flatpak manifest. scripts/build-flatpak.sh extracts the release .deb into
+# dist/flatpak/stage and builds from that — the bundle ships the same files
+# the .deb installs, relaid under flatpak's /app prefix.
+id: ch.lkmc.poltergeist
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: poltergeist
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  # GPU rendering for the Flutter embedder.
+  - --device=dri
+  # SFTP client: SSH sessions out, ssh-agent for auth, and real file
+  # transfer means real filesystem access — it syncs and copies the
+  # user's actual files, not just portal-picked ones.
+  - --share=network
+  - --socket=ssh-auth
+  - --filesystem=home
+  # Passwords/secrets live in the host keyring (Secret Service API).
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: poltergeist
+    buildsystem: simple
+    sources:
+      - type: dir
+        path: ../dist/flatpak/stage
+    build-commands:
+      - rm -rf DEBIAN
+      - "if [ -d usr ]; then cp -a usr/. /app/; else cp -a . /app/; fi"

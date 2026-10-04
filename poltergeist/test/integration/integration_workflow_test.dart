@@ -1,0 +1,209 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:isolate';
+
+import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
+
+const _fixturePath = 'test/integration/docker-compose.yml';
+const _requiredEvents = ['push', 'workflow_dispatch'];
+
+void main() {
+  late String guard;
+  late YamlList integrationPaths;
+  late YamlMap jobs;
+  late String calibratedDartVersion;
+
+  setUpAll(() async {
+    final workspace = await Isolate.resolvePackageUri(
+      Uri.parse('package:_poltergeist_workspace/'),
+    );
+    if (workspace == null) throw StateError('Workspace package is unresolved.');
+
+    final workflow =
+        loadYaml(
+              await File.fromUri(
+                workspace.resolve('../.github/workflows/ci.yml'),
+              ).readAsString(),
+            )
+            as YamlMap;
+    jobs = workflow['jobs'] as YamlMap;
+    final budgets = jsonDecode(
+      await File.fromUri(
+        workspace.resolve('../test/benchmarks/budgets.json'),
+      ).readAsString(),
+    ) as Map<String, dynamic>;
+    calibratedDartVersion =
+        budgets['calibratedFingerprint']['dartVersion'] as String;
+    final detection = jobs['detect_integration'] as YamlMap;
+    final steps = (detection['steps'] as YamlList).cast<YamlMap>();
+    final changes = steps.singleWhere((step) => step['id'] == 'changes');
+    final filters = loadYaml(changes['with']['filters'] as String) as YamlMap;
+    integrationPaths = filters['integration'] as YamlList;
+    guard =
+        steps.singleWhere((step) => step['id'] == 'fixture')['run'] as String;
+  });
+
+  test('benchmark SDK matches calibration while ordinary CI follows stable', () {
+    final calibratedSdk = RegExp(
+      r'^(\d+\.\d+\.\d+)\s',
+    ).firstMatch(calibratedDartVersion)?.group(1);
+    expect(calibratedSdk, isNotNull);
+
+    String sdkFor(String job) => (jobs[job]['steps'] as YamlList)
+        .cast<YamlMap>()
+        .singleWhere(
+          (step) => '${step['uses']}'.startsWith('dart-lang/setup-dart@'),
+        )['with']['sdk'] as String;
+
+    expect(sdkFor('bench'), calibratedSdk);
+    expect(sdkFor('bench'), matches(r'^\d+\.\d+\.\d+$'));
+    expect(sdkFor('dart'), 'stable');
+    expect(sdkFor('dart_tools'), 'stable');
+  });
+
+  test('ordinary Dart contracts are required on all three native OSes', () {
+    final dart = jobs['dart'] as YamlMap;
+    expect(dart['runs-on'], r'${{ matrix.os }}');
+    expect(dart['strategy']['fail-fast'], isFalse);
+    expect(dart['strategy']['matrix']['os'], [
+      'ubuntu-latest',
+      'macos-latest',
+      'windows-latest',
+    ]);
+    expect(dart['if'], isNull);
+    expect(dart['continue-on-error'], isNull);
+    expect(dart['defaults']['run']['shell'], 'bash');
+    final steps = (dart['steps'] as YamlList).cast<YamlMap>();
+    for (final name in ['Analyze', 'Test']) {
+      final step = steps.singleWhere((step) => step['name'] == name);
+      expect(step['if'], isNull);
+      expect(step['continue-on-error'], isNull);
+      expect(step['run'], contains('packages/*'));
+      expect(step['run'], contains('set -euo pipefail'));
+    }
+    final testCommand = steps.singleWhere((s) => s['name'] == 'Test')['run'];
+    expect(testCommand, contains(r'dart test --reporter expanded "${dirs[@]}"'));
+  });
+
+  test('fixture and benchmark tooling stays on Ubuntu', () {
+    final tools = jobs['dart_tools'] as YamlMap;
+    expect(tools['runs-on'], 'ubuntu-latest');
+    expect(tools['if'], isNull);
+    expect(tools['continue-on-error'], isNull);
+    final names = (tools['steps'] as YamlList).map((step) => step['name']);
+    expect(names, containsAll([
+      'Test dependency guard',
+      'Test engine protocol guard',
+      'Test release gate',
+      'Test release version tool',
+      'Test Séance pin audit',
+      'Test M0 benchmark harness',
+      'Validate committed M0 evidence',
+      'Test integration fixture tools',
+      'Validate rendered integration fixture',
+      'Guard Séance release gate',
+    ]));
+    expect(jobs['m0_bench']['needs'], containsAll(['dart', 'dart_tools']));
+  });
+
+  test('workspace dependency changes select SSH integration', () {
+    // Root resolution can change SSH dependencies without touching packages.
+    expect(integrationPaths, containsAll(['pubspec.yaml', 'pubspec.lock']));
+  });
+
+  for (final event in _requiredEvents) {
+    test('$event fails closed when the SSH fixture is absent', () async {
+      final result = await _runGuard(guard, event: event);
+      expect(result.exitCode, isNonZero);
+      expect(
+        result.stdout,
+        contains('Missing integration fixture: $_fixturePath'),
+      );
+      expect(result.output, isEmpty);
+    });
+  }
+
+  test('fixture or workflow PR deletion fails closed', () async {
+    final result = await _runGuard(guard, changed: 'true');
+    expect(result.exitCode, isNonZero);
+    expect(
+      result.stdout,
+      contains('Missing integration fixture: $_fixturePath'),
+    );
+    expect(result.output, isEmpty);
+  });
+
+  test('source-only PR without the fixture remains skipped', () async {
+    final result = await _runGuard(guard);
+    expect(result.exitCode, 0, reason: result.stderr);
+    expect(result.output, 'run=false');
+  });
+
+  test('fixture or workflow PR changes run the existing fixture', () async {
+    final result = await _runGuard(
+      guard,
+      changed: 'true',
+      fixture: _FixtureState.present,
+    );
+    expect(result.exitCode, 0, reason: result.stderr);
+    expect(result.output, 'run=true');
+  });
+
+  for (final event in [..._requiredEvents, 'pull_request']) {
+    test('$event runs the existing SSH fixture', () async {
+      final result = await _runGuard(
+        guard,
+        event: event,
+        fixture: _FixtureState.present,
+      );
+      expect(result.exitCode, 0, reason: result.stderr);
+      expect(result.output, 'run=true');
+    });
+  }
+}
+
+enum _FixtureState { absent, present }
+
+typedef _GuardResult = ({
+  int exitCode,
+  String stdout,
+  String stderr,
+  String output,
+});
+
+Future<_GuardResult> _runGuard(
+  String guard, {
+  String event = 'pull_request',
+  String changed = 'false',
+  _FixtureState fixture = _FixtureState.absent,
+}) async {
+  final directory = await Directory.systemTemp.createTemp(
+    'poltergeist-ci-guard-',
+  );
+  addTearDown(() => directory.delete(recursive: true));
+  final output = File('${directory.path}/output');
+  await output.create();
+  if (fixture == _FixtureState.present) {
+    await File('${directory.path}/$_fixturePath').create(recursive: true);
+  }
+
+  // Match CI's default bash flags without inheriting developer shell hooks.
+  final result = await Process.run(
+    'bash',
+    ['-e', '-c', guard],
+    workingDirectory: directory.path,
+    includeParentEnvironment: false,
+    environment: {
+      'EVENT_NAME': event,
+      'FIXTURE_CHANGED': changed,
+      'GITHUB_OUTPUT': output.path,
+    },
+  );
+  return (
+    exitCode: result.exitCode,
+    stdout: '${result.stdout}',
+    stderr: '${result.stderr}',
+    output: (await output.readAsString()).trim(),
+  );
+}

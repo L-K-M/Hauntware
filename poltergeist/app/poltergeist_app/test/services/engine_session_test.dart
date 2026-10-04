@@ -1,0 +1,1457 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:poltergeist_app/services/engine_session.dart';
+import 'package:poltergeist_app/services/file_stores.dart';
+import 'package:poltergeist_app/services/prompt_coordinator.dart';
+import 'package:poltergeist_app/services/trash_channel.dart';
+import 'package:poltergeist_core/poltergeist_core.dart';
+
+import '../support/fake_bookmark_store.dart';
+
+final _now = DateTime.utc(2026, 9, 11, 9);
+
+const _pin = HostKey(
+  host: 'web.example.com',
+  port: 2222,
+  type: 'ssh-ed25519',
+  fingerprintSha256: 'SHA256:pinned',
+  pinnedAt: 1700000000000,
+);
+
+final _incident = IncidentRecord(
+  serverId: 'b1',
+  host: 'web.example.com',
+  port: 2222,
+  username: 'deploy',
+  presentedFingerprintSha256: 'SHA256:presented',
+  pinnedFingerprintSha256: 'SHA256:pinned',
+);
+
+Bookmark _blockedBookmark() {
+  return Bookmark(
+    id: 'b1',
+    kind: BookmarkKind.remotePath,
+    label: 'web',
+    server: BookmarkServerRef(
+      identity: EmbeddedHostIdentity(
+        host: 'web.example.com',
+        port: 2222,
+        username: 'deploy',
+        authMethod: AuthMethod.password,
+        secretRef: 'secret-b1',
+      ),
+    ),
+    remotePath: '/',
+    sortKey: 'b1',
+    createdAt: _now,
+    updatedAt: _now,
+  );
+}
+
+ServerConfig _catalogServer(String id, {String? jumpHostId}) => ServerConfig(
+  id: id,
+  label: id,
+  host: '$id.internal',
+  username: 'deploy',
+  authMethod: AuthMethod.agent,
+  jumpHostId: jumpHostId,
+  createdAt: 0,
+  updatedAt: 0,
+);
+
+Bookmark _catalogBookmark(String id, String serverConfigId) => Bookmark(
+  id: id,
+  kind: BookmarkKind.remotePath,
+  label: id,
+  server: BookmarkServerRef(serverConfigId: serverConfigId),
+  remotePath: '/',
+  sortKey: id,
+  createdAt: _now,
+  updatedAt: _now,
+);
+
+/// The engine surface, socket-free: scripted prompts/trust events over
+/// broadcast lanes, recorded calls (the FakeSftpDemoEngine pattern, over
+/// the production [AppEngine] facet).
+class FakeAppEngine implements AppEngine {
+  /// The composition's transfer seams are not this suite's subject: a
+  /// fake engine hands out managers that refuse every lease, typed.
+  @override
+  ConnectionManager transferConnections(ServerConfigSource configs) =>
+      _RefusingConnections();
+
+  @override
+  LocalTrashBackend get localTrash => _UnavailableTrash();
+
+  final promptsController = StreamController<EnginePromptEvent>.broadcast();
+  final dismissalsController =
+      StreamController<PromptDismissedEvent>.broadcast();
+  final pinsController = StreamController<HostKeyPinnedEvent>.broadcast();
+  final incidentsController = StreamController<IncidentStoreEvent>.broadcast();
+  final statesControllers = <String, StreamController<ServerStatus>>{};
+  final recoveryController = StreamController<RecoveryFailedEvent>.broadcast();
+  final logController = StreamController<ConnectionLogEvent>.broadcast();
+  final probeStatusesController =
+      StreamController<ProbeStatusesEvent>.broadcast();
+  final _pendingReplies = <String, Completer<PromptReply>>{};
+
+  final replies = <(String, EnginePromptKind, PromptReply)>[];
+  final catalogSnapshots = <List<ServerConfig>>[];
+  final openCalls =
+      <({String serverId, String paneTabId, ServerConfig config})>[];
+
+  /// Scripted local channels, consumed FIFO by [openLocalChannel] (the
+  /// panes' initial browse). Kept in place so tests can assert on their
+  /// recorded calls after the panes consumed them.
+  final localChannels = <FakeAppBrowseChannel>[];
+  int _localChannelCursor = 0;
+
+  /// Roots the panes requested at open time (the home anchor contract).
+  final localChannelRoots = <String>[];
+
+  /// Emitted (and awaited) in order inside [openBrowseChannel].
+  List<EnginePromptEvent> promptScript = const [];
+
+  Object? openFailure;
+  FakeAppBrowseChannel? channel;
+  final disconnectIds = <String>[];
+  final removedBookmarkIds = <String>[];
+  Completer<void>? catalogReplacementGate;
+  int shutdownCalls = 0;
+
+  @override
+  Stream<EnginePromptEvent> get prompts => promptsController.stream;
+
+  @override
+  Stream<PromptDismissedEvent> get promptDismissals =>
+      dismissalsController.stream;
+
+  @override
+  void replyPrompt(String promptId, EnginePromptKind kind, PromptReply reply) {
+    replies.add((promptId, kind, reply));
+    final completer = _pendingReplies.remove(promptId);
+    if (completer != null && !completer.isCompleted) completer.complete(reply);
+  }
+
+  @override
+  Stream<HostKeyPinnedEvent> get hostKeyPins => pinsController.stream;
+
+  void pinHostKey(HostKey key) {
+    pinsController.add(HostKeyPinnedEvent(key: key));
+  }
+
+  @override
+  Stream<IncidentStoreEvent> get incidentChanges => incidentsController.stream;
+
+  @override
+  Stream<ServerStatus> watchServer(String serverId) =>
+      _stateOf(serverId).stream;
+
+  @override
+  Stream<RecoveryFailedEvent> get recoveryFailures => recoveryController.stream;
+
+  @override
+  Stream<ConnectionLogEvent> get connectionLog => logController.stream;
+
+  @override
+  Stream<ProbeStatusesEvent> get probeStatuses =>
+      probeStatusesController.stream;
+
+  @override
+  Future<void> setProbeTargets(List<ServerConfig> targets) async {}
+
+  @override
+  Future<void> setProbeActivity(ProbeActivity activity) async {}
+
+  @override
+  Future<void> replaceServerCatalog(List<ServerConfig> configs) async {
+    catalogSnapshots.add(List.unmodifiable(configs));
+    await catalogReplacementGate?.future;
+  }
+
+  @override
+  Future<AppBrowseChannel> openBrowseChannel({
+    required String serverId,
+    required String paneTabId,
+    required ServerConfig config,
+  }) async {
+    openCalls.add((serverId: serverId, paneTabId: paneTabId, config: config));
+    final repliesAtOpenStart = replies.length;
+    _stateOf(
+      serverId,
+    ).add(const ServerStatus(ServerConnectionState.connecting));
+    for (final prompt in promptScript) {
+      promptsController.add(prompt);
+      await _waitForReply(prompt.promptId);
+    }
+    final failure = openFailure;
+    if (failure != null) {
+      // The engine's teardown fan-out: a declined changed key ends
+      // blocked; every other failure ends disconnected with the detail.
+      final declinedChangedKey = promptScript.any(
+        (prompt) =>
+            prompt.kind == EnginePromptKind.hostKeyChanged &&
+            replies
+                .skip(repliesAtOpenStart)
+                .any(
+                  (reply) =>
+                      reply.$1 == prompt.promptId &&
+                      reply.$3 is HostKeyPromptReply &&
+                      !(reply.$3 as HostKeyPromptReply).accepted,
+                ),
+      );
+      _stateOf(serverId).add(
+        ServerStatus(
+          declinedChangedKey
+              ? ServerConnectionState.blocked
+              : ServerConnectionState.disconnected,
+          detail: failure is RemoteFileException ? failure.message : null,
+        ),
+      );
+      throw failure;
+    }
+    final channel = this.channel;
+    if (channel == null) throw StateError('no browse channel scripted');
+    _stateOf(serverId).add(const ServerStatus(ServerConnectionState.connected));
+    return channel;
+  }
+
+  /// The per-server state lane, created on watch like the client's.
+  StreamController<ServerStatus> _stateOf(String serverId) =>
+      statesControllers.putIfAbsent(
+        serverId,
+        () => StreamController<ServerStatus>.broadcast(sync: true),
+      );
+
+  Future<PromptReply> _waitForReply(String promptId) {
+    final completer = Completer<PromptReply>();
+    _pendingReplies[promptId] = completer;
+    return completer.future;
+  }
+
+  @override
+  Future<AppBrowseChannel> openLocalChannel({required String rootPath}) async {
+    localChannelRoots.add(rootPath);
+    if (_localChannelCursor >= localChannels.length) {
+      throw StateError('no local browse channel scripted');
+    }
+    return localChannels[_localChannelCursor++];
+  }
+
+  @override
+  Future<void> disconnectServer(String serverId) async {
+    disconnectIds.add(serverId);
+  }
+
+  @override
+  Future<void> removeBookmark(String serverId) async {
+    removedBookmarkIds.add(serverId);
+  }
+
+  @override
+  Future<void> shutdown() async {
+    shutdownCalls++;
+  }
+
+  /// Closes every controller without awaiting: a controller whose
+  /// subscription was cancelled completes its close future only in real
+  /// async, which never arrives inside a widget test's fake-async zone.
+  /// A prompt still awaiting its reply fails loudly instead of hanging.
+  void close() {
+    for (final completer in _pendingReplies.values) {
+      if (!completer.isCompleted) {
+        completer.completeError(StateError('FakeAppEngine closed'));
+      }
+    }
+    _pendingReplies.clear();
+    unawaited(promptsController.close());
+    unawaited(dismissalsController.close());
+    unawaited(pinsController.close());
+    unawaited(incidentsController.close());
+    for (final controller in statesControllers.values) {
+      unawaited(controller.close());
+    }
+    unawaited(recoveryController.close());
+    unawaited(logController.close());
+    unawaited(probeStatusesController.close());
+  }
+}
+
+class _RefusingConnections implements ConnectionManager {
+  @override
+  Future<TransferChannelLease> leaseTransferChannel(String serverId) =>
+      Future.error(
+        const RemoteFileException(
+          kind: RemoteFileErrorKind.unsupported,
+          operation: 'lease transfer channel',
+          message: 'fake engine',
+        ),
+      );
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName}');
+}
+
+class _UnavailableTrash implements LocalTrashBackend {
+  @override
+  Future<bool> isAvailable() async => false;
+
+  @override
+  Future<String?> trash(String path) => throw const TrashException(
+    kind: TrashErrorKind.unavailable,
+    message: 'fake engine',
+  );
+}
+
+class FakeAppBrowseChannel implements AppBrowseChannel {
+  FakeAppBrowseChannel({this.homePath = '/home/deploy'});
+
+  @override
+  Future<void> createDirectory(String path) async {}
+
+  @override
+  Future<RemoteFileEntry> createEmptyFile(String path) async =>
+      RemoteFileEntry(path: path, name: path, type: RemoteFileType.file);
+
+  @override
+  Future<RemoteFileEntry> stat(String path) => throw RemoteFileException(
+    kind: RemoteFileErrorKind.notFound,
+    operation: 'stat',
+    path: path,
+    message: 'not scripted',
+  );
+
+  @override
+  final String homePath;
+
+  /// Per-path scripted listings; paths without an entry answer empty.
+  final listings = <String, List<RemoteFileEntry>>{};
+
+  /// Per-path listing refusals, checked before [listings].
+  final listingFailures = <String, Object>{};
+
+  final listCalls = <String>[];
+  int closeCalls = 0;
+
+  @override
+  Future<List<RemoteFileEntry>> listDirectory(String path) async {
+    listCalls.add(path);
+    final failure = listingFailures[path];
+    if (failure != null) throw failure;
+    return listings[path] ?? const [];
+  }
+
+  /// Recorded watch requests; the stream stays open like a live
+  /// channel's and never signals.
+  final watchCalls = <String>[];
+  int unwatchCalls = 0;
+  final _watchEvents = StreamController<DirectoryWatchEvent>.broadcast();
+
+  @override
+  Stream<DirectoryWatchEvent> get directoryChanges => _watchEvents.stream;
+
+  @override
+  Future<void> watchDirectory(String path) async {
+    watchCalls.add(path);
+  }
+
+  @override
+  Future<void> unwatchDirectory() async {
+    unwatchCalls++;
+  }
+
+  /// Recorded rename calls and a scripted failure — null succeeds.
+  final renameCalls = <(String, String)>[];
+  Object? renameFailure;
+
+  @override
+  Future<void> rename(String oldPath, String newPath) async {
+    renameCalls.add((oldPath, newPath));
+    final failure = renameFailure;
+    if (failure != null) throw failure;
+  }
+
+  /// Recorded chmod calls (path, permissions) and a scripted failure —
+  /// null succeeds silently.
+  final permissionsCalls = <(String, int)>[];
+  Object? permissionsFailure;
+
+  @override
+  Future<void> setPermissions(String path, int permissions) async {
+    permissionsCalls.add((path, permissions));
+    final failure = permissionsFailure;
+    if (failure != null) throw failure;
+  }
+
+  /// Recorded default-app opens (paths) and a scripted failure — null
+  /// opens succeed silently.
+  final openCalls = <String>[];
+  Object? openFailure;
+
+  @override
+  Future<void> openInDefaultApp(String path) async {
+    openCalls.add(path);
+    final failure = openFailure;
+    if (failure != null) throw failure;
+  }
+
+  @override
+  Future<void> close() async {
+    closeCalls++;
+  }
+}
+
+/// A pin store whose read violates the fail-safe contract with an
+/// unexpected error type (not a corrupt file): the composition must
+/// still boot engine-less rather than dying in main.
+class _ThrowingPinStore implements HostKeyStore {
+  @override
+  Future<List<HostKey>> all() async => throw StateError('pin read failed');
+
+  @override
+  Future<HostKey?> get(String host, int port) async => null;
+
+  @override
+  Future<void> put(HostKey key) async {}
+}
+
+/// A pin store whose writes block on a gate: the flush hook's test
+/// vehicle (writes pend, then land).
+class _GatedPinStore implements HostKeyStore {
+  _GatedPinStore(this.gate, [Iterable<HostKey> initialKeys = const []])
+    : _written = List.of(initialKeys);
+
+  final Completer<void> gate;
+  final List<HostKey> _written;
+
+  @override
+  Future<List<HostKey>> all() async => List.of(_written);
+
+  @override
+  Future<HostKey?> get(String host, int port) async {
+    for (final key in _written) {
+      if (key.host == host && key.port == port) return key;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> put(HostKey key) async {
+    await gate.future;
+    _written.removeWhere(
+      (candidate) => candidate.host == key.host && candidate.port == key.port,
+    );
+    _written.add(key);
+  }
+}
+
+/// Holds one stale delegate read while the engine observes a replacement.
+class _GatedReadPinStore implements HostKeyStore {
+  _GatedReadPinStore(this._stored);
+
+  final HostKey _stored;
+  final readStarted = Completer<void>();
+  final releaseRead = Completer<void>();
+
+  @override
+  Future<List<HostKey>> all() async => const [];
+
+  @override
+  Future<HostKey?> get(String host, int port) async {
+    readStarted.complete();
+    await releaseRead.future;
+    return _stored;
+  }
+
+  @override
+  Future<void> put(HostKey key) async {}
+}
+
+class _FailingPutPinStore implements HostKeyStore {
+  _FailingPutPinStore(this._stored);
+
+  final HostKey _stored;
+
+  @override
+  Future<List<HostKey>> all() async => [_stored];
+
+  @override
+  Future<HostKey?> get(String host, int port) async =>
+      host == _stored.host && port == _stored.port ? _stored : null;
+
+  @override
+  Future<void> put(HostKey key) async => throw StateError('write failed');
+}
+
+class _ConcurrentWritePinStore implements HostKeyStore {
+  _ConcurrentWritePinStore(Iterable<HostKey> initialKeys)
+    : _written = List.of(initialKeys);
+
+  final firstWriteGate = Completer<void>();
+  final List<HostKey> _written;
+  final calls = <HostKey>[];
+  int activeWrites = 0;
+  int maximumActiveWrites = 0;
+
+  @override
+  Future<List<HostKey>> all() async => List.of(_written);
+
+  @override
+  Future<HostKey?> get(String host, int port) async {
+    for (final key in _written) {
+      if (key.host == host && key.port == port) return key;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> put(HostKey key) async {
+    calls.add(key);
+    activeWrites++;
+    if (activeWrites > maximumActiveWrites) {
+      maximumActiveWrites = activeWrites;
+    }
+    try {
+      if (calls.length == 1) await firstWriteGate.future;
+
+      _written.removeWhere(
+        (candidate) => candidate.host == key.host && candidate.port == key.port,
+      );
+      _written.add(key);
+    } finally {
+      activeWrites--;
+    }
+  }
+}
+
+EnginePromptEvent _changedKeyPrompt(String promptId) {
+  return EnginePromptEvent(
+    promptId: promptId,
+    kind: EnginePromptKind.hostKeyChanged,
+    data: HostKeyPromptData(
+      host: 'web.example.com',
+      port: 2222,
+      keyType: 'ssh-ed25519',
+      fingerprintSha256: 'SHA256:presented',
+      pinnedFingerprintSha256: 'SHA256:pinned',
+    ),
+  );
+}
+
+/// Mirror writes are fire-and-forget into the stores' serialized chains
+/// (like the engine's own writes), so assertions poll until the file
+/// lands and only then read it back — a store instance caches its first
+/// load, and one created before the atomic rename would read empty
+/// forever. Real IO, not microtasks.
+Future<List<T>> _eventually<T>(
+  String path,
+  Future<List<T>> Function() read,
+) async {
+  final file = File(path);
+  // Real file IO (temp write + rename) on a possibly loaded runner: a
+  // generous budget beats a flake, and the normal case lands on attempt 1.
+  for (var attempt = 0; attempt < 500; attempt++) {
+    if (await file.exists()) return await read();
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  fail('mirror write did not land in time');
+}
+
+void main() {
+  late Directory support;
+  late FakeBookmarkStore bookmarks;
+  late List<Object> reported;
+
+  setUp(() async {
+    support = await Directory.systemTemp.createTemp('engine-session-test');
+    bookmarks = FakeBookmarkStore([_blockedBookmark()]);
+    reported = [];
+  });
+
+  tearDown(() async {
+    if (support.existsSync()) {
+      await support.delete(recursive: true);
+    }
+  });
+
+  /// Builds the production composition over a fake spawn seam, mirroring
+  /// main.dart's wiring (the real factory differs only in the spawn and
+  /// the store paths).
+  Future<(EngineSession?, FakeAppEngine?)> startSession({
+    FakeAppEngine? engine,
+    List<EngineConfig>? spawnedConfigs,
+    Object? spawnFailure,
+    GlobalKey<NavigatorState>? navigatorKey,
+    HostKeyStore? pinStore,
+    IncidentStore? incidentStore,
+    TrashChannelServer? Function()? trashServerBinder,
+  }) async {
+    final scripted = engine ?? FakeAppEngine();
+    addTearDown(scripted.close);
+    final session = await startEngineSession(
+      supportDirectoryPath: support.path,
+      bookmarks: bookmarks,
+      navigatorKey: navigatorKey ?? GlobalKey<NavigatorState>(),
+      pinStore: pinStore,
+      incidentStore: incidentStore,
+      trashServerBinder: trashServerBinder,
+      spawn: (config) async {
+        if (spawnFailure != null) throw spawnFailure;
+        spawnedConfigs?.add(config);
+        return scripted;
+      },
+      onError: (error, stackTrace) => reported.add(error),
+    );
+    return (session, session == null ? null : scripted);
+  }
+
+  group('startup spawn and seeding', () {
+    test('spawns the engine with pins and incidents seeded together', () async {
+      // The persisted stores hold one pin and the incident that names it.
+      await FileHostKeyStore(
+        File('${support.path}${Platform.pathSeparator}host_keys.json'),
+      ).put(_pin);
+      await FileIncidentStore(
+        File('${support.path}${Platform.pathSeparator}incidents.json'),
+      ).put(_incident);
+
+      final configs = <EngineConfig>[];
+      final (session, _) = await startSession(spawnedConfigs: configs);
+      addTearDown(session!.shutdown);
+
+      expect(configs, hasLength(1));
+      // Audit finding A: the incident and the pin it names cross together,
+      // or the engine refuses to restore the record. The pinned HostKey
+      // type carries no ==, so the seed is compared by its JSON form.
+      expect(configs.single.hostKeyPins.map((pin) => pin.toJson()).toList(), [
+        _pin.toJson(),
+      ]);
+      expect(configs.single.incidents, [_incident]);
+    });
+
+    test('exposes seeded keys through the shared store', () async {
+      await FileHostKeyStore(
+        File('${support.path}${Platform.pathSeparator}host_keys.json'),
+      ).put(_pin);
+      final (session, _) = await startSession();
+      addTearDown(session!.shutdown);
+
+      expect(
+        (await session.pinStore.get(_pin.host, _pin.port))?.fingerprintSha256,
+        _pin.fingerprintSha256,
+      );
+    });
+
+    test('carries the trash server port into the engine config', () async {
+      // The test host is Linux, where TrashChannelServer.bind returns
+      // null — the binder seam pretends macOS to pin the wiring itself:
+      // the port that lands in EngineConfig is the engine isolate's only
+      // reach back to the native channel (03 §7.1).
+      final configs = <EngineConfig>[];
+      final (session, _) = await startSession(
+        spawnedConfigs: configs,
+        trashServerBinder: () =>
+            TrashChannelServer.bind(operatingSystem: 'macos'),
+      );
+      addTearDown(session!.shutdown);
+
+      expect(configs.single.trashRequests, isNotNull);
+    });
+
+    test('a failed spawn leaves no trash server or port behind', () async {
+      TrashChannelServer? bound;
+      final (session, _) = await startSession(
+        spawnFailure: StateError('spawn failed'),
+        trashServerBinder: () =>
+            bound = TrashChannelServer.bind(operatingSystem: 'macos'),
+      );
+
+      expect(session, isNull);
+      expect(bound, isNotNull);
+      // The relay seam: sends into the closed port are dropped, so a
+      // request fails on the relay's bounded wait — never a hang past it.
+      final invoker = trashChannelInvokerFor(
+        bound!.requests,
+        timeout: const Duration(milliseconds: 100),
+      );
+      await expectLater(
+        invoker(trashChannelMethod, {'path': '/x'}),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+
+    test('subscribes the prompt and trust mirrors before returning', () async {
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      // 03 §5's ordering rule: listeners exist before any caller can send.
+      expect(engine!.promptsController.hasListener, isTrue);
+      expect(engine.pinsController.hasListener, isTrue);
+      expect(engine.incidentsController.hasListener, isTrue);
+    });
+
+    test('reports a failed spawn and continues without an engine', () async {
+      final (session, _) = await startSession(
+        spawnFailure: StateError('isolate boot failed'),
+      );
+
+      expect(session, isNull);
+      expect(reported, isNotEmpty);
+    });
+
+    test('an unexpected store fault boots engine-less, not dead', () async {
+      // A store contract violation (an error type its fail-safe read does
+      // not catch) must not escape into main and kill the boot.
+      final (session, _) = await startSession(pinStore: _ThrowingPinStore());
+
+      expect(session, isNull);
+      expect(reported, isNotEmpty);
+    });
+  });
+
+  group('trust mirrors', () {
+    test('returns an engine pin observed during a delegate read', () async {
+      final pins = _GatedReadPinStore(_pin);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.releaseRead.isCompleted) pins.releaseRead.complete();
+        await session!.shutdown();
+      });
+      const changed = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed-during-read',
+        pinnedAt: 1700000000001,
+      );
+
+      final read = session!.pinStore.get(_pin.host, _pin.port);
+      await pins.readStarted.future;
+      engine!.pinHostKey(changed);
+      await pumpEventQueue();
+      pins.releaseRead.complete();
+
+      expect((await read)?.fingerprintSha256, changed.fingerprintSha256);
+    });
+
+    test('conditional sync install refuses an earlier engine pin', () async {
+      final pins = InMemoryHostKeyStore();
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(session!.shutdown);
+      const enginePin = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine-first',
+        pinnedAt: 1700000000001,
+      );
+      const pulled = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:pulled',
+        pinnedAt: 1700000000002,
+      );
+
+      engine!.pinHostKey(enginePin);
+      await pumpEventQueue();
+      final result = await session.pinStore.putIfNoConflict(pulled);
+
+      expect(result, HostKeyInstallResult.conflict);
+      expect(
+        (await session.pinStore.get(
+          pulled.host,
+          pulled.port,
+        ))!.fingerprintSha256,
+        enginePin.fingerprintSha256,
+      );
+    });
+
+    test('an engine pin after conditional install wins write order', () async {
+      final pins = _ConcurrentWritePinStore(const []);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.firstWriteGate.isCompleted) pins.firstWriteGate.complete();
+        await session!.shutdown();
+      });
+      const pulled = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:pulled-first',
+        pinnedAt: 1700000000001,
+      );
+      const enginePin = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine-after',
+        pinnedAt: 1700000000002,
+      );
+
+      final install = session!.pinStore.putIfNoConflict(pulled);
+      await pumpEventQueue();
+      expect(pins.calls, [pulled]);
+      engine!.pinHostKey(enginePin);
+      await pumpEventQueue();
+      pins.firstWriteGate.complete();
+
+      expect(await install, HostKeyInstallResult.installed);
+      await session.flushWrites();
+      expect(pins._written, [enginePin]);
+      expect(
+        (await session.pinStore.get(
+          enginePin.host,
+          enginePin.port,
+        ))!.fingerprintSha256,
+        enginePin.fingerprintSha256,
+      );
+    });
+
+    test('an engine pin during conditional replacement wins', () async {
+      final pins = _ConcurrentWritePinStore([_pin]);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.firstWriteGate.isCompleted) pins.firstWriteGate.complete();
+        await session!.shutdown();
+      });
+      const pulled = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:pulled',
+        pinnedAt: 1700000000001,
+      );
+      const enginePin = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine-after',
+        pinnedAt: 1700000000002,
+      );
+
+      final replacement = session!.pinStore.replaceIfCurrent(_pin, pulled);
+      await pumpEventQueue();
+      expect(pins.calls, [pulled]);
+
+      engine!.pinHostKey(enginePin);
+      await pumpEventQueue();
+      pins.firstWriteGate.complete();
+
+      expect(await replacement, HostKeyInstallResult.conflict);
+      await session.flushWrites();
+      expect(pins._written, [enginePin]);
+      expect(
+        (await session.pinStore.get(
+          enginePin.host,
+          enginePin.port,
+        ))!.fingerprintSha256,
+        enginePin.fingerprintSha256,
+      );
+    });
+
+    test('keeps observed keys ahead of stale persistence reads', () async {
+      final gate = Completer<void>();
+      final pins = _GatedPinStore(gate, [_pin]);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!gate.isCompleted) gate.complete();
+        await session!.shutdown();
+      });
+      const changed = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedAt: 1700000000001,
+      );
+
+      engine!.pinHostKey(changed);
+      await pumpEventQueue();
+
+      expect(
+        (await session!.pinStore.all()).single.fingerprintSha256,
+        changed.fingerprintSha256,
+      );
+      expect(pins._written.single.fingerprintSha256, _pin.fingerprintSha256);
+
+      gate.complete();
+      await session.flushWrites();
+    });
+
+    test('shares successful external pin replacements', () async {
+      final pins = InMemoryHostKeyStore();
+      await pins.put(_pin);
+      final (session, _) = await startSession(pinStore: pins);
+      addTearDown(session!.shutdown);
+      const changed = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedAt: 1700000000001,
+      );
+
+      await session.pinStore.put(changed);
+
+      expect(
+        (await session.pinStore.all()).single.fingerprintSha256,
+        changed.fingerprintSha256,
+      );
+      expect(
+        (await pins.get(changed.host, changed.port))?.fingerprintSha256,
+        changed.fingerprintSha256,
+      );
+    });
+
+    test('does not expose failed external pin writes', () async {
+      final pins = _FailingPutPinStore(_pin);
+      final (session, _) = await startSession(pinStore: pins);
+      addTearDown(session!.shutdown);
+      const changed = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:changed',
+        pinnedAt: 1700000000001,
+      );
+
+      await expectLater(session.pinStore.put(changed), throwsStateError);
+
+      expect(
+        (await session.pinStore.all()).single.fingerprintSha256,
+        _pin.fingerprintSha256,
+      );
+    });
+
+    test('serializes engine and external pin writes', () async {
+      final pins = _ConcurrentWritePinStore([_pin]);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(() async {
+        if (!pins.firstWriteGate.isCompleted) {
+          pins.firstWriteGate.complete();
+        }
+        await session!.shutdown();
+      });
+      const engineChanged = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:engine',
+        pinnedAt: 1700000000001,
+      );
+      const externalChanged = HostKey(
+        host: 'web.example.com',
+        port: 2222,
+        type: 'ssh-ed25519',
+        fingerprintSha256: 'SHA256:external',
+        pinnedAt: 1700000000002,
+      );
+
+      engine!.pinHostKey(engineChanged);
+      await pumpEventQueue();
+      expect(pins.calls, [engineChanged]);
+
+      final externalWrite = session!.pinStore.put(externalChanged);
+      await pumpEventQueue();
+
+      expect(pins.calls, [engineChanged]);
+      expect(pins.maximumActiveWrites, 1);
+
+      pins.firstWriteGate.complete();
+      await externalWrite;
+      await session.flushWrites();
+      expect(pins._written, [externalChanged]);
+    });
+
+    test('persists engine pin writes to the app-owned pin store', () async {
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      engine!.pinHostKey(_pin);
+      final store = FileHostKeyStore(
+        File('${support.path}${Platform.pathSeparator}host_keys.json'),
+      );
+      final pins = await _eventually(
+        '${support.path}${Platform.pathSeparator}host_keys.json',
+        store.all,
+      );
+
+      expect(pins.map((pin) => pin.toJson()).toList(), [_pin.toJson()]);
+    });
+
+    test('persists stored incident records', () async {
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      engine!.incidentsController.add(
+        IncidentRecordStoredEvent(record: _incident),
+      );
+      final store = FileIncidentStore(
+        File('${support.path}${Platform.pathSeparator}incidents.json'),
+      );
+      final records = await _eventually(
+        '${support.path}${Platform.pathSeparator}incidents.json',
+        store.load,
+      );
+
+      expect(records, [_incident]);
+    });
+
+    test('applies scoped and bulk removals idempotently', () async {
+      final store = FileIncidentStore(
+        File('${support.path}${Platform.pathSeparator}incidents.json'),
+      );
+      await store.put(_incident);
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      // A removal for a record it just seeded (the engine drops a record
+      // whose pin is gone) must apply without error and never re-seed.
+      engine!.incidentsController.add(
+        IncidentRecordRemovedEvent(serverId: 'b1', endpoint: _incident.poolKey),
+      );
+      // The removal deletes the file's only record; wait for the file to
+      // vanish (a write of `[]` may land first — poll until empty).
+      var removed = false;
+      for (var attempt = 0; attempt < 500; attempt++) {
+        final probe = FileIncidentStore(
+          File('${support.path}${Platform.pathSeparator}incidents.json'),
+        );
+        if ((await probe.load()).isEmpty) {
+          removed = true;
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(removed, isTrue);
+
+      // The no-op phase needs something observable, and the observation
+      // must be deterministic: the store event lands first (poll until it
+      // is on disk), THEN the removals — never a race with a transient
+      // intermediate file state. The engine mirror is the file's single
+      // writer (the store's documented one-instance-per-file contract).
+      final otherIncident = IncidentRecord(
+        serverId: 'other',
+        host: 'web.example.com',
+        port: 2222,
+        username: 'deploy',
+        presentedFingerprintSha256: 'SHA256:presented',
+        pinnedFingerprintSha256: 'SHA256:pinned',
+      );
+      engine.incidentsController.add(
+        IncidentRecordStoredEvent(record: otherIncident),
+      );
+      var storedSeen = false;
+      for (var attempt = 0; attempt < 500 && !storedSeen; attempt++) {
+        final probe = FileIncidentStore(
+          File('${support.path}${Platform.pathSeparator}incidents.json'),
+        );
+        storedSeen = (await probe.load()).any(
+          (record) => record.serverId == 'other',
+        );
+        if (!storedSeen) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      }
+      expect(storedSeen, isTrue);
+
+      engine.incidentsController.add(
+        IncidentRecordRemovedEvent(serverId: 'b1', endpoint: _incident.poolKey),
+      );
+      engine.incidentsController.add(
+        const IncidentRecordRemovedEvent(serverId: 'other', endpoint: null),
+      );
+      var bulkApplied = false;
+      for (var attempt = 0; attempt < 500 && !bulkApplied; attempt++) {
+        final probe = FileIncidentStore(
+          File('${support.path}${Platform.pathSeparator}incidents.json'),
+        );
+        bulkApplied = (await probe.load()).isEmpty;
+        if (!bulkApplied) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      }
+      expect(bulkApplied, isTrue);
+      // `b1` stayed deleted through the second scoped removal and was
+      // never re-seeded by the mirror, and the review connect never ran.
+      expect(
+        await FileIncidentStore(
+          File('${support.path}${Platform.pathSeparator}incidents.json'),
+        ).load(),
+        isEmpty,
+      );
+      expect(engine.openCalls, isEmpty);
+    });
+  });
+
+  group('lifecycle', () {
+    test('flushWrites waits for pending mirror writes', () async {
+      // The exit path's durability hook: a pin approved immediately
+      // before quitting is on disk before the framework may exit.
+      final gate = Completer<void>();
+      final pins = _GatedPinStore(gate);
+      final (session, engine) = await startSession(pinStore: pins);
+      addTearDown(session!.shutdown);
+
+      engine!.pinHostKey(_pin);
+      await pumpEventQueue();
+
+      final flushed = Completer<void>();
+      unawaited(
+        session.flushWrites().then(
+          (_) => flushed.complete(),
+          onError: flushed.completeError,
+        ),
+      );
+      await pumpEventQueue();
+      expect(flushed.isCompleted, isFalse);
+
+      gate.complete();
+      await flushed.future;
+      expect(await pins.all(), [_pin]);
+    });
+
+    test('shuts the engine down when the app detaches', () async {
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      session.forwardLifecycle(AppLifecycleState.detached);
+      await pumpEventQueue();
+
+      expect(engine!.shutdownCalls, 1);
+    });
+
+    test('shutdown is idempotent and ignores later detach events', () async {
+      final (session, engine) = await startSession();
+
+      await session!.shutdown();
+      await session.shutdown();
+      session.forwardLifecycle(AppLifecycleState.detached);
+      await pumpEventQueue();
+
+      expect(engine!.shutdownCalls, 1);
+    });
+  });
+
+  group('catalog config refresh', () {
+    test('publishes a snapshot before its acknowledgement', () async {
+      const direct = ServerConfig(
+        id: 'catalog-1',
+        label: 'Database',
+        host: 'db.internal',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+      final gate = Completer<void>();
+      engine!.catalogReplacementGate = gate;
+
+      session.publishServerCatalog([direct]);
+
+      expect(engine.catalogSnapshots, [
+        [direct],
+      ]);
+      gate.complete();
+      await pumpEventQueue();
+    });
+
+    test('coalesces publisher and listener snapshots', () async {
+      const direct = ServerConfig(
+        id: 'catalog-1',
+        label: 'Database',
+        host: 'db.internal',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final catalog = ValueNotifier<List<ServerConfig>>([direct]);
+      addTearDown(catalog.dispose);
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      // Catalog replacement publishes before notifying its bound listener.
+      session.publishServerCatalog(catalog.value);
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
+      await pumpEventQueue();
+
+      expect(engine!.catalogSnapshots, [
+        [direct],
+      ]);
+    });
+
+    test('sends an empty snapshot when sync removes the catalog', () async {
+      const direct = ServerConfig(
+        id: 'catalog-1',
+        label: 'Database',
+        host: 'db.internal',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final catalog = ValueNotifier<List<ServerConfig>>([direct]);
+      addTearDown(catalog.dispose);
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
+      catalog.value = const [];
+      await pumpEventQueue();
+
+      expect(engine!.catalogSnapshots, [
+        [direct],
+        <ServerConfig>[],
+      ]);
+    });
+
+    test('pushes route changes and detaches on shutdown', () async {
+      const direct = ServerConfig(
+        id: 'catalog-1',
+        label: 'Database',
+        host: 'db.internal',
+        username: 'deploy',
+        createdAt: 0,
+        updatedAt: 0,
+      );
+      final catalog = ValueNotifier<List<ServerConfig>>([direct]);
+      addTearDown(catalog.dispose);
+      final (session, engine) = await startSession();
+
+      session!.bindServerCatalog(changes: catalog, read: () => catalog.value);
+      await pumpEventQueue();
+      expect(engine!.catalogSnapshots, [
+        [direct],
+      ]);
+
+      final routed = direct.copyWith(jumpHostId: 'bastion');
+      catalog.value = [routed];
+      await pumpEventQueue();
+      expect(engine.catalogSnapshots, [
+        [direct],
+        [routed],
+      ]);
+
+      await session.shutdown();
+      catalog.value = [direct];
+      await pumpEventQueue();
+      expect(engine.catalogSnapshots, [
+        [direct],
+        [routed],
+      ]);
+    });
+  });
+
+  group('blocked-key review', () {
+    test('opens a review connect through the bookmark identity', () async {
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+      final channel = FakeAppBrowseChannel();
+      engine!.channel = channel;
+
+      await session.reviewBlockedHostKey('b1');
+
+      expect(engine.openCalls, hasLength(1));
+      final call = engine.openCalls.single;
+      expect(call.serverId, 'b1');
+      expect(call.config.host, 'web.example.com');
+      expect(call.config.port, 2222);
+      expect(call.config.username, 'deploy');
+      expect(call.config.authMethod, AuthMethod.password);
+      expect(call.config.secretRef, 'secret-b1');
+      // The review connect ends with the reference dropped: a review is
+      // not a session.
+      expect(channel.closeCalls, 1);
+      expect(engine.disconnectIds, ['b1']);
+    });
+
+    test(
+      'uses the current routed config for a catalog-backed favorite',
+      () async {
+        final target = _catalogServer('target', jumpHostId: 'bastion');
+        final bastion = _catalogServer('bastion');
+        final catalog = ValueNotifier<List<ServerConfig>>([target, bastion]);
+        addTearDown(catalog.dispose);
+        bookmarks.bookmarks = [_catalogBookmark('favorite', target.id)];
+        final (session, engine) = await startSession();
+        addTearDown(session!.shutdown);
+        engine!.channel = FakeAppBrowseChannel();
+        session.bindServerCatalog(changes: catalog, read: () => catalog.value);
+        await pumpEventQueue();
+
+        await session.reviewBlockedHostKey('favorite');
+
+        expect(engine.openCalls, hasLength(1));
+        final call = engine.openCalls.single;
+        expect(call.serverId, 'favorite');
+        expect(call.config, same(target));
+        expect(call.config.jumpHostId, bastion.id);
+        expect(engine.disconnectIds, ['favorite']);
+      },
+    );
+
+    test('reviews a catalog server without a bookmark', () async {
+      final target = _catalogServer('target', jumpHostId: 'bastion');
+      final bastion = _catalogServer('bastion');
+      final catalog = ValueNotifier<List<ServerConfig>>([target, bastion]);
+      addTearDown(catalog.dispose);
+      bookmarks.bookmarks = const [];
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+      engine!.channel = FakeAppBrowseChannel();
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
+      await pumpEventQueue();
+
+      await session.reviewBlockedHostKey(target.id);
+
+      expect(engine.openCalls, hasLength(1));
+      final call = engine.openCalls.single;
+      expect(call.serverId, target.id);
+      expect(call.config, same(target));
+      expect(call.config.jumpHostId, bastion.id);
+      expect(engine.disconnectIds, [target.id]);
+    });
+
+    test('a removed referenced config cannot be reviewed', () async {
+      final target = _catalogServer('target', jumpHostId: 'bastion');
+      final catalog = ValueNotifier<List<ServerConfig>>([target]);
+      addTearDown(catalog.dispose);
+      bookmarks.bookmarks = [_catalogBookmark('favorite', target.id)];
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+      engine!.channel = FakeAppBrowseChannel();
+      session.bindServerCatalog(changes: catalog, read: () => catalog.value);
+      await pumpEventQueue();
+      catalog.value = const [];
+      await pumpEventQueue();
+
+      await session.reviewBlockedHostKey('favorite');
+
+      expect(engine.openCalls, isEmpty);
+      expect(engine.disconnectIds, isEmpty);
+    });
+
+    test('a declined review drops the reference without a fault', () async {
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+      engine!.openFailure = const RemoteFileException(
+        kind: RemoteFileErrorKind.permissionDenied,
+        operation: 'connect',
+        message: 'The server is blocked until the new key is reviewed.',
+      );
+
+      await session.reviewBlockedHostKey('b1');
+
+      expect(engine.disconnectIds, ['b1']);
+      // A decline is the user's answer, not a fault: nothing was reported.
+      expect(reported, isEmpty);
+    });
+
+    test('a bookmark-store fault is reported, never rethrown', () async {
+      final failing = FakeBookmarkStore()
+        ..failure = StateError('store unreadable');
+      final engine = FakeAppEngine();
+      addTearDown(engine.close);
+      final session = await startEngineSession(
+        supportDirectoryPath: support.path,
+        bookmarks: failing,
+        navigatorKey: GlobalKey<NavigatorState>(),
+        pinStore: InMemoryHostKeyStore(),
+        incidentStore: InMemoryIncidentStore(),
+        spawn: (config) async => engine,
+        onError: (error, stackTrace) => reported.add(error),
+      );
+      addTearDown(session!.shutdown);
+
+      // The review is fired unawaited from a widget handler in
+      // production; the store fault must land in the error sink, not
+      // escape as an unhandled async error.
+      await session.reviewBlockedHostKey('b1');
+
+      expect(reported, isNotEmpty);
+      expect(engine.openCalls, isEmpty);
+    });
+
+    test('an unknown id opens nothing', () async {
+      final (session, engine) = await startSession();
+      addTearDown(session!.shutdown);
+
+      await session.reviewBlockedHostKey('missing');
+
+      expect(engine!.openCalls, isEmpty);
+      expect(engine.disconnectIds, isEmpty);
+    });
+
+    test('routes the raised prompt through the session coordinator', () async {
+      final navigatorKey = GlobalKey<NavigatorState>();
+      final (session, engine) = await startSession(navigatorKey: navigatorKey);
+      addTearDown(session!.shutdown);
+      engine!.promptScript = [_changedKeyPrompt('p1')];
+      engine.channel = FakeAppBrowseChannel();
+      // A declined changed key aborts the connect in the real engine —
+      // script the blocked failure so the review walks the decline path,
+      // not an impossible decline-then-connect.
+      engine.openFailure = const RemoteFileException(
+        kind: RemoteFileErrorKind.permissionDenied,
+        operation: 'connect',
+        message: 'The new host key was declined.',
+      );
+
+      // The coordinator's reply answer arrives asynchronously; the review
+      // await covers the whole connect.
+      final review = session.reviewBlockedHostKey('b1');
+      await pumpEventQueue();
+      // No surface is mounted, so the coordinator declines rather than
+      // blocking the engine (its no-context contract).
+      await review;
+
+      expect(
+        engine.replies
+            .where((reply) => reply.$1 == 'p1')
+            .map((reply) => reply.$3),
+        [
+          isA<HostKeyPromptReply>().having(
+            (r) => r.accepted,
+            'accepted',
+            false,
+          ),
+        ],
+      );
+    });
+
+    test(
+      'shares the coordinator, engine, and lanes with app surfaces',
+      () async {
+        final (session, engine) = await startSession();
+        addTearDown(session!.shutdown);
+        engine!.channel = FakeAppBrowseChannel();
+
+        expect(session.prompts, isA<PromptCoordinator>());
+        expect(session.connectionLanes.watchServer('b1'), isNotNull);
+
+        // The pane lanes are the same production engine — one engine per
+        // process, never a second spawn behind a pane binding.
+        await session.paneLanes.openBrowseChannel(
+          serverId: 'pane',
+          paneTabId: 'pane.left',
+          config: ServerConfig(
+            id: 'pane',
+            label: 'pane',
+            host: 'pane.example.com',
+            port: 22,
+            username: 'deploy',
+            authMethod: AuthMethod.agent,
+            createdAt: _now.millisecondsSinceEpoch,
+            updatedAt: _now.millisecondsSinceEpoch,
+          ),
+        );
+        expect(engine.openCalls, hasLength(1));
+      },
+    );
+  });
+}

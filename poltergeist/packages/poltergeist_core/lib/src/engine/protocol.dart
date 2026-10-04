@@ -1,0 +1,1279 @@
+import 'dart:isolate' show SendPort, TransferableTypedData;
+
+import 'package:seance_core/seance_core.dart';
+
+import '../connection/connection_manager.dart'
+    show AuthenticatedEndpointIdentity, CredentialOrigin, ServerConnectionState;
+import '../connection/incident_store.dart' show IncidentRecord;
+import '../connection/pool_key.dart' show PoolKey;
+import '../connection/pool_policy.dart' show PoolPolicy;
+import '../transfer/trash_service.dart' show TrashErrorKind, TrashException;
+
+/// Increment when the cross-isolate message contract changes.
+///
+/// v2 adds the connection/prompt surface (03 §5). v3 adds
+/// [RecoveryFailedEvent] for terminal background failures. v4 adds live
+/// transcript batches ([ConnectionLogEvent]) and starts populating the
+/// previously reserved [ServerStateEvent.detail]. v5 adds probe targets,
+/// activity control, and tri-state reachability snapshots. v6 adds
+/// [RemoveBookmarkRequest] and the incident-store bridge
+/// ([IncidentStoreEvent]). v7 adds the local browse-channel open request
+/// ([OpenLocalBrowseChannelRequest]) — the engine-side seam for local
+/// panes (03 §5's ownership table). v8 adds the local directory-watch
+/// seam (03 §7.5): [WatchLocalDirectoryRequest],
+/// [UnwatchLocalDirectoryRequest], and [DirectoryWatchEvent]. v9 adds
+/// [RenameEntryRequest] for the panes' inline rename (02 §2.6). v10 adds
+/// [OpenLocalFileRequest] — §2.6's local-file Open behind the engine's
+/// OS-default-application launcher (D8). v11 adds [SetPermissionsRequest]
+/// for §2.6's Get Info permissions editor (D28). v12 adds
+/// [EngineConfig.trashRequests] — the app-side `poltergeist/trash`
+/// channel port the engine's D15 local-trash service invokes through
+/// (03 §7.1). v13 adds the bridged transfer lease (STATUS item 23, the
+/// D8 addendum): [LeaseTransferChannelRequest]/[ReleaseTransferLeaseRequest],
+/// the generic [VfsOpRequest] over a lease or a browse channel, the
+/// credit-flow-controlled download/upload streams, and the engine-side
+/// local-trash requests. v14 adds [ReplaceServerCatalogRequest] and the
+/// trusted endpoint on [KeyboardInteractivePromptData]. v15 carries the
+/// authenticated endpoint identity on [TransferLeaseGranted].
+const engineProtocolVersion = 15;
+
+// ── Engine → UI events ──────────────────────────────────────────────────
+
+/// Plain-data events keep sockets and callbacks on the engine isolate.
+sealed class EngineEvent {
+  final int protocolVersion;
+
+  const EngineEvent() : protocolVersion = engineProtocolVersion;
+}
+
+/// Item counters and task rollups travel together; the UI cannot derive totals
+/// from the subset of items retained by progress coalescing.
+final class TransferProgressEvent extends EngineEvent {
+  final String taskId;
+  final String itemId;
+  final int transferred;
+  final int? total;
+  final int taskTransferredBytes;
+  final int? taskTotalBytes;
+
+  const TransferProgressEvent({
+    required this.taskId,
+    required this.itemId,
+    required this.transferred,
+    required this.total,
+    required this.taskTransferredBytes,
+    required this.taskTotalBytes,
+  });
+}
+
+/// One flush window across all tasks, so task count cannot multiply port traffic.
+final class TransferProgressBatchEvent extends EngineEvent {
+  /// Oldest update first; replace task rollups in order, never sum them.
+  final List<TransferProgressEvent> items;
+
+  TransferProgressBatchEvent(Iterable<TransferProgressEvent> items)
+    : items = List.unmodifiable(items);
+}
+
+/// The reply to one [EngineRequest], correlated by `requestId`.
+final class ResponseEvent extends EngineEvent {
+  final int requestId;
+  final EngineResult result;
+
+  const ResponseEvent({required this.requestId, required this.result});
+}
+
+/// One `watchServer` emission for one serverId (03 §3.2).
+final class ServerStateEvent extends EngineEvent {
+  final String serverId;
+  final ServerConnectionState state;
+
+  /// The state-associated failure one-liner (03 §3.2): a summarized connect
+  /// failure, terminal background-recovery error, or host-key block reason.
+  /// [RecoveryFailedEvent] also delivers scoped terminal failures without a
+  /// watch. Null for healthy and cancelled states.
+  final String? detail;
+
+  const ServerStateEvent({
+    required this.serverId,
+    required this.state,
+    this.detail,
+  });
+}
+
+/// Complete reachability snapshot for the currently eligible probe targets.
+/// Live connection state remains authoritative for the Connections section.
+final class ProbeStatusesEvent extends EngineEvent {
+  final Map<String, ProbeStatus> statuses;
+
+  ProbeStatusesEvent({required Map<String, ProbeStatus> statuses})
+    : statuses = Map.unmodifiable(statuses);
+}
+
+/// A terminal background recovery failure for local diagnostics (D19).
+/// Independent of state watches and request replies; causes stay engine-side.
+final class RecoveryFailedEvent extends EngineEvent {
+  final String serverId;
+
+  /// A failed browse binding; null when recovery stopped for the whole pool.
+  final String? paneTabId;
+  final EngineError error;
+
+  const RecoveryFailedEvent({
+    required this.serverId,
+    this.paneTabId,
+    required this.error,
+  });
+}
+
+/// Live transcript lines for one server's connect attempts (03 §3.3,
+/// crossing per 03 §5): dartssh2 debug/trace plus the connect steps, the
+/// material the UI renders during connect and keeps visible on failure.
+final class ConnectionLogEvent extends EngineEvent {
+  final String serverId;
+
+  /// Oldest first, in attempt append order. Per server at most
+  /// `connectionLogMaxLines` lines are pending at once (drop-oldest,
+  /// mirroring the source log's own bound) and batches flush at most
+  /// `connectionLogFlushesPerSecond` times per second.
+  final List<String> lines;
+
+  ConnectionLogEvent({required this.serverId, required List<String> lines})
+    : lines = List.unmodifiable(lines);
+}
+
+/// The engine asks the UI a question; exactly one [PromptReplyRequest] per
+/// `promptId` answers it (03 §5). The seance_core prompt callbacks cannot
+/// cross isolates, so the engine emits one of these and awaits the reply.
+final class EnginePromptEvent extends EngineEvent {
+  final String promptId;
+  final EnginePromptKind kind;
+  final EnginePromptData data;
+
+  const EnginePromptEvent({
+    required this.promptId,
+    required this.kind,
+    required this.data,
+  });
+}
+
+/// The engine withdrew an open prompt: the dialog owning [promptId] must
+/// close without answering. This is the isolate boundary's half of
+/// `CredentialResolutionScope` dismissal (03 §3.2) — one mechanism, both
+/// sides — plus engine shutdown's implicit cancel for still-open prompts.
+final class PromptDismissedEvent extends EngineEvent {
+  final String promptId;
+  final EnginePromptKind kind;
+
+  const PromptDismissedEvent({required this.promptId, required this.kind});
+}
+
+/// The engine pinned (or re-pinned) a host key. Pin storage lives on the UI
+/// side (app-layer file store), so the engine — which owns the TOFU verifier
+/// — surfaces every pin write for the UI to persist.
+final class HostKeyPinnedEvent extends EngineEvent {
+  final HostKey key;
+
+  const HostKeyPinnedEvent({required this.key});
+}
+
+/// A trust-incident store mutation crossing the port (03 §5, owner decision
+/// 2a). The engine owns the live incident logic; the app owns the persisted
+/// store. The engine mirrors every put/remove here so a restart seeds it from
+/// exactly the records the app persisted — one writer, one store owner,
+/// exactly like [HostKeyPinnedEvent].
+///
+/// These events and the [EngineConfig.incidents] seed cross an isolate port:
+/// [IncidentRecord] and [PoolKey] must stay deeply sendable and immutable,
+/// and a receiver must treat them as snapshots — object identity does not
+/// survive the port.
+sealed class IncidentStoreEvent extends EngineEvent {
+  const IncidentStoreEvent();
+}
+
+/// The engine stored (or updated) an incident record: a declined changed-key
+/// block was installed or re-written for [IncidentRecordStoredEvent.record]'s
+/// `serverId`.
+final class IncidentRecordStoredEvent extends IncidentStoreEvent {
+  final IncidentRecord record;
+
+  const IncidentRecordStoredEvent({required this.record});
+}
+
+/// The engine deleted incident records: [endpoint] scopes the delete to one
+/// endpoint (a lifted block), null deletes every record for [serverId] (the
+/// bookmark-removal cascade, owner decision 3a).
+final class IncidentRecordRemovedEvent extends IncidentStoreEvent {
+  final String serverId;
+  final PoolKey? endpoint;
+
+  const IncidentRecordRemovedEvent({required this.serverId, this.endpoint});
+}
+
+// ── Local directory watches (03 §7.5) ────────────────────────────────
+
+/// Why a watched local directory invalidated (03 §7.5).
+enum DirectoryWatchSignal {
+  /// An ordinary change in the watched directory — coalesced (debounced
+  /// 300 ms) engine-side. The consumer rescans the directory. A rescan
+  /// answering `notFound` must still be handled as an implicit loss (see
+  /// the [lost] variant): backend events can go unreported without a
+  /// lost signal (permitted ancestor moves, STATUS item 18), leaving the
+  /// shown path gone while the watch stays silently installed.
+  changed,
+
+  /// The backend reported root loss, failure, or closure. Delivered
+  /// immediately; the watch is released, so the consumer must rescan or
+  /// retarget. More signals require a new [WatchLocalDirectoryRequest].
+  /// Windows event-driven checks also detect delete-pending roots whose
+  /// loss dart:io may omit. Ancestor-move detection remains platform-dependent
+  /// (STATUS item 18); a refused filesystem mutation does not imply loss.
+  lost,
+}
+
+/// One invalidation signal for a local channel's watched directory
+/// (03 §7.5). The watch lives behind the isolate boundary with the engine's
+/// `LocalFileSystem` instances (03 §5's ownership table; D8) — only the
+/// typed signal crosses.
+final class DirectoryWatchEvent extends EngineEvent {
+  final int channelId;
+
+  /// The canonical watched path — the identity a retarget replaces, so a
+  /// consumer can drop signals naming a directory it no longer shows.
+  final String path;
+
+  final DirectoryWatchSignal signal;
+
+  /// Diagnostic detail for a [DirectoryWatchSignal.lost] signal (local
+  /// diagnostics, D19); null for [DirectoryWatchSignal.changed].
+  final String? detail;
+
+  const DirectoryWatchEvent({
+    required this.channelId,
+    required this.path,
+    required this.signal,
+    this.detail,
+  });
+}
+
+// ── Prompt model ────────────────────────────────────────────────────────
+
+/// The prompts the engine can raise (03 §5).
+enum EnginePromptKind {
+  hostKeyFirstUse,
+  hostKeyChanged,
+  keyboardInteractive,
+  credentialNeeded,
+
+  /// Transfer conflicts (02 §5.2). No producer exists until the transfer
+  /// queue (M4) lands; its prompt payload and reply subtype land with it.
+  conflict,
+}
+
+/// Kind-specific prompt payload (03 §5: "fingerprint, prompt texts, …").
+sealed class EnginePromptData {
+  const EnginePromptData();
+}
+
+/// A host key awaiting approval — first use or a detected change.
+final class HostKeyPromptData extends EnginePromptData {
+  final String host;
+  final int port;
+
+  /// Key algorithm, e.g. `ssh-ed25519`.
+  final String keyType;
+
+  /// `SHA256:...` fingerprint of the presented key.
+  final String fingerprintSha256;
+
+  /// The previously pinned fingerprint when a change was detected.
+  final String? pinnedFingerprintSha256;
+
+  const HostKeyPromptData({
+    required this.host,
+    required this.port,
+    required this.keyType,
+    required this.fingerprintSha256,
+    this.pinnedFingerprintSha256,
+  });
+}
+
+/// A keyboard-interactive challenge (2FA/TOTP); one answer per prompt.
+///
+/// The endpoint is trusted local configuration. [name], [instruction], and
+/// [prompts] are untrusted server text and must render separately so a jump
+/// host cannot present itself as the destination.
+final class KeyboardInteractivePromptData extends EnginePromptData {
+  final String host;
+  final int port;
+  final String username;
+  final String name;
+  final String instruction;
+  final List<String> prompts;
+
+  const KeyboardInteractivePromptData({
+    required this.host,
+    required this.port,
+    required this.username,
+    required this.name,
+    required this.instruction,
+    required this.prompts,
+  });
+}
+
+/// The engine needs credentials for a first connect. The UI-side handler
+/// checks the vault first and answers from it (origin `stored`) or renders
+/// a dialog and answers with what the user typed (origin `prompted`) —
+/// provenance caps pool growth per 03 §3.2 rule 2.
+final class CredentialPromptData extends EnginePromptData {
+  final String host;
+  final int port;
+  final String username;
+  final AuthMethod authMethod;
+
+  /// Vault entry the UI-side handler should read, when the config has one.
+  final String? secretRef;
+
+  /// Referenced on-disk key, when the config authenticates by identity file.
+  final String? identityFilePath;
+
+  const CredentialPromptData({
+    required this.host,
+    required this.port,
+    required this.username,
+    required this.authMethod,
+    this.secretRef,
+    this.identityFilePath,
+  });
+}
+
+/// One plain-data subtype per [EnginePromptKind] (03 §5). A UI-side dialog
+/// dismissal sends the cancel form for the prompt's kind: `accepted: false`,
+/// empty `answers`, or `cancelled: true`.
+sealed class PromptReply {
+  const PromptReply();
+}
+
+final class HostKeyPromptReply extends PromptReply {
+  final bool accepted;
+
+  const HostKeyPromptReply({required this.accepted});
+}
+
+final class KeyboardInteractivePromptReply extends PromptReply {
+  /// Empty answers cannot authenticate; the connect fails its auth step.
+  final List<String> answers;
+
+  const KeyboardInteractivePromptReply({required this.answers});
+}
+
+final class CredentialPromptReply extends PromptReply {
+  /// The dialog was dismissed: fail the resolution without an answer.
+  final bool cancelled;
+
+  /// Which secret field is set picks the [SshCredentials] constructor:
+  /// `privateKeyPem` → key auth, `password` → password auth, neither → agent.
+  final String? privateKeyPem;
+  final String? keyPassphrase;
+  final String? password;
+
+  /// Whether the answer came from the vault or a user prompt — growth
+  /// rule 2's interactive-cap signal (03 §3.2). Required: a dialog-sourced
+  /// reply that forgets it would silently claim vault provenance and cap
+  /// pool growth; a compile error is cheaper than that bug.
+  final CredentialOrigin origin;
+
+  const CredentialPromptReply({
+    this.cancelled = false,
+    this.privateKeyPem,
+    this.keyPassphrase,
+    this.password,
+    required this.origin,
+  });
+}
+
+// ── UI → engine requests ────────────────────────────────────────────────
+
+/// One call on the [EngineClient] facade. Most requests are answered by
+/// exactly one [ResponseEvent]; the protocol's fire-and-forget exceptions —
+/// watch/unwatch (answered by the [ServerStateEvent] stream they create)
+/// and prompt replies (applied-or-ignored by contract, 03 §5) — allocate a
+/// requestId only for uniform addressing and never expect a response.
+sealed class EngineRequest {
+  final int requestId;
+
+  const EngineRequest({required this.requestId});
+}
+
+/// Opens (or rejoins) the pane-tab's browse channel (03 §3.2). Carries the
+/// [ServerConfig] — the engine holds no bookmark store; the UI owns bookmarks
+/// and supplies the config with every connection-bearing request.
+final class OpenBrowseChannelRequest extends EngineRequest {
+  final String serverId;
+  final String paneTabId;
+  final ServerConfig config;
+
+  const OpenBrowseChannelRequest({
+    required super.requestId,
+    required this.serverId,
+    required this.paneTabId,
+    required this.config,
+  });
+}
+
+/// Opens a local browse channel backed by a `LocalFileSystem` the engine
+/// owns (03 §5's ownership table; D8 keeps dart:io off the UI isolate). No
+/// [ServerConfig], no pool, no server-state surface — a local pane is not a
+/// connection. [rootPath] is the channel's initial home, not a sandbox:
+/// like pool channels, listings may navigate to any absolute path — the
+/// user's OS permissions bound the reach, and confinement is 03 §7.2's
+/// app-side `ScopedPathAccess` seam (v1 desktop grants are pass-through),
+/// never this request. The engine canonicalizes [rootPath] (03 §2.2's
+/// realpath semantics; `~` expands through the engine's environment) and
+/// answers [BrowseChannelOpened] on the same channel-id routing as pool
+/// channels, so listing and closing reuse the existing requests unchanged.
+/// Only a *missing* root is guaranteed to open (surfacing the typed
+/// `notFound` at first listing): a root under an unreadable ancestor
+/// cannot be traversed, so the open itself fails typed
+/// (`permissionDenied`, operation `resolve`) through the local funnel.
+final class OpenLocalBrowseChannelRequest extends EngineRequest {
+  final String rootPath;
+
+  const OpenLocalBrowseChannelRequest({
+    required super.requestId,
+    required this.rootPath,
+  });
+}
+
+/// Closes the pane-tab's browse channel; idempotent per channel.
+final class CloseBrowseChannelRequest extends EngineRequest {
+  final int channelId;
+
+  const CloseBrowseChannelRequest({
+    required super.requestId,
+    required this.channelId,
+  });
+}
+
+final class ListDirectoryRequest extends EngineRequest {
+  final int channelId;
+  final String path;
+
+  const ListDirectoryRequest({
+    required super.requestId,
+    required this.channelId,
+    required this.path,
+  });
+}
+
+/// Renames one entry inside its directory (02 §2.6's inline rename):
+/// [oldPath] and [newPath] share a parent — the request moves nothing
+/// across directories and never overwrites, so a destination that exists
+/// fails with the channel fs's typed conflict error rather than a flag.
+/// Local and pool channels answer through the same channel-id routing as
+/// [ListDirectoryRequest]: both funnel to `RemoteFileSystem.rename`.
+final class RenameEntryRequest extends EngineRequest {
+  final int channelId;
+  final String oldPath;
+  final String newPath;
+
+  const RenameEntryRequest({
+    required super.requestId,
+    required this.channelId,
+    required this.oldPath,
+    required this.newPath,
+  });
+}
+
+/// Sets one entry's POSIX permission bits (02 §2.6's Get Info editor, D28):
+/// funnels to `RemoteFileSystem.setMode`, so [permissions] is the full
+/// twelve-bit mode `0..0xFFF` — the leading octal digit carries setuid,
+/// setgid, and sticky. Local and pool channels answer through the same
+/// channel-id routing as [ListDirectoryRequest]. The VFS lstat-guards the
+/// path: a symlink target is refused typed (`unsupported`) rather than
+/// followed, and filesystems without POSIX modes refuse `unsupported` too —
+/// no silent success either way. Recursion is not this request's job:
+/// "Apply to enclosed items…" is an app-side walker that issues one of
+/// these per entry (D28).
+final class SetPermissionsRequest extends EngineRequest {
+  final int channelId;
+  final String path;
+  final int permissions;
+
+  const SetPermissionsRequest({
+    required super.requestId,
+    required this.channelId,
+    required this.path,
+    required this.permissions,
+  }) : assert(
+         permissions >= 0 && permissions <= 0xFFF,
+         'permissions must be a full 12-bit mode (0x000..0xFFF)',
+       );
+}
+
+/// Starts (or retargets) [channelId]'s single non-recursive watch on
+/// [path] (03 §7.5): one watch per subscribed local channel — opening a
+/// channel or listing alone never starts one. Local channels only: a pool
+/// channel answers the typed `unsupported` refusal, because watching a
+/// remote directory would be a polling feature this engine deliberately
+/// lacks. The engine canonicalizes [path] (03 §2.2's realpath semantics;
+/// `~` expands through the engine's environment) and fails the request
+/// typed for an empty path, a missing root (the local funnel's `notFound`),
+/// or a non-directory target. A watch that dies after establishment
+/// surfaces as a [DirectoryWatchEvent] with [DirectoryWatchSignal.lost]
+/// immediately and releases the watch. Windows event-driven checks cover
+/// delete-pending root loss; ancestor-move delivery remains platform-dependent
+/// (STATUS item 18). A refused rename is not a watch-loss event.
+/// A second watch on the same
+/// channel replaces the first: stale
+/// callbacks from the replaced watch cannot invalidate the new binding,
+/// and a watch superseded (by a later watch or unwatch) before it finished
+/// validating answers the typed `cancelled` refusal, while a close
+/// superseding it answers the channel-closed `disconnected` refusal —
+/// clients treat both as last-request-wins, not a failure. Any later
+/// watch-control request — including one that itself fails validation —
+/// supersedes in-flight validations, so a failed watch can leave the
+/// channel unwatched; an already-installed watch is left untouched by a
+/// failed validation.
+final class WatchLocalDirectoryRequest extends EngineRequest {
+  final int channelId;
+  final String path;
+
+  const WatchLocalDirectoryRequest({
+    required super.requestId,
+    required this.channelId,
+    required this.path,
+  });
+}
+
+/// Releases [channelId]'s watch (backend subscription and debounce timer).
+/// Idempotent per channel. Closing the channel and engine shutdown release
+/// the watch too. A pool channel answers the same typed `unsupported`
+/// refusal as [WatchLocalDirectoryRequest].
+final class UnwatchLocalDirectoryRequest extends EngineRequest {
+  final int channelId;
+
+  const UnwatchLocalDirectoryRequest({
+    required super.requestId,
+    required this.channelId,
+  });
+}
+
+/// Opens [path] in the operating system's default application (02 §2.6's
+/// Open on a local file): the engine owns the launcher process (D8 keeps
+/// dart:io off the UI isolate) and answers [EngineAck] once the launch
+/// was accepted — not when the launched application exits. Local
+/// channels only: a pool channel answers the typed `unsupported`
+/// refusal, because a remote file's open is the managed-checkout
+/// pipeline (06), never a launcher call. Launcher failures — a missing
+/// opener, a nonzero exit — serialize like every other typed engine
+/// error so the pane can surface them inline. The path rides along
+/// unvalidated like a listing's: the pane sends rows it listed, and the
+/// user's OS permissions bound the reach (the same rule as
+/// [OpenLocalBrowseChannelRequest]'s root).
+final class OpenLocalFileRequest extends EngineRequest {
+  final int channelId;
+  final String path;
+
+  const OpenLocalFileRequest({
+    required super.requestId,
+    required this.channelId,
+    required this.path,
+  });
+}
+
+/// Start (or restart) forwarding this server's state as [ServerStateEvent]s;
+/// the first forwarded event is the current state.
+final class WatchServerRequest extends EngineRequest {
+  final String serverId;
+
+  const WatchServerRequest({required super.requestId, required this.serverId});
+}
+
+/// Stop forwarding this server's state.
+final class UnwatchServerRequest extends EngineRequest {
+  final String serverId;
+
+  const UnwatchServerRequest({
+    required super.requestId,
+    required this.serverId,
+  });
+}
+
+final class ConnectedServerIdsRequest extends EngineRequest {
+  const ConnectedServerIdsRequest({required super.requestId});
+}
+
+/// Probe permission combines foreground visibility with the global setting.
+enum ProbeActivity { paused, running }
+
+/// Replaces eligible, locally seen targets; an empty list clears them.
+/// Config ids are bookmark-derived serverIds (03 §3.5). The caller applies
+/// per-favorite settings and sync-provenance eligibility before sending.
+final class SetProbeTargetsRequest extends EngineRequest {
+  final List<ServerConfig> targets;
+
+  SetProbeTargetsRequest({
+    required super.requestId,
+    required List<ServerConfig> targets,
+  }) : targets = List.unmodifiable(targets);
+}
+
+/// No probes run until explicitly enabled; pause invalidates stale work.
+final class SetProbeActivityRequest extends EngineRequest {
+  final ProbeActivity activity;
+
+  const SetProbeActivityRequest({
+    required super.requestId,
+    required this.activity,
+  });
+}
+
+/// Replaces the engine's authoritative shared-server catalog snapshot.
+///
+/// This updates routing only. It never acquires a channel. An empty snapshot
+/// retires aliases for every catalog record the engine knew previously.
+final class ReplaceServerCatalogRequest extends EngineRequest {
+  final List<ServerConfig> configs;
+
+  ReplaceServerCatalogRequest({
+    required super.requestId,
+    required List<ServerConfig> configs,
+  }) : configs = List.unmodifiable(configs);
+}
+
+/// Drops this serverId's pool reference (03 §3.5): closes its browse
+/// channels, force-releases its transfer leases, trips in-flight credential
+/// resolutions.
+final class DisconnectServerRequest extends EngineRequest {
+  final String serverId;
+
+  const DisconnectServerRequest({
+    required super.requestId,
+    required this.serverId,
+  });
+}
+
+/// Deletes the bookmark's connection state and its trust-incident records
+/// (owner decision 2026-09-09, option 3a). Like [DisconnectServerRequest] for
+/// the pool, plus the incident cascade; the engine also forgets the id's
+/// config and watch. The cascade runs even when the pool teardown throws:
+/// the error still reaches the caller, but the removal is final and must not
+/// be retried — the app has already deleted the bookmark.
+final class RemoveBookmarkRequest extends EngineRequest {
+  final String serverId;
+
+  const RemoveBookmarkRequest({
+    required super.requestId,
+    required this.serverId,
+  });
+}
+
+/// Answers an open [EnginePromptEvent]. Deliberately un-acked: a reply
+/// whose promptId is closed, unknown, kind-mismatched, or already answered
+/// is ignored at debug level — promptId and kind only, never the payload,
+/// since credential replies carry secrets (03 §5) — so there is no result
+/// to report back.
+final class PromptReplyRequest extends EngineRequest {
+  final String promptId;
+  final EnginePromptKind kind;
+  final PromptReply reply;
+
+  const PromptReplyRequest({
+    required super.requestId,
+    required this.promptId,
+    required this.kind,
+    required this.reply,
+  });
+}
+
+/// Orderly engine shutdown: open prompts are dismissed, references dropped,
+/// an ack is sent, then the UI kills the isolate.
+final class ShutdownRequest extends EngineRequest {
+  const ShutdownRequest({required super.requestId});
+}
+
+// ── Bridged transfer leases and VFS operations (v13) ────────────────────
+//
+// The UI-isolate transfer queue, checkout manager, preview producer, and
+// sync engine speak `RemoteFileSystem` over a leased channel (03 §3.2's
+// `TransferChannelLease`). Sockets cannot cross isolates (D8), so the
+// lease stays engine-side and the UI holds a proxy: every VFS call
+// becomes a [VfsOpRequest], and the two byte-carrying calls become
+// credit-flow-controlled streams. One port carries one stream's events
+// and its final [ResponseEvent] in order, so every chunk arrives before
+// the result that ends it.
+
+/// Borrows one transfer channel from the server's pool (03 §3.2). Blocks
+/// engine-side while the pool is at capacity; the answer is
+/// [TransferLeaseGranted] once a channel is granted. Carries the
+/// [ServerConfig] like every connection-bearing request: a restored task
+/// or a sync run can lease a server no pane has browsed yet. A null
+/// [config] means the app holds none (a Quick Connect `adhoc:` id lives
+/// only in its tab): the engine then uses the config the server's browse
+/// open supplied, and refuses typed when no open ever did.
+final class LeaseTransferChannelRequest extends EngineRequest {
+  final String serverId;
+  final ServerConfig? config;
+
+  const LeaseTransferChannelRequest({
+    required super.requestId,
+    required this.serverId,
+    this.config,
+  });
+}
+
+/// Returns a lease to the pool. Idempotent: an unknown or already
+/// released id acks. The engine waits for the lease's in-flight
+/// operations to settle (bounded) before the channel goes back, so a
+/// channel is never lent on while an earlier borrower's operation is
+/// still unwinding on it.
+final class ReleaseTransferLeaseRequest extends EngineRequest {
+  final int leaseId;
+
+  const ReleaseTransferLeaseRequest({
+    required super.requestId,
+    required this.leaseId,
+  });
+}
+
+/// What a [VfsOpRequest] runs against.
+sealed class VfsTarget {
+  const VfsTarget();
+}
+
+/// A granted transfer lease ([TransferLeaseGranted.leaseId]).
+final class LeaseTarget extends VfsTarget {
+  final int leaseId;
+
+  const LeaseTarget(this.leaseId);
+}
+
+/// An open browse channel ([BrowseChannelOpened.channelId]) — local or
+/// pool — for the panes' single-shot file verbs.
+final class ChannelTarget extends VfsTarget {
+  final int channelId;
+
+  const ChannelTarget(this.channelId);
+}
+
+/// One `RemoteFileSystem` call as plain data. The engine answers each
+/// with the result type named on the subtype.
+sealed class VfsOp {
+  const VfsOp();
+
+  /// The VFS verb, for typed refusals raised before the call runs.
+  String get operation;
+}
+
+/// → [VfsStringResult].
+final class VfsCanonicalize extends VfsOp {
+  final String path;
+
+  const VfsCanonicalize(this.path);
+
+  @override
+  String get operation => 'canonicalize';
+}
+
+/// → [DirectoryListed].
+final class VfsListDirectory extends VfsOp {
+  final String path;
+
+  const VfsListDirectory(this.path);
+
+  @override
+  String get operation => 'list directory';
+}
+
+/// → [VfsEntryResult].
+final class VfsStat extends VfsOp {
+  final String path;
+  final bool followLinks;
+
+  const VfsStat(this.path, {this.followLinks = true});
+
+  @override
+  String get operation => 'stat';
+}
+
+/// → [EngineAck]. [permissions] is the full twelve-bit mode.
+final class VfsSetMode extends VfsOp {
+  final String path;
+  final int permissions;
+
+  const VfsSetMode(this.path, this.permissions);
+
+  @override
+  String get operation => 'change permissions for';
+}
+
+/// → [EngineAck]. At least one time must be set.
+final class VfsSetTimes extends VfsOp {
+  final String path;
+  final DateTime? accessedAt;
+  final DateTime? modifiedAt;
+
+  const VfsSetTimes(this.path, {this.accessedAt, this.modifiedAt});
+
+  @override
+  String get operation => 'set times for';
+}
+
+/// → [EngineAck]. At least one id must be set.
+final class VfsSetOwner extends VfsOp {
+  final String path;
+  final int? uid;
+  final int? gid;
+
+  const VfsSetOwner(this.path, {this.uid, this.gid});
+
+  @override
+  String get operation => 'change owner of';
+}
+
+/// → [VfsStringResult].
+final class VfsReadSymbolicLink extends VfsOp {
+  final String path;
+
+  const VfsReadSymbolicLink(this.path);
+
+  @override
+  String get operation => 'read link';
+}
+
+/// → [EngineAck].
+final class VfsCreateSymbolicLink extends VfsOp {
+  final String linkPath;
+  final String targetPath;
+
+  const VfsCreateSymbolicLink(this.linkPath, this.targetPath);
+
+  @override
+  String get operation => 'create link';
+}
+
+/// → [EngineAck].
+final class VfsCreateDirectory extends VfsOp {
+  final String path;
+
+  const VfsCreateDirectory(this.path);
+
+  @override
+  String get operation => 'create directory';
+}
+
+/// → [EngineAck].
+final class VfsRename extends VfsOp {
+  final String oldPath;
+  final String newPath;
+  final bool overwrite;
+
+  const VfsRename(this.oldPath, this.newPath, {this.overwrite = false});
+
+  @override
+  String get operation => 'rename';
+}
+
+/// → [EngineAck]. A file, symlink, or empty directory — recursion is the
+/// transfer queue's delete task, never this call.
+final class VfsDelete extends VfsOp {
+  final RemoteFileEntry entry;
+
+  const VfsDelete(this.entry);
+
+  @override
+  String get operation => 'delete';
+}
+
+/// → [VfsEntryResult]. Creates an empty regular file through the VFS's
+/// own upload (temporary sibling + rename): an existing [path] fails with
+/// the typed conflict error — never an overwrite.
+final class VfsCreateEmptyFile extends VfsOp {
+  final String path;
+
+  const VfsCreateEmptyFile(this.path);
+
+  @override
+  String get operation => 'create file';
+}
+
+/// → [VfsEntryResult] carrying `contentSha256`. The engine streams the
+/// file into a discarding sink with hashing on, so the digest is computed
+/// where the socket lives (D7/D8) and no byte crosses the port.
+final class VfsContentDigest extends VfsOp {
+  final String path;
+
+  const VfsContentDigest(this.path);
+
+  @override
+  String get operation => 'download';
+}
+
+/// Runs one [VfsOp] on [target]. A released lease or closed channel
+/// answers the typed `disconnected` refusal; a `disconnected` failure of
+/// the operation itself is reported to the pool for recovery before the
+/// answer crosses (the browse-channel rule, 03 §3.2).
+final class VfsOpRequest extends EngineRequest {
+  final VfsTarget target;
+  final VfsOp op;
+
+  const VfsOpRequest({
+    required super.requestId,
+    required this.target,
+    required this.op,
+  });
+}
+
+/// Streams [path] from the lease's VFS as [DownloadChunkEvent]s; the
+/// stream id is this request's id and the final [ResponseEvent] carries
+/// the committed [VfsEntryResult] (or the typed failure). The engine
+/// keeps at most [windowBytes] sent-but-uncredited (a single batch
+/// larger than the window may still go when nothing is in flight); the
+/// consumer returns credit with [StreamCreditRequest] as it hands bytes
+/// to its sink, which is how a slow consumer pauses the remote read.
+final class DownloadStreamRequest extends EngineRequest {
+  final int leaseId;
+  final String path;
+  final bool computeHash;
+  final int windowBytes;
+
+  const DownloadStreamRequest({
+    required super.requestId,
+    required this.leaseId,
+    required this.path,
+    required this.computeHash,
+    required this.windowBytes,
+  });
+}
+
+/// Uploads to [path] through the lease's VFS. The engine announces
+/// [UploadReadyEvent] once the VFS subscribes to its content (a refusal
+/// raised before that — an existing target without [overwrite] — never
+/// asks for a byte), then the client sends [UploadChunkRequest]s keeping
+/// at most [windowBytes] unconsumed, pacing on [UploadProgressEvent], and
+/// ends with [UploadEndRequest] or [UploadAbortRequest]. The final
+/// [ResponseEvent] carries the committed [VfsEntryResult].
+final class UploadStreamRequest extends EngineRequest {
+  final int leaseId;
+  final String path;
+  final int? length;
+  final bool overwrite;
+  final int? preserveMode;
+  final RemoteFileEntry? expectedTarget;
+  final bool computeHash;
+  final int windowBytes;
+
+  const UploadStreamRequest({
+    required super.requestId,
+    required this.leaseId,
+    required this.path,
+    this.length,
+    this.overwrite = false,
+    this.preserveMode,
+    this.expectedTarget,
+    required this.computeHash,
+    required this.windowBytes,
+  });
+}
+
+/// Download credit: [bytes] more the consumer has handed to its sink.
+/// Fire-and-forget; credit for a finished stream is ignored.
+final class StreamCreditRequest extends EngineRequest {
+  final int streamId;
+  final int bytes;
+
+  const StreamCreditRequest({
+    required super.requestId,
+    required this.streamId,
+    required this.bytes,
+  });
+}
+
+/// One upload chunk. [bytes] materializes exactly once, engine-side.
+/// Fire-and-forget; a chunk for a finished stream is dropped.
+final class UploadChunkRequest extends EngineRequest {
+  final int streamId;
+  final TransferableTypedData bytes;
+
+  UploadChunkRequest({
+    required super.requestId,
+    required this.streamId,
+    required this.bytes,
+  });
+}
+
+/// The upload's content ended normally. Fire-and-forget.
+final class UploadEndRequest extends EngineRequest {
+  final int streamId;
+
+  const UploadEndRequest({required super.requestId, required this.streamId});
+}
+
+/// The upload's content failed: the engine-side content stream errors
+/// with [error], which unwinds the VFS upload (temporary cleaned up).
+/// Fire-and-forget.
+final class UploadAbortRequest extends EngineRequest {
+  final int streamId;
+  final EngineError error;
+
+  const UploadAbortRequest({
+    required super.requestId,
+    required this.streamId,
+    required this.error,
+  });
+}
+
+/// Trips the stream's engine-side `RemoteTransferCancellation`. The
+/// stream's final [ResponseEvent] still arrives — typically `cancelled`
+/// — once the VFS call has actually unwound. Fire-and-forget.
+final class CancelVfsStreamRequest extends EngineRequest {
+  final int streamId;
+
+  const CancelVfsStreamRequest({
+    required super.requestId,
+    required this.streamId,
+  });
+}
+
+/// Whether the engine's D15 local-trash service can serve
+/// (→ [TrashAvailability]). The service lives engine-side because its
+/// Linux backend spawns `gio` and its macOS/Windows backends ride the
+/// [EngineConfig.trashRequests] channel relay (D8: the UI isolate never
+/// spawns).
+final class LocalTrashAvailableRequest extends EngineRequest {
+  const LocalTrashAvailableRequest({required super.requestId});
+}
+
+/// Moves one local [path] to the OS trash (→ [TrashMoved], or the typed
+/// [EngineTrashError]).
+final class LocalTrashRequest extends EngineRequest {
+  final String path;
+
+  const LocalTrashRequest({required super.requestId, required this.path});
+}
+
+/// One batch of a download stream's bytes. [length] is the batch size;
+/// [transferred] the stream's cumulative byte count including this batch;
+/// [total] the file size once the VFS reported it.
+final class DownloadChunkEvent extends EngineEvent {
+  final int streamId;
+  final TransferableTypedData bytes;
+  final int length;
+  final int transferred;
+  final int? total;
+
+  DownloadChunkEvent({
+    required this.streamId,
+    required this.bytes,
+    required this.length,
+    required this.transferred,
+    required this.total,
+  });
+}
+
+/// The engine-side upload subscribed to its content: chunks may flow.
+final class UploadReadyEvent extends EngineEvent {
+  final int streamId;
+
+  const UploadReadyEvent({required this.streamId});
+}
+
+/// Upload flow control plus progress: [consumed] bytes the VFS has pulled
+/// from the content stream (the credit the client paces on) and
+/// [committed] the VFS's own last progress report (null until it made
+/// one).
+final class UploadProgressEvent extends EngineEvent {
+  final int streamId;
+  final int consumed;
+  final int? committed;
+  final int? total;
+
+  const UploadProgressEvent({
+    required this.streamId,
+    required this.consumed,
+    this.committed,
+    this.total,
+  });
+}
+
+// ── Responses ───────────────────────────────────────────────────────────
+
+/// The payload of a [ResponseEvent] — always typed, never a bare Object.
+sealed class EngineResult {
+  const EngineResult();
+}
+
+/// A failed request, reconstructed client-side as a [RemoteFileException].
+/// `cause` does not cross the port (arbitrary exceptions are not sendable);
+/// the message carries the user-facing summary.
+final class EngineError extends EngineResult {
+  final RemoteFileErrorKind kind;
+  final String operation;
+  final String? path;
+  final String message;
+
+  const EngineError({
+    required this.kind,
+    required this.operation,
+    this.path,
+    required this.message,
+  });
+
+  factory EngineError.fromException(RemoteFileException error) => EngineError(
+    kind: error.kind,
+    operation: error.operation,
+    path: error.path,
+    message: error.message,
+  );
+
+  RemoteFileException toException() => RemoteFileException(
+    kind: kind,
+    operation: operation,
+    path: path,
+    message: message,
+  );
+}
+
+final class BrowseChannelOpened extends EngineResult {
+  final int channelId;
+  final String homePath;
+
+  const BrowseChannelOpened({required this.channelId, required this.homePath});
+}
+
+final class DirectoryListed extends EngineResult {
+  final List<RemoteFileEntry> entries;
+
+  const DirectoryListed({required this.entries});
+}
+
+final class ServerIdsListed extends EngineResult {
+  final List<String> ids;
+
+  const ServerIdsListed({required this.ids});
+}
+
+/// Void results: channel close, disconnect, shutdown.
+final class EngineAck extends EngineResult {
+  const EngineAck();
+}
+
+/// A granted transfer lease; the id addresses [LeaseTarget] and the
+/// stream requests until [ReleaseTransferLeaseRequest]. The identity belongs
+/// to the transport backing this lease, not a process-wide configuration.
+final class TransferLeaseGranted extends EngineResult {
+  final int leaseId;
+  final AuthenticatedEndpointIdentity endpointIdentity;
+
+  const TransferLeaseGranted({
+    required this.leaseId,
+    required this.endpointIdentity,
+  });
+}
+
+/// A VFS call's entry answer (stat, committed download/upload, digest).
+final class VfsEntryResult extends EngineResult {
+  final RemoteFileEntry entry;
+
+  const VfsEntryResult({required this.entry});
+}
+
+/// A VFS call's string answer (canonicalize, readSymbolicLink).
+final class VfsStringResult extends EngineResult {
+  final String value;
+
+  const VfsStringResult({required this.value});
+}
+
+/// Whether the engine's local trash can serve right now.
+final class TrashAvailability extends EngineResult {
+  final bool available;
+
+  const TrashAvailability({required this.available});
+}
+
+/// A completed local trash move; [trashedPath] is the platform's
+/// reported location (the macOS Put Back anchor), when it reports one.
+final class TrashMoved extends EngineResult {
+  final String? trashedPath;
+
+  const TrashMoved({this.trashedPath});
+}
+
+/// A failed trash request, reconstructed client-side as a
+/// [TrashException] — callers of the trash layer only ever interpret
+/// that type as "trash failed" (03 §7.3).
+final class EngineTrashError extends EngineResult {
+  final TrashErrorKind kind;
+  final String? path;
+  final String message;
+
+  const EngineTrashError({
+    required this.kind,
+    this.path,
+    required this.message,
+  });
+
+  factory EngineTrashError.fromException(TrashException error) =>
+      EngineTrashError(
+        kind: error.kind,
+        path: error.path,
+        message: error.message,
+      );
+
+  TrashException toException() =>
+      TrashException(kind: kind, path: path, message: message);
+}
+
+// ── Spawn configuration ─────────────────────────────────────────────────
+
+/// The first message sent after spawn (03 §5): everything the engine must
+/// not resolve itself. Storage/journal directories and initial bandwidth
+/// limits join with the slices that consume them (M4).
+final class EngineConfig {
+  /// The pool policy (D9's frozen numbers). Invalid values fail the engine's
+  /// construction, which surfaces UI-side as engine termination.
+  final PoolPolicy policy;
+
+  /// Host keys pinned by the UI-side store; the engine seeds its TOFU
+  /// verifier from these (pin storage itself stays app-side).
+  final List<HostKey> hostKeyPins;
+
+  /// Trust-incident records restored from the app-owned store; the engine
+  /// seeds its in-memory incident store from these. A record is not restored
+  /// unless its `pinnedFingerprintSha256` matches the pin [hostKeyPins] holds
+  /// for the record's own endpoint — the verifier's `(host, port)` lookup,
+  /// never a fingerprint found anywhere in the list, because only that
+  /// endpoint's pin can review or lift the block (audit finding A).
+  /// Re-detection covers the endpoint on the next connect. A skipped record
+  /// is deleted only when the endpoint holds a *different* pin: with no pin
+  /// at all the app keeps it, because an empty pin seed is indistinguishable
+  /// from a pin store that failed to load.
+  final List<IncidentRecord> incidents;
+
+  /// The app-side `poltergeist/trash` channel port (03 §7.1, D15): the
+  /// platform `MethodChannel` lives on the UI isolate's binary
+  /// messenger, which the engine isolate cannot reach, so the app
+  /// serves `TrashInvokeRequest`s on this port and the engine issues
+  /// them through `trashChannelInvokerFor`. Null leaves the channel
+  /// backends
+  /// unwired — they report `TrashErrorKind.unavailable`, the honest
+  /// confirm-then-permanent fallback, never a silent unlink.
+  final SendPort? trashRequests;
+
+  /// The directory local panes open for `~` when the process environment
+  /// names no home (neither `HOME` nor `USERPROFILE`). An Android app
+  /// process has none, so without it `~` stayed literal and resolved to
+  /// `/~`; the app passes a directory it can always list. A home the
+  /// environment does name always wins.
+  final String? fallbackHome;
+
+  const EngineConfig({
+    this.policy = const PoolPolicy(),
+    this.hostKeyPins = const [],
+    this.incidents = const [],
+    this.trashRequests,
+    this.fallbackHome,
+  });
+}

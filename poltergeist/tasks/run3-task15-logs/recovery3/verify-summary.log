@@ -1,0 +1,7 @@
+core-analyze exit=0
+core-tests exit=0
+imports exit=0
+protocol-tests exit=0
+protocol exit=0
+app-analyze exit=0
+app-tests exit=0

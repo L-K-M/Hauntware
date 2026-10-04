@@ -1,0 +1,22 @@
+name: ghost_desktop
+description: >-
+  Shared desktop window state for Planchette, Poltergeist, and Seance:
+  remembered frame, missing-monitor fallback, maximized/full-screen restore,
+  and the intercepted close path behind host-owned adapters.
+version: 1.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.0
+  flutter: '>=3.47.2'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  screen_retriever: ^0.2.2
+  window_manager: ^0.5.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

@@ -1,0 +1,577 @@
+
+### controller-red.log EXIT: 1
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+00:00 +0: retry on a severed remote channel reopens instead of looping
+00:00 +1: a failed reconnect still preserves the user directory on the next retry
+00:00 +2: a stale pending path never leaks into another bookmark
+00:00 +2 -1: a stale pending path never leaks into another bookmark [E]
+  Expected: ['/srv/other/home']
+    Actual: ['/srv/www']
+     Which: at location [0] is '/srv/www' instead of '/srv/other/home'
+  a pending path from srv-1 must not leak into srv-2
+  
+  package:matcher                                        expect
+  package:flutter_test/src/widget_tester.dart 473:18     expect
+  test/services/pane_cancel_regressions_test.dart 360:5  registerRound15Tests.<fn>
+  
+00:00 +2 -1: an old listing cannot consume a newer failed bind landing path
+00:00 +3 -1: a dead status lane cannot latch the connection-lost banner
+00:00 +4 -1: a cleanly closed status lane cannot latch the connection-lost banner
+00:00 +5 -1: cancelRecovery during an in-flight connect invalidates the bind
+00:00 +6 -1: a failed bind clears the stale connection-lost banner
+00:00 +7 -1: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: a stale pending path never leaks into another bookmark
+
+### controller-green.log EXIT: 0
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+00:00 +0: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: retry on a severed remote channel reopens instead of looping
+00:00 +1: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: a failed reconnect still preserves the user directory on the next retry
+00:00 +2: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: a stale pending path never leaks into another bookmark
+00:00 +3: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: an old listing cannot consume a newer failed bind landing path
+00:00 +4: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: a dead status lane cannot latch the connection-lost banner
+00:00 +5: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: a cleanly closed status lane cannot latch the connection-lost banner
+00:00 +6: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: cancelRecovery during an in-flight connect invalidates the bind
+00:00 +7: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: a failed bind clears the stale connection-lost banner
+00:00 +8: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: openLocalHome binds home, lists it, sorts directories first
+00:00 +9: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: dotfiles are hidden by default
+00:00 +10: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: navigation issues optimistically and accepts current listings
+00:00 +11: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: stale listing responses are dropped on arrival
+00:00 +12: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: error answers keep stale entries and disable verbs until retry
+00:00 +13: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: Esc cancel restores the last quiescent snapshot, including errors
+00:00 +14: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: connectRemote subscribes to state before opening the channel
+00:00 +15: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: connectRemote navigates to the bookmark remotePath, not home
+00:00 +16: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: a connect failure surfaces the typed error and retry reopens
+00:00 +17: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: rebinding closes the previous channel and drops its server watch
+00:00 +18: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: verbsEnabled requires a live browsing phase
+00:00 +19: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: a bookmark without a server identity fails the bind fast
+00:00 +20: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: dispose closes the channel
+00:00 +21: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: openEntry navigates directories only
+00:00 +22: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: goUp navigates to the parent and stops at the root
+00:00 +23: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: cursor moves within the listing and resets on navigation
+00:00 +24: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: cancelRecovery after dispose is a no-op
+00:00 +25: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: a cancelled first listing keeps the remote kind for navigation
+00:00 +26: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: detaching a shared server leaves the pool for the sibling
+00:00 +27: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: verbs stay disabled after cancelling the first listing
+00:00 +28: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: arrow up from no cursor selects the last row
+00:00 +29: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: a failing local open never rejects the future
+══╡ EXCEPTION CAUGHT BY FLUTTER FRAMEWORK ╞═════════════════════════════════════════════════════════
+The following StateError was thrown:
+Bad state: no local browse channel scripted
+
+When the exception was thrown, this was the stack:
+#0      FakePaneLanes.openLocalChannel (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart:31:26)
+#1      PaneController.openLocalHome.<anonymous closure> (package:poltergeist_app/services/pane_controller.dart:515:37)
+#2      PaneController._bind (package:poltergeist_app/services/pane_controller.dart:454:20)
+<asynchronous suspension>
+#3      PaneController.openLocalHome (package:poltergeist_app/services/pane_controller.dart:508:5)
+<asynchronous suspension>
+#4      main.<anonymous closure> (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart:754:5)
+<asynchronous suspension>
+#5      Declarer.test.<anonymous closure>.<anonymous closure> (package:test_api/src/backend/declarer.dart:253:15)
+<asynchronous suspension>
+#6      Declarer.test.<anonymous closure> (package:test_api/src/backend/declarer.dart:250:11)
+<asynchronous suspension>
+#7      Invoker._waitForOutstandingCallbacks.<anonymous closure> (package:test_api/src/backend/invoker.dart:318:9)
+<asynchronous suspension>
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:00 +30: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: the post-first-cancel remote state can still unbind
+00:00 +31: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: cancelRecovery on a local pane is a no-op
+00:00 +32: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_controller_test.dart: reconnecting state raises the connection-lost banner
+00:00 +33: All tests passed!
+
+### cancel-replacement-red.log EXIT: 1
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+00:00 +0: retry on a severed remote channel reopens instead of looping
+00:00 +1: a failed reconnect still preserves the user directory on the next retry
+00:00 +2: a stale pending path never leaks into another bookmark
+00:00 +3: an old listing cannot consume a newer failed bind landing path
+00:00 +4: a dead status lane cannot latch the connection-lost banner
+00:00 +5: a cleanly closed status lane cannot latch the connection-lost banner
+00:00 +6: cancelRecovery during an in-flight connect invalidates the bind
+00:00 +7: cancelRecovery cannot disconnect a replacement bind
+00:00 +7 -1: cancelRecovery cannot disconnect a replacement bind [E]
+  Expected: empty
+    Actual: ['srv-1']
+  
+  package:matcher                                       expect
+  package:flutter_test/src/widget_tester.dart 473:18    expect
+  test/services/pane_cancel_regressions_test.dart 73:5  main.<fn>
+  
+00:00 +7 -1: a failed bind clears the stale connection-lost banner
+00:00 +8 -1: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart: cancelRecovery cannot disconnect a replacement bind
+
+### cancel-replacement-green.log EXIT: 0
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/services/pane_cancel_regressions_test.dart
+00:00 +0: retry on a severed remote channel reopens instead of looping
+00:00 +1: a failed reconnect still preserves the user directory on the next retry
+00:00 +2: a stale pending path never leaks into another bookmark
+00:00 +3: an old listing cannot consume a newer failed bind landing path
+00:00 +4: a dead status lane cannot latch the connection-lost banner
+00:00 +5: a cleanly closed status lane cannot latch the connection-lost banner
+00:00 +6: cancelRecovery during an in-flight connect invalidates the bind
+00:00 +7: cancelRecovery cannot disconnect a replacement bind
+00:00 +8: a failed bind clears the stale connection-lost banner
+00:00 +9: All tests passed!
+
+### route-red.log EXIT: 1
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart
+00:00 +0: a rapid double-tap opens the pane once and pops one route
+00:00 +1: a second tap mid-animation cannot mis-pop
+00:00 +2: a vetoed pop does not open a pane behind Connections
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: empty
+  Actual: ['a']
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart:148:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart line 148
+The test description was:
+  a vetoed pop does not open a pane behind Connections
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +2 -1: a vetoed pop does not open a pane behind Connections [E]
+  Test failed. See exception logs above.
+  The test description was: a vetoed pop does not open a pane behind Connections
+  
+00:01 +2 -1: a stale row callback cannot pop a covering route
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "covering route": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart:163:5)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart line 163
+The test description was:
+  a stale row callback cannot pop a covering route
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:01 +2 -2: a stale row callback cannot pop a covering route [E]
+  Test failed. See exception logs above.
+  The test description was: a stale row callback cannot pop a covering route
+  
+00:01 +2 -2: a single tap pops the connections route and opens the pane
+00:01 +3 -2: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a stale row callback cannot pop a covering route
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a vetoed pop does not open a pane behind Connections
+
+### route-final.log EXIT: 0
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart
+00:00 +0: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/open_inpane_pop_test.dart: a rapid double-tap opens the pane once and pops one route
+00:00 +1: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +2: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +3: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +4: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +5: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +6: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +7: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +8: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +9: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +10: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +11: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +12: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration registers with a bookmark store, not without one
+00:01 +13: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_commands_test.dart: an enabled command's chord runs it
+00:01 +14: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration opens the surface from the toolbar
+00:01 +15: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: command registration opens the surface from the toolbar
+00:01 +16: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:01 +17: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:02 +18: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:02 +19: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:02 +20: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: panes browse the local home through the engine seam
+00:02 +21: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: renders a local listing: name, kind glyph, size, mtime
+00:02 +22: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: renders a local listing: name, kind glyph, size, mtime
+00:02 +23: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: renders a local listing: name, kind glyph, size, mtime
+00:02 +24: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: the list without an engine every row reads not connected
+00:02 +25: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/connections/connections_view_test.dart: the list without an engine every row reads not connected
+00:02 +26: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Ctrl+R refreshes the focused pane only
+00:02 +27: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Ctrl+R refreshes the focused pane only
+00:02 +28: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Ctrl+R refreshes the focused pane only
+00:02 +29: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: taxonomy errors render inline with Retry over stale entries
+00:02 +30: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: taxonomy errors render inline with Retry over stale entries
+00:02 +31: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:02 +32: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:02 +33: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: Meta+R refreshes on macOS
+00:02 +34: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:02 +35: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:02 +36: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: loading stays silent before the 150 ms anti-flash grace
+00:02 +37: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:02 +38: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:03 +39: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:03 +40: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:03 +41: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: pane focus commands move focus between panes
+00:03 +42: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: arrow keys move the cursor and Enter opens a directory
+00:03 +43: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: without an engine the panes render the no-engine state
+00:03 +44: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Enter does not open on macOS (rename-key muscle memory)
+00:03 +45: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:03 +46: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:03 +47: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:03 +48: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a session arriving later gains live connections truth
+00:03 +49: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: Enter is inert on stale entries during connection-lost
+00:03 +50: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:03 +51: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:03 +52: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:03 +53: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/workspace_panes_test.dart: a remote bookmark opens in the active pane from Connections
+00:03 +54: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: every fault variant renders its ARB sentence, never the sentinel
+00:03 +55: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: remote connect renders the connecting state until it lands
+00:03 +56: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: reconnecting renders the connection-lost banner with Cancel
+00:03 +57: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: path bar segments navigate to their ancestor
+00:03 +58: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: a navigation from a scrolled listing reveals the top
+00:04 +59: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: the focused pane path renders in the accent color
+00:04 +60: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: rows announce name, size, and date to semantics
+00:04 +61: /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_view_test.dart: a null lanes pane renders the no-engine state
+00:04 +62: All tests passed!
+
+### shared-session.log EXIT: 124
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+00:00 +0: both pane connects share FIFO prompts and independent teardown
+
+### shared-session-diagnostic.log EXIT: 124
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+00:00 +0: both pane connects share FIFO prompts and independent teardown
+lifetime: session started
+lifetime: prompts answered 2
+lifetime: connected
+lifetime: detaching
+lifetime: detached
+lifetime: shutting down
+lifetime: shut down
+
+### shared-session-teardown.log EXIT: 124
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+00:00 +0: both pane connects share FIFO prompts and independent teardown
+lifetime: session started
+lifetime: prompts answered 2
+lifetime: connected
+lifetime: detaching
+lifetime: detached
+lifetime: shutting down
+lifetime: shut down
+lifetime: test body finished
+lifetime: teardown shutdown
+unhandled error during finalization of test:
+/home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+TestDeviceException(Shell subprocess crashed with SIGTERM (-15).)
+#0      FlutterTesterTestDevice.finished (package:flutter_tools/src/test/flutter_tester_device.dart:256:5)
+<asynchronous suspension>
+#1      FlutterTesterTestDevice.kill (package:flutter_tools/src/test/flutter_tester_device.dart:238:5)
+<asynchronous suspension>
+#2      FlutterPlatform._startTest.<anonymous closure> (package:flutter_tools/src/test/flutter_platform.dart:689:9)
+<asynchronous suspension>
+#3      FlutterPlatform._startTest.finalize (package:flutter_tools/src/test/flutter_platform.dart:591:11)
+<asynchronous suspension>
+#4      asyncGuard.<anonymous closure> (package:flutter_tools/src/base/async_guard.dart:108:24)
+<asynchronous suspension>
+
+unhandled error during finalization of test:
+/home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+PathNotFoundException: Deletion failed, path = '/tmp/flutter_tools.CCSMIY/flutter_test_listener.QKYTKC' (OS Error: No such file or directory, errno = 2)
+#0      _Directory._deleteSync (dart:io/directory_impl.dart:216:7)
+#1      FileSystemEntity.deleteSync (dart:io/file_system_entity.dart:425:7)
+#2      ForwardingFileSystemEntity.deleteSync (package:file/src/forwarding/forwarding_file_system_entity.dart:70:16)
+#3      ErrorHandlingDirectory.deleteSync.<anonymous closure> (package:flutter_tools/src/base/error_handling_io.dart:717:22)
+#4      _runSync (package:flutter_tools/src/base/error_handling_io.dart:1118:16)
+#5      ErrorHandlingDirectory.deleteSync (package:flutter_tools/src/base/error_handling_io.dart:716:12)
+#6      FlutterPlatform._createListenerDart.<anonymous closure> (package:flutter_tools/src/test/flutter_platform.dart:786:15)
+#7      FlutterPlatform._startTest.finalize (package:flutter_tools/src/test/flutter_platform.dart:591:26)
+<asynchronous suspension>
+#8      asyncGuard.<anonymous closure> (package:flutter_tools/src/base/async_guard.dart:108:24)
+<asynchronous suspension>
+
+00:26 +0: both pane connects share FIFO prompts and independent teardown - did not complete [E]
+00:26 +0: Some tests failed.
+
+Failing tests:
+  /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart: both pane connects share FIFO prompts and independent teardown (did not complete)
+
+### shared-session-green.log EXIT: 0
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /home/paseo/workspace/Poltergeist/app/poltergeist_app/test/ui/panes/pane_session_lifetime_test.dart
+00:00 +0: both pane connects share FIFO prompts and independent teardown
+00:01 +1: a replaced session cannot repaint from its delayed listing
+00:01 +2: All tests passed!
+
+### app-analyze.log EXIT: 0
+
+Resolving dependencies...
+Downloading packages...
+  _fe_analyzer_shared 105.0.0 (108.0.0 available)
+  analyzer 14.1.0 (14.4.0 available)
+  cli_util 0.4.2 (0.6.0 available)
+  code_assets 1.2.1 (2.0.0 available)
+  dartssh2 3.0.2 (4.1.0 available)
+  flutter_secure_storage 10.3.1 (11.1.1 available)
+  flutter_secure_storage_darwin 0.3.2 (0.4.2 available)
+  flutter_secure_storage_linux 3.0.2 (3.0.3 available)
+  flutter_secure_storage_platform_interface 2.0.3 (2.1.0 available)
+  hooks 2.0.2 (2.2.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  objective_c 9.5.0 (9.6.0 available)
+  platform 3.1.6 (3.2.0 available)
+  record_use 0.6.0 (1.1.1 available)
+  test_api 0.7.12 (0.7.14 available)
+  vector_math 2.4.0 (2.4.2 available)
+Got dependencies!
+17 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing poltergeist_app...                                    
+No issues found! (ran in 2.1s)
+
+### core-analyze.log EXIT: 0
+
+Analyzing poltergeist_core...
+No issues found!
