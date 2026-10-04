@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:poltergeist_m0_bench/fixture_data.dart';
+import 'package:poltergeist_m0_bench/result_manifest.dart'
+    show affordableThroughputCells, standardThroughputTrialSpecs;
 import 'package:poltergeist_m0_bench/throughput.dart';
 import 'package:poltergeist_m0_bench/throughput_attempt.dart';
 import 'package:test/test.dart';
@@ -134,6 +136,24 @@ void main() {
       samples.medianFor(ThroughputVariant.openssh),
       const Duration(microseconds: 70),
     );
+  });
+
+  test('runs trials in the result manifest\'s ABCCBA order', () async {
+    final trials = <ThroughputVariant>[];
+    await collectCounterbalancedSamples((variant) async {
+      trials.add(variant);
+      return Duration.zero;
+    }, warmup: (_) async => Duration.zero);
+
+    // The aggregator validates live evidence against this manifest; the
+    // runner's order must match it before any shard runs.
+    final cell = affordableThroughputCells.first;
+    final manifest = standardThroughputTrialSpecs
+        .where((trial) => trial.cellId == cell.id)
+        .toList();
+    expect(trials.map((variant) => variant.cliValue), [
+      for (final trial in manifest) trial.variant.label,
+    ]);
   });
 
   test('keeps bounded warmups outside measured trials', () async {
