@@ -1460,7 +1460,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // developer-facing debug assert message, never rendered to users.
   'lib/ui/server_state_indicator.dart': {
     "''",
-    "'Probe truth must be painted by ProbeStatusDot/ServerStateIndicator; '",
+    "'Probe truth must be painted by the caller; '",
     "'ServerStateGlyph has no probe paint.'",
   },
   // The D32 sidebar library (sidebar_view.dart and its parts): widget keys,

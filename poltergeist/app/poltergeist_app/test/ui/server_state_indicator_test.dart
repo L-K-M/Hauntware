@@ -3,7 +3,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
-import 'package:poltergeist_app/ui/probe_status_dot.dart';
 import 'package:poltergeist_app/ui/server_state_indicator.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -175,98 +174,6 @@ void main() {
     });
   });
 
-  group('the labeled indicator widget', () {
-    testWidgets('delegates to the probe dot without a second label', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        const ServerStateIndicator(status: null, probe: ProbeStatus.online),
-      );
-
-      expect(find.byType(ProbeStatusDot), findsOneWidget);
-      expect(find.byTooltip(_l10n.probeStatusOnline), findsOneWidget);
-
-      final semantics = tester.ensureSemantics();
-      try {
-        // One announcement: the dot owns the label, the wrapper adds none.
-        expect(find.bySemanticsLabel(_l10n.probeStatusOnline), findsOneWidget);
-      } finally {
-        semantics.dispose();
-      }
-    });
-
-    testWidgets('a blocked connection replaces the reachable probe dot', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        const ServerStateIndicator(status: _blocked, probe: ProbeStatus.online),
-      );
-
-      expect(find.byType(ProbeStatusDot), findsNothing);
-      expect(find.byTooltip(_l10n.connectionBlockedTitle), findsOneWidget);
-      expect(find.byIcon(Icons.gpp_bad), findsOneWidget);
-
-      final semantics = tester.ensureSemantics();
-      try {
-        expect(
-          find.bySemanticsLabel(_l10n.connectionBlockedTitle),
-          findsOneWidget,
-        );
-        expect(find.bySemanticsLabel(_l10n.probeStatusOnline), findsNothing);
-      } finally {
-        semantics.dispose();
-      }
-    });
-
-    testWidgets('a connected server replaces the offline probe dot', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        const ServerStateIndicator(
-          status: ServerStatus(ServerConnectionState.connected),
-          probe: ProbeStatus.offline,
-        ),
-      );
-
-      expect(find.byType(ProbeStatusDot), findsNothing);
-      expect(find.byTooltip(_l10n.connectionStateConnected), findsOneWidget);
-
-      final semantics = tester.ensureSemantics();
-      try {
-        expect(
-          find.bySemanticsLabel(_l10n.connectionStateConnected),
-          findsOneWidget,
-        );
-        expect(find.bySemanticsLabel(_l10n.probeStatusOffline), findsNothing);
-      } finally {
-        semantics.dispose();
-      }
-    });
-
-    testWidgets('paints nothing when neither truth exists', (tester) async {
-      await _pump(tester, const ServerStateIndicator(status: null));
-
-      expect(find.byType(ProbeStatusDot), findsNothing);
-      expect(find.byType(ServerStateGlyph), findsNothing);
-      expect(find.byType(Tooltip), findsNothing);
-    });
-
-    testWidgets('a pending attempt spins', (tester) async {
-      await _pump(
-        tester,
-        const ServerStateIndicator(
-          status: ServerStatus(ServerConnectionState.connecting),
-        ),
-      );
-
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.byTooltip(_l10n.connectionStateConnecting), findsOneWidget);
-    });
-  });
-
   group('ServerStateGlyph paints', () {
     Finder inGlyph(Finder matching) =>
         find.descendant(of: find.byType(ServerStateGlyph), matching: matching);
@@ -426,12 +333,10 @@ void main() {
   });
 
   test('indicator colors stay above 3:1 on both theme surfaces', () {
-    // The composed indicator inherits the probe dot's contrast floor
-    // (02 §4, SEA-019) for every color it can paint. The delegated probe
-    // offline/unknown states reuse the scheme colors already pinned below
-    // (`error`/`outline`), so no delegated color escapes the pin. The
-    // backgrounds mirror the probe dot's own floor: the resting surface
-    // (the app bar is pinned to paint it) and the scrolled-under tint.
+    // Every color the composed indicator can paint keeps 02 §4's contrast
+    // floor (SEA-019). The sidebar's probe offline/unknown dots reuse the
+    // scheme colors pinned below (`error`/`outline`). The backgrounds are
+    // the resting surface and its scrolled-under tint.
     for (final brightness in Brightness.values) {
       final scheme = buildPoltergeistTheme(brightness).colorScheme;
       final scrolled = ElevationOverlay.applySurfaceTint(

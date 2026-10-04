@@ -3,7 +3,6 @@ import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../l10n/app_localizations.dart';
 import '../theme/app_theme.dart';
-import 'probe_status_dot.dart';
 
 /// What the one composed server indicator paints (02 §4: exactly one
 /// indicator per server — SEA-021).
@@ -11,7 +10,8 @@ enum ServerIndicatorGlyph {
   /// Neither truth exists: paint nothing.
   none,
 
-  /// Probe truth only: delegate to [ProbeStatusDot].
+  /// Probe truth only: the caller paints the reachability result itself
+  /// (the sidebar's status dot); [ServerStateGlyph] has no probe paint.
   probe,
 
   /// A connect or recovery attempt is running.
@@ -161,65 +161,17 @@ ServerIndicatorAppearance _probeAppearance(
   };
 }
 
-/// The labeled composed indicator for a server, resolved by
-/// [serverIndicatorOf]: the probe dot while no connection truth outranks
-/// it, else the connection glyph, else nothing.
-///
-/// Used where the indicator is the row's only state wording (the interim
-/// list's app bar; M5's sidebar badge corner). A list that renders the state
-/// as text uses [ServerStateGlyph] instead, so the label is announced once.
-class ServerStateIndicator extends StatelessWidget {
-  const ServerStateIndicator({required this.status, this.probe, super.key});
-
-  /// Live connection truth; null when no engine reports this server.
-  final ServerStatus? status;
-
-  /// Reachability truth; rendered while [status] is null or its resolved
-  /// glyph does not outrank it (see [serverIndicatorOf]).
-  final ProbeStatus? probe;
-
-  @override
-  Widget build(BuildContext context) {
-    final appearance = serverIndicatorOf(
-      AppLocalizations.of(context),
-      status: status,
-      probe: probe,
-    );
-
-    // The probe dot owns its own tooltip and semantics: wrapping it would
-    // announce the same state twice.
-    final probeStatus = probe;
-    if (appearance.glyph == ServerIndicatorGlyph.probe && probeStatus != null) {
-      return ProbeStatusDot(probeStatus);
-    }
-    if (appearance.glyph == ServerIndicatorGlyph.none) {
-      return const SizedBox.shrink();
-    }
-
-    return Tooltip(
-      message: appearance.label,
-      excludeFromSemantics: true,
-      child: Semantics(
-        label: appearance.label,
-        container: true,
-        child: ServerStateGlyph(appearance.glyph),
-      ),
-    );
-  }
-}
-
 /// The composed indicator's paint, without a label: for rows that render the
 /// state as text beside it.
 class ServerStateGlyph extends StatelessWidget {
   const ServerStateGlyph(this.glyph, {super.key});
 
-  /// The dot diameter [ProbeStatusDot] paints, so one server's indicator is
-  /// the same size whichever truth produced it.
-  static const dotSize = ProbeStatusDot.dotSize;
+  /// The painted dot's diameter.
+  static const dotSize = 10.0;
 
-  /// The padded box [ProbeStatusDot] keeps its dot in: a 10 px paint alone is
-  /// not a practical hover or touch target.
-  static const boxSize = ProbeStatusDot.boxSize;
+  /// The padded box every glyph is centred in: a 10 px paint alone is not a
+  /// practical hover or touch target.
+  static const boxSize = 24.0;
 
   final ServerIndicatorGlyph glyph;
 
@@ -228,13 +180,13 @@ class ServerStateGlyph extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final chrome = PoltergeistChrome.of(context);
 
-    // Probe truth has no paint here: it must render through
-    // ProbeStatusDot (via ServerStateIndicator). Reaching for this glyph
-    // with probe truth trips the assert in debug builds; release builds
-    // strip asserts and paint nothing, so misuse there is silent.
+    // Probe truth has no paint here: a caller that shows reachability
+    // paints its own dot for it. Reaching for this glyph with probe truth
+    // trips the assert in debug builds; release builds strip asserts and
+    // paint nothing, so misuse there is silent.
     assert(
       glyph != ServerIndicatorGlyph.probe,
-      'Probe truth must be painted by ProbeStatusDot/ServerStateIndicator; '
+      'Probe truth must be painted by the caller; '
       'ServerStateGlyph has no probe paint.',
     );
 
@@ -253,10 +205,8 @@ class ServerStateGlyph extends StatelessWidget {
               color: scheme.primary,
             ),
           ),
-          // The same green the probe dot uses: one "connected" color per app.
-          ServerIndicatorGlyph.connected => _dot(
-            ProbeStatusDot.onlineColorOf(context),
-          ),
+          // The palette's one "connected" green.
+          ServerIndicatorGlyph.connected => _dot(chrome.statusConnected),
           // The theme's status colours, as the rail's dots paint them.
           ServerIndicatorGlyph.idle => _dot(chrome.statusUnknown),
           ServerIndicatorGlyph.failed => _dot(chrome.statusFailed),
