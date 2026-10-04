@@ -17,8 +17,11 @@
 #   scripts/test.sh flutter  # Flutter packages and apps only
 #
 # Requires the Dart SDK (3.12+) for `dart` and Flutter 3.47.2 for
-# `flutter` — its bundled Dart drives the app packages. Host-bound
-# gates stay in CI, not here: the compiled-PTY lifecycle test
+# `flutter` — its bundled Dart drives the app packages. The `dart`
+# scope also needs Linux (the Poltergeist benchmark harness reads
+# /proc/uptime) and Docker with the Compose plugin (the integration
+# fixture checks render the compose file; no container is started).
+# Host-bound gates stay in CI, not here: the compiled-PTY lifecycle test
 # (SEANCE_NATIVE_PTY_REQUIRED), the macOS keyboard/accessibility
 # fixtures, the SSH/sync-server integration fixtures, and the D12
 # benchmark collectors.
@@ -113,6 +116,13 @@ if [[ "$scope" != flutter ]]; then
     run bash scripts/audit-seance-pin.sh
 
     (cd packages/poltergeist_bench && run dart analyze && run dart test test)
+    (
+      cd packages/poltergeist_bench
+      run dart run benchmark/validate_bundle.dart \
+        --bundle ../../docs/evidence/m0 \
+        --report ../../docs/M0-DARTSSH2-REPORT.md \
+        --repo ../..
+    )
     run dart test test/benchmarks
     run dart analyze test/benchmarks
     run dart analyze test/integration
@@ -137,6 +147,9 @@ if [[ "$scope" != dart ]]; then
                packages/ghost_desktop app/planchette_app; do
       (cd "$dir" && run flutter analyze && run flutter test)
     done
+    run dart format --set-exit-if-changed --output=none \
+      packages/planchette_core packages/planchette_editor \
+      packages/ghost_ui packages/ghost_desktop app/planchette_app
   )
 
   # ---- Séance: app plus the vendored xterm fork (its tests are not
