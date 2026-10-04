@@ -76,7 +76,7 @@ final _emailAttributionPattern = RegExp(
   r'^[A-Za-z][A-Za-z0-9_-]*:[ \t]+\S.*<[^<>]*@[^<>]*>[ \t]*$',
 );
 
-enum _OutputMode { verify, printRecord, printFindings }
+enum _OutputMode { verify, printRecord, printFindings, writeRecord }
 
 /// Runs the deterministic Séance local-source audit command.
 Future<int> runSeancePinAudit(List<String> arguments) async {
@@ -95,6 +95,10 @@ Future<int> runSeancePinAudit(List<String> arguments) async {
     }
     if (options.outputMode == _OutputMode.printFindings) {
       stdout.write(evidence.renderFindings());
+      return _successExitCode;
+    }
+    if (options.outputMode == _OutputMode.writeRecord) {
+      _writeRecord(options.root, record);
       return _successExitCode;
     }
 
@@ -926,6 +930,51 @@ void _verifyRecord(Directory root, String expected) {
   }
 
   final contents = file.readAsStringSync();
+  final span = _recordSpan(contents);
+  final actual = '${contents.substring(span.$1, span.$2)}\n';
+  if (actual == expected) return;
+
+  throw const _AuditFailure(
+    '$_portsPath record does not match; run scripts/audit-seance-pin.sh --print-record',
+  );
+}
+
+/// Replaces the single recorded block in `$_portsPath` with the freshly
+/// generated [record], preserving every byte around the markers. The
+/// record file must already exist with exactly one marked block and must
+/// resolve inside the audit root; every inconsistency fails before a
+/// single byte is written.
+void _writeRecord(Directory root, String record) {
+  final file = File(p.join(root.path, _portsPath));
+  if (!file.existsSync()) {
+    throw const _AuditFailure('$_portsPath is missing the source audit record');
+  }
+  final resolvedRoot = root.resolveSymbolicLinksSync();
+  final resolvedFile = file.resolveSymbolicLinksSync();
+  if (!p.isWithin(resolvedRoot, resolvedFile)) {
+    throw const _AuditFailure('$_portsPath resolves outside the audit root');
+  }
+
+  final contents = file.readAsStringSync();
+  final span = _recordSpan(contents);
+  final actual = '${contents.substring(span.$1, span.$2)}\n';
+  if (actual == record) {
+    stdout.writeln('$_portsPath record already matches');
+    return;
+  }
+  file.writeAsStringSync(
+    contents.replaceRange(
+      span.$1,
+      span.$2,
+      record.substring(0, record.length - 1),
+    ),
+  );
+  stdout.writeln('$_portsPath record updated');
+}
+
+/// Byte offsets of the single `$_recordStart`…`$_recordEnd` span, or a
+/// failure when the file has zero or more than one marked record.
+(int, int) _recordSpan(String contents) {
   final start = contents.indexOf(_recordStart);
   final end = contents.indexOf(_recordEnd);
   final duplicateStart =
@@ -937,12 +986,7 @@ void _verifyRecord(Directory root, String expected) {
     );
   }
 
-  final actual = '${contents.substring(start, end + _recordEnd.length)}\n';
-  if (actual == expected) return;
-
-  throw const _AuditFailure(
-    '$_portsPath record does not match; run scripts/audit-seance-pin.sh --print-record',
-  );
+  return (start, end + _recordEnd.length);
 }
 
 Future<_CommandResult> _runGit(
@@ -1041,6 +1085,13 @@ final class _Options {
           throw const FormatException('choose one output mode');
         }
         outputMode = _OutputMode.printFindings;
+        continue;
+      }
+      if (argument == '--write-record') {
+        if (outputMode != _OutputMode.verify) {
+          throw const FormatException('choose one output mode');
+        }
+        outputMode = _OutputMode.writeRecord;
         continue;
       }
 

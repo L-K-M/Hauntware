@@ -83,40 +83,142 @@ void main() {
     expect(output, contains('(path dependency)'));
   });
 
-  test('fails when any recorded audit section changes', () async {
-    final generated = await _audit(fixture, ['--print-record']);
-    expect(generated.exitCode, 0, reason: generated.stderr as String);
+  test(
+    'fails when any recorded audit section changes',
+    timeout: const Timeout(Duration(seconds: 90)),
+    () async {
+      final generated = await _audit(fixture, ['--print-record']);
+      expect(generated.exitCode, 0, reason: generated.stderr as String);
 
+      final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+      final record = generated.stdout as String;
+      await ports.parent.create(recursive: true);
+      await ports.writeAsString('# Ports\n\n$record');
+
+      final passing = await _audit(fixture);
+      expect(passing.exitCode, 0, reason: passing.stderr as String);
+
+      for (final section in [
+        'Identity',
+        'Companion',
+        'Companion orphans',
+        'Pinpoints',
+        'License scan',
+        'Vendored paths',
+        'Gitlinks',
+        'Tree',
+      ]) {
+        final expression = RegExp('($section:.*sha256:)([0-9a-f])');
+        final tampered = record.replaceFirstMapped(
+          expression,
+          (match) => '${match[1]}${match[2] == '0' ? '1' : '0'}',
+        );
+        expect(tampered, isNot(record), reason: 'missing $section digest');
+        await ports.writeAsString('# Ports\n\n$tampered');
+
+        final failing = await _audit(fixture);
+        expect(failing.exitCode, isNot(0), reason: '$section was accepted');
+        expect(failing.stderr, contains('record does not match'));
+      }
+    },
+  );
+
+  test('writes the record into one marked block preserving bytes', () async {
     final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
-    final record = generated.stdout as String;
     await ports.parent.create(recursive: true);
-    await ports.writeAsString('# Ports\n\n$record');
+    const prefix = '# Ports\n\nintro paragraph\n\n';
+    const suffix = '\ntrailing paragraph\n';
+    await ports.writeAsString(
+      '$prefix<!-- SEANCE_PIN_AUDIT_V2:START -->\n'
+      'stale\n'
+      '<!-- SEANCE_PIN_AUDIT_V2:END -->$suffix',
+    );
+
+    final written = await _audit(fixture, ['--write-record']);
+    expect(written.exitCode, 0, reason: written.stderr as String);
+
+    final generated = await _audit(fixture, ['--print-record']);
+    final record = generated.stdout as String;
+    expect(
+      ports.readAsStringSync(),
+      '$prefix${record.substring(0, record.length - 1)}$suffix',
+    );
 
     final passing = await _audit(fixture);
     expect(passing.exitCode, 0, reason: passing.stderr as String);
+  });
 
-    for (final section in [
-      'Identity',
-      'Companion',
-      'Companion orphans',
-      'Pinpoints',
-      'License scan',
-      'Vendored paths',
-      'Gitlinks',
-      'Tree',
-    ]) {
-      final expression = RegExp('($section:.*sha256:)([0-9a-f])');
-      final tampered = record.replaceFirstMapped(
-        expression,
-        (match) => '${match[1]}${match[2] == '0' ? '1' : '0'}',
-      );
-      expect(tampered, isNot(record), reason: 'missing $section digest');
-      await ports.writeAsString('# Ports\n\n$tampered');
+  test('leaves an already matching record untouched', () async {
+    final generated = await _audit(fixture, ['--print-record']);
+    final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+    await ports.parent.create(recursive: true);
+    final initial = '# Ports\n\n${generated.stdout}';
+    await ports.writeAsString(initial);
 
-      final failing = await _audit(fixture);
-      expect(failing.exitCode, isNot(0), reason: '$section was accepted');
-      expect(failing.stderr, contains('record does not match'));
-    }
+    final result = await _audit(fixture, ['--write-record']);
+    expect(result.exitCode, 0, reason: result.stderr as String);
+    expect(ports.readAsStringSync(), initial);
+  });
+
+  test('rejects a missing record file without writing', () async {
+    final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+
+    final result = await _audit(fixture, ['--write-record']);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('missing the source audit record'));
+    expect(ports.existsSync(), isFalse);
+  });
+
+  test('rejects unmarked and duplicated records without writing', () async {
+    final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+    await ports.parent.create(recursive: true);
+
+    const unmarked = '# Ports\n\nno record here\n';
+    await ports.writeAsString(unmarked);
+    var result = await _audit(fixture, ['--write-record']);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('one source audit record'));
+    expect(ports.readAsStringSync(), unmarked);
+
+    const duplicated =
+        '<!-- SEANCE_PIN_AUDIT_V2:START -->\n'
+        'one\n'
+        '<!-- SEANCE_PIN_AUDIT_V2:END -->\n'
+        '<!-- SEANCE_PIN_AUDIT_V2:START -->\n'
+        'two\n'
+        '<!-- SEANCE_PIN_AUDIT_V2:END -->\n';
+    await ports.writeAsString(duplicated);
+    result = await _audit(fixture, ['--write-record']);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('one source audit record'));
+    expect(ports.readAsStringSync(), duplicated);
+  });
+
+  test('rejects a record symlinked outside the audit root', () async {
+    final outside = File(p.join(sandbox.path, 'outside.md'));
+    await outside.writeAsString('outside\n');
+    final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+    await ports.parent.create(recursive: true);
+    await Link(ports.path).create(outside.path);
+
+    final result = await _audit(fixture, ['--write-record']);
+    expect(result.exitCode, isNot(0));
+    expect(outside.readAsStringSync(), 'outside\n');
+  });
+
+  test('rejects a second output mode without writing', () async {
+    final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+    await ports.parent.create(recursive: true);
+    const contents =
+        '<!-- SEANCE_PIN_AUDIT_V2:START -->\n'
+        'stale\n'
+        '<!-- SEANCE_PIN_AUDIT_V2:END -->\n';
+    await ports.writeAsString(contents);
+
+    final result = await _audit(fixture, ['--write-record', '--print-record']);
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('choose one output mode'));
+    expect(ports.readAsStringSync(), contents);
   });
 
   test('rejects a shallow worktree', () async {

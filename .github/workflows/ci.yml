@@ -311,6 +311,7 @@ jobs:
         with:
           filters: |
             pin:
+              - 'seance/**'
               - 'poltergeist/pubspec.yaml'
               - 'poltergeist/pubspec.lock'
               - 'poltergeist/**/pubspec.yaml'

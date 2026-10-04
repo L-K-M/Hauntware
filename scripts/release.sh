@@ -57,7 +57,8 @@ if ! $tool_free; then
     $has_version && preflight_arguments+=(--version "$requested_version")
     run_version_tool "${preflight_arguments[@]}"
   fi
-  export RELEASE_PUBSPECS="$(run_version_tool pubspecs)"
+  RELEASE_PUBSPECS="$(run_version_tool pubspecs)"
+  export RELEASE_PUBSPECS
 fi
 # `--help`/`--version` reach the engine without the tool; the variable
 # still must exist for `set -u` consumers.
@@ -67,7 +68,13 @@ export RELEASE_DART_BIN="$DART_BIN"
 # The hook runs the tool file directly (not `dart run`) so its package
 # resolution walks up from the file's location — correct no matter which
 # directory the engine runs the hook from.
-export RELEASE_POST_BUMP='"${RELEASE_DART_BIN}" '"$ROOT"'/tool/release_version/bin/release_version.dart post-bump --version "${RELEASE_NEW_VERSION}"'
+# shellcheck disable=SC2016 # The engine expands hook variables at invocation.
+export RELEASE_POST_BUMP='"${RELEASE_DART_BIN}" "'"$ROOT"'/tool/release_version/bin/release_version.dart" post-bump --version "${RELEASE_NEW_VERSION}"'
+# The pre-tag hook refreshes the Séance release-audit record and commits it;
+# the engine then tags whatever HEAD the hook leaves. DART_EXECUTABLE hands
+# the configured Dart binary to the audit driver.
+# shellcheck disable=SC2016 # The engine expands hook variables at invocation.
+export RELEASE_PRE_TAG='DART_EXECUTABLE="${RELEASE_DART_BIN}" "'"$ROOT"'/scripts/refresh-seance-release-audit.sh"'
 export RELEASE_CI_NOTE="CI (release.yml) will now test, build every client (Planchette desktop, the Séance and Poltergeist apps incl. APK/IPA) plus the Séance sync server + Docker image, and publish the GitHub Release for <tag>."
 export RELEASE_INVOKED_AS="scripts/release.sh"
 
@@ -76,5 +83,19 @@ command -v "$BIN" >/dev/null 2>&1 || {
   echo "error: lkm-release not found — clone https://github.com/L-K-M/release-tool and run ./install.sh" >&2
   exit 1
 }
+# An engine too old for RELEASE_PRE_TAG would run the release while silently
+# ignoring the audit hook — worse than refusing. Probe support before the
+# engine gets to mutate; read-only entry points never reach the hook, so
+# they skip the probe entirely.
+if ! $tool_free && ! $check_only; then
+  capabilities=$("$BIN" --capabilities) || {
+    echo "error: $BIN did not report RELEASE_PRE_TAG — update lkm-release before releasing" >&2
+    exit 1
+  }
+  grep -qx 'RELEASE_PRE_TAG' <<<"$capabilities" || {
+    echo "error: $BIN does not support RELEASE_PRE_TAG — update lkm-release before releasing" >&2
+    exit 1
+  }
+fi
 cd "$ROOT"
 exec "$BIN" "$@"

@@ -1,10 +1,18 @@
 @TestOn('posix')
 library;
 
+// Release tooling stays outside the shipped applications.
+// ignore_for_file: avoid_relative_lib_imports
+
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
+
+import '../lib/release_version.dart';
+
+const _baselineVersion = '0.0.0';
 
 void main() {
   late Directory sandbox;
@@ -57,35 +65,58 @@ printf 'app=%s\n' "\$RELEASE_APP_NAME"
   // dependencies, which now point outside the module root.
   test('module check forwards to the suite root inside the monorepo', () async {
     final root = _repositoryRoot();
-    final result = await Process.run(Platform.resolvedExecutable, [
-      'run',
-      'tool/release_version/bin/release_version.dart',
-      'check',
-    ], workingDirectory: p.join(root.path, 'poltergeist'));
+    final result = await _runModuleCheck(root, ['check']);
 
     expect(result.exitCode, 0, reason: result.stderr as String);
-    expect(result.stdout, contains('1.1.0+1010099'));
+    expect(result.stdout, contains(_suiteVersion(root).appVersion));
     // The suite-wide count proves the report came from the root tool.
     expect(result.stdout, contains('15 pubspecs'));
   });
 
   test('module check-tag and check-order forward to the suite root', () async {
     final root = _repositoryRoot();
-    for (final arguments in [
-      ['check-tag', '--tag', 'v1.1.0'],
-      ['check-order', '--version', '1.2.0'],
-    ]) {
-      final result = await Process.run(Platform.resolvedExecutable, [
-        'run',
-        'tool/release_version/bin/release_version.dart',
-        ...arguments,
-      ], workingDirectory: p.join(root.path, 'poltergeist'));
+    final current = _suiteVersion(root);
+    final mismatchedVersion = current.semantic == _baselineVersion
+        ? '0.0.1'
+        : _baselineVersion;
 
+    // The current release remains valid after any supported version bump.
+    for (final arguments in [
+      ['check-tag', '--tag', 'v${current.semantic}'],
+      ['check-order', '--version', current.semantic],
+    ]) {
+      final result = await _runModuleCheck(root, arguments);
       expect(
         result.exitCode,
         0,
         reason: '${arguments.first}: ${result.stderr}',
       );
+    }
+
+    // Forwarded checks still reject mismatched tags and repeated releases.
+    for (final (arguments, expectedError) in [
+      (
+        ['check-tag', '--tag', 'v$mismatchedVersion'],
+        'expected $mismatchedVersion',
+      ),
+      (
+        [
+          'check-order',
+          '--version',
+          current.semantic,
+          '--prior-tag',
+          'v${current.semantic}',
+        ],
+        'must exceed prior tag v${current.semantic}',
+      ),
+    ]) {
+      final result = await _runModuleCheck(root, arguments);
+      expect(
+        result.exitCode,
+        isNot(0),
+        reason: '${arguments.first} unexpectedly passed',
+      );
+      expect(result.stderr, contains(expectedError));
     }
   });
 
@@ -161,6 +192,24 @@ packages:
     '**Current version:** v<!-- version -->0.1.0<!-- /version -->\n',
   );
 }
+
+/// The suite version declared by the root manifest — deriving it keeps
+/// these tests true after every release bump.
+ReleaseVersion _suiteVersion(Directory root) {
+  final manifest =
+      loadYaml(File(p.join(root.path, 'pubspec.yaml')).readAsStringSync())
+          as YamlMap;
+  return ReleaseVersion.parse(manifest['version'] as String);
+}
+
+/// Runs the module CLI's tree checks exactly as CI and the module
+/// release stub invoke them: `dart run` from the module root.
+Future<ProcessResult> _runModuleCheck(Directory root, List<String> arguments) =>
+    Process.run(Platform.resolvedExecutable, [
+      'run',
+      'tool/release_version/bin/release_version.dart',
+      ...arguments,
+    ], workingDirectory: p.join(root.path, 'poltergeist'));
 
 /// Finds the monorepo root — the directory that owns the root release
 /// stub plus the three project trees.
