@@ -33,7 +33,7 @@ final class InMemorySyncRecordStore implements SyncRecordStore {
       await markSynced(sent.id, result.seq);
       return null;
     }
-    return restoreDisplaced(sent.id);
+    return _restoreDisplaced(sent.id);
   }
 
   final _records = <String, EncryptedRecord>{};
@@ -107,8 +107,7 @@ final class InMemorySyncRecordStore implements SyncRecordStore {
     _lastAppliedSeq = 0;
   }
 
-  @override
-  Future<EncryptedRecord?> restoreDisplaced(String id) async {
+  Future<EncryptedRecord?> _restoreDisplaced(String id) async {
     final restored = _displaced.remove(id);
     if (restored != null) {
       _records[id] = restored;
