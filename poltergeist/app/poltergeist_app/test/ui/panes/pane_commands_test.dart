@@ -698,8 +698,10 @@ void main() {
         focusRight: () {},
         swapFocus: () {},
       );
+      final field = TextEditingController(text: 'hello world');
       final fieldNode = FocusNode();
       final listingNode = FocusNode();
+      addTearDown(field.dispose);
       addTearDown(fieldNode.dispose);
       addTearDown(listingNode.dispose);
       await tester.pumpWidget(
@@ -711,7 +713,7 @@ void main() {
             child: Scaffold(
               body: Column(
                 children: [
-                  TextField(focusNode: fieldNode),
+                  TextField(controller: field, focusNode: fieldNode),
                   Focus(
                     focusNode: listingNode,
                     child: const SizedBox(height: 10),
@@ -743,14 +745,22 @@ void main() {
       await pressMetaArrow(LogicalKeyboardKey.arrowRight);
       expect(left.location?.path, '/home/tester/a');
 
-      // From a text field, Cmd+Left keeps its caret meaning: the chord
-      // layer stands down (02 §8.2 field-first) and history does not move.
+      // From a text field, Cmd+Left/Right keep their caret meaning: the
+      // chord layer stands down (02 §8.2 field-first), so the keys reach
+      // the field (line start/end) and history does not move.
       fieldNode.requestFocus();
+      await tester.pump();
+      field.selection = const TextSelection.collapsed(offset: 5);
       await tester.pump();
       await pressMetaArrow(LogicalKeyboardKey.arrowLeft);
       expect(left.location?.path, '/home/tester/a');
+      expect(field.selection, const TextSelection.collapsed(offset: 0));
       await pressMetaArrow(LogicalKeyboardKey.arrowRight);
       expect(left.location?.path, '/home/tester/a');
+      expect(
+        field.selection,
+        const TextSelection.collapsed(offset: 11, affinity: TextAffinity.upstream),
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
