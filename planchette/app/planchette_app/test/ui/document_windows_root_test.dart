@@ -137,6 +137,34 @@ void main() {
     expect(seenViews[1], same(views[1]));
   });
 
+  testWidgets('each window binds its own navigator, under a messenger', (
+    tester,
+  ) async {
+    await startWindows(tester);
+    await windows.openWindow();
+    views[1] = _FakeView(tester.view, viewId: 1);
+
+    await tester.pumpWidget(root(), wrapWithView: false);
+    await tester.pump();
+
+    expect(windows.windows, hasLength(2));
+    for (final window in windows.windows) {
+      // Dialogs raised for a window's workspace use this key, so it must
+      // be the navigator inside that window's own app.
+      final navigator = window.navigatorKey.currentState;
+      expect(navigator, isNotNull, reason: 'window ${window.viewId}');
+      expect(
+        View.of(window.navigatorKey.currentContext!).viewId,
+        window.viewId,
+      );
+      expect(
+        ScaffoldMessenger.maybeOf(window.navigatorKey.currentContext!),
+        isNotNull,
+        reason: 'window ${window.viewId}',
+      );
+    }
+  });
+
   testWidgets("macOS: one menu bar, fed by the active window's shell", (
     tester,
   ) async {
