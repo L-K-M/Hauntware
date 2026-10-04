@@ -123,6 +123,15 @@ grep -q 'fetch-depth: 0' .github/workflows/release.yml ||
 grep -q 'tool/release_version/bin/release_version.dart' \
   .github/workflows/release.yml ||
   err "release.yml must verify versions via the root release_version tool"
+# The sync fixture resolves seance_core's rootUri against the
+# package_config file, not the shell's working directory — the self-test
+# pins relative/absolute/encoded URI handling and the missing-anchor
+# fail-closed path, so a regression cannot silently build the wrong
+# Docker context again.
+grep -q 'resolve-package-root.py' .github/workflows/ci.yml ||
+  err "ci.yml sync fixture must resolve seance_core via scripts/resolve-package-root.py"
+python3 scripts/resolve-package-root.py --self-test ||
+  err "resolve-package-root self-test failed"
 
 # --- 7. GLM canonical identity ---------------------------------------------
 cmp -s .github/workflows/zai-code-review.yml \

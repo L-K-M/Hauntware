@@ -218,6 +218,13 @@ jobs:
           sdk: stable
       - name: Resolve workspace
         run: dart pub get
+      # The forwarding tests execute the root tool in place — it is a
+      # standalone package at the suite root (not a workspace member),
+      # so it resolves separately, right after the workspace like
+      # scripts/test.sh does.
+      - name: Resolve root suite tooling
+        working-directory: .
+        run: dart pub get
       - name: Resolve M0 benchmark harness
         working-directory: poltergeist/packages/poltergeist_bench
         run: dart pub get
@@ -293,6 +300,11 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The audit walks the preserved Séance history (the recorded
+          # pin and its ancestors); a shallow checkout fails its
+          # non-shallow requirement by design.
+          fetch-depth: 0
       - uses: dorny/paths-filter@v4
         if: github.event_name != 'workflow_dispatch'
         id: changes
@@ -421,17 +433,14 @@ jobs:
         working-directory: poltergeist
         run: |
           set -euo pipefail
-          # The resolved Séance checkout, wherever pub put it — read from the
-          # resolved package config rather than guessing a cache path.
-          src="$(python3 - <<'PY'
-          import json, sys
-          pc = json.load(open(".dart_tool/package_config.json"))
-          match = next((p for p in pc["packages"] if p["name"] == "seance_core"), None)
-          if match is None:
-              sys.exit("seance_core not found in .dart_tool/package_config.json; did dart pub get resolve the dependency?")
-          print(match["rootUri"].removeprefix("file://").removesuffix("/packages/seance_core"))
-          PY
-          )"
+          # The resolved Séance checkout, wherever pub put it — the
+          # rootUri is resolved against the package_config file's own
+          # directory (path deps land in the worktree, git pins in the
+          # pub cache), and the Dockerfile anchor must exist before any
+          # build is attempted. Never a guessed cache path.
+          src="$(python3 "$GITHUB_WORKSPACE/scripts/resolve-package-root.py" \
+                   --package seance_core \
+                   --require packages/seance_sync_server/Dockerfile)"
           docker build \
             -f "$src/packages/seance_sync_server/Dockerfile" \
             -t seance-sync-test "$src"
@@ -445,7 +454,7 @@ jobs:
             -p 127.0.0.1:8799:8787 \
             seance-sync-test
           ready=0
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8799/healthz >/dev/null; then
               ready=1
               break

@@ -544,10 +544,12 @@ jobs:
       - name: Package
         shell: bash
         run: |
+          shopt -s nullglob
           case "${{ matrix.target }}" in
             linux)
-              mv "$(ls -d planchette/app/planchette_app/build/linux/*/release/bundle)" \
-                 "planchette-linux-${{ matrix.flavor }}"
+              bundles=(planchette/app/planchette_app/build/linux/*/release/bundle)
+              [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
+              mv "${bundles[0]}" "planchette-linux-${{ matrix.flavor }}"
               tar -czf "planchette-linux-${{ matrix.flavor }}.tar.gz" "planchette-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
@@ -558,11 +560,15 @@ jobs:
               # ditto keeps the bundle's symlinks and metadata intact inside
               # the zip.
               cd planchette/app/planchette_app/build/macos/Build/Products/Release
-              ditto -c -k --keepParent "$(ls -d *.app | head -1)" \
+              apps=(*.app)
+              [[ ${#apps[@]} -eq 1 ]] || { echo "expected one .app, found ${#apps[@]}" >&2; exit 1; }
+              ditto -c -k --keepParent "${apps[0]}" \
                 "$GITHUB_WORKSPACE/planchette-macos-universal.zip"
               ;;
             windows)
-              mv "$(ls -d planchette/app/planchette_app/build/windows/*/runner/Release)" planchette-windows-x64
+              runners=(planchette/app/planchette_app/build/windows/*/runner/Release)
+              [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
+              mv "${runners[0]}" planchette-windows-x64
               7z a -bd planchette-windows-x64.zip planchette-windows-x64
               ;;
           esac
@@ -638,8 +644,11 @@ jobs:
         working-directory: planchette
         shell: bash
         run: |
+          shopt -s nullglob
+          bundles=(app/planchette_app/build/linux/*/release/bundle)
+          [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
           scripts/package-linux.sh \
-            --bundle "$(ls -d app/planchette_app/build/linux/*/release/bundle)" \
+            --bundle "${bundles[0]}" \
             --output-dir . --skip-appimage
           scripts/build-flatpak.sh "$(find . -maxdepth 1 -type f -name 'planchette_*.deb' -printf '%T@\t%p\n' | sort -rn | head -n1 | cut -f2-)"
           mv dist/planchette-linux-x64.flatpak "$GITHUB_WORKSPACE/"
@@ -798,14 +807,16 @@ jobs:
       - name: Package
         shell: bash
         run: |
+          shopt -s nullglob
           case "${{ matrix.target }}" in
             android)
               cp seance/app/seance_app/build/app/outputs/flutter-apk/app-release.apk \
                  seance-android.apk
               ;;
             linux)
-              mv "$(ls -d seance/app/seance_app/build/linux/*/release/bundle)" \
-                 "seance-linux-${{ matrix.flavor }}"
+              bundles=(seance/app/seance_app/build/linux/*/release/bundle)
+              [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
+              mv "${bundles[0]}" "seance-linux-${{ matrix.flavor }}"
               tar -czf "seance-linux-${{ matrix.flavor }}.tar.gz" "seance-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
@@ -830,7 +841,9 @@ jobs:
               # signature seal. ditto keeps the bundle's symlinks and metadata
               # intact inside the zip.
               cd seance/app/seance_app/build/macos/Build/Products/Release
-              mv "$(ls -d *.app | head -1)" "Séance.app"
+              apps=(*.app)
+              [[ ${#apps[@]} -eq 1 ]] || { echo "expected one .app, found ${#apps[@]}" >&2; exit 1; }
+              mv "${apps[0]}" "Séance.app"
               ditto -c -k --keepParent "Séance.app" \
                 "$GITHUB_WORKSPACE/seance-macos-universal.zip"
               ;;
@@ -842,7 +855,9 @@ jobs:
               zip -qry seance-ios-unsigned.ipa Payload
               ;;
             windows)
-              mv "$(ls -d seance/app/seance_app/build/windows/*/runner/Release)" seance-windows-x64
+              runners=(seance/app/seance_app/build/windows/*/runner/Release)
+              [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
+              mv "${runners[0]}" seance-windows-x64
               7z a -bd seance-windows-x64.zip seance-windows-x64
               ;;
           esac
@@ -1011,14 +1026,16 @@ jobs:
       - name: Package
         shell: bash
         run: |
+          shopt -s nullglob
           case "${{ matrix.target }}" in
             android)
               cp poltergeist/app/poltergeist_app/build/app/outputs/flutter-apk/app-release.apk \
                  poltergeist-android.apk
               ;;
             linux)
-              mv "$(ls -d poltergeist/app/poltergeist_app/build/linux/*/release/bundle)" \
-                 "poltergeist-linux-${{ matrix.flavor }}"
+              bundles=(poltergeist/app/poltergeist_app/build/linux/*/release/bundle)
+              [[ ${#bundles[@]} -eq 1 ]] || { echo "expected one linux bundle, found ${#bundles[@]}" >&2; exit 1; }
+              mv "${bundles[0]}" "poltergeist-linux-${{ matrix.flavor }}"
               tar -czf "poltergeist-linux-${{ matrix.flavor }}.tar.gz" "poltergeist-linux-${{ matrix.flavor }}"
               # The mv above renamed the bundle out of Flutter's layout, so
               # point the packager at it explicitly (--bundle asks the ELF for
@@ -1037,7 +1054,9 @@ jobs:
               # ditto keeps the bundle's symlinks and metadata intact inside
               # the zip.
               cd poltergeist/app/poltergeist_app/build/macos/Build/Products/Release
-              ditto -c -k --keepParent "$(ls -d *.app | head -1)" \
+              apps=(*.app)
+              [[ ${#apps[@]} -eq 1 ]] || { echo "expected one .app, found ${#apps[@]}" >&2; exit 1; }
+              ditto -c -k --keepParent "${apps[0]}" \
                 "$GITHUB_WORKSPACE/poltergeist-macos-universal.zip"
               ;;
             ios)
@@ -1047,14 +1066,16 @@ jobs:
               # (D23's step) — unsigned; installing it means re-signing
               # (AltStore / Sideloadly / Xcode free account).
               app_dir="poltergeist/app/poltergeist_app/build/ios/archive/Runner.xcarchive/Products/Applications"
-              app="$(ls -d "$app_dir"/*.app | head -1)"
-              [[ -n "$app" ]] || { echo "no .app under $app_dir" >&2; exit 1; }
+              apps=("$app_dir"/*.app)
+              [[ ${#apps[@]} -eq 1 ]] || { echo "expected one .app under $app_dir, found ${#apps[@]}" >&2; exit 1; }
               mkdir Payload
-              cp -R "$app" Payload/
+              cp -R "${apps[0]}" Payload/
               zip -qry poltergeist-ios-unsigned.ipa Payload
               ;;
             windows)
-              mv "$(ls -d poltergeist/app/poltergeist_app/build/windows/*/runner/Release)" poltergeist-windows-x64
+              runners=(poltergeist/app/poltergeist_app/build/windows/*/runner/Release)
+              [[ ${#runners[@]} -eq 1 ]] || { echo "expected one windows runner dir, found ${#runners[@]}" >&2; exit 1; }
+              mv "${runners[0]}" poltergeist-windows-x64
               7z a -bd poltergeist-windows-x64.zip poltergeist-windows-x64
               ;;
           esac
