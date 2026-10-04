@@ -31,6 +31,19 @@ Integration commits use the new project prefixes. Original repositories and
 their release artifacts remain intact, archived after a final release that
 points here. Suite releases start at v1.9.0.
 
+## Following a file across the import
+
+`git log -- <path>` stops at the import merge, because earlier commits store
+the file without its project prefix, and `--follow` does not bridge that. Log
+the project's source main from the table above with the original path:
+
+```bash
+# Since the import
+git log -- seance/packages/seance_core/pubspec.yaml
+# Before it
+git log 75b1e84bf231d149d64c295430a9dda9dc7f4ffb -- packages/seance_core/pubspec.yaml
+```
+
 ## Verifying and recovering metadata
 
 Use a full-history checkout:
