@@ -2522,7 +2522,7 @@ final class SyncPlanController extends ChangeNotifier {
         ? error
         : RemoteFileException(
             kind: RemoteFileErrorKind.other,
-            operation: 'restore',
+            operation: _SyncPlanOperation.restore.name,
             path: journalPath,
             message: error.toString(),
             cause: error,

@@ -45,8 +45,9 @@ cleanup ownership after lock-release errors, and kept host-key decisions
 outstamp the pulled record under clock skew.
 
 Core and sync analysis are clean; 1,930 core tests pass with 27 environment
-skips, and 390 sync tests pass with five SSH-fixture skips. Flutter analysis is
-clean, and all 130 affected app tests pass. Two pre-final full-suite runs hit
+skips, and 390 sync tests pass with five SSH-fixture skips. Flutter analysis
+and the localization contract are clean, and all 130 affected app tests pass.
+Two pre-final full-suite runs hit
 the unrelated editor CRLF/BOM I/O timing case; its isolated rerun passes. All
 140 benchmark tests pass. Light-theme captures and provenance are in
 `tasks/sync-trash-purge/screenshots/`. Local native builds remain
