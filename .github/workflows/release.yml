@@ -51,8 +51,12 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write       # create the GitHub Release
-  packages: write       # push the image to GHCR
+  # Read-only baseline for any job without its own block; every job
+  # below declares what it actually needs. Only the docker job pushes
+  # to GHCR (packages: write); the asset legs, the sums job and the
+  # test gate need contents: write (asset uploads; the gate lists
+  # draft releases, which read-scoped tokens cannot see).
+  contents: read
 
 env:
   FLUTTER_VERSION: '3.47.2'
@@ -66,11 +70,14 @@ jobs:
     name: Test (release gate)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Deliberately NOT scoped down to contents: read: the guard below
-    # lists releases, and GitHub shows draft releases only to tokens
-    # with write access (REST docs: "Only users with push access will
-    # receive listings for draft releases") — a read-scoped token would
-    # be blind to leftover drafts and let a re-dispatch update them.
+    permissions:
+      # Deliberately NOT scoped down to contents: read: the guard below
+      # lists releases, and GitHub shows draft releases only to tokens
+      # with write access (REST docs: "Only users with push access will
+      # receive listings for draft releases") — a read-scoped token would
+      # be blind to leftover drafts and let a re-dispatch update them.
+      # packages: write is NOT inherited: this gate pushes no images.
+      contents: write
     defaults:
       run:
         shell: bash
@@ -803,6 +810,12 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: seance
         run: scripts/test-macos-keyboard.sh
+      # Prove Gradle consumed the synchronized pubspec code in the real APK.
+      - name: Verify Android version code
+        if: matrix.target == 'android'
+        working-directory: seance/app/seance_app
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/scripts/verify-android-version.sh"
       # Stage each platform's product under its release asset name. Names
       # match the sync-server tarballs: product + platform, no version (the
       # release page already carries the version) — except the .deb, whose
@@ -1021,7 +1034,7 @@ jobs:
         if: matrix.target == 'android'
         working-directory: poltergeist/app/poltergeist_app
         shell: bash
-        run: bash "$GITHUB_WORKSPACE/poltergeist/scripts/verify-android-version.sh"
+        run: bash "$GITHUB_WORKSPACE/scripts/verify-android-version.sh"
       # Stage each platform's product under its release asset name: product +
       # platform, no version (the release page already carries the version) —
       # except the .deb, whose filename is Debian's versioned convention.
@@ -1226,6 +1239,13 @@ jobs:
           assets_dir="$(mktemp -d)"
           gh release download "$RELEASE_TAG" --repo "$REPO" \
             --dir "$assets_dir" --clobber
+          # A re-run of this job downloads the previous attempt's
+          # SHA256SUMS back with the assets; folded into the sums it
+          # would list itself and the bijection check below would
+          # fail on every retry. Drop it — the upload step below
+          # --clobbers it back — so the floor check and the sums see
+          # product assets only.
+          rm -f "$assets_dir/SHA256SUMS"
 
           # Manifest floor: every entry in scripts/release-manifest.txt
           # must have a downloaded match — 25 product assets across the

@@ -62,7 +62,10 @@ def _has_bash_default(lines: list, indent: int) -> bool:
             if line.strip() and not line.startswith(" " * (indent + 1)):
                 inside = False
             elif _key(line, indent + 4) and _key(line, indent + 4)[0] == "shell":
-                return _key(line, indent + 4)[1].split()[:1] in (["bash"], ["sh"])
+                # YAML allows the value to be quoted ("bash", 'bash');
+                # the first word is the program even with arguments.
+                words = _key(line, indent + 4)[1].split()
+                return bool(words) and words[0].strip("\"'") in ("bash", "sh")
     return False
 
 
@@ -143,6 +146,8 @@ def self_test() -> int:
         "gated with !=": (header + "    steps:\n      - name: S\n        if: matrix.target != 'linux'\n" + script, 1),
         "gated to windows": (header + "    steps:\n      - name: S\n        if: runner.os == 'Windows'\n" + script, 1),
         "job default shell": (header + "    defaults:\n      run:\n        shell: bash\n    steps:\n      - name: S\n" + script, 0),
+        "job default shell, double-quoted": (header + "    defaults:\n      run:\n        shell: \"bash\"\n    steps:\n      - name: S\n" + script, 0),
+        "job default shell, single-quoted": (header + "    defaults:\n      run:\n        shell: 'bash'\n    steps:\n      - name: S\n" + script, 0),
         "workflow default shell": ("defaults:\n  run:\n    shell: bash\n" + header + "    steps:\n      - name: S\n" + script, 0),
         "windows named only in a comment": ("jobs:\n  leg:\n    # not windows\n    runs-on: ubuntu-latest\n    steps:\n      - name: S\n" + script, 0),
         "comment between jobs": ("jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n# windows legs\n  b:\n    runs-on: windows-latest\n    steps:\n      - name: S\n" + script, 1),
