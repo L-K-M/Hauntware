@@ -13,8 +13,6 @@ import 'editor_syntax.dart' show seanceEditorSyntaxTheme;
 import 'top_toast.dart';
 
 export '../services/editor_document.dart';
-export 'package:planchette_core/planchette_core.dart'
-    show lineStartOffsets, utf8EncodedLength;
 
 /// The managed save folds a CRLF-dominant document's breaks to CRLF and
 /// leaves an LF document's alone; the controller's byte preflight must

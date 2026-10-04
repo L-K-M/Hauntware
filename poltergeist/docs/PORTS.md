@@ -790,6 +790,10 @@ counterpart is ported here.
 - Divergences: the same `Characters` import re-point as the widget;
   otherwise verbatim (imports re-pointed).
 - Port-back candidates: none.
+- Retired: 2026-10-04. The app copy re-tested ghost_ui's
+  `MiddleEllipsisText` through the compatibility export; coverage lives in
+  `planchette/packages/ghost_ui/test/middle_ellipsis_text_test.dart` (a
+  superset). The export stays.
 
 ## app/poltergeist_app/lib/ui/sidebar/sidebar_kit.dart (port-out)
 

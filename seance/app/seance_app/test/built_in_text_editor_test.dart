@@ -911,14 +911,6 @@ void main() {
     });
   });
 
-  test('lineStartOffsets counts logical lines', () {
-    expect(lineStartOffsets(''), [0]);
-    expect(lineStartOffsets('one'), [0]);
-    expect(lineStartOffsets('one\ntwo\n'), [0, 4, 8]);
-    expect(lineStartOffsets('\n'), [0, 1]);
-    expect(lineStartOffsets('one\r\ntwo'), [0, 5]);
-  });
-
   testWidgets('a gutter insets the text field', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -1038,22 +1030,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('· 10 bytes'), findsOneWidget);
-  });
-
-  test('utf8EncodedLength agrees with utf8.encode', () {
-    for (final text in [
-      '',
-      'plain ascii',
-      'aé€😀',
-      'line\r\nbreaks\n',
-      // Unpaired surrogates encode as U+FFFD (3 bytes each).
-      '\uD83D',
-      'x\uDE00y',
-      '\uDE00\uD83D',
-      '😀' * 3,
-    ]) {
-      expect(utf8EncodedLength(text), utf8.encode(text).length, reason: text);
-    }
   });
 
   testWidgets('the status bar reports CRLF endings and a UTF-8 BOM', (
