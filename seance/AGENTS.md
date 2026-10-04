@@ -89,7 +89,7 @@ docker compose -f packages/seance_sync_server/docker-compose.yml up -d --build
 [release-tool](https://github.com/L-K-M/release-tool) engine) bumps the
 `version:` in all four pubspecs in lockstep, keeps the app lockfile and the
 version line at the top of this README in step, commits, and tags `v<version>`
-— pushing that tag triggers `.github/workflows/release.yml`, which tests, then
+— pushing that tag triggers `../.github/workflows/release.yml`, which tests, then
 publishes the sync-server binaries, the `ghcr.io/l-k-m/seance` Docker image,
 and the app for every client platform — Android APK, Linux `.deb` + Flatpak + AppImage
 packages for x64 plus plain desktop bundles (via
@@ -110,7 +110,7 @@ the latest code and rebuilds + recreates the stack in one step.
 ## Verification
 
 Everything security- or correctness-critical is covered by tests that run in CI
-(`.github/workflows/ci.yml`):
+(`../.github/workflows/ci.yml`):
 
 - **746 Dart tests** across the three packages — crypto round-trips and
   wrong-key/tamper rejection, verifier independence, recovery-code corruption
@@ -289,7 +289,7 @@ SEANCE_OPEN_REGISTRATION=true SEANCE_BIND=127.0.0.1 SEANCE_PORT=8799 /tmp/seance
 docker build -f packages/seance_sync_server/Dockerfile -t seance-sync .
 ```
 
-CI runs all of the above (`.github/workflows/ci.yml`): dart analyze+test,
+CI runs all of the above (`../.github/workflows/ci.yml`): dart analyze+test,
 flutter analyze+test, the Docker build, and a client build matrix that
 compiles the app for android/linux/macos/ios/windows on their native runners
 (the same matrix release.yml packages and publishes — keep the two in step).
@@ -319,7 +319,7 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   [release-tool](https://github.com/L-K-M/release-tool) engine (`lkm-release`):
   bumps all four pubspecs in lockstep (+ app lockfile + README version line),
   commits, tags `v<version>`; the pushed tag triggers
-  `.github/workflows/release.yml` (tests gate; publishes sync-server binaries,
+  `../.github/workflows/release.yml` (tests gate; publishes sync-server binaries,
   the GHCR Docker image, and all app clients, now including the Linux
   .deb + Flatpak + AppImage packages). Runs on macOS (BSD sed),
   like the engine. (The post-bump hook is sed-portable since 0.7.0, so Linux

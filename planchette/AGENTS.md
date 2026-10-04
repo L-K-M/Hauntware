@@ -58,9 +58,9 @@ scripts/build.sh
 scripts/build.sh --install  # build + install the app for this host
 ```
 
-CI (`.github/workflows/ci.yml`) runs Dart analyze+test on every push/PR on
-three OSes, shared-editor/app analysis and tests on Linux, and release builds
-on all three desktop platforms. macOS also runs native keyboard and
+CI (`../.github/workflows/ci.yml`) runs Dart analyze+test on every push/PR
+on three OSes, shared-editor/app analysis and tests on Linux, and release
+builds on all three desktop platforms. macOS also runs native keyboard and
 accessibility fixtures; Linux validates its installable packages.
 
 ## Releasing
@@ -69,9 +69,9 @@ accessibility fixtures; Linux validates its installable packages.
 [release-tool](https://github.com/L-K-M/release-tool) engine) bumps the
 `version:` in every pubspec in lockstep, keeps committed lockfiles and the
 README version line in step, commits, and tags `v<version>` — pushing that
-tag triggers `.github/workflows/release.yml`, which tests, then builds and
-publishes the desktop app as the GitHub Release: Linux `.deb`, AppImage and
-bundle for x64, plus macOS and Windows desktop bundles.
+tag triggers `../.github/workflows/release.yml`, which tests, then builds
+and publishes the desktop app as the GitHub Release: Linux `.deb`, AppImage
+and bundle for x64, plus macOS and Windows desktop bundles.
 
 ```bash
 scripts/release.sh 0.2.0          # bump + commit, tag v0.2.0
