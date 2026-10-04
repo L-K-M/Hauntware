@@ -881,6 +881,8 @@ counterpart is ported here.
   Poltergeist-only cases for always-visible touch controls and
   `SidebarKitLayout.list`. Those local cases are the remaining port-back
   candidate.
+  (Superseded 2026-10-04: the kit test lives only in `ghost_ui`, which
+  carries those cases; both app copies are removed.)
 
 ## app/poltergeist_app/lib/services/badge_image.dart
 
