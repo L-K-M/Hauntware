@@ -956,5 +956,72 @@ void main() {
         '\\ No newline at end of file',
       ]);
     });
+
+    test('case-insensitive keywords match in any ASCII case', () {
+      const text = 'SELECT select SeLeCt selection';
+      expect(slices(text, SyntaxLanguages.sql, SyntaxTokenType.keyword), [
+        'SELECT',
+        'select',
+        'SeLeCt',
+      ]);
+      expect(
+        slices('On OFF yes', SyntaxLanguages.ini, SyntaxTokenType.keyword),
+        ['On', 'OFF', 'yes'],
+      );
+    });
+
+    test('every case-insensitive keyword matches folded upper case', () {
+      // SQL, INI, CSS and Dockerfile fold case; folding must classify the
+      // same words as the previous toLowerCase lookup — no more, no less.
+      for (final language in [
+        SyntaxLanguages.sql,
+        SyntaxLanguages.ini,
+        SyntaxLanguages.css,
+        SyntaxLanguages.dockerfile,
+      ]) {
+        for (final keyword in language.keywords) {
+          final upper = keyword.toUpperCase();
+          expect(slices(upper, language, SyntaxTokenType.keyword), [
+            upper,
+          ], reason: '${language.id} keyword $upper');
+        }
+      }
+    });
+
+    test('case-sensitive keywords keep their case', () {
+      expect(
+        slices('final Final', SyntaxLanguages.dart, SyntaxTokenType.keyword),
+        ['final'],
+      );
+      expect(slices('if IF', SyntaxLanguages.go, SyntaxTokenType.keyword), [
+        'if',
+      ]);
+    });
+
+    test('mutating a caller-owned keyword set re-highlights the next scan', () {
+      // SyntaxLanguage keeps the set it is given, so a caller that edits it
+      // after the first tokenize expects later scans to see the edits.
+      final keywords = <String>{'alpha', 'beta'};
+      final language = SyntaxLanguage(
+        id: 'custom',
+        keywords: keywords,
+        caseInsensitiveKeywords: true,
+      );
+      expect(slices('ALPHA beta', language, SyntaxTokenType.keyword), [
+        'ALPHA',
+        'beta',
+      ]);
+
+      keywords.remove('alpha');
+      expect(slices('ALPHA beta', language, SyntaxTokenType.keyword), ['beta']);
+
+      // Same-length remove+add: the set's size is unchanged, so a cache
+      // keyed on length alone would still miss the swap.
+      keywords.remove('beta');
+      keywords.add('omega');
+      expect(slices('ALPHA beta OMEGA', language, SyntaxTokenType.keyword), [
+        'OMEGA',
+      ]);
+    });
   });
 }

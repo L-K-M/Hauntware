@@ -1104,6 +1104,11 @@ bool _isDigit(int c) => c >= 0x30 && c <= 0x39;
 List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
   if (language.id == 'dotenv') return _tokenizeDotenv(text);
   if (language.id == 'diff') return _tokenizeDiff(text);
+  // Resolve the keyword fold once per scan rather than per identifier; the
+  // snapshot check inside keeps it honest if the caller mutates the set.
+  final buckets = language.caseInsensitiveKeywords
+      ? _foldBucketsFor(language.keywords)
+      : null;
   final tokens = <SyntaxToken>[];
   final n = text.length;
   var i = 0;
@@ -1206,10 +1211,7 @@ List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
       while (end < n && _isIdentPart(text.codeUnitAt(end))) {
         end++;
       }
-      final word = text.substring(i, end);
-      final isKeyword = language.caseInsensitiveKeywords
-          ? language.keywords.contains(word.toLowerCase())
-          : language.keywords.contains(word);
+      final isKeyword = _isKeyword(language, text, i, end, buckets);
       if (isKeyword) {
         tokens.add(SyntaxToken(i, end, SyntaxTokenType.keyword));
       }
@@ -1230,6 +1232,100 @@ List<SyntaxToken> tokenizeSyntax(String text, SyntaxLanguage language) {
   final meta = language.metaPattern;
   if (meta == null) return tokens;
   return _mergeMetaTokens(tokens, text, meta, language.metaGroup);
+}
+
+/// Folded-keyword buckets per [SyntaxLanguage.keywords] instance. The set
+/// stays the caller's property — nothing stops it mutating between scans —
+/// so the entry pairs the buckets with a snapshot of the contents they were
+/// built from and each scan re-checks the snapshot before trusting it.
+final _keywordFoldBuckets =
+    Expando<({Set<String> snapshot, Map<int, List<String>> buckets})>(
+      'keyword folds',
+    );
+
+/// Buckets for [keywords], rebuilt whenever its contents drifted since the
+/// last scan. The drift check is one O(|keywords|) pass per tokenize, which
+/// is nothing next to the O(text) scan it heads up.
+Map<int, List<String>> _foldBucketsFor(Set<String> keywords) {
+  final cached = _keywordFoldBuckets[keywords];
+  if (cached != null &&
+      cached.snapshot.length == keywords.length &&
+      cached.snapshot.containsAll(keywords)) {
+    return cached.buckets;
+  }
+  final buckets = _buildFoldBuckets(keywords);
+  // The snapshot is a private copy: aliasing the live set here would let a
+  // later caller mutation rewrite history and hide the drift.
+  _keywordFoldBuckets[keywords] = (
+    snapshot: Set.of(keywords),
+    buckets: buckets,
+  );
+  return buckets;
+}
+
+/// Whether the identifier `text[start..end)` is one of [language]'s keywords.
+/// [buckets] is the per-scan fold from [_foldBucketsFor] when the language
+/// folds case, else null.
+///
+/// The case-insensitive path used to lowercase every identifier to probe the
+/// keyword set — an allocation per word on a per-keystroke hot path. An
+/// identifier that is pure ASCII probes a folded-hash bucket instead and
+/// verifies character by character, which matches `toLowerCase` exactly for
+/// ASCII and costs nothing. Anything else keeps the original lowercase
+/// semantics: a fold that changes the character set is not this fast path's
+/// business.
+bool _isKeyword(
+  SyntaxLanguage language,
+  String text,
+  int start,
+  int end,
+  Map<int, List<String>>? buckets,
+) {
+  if (!language.caseInsensitiveKeywords) {
+    return language.keywords.contains(text.substring(start, end));
+  }
+  var hash = 17;
+  for (var i = start; i < end; i++) {
+    var c = text.codeUnitAt(i);
+    if (c > 0x7f) {
+      return language.keywords.contains(
+        text.substring(start, end).toLowerCase(),
+      );
+    }
+    if (c >= 0x41 && c <= 0x5a) c += 0x20;
+    hash = hash * 31 + c;
+  }
+  final candidates = buckets![hash & 0x7fffffff];
+  if (candidates == null) return false;
+  final length = end - start;
+  for (final keyword in candidates) {
+    if (keyword.length != length) continue;
+    var same = true;
+    for (var i = 0; i < length; i++) {
+      var c = text.codeUnitAt(start + i);
+      if (c >= 0x41 && c <= 0x5a) c += 0x20;
+      if (c != keyword.codeUnitAt(i)) {
+        same = false;
+        break;
+      }
+    }
+    if (same) return true;
+  }
+  return false;
+}
+
+Map<int, List<String>> _buildFoldBuckets(Set<String> keywords) {
+  final buckets = <int, List<String>>{};
+  for (final keyword in keywords) {
+    var hash = 17;
+    for (var i = 0; i < keyword.length; i++) {
+      var c = keyword.codeUnitAt(i);
+      if (c >= 0x41 && c <= 0x5a) c += 0x20;
+      hash = hash * 31 + c;
+    }
+    (buckets[hash & 0x7fffffff] ??= []).add(keyword);
+  }
+  return buckets;
 }
 
 bool _isWhitespace(int c) => c == 0x20 || c == 0x09 || c == 0x0a || c == 0x0d;

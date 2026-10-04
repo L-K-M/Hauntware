@@ -543,4 +543,50 @@ void main() {
     );
     expect(windows.navigatorKey.currentContext, isNotNull);
   });
+
+  test('a batch file open lands together and reports its failures', () async {
+    await windows.start();
+    store.files[testPath('one.txt')] = document('one.txt', 'one');
+    store.files[testPath('two.txt')] = document('two.txt', 'two');
+
+    await windows.openDocuments([
+      testPath('one.txt'),
+      testPath('missing.txt'),
+      testPath('two.txt'),
+    ]);
+
+    final main = windows.windows.single;
+    expect(main.workspace.documents, hasLength(2));
+    expect(main.workspace.documents.map((tab) => tab.name), [
+      'one.txt',
+      'two.txt',
+    ]);
+    final error = main.workspace.error!;
+    expect(error, contains('missing.txt'));
+    expect(error, isNot(contains('one.txt')));
+  });
+
+  test(
+    'a batch open still reveals the window already holding a file',
+    () async {
+      await windows.start();
+      store.files[testPath('one.txt')] = document('one.txt', 'one');
+      await windows.openDocument(testPath('one.txt'));
+      final main = windows.windows.single;
+      await windows.openWindow();
+      host.calls.clear();
+      final flashes = main.workspace.active!.flashRequest;
+
+      await windows.openDocuments([
+        testPath('one.txt'),
+        testPath('missing.txt'),
+      ]);
+
+      // The held file flashed its owner; the missing one opened nowhere.
+      expect(main.workspace.active!.flashRequest, flashes + 1);
+      expect(host.calls, contains('activate 0'));
+      final extra = windows.windows.last;
+      expect(extra.workspace.error, contains('missing.txt'));
+    },
+  );
 }

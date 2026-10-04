@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1179,4 +1180,185 @@ void main() {
     expect(item('Edit', 'Duplicate Line').onSelected, isNotNull);
     await tester.pumpWidget(const SizedBox.shrink());
   }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
+  // The desktop_drop channel the platform runner calls into; the messages
+  // here are exactly what macOS/Windows (`performOperation` with a path
+  // list) and Linux (`performOperation_linux` with text/uri-list plus a
+  // drop point) deliver.
+  Future<void> sendDropEvent(
+    WidgetTester tester,
+    String method,
+    Object? arguments,
+  ) async {
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'desktop_drop',
+      const StandardMethodCodec().encodeMethodCall(
+        MethodCall(method, arguments),
+      ),
+      (_) {},
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a native file drop opens its files in this window', (
+    tester,
+  ) async {
+    store.files[testPath('dropped.txt')] = document('dropped.txt', 'dropped');
+    store.files[testPath('second.txt')] = document('second.txt', 'two');
+    await mount(tester);
+
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    await sendDropEvent(tester, 'performOperation', [
+      testPath('dropped.txt'),
+      testPath('missing.txt'),
+      testPath('second.txt'),
+    ]);
+
+    expect(workspace.documents.map((tab) => tab.name), [
+      'dropped.txt',
+      'second.txt',
+    ]);
+    // A partial drop reports every lost file, not only the last.
+    final error = workspace.error!;
+    expect(error, contains('missing.txt'));
+    expect(error, isNot(contains('dropped.txt')));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets(
+    'a Linux uri-list drop decodes to real file paths',
+    (tester) async {
+      final unix = testPath('dropped.txt');
+      store.files[unix] = document('dropped.txt', 'dropped');
+      await mount(tester);
+
+      await sendDropEvent(tester, 'performOperation_linux', [
+        'file://$unix\r\n',
+        [20.0, 20.0],
+      ]);
+
+      expect(workspace.documents.map((tab) => tab.name), ['dropped.txt']);
+      expect(workspace.error, isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    // GTK can notify exit before the drop lands, so desktop_drop accepts a
+    // bare performOperation_linux only on a Linux host; on macOS/Windows a
+    // done event without a preceding enter is ignored, which is what the
+    // performOperation test above proves end to end instead.
+    skip: !Platform.isLinux,
+  );
+
+  testWidgets('a drop while the workspace is locked opens nothing', (
+    tester,
+  ) async {
+    store.files[testPath('dropped.txt')] = document('dropped.txt', 'dropped');
+    await mount(tester);
+
+    // A pending picker owns the workspace; the drop target unregisters so
+    // the file cannot slip in behind it.
+    dialogs.openGate = Completer<List<String>>();
+    unawaited(workspace.openDialog());
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isTrue);
+    expect(tester.widget<DropTarget>(find.byType(DropTarget)).enable, isFalse);
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    await sendDropEvent(tester, 'performOperation', [testPath('dropped.txt')]);
+    expect(workspace.documents, isEmpty);
+    expect(workspace.error, isNull);
+
+    dialogs.openGate!.complete(const []);
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isFalse);
+
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    await sendDropEvent(tester, 'performOperation', [testPath('dropped.txt')]);
+    expect(workspace.documents.map((tab) => tab.name), ['dropped.txt']);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a hovering file highlights the window until it leaves', (
+    tester,
+  ) async {
+    await mount(tester);
+    final highlight = find.byKey(const ValueKey('window-drop-highlight'));
+    BoxDecoration decoration() =>
+        tester.widget<DecoratedBox>(highlight).decoration as BoxDecoration;
+
+    expect(highlight, findsOneWidget);
+    expect(decoration().border, isNull);
+    // The border is drawn over the shell — the Scaffold's opaque Material
+    // would cover a background decoration and the hint would never show.
+    expect(
+      tester.widget<DecoratedBox>(highlight).position,
+      DecorationPosition.foreground,
+    );
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    expect(decoration().border, isNotNull);
+    await sendDropEvent(tester, 'exited', null);
+    expect(decoration().border, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('locking mid-drag clears the highlight and refuses the drop', (
+    tester,
+  ) async {
+    store.files[testPath('dropped.txt')] = document('dropped.txt', 'dropped');
+    await mount(tester);
+    final highlight = find.byKey(const ValueKey('window-drop-highlight'));
+    BoxDecoration decoration() =>
+        tester.widget<DecoratedBox>(highlight).decoration as BoxDecoration;
+
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+    expect(decoration().border, isNotNull);
+
+    // A picker opens while the file hovers: the target unregisters, so no
+    // exit event arrives — the highlight must not linger on the rebuild.
+    dialogs.openGate = Completer<List<String>>();
+    unawaited(workspace.openDialog());
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isTrue);
+    expect(decoration().border, isNull);
+
+    // And a done event squeezed in before the listener unregisters must not
+    // land a file behind the dialog either.
+    dialogs.openGate!.complete(const []);
+    await tester.pumpAndSettle();
+    expect(workspace.interactionLocked, isFalse);
+    // Disabling the target made desktop_drop report the exit, so the flag is
+    // really cleared — the border cannot resurface once the lock releases.
+    expect(decoration().border, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('a drop caught between the lock and the rebuild defers', (
+    tester,
+  ) async {
+    store.files[testPath('dropped.txt')] = document('dropped.txt', 'dropped');
+    await mount(tester);
+    await sendDropEvent(tester, 'entered', [10.0, 10.0]);
+
+    // The lock is set but the frame that would unregister the target has
+    // not run — the done event still reaches the mounted listener. Open calls
+    // queue behind the lock (`_openDeduped` waits on `_unlocked`), so the
+    // file lands the moment the dialog releases instead of being refused or
+    // opened behind the dialog.
+    dialogs.openGate = Completer<List<String>>();
+    unawaited(workspace.openDialog());
+    expect(workspace.interactionLocked, isTrue);
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'desktop_drop',
+      const StandardMethodCodec().encodeMethodCall(
+        MethodCall('performOperation', [testPath('dropped.txt')]),
+      ),
+      (_) {},
+    );
+    await tester.pump();
+    expect(workspace.documents, isEmpty);
+    expect(workspace.error, isNull);
+
+    dialogs.openGate!.complete(const []);
+    await tester.pumpAndSettle();
+    expect(workspace.documents.map((tab) => tab.name), ['dropped.txt']);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }

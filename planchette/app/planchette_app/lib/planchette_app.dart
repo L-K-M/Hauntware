@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show
@@ -126,7 +129,35 @@ class _DocumentShellState extends State<_DocumentShell>
   DocumentWorkspace get workspace => widget.workspace;
   DocumentWindow? get window => widget.window;
   bool get mac => defaultTargetPlatform == TargetPlatform.macOS;
+
+  /// Native file drops are wired on the desktops; the mobile runners have
+  /// no drop bridge, so the target stays unregistered there.
+  static final bool _supportsDrop =
+      Platform.isLinux || Platform.isMacOS || Platform.isWindows;
+  bool _dropping = false;
   FocusNode? _lastTextFocus;
+
+  /// desktop_drop reports a drag's exit from inside the widget update that
+  /// disabled the target, where setState is illegal — and a platform drag
+  /// event can land mid-frame regardless — so the flag writes first and a
+  /// repaint is scheduled only when no build is running.
+  void _dropHover(bool hovering) {
+    if (_dropping == hovering) return;
+    _dropping = hovering;
+    final binding = WidgetsBinding.instance;
+    if (binding.schedulerPhase == SchedulerPhase.idle) {
+      setState(() {});
+    } else {
+      binding.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
+      // A callback added while post-frame callbacks already run only fires
+      // on the next frame — request it so the repaint cannot be dropped.
+      if (binding.schedulerPhase == SchedulerPhase.postFrameCallbacks) {
+        binding.scheduleFrame();
+      }
+    }
+  }
 
   /// The one readiness rule behind every document command and the toolbar.
   /// [DocumentWorkspace] refuses edits and saves for a tab that is still
@@ -1314,131 +1345,168 @@ class _DocumentShellState extends State<_DocumentShell>
       // Keep focus below the shortcuts when the final editor is disposed.
       child: FocusScope(
         autofocus: true,
-        child: Scaffold(
-          body: Column(
-            // Chrome rows span the window and start at the leading edge;
-            // a centered column floated the menu bar mid-window.
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!mac) _menuBar(menus),
-              TabStrip(
-                tabs: [
-                  for (final tab in tabs)
-                    (
-                      id: tab.id,
-                      name: workspace.labelFor(tab),
-                      tooltip: tab.path ?? tab.name,
-                      dirty: tab.editor.isDirty,
-                      closable: !tab.busy,
-                      flashRequest: tab.flashRequest,
+        child: DropTarget(
+          // While a dialog or quit review owns the workspace the file must
+          // not sneak in behind it, so the target unregisters outright.
+          enable: _supportsDrop && !workspace.interactionLocked,
+          onDragEntered: (_) => _dropHover(true),
+          onDragExited: (_) => _dropHover(false),
+          onDragDone: (details) {
+            _dropHover(false);
+            final paths = [for (final item in details.files) item.path];
+            if (paths.isEmpty) return;
+            final registry = window?.owner;
+            unawaited(
+              registry != null
+                  ? registry.openDocuments(paths)
+                  : workspace.openAll(paths),
+            );
+          },
+          child: DecoratedBox(
+            key: const ValueKey('window-drop-highlight'),
+            // The border sits over the shell — as a background decoration the
+            // Scaffold's opaque Material would cover it. Disabling the target
+            // makes desktop_drop report the drag's exit during the update, so
+            // the flag is already false before a locked frame ever paints.
+            position: DecorationPosition.foreground,
+            decoration: _dropping
+                ? BoxDecoration(
+                    border: Border.all(color: scheme.primary, width: 2),
+                  )
+                : const BoxDecoration(),
+            child: Scaffold(
+              body: Column(
+                // Chrome rows span the window and start at the leading edge;
+                // a centered column floated the menu bar mid-window.
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!mac) _menuBar(menus),
+                  TabStrip(
+                    tabs: [
+                      for (final tab in tabs)
+                        (
+                          id: tab.id,
+                          name: workspace.labelFor(tab),
+                          tooltip: tab.path ?? tab.name,
+                          dirty: tab.editor.isDirty,
+                          closable: !tab.busy,
+                          flashRequest: tab.flashRequest,
+                        ),
+                    ],
+                    activeId: active?.id,
+                    enabled: !workspace.interactionLocked,
+                    busy: active?.busy == true,
+                    onSelect: (id) =>
+                        _select(tabs.firstWhere((t) => t.id == id)),
+                    onClose: (id) => unawaited(
+                      workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
                     ),
-                ],
-                activeId: active?.id,
-                enabled: !workspace.interactionLocked,
-                busy: active?.busy == true,
-                onSelect: (id) => _select(tabs.firstWhere((t) => t.id == id)),
-                onClose: (id) => unawaited(
-                  workspace.closeTab(tabs.firstWhere((t) => t.id == id)),
-                ),
-                onContextMenu: (id, position) =>
-                    _showTabMenu(position, tabs.firstWhere((t) => t.id == id)),
-                onNew: _new,
-                onOpen: () => unawaited(workspace.openDialog()),
-                onSave: _documentReady ? _save : null,
-                newTooltip: 'New (${_keyLabel(LogicalKeyboardKey.keyN)})',
-                openTooltip: 'Open… (${_keyLabel(LogicalKeyboardKey.keyO)})',
-                saveTooltip: 'Save (${_keyLabel(LogicalKeyboardKey.keyS)})',
-              ),
-              if (workspace.error case final error?)
-                _errorBanner(
-                  key: const ValueKey('workspace-error-banner'),
-                  message: error,
-                  onDismiss: workspace.clearError,
-                ),
-              if (settings.error case final error?)
-                _errorBanner(
-                  key: const ValueKey('settings-error-banner'),
-                  message: error,
-                  onDismiss: settings.clearError,
-                ),
-              Expanded(
-                child: tabs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.description_outlined,
-                              size: 48,
-                              color: scheme.primary,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Start with a blank page',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
+                    onContextMenu: (id, position) => _showTabMenu(
+                      position,
+                      tabs.firstWhere((t) => t.id == id),
+                    ),
+                    onNew: _new,
+                    onOpen: () => unawaited(workspace.openDialog()),
+                    onSave: _documentReady ? _save : null,
+                    newTooltip: 'New (${_keyLabel(LogicalKeyboardKey.keyN)})',
+                    openTooltip:
+                        'Open… (${_keyLabel(LogicalKeyboardKey.keyO)})',
+                    saveTooltip: 'Save (${_keyLabel(LogicalKeyboardKey.keyS)})',
+                  ),
+                  if (workspace.error case final error?)
+                    _errorBanner(
+                      key: const ValueKey('workspace-error-banner'),
+                      message: error,
+                      onDismiss: workspace.clearError,
+                    ),
+                  if (settings.error case final error?)
+                    _errorBanner(
+                      key: const ValueKey('settings-error-banner'),
+                      message: error,
+                      onDismiss: settings.clearError,
+                    ),
+                  Expanded(
+                    child: tabs.isEmpty
+                        ? Center(
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                // Offered only when they would act, like the
-                                // strip's buttons (from #36).
-                                FilledButton(
-                                  onPressed: workspace.interactionLocked
-                                      ? null
-                                      : _new,
-                                  child: const Text('New document'),
+                                Icon(
+                                  Icons.description_outlined,
+                                  size: 48,
+                                  color: scheme.primary,
                                 ),
-                                const SizedBox(width: 12),
-                                OutlinedButton(
-                                  onPressed: workspace.interactionLocked
-                                      ? null
-                                      : () => unawaited(workspace.openDialog()),
-                                  child: const Text('Open…'),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Start with a blank page',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 20),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Offered only when they would act, like the
+                                    // strip's buttons (from #36).
+                                    FilledButton(
+                                      onPressed: workspace.interactionLocked
+                                          ? null
+                                          : _new,
+                                      child: const Text('New document'),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    OutlinedButton(
+                                      onPressed: workspace.interactionLocked
+                                          ? null
+                                          : () => unawaited(
+                                              workspace.openDialog(),
+                                            ),
+                                      child: const Text('Open…'),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      )
-                    : IndexedStack(
-                        index: tabs.indexOf(active!),
-                        children: [
-                          for (final tab in tabs)
-                            PlanchetteEditor(
-                              key: ValueKey(tab.id),
-                              // Only what the user chose: the editor supplies
-                              // the platform's monospace stack and the line
-                              // height beneath it.
-                              textStyle: TextStyle(
-                                fontFamily: settings.value.fontFamily,
-                                fontSize: _fontSize.toDouble(),
-                              ),
-                              controller: tab.editor,
-                              isActive: tab == active,
-                              banner: _diskNotice(tab),
-                              // App-only clickable status; the shared
-                              // editor keeps its passive default.
-                              statusBuilder: (context, controller) =>
-                                  DocumentStatusBar(controller: controller),
-                              // No editingLocked here: the workspace locks
-                              // each controller the moment a dialog opens
-                              // and unlocks it the moment it closes. A view
-                              // lock would clear only on the next rebuild,
-                              // refusing a save made before it.
-                              //
-                              // A locked field cannot take the typing the
-                              // placeholder invites.
-                              placeholder:
-                                  tab.path == null &&
-                                      !workspace.interactionLocked
-                                  ? ghostLineFor(tab.id)
-                                  : null,
-                            ),
-                        ],
-                      ),
+                          )
+                        : IndexedStack(
+                            index: tabs.indexOf(active!),
+                            children: [
+                              for (final tab in tabs)
+                                PlanchetteEditor(
+                                  key: ValueKey(tab.id),
+                                  // Only what the user chose: the editor supplies
+                                  // the platform's monospace stack and the line
+                                  // height beneath it.
+                                  textStyle: TextStyle(
+                                    fontFamily: settings.value.fontFamily,
+                                    fontSize: _fontSize.toDouble(),
+                                  ),
+                                  controller: tab.editor,
+                                  isActive: tab == active,
+                                  banner: _diskNotice(tab),
+                                  // App-only clickable status; the shared
+                                  // editor keeps its passive default.
+                                  statusBuilder: (context, controller) =>
+                                      DocumentStatusBar(controller: controller),
+                                  // No editingLocked here: the workspace locks
+                                  // each controller the moment a dialog opens
+                                  // and unlocks it the moment it closes. A view
+                                  // lock would clear only on the next rebuild,
+                                  // refusing a save made before it.
+                                  //
+                                  // A locked field cannot take the typing the
+                                  // placeholder invites.
+                                  placeholder:
+                                      tab.path == null &&
+                                          !workspace.interactionLocked
+                                      ? ghostLineFor(tab.id)
+                                      : null,
+                                ),
+                            ],
+                          ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
