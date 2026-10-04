@@ -87,8 +87,8 @@ final class BookmarkSyncTuple {
   /// Milliseconds since epoch — the record envelope's `updatedAt`.
   final int updatedAt;
 
-  /// The record envelope's `deviceId`. Empty when the authorship is unknown
-  /// (the tuple-less `applySynced` path): an empty id loses every deviceId
+  /// The record envelope's `deviceId`. [fromJson] also accepts an empty id,
+  /// which marks the authorship as unknown: an empty id loses every deviceId
   /// tie-break, so a re-pulled copy of the same write still applies.
   final String deviceId;
 
@@ -130,19 +130,24 @@ final class BookmarkSyncTuple {
 /// persist the winning envelope's tuple with the row.
 abstract interface class SyncTrackingBookmarkStore implements BookmarkStore {
   /// The tuple last materialized for [id], or null when nothing about the
-  /// row's sync authorship is known (never synced, or applied through the
-  /// tuple-less legacy path before tuples existed).
+  /// row's sync authorship is known (never synced, or materialized before
+  /// tuples existed).
   Future<BookmarkSyncTuple?> syncTupleOf(String id);
 
   /// Every materialized tuple, including tombstone tuples — the recovery
   /// path's re-seal set.
   Future<Map<String, BookmarkSyncTuple>> syncTuples();
 
-  /// [applySynced] carrying the winning envelope's tuple.
+  /// M6's pulled-record apply (04 §3.2): verbatim upsert with no
+  /// `updatedAt` stamp and no [BookmarkStore.changes] emission — a pulled
+  /// winner applied back through the local-save seam would mark itself
+  /// dirty and re-push every round. Each row's winning envelope tuple is
+  /// materialized with it.
   Future<void> applySyncedRecords(
       Iterable<({Bookmark bookmark, BookmarkSyncTuple winner})> rows);
 
-  /// [removeSynced] carrying the winning tombstone's tuple.
+  /// The tombstone half of [applySyncedRecords]: a quiet remove that
+  /// materializes the winning tombstone's tuple.
   Future<void> removeSyncedRecord(String id, BookmarkSyncTuple tombstone);
 }
 
@@ -172,9 +177,6 @@ abstract interface class BookmarkStore extends BookmarkRepository {
   /// last) — 02 §4's sidebar shape.
   Future<List<BookmarkGroupSection>> sections();
 
-  /// The distinct stored group names, sorted (editor pick-lists).
-  Future<List<String>> groupNames();
-
   /// The key a new bookmark should carry to land at the position described
   /// by [group]/[beforeId]/[afterId]. With neither neighbor named, the key
   /// appends at [group]'s tail (ungrouped tail when [group] is null). A
@@ -187,7 +189,8 @@ abstract interface class BookmarkStore extends BookmarkRepository {
 
   /// A local create-or-replace edit: stamps `updatedAt` to now (the LWW
   /// half of every save, 04 §2.1) and emits [BookmarkSavedChange]. For
-  /// verbatim materialization use [upsertAll]/[applySynced] instead.
+  /// verbatim materialization use [upsertAll] or
+  /// [SyncTrackingBookmarkStore.applySyncedRecords] instead.
   Future<Bookmark> save(Bookmark bookmark);
 
   /// Removes the bookmark with [id]; emits [BookmarkRemovedChange].
@@ -209,15 +212,6 @@ abstract interface class BookmarkStore extends BookmarkRepository {
   /// [afterId] (either may be null for head/tail). Emits
   /// [BookmarkSavedChange].
   Future<Bookmark> reorder(String id, {String? beforeId, String? afterId});
-
-  /// M6's pulled-record apply (04 §3.2): verbatim upsert with no
-  /// `updatedAt` stamp and no [changes] emission — a pulled winner applied
-  /// back through the local-save seam would mark itself dirty and re-push
-  /// every round.
-  Future<void> applySynced(Iterable<Bookmark> bookmarks);
-
-  /// The tombstone half of [applySynced]: a quiet remove.
-  Future<void> removeSynced(String id);
 
   /// Local mutations, in write order. Sync-apply calls emit nothing here.
   Stream<BookmarkStoreChange> get changes;
@@ -322,10 +316,6 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
   @override
   Future<List<BookmarkGroupSection>> sections() async =>
       groupBookmarks(await load());
-
-  @override
-  Future<List<String>> groupNames() async =>
-      bookmarkGroupNames(await load());
 
   @override
   Future<String> sortKeyForInsert({
@@ -511,22 +501,6 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
   }
 
   @override
-  Future<void> applySynced(Iterable<Bookmark> bookmarks) =>
-      applySyncedRecords([
-        for (final bookmark in bookmarks)
-          // The tuple-less legacy path records authorship as unknown: the
-          // empty deviceId loses every tie-break, so a re-pulled copy of
-          // the true winner still applies over it.
-          (
-            bookmark: bookmark,
-            winner: BookmarkSyncTuple(
-              updatedAt: bookmark.updatedAt.toUtc().millisecondsSinceEpoch,
-              deviceId: '',
-            ),
-          ),
-      ]);
-
-  @override
   Future<void> applySyncedRecords(
       Iterable<({Bookmark bookmark, BookmarkSyncTuple winner})> rows) async {
     final incoming = rows.toList(growable: false);
@@ -546,22 +520,6 @@ final class FileBookmarkStore implements SyncTrackingBookmarkStore {
           tuples[row.bookmark.id] = row.winner;
         }
       },
-    );
-  }
-
-  @override
-  Future<void> removeSynced(String id) async {
-    await _ensureLoaded();
-    await _writeTail;
-    if (!_bookmarks.containsKey(id)) return;
-    await _writeNext(
-      (next) => next.remove(id),
-      // The tuple-less legacy path writes no tombstone of its own: it
-      // clears a tuple only for a row it actually removes (a truthful
-      // tombstone from a local remove is deliberately left intact), and
-      // the record store's own merge remains the guard until a
-      // tuple-carrying call records the winning envelope.
-      syncEdit: (tuples) => tuples.remove(id),
     );
   }
 

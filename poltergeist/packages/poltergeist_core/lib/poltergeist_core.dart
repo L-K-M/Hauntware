@@ -129,7 +129,6 @@ export 'package:seance_core/seance_core.dart'
 export 'src/bookmarks/bookmark_groups.dart'
     show
         BookmarkGroupSection,
-        bookmarkGroupNames,
         groupBookmarks,
         kUngroupedBookmarkKey;
 export 'src/bookmarks/bookmark_coordinator.dart'

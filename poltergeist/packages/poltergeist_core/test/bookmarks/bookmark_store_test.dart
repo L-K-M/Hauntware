@@ -723,19 +723,6 @@ Host web
       expect(sections.single.name, isNull);
       expect(sections.single.bookmarks.single.id, 'a');
     });
-
-    test('groupNames lists distinct groups sorted', () async {
-      final path = pathIn('bookmarks.json');
-      final store = FileBookmarkStore(path: path);
-      await store.upsertAll([
-        _localBookmark('a', sortKey: 'm'),
-        _localBookmark('b', sortKey: 'q'),
-      ]);
-      await store.moveToGroup('a', 'Zeta');
-      await store.moveToGroup('b', 'Alpha');
-
-      expect(await store.groupNames(), ['Alpha', 'Zeta']);
-    });
   });
 
   group('CRUD and reorder', () {
@@ -755,7 +742,8 @@ Host web
 
     test('upsertAll keeps the record timestamps verbatim', () async {
       // The materialization path (import today, M6's pulled-record apply
-      // through [applySynced]) must not restamp — LWW compares this tuple.
+      // through [applySyncedRecords]) must not restamp — LWW compares this
+      // tuple.
       final path = pathIn('bookmarks.json');
       final store =
           FileBookmarkStore(path: path, now: () => DateTime.utc(2030));
@@ -943,34 +931,12 @@ Host web
       );
     });
 
-    test('a synced record carrying an invalid key is repaired on apply',
-        () async {
+    test('a synced record carrying an invalid key is repaired on '
+        'applySyncedRecords', () async {
       // M6's pulled records are verbatim-applied — but a pulled interim
       // `sortKey: <uuid>` must still be normalized before it can poison a
       // later reorder, so the store normalizes the edited map, not just the
       // pre-edit one.
-      final path = pathIn('bookmarks.json');
-      final store = FileBookmarkStore(path: path);
-      await store.applySynced([
-        _localBookmark('ok', sortKey: 'm'),
-        _localBookmark('pulled', sortKey: 'x9-pulled-uuid'),
-      ]);
-
-      // A same-group move reads the repaired key, never the uuid.
-      final moved = await store.moveToGroup('ok', 'Work');
-      expect(isValidSortKey(moved.sortKey), isTrue);
-      await store.moveToGroup('pulled', 'Work');
-      final sections = await store.sections();
-      expect(sections.single.bookmarks.map((b) => b.id), ['ok', 'pulled']);
-      for (final bookmark in sections.single.bookmarks) {
-        expect(isValidSortKey(bookmark.sortKey), isTrue);
-      }
-    });
-
-    test('a synced record carrying an invalid key is repaired on '
-        'applySyncedRecords', () async {
-      // The coordinator's pulled-record path: the same normalization must
-      // hold when the winning envelope's tuple rides along.
       final path = pathIn('bookmarks.json');
       final store = FileBookmarkStore(path: path);
       const winner = BookmarkSyncTuple(updatedAt: 1, deviceId: 'device-b');
@@ -1041,27 +1007,11 @@ Host web
       expect(events.whereType<BookmarkRemovedChange>().single.id, 'b');
     });
 
-    test('the sync-apply path stays quiet', () async {
+    test('the sync-apply path stays quiet and keeps its tombstone',
+        () async {
       // M6's coordinator marks dirty on local saves; a pulled record
       // applied back through the store must not re-fire it (04 §3.2's
       // store-behind-callback split).
-      final path = pathIn('bookmarks.json');
-      final store = FileBookmarkStore(path: path);
-      final events = <BookmarkStoreChange>[];
-      final sub = store.changes.listen(events.add);
-      addTearDown(sub.cancel);
-
-      await store.applySynced([_localBookmark('a', sortKey: 'm')]);
-      await store.removeSynced('a');
-
-      expect(events, isEmpty);
-      expect(await store.load(), isEmpty);
-    });
-
-    test('the record-carrying sync-apply path stays quiet and keeps its '
-        'tombstone', () async {
-      // The coordinator applies pulled winners through these calls; neither
-      // may fire the local-save change the coordinator marks dirty on.
       final path = pathIn('bookmarks.json');
       final store = FileBookmarkStore(path: path);
       final events = <BookmarkStoreChange>[];

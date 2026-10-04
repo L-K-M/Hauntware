@@ -348,9 +348,6 @@ final class FakeSyncTrackingBookmarkStore
   Future<List<BookmarkGroupSection>> sections() => _inner.sections();
 
   @override
-  Future<List<String>> groupNames() => _inner.groupNames();
-
-  @override
   Future<String> sortKeyForInsert(
           {String? group, String? beforeId, String? afterId}) =>
       _inner.sortKeyForInsert(
@@ -374,13 +371,6 @@ final class FakeSyncTrackingBookmarkStore
   @override
   Future<Bookmark> reorder(String id, {String? beforeId, String? afterId}) =>
       _inner.reorder(id, beforeId: beforeId, afterId: afterId);
-
-  @override
-  Future<void> applySynced(Iterable<Bookmark> bookmarks) =>
-      _inner.applySynced(bookmarks);
-
-  @override
-  Future<void> removeSynced(String id) => _inner.removeSynced(id);
 
   @override
   Future<BookmarkSyncTuple?> syncTupleOf(String id) async => tuples[id];
