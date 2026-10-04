@@ -1,6 +1,4 @@
-import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -414,107 +412,6 @@ class _TotalsFooter extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.labelSmall,
-      ),
-    );
-  }
-}
-
-/// The panes↔activity splitter (02 §1's third splitter): drags set the
-/// panel's pixel height inside [min, max]; keyboard and semantics mirror
-/// the pane splitter's pattern.
-class ActivityHeightSplitter extends StatelessWidget {
-  const ActivityHeightSplitter({
-    super.key,
-    required this.focusNode,
-    required this.label,
-    required this.value,
-    required this.increasedValue,
-    required this.decreasedValue,
-    required this.onResize,
-    required this.onResizeEnd,
-  });
-
-  final FocusNode focusNode;
-  final String label;
-  final String value;
-  final String increasedValue;
-  final String decreasedValue;
-
-  /// Drag/key deltas — positive grows the panel upward.
-  final ValueChanged<double> onResize;
-  final VoidCallback onResizeEnd;
-
-  static const _keyboardStep = 16.0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      focusNode: focusNode,
-      onFocusChange: (hasFocus) {
-        if (!hasFocus) onResizeEnd();
-      },
-      onKeyEvent: (_, event) {
-        final delta = switch (event.logicalKey) {
-          LogicalKeyboardKey.arrowUp => _keyboardStep,
-          LogicalKeyboardKey.arrowDown => -_keyboardStep,
-          _ => null,
-        };
-        if (delta == null) return KeyEventResult.ignored;
-        if (event is KeyUpEvent) {
-          onResizeEnd();
-          return KeyEventResult.handled;
-        }
-        if (event is KeyDownEvent || event is KeyRepeatEvent) {
-          onResize(delta);
-          return KeyEventResult.handled;
-        }
-        return KeyEventResult.ignored;
-      },
-      child: AnimatedBuilder(
-        animation: focusNode,
-        builder: (context, child) => DecoratedBox(
-          decoration: BoxDecoration(
-            border: focusNode.hasFocus
-                ? Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 2,
-                  )
-                : null,
-          ),
-          child: child,
-        ),
-        child: Semantics(
-          label: label,
-          value: value,
-          increasedValue: increasedValue,
-          decreasedValue: decreasedValue,
-          onIncrease: () {
-            onResize(_keyboardStep);
-            onResizeEnd();
-          },
-          onDecrease: () {
-            onResize(-_keyboardStep);
-            onResizeEnd();
-          },
-          child: MouseRegion(
-            cursor: SystemMouseCursors.resizeRow,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              dragStartBehavior: DragStartBehavior.down,
-              onTap: focusNode.requestFocus,
-              onVerticalDragUpdate: (details) => onResize(-details.delta.dy),
-              onVerticalDragEnd: (_) => onResizeEnd(),
-              onVerticalDragCancel: onResizeEnd,
-              child: Center(
-                child: Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: Theme.of(context).dividerColor,
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
