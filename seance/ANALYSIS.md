@@ -2410,9 +2410,10 @@ guard idea ·
 **Priority:** P2 · **Status:** Open
 
 The Séance halves are tracked in REL-02, STORE-02, CRED-04 and REL-01. Keep
-`family_hues.dart`, `sidebar_kit.dart`, `selected_tab_view.dart`, the theme
+`family_hues.dart`, `sidebar_kit.dart`, the theme
 palette/presets/contrast files and the settings-window runners in step (a
-manifest plus a CI hash check is an idea below). Pin both siblings to the same
+manifest plus a CI hash check is an idea below; `SelectedTabView` moved into
+`ghost_ui` on 2026-10-04 and needs no check). Pin both siblings to the same
 Flutter version so Poltergeist's reliance on Séance's macOS accessibility gate
 holds. BOTH-REV-012: keep an authoritative port ledger. Shared package fixes
 belong upstream; copied UI and storage files need behavioural parity checks and

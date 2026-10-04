@@ -10,12 +10,6 @@ const _initialWindowSize = Size(1180, 760);
 const _minimumContentSize = Size(720, 480);
 const _defaultGeometrySaveDelay = Duration(milliseconds: 250);
 
-typedef DesktopPlatform = GhostDesktopPlatform;
-typedef WindowPlacement = GhostWindowPlacement;
-typedef WindowShowOptions = GhostWindowOptions;
-typedef DesktopWindowAdapter = GhostWindowAdapter;
-typedef DisplayAdapter = GhostDisplayAdapter;
-
 abstract interface class MacTitlebarAdapter {
   Future<void> initialize();
 }

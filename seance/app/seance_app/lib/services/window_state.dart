@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show Rect;
 
 import 'package:flutter/foundation.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
@@ -10,31 +9,26 @@ import 'package:window_manager/window_manager.dart';
 
 import 'atomic_file.dart';
 
-/// The persisted window state. The type and its `window_state.json` schema
-/// live in the shared ghost_desktop package now; this name stays so the file
-/// and its readers never change.
-typedef WindowStateSnapshot = GhostWindowSnapshot;
-
-/// Séance's missing-monitor rule — [resolveRestorableFrame] in ghost_desktop,
-/// kept under the old name for the test suite that grew up with it.
-Rect? resolveWindowBounds(Rect? saved, Iterable<Rect> displayAreas) =>
-    resolveRestorableFrame(saved, displayAreas);
-
 /// Loads and saves the window state as `window_state.json`. Kept out of
 /// settings.json on purpose: geometry changes with every move/resize, and the
 /// settings file — which carries the device's sync identity — should not be
 /// rewritten that often (and it isn't loaded until after the first frame,
 /// which is too late to place the window without a flash).
-class WindowStateStore {
+///
+/// This is the store as the shared lifecycle sees it: Séance's file keeps its
+/// schema (and its physical-pixel units on Windows — see the coordinate space
+/// on the lifecycle below), the package never learns either.
+final class WindowStateStore implements GhostWindowPersistence {
   final File file;
   Future<void> _saveTail = Future<void>.value();
 
   WindowStateStore(this.file);
 
-  Future<WindowStateSnapshot?> load() async {
+  @override
+  Future<GhostWindowSnapshot?> load() async {
     try {
       if (!await file.exists()) return null;
-      return WindowStateSnapshot.fromJson(
+      return GhostWindowSnapshot.fromJson(
         jsonDecode(await file.readAsString()),
       );
     } catch (_) {
@@ -42,7 +36,8 @@ class WindowStateStore {
     }
   }
 
-  Future<void> save(WindowStateSnapshot snapshot) {
+  @override
+  Future<void> save(GhostWindowSnapshot snapshot) {
     final contents = jsonEncode(snapshot.toJson());
     final result = Completer<void>();
     _saveTail = _saveTail.then((_) async {
@@ -55,21 +50,6 @@ class WindowStateStore {
     });
     return result.future;
   }
-}
-
-/// The store as the shared lifecycle sees it: Séance's file keeps its schema
-/// (and its physical-pixel units on Windows — see the coordinate space on the
-/// lifecycle below), the package never learns either.
-final class _WindowStatePersistence implements GhostWindowPersistence {
-  _WindowStatePersistence(this._store);
-
-  final WindowStateStore _store;
-
-  @override
-  Future<GhostWindowSnapshot?> load() => _store.load();
-
-  @override
-  Future<void> save(GhostWindowSnapshot snapshot) => _store.save(snapshot);
 }
 
 /// Restores the persisted window state at launch and keeps it current while
@@ -104,9 +84,8 @@ final class WindowStateService {
       // plugin, so it must be usable even when the earliest awaits fail.
       await windowManager.ensureInitialized();
       final dir = await getApplicationSupportDirectory();
-      final store = WindowStateStore(File('${dir.path}/window_state.json'));
       final lifecycle = GhostWindowLifecycle(
-        persistence: _WindowStatePersistence(store),
+        persistence: WindowStateStore(File('${dir.path}/window_state.json')),
         closePolicy: GhostClosePolicy.observe,
         missingMonitor: MissingMonitorPolicy.rejectAndKeep,
         coordinates: GhostCoordinateSpace.physicalOnWindows,

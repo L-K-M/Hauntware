@@ -1679,11 +1679,14 @@ revocation and concurrent login/deletion lifecycle work remain separate.
   a hidden live session, its announcement, and the section header a
   filter keeps for one; the blocked row; the empty state) and the
   home's "+" never covering the last row's "⋮".
-- `app/seance_app/test/ui/sidebar/sidebar_kit_test.dart` — the ported
-  kit's tests plus Séance's additions: ring dots, the host surface, two
-  lines, the menu button on desktop and touch, touch headers, keyboard
-  focus inside a row menu, a focus ring that does not move content, and
-  a header dot's words in the header's announcement.
+- `planchette/packages/ghost_ui/test/sidebar_kit_test.dart` (in the
+  shared `ghost_ui` package) — the kit's tests, Séance's additions
+  included: ring dots, the host surface, two lines, the menu button on
+  desktop and touch, touch headers, keyboard focus inside a row menu, a
+  focus ring that does not move content, and a header dot's words in the
+  header's announcement. `app/seance_app/test/theme_build_test.dart`
+  checks that every palette hands the kit `SeanceChrome`'s sidebar
+  tokens.
 - `app/seance_app/test/server_list_capture_test.dart` — renders the
   rail (also at its 200 px minimum), a tablet rail, the phone home and a
   narrow desktop window at both densities and brightnesses, plus a folded

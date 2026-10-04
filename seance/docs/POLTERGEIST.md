@@ -215,6 +215,10 @@ of it:
   relative paths so the two files diff cleanly. The kit's one seam,
   `_chrome()`, returns `SeanceChrome` (the same token names as
   `PoltergeistChrome`); `middle_ellipsis_text.dart` was already shared.
+- **Retired (2026-10-04):** with the kit in `ghost_ui`, its test is
+  `planchette/packages/ghost_ui/test/sidebar_kit_test.dart`, and both app
+  copies of the test are removed. `test/theme_build_test.dart` checks
+  that the theme hands the kit `SeanceChrome`'s tokens.
 
 Séance-side changes, each worth porting back (all in the kit file, with
 tests in the kit test):
@@ -385,10 +389,10 @@ become too bland to tell apart.
 - **The rule** is D11's quiet chrome with colour on glyphs only: the
   surfaces, the accent and the status dots are untouched, text stays in
   the ink, and a coloured verb keeps its colour only while it is live.
-- **The kind table** in `lib/ui/file_kinds.dart` is a port of
-  Poltergeist's `pane_format.dart` classifier and `kind_glyph.dart`
-  glyphs, so a folder, a photo or a script reads the same in both
-  Files views.
+- **The kind table**, now ghost_ui's `ghost_file_kinds.dart` (which
+  `lib/ui/file_kinds.dart` feeds), is a port of Poltergeist's
+  `pane_format.dart` classifier and `kind_glyph.dart` glyphs, so a
+  folder, a photo or a script reads the same in both Files views.
 - **Here it colours** the side panel's tabs (the Assistant purple,
   Snippets teal, Files blue, Git orange, glyphs named by their tooltips,
   the open one filled on a wash of its hue as in Poltergeist's

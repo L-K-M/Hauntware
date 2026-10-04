@@ -106,27 +106,6 @@ class ChatTurn {
 /// Which wire protocol a provider speaks.
 enum LlmProviderKind { anthropic, openaiCompatible }
 
-/// A named provider "mode" (Wave Terminal's pattern): the transport, endpoint,
-/// model, and — resolved separately, never stored in config — the API key.
-class LlmProviderConfig {
-  final String name;
-  final LlmProviderKind kind;
-  final String baseUrl;
-  final String model;
-
-  /// The keychain entry name holding the API key (never the key itself, and
-  /// never synced). Empty for keyless local endpoints like Ollama.
-  final String apiKeyRef;
-
-  const LlmProviderConfig({
-    required this.name,
-    required this.kind,
-    required this.baseUrl,
-    required this.model,
-    this.apiKeyRef = '',
-  });
-}
-
 abstract class LlmProvider {
   String get model;
 

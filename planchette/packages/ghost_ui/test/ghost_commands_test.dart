@@ -34,6 +34,28 @@ void main() {
       expect(formatShortcutActivator(tab, TargetPlatform.windows), 'Ctrl+Tab');
     });
 
+    test('spells only the modifiers the chord holds', () {
+      const chord = SingleActivator(
+        LogicalKeyboardKey.keyP,
+        control: true,
+        shift: true,
+      );
+      expect(
+        formatShortcutActivator(chord, TargetPlatform.linux),
+        'Ctrl+Shift+P',
+      );
+      expect(
+        formatShortcutActivator(chord, TargetPlatform.windows),
+        'Ctrl+Shift+P',
+      );
+    });
+
+    test('spells a bare key on its own', () {
+      const bare = SingleActivator(LogicalKeyboardKey.arrowUp);
+      expect(formatShortcutActivator(bare, TargetPlatform.macOS), '↑');
+      expect(formatShortcutActivator(bare, TargetPlatform.linux), 'Up');
+    });
+
     test('iOS is a glyph platform like macOS', () {
       const chord = SingleActivator(LogicalKeyboardKey.keyT, meta: true);
       expect(formatShortcutActivator(chord, TargetPlatform.iOS), '⌘T');
