@@ -32,21 +32,6 @@ const String syncPassphraseCheckFailedMessage =
     'The passphrase may be wrong, the record may be corrupt, or it may use '
     'a newer schema.';
 
-/// The durable "backup paused" status while `passphraseUnverified` holds
-/// (04 §4.5) — the visible Settings → Backup state, never a silent stall.
-const String syncBackupPausedMessage =
-    'Backup paused until the passphrase is verified against the account\'s '
-    'existing data.';
-
-/// Mode-matched way-out copy for the paused status (04 §4.5): the account
-/// needs a foreign record to verify against, and these say how to make one.
-const String syncBackupPausedWayOutShared =
-    'Open Séance on any device signed into this account and add or edit a '
-    'server, then sync — backup resumes automatically.';
-const String syncBackupPausedWayOutSeparate =
-    'Open Poltergeist on another device signed into this account and add or '
-    'edit a bookmark, then sync.';
-
 /// Notice keys for [SyncEnrollmentState.setNotice] — stable identifiers the
 /// settings surface maps to §4.3/§4.5/§7.3 copy. A notice clears only when
 /// its condition provably resolves, never on dismissal.

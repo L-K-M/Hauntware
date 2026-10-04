@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
-import 'package:poltergeist_app/ui/probe_status_dot.dart';
 import 'package:poltergeist_app/ui/server_state_indicator.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
@@ -20,10 +20,14 @@ const _failedConnect = ServerStatus(
   detail: 'Authentication failed for deploy@web.example.com:22.',
 );
 
-Future<void> _pump(WidgetTester tester, Widget child) async {
+Future<void> _pump(
+  WidgetTester tester,
+  Widget child, {
+  Brightness brightness = Brightness.light,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
-      theme: buildPoltergeistTheme(Brightness.light),
+      theme: buildPoltergeistTheme(brightness),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(body: Center(child: child)),
@@ -170,105 +174,168 @@ void main() {
     });
   });
 
-  group('the labeled indicator widget', () {
-    testWidgets('delegates to the probe dot without a second label', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        const ServerStateIndicator(status: null, probe: ProbeStatus.online),
-      );
+  group('ServerStateGlyph paints', () {
+    Finder inGlyph(Finder matching) =>
+        find.descendant(of: find.byType(ServerStateGlyph), matching: matching);
 
-      expect(find.byType(ProbeStatusDot), findsOneWidget);
-      expect(find.byTooltip(_l10n.probeStatusOnline), findsOneWidget);
-
-      final semantics = tester.ensureSemantics();
-      try {
-        // One announcement: the dot owns the label, the wrapper adds none.
-        expect(find.bySemanticsLabel(_l10n.probeStatusOnline), findsOneWidget);
-      } finally {
-        semantics.dispose();
-      }
-    });
-
-    testWidgets('a blocked connection replaces the reachable probe dot', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        const ServerStateIndicator(status: _blocked, probe: ProbeStatus.online),
-      );
-
-      expect(find.byType(ProbeStatusDot), findsNothing);
-      expect(find.byTooltip(_l10n.connectionBlockedTitle), findsOneWidget);
-      expect(find.byIcon(Icons.gpp_bad), findsOneWidget);
-
-      final semantics = tester.ensureSemantics();
-      try {
+    testWidgets('every glyph sits in the shared 24 px box', (tester) async {
+      for (final glyph in [
+        ServerIndicatorGlyph.none,
+        ServerIndicatorGlyph.pending,
+        ServerIndicatorGlyph.connected,
+        ServerIndicatorGlyph.idle,
+        ServerIndicatorGlyph.failed,
+        ServerIndicatorGlyph.blocked,
+      ]) {
+        await _pump(tester, ServerStateGlyph(glyph));
         expect(
-          find.bySemanticsLabel(_l10n.connectionBlockedTitle),
-          findsOneWidget,
+          tester.getSize(find.byType(ServerStateGlyph)),
+          const Size(24, 24),
+          reason: glyph.name,
         );
-        expect(find.bySemanticsLabel(_l10n.probeStatusOnline), findsNothing);
-      } finally {
-        semantics.dispose();
+        // A fresh tree per glyph: the pending spinner never settles.
+        await tester.pumpWidget(const SizedBox());
       }
     });
 
-    testWidgets('a connected server replaces the offline probe dot', (
+    testWidgets('dots are 10 px circles in the theme status colours', (
       tester,
     ) async {
-      await _pump(
-        tester,
-        const ServerStateIndicator(
-          status: ServerStatus(ServerConnectionState.connected),
-          probe: ProbeStatus.offline,
-        ),
-      );
-
-      expect(find.byType(ProbeStatusDot), findsNothing);
-      expect(find.byTooltip(_l10n.connectionStateConnected), findsOneWidget);
-
-      final semantics = tester.ensureSemantics();
-      try {
-        expect(
-          find.bySemanticsLabel(_l10n.connectionStateConnected),
-          findsOneWidget,
+      for (final (glyph, colorOf)
+          in <(ServerIndicatorGlyph, Color Function(PoltergeistChrome))>[
+            (ServerIndicatorGlyph.connected, (c) => c.statusConnected),
+            (ServerIndicatorGlyph.failed, (c) => c.statusFailed),
+            (ServerIndicatorGlyph.idle, (c) => c.statusUnknown),
+          ]) {
+        await _pump(tester, ServerStateGlyph(glyph));
+        final chrome = PoltergeistChrome.of(
+          tester.element(find.byType(ServerStateGlyph)),
         );
-        expect(find.bySemanticsLabel(_l10n.probeStatusOffline), findsNothing);
-      } finally {
-        semantics.dispose();
+        final dot = inGlyph(find.byType(Container));
+        expect(tester.getSize(dot), const Size(10, 10), reason: glyph.name);
+        final decoration =
+            tester.widget<Container>(dot).decoration! as BoxDecoration;
+        expect(decoration.shape, BoxShape.circle, reason: glyph.name);
+        expect(decoration.color, colorOf(chrome), reason: glyph.name);
+        expect(inGlyph(find.byType(Icon)), findsNothing, reason: glyph.name);
       }
     });
 
-    testWidgets('paints nothing when neither truth exists', (tester) async {
-      await _pump(tester, const ServerStateIndicator(status: null));
-
-      expect(find.byType(ProbeStatusDot), findsNothing);
-      expect(find.byType(ServerStateGlyph), findsNothing);
-      expect(find.byType(Tooltip), findsNothing);
-    });
-
-    testWidgets('a pending attempt spins', (tester) async {
-      await _pump(
-        tester,
-        const ServerStateIndicator(
-          status: ServerStatus(ServerConnectionState.connecting),
-        ),
+    testWidgets('blocked paints the 14 px shield in the failure colour', (
+      tester,
+    ) async {
+      await _pump(tester, const ServerStateGlyph(ServerIndicatorGlyph.blocked));
+      final chrome = PoltergeistChrome.of(
+        tester.element(find.byType(ServerStateGlyph)),
       );
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.byTooltip(_l10n.connectionStateConnecting), findsOneWidget);
+      final icon = tester.widget<Icon>(inGlyph(find.byType(Icon)));
+      expect(icon.icon, Icons.gpp_bad);
+      expect(icon.size, 14);
+      expect(icon.color, chrome.statusFailed);
+      expect(inGlyph(find.byType(CircularProgressIndicator)), findsNothing);
+    });
+
+    testWidgets('pending spins at 14 px in the primary colour', (tester) async {
+      await _pump(tester, const ServerStateGlyph(ServerIndicatorGlyph.pending));
+      final scheme = Theme.of(
+        tester.element(find.byType(ServerStateGlyph)),
+      ).colorScheme;
+
+      final spinner = inGlyph(find.byType(CircularProgressIndicator));
+      expect(spinner, findsOneWidget);
+      expect(tester.getSize(spinner), const Size(14, 14));
+      expect(
+        tester.widget<CircularProgressIndicator>(spinner).color,
+        scheme.primary,
+      );
+      expect(inGlyph(find.byType(Icon)), findsNothing);
+    });
+
+    testWidgets('none paints nothing inside its box', (tester) async {
+      await _pump(tester, const ServerStateGlyph(ServerIndicatorGlyph.none));
+
+      expect(inGlyph(find.byType(Container)), findsNothing);
+      expect(inGlyph(find.byType(Icon)), findsNothing);
+      expect(inGlyph(find.byType(CircularProgressIndicator)), findsNothing);
+    });
+
+    testWidgets('each dot paints its exact colour on screen', (tester) async {
+      // Pins the rendered pixels, not just the decoration: a golden-capture
+      // color-space artifact must never hide a real paint regression.
+      // Deliberately exact (no ±1 tolerance): an SDK color-pipeline change
+      // SHOULD fail this pin and be triaged as such, not absorbed silently.
+      for (final glyph in [
+        ServerIndicatorGlyph.connected,
+        ServerIndicatorGlyph.failed,
+        ServerIndicatorGlyph.idle,
+      ]) {
+        for (final brightness in Brightness.values) {
+          await _pump(
+            tester,
+            RepaintBoundary(
+              key: const ValueKey('dot-boundary'),
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: ServerStateGlyph(glyph),
+              ),
+            ),
+            brightness: brightness,
+          );
+
+          // The dot is centred in the box, so the box centre is the dot
+          // centre. toImage needs a real event loop; runAsync provides one
+          // inside the test zone.
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(const ValueKey('dot-boundary')),
+          );
+          final pixel = (await tester.runAsync(() async {
+            final image = await boundary.toImage(pixelRatio: 3);
+            try {
+              final data = await image.toByteData();
+              final width = image.width;
+              final center = (width ~/ 2) * width + width ~/ 2;
+              // Honor the view's offset: a view-backed ByteData must sample
+              // from its own start, never the underlying buffer's zero.
+              return data!.buffer.asUint8List(
+                data.offsetInBytes + center * 4,
+                4,
+              );
+            } finally {
+              image.dispose();
+            }
+          }))!;
+          final context = tester.element(find.byType(ServerStateGlyph));
+          // The tokens ServerStateGlyph paints, as its decoration tests pin.
+          final chrome = PoltergeistChrome.of(context);
+          final expected = switch (glyph) {
+            ServerIndicatorGlyph.connected => chrome.statusConnected,
+            ServerIndicatorGlyph.failed => chrome.statusFailed,
+            _ => chrome.statusUnknown,
+          };
+          final name = '${glyph.name} (${brightness.name})';
+
+          expect(pixel[0], (expected.r * 255).round(), reason: 'red of $name');
+          expect(
+            pixel[1],
+            (expected.g * 255).round(),
+            reason: 'green of $name',
+          );
+          expect(pixel[2], (expected.b * 255).round(), reason: 'blue of $name');
+          expect(pixel[3], 255, reason: 'alpha of $name');
+          // A fresh tree per iteration keeps the captured picture current.
+          await tester.pumpWidget(const SizedBox());
+        }
+      }
     });
   });
 
   test('indicator colors stay above 3:1 on both theme surfaces', () {
-    // The composed indicator inherits the probe dot's contrast floor
-    // (02 §4, SEA-019) for every color it can paint. The delegated probe
-    // offline/unknown states reuse the scheme colors already pinned below
-    // (`error`/`outline`), so no delegated color escapes the pin. The
-    // backgrounds mirror the probe dot's own floor: the resting surface
-    // (the app bar is pinned to paint it) and the scrolled-under tint.
+    // Every color the composed indicator can paint keeps 02 §4's contrast
+    // floor (SEA-019). The sidebar's probe offline/unknown dots reuse the
+    // scheme colors pinned below (`error`/`outline`). The backgrounds are
+    // the resting surface and its scrolled-under tint.
     for (final brightness in Brightness.values) {
       final scheme = buildPoltergeistTheme(brightness).colorScheme;
       final scrolled = ElevationOverlay.applySurfaceTint(

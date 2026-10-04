@@ -532,7 +532,7 @@ List<SidebarMenuEntry> _editVerbs(
   final l10n = data.l10n;
   final view = data.view;
   // The loaded sections carry every group name in the store's own order —
-  // an async groupNames() read here would flash an empty submenu.
+  // an async store read here would flash an empty submenu.
   final names = <String>[
     for (final section in data.controller.sections) ?section.name,
     for (final pending in data.controller.pendingGroups) pending,

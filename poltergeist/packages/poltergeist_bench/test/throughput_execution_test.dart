@@ -107,6 +107,103 @@ void main() {
       }
     }
   });
+
+  test(
+    'driver byte/digest mismatches fail a trial with an intact destination',
+    () async {
+      final cases = [
+        (
+          ThroughputVariant.dartHashOn,
+          _DriverReport.staleDigest,
+          'hashing produced',
+        ),
+        (
+          ThroughputVariant.dartHashOff,
+          _DriverReport.unexpectedDigest,
+          'hashing-off produced',
+        ),
+        (ThroughputVariant.dartHashOn, _DriverReport.wrongBytes, ' bytes.'),
+        (ThroughputVariant.dartHashOff, _DriverReport.wrongBytes, ' bytes.'),
+      ];
+      for (final direction in ThroughputLeg.values) {
+        for (final (variant, report, error) in cases) {
+          final fixture = await _ExecutionFixture.create();
+          addTearDown(fixture.close);
+          final driver = _RecordingDriver(
+            variant: variant,
+            uploadRoot: fixture.uploads,
+            report: report,
+          );
+          final name = '${variant.cliValue} ${report.name} ${direction.name}';
+
+          await expectLater(
+            fixture.runtime.runTrial(
+              driver: driver,
+              scenario: '${variant.cliValue}-${direction.name}',
+              direction: direction,
+              payload: fixture.trialPayload,
+              warmupPayload: fixture.warmupPayload,
+              ordinal: 1,
+              replicate: ThroughputReplicate.first,
+              warmupTimeout: () => _transferTimeout,
+              trialTimeout: () => _transferTimeout,
+            ),
+            throwsStateError,
+            reason: name,
+          );
+
+          final attempts = await fixture.readAttempts();
+          final trial = attempts.singleWhere(
+            (attempt) => attempt.phase == ThroughputAttemptPhase.trial,
+          );
+          expect(trial.status, ThroughputAttemptStatus.failure, reason: name);
+          expect(trial.error, contains(error), reason: name);
+          // The destination itself is intact: the driver's own report is
+          // what rejected the trial, not the post-timing inspection.
+          expect(
+            trial.integrity.status,
+            ThroughputIntegrityStatus.verified,
+            reason: name,
+          );
+        }
+      }
+    },
+  );
+
+  test('OpenSSH trials ignore driver-reported bytes and digests', () async {
+    for (final direction in ThroughputLeg.values) {
+      for (final report in [
+        _DriverReport.staleDigest,
+        _DriverReport.wrongBytes,
+      ]) {
+        final fixture = await _ExecutionFixture.create();
+        addTearDown(fixture.close);
+        final evidence = await fixture.runtime.runTrial(
+          driver: _RecordingDriver(
+            variant: ThroughputVariant.openssh,
+            uploadRoot: fixture.uploads,
+            report: report,
+          ),
+          scenario: 'openssh-${direction.name}',
+          direction: direction,
+          payload: fixture.trialPayload,
+          warmupPayload: fixture.warmupPayload,
+          ordinal: 1,
+          replicate: ThroughputReplicate.first,
+          warmupTimeout: () => _transferTimeout,
+          trialTimeout: () => _transferTimeout,
+        );
+        final name = '${report.name} ${direction.name}';
+
+        expect(
+          evidence.trial.status,
+          ThroughputAttemptStatus.success,
+          reason: name,
+        );
+        expect(evidence.trial.integrity.isVerified, isTrue, reason: name);
+      }
+    }
+  });
 }
 
 void _expectSourceOnlyPrimes(
@@ -285,12 +382,14 @@ class _RecordingDriver implements ThroughputExecutionDriver {
   final ThroughputVariant variant;
   final Directory uploadRoot;
   final _TransferContent content;
+  final _DriverReport report;
   final List<_TransferCall> calls = [];
 
   _RecordingDriver({
     required this.variant,
     required this.uploadRoot,
     this.content = _TransferContent.valid,
+    this.report = _DriverReport.faithful,
   });
 
   @override
@@ -352,12 +451,30 @@ class _RecordingDriver implements ThroughputExecutionDriver {
     await destination.writeAsString(corrupt ? 'corrupt' : contents);
   }
 
-  ThroughputTransferResult _result(ThroughputExecutionPayload payload) =>
-      ThroughputTransferResult(
-        bytes: variant == ThroughputVariant.openssh ? null : payload.bytes,
-        digest: variant == ThroughputVariant.dartHashOn ? payload.digest : null,
-        elapsed: _transferElapsed,
-      );
+  ThroughputTransferResult _result(ThroughputExecutionPayload payload) {
+    // A misreport applies to the measured trial only; the warmup stays
+    // faithful so the trial is the attempt that fails.
+    final misreport = payload.label == 'trial'
+        ? report
+        : _DriverReport.faithful;
+    // A misreport wins over OpenSSH's faithful null, deliberately: the
+    // OpenSSH test needs a driver that does report wrong values.
+    final bytes = switch (misreport) {
+      _DriverReport.wrongBytes => payload.bytes + 1,
+      _ when variant == ThroughputVariant.openssh => null,
+      _ => payload.bytes,
+    };
+    final digest = switch (misreport) {
+      _DriverReport.staleDigest || _DriverReport.unexpectedDigest => 'stale',
+      _ when variant == ThroughputVariant.dartHashOn => payload.digest,
+      _ => null,
+    };
+    return ThroughputTransferResult(
+      bytes: bytes,
+      digest: digest,
+      elapsed: _transferElapsed,
+    );
+  }
 
   @override
   Future<void> deleteRemote(String path, {required Duration timeout}) async {
@@ -371,6 +488,9 @@ class _RecordingDriver implements ThroughputExecutionDriver {
 }
 
 enum _TransferContent { valid, corruptTrial }
+
+/// What the driver claims about the trial transfer it just ran.
+enum _DriverReport { faithful, staleDigest, unexpectedDigest, wrongBytes }
 
 class _TransferCall {
   final ThroughputLeg direction;

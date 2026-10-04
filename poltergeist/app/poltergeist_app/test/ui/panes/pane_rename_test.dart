@@ -364,6 +364,33 @@ void main() {
     }
   });
 
+  testWidgets('a blank name asks for one inside the field', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    try {
+      final channel = localChannel();
+      await left.openLocalHome();
+      await pumpShell(tester);
+      leftNode.requestFocus();
+      await tester.pump();
+
+      left.setCursorIndex(2); // report.txt (docs, notes.md sort ahead)
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.f2);
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byKey(fieldKey), '   ');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(fieldKey), findsOneWidget,
+          reason: 'a failed validation keeps the field open');
+      expect(find.text('Enter a name.'), findsOneWidget);
+      expect(channel.renameCalls, isEmpty);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('a typed refusal re-opens the field with the draft and '
       'the VFS error', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.linux;

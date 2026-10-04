@@ -90,7 +90,6 @@ class PlanchetteApp extends StatelessWidget {
     builder: (context, _) => MaterialApp(
       title: 'Planchette',
       navigatorKey: navigatorKey ?? window?.navigatorKey,
-      scaffoldMessengerKey: window?.scaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       theme: planchetteTheme(Brightness.light),
       darkTheme: planchetteTheme(Brightness.dark),

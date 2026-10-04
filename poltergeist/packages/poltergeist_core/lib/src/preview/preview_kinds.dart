@@ -104,15 +104,11 @@ int? previewKindCapBytes(PreviewKind kind) => switch (kind) {
       _ => null,
     };
 
-/// A name's leaf extension, lower-cased, without the dot — null when the
-/// name has none (or ends in one). Dotfiles like `.zshrc` report no
-/// extension: `.zshrc`'s "extension" would be the whole basename.
-String? previewExtension(String name) =>
-    _rawExtension(_baseName(name))?.toLowerCase();
-
-/// The same leaf extension in its original case — the input to
-/// [sanitizePreviewExtension] for cache naming, which preserves case
-/// (06 §5.3). Classification uses the lower-cased [previewExtension].
+/// A name's leaf extension in its original case, without the dot — null
+/// when the name has none (or ends in one). Dotfiles like `.zshrc` report
+/// no extension: `.zshrc`'s "extension" would be the whole basename. The
+/// input to [sanitizePreviewExtension] for cache naming, which preserves
+/// case (06 §5.3); [previewKindForName] classifies on the lower-cased form.
 String? previewRawExtension(String name) => _rawExtension(_baseName(name));
 
 /// The cache file-name extension (06 §5.3): [extension] survives only
@@ -227,7 +223,7 @@ const _linuxExecutableExtensions = <String>{'desktop', 'jar', 'appimage'};
 /// `x.hta`). The strip applies on every host, where it can only err
 /// toward refusing.
 ///
-/// Unlike [previewExtension], a leading dot names an extension: Explorer
+/// Unlike [previewKindForName], a leading dot names an extension: Explorer
 /// runs a file called `.js` through Script Host, so the dotfile rule
 /// that keeps `.zshrc` extensionless for preview must not apply here.
 bool isExecutableLaunchName(String name, {required LaunchHost host}) {

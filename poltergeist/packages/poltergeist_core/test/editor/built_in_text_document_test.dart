@@ -30,7 +30,7 @@ void main() {
   });
 
   test('loads UTF-8 and atomically saves edited text', () async {
-    expect(await loadBuiltInTextDocument(file), 'one\ntwo\n');
+    expect((await loadBuiltInTextDocumentDetails(file)).text, 'one\ntwo\n');
 
     await saveBuiltInTextDocument(file, 'changed\n');
 
@@ -191,7 +191,7 @@ void main() {
   test('rejects malformed, binary, and oversized content', () async {
     await file.writeAsBytes([0xff]);
     await expectLater(
-      loadBuiltInTextDocument(file),
+      loadBuiltInTextDocumentDetails(file),
       throwsA(
         isA<BuiltInEditorException>().having(
           (error) => error.message,
@@ -203,7 +203,7 @@ void main() {
 
     await file.writeAsBytes([0, 1, 2]);
     await expectLater(
-      loadBuiltInTextDocument(file),
+      loadBuiltInTextDocumentDetails(file),
       throwsA(
         isA<BuiltInEditorException>().having(
           (error) => error.message,
@@ -215,7 +215,7 @@ void main() {
 
     await file.writeAsBytes([1, 2, 3]);
     await expectLater(
-      loadBuiltInTextDocument(file, maximumBytes: 2),
+      loadBuiltInTextDocumentDetails(file, maximumBytes: 2),
       throwsA(
         isA<BuiltInEditorException>().having(
           (error) => error.message,
@@ -253,7 +253,7 @@ void main() {
   test('error messages surface bare — no Exception prefix', () async {
     await file.writeAsBytes([0xff]);
     try {
-      await loadBuiltInTextDocument(file);
+      await loadBuiltInTextDocumentDetails(file);
       fail('expected the load to refuse');
     } on BuiltInEditorException catch (error) {
       // §2.4's toast contract: error.toString() IS the message.

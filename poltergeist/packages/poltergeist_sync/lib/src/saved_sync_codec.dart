@@ -159,7 +159,7 @@ SyncPair syncPairFromSavedSync(
 
 /// SyncPair → a savedSync-kind [Bookmark] (04 §2.1, §9: the bookmark
 /// id IS the favorite's SyncPair.id). [createdAt]/[updatedAt] come
-/// from the caller — a save stamps "now", an applySynced round-trip
+/// from the caller — a save stamps "now", a pulled-record apply
 /// preserves the server's values.
 Bookmark bookmarkFromSyncPair(
   SyncPair pair, {

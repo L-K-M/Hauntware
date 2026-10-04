@@ -129,7 +129,6 @@ export 'package:seance_core/seance_core.dart'
 export 'src/bookmarks/bookmark_groups.dart'
     show
         BookmarkGroupSection,
-        bookmarkGroupNames,
         groupBookmarks,
         kUngroupedBookmarkKey;
 export 'src/bookmarks/bookmark_coordinator.dart'
@@ -172,9 +171,6 @@ export 'src/sync/enrollment.dart'
         SyncEnrollmentApi,
         SyncEnrollmentException,
         SyncEnrollmentState,
-        syncBackupPausedMessage,
-        syncBackupPausedWayOutSeparate,
-        syncBackupPausedWayOutShared,
         syncNoticeAccountAuthFailed,
         syncNoticePassphraseCheckFailed,
         syncPassphraseCheckFailedMessage,
@@ -276,7 +272,6 @@ export 'src/preview/preview_kinds.dart'
         dragOutProduceSlotLimit,
         isExecutableLaunchName,
         previewCacheKey,
-        previewExtension,
         previewImageKindCapBytes,
         previewKindCapBytes,
         previewKindForName,
@@ -311,7 +306,6 @@ export 'src/editor/built_in_text_document.dart'
         MaximumByteSink,
         builtInEditorMaximumBytes,
         classifyBuiltInTextDocumentFailure,
-        loadBuiltInTextDocument,
         loadBuiltInTextDocumentDetails,
         resolveBuiltInEditorTarget,
         saveBuiltInTextDocument;

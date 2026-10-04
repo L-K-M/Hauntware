@@ -1460,7 +1460,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   // developer-facing debug assert message, never rendered to users.
   'lib/ui/server_state_indicator.dart': {
     "''",
-    "'Probe truth must be painted by ProbeStatusDot/ServerStateIndicator; '",
+    "'Probe truth must be painted by the caller; '",
     "'ServerStateGlyph has no probe paint.'",
   },
   // The D32 sidebar library (sidebar_view.dart and its parts): widget keys,
@@ -2544,14 +2544,6 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     r"'${server.group ?? ''}'",
     "''",
     "r'\\s+'",
-  },
-  'lib/ui/server_grouping.dart': {
-    // Section sentinels — identity keys the view substitutes localized
-    // headers for; never rendered raw in Poltergeist.
-    "' pinned'",
-    "' servers'",
-    "'Pinned'",
-    "'Servers'",
   },
   // D32 §11's platform integration: Dock progress diagnostics and the
   // file-manager reveal's process arguments (never user-facing copy).

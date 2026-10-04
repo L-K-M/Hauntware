@@ -41,14 +41,6 @@ const _payloads = [
     digest: fixturePayload1GbSha256,
   ),
 ];
-const _trialOrder = [
-  ThroughputVariant.dartHashOn,
-  ThroughputVariant.openssh,
-  ThroughputVariant.dartHashOff,
-  ThroughputVariant.dartHashOff,
-  ThroughputVariant.openssh,
-  ThroughputVariant.dartHashOn,
-];
 const _sampleNote =
     'samples=2; aggregate=floor-midpoint; pathPrimed=true; '
     'variantWarmup=1mb-per-trial; order=ABCCBA';
@@ -153,44 +145,6 @@ class ThroughputSampleDeadline {
     if (available < maximum) return available;
 
     return maximum;
-  }
-}
-
-typedef ThroughputTrial = Future<Duration> Function(ThroughputVariant variant);
-
-/// Warms immediately before every trial, then records mirrored samples.
-Future<CounterbalancedSamples> collectCounterbalancedSamples(
-  ThroughputTrial trial, {
-  ThroughputTrial? warmup,
-}) async {
-  final samples = {
-    for (final variant in ThroughputVariant.values) variant: <Duration>[],
-  };
-  for (final variant in _trialOrder) {
-    await (warmup ?? trial)(variant);
-    samples[variant]!.add(await trial(variant));
-  }
-  return CounterbalancedSamples._(samples);
-}
-
-class CounterbalancedSamples {
-  final Map<ThroughputVariant, List<Duration>> _samples;
-
-  const CounterbalancedSamples._(this._samples);
-
-  int get sampleCount => _samples.values.first.length;
-
-  Duration medianFor(ThroughputVariant variant) {
-    final ordered = [..._samples[variant]!]..sort();
-    final middle = ordered.length ~/ 2;
-    if (ordered.length.isOdd) return ordered[middle];
-
-    return Duration(
-      microseconds:
-          (ordered[middle - 1].inMicroseconds +
-              ordered[middle].inMicroseconds) ~/
-          2,
-    );
   }
 }
 
@@ -334,8 +288,8 @@ Future<List<BenchResult>> _runCounterbalancedCell({
     for (final variant in ThroughputVariant.values) variant: 0,
   };
 
-  for (var index = 0; index < _trialOrder.length; index++) {
-    final variant = _trialOrder[index];
+  for (var index = 0; index < throughputTrialOrder.length; index++) {
+    final variant = throughputTrialOrder[index];
     final driver = drivers.forVariant(variant);
     final ordinal = index + 1;
     final replicateIndex = replicateCounts[variant]!;
@@ -367,16 +321,6 @@ Future<List<BenchResult>> _runCounterbalancedCell({
       ),
   ];
 }
-
-Future<ThroughputIntegrityEvidence> inspectLocalFile(
-  File file, {
-  required int expectedBytes,
-  required String expectedDigest,
-}) => inspectThroughputFile(
-  file,
-  expectedBytes: expectedBytes,
-  expectedDigest: expectedDigest,
-);
 
 BenchResult _captureCellResult({
   required BenchConfig config,
@@ -428,24 +372,6 @@ String _scenario(
   ThroughputExecutionPayload payload,
   String linkName,
 ) => '${variant.cliValue}-${direction.name}-${payload.label}-$linkName';
-
-void validateThroughputEntry({
-  required int? actualBytes,
-  required String? digest,
-  required int expectedBytes,
-  required String expectedDigest,
-  required HashMode hashMode,
-}) {
-  if (actualBytes != expectedBytes) {
-    throw StateError('$actualBytes != $expectedBytes bytes.');
-  }
-  if (hashMode == HashMode.on && digest != expectedDigest) {
-    throw StateError('hashing produced $digest, expected $expectedDigest.');
-  }
-  if (hashMode == HashMode.off && digest != null) {
-    throw StateError('hashing-off produced $digest.');
-  }
-}
 
 class _DartThroughputDriver implements ThroughputExecutionDriver {
   final BenchSshConnection _connection;

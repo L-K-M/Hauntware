@@ -73,9 +73,6 @@ final class FakeBookmarkStore implements BookmarkStore {
       groupBookmarks(await load());
 
   @override
-  Future<List<String>> groupNames() async => bookmarkGroupNames(await load());
-
-  @override
   Future<String> sortKeyForInsert({
     String? group,
     String? beforeId,
@@ -203,14 +200,12 @@ final class FakeBookmarkStore implements BookmarkStore {
     );
   }
 
-  @override
   Future<void> applySynced(Iterable<Bookmark> bookmarks) async {
     // The quiet materialization path: verbatim upsert, no [changes]
     // emission, and not gated on the local-edit failure scripts.
     _upsert(List<Bookmark>.of(bookmarks));
   }
 
-  @override
   Future<void> removeSynced(String id) async {
     // The quiet path emits nothing — mirrored from the file store.
     bookmarks = [

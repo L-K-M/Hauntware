@@ -1,6 +1,10 @@
 import 'dart:io';
 
 import 'package:poltergeist_m0_bench/fixture_data.dart';
+import 'package:poltergeist_m0_bench/result_manifest.dart'
+    show affordableThroughputCells, standardThroughputTrialSpecs;
+import 'package:poltergeist_m0_bench/src/throughput_execution.dart'
+    show inspectThroughputFile, throughputTrialOrder;
 import 'package:poltergeist_m0_bench/throughput.dart';
 import 'package:poltergeist_m0_bench/throughput_attempt.dart';
 import 'package:test/test.dart';
@@ -105,90 +109,25 @@ void main() {
     });
   });
 
-  test('warms variants and records counterbalanced repeated trials', () async {
-    final calls = <ThroughputVariant>[];
-    var elapsed = 0;
-
-    final samples = await collectCounterbalancedSamples((variant) async {
-      calls.add(variant);
-      elapsed += 10;
-      return Duration(microseconds: elapsed);
-    });
-
-    expect(calls, [
-      ThroughputVariant.dartHashOn,
-      ThroughputVariant.dartHashOn,
-      ThroughputVariant.openssh,
-      ThroughputVariant.openssh,
-      ThroughputVariant.dartHashOff,
-      ThroughputVariant.dartHashOff,
-      ThroughputVariant.dartHashOff,
-      ThroughputVariant.dartHashOff,
-      ThroughputVariant.openssh,
-      ThroughputVariant.openssh,
-      ThroughputVariant.dartHashOn,
-      ThroughputVariant.dartHashOn,
+  test('the shared ABCCBA trial order matches the result manifest', () async {
+    // The aggregator validates live evidence against this manifest; the
+    // runner's order must match it before any shard runs.
+    final cell = affordableThroughputCells.first;
+    final manifest = standardThroughputTrialSpecs
+        .where((trial) => trial.cellId == cell.id)
+        .toList();
+    expect(throughputTrialOrder.map((variant) => variant.cliValue), [
+      for (final trial in manifest) trial.variant.label,
     ]);
-    expect(samples.sampleCount, 2);
-    expect(
-      samples.medianFor(ThroughputVariant.openssh),
-      const Duration(microseconds: 70),
-    );
-  });
 
-  test('keeps bounded warmups outside measured trials', () async {
-    final warmups = <ThroughputVariant>[];
-    final trials = <ThroughputVariant>[];
-
-    await collectCounterbalancedSamples(
-      (variant) async {
-        trials.add(variant);
-        return const Duration(microseconds: 1);
-      },
-      warmup: (variant) async {
-        warmups.add(variant);
-        return Duration.zero;
-      },
-    );
-
-    expect(warmups, [
-      ThroughputVariant.dartHashOn,
-      ThroughputVariant.openssh,
-      ThroughputVariant.dartHashOff,
-      ThroughputVariant.dartHashOff,
-      ThroughputVariant.openssh,
-      ThroughputVariant.dartHashOn,
-    ]);
-    expect(trials, hasLength(6));
-  });
-
-  test('floors the midpoint of two raw samples', () async {
-    final indices = {
-      for (final variant in ThroughputVariant.values) variant: 0,
-    };
-    final samples = await collectCounterbalancedSamples((variant) async {
-      final index = indices[variant]!;
-      indices[variant] = index + 1;
-      return Duration(microseconds: index + 1);
-    }, warmup: (_) async => Duration.zero);
-
-    expect(
-      samples.medianFor(ThroughputVariant.dartHashOn),
-      const Duration(microseconds: 1),
-    );
-  });
-
-  test('rejects a stale hash-on digest', () {
-    expect(
-      () => validateThroughputEntry(
-        actualBytes: 1_000_000,
-        digest: 'stale',
-        expectedBytes: 1_000_000,
-        expectedDigest: fixturePayload1MbSha256,
-        hashMode: HashMode.on,
-      ),
-      throwsStateError,
-    );
+    // The manifest numbers each variant's replicates by occurrence.
+    final seen = <ThroughputVariant, int>{};
+    final replicates = [
+      for (final variant in throughputTrialOrder)
+        seen[variant] = (seen[variant] ?? 0) + 1,
+    ];
+    expect(replicates, [for (final trial in manifest) trial.replicate]);
+    expect(replicates, [1, 1, 1, 2, 2, 2]);
   });
 
   test('independently verifies a local transfer destination', () async {
@@ -199,7 +138,7 @@ void main() {
     final file = File('${directory.path}/payload.bin');
     await file.writeAsString('abc');
 
-    final integrity = await inspectLocalFile(
+    final integrity = await inspectThroughputFile(
       file,
       expectedBytes: 3,
       expectedDigest:

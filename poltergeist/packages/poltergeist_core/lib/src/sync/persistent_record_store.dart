@@ -21,7 +21,11 @@ abstract interface class SyncRecordStore implements LocalRecordStore {
   /// Settle only the operation actually sent to the server. A local edit may
   /// replace it while the push is in flight, even within the same clock tick.
   /// The identity check and mutation must share the store's write queue.
-  /// Returns a restored remote winner for a rejected, still-current operation.
+  /// Returns a restored remote winner for a rejected, still-current operation:
+  /// the pulled winner that edit displaced is the copy the server still
+  /// holds, so it is the true winner and the losing edit must not keep its
+  /// slot (04 §3.2's "re-evaluation when the pending local rival next pushes
+  /// — including the push-ties-or-LOSES case").
   Future<EncryptedRecord?> settlePush(
     EncryptedRecord sent,
     PushResult result,
@@ -41,13 +45,6 @@ abstract interface class SyncRecordStore implements LocalRecordStore {
   /// pull runs `since = 0` and `applyPulled` re-scans the lifetime set —
   /// every record a no-op tie or a real apply).
   Future<void> resetSyncCursors();
-
-  /// The pulled winner a local edit displaced, restored when that edit's
-  /// push is rejected: the server still holds this copy, so it is the true
-  /// winner and the losing edit must not keep its slot (04 §3.2's
-  /// "re-evaluation when the pending local rival next pushes — including
-  /// the push-ties-or-LOSES case"). Returns the restored record, or null.
-  Future<EncryptedRecord?> restoreDisplaced(String id);
 
   /// Every displaced pulled winner currently parked behind a dirty local
   /// rival — the apply pass reports these as deferred (their re-check is
@@ -128,7 +125,7 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
 
   /// The pulled winners a dirty local edit displaced (04 §3.2's deferred
   /// re-check): when the local rival's push is rejected, the server's copy
-  /// is still this record — [restoreDisplaced] puts it back so the losing
+  /// is still this record — [settlePush] puts it back so the losing
   /// edit cannot keep the slot or the materialized row.
   final _displaced = <String, EncryptedRecord>{};
 
@@ -293,22 +290,6 @@ final class PersistentLocalRecordStore implements SyncRecordStore {
         _highWaterSeq = 0;
         _lastAppliedSeq = 0;
       });
-
-  @override
-  Future<EncryptedRecord?> restoreDisplaced(String id) async {
-    await _ensureLoaded();
-    await _writeTail;
-    if (_displaced[id] == null) return null;
-    EncryptedRecord? restored;
-    await _mutate(() {
-      restored = _displaced.remove(id);
-      if (restored != null) {
-        _records[id] = restored!;
-        _dirty.remove(id);
-      }
-    });
-    return restored;
-  }
 
   /// Every mutation is serialized and persisted atomically before the
   /// call returns — a crash mid-round can lose at most the in-flight

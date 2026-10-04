@@ -12,9 +12,7 @@ import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/theme/contrast.dart';
 import 'package:poltergeist_app/theme/theme_palette.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
-import 'package:poltergeist_app/ui/probe_status_dot.dart';
 import 'package:poltergeist_app/ui/server_state_indicator.dart';
-import 'package:poltergeist_core/poltergeist_core.dart' show ProbeStatus;
 
 import 'legacy_theme.dart';
 
@@ -456,9 +454,7 @@ void main() {
         home: const Scaffold(
           body: Column(
             children: [
-              ProbeStatusDot(ProbeStatus.online),
-              ProbeStatusDot(ProbeStatus.offline),
-              ProbeStatusDot(ProbeStatus.unknown),
+              ServerStateGlyph(ServerIndicatorGlyph.connected),
               ServerStateGlyph(ServerIndicatorGlyph.failed),
               ServerStateGlyph(ServerIndicatorGlyph.idle),
             ],
@@ -474,12 +470,6 @@ void main() {
         ))
           color,
     ];
-    expect(painted, [
-      palette.online,
-      palette.offline,
-      palette.unknown,
-      palette.offline,
-      palette.unknown,
-    ]);
+    expect(painted, [palette.online, palette.offline, palette.unknown]);
   });
 }

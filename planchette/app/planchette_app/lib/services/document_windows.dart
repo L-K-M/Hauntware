@@ -10,7 +10,6 @@
 // again with a fresh one.
 import 'dart:async';
 
-import 'package:flutter/material.dart' show ScaffoldMessengerState;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -45,9 +44,6 @@ final class DocumentWindow {
   }) : navigatorKey = GlobalKey<NavigatorState>(
          debugLabel: 'window $serial navigator',
        ),
-       scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>(
-         debugLabel: 'window $serial messenger',
-       ),
        focusScope = FocusScopeNode(debugLabel: 'window $serial');
 
   final int viewId;
@@ -62,7 +58,6 @@ final class DocumentWindow {
   late final DocumentWorkspace workspace;
 
   final GlobalKey<NavigatorState> navigatorKey;
-  final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey;
 
   /// Everything the window shows sits under this scope, so activating the
   /// window can put focus back where it was in it.
@@ -132,7 +127,8 @@ final class DocumentWindows extends ChangeNotifier
   final WindowHost _host;
 
   /// Builds a window's workspace — its own documents on the app's shared
-  /// services — once the window's keys exist for the dialogs to use.
+  /// services — once the window's navigator key exists for the dialogs to
+  /// use.
   final DocumentWorkspace Function(DocumentWindow window) _workspaceFactory;
 
   /// Quits the whole app (the desktop window's requestQuit): reviews every
@@ -172,18 +168,6 @@ final class DocumentWindows extends ChangeNotifier
   /// Serializes opening and closing, which both await the runner: two
   /// quick New Windows must not both reuse the hidden main window.
   Future<void> _tail = Future.value();
-
-  late final GlobalKey<NavigatorState> navigatorKey =
-      _ActiveWindowKey<NavigatorState>(
-        () => activeWindow?.navigatorKey,
-        'active window navigator',
-      );
-
-  late final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey =
-      _ActiveWindowKey<ScaffoldMessengerState>(
-        () => activeWindow?.scaffoldMessengerKey,
-        'active window messenger',
-      );
 
   /// Bounded: frames stop while the app is hidden, and a close must not
   /// wait for one forever. Without the frame the view is only destroyed
@@ -647,27 +631,4 @@ final class WindowPickers {
     suggestedName: suggestedName,
     initialDirectory: initialDirectory,
   );
-}
-
-/// A key that is never mounted: it answers for the active window's key.
-///
-/// Callers that take one navigator key — dialogs and prompts raised above
-/// whatever window is in front — read `currentContext` when they show
-/// something. With several windows the right navigator is the one in the
-/// window the user is working in, and it changes, so they get this instead
-/// of any one window's key.
-final class _ActiveWindowKey<T extends State<StatefulWidget>>
-    extends LabeledGlobalKey<T> {
-  _ActiveWindowKey(this._resolve, String label) : super(label);
-
-  final GlobalKey<T>? Function() _resolve;
-
-  @override
-  BuildContext? get currentContext => _resolve()?.currentContext;
-
-  @override
-  Widget? get currentWidget => _resolve()?.currentWidget;
-
-  @override
-  T? get currentState => _resolve()?.currentState;
 }

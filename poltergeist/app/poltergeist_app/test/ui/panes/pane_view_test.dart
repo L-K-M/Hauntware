@@ -1240,6 +1240,112 @@ void main() {
     expect(find.textContaining('fault:'), findsNothing);
   });
 
+  testWidgets('a folder that cannot open in place names itself and the '
+      'engine reason in the notice strip', (tester) async {
+    final channel = localChannelWithEntries()
+      ..listingFailures['/home/tester/docs'] = const RemoteFileException(
+        kind: RemoteFileErrorKind.permissionDenied,
+        operation: 'list',
+        path: '/home/tester/docs',
+        message: 'Permission denied',
+      );
+    await left.openLocalHome();
+    await pumpShell(tester);
+
+    final docs = left.entries.indexWhere((entry) => entry.name == 'docs');
+    expect(left.expandAt(docs), isTrue);
+    await tester.pumpAndSettle();
+
+    expect(channel.listCalls, contains('/home/tester/docs'));
+    expect(left.notice, PaneNotice.expandFailed);
+    expect(
+      find.text("Couldn't show what's in “docs”: Permission denied"),
+      findsOneWidget,
+    );
+    await tester.pump(left.noticeLifetime);
+  });
+
+  testWidgets('a watch that keeps dying says so in the notice strip', (
+    tester,
+  ) async {
+    final channel = localChannelWithEntries();
+    await left.openLocalHome();
+    await pumpShell(tester);
+    expect(channel.watchCalls, isNotEmpty, reason: 'the listing is watched');
+
+    // Every re-arm dies at subscribe, so the loss budget runs out.
+    channel.onWatch = (_) => channel.emitWatch(DirectoryWatchSignal.lost);
+    channel.emitWatch(DirectoryWatchSignal.lost);
+    await tester.pumpAndSettle();
+
+    expect(left.notice, PaneNotice.watchStopped);
+    expect(
+      find.text(
+        'This folder stopped updating automatically. '
+        'Refresh to see new changes.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(left.noticeLifetime);
+  });
+
+  testWidgets('an untyped expansion failure reads as the list-folder fault', (
+    tester,
+  ) async {
+    // The untyped error is reported, not rendered: give the pane a sink.
+    final reported = <Object>[];
+    workspace.dispose();
+    left = PaneController(
+      paneTabId: 'pane.left',
+      lanes: lanes,
+      onError: (error, _) => reported.add(error),
+    );
+    right = PaneController(paneTabId: 'pane.right', lanes: lanes);
+    leftStrip = testPaneStrip(left);
+    rightStrip = testPaneStrip(right);
+    workspace = WorkspaceController(left: leftStrip, right: rightStrip);
+    localChannelWithEntries().listingFailures['/home/tester/docs'] =
+        StateError('io exploded');
+    await left.openLocalHome();
+    await pumpShell(tester);
+
+    final docs = left.entries.indexWhere((entry) => entry.name == 'docs');
+    expect(left.expandAt(docs), isTrue);
+    await tester.pumpAndSettle();
+
+    expect(reported, [isA<StateError>()]);
+    expect(
+      find.text(
+        "Couldn't show what's in “docs”: This folder could not be listed.",
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('fault:'), findsNothing);
+    await tester.pump(left.noticeLifetime);
+  });
+
+  testWidgets('a typed failure titles the overlay by its kind and keeps '
+      'the engine line', (tester) async {
+    localChannelWithEntries().listingFailures['/home/tester/docs'] =
+        const RemoteFileException(
+          kind: RemoteFileErrorKind.unsupported,
+          operation: 'list',
+          path: '/home/tester/docs',
+          message: 'Listing is not available on this volume',
+        );
+    await left.openLocalHome();
+    await pumpShell(tester);
+
+    left.navigate('/home/tester/docs');
+    await tester.pumpAndSettle();
+
+    expect(find.text('This operation is not supported here.'), findsOneWidget);
+    expect(
+      find.text('Listing is not available on this volume'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('remote connect renders the connecting state until it lands', (
     tester,
   ) async {

@@ -32,7 +32,6 @@ enum WindowHostKey {
   title,
   suggestedName,
   initialDirectory,
-  paths,
 }
 
 /// What a runner's window host reports back to Dart.
@@ -292,50 +291,4 @@ final class MethodChannelWindowHost implements WindowHost {
     }
     return null;
   }
-}
-
-/// No runner behind the channel, as under `flutter test`: one window, and
-/// every operation fails closed and says so.
-final class UnavailableWindowHost implements WindowHost {
-  const UnavailableWindowHost();
-
-  @override
-  set listener(WindowHostListener? listener) {}
-
-  @override
-  Future<bool> isAvailable() async => false;
-
-  @override
-  Future<int> create({String? title}) async =>
-      throw const WindowHostException('no window host on this platform');
-
-  @override
-  Future<void> destroy(int viewId) async {}
-
-  @override
-  Future<void> activate(int viewId) async {}
-
-  @override
-  Future<void> hide(int viewId) async {}
-
-  @override
-  Future<bool> isFullScreen(int viewId) async => false;
-
-  @override
-  Future<void> setFullScreen(int viewId, {required bool fullScreen}) async {}
-
-  @override
-  Future<void> setTitle(int viewId, String title) async {}
-
-  @override
-  Future<List<String>> pickOpenFiles(int viewId) async =>
-      throw const WindowHostException('no window host on this platform');
-
-  @override
-  Future<String?> pickSavePath(
-    int viewId, {
-    required String suggestedName,
-    String? initialDirectory,
-  }) async =>
-      throw const WindowHostException('no window host on this platform');
 }

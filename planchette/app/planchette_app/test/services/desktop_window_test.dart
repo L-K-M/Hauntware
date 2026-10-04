@@ -5,9 +5,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:planchette_app/planchette_app.dart';
 import 'package:planchette_app/services/desktop_window.dart';
+import 'package:planchette_app/services/document_windows.dart';
 import 'package:planchette_app/services/document_workspace.dart';
 import 'package:planchette_app/theme/planchette_theme.dart';
 
+import 'document_windows_test.dart' show FakeWindowHost;
 import 'document_workspace_test.dart' show MemoryDocuments, FakeDialogs;
 
 /// The native window, scripted: every call lands in [events], and
@@ -156,16 +158,22 @@ void main() {
   test(
     'failed native destroy reports and unlocks the retained workspace',
     () async {
-      final workspace = DocumentWorkspace(
-        store: MemoryDocuments(),
-        dialogs: FakeDialogs(),
+      // Wired as main.dart wires it: the app-wide review and failure path.
+      final windows = DocumentWindows(
+        host: FakeWindowHost(),
+        workspaceFactory: (_) =>
+            DocumentWorkspace(store: MemoryDocuments(), dialogs: FakeDialogs()),
+        quitApplication: () async {},
+        afterFrame: () async {},
       );
-      addTearDown(workspace.dispose);
+      addTearDown(windows.dispose);
+      await windows.start();
+      final workspace = windows.windows.single.workspace;
       final tab = workspace.newDocument()!;
       final window = FakeWindowAdapter()..failDestroy = true;
       final desktop = desktopFor(
-        confirmQuit: workspace.confirmQuit,
-        onQuitFailed: workspace.quitFailed,
+        confirmQuit: windows.confirmAllClose,
+        onQuitFailed: windows.quitFailed,
         window: window,
       );
       await desktop.requestQuit();

@@ -197,6 +197,12 @@ literals, inventoried in the localization contract. The controller keeps
 its default `TextNormalization.normalize`, matching
 `loadBuiltInTextDocumentDetails` and `saveBuiltInTextDocument`.
 
+Retired (2026-10-04): the text-only `loadBuiltInTextDocument`
+compatibility wrapper had no caller outside core's own test; app code
+loads through `loadBuiltInTextDocumentDetails`. The ported
+`built_in_text_document_test.dart` now calls that function where
+upstream's `built_in_text_editor_test.dart` calls the wrapper.
+
 ## Destination collision ownership (2026-09-27)
 
 Original Poltergeist implementation; no Séance source was copied and no pin
@@ -373,6 +379,10 @@ port candidates.
   composition yet (it lands with the engine/prompt slices that consume the
   vault); behavior identical.
 - Port-back candidates: none.
+- Retired: 2026-10-04. Never wired: `main.dart` builds the vault as
+  `DynamicSecretVault`, whose null key provider is the production locked
+  vault. The file and its keystore_resilience case are removed; Séance's
+  class is unaffected.
 
 ## app/poltergeist_app/test/keystore_resilience_test.dart
 
@@ -381,7 +391,9 @@ port candidates.
 - Ported: 2026-09-07
 - Divergences: the dropped API-key methods' tests map to `setKeystoreKey`
   write-failure coverage plus a master-key entry-name assertion; imports via
-  the poltergeist_core barrel.
+  the poltergeist_core barrel. Since 2026-10-04 the `LockedSecretVault`
+  read/write/delete case is dropped with that class; the locked-message
+  case is kept.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/vault_rekey_journal_test.dart
@@ -732,12 +744,18 @@ counterpart is ported here.
 - Source: app/seance_app/lib/ui/server_grouping.dart
 - Séance commit: 8326f41f574fabce11986ea16137917626f67958
 - Ported: 2026-09-24
-- Divergences: none — carried verbatim (imports re-pointed). The file is
-  deliberately Flutter-free upstream; the catalog section renders pulled
-  `ServerConfig`s through the same sectioning Séance uses, so identical
-  data produces identical placement. Re-synced 2026-09-29 so a filter keeps
-  an otherwise-empty top-level section when it contains a hidden live server;
-  the header remains the place that connection's status is exposed.
+- Divergences: since 2026-10-04 only `existingServerGroups` is carried
+  (see Pruned below). Until then the file was carried verbatim (imports
+  re-pointed); it is deliberately Flutter-free upstream. Re-synced
+  2026-09-29 so a filter keeps an otherwise-empty top-level section when
+  it contains a hidden live server; the header remains the place that
+  connection's status is exposed.
+- Pruned: 2026-10-04. The catalog stopped using this sectioning on
+  2026-09-24 (`477be0a4`) and groups its servers inline, so only
+  `existingServerGroups`, behind the server editor's group chips, is
+  carried. The section keys and labels, `groupServers`, the row model,
+  `sectionsHoldingLive` and `hiddenByHeader` are removed; a diff against
+  the source is now partial.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
@@ -755,8 +773,12 @@ counterpart is ported here.
 - Source: app/seance_app/test/server_grouping_test.dart
 - Séance commit: 8326f41f574fabce11986ea16137917626f67958
 - Ported: 2026-09-24
-- Divergences: none — carried verbatim (imports re-pointed), including the
-  kept-section and `sectionsHoldingLive` regressions re-synced 2026-09-29.
+- Divergences: since 2026-10-04 only the `existingServerGroups` group is
+  carried (see Pruned below). Until then it was carried verbatim (imports
+  re-pointed), including the kept-section and `sectionsHoldingLive`
+  regressions re-synced 2026-09-29.
+- Pruned: 2026-10-04, with the library above: only the
+  `existingServerGroups` group and its `_server` fixture are carried.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_filter_test.dart
@@ -1040,7 +1062,9 @@ counterpart is ported here.
 - Ported: 2026-09-24
 - Divergences: the security-bookmark and `ServerTile` cases are dropped
   with the machinery they exercise; label grammar and stale-source
-  coverage carried verbatim.
+  coverage carried verbatim. Since 2026-10-04 the two locked-vault cases
+  use `DynamicSecretVault` with a null key provider, the production
+  locked shape, instead of upstream's `LockedSecretVault`.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_editor_test.dart
