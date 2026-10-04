@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'repository_root.dart';
+
 const _driverPath = 'scripts/refresh-seance-release-audit.sh';
 const _recordPath = 'poltergeist/docs/PORTS.md';
 const _originalRecord = 'original audit\n';
@@ -29,7 +31,8 @@ void main() {
     sandbox = Directory.systemTemp.createTempSync('hauntware-release-audit-');
     repository = Directory(p.join(sandbox.path, 'repository'))..createSync();
 
-    _write(repository, _driverPath, File(_driverPath).readAsStringSync());
+    final source = File(p.join(findRepositoryRoot().path, _driverPath));
+    _write(repository, _driverPath, source.readAsStringSync());
     _write(repository, _recordPath, _originalRecord);
     _write(repository, 'unrelated.txt', 'preserved\n');
     _write(repository, 'poltergeist/scripts/audit-seance-pin.sh', '''

@@ -9,6 +9,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 
+import 'repository_root.dart';
+
 void main() {
   late Directory sandbox;
   late File fakeEngine;
@@ -187,11 +189,13 @@ exit 1
       ..writeAsStringSync(r'''#!/usr/bin/env bash
 set -euo pipefail
 case "$*" in
-  *pubspecs) exit 1 ;;
+  *pubspecs)
+    printf 'fixture: pubspec discovery failed\n' >&2
+    exit 1 ;;
 esac
 ''');
     Process.runSync('chmod', ['+x', fakeDart.path]);
-    final root = _repositoryRoot();
+    final root = findRepositoryRoot();
     final result = await Process.run(
       'bash',
       [p.join(root.path, 'scripts/release.sh'), '2099.99.99'],
@@ -205,6 +209,7 @@ esac
 
     expect(result.exitCode, isNot(0));
     expect(result.stdout, isNot(contains('args=')));
+    expect(result.stderr, contains('fixture: pubspec discovery failed'));
   });
 
   test('post-bump stops when app metadata synchronization fails', () async {
@@ -343,12 +348,12 @@ esac
     );
 
     expect(result.exitCode, 0, reason: result.stderr as String);
-    expect(result.stdout, contains('cwd=${_repositoryRoot().path}\n'));
+    expect(result.stdout, contains('cwd=${findRepositoryRoot().path}\n'));
   });
 
   for (final product in ['planchette', 'seance', 'poltergeist']) {
     test('$product release.sh forwards the whole-suite release', () async {
-      final root = _repositoryRoot();
+      final root = findRepositoryRoot();
       final result = await Process.run(
         'bash',
         [p.join(root.path, product, 'scripts/release.sh'), '--help'],
@@ -378,7 +383,7 @@ Future<ProcessResult> _runRelease(
   String priorTags = '',
   String remoteTags = '',
 }) {
-  final root = _repositoryRoot();
+  final root = findRepositoryRoot();
   return Process.run(
     'bash',
     [p.join(root.path, 'scripts/release.sh'), ...arguments],
@@ -491,19 +496,3 @@ File _engineLog(Directory sandbox) =>
 String _line(ProcessResult result, String prefix) => (result.stdout as String)
     .split('\n')
     .firstWhere((line) => line.startsWith(prefix), orElse: () => '');
-
-Directory _repositoryRoot() {
-  var candidate = Directory.current.absolute;
-  while (true) {
-    if (File(p.join(candidate.path, 'scripts/release.sh')).existsSync() &&
-        File(p.join(candidate.path, 'pubspec.yaml')).existsSync()) {
-      return candidate;
-    }
-
-    final parent = candidate.parent;
-    if (p.equals(parent.path, candidate.path)) {
-      throw StateError('repository root not found from ${Directory.current}');
-    }
-    candidate = parent;
-  }
-}
