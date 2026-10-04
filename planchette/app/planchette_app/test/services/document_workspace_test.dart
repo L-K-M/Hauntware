@@ -1640,7 +1640,7 @@ void main() {
   test('a quit failure survives unrelated successes', () async {
     final tab = workspace.newDocument()!..editor.text.text = 'draft';
     dialogs.savePath = testPath('draft.txt');
-    workspace.quitFailed(StateError('destroy failed'));
+    workspace.reportError('Could not close Planchette: destroy failed');
     expect(workspace.error, contains('Could not close Planchette'));
 
     expect(await workspace.save(tab), isTrue);
