@@ -1265,6 +1265,30 @@ void main() {
     await tester.pump(left.noticeLifetime);
   });
 
+  testWidgets('a watch that keeps dying says so in the notice strip', (
+    tester,
+  ) async {
+    final channel = localChannelWithEntries();
+    await left.openLocalHome();
+    await pumpShell(tester);
+    expect(channel.watchCalls, isNotEmpty, reason: 'the listing is watched');
+
+    // Every re-arm dies at subscribe, so the loss budget runs out.
+    channel.onWatch = (_) => channel.emitWatch(DirectoryWatchSignal.lost);
+    channel.emitWatch(DirectoryWatchSignal.lost);
+    await tester.pumpAndSettle();
+
+    expect(left.notice, PaneNotice.watchStopped);
+    expect(
+      find.text(
+        'This folder stopped updating automatically. '
+        'Refresh to see new changes.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(left.noticeLifetime);
+  });
+
   testWidgets('an untyped expansion failure reads as the list-folder fault', (
     tester,
   ) async {
