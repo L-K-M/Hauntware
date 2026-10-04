@@ -86,6 +86,8 @@ jobs:
       - name: Verify suite version lockstep
         run: |
           dart run tool/release_version/bin/release_version.dart check
+      - name: Analyze suite release tool
+        run: dart analyze tool/release_version
       - name: Test suite release tool
         run: dart test tool/release_version/test
 
@@ -356,6 +358,14 @@ jobs:
               - 'poltergeist/packages/**/test/**'
               - 'poltergeist/packages/**/pubspec.yaml'
               - 'poltergeist/test/integration/**'
+              # Shared code the Poltergeist packages consume by path
+              # (same list as the bench filter below).
+              - 'seance/packages/seance_core/lib/**'
+              - 'seance/packages/seance_core/pubspec.yaml'
+              - 'seance/packages/seance_protocol/lib/**'
+              - 'seance/packages/seance_protocol/pubspec.yaml'
+              - 'planchette/packages/planchette_core/lib/**'
+              - 'planchette/packages/planchette_core/pubspec.yaml'
               - '.github/workflows/ci.yml'
             fixture:
               - 'poltergeist/test/integration/**'
@@ -499,6 +509,14 @@ jobs:
               - 'poltergeist/app/poltergeist_app/lib/bench/**'
               - 'poltergeist/app/poltergeist_app/integration_test/**'
               - 'poltergeist/app/poltergeist_app/test_driver/**'
+              # Shared code the Poltergeist packages consume by path
+              # (same list as the integration filter above).
+              - 'seance/packages/seance_core/lib/**'
+              - 'seance/packages/seance_core/pubspec.yaml'
+              - 'seance/packages/seance_protocol/lib/**'
+              - 'seance/packages/seance_protocol/pubspec.yaml'
+              - 'planchette/packages/planchette_core/lib/**'
+              - 'planchette/packages/planchette_core/pubspec.yaml'
               - '.github/workflows/ci.yml'
       # A matching PR, a main push, or a dispatch always runs the job;
       # an absent fixture fails those runs loudly instead of silently
