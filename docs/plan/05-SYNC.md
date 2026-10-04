@@ -1129,8 +1129,12 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    secrets — may be retrievable over HTTP until purged. The `trashPath`
    rule is **per side** (`trashPathLeft`/`trashPathRight`, §6 — each
    resolved on that side's host; one shared string could not be
-   same-filesystem on both machines) and moves that side's trash outside
-   that side's root (a rename onto that out-of-root trash can still
+   same-filesystem on both machines). A configured value is not itself
+   proof that trash is outside: null selects the in-root default, relative
+   values resolve from the canonical sync root, and `~`/`~/…` plus absolute
+   values are anchored on that side. The warning clears only when the
+   effective trash path is outside the effective root. A rename onto that
+   out-of-root trash can still
    fail — copy-then-delete is the fallback, and its trigger is a
    precision point: for a local pair EXDEV is the classifiable trigger
    (mirroring D26's local rule) and falls back, while any other local
@@ -1138,8 +1142,8 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    same permission or existence problem and only mask the cause; for a
    remote pair the SFTP status code carries no errno, so *any* rename
    failure not prevented by the sequence prefix triggers the fallback
-   rather than being classified as cross-device), and the
-   docroot warning — trash in-root while the destination path looks like
+   rather than being classified as cross-device. The docroot warning —
+   trash in-root while an affected sync root looks like
    a docroot (`public_html`, `www`, `htdocs`, `/var/www`) — appears both
    in the pair editor *and* as a plan-view notice chip: ad-hoc pairs (§9)
    never pass through the pair editor, so the plan view is their only
@@ -1152,8 +1156,27 @@ heavy set (`node_modules`, `.git`, `build`, `target`, `__pycache__`):
    `~/.poltergeist-trash/<root-slug>`, so the per-(host, root) trash
    invariant the purge/restore machinery in this rail depends on
    survives the suggestion rather than merging every root's trash into
-   one directory). For an ad-hoc pair, which never passes through the
-   pair editor and so has no field to open, the chip's action instead
+   one directory). Detection uses normalized, ASCII-case-insensitive path
+   components named exactly `public_html`, `www`, or `htdocs`; `/var/www`
+   is therefore covered while `www2`, `www-data`, and
+   `public_html_backup` are not. Remote paths use POSIX separators and
+   local paths use their platform grammar. Before a scan, the editor uses
+   lexical containment and case-folds conservatively because path case is
+   not known; the plan view refines it with canonical root and trash paths
+   under the detected root case rule. A mixed absolute/`~` relationship is
+   unknown before home expansion, so it remains warned until scan. A side
+   participates whenever an allowed plan action can write or delete there:
+   conflict and kind-change overrides can target either side regardless of
+   the default direction, and Mirror offers explicit deletes on either
+   existing side. Both sides are therefore assessed when either deletions
+   are not `permanent` or backups are `trash`:
+   `deletions: none` can still trash an explicitly approved rule-4 kind
+   change, so only `permanent` + `backups: none` proves a side
+   cannot create trash. `<root-slug>` is a sanitized basename plus a
+   complete lowercase base32 SHA-256 digest of the normalized endpoint
+   identity, capped together at 63 characters; digest truncation cannot
+   merge same-named roots. For an ad-hoc pair, which never passes through
+   the pair editor and so has no field to open, the chip's action instead
    follows rail 4's `Save as Favorite & Adjust Rules…` pattern (save the
    pair, open the editor focused on the trash path, rescan on close) —
    so the "one click" promise holds for exactly the audience the chip

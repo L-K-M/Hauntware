@@ -133,6 +133,62 @@ void main() {
       );
     });
 
+    test(
+      'docroot warning keeps a canonical root without trash identity',
+      () async {
+        final scratch = Directory.systemTemp.createTempSync('pg-sync-docroot-');
+        addTearDown(() => scratch.deleteSync(recursive: true));
+        final rightRoot = Directory(p.join(scratch.path, 'www', 'site'))
+          ..createSync(recursive: true);
+        final pair = testSyncPair(right: '.');
+        final controller = SyncPlanController(
+          pair: pair,
+          environment: testSyncEnvironment(scratch),
+          syncTasks: SyncQueueTasks(),
+          scanner: FakeSyncScanner(
+            left: testScanResult('/left', const {}),
+            right: testScanResult(rightRoot.path, const {}),
+          ),
+          differ: FakeSyncDiffer(testPlan(pair, const [])),
+          rsyncEndpoints: resolveRsyncEndpoints,
+        );
+        addTearDown(controller.dispose);
+
+        await _ready(controller);
+
+        expect(controller.docrootWarnings, hasLength(1));
+        expect(controller.docrootWarnings.single.rootPath, rightRoot.path);
+      },
+    );
+
+    test('docroot containment follows the scanned root case rule', () async {
+      final scratch = Directory.systemTemp.createTempSync('pg-sync-docroot-');
+      addTearDown(() => scratch.deleteSync(recursive: true));
+      final rightRoot = Directory(p.join(scratch.path, 'www', 'site'))
+        ..createSync(recursive: true);
+      final trashPath = p.join(scratch.path, 'WWW', 'site', 'private');
+      final pair = testSyncPair(
+        right: rightRoot.path,
+        rules: SyncRuleSet(trashPathRight: trashPath),
+      );
+      final controller = SyncPlanController(
+        pair: pair,
+        environment: testSyncEnvironment(scratch),
+        syncTasks: SyncQueueTasks(),
+        scanner: FakeSyncScanner(
+          left: testScanResult('/left', const {}),
+          right: testScanResult(rightRoot.path, const {}, caseSensitive: false),
+        ),
+        differ: FakeSyncDiffer(testPlan(pair, const [])),
+        rsyncEndpoints: resolveRsyncEndpoints,
+      );
+      addTearDown(controller.dispose);
+
+      await _ready(controller);
+
+      expect(controller.docrootWarnings, hasLength(1));
+    });
+
     test('focused comparison selection drives command enablement', () async {
       final pair = testSyncPair();
       final comparable = testItem(

@@ -18,10 +18,12 @@ import 'package:poltergeist_app/services/sync_plan_controller.dart';
 import 'package:poltergeist_app/services/sync_queue_facade.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
 import 'package:poltergeist_app/ui/sync/sync_commands.dart';
+import 'package:poltergeist_app/ui/sync/sync_pair_editor.dart';
 import 'package:poltergeist_app/ui/sync/sync_plan_view.dart';
 import 'package:poltergeist_app/ui/workspace_shell.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
-import 'package:poltergeist_sync/poltergeist_sync.dart' show SyncSide;
+import 'package:poltergeist_sync/poltergeist_sync.dart'
+    show SyncPair, SyncSide, syncPairFromBookmark;
 
 import '../../services/engine_session_test.dart' as session_test;
 import '../../support/fake_bookmark_store.dart';
@@ -37,22 +39,27 @@ RemoteFileEntry _entry(String dir, String name) => RemoteFileEntry(
 
 /// Two real folders, the shell's panes bound to them.
 final class _Fixture {
-  _Fixture(this.scratch)
+  _Fixture(this.scratch, {String rightName = 'right'})
     : left = Directory('${scratch.path}/left')..createSync(),
-      right = Directory('${scratch.path}/right')..createSync();
+      right = Directory('${scratch.path}/$rightName')..createSync();
 
   final Directory scratch;
   final Directory left;
   final Directory right;
+  late final FakeBookmarkStore bookmarks;
 }
+
+enum _BookmarkExposure { available, unavailable }
 
 Future<_Fixture> _pumpShell(
   WidgetTester tester, {
   required void Function(_Fixture fixture) seed,
+  String rightName = 'right',
+  _BookmarkExposure bookmarkExposure = _BookmarkExposure.available,
 }) async {
   final scratch = Directory.systemTemp.createTempSync('pg-sheet-shell-');
   addTearDown(() => scratch.deleteSync(recursive: true));
-  final fixture = _Fixture(scratch);
+  final fixture = _Fixture(scratch, rightName: rightName);
   seed(fixture);
 
   final engine = session_test.FakeAppEngine();
@@ -73,6 +80,8 @@ Future<_Fixture> _pumpShell(
   final navigatorKey = GlobalKey<NavigatorState>();
   final supportDir = Directory('${scratch.path}/support')..createSync();
   final bookmarks = FakeBookmarkStore();
+  fixture.bookmarks = bookmarks;
+  addTearDown(bookmarks.close);
   final session = await startEngineSession(
     supportDirectoryPath: supportDir.path,
     bookmarks: bookmarks,
@@ -91,7 +100,9 @@ Future<_Fixture> _pumpShell(
       supportedLocales: AppLocalizations.supportedLocales,
       navigatorKey: navigatorKey,
       home: WorkspaceShell(
-        bookmarks: bookmarks,
+        bookmarks: bookmarkExposure == _BookmarkExposure.available
+            ? bookmarks
+            : null,
         engineSession: session,
         syncEnvironment: testSyncEnvironment(scratch),
         syncTasks: SyncQueueTasks(),
@@ -208,5 +219,175 @@ void main() {
       findsOneWidget,
     );
     expect(File('${fixture.right.path}/a.txt').readAsStringSync(), 'old');
+  });
+
+  testWidgets('docroot action saves, focuses, and persists the safer path', (
+    tester,
+  ) async {
+    final fixture = await _pumpShell(
+      tester,
+      rightName: 'public_html',
+      seed: (f) => File('${f.left.path}/a.txt').writeAsStringSync('alpha'),
+    );
+    await runShellCommand(tester, kSyncSynchronizePanesCommandId);
+    await _tapAndWait(
+      tester,
+      'sync.sheet.simulate',
+      () => _session(tester)?.phase == SyncPlanPhase.ready,
+    );
+    final session = _session(tester)!;
+    expect(
+      find.byKey(const ValueKey('sync.docrootWarning.right')),
+      findsOneWidget,
+    );
+    expect(
+      shellCommandEnabled(tester, kSyncAdjustDocrootTrashCommandId),
+      isTrue,
+    );
+
+    await tester.runAsync(() async {
+      await tester.tap(
+        find.byKey(const ValueKey('sync.docrootWarningAction.right')),
+      );
+      for (
+        var i = 0;
+        i < 100 && find.byType(SyncPairEditorDialog).evaluate().isEmpty;
+        i++
+      ) {
+        await tester.pump(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pumpAndSettle();
+
+    final savedBeforeEdit = await fixture.bookmarks.byId(session.pair.id);
+    expect(savedBeforeEdit?.kind, BookmarkKind.savedSync);
+    final trashField = tester.widget<TextField>(
+      find.byKey(const ValueKey('sync.trashPath.right')),
+    );
+    expect(trashField.controller!.text, startsWith('~/.poltergeist-trash/'));
+    expect(trashField.focusNode!.hasFocus, isTrue);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.widgetWithText(FilledButton, 'Save & Rescan'));
+      for (
+        var i = 0;
+        i < 200 &&
+            (find.byType(SyncPairEditorDialog).evaluate().isNotEmpty ||
+                session.phase == SyncPlanPhase.scanning);
+        i++
+      ) {
+        await tester.pump(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(
+      session.pair.rules.trashPathRight,
+      startsWith('~/.poltergeist-trash/'),
+    );
+    SyncPair? stored;
+    await tester.runAsync(() async {
+      for (var i = 0; i < 200; i++) {
+        final bookmark = await fixture.bookmarks.byId(session.pair.id);
+        stored = bookmark == null ? null : syncPairFromBookmark(bookmark);
+        if (stored?.rules.trashPathRight == session.pair.rules.trashPathRight) {
+          return;
+        }
+
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    expect(stored?.rules.trashPathRight, session.pair.rules.trashPathRight);
+    expect(
+      find.byKey(const ValueKey('sync.docrootWarning.right')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('docroot action ignores a second invocation while opening', (
+    tester,
+  ) async {
+    await _pumpShell(
+      tester,
+      rightName: 'public_html',
+      seed: (f) => File('${f.left.path}/a.txt').writeAsStringSync('alpha'),
+    );
+    await runShellCommand(tester, kSyncSynchronizePanesCommandId);
+    await _tapAndWait(
+      tester,
+      'sync.sheet.simulate',
+      () => _session(tester)?.phase == SyncPlanPhase.ready,
+    );
+
+    final action = tester.widget<TextButton>(
+      find.byKey(const ValueKey('sync.docrootWarningAction.right')),
+    );
+    await tester.runAsync(() async {
+      action.onPressed!();
+      action.onPressed!();
+      for (
+        var i = 0;
+        i < 100 && find.byType(SyncPairEditorDialog).evaluate().isEmpty;
+        i++
+      ) {
+        await tester.pump(const Duration(milliseconds: 20));
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SyncPairEditorDialog), findsOneWidget);
+  });
+
+  testWidgets('docroot command requires bookmark persistence', (tester) async {
+    await _pumpShell(
+      tester,
+      rightName: 'public_html',
+      bookmarkExposure: _BookmarkExposure.unavailable,
+      seed: (f) => File('${f.left.path}/a.txt').writeAsStringSync('alpha'),
+    );
+    await runShellCommand(tester, kSyncSynchronizePanesCommandId);
+    await _tapAndWait(
+      tester,
+      'sync.sheet.simulate',
+      () => _session(tester)?.phase == SyncPlanPhase.ready,
+    );
+
+    expect(
+      shellCommandEnabled(tester, kSyncAdjustDocrootTrashCommandId),
+      isFalse,
+    );
+    expect(
+      find.byKey(const ValueKey('sync.docrootWarningAction.right')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('docroot command disables while the plan is owned', (
+    tester,
+  ) async {
+    await _pumpShell(
+      tester,
+      rightName: 'public_html',
+      seed: (f) => File('${f.left.path}/a.txt').writeAsStringSync('alpha'),
+    );
+    await runShellCommand(tester, kSyncSynchronizePanesCommandId);
+    await _tapAndWait(
+      tester,
+      'sync.sheet.simulate',
+      () => _session(tester)?.phase == SyncPlanPhase.ready,
+    );
+    final session = _session(tester)!;
+
+    final run = session.run();
+    expect(session.planMutationsBlocked, isTrue);
+    expect(
+      shellCommandEnabled(tester, kSyncAdjustDocrootTrashCommandId),
+      isFalse,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() => run);
   });
 }

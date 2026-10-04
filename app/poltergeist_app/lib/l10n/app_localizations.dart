@@ -7419,6 +7419,12 @@ abstract class AppLocalizations {
   /// **'Purge Sync Trash…'**
   String get syncPurgeTrash;
 
+  /// Server-menu command (05 §8 rail 5): saves when needed and opens the active docroot warning's trash-path field.
+  ///
+  /// In en, this message translates to:
+  /// **'Protect Published Sync Trash…'**
+  String get syncAdjustDocrootTrash;
+
   /// Persistent plan notice for aged sync trash. File counts are journal-derived; run counts include unjournaled directories.
   ///
   /// In en, this message translates to:
@@ -7839,6 +7845,30 @@ abstract class AppLocalizations {
   /// **'Right trash path'**
   String get syncEditorTrashRightLabel;
 
+  /// Persistent warning when recoverable sync trash sits inside a likely HTTP document root (05 §8 rail 5).
+  ///
+  /// In en, this message translates to:
+  /// **'Trash may be public'**
+  String get syncDocrootWarningTitle;
+
+  /// Docroot trash warning body. Names the affected side and sync root.
+  ///
+  /// In en, this message translates to:
+  /// **'{side} trash is inside {root}. Deleted and replaced files may be downloadable over HTTP.'**
+  String syncDocrootWarningBody(String side, String root);
+
+  /// Plan and pair-editor action that prefills the affected trash field with the out-of-root suggestion.
+  ///
+  /// In en, this message translates to:
+  /// **'Use safer path'**
+  String get syncDocrootWarningUseSaferPath;
+
+  /// Accessible name for a docroot warning action. Distinguishes the affected side when both sides warn.
+  ///
+  /// In en, this message translates to:
+  /// **'Use safer path for {side}'**
+  String syncDocrootWarningUseSaferPathForSide(String side);
+
   /// Placeholder inside the pair editor's path fields (05 §9).
   ///
   /// In en, this message translates to:
@@ -8114,6 +8144,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requires live sync trash with no active run'**
   String get commandDisabledNoSyncTrash;
+
+  /// Palette reason under sync.adjustDocrootTrash when no persisted, mutable HTTP-docroot warning is active.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires an editable published-root trash warning'**
+  String get commandDisabledNoDocrootTrash;
 
   /// Palette reason under Compare Selected Item while no comparable sync-plan row is focused.
   ///

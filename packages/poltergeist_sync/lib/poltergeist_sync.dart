@@ -7,6 +7,7 @@ library;
 
 export 'src/compare.dart';
 export 'src/diff.dart';
+export 'src/docroot_warning.dart';
 export 'src/executor.dart';
 export 'src/ignore.dart';
 export 'src/journal.dart';

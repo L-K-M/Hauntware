@@ -18,6 +18,7 @@ import '../panes/pane_tabs_view.dart' show paneTabTitle;
 import '../panes/quick_connect_view.dart';
 import '../sidebar/sidebar_facts.dart' show canAddLocationToFavorites;
 import '../sync/sync_plan_view.dart';
+import '../sync/sync_rules_edit_request.dart';
 import 'compact_breadcrumbs.dart';
 import 'compact_command_sheet.dart';
 import 'compact_listing.dart';
@@ -48,7 +49,8 @@ class CompactPaneSeams {
   final CheckoutSession? checkoutSession;
   final void Function(String serverId)? onReviewLocalEdits;
   final void Function(SyncPlanController session)? onSyncSaveAsFavorite;
-  final void Function(SyncPlanController session)? onSyncEditRules;
+  final void Function(SyncPlanController session, SyncRulesEditRequest request)?
+  onSyncEditRules;
   final VoidCallback? onImportSshConfig;
 
   /// "Add Current Folder to Favorites" for the shown pane — the verb the
@@ -452,7 +454,7 @@ class _PaneBody extends StatelessWidget {
             : () => seams.onSyncSaveAsFavorite!(session),
         onEditRules: seams.onSyncEditRules == null
             ? null
-            : () => seams.onSyncEditRules!(session),
+            : (request) => seams.onSyncEditRules!(session, request),
       );
     } else {
       body = CompactListing(

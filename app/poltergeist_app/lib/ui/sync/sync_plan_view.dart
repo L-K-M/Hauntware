@@ -20,11 +20,13 @@ import '../../services/registered_command.dart';
 import '../../services/sync_plan_controller.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/family_hues.dart';
+import '../display_path.dart';
 import '../menus/menu_shortcut_hint.dart';
 import 'rsync_copy.dart';
 import 'sync_commands.dart';
 import 'sync_plan_format.dart';
 import 'sync_plan_table.dart';
+import 'sync_rules_edit_request.dart';
 import 'sync_trash_purge_dialog.dart';
 
 /// One filter chip's bucket over effective actions.
@@ -64,7 +66,7 @@ final class SyncPlanView extends StatefulWidget {
   final VoidCallback? onSaveAsFavorite;
 
   /// The pair/rules editor affordance (options sheet / pair editor).
-  final VoidCallback? onEditRules;
+  final ValueChanged<SyncRulesEditRequest>? onEditRules;
 
   /// Injectable clock for the reason column's age labels.
   final DateTime Function()? clock;
@@ -135,6 +137,11 @@ class _SyncPlanViewState extends State<SyncPlanView> {
                 expanded: _warningsExpanded,
                 onToggle: () =>
                     setState(() => _warningsExpanded = !_warningsExpanded),
+              ),
+              _DocrootNotices(
+                controller: _controller,
+                l10n: l10n,
+                onEditRules: widget.onEditRules,
               ),
               _TrashNotices(
                 controller: _controller,
@@ -943,6 +950,124 @@ class _WarningsStrip extends StatelessWidget {
   }
 }
 
+/// Rail 5's non-dismissible HTTP-docroot hazard.
+final class _DocrootNotices extends StatelessWidget {
+  const _DocrootNotices({
+    required this.controller,
+    required this.l10n,
+    this.onEditRules,
+  });
+
+  final SyncPlanController controller;
+  final AppLocalizations l10n;
+  final ValueChanged<SyncRulesEditRequest>? onEditRules;
+
+  @override
+  Widget build(BuildContext context) {
+    final warnings = controller.docrootWarnings;
+    if (warnings.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final warning in warnings)
+          Semantics(
+            container: true,
+            explicitChildNodes: true,
+            liveRegion: true,
+            label: l10n.syncDocrootWarningBody(
+              warning.side == SyncSide.left
+                  ? l10n.syncSideLeft
+                  : l10n.syncSideRight,
+              isolatePathForDisplay(warning.rootPath),
+            ),
+            child: Material(
+              key: ValueKey('sync.docrootWarning.${warning.side.name}'),
+              color: theme.colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ExcludeSemantics(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.public_off_outlined,
+                            size: 18,
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  l10n.syncDocrootWarningTitle,
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    color: theme.colorScheme.onErrorContainer,
+                                  ),
+                                ),
+                                Text(
+                                  l10n.syncDocrootWarningBody(
+                                    warning.side == SyncSide.left
+                                        ? l10n.syncSideLeft
+                                        : l10n.syncSideRight,
+                                    isolatePathForDisplay(warning.rootPath),
+                                  ),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onErrorContainer,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (onEditRules != null)
+                      Semantics(
+                        label: l10n.syncDocrootWarningUseSaferPathForSide(
+                          warning.side == SyncSide.left
+                              ? l10n.syncSideLeft
+                              : l10n.syncSideRight,
+                        ),
+                        button: true,
+                        excludeSemantics: true,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            key: ValueKey(
+                              'sync.docrootWarningAction.${warning.side.name}',
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor:
+                                  theme.colorScheme.onErrorContainer,
+                            ),
+                            onPressed: controller.planMutationsBlocked
+                                ? null
+                                : () => onEditRules!(
+                                    SyncRulesEditRequest.docroot(warning),
+                                  ),
+                            child: Text(l10n.syncDocrootWarningUseSaferPath),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// Rail 5's persistent aged-trash notices and cancellable purge state.
 final class _TrashNotices extends StatelessWidget {
   const _TrashNotices({
@@ -1102,7 +1227,7 @@ class _RefusalBanner extends StatelessWidget {
 
   final SyncPlanController controller;
   final AppLocalizations l10n;
-  final VoidCallback? onEditRules;
+  final ValueChanged<SyncRulesEditRequest>? onEditRules;
 
   @override
   Widget build(BuildContext context) {
@@ -1148,7 +1273,10 @@ class _RefusalBanner extends StatelessWidget {
             ),
             if (onEditRules != null)
               TextButton(
-                onPressed: controller.planMutationsBlocked ? null : onEditRules,
+                onPressed: controller.planMutationsBlocked
+                    ? null
+                    : () =>
+                          onEditRules!(const SyncRulesEditRequest.maxDelete()),
                 child: Text(l10n.syncMaxDeleteSaveAdjust),
               ),
           ],

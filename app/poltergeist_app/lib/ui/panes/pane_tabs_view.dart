@@ -24,6 +24,7 @@ import '../../theme/app_theme.dart';
 import '../server_appearance.dart';
 import '../server_state_indicator.dart';
 import '../sync/sync_plan_view.dart';
+import '../sync/sync_rules_edit_request.dart';
 import 'pane_commands.dart' show copyPanePath;
 import 'pane_drop_area.dart';
 import 'pane_view.dart';
@@ -161,7 +162,10 @@ class PaneTabsView extends StatelessWidget {
 
   /// The pair/rules editor — the shell opens the options surface for
   /// the session's pair.
-  final void Function(SyncPlanController session)? onSyncEditRules;
+  final void Function(
+    SyncPlanController session,
+    SyncRulesEditRequest request,
+  )? onSyncEditRules;
 
   /// The ssh_config import offer on the §2.7 launcher (D22) — the shell
   /// routes it through the registered command so enablement and the
@@ -217,7 +221,7 @@ class PaneTabsView extends StatelessWidget {
                       : () => onSyncSaveAsFavorite!(syncSession),
                   onEditRules: onSyncEditRules == null
                       ? null
-                      : () => onSyncEditRules!(syncSession),
+                      : (request) => onSyncEditRules!(syncSession, request),
                 );
               }
               return PaneView(
