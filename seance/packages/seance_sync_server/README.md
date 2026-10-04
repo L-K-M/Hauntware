@@ -40,8 +40,10 @@ existing container and its `seance-data` volume:
 
 ```bash
 git clone https://github.com/L-K-M/Hauntware.git
-cp Seance/packages/seance_sync_server/.env \
-  Hauntware/seance/packages/seance_sync_server/.env   # if you have one
+if [ -f Seance/packages/seance_sync_server/.env ]; then
+  cp Seance/packages/seance_sync_server/.env \
+    Hauntware/seance/packages/seance_sync_server/.env
+fi
 cd Hauntware/seance && ./update.sh
 ```
 
