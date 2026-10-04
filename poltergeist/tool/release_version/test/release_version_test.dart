@@ -24,6 +24,22 @@ void main() {
       });
     }
 
+    // Apple's first bundle-version component must be positive.
+    const appleBundleVersions = {
+      '0.1.0': '1.1.0',
+      '1.1.0': '2.1.0',
+      '1.1.1': '2.1.1',
+      '2099.99.99': '2100.99.99',
+    };
+
+    for (final entry in appleBundleVersions.entries) {
+      test('maps ${entry.key} to Apple bundle version ${entry.value}', () {
+        final version = ReleaseVersion.parse(entry.key);
+
+        expect(version.appleBundleVersion, entry.value);
+      });
+    }
+
     const invalidVersions = [
       '',
       'v1.0.0',

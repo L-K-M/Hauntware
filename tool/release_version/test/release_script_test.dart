@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
 
 import 'repository_root.dart';
 
@@ -53,6 +54,7 @@ printf 'post=%s\n' "\$RELEASE_POST_BUMP"
 printf 'pretag=%s\n' "\${RELEASE_PRE_TAG:-}"
 printf 'args=%s\n' "\$*"
 printf 'cwd=%s\n' "\$PWD"
+printf 'app=%s\n' "\$RELEASE_APP_NAME"
 ''');
     fakeGit = File(p.join(sandbox.path, 'git'));
     fakeGit.writeAsStringSync(r'''#!/usr/bin/env bash
@@ -117,6 +119,7 @@ exit 1
     );
     expect(result.stdout, contains(RegExp('^sign=\$', multiLine: true)));
     expect(result.stdout, contains('args=2099.99.99 --push'));
+    expect(result.stdout, contains('app=Hauntware'));
   });
 
   test('rejects an invalid version before invoking the engine', () async {
@@ -152,6 +155,20 @@ exit 1
 
     expect(result.exitCode, isNot(0));
     expect(result.stderr, contains('prior tag v2099.99.99'));
+    expect(result.stdout, isNot(contains('pubspecs=')));
+  });
+
+  test('rejects re-releasing the version of an existing tag', () async {
+    final current = _suiteVersion();
+    final result = await _runRelease(
+      fakeEngine,
+      [current],
+      git: fakeGit,
+      priorTags: 'v$current',
+    );
+
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('must exceed prior tag v$current'));
     expect(result.stdout, isNot(contains('pubspecs=')));
   });
 
@@ -368,6 +385,7 @@ esac
       expect(result.exitCode, 0, reason: result.stderr as String);
       expect(result.stdout, contains('args=--help'));
       expect(result.stdout, contains('cwd=${root.path}'));
+      expect(result.stdout, contains('app=Hauntware'));
     });
   }
 }
@@ -405,6 +423,19 @@ Future<ProcessResult> _runRelease(
       'PATH': '${git.parent.path}:${Platform.environment['PATH']}',
     },
   );
+}
+
+/// The suite version the root manifest declares; deriving it keeps the
+/// real-tree cases true after every release bump.
+String _suiteVersion() {
+  final manifest =
+      loadYaml(
+            File(
+              p.join(findRepositoryRoot().path, 'pubspec.yaml'),
+            ).readAsStringSync(),
+          )
+          as YamlMap;
+  return manifest['version'] as String;
 }
 
 enum _GitFailure { localTags, none, remoteTags }
