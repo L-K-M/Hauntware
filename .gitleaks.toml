@@ -1,0 +1,17 @@
+# Secret-scan configuration for the whole monorepo (gitleaks reads the
+# root file only). Carries Poltergeist's former poltergeist/.gitleaks.toml
+# allowlist. Each path is listed twice: under poltergeist/ for current
+# commits, and at its standalone-repository location for the imported
+# history the scheduled full-history scan also reads.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Deliberately public CI fixture and Android signing keys"
+paths = [
+  '''^(poltergeist/)?app/poltergeist_app/android/app/ci-release\.jks$''',
+  '''^(poltergeist/)?app/poltergeist_app/android/key\.properties$''',
+  '''^(poltergeist/)?test/integration/keys/ssh_host_ed25519_key$''',
+  '''^(poltergeist/)?test/integration/keys/ssh_host_ed25519_key_swap$''',
+  '''^(poltergeist/)?test/integration/keys/ssh_host_rsa_key$''',
+]

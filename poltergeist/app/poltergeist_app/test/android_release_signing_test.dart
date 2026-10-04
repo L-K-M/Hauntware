@@ -65,12 +65,17 @@ void main() {
     expect(androidIgnore, contains('!/key.properties'));
     expect(androidIgnore, contains('!/app/ci-release.jks'));
 
-    final gitleaks = _read('../../.gitleaks.toml');
+    // GitHub's secret scan reads the monorepo root's config only.
+    final gitleaks = _read('../../../.gitleaks.toml');
     expect(
       gitleaks,
       allOf(
-        contains(r'''^app/poltergeist_app/android/app/ci-release\.jks$'''),
-        contains(r'''^app/poltergeist_app/android/key\.properties$'''),
+        contains(
+          r'''^(poltergeist/)?app/poltergeist_app/android/app/ci-release\.jks$''',
+        ),
+        contains(
+          r'''^(poltergeist/)?app/poltergeist_app/android/key\.properties$''',
+        ),
       ),
     );
   });
