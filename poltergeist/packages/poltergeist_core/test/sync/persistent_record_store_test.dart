@@ -223,6 +223,106 @@ void main() {
       expect(await store.restoreDisplaced('bookmark:a'), isNull);
     });
 
+    const rejected = PushResult(id: 'bookmark:a', seq: 0, accepted: false);
+
+    test('a rejected push restores a stashed losing pull after a reopen',
+        () async {
+      final store = open();
+      await store.putLocal(_record('bookmark:a', updatedAt: 30));
+      // The server's copy loses to the dirty local — but it is still the
+      // record the server holds, and must resurface if the push is rejected.
+      await store.putRemote(_record('bookmark:a', updatedAt: 20, seq: 4));
+
+      // Settle through a freshly opened store: the stash must round-trip
+      // through disk, since the pull cursor has already moved past its seq.
+      final reloaded = open();
+      final sent = (await reloaded.dirtyRecords()).single;
+      final restored = await reloaded.settlePush(sent, rejected);
+      expect(restored, isNotNull);
+      expect(restored!.updatedAt, 20);
+      expect(restored.seq, 4);
+      expect(await reloaded.getRecord('bookmark:a'), same(restored));
+      expect(await reloaded.dirtyRecords(), isEmpty);
+      expect(await reloaded.displacedRecords(), isEmpty);
+      expect(await open().displacedRecords(), isEmpty);
+      // Consume-on-restore: settling the same push again resurrects nothing.
+      expect(await reloaded.settlePush(sent, rejected), isNull);
+    });
+
+    test('a rejected push restores a clean winner its edit evicted',
+        () async {
+      final store = open();
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      // A clock-skewed local edit loses to the pulled winner's tuple.
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+
+      final reloaded = open();
+      final sent = (await reloaded.dirtyRecords()).single;
+      expect(sent.updatedAt, 100);
+      final restored = await reloaded.settlePush(sent, rejected);
+      expect(restored!.updatedAt, 200);
+      expect(restored.seq, 5);
+      expect(await reloaded.getRecord('bookmark:a'), same(restored));
+      expect(await reloaded.dirtyRecords(), isEmpty);
+      expect(await reloaded.displacedRecords(), isEmpty);
+      expect(await open().displacedRecords(), isEmpty);
+      expect(await reloaded.settlePush(sent, rejected), isNull);
+    });
+
+    test('a rejected push waits for a queued write that stashes the winner',
+        () async {
+      final store = open();
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      // Queue the displacing putLocal and settle without awaiting it: the
+      // stash lands inside the serialized write, so settlePush must run
+      // behind it on the same queue.
+      final local = _record('bookmark:a', updatedAt: 100);
+      final put = store.putLocal(local);
+      final restored = await store.settlePush(local, rejected);
+      expect(restored, isNotNull);
+      expect(restored!.updatedAt, 200);
+      await put;
+      expect(await store.dirtyRecords(), isEmpty);
+      expect(await store.displacedRecords(), isEmpty);
+    });
+
+    test('a rejected push with nothing displaced keeps the edit dirty',
+        () async {
+      final store = open();
+      final local = _record('bookmark:a', updatedAt: 30);
+      await store.putLocal(local);
+      expect(await store.settlePush(local, rejected), isNull);
+      expect((await store.dirtyRecords()).single, same(local));
+    });
+
+    test('markSynced drops a populated displaced stash', () async {
+      final store = open();
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      expect(await store.displacedRecords(), hasLength(1));
+      // The edit is accepted after all — the displaced copy is dead.
+      await store.markSynced('bookmark:a', 9);
+      expect(await store.displacedRecords(), isEmpty);
+    });
+
+    test('an accepted push drops a populated displaced stash', () async {
+      final store = open();
+      await store.putRemote(_record('bookmark:a', updatedAt: 200, seq: 5));
+      await store.putLocal(_record('bookmark:a', updatedAt: 100));
+      expect(await store.displacedRecords(), hasLength(1));
+      final sent = (await store.dirtyRecords()).single;
+      expect(
+        await store.settlePush(
+          sent,
+          const PushResult(id: 'bookmark:a', seq: 9, accepted: true),
+        ),
+        isNull,
+      );
+      expect(await store.displacedRecords(), isEmpty);
+      expect((await store.getRecord('bookmark:a'))!.seq, 9);
+      expect(await store.dirtyRecords(), isEmpty);
+    });
+
     test('tombstone wins over an older pulled edit and stays in the store',
         () async {
       final store = open();
