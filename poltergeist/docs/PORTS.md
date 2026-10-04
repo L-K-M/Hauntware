@@ -1034,7 +1034,9 @@ counterpart is ported here.
 - Ported: 2026-09-24
 - Divergences: the security-bookmark and `ServerTile` cases are dropped
   with the machinery they exercise; label grammar and stale-source
-  coverage carried verbatim.
+  coverage carried verbatim. Since 2026-10-04 the two locked-vault cases
+  use `DynamicSecretVault` with a null key provider, the production
+  locked shape, instead of upstream's `LockedSecretVault`.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_editor_test.dart

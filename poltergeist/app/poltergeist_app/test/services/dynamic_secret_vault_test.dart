@@ -47,6 +47,21 @@ void main() {
       vault.getSecret('s1'),
       throwsA(isA<VaultLockedException>()),
     );
+    // Never "unreadable reads as absent": a caller that took a silent null
+    // would read a locked vault as an empty one and overwrite the entries
+    // it cannot currently see.
+    await expectLater(
+      vault.readableSecret('s1'),
+      throwsA(isA<VaultLockedException>()),
+    );
+    await expectLater(
+      vault.putSecret(_secret('s1')),
+      throwsA(isA<VaultLockedException>()),
+    );
+    await expectLater(
+      vault.putSecrets([_secret('s1')]),
+      throwsA(isA<VaultLockedException>()),
+    );
     expect(reports, isEmpty);
   });
 

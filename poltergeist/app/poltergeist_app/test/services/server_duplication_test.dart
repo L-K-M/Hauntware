@@ -8,7 +8,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/services/locked_secret_vault.dart';
+import 'package:poltergeist_app/services/dynamic_secret_vault.dart';
 import 'package:poltergeist_app/services/secure_master_key.dart'
     show VaultLockedException;
 import 'package:poltergeist_app/services/server_duplication.dart';
@@ -354,7 +354,7 @@ void main() {
       await expectLater(
         planServerDuplication(
           source(secretRef: 'sec-old'),
-          vault: LockedSecretVault(InMemoryVaultStore()),
+          vault: DynamicSecretVault(InMemoryVaultStore(), () async => null),
           takenLabels: const [],
           id: 'fresh',
           secretId: 'sec-new',
@@ -367,7 +367,7 @@ void main() {
     test('a server with no credential needs no vault read', () async {
       final plan = await planServerDuplication(
         source(),
-        vault: LockedSecretVault(InMemoryVaultStore()),
+        vault: DynamicSecretVault(InMemoryVaultStore(), () async => null),
         takenLabels: const [],
         id: 'fresh',
         secretId: 'sec-new',
