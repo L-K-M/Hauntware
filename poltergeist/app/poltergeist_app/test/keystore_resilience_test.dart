@@ -3,9 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:poltergeist_app/services/locked_secret_vault.dart';
 import 'package:poltergeist_app/services/secure_master_key.dart';
-import 'package:poltergeist_core/poltergeist_core.dart';
 
 /// A keystore in the exact state the Ubuntu bug report hit: every access
 /// throws the libsecret "KeyringLocked" PlatformException.
@@ -152,23 +150,7 @@ void main() {
     });
   });
 
-  group('LockedSecretVault', () {
-    test('reads and writes throw VaultLockedException; deletes work', () async {
-      final vault = LockedSecretVault(InMemoryVaultStore());
-      await expectLater(
-        () => vault.getSecret('any'),
-        throwsA(isA<VaultLockedException>()),
-      );
-      await expectLater(
-        () => vault.putSecret(
-          Secret(id: 's1', kind: SecretKind.password, value: 'x'),
-        ),
-        throwsA(isA<VaultLockedException>()),
-      );
-      // Deleting needs no key and must not throw.
-      await vault.deleteSecret('any');
-    });
-
+  group('VaultLockedException', () {
     test('the locked message tells the user what to do', () {
       expect(
         const VaultLockedException().toString(),

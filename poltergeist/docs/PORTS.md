@@ -370,6 +370,10 @@ port candidates.
   composition yet (it lands with the engine/prompt slices that consume the
   vault); behavior identical.
 - Port-back candidates: none.
+- Retired: 2026-10-04. Never wired: `main.dart` builds the vault as
+  `DynamicSecretVault`, whose null key provider is the production locked
+  vault. The file and its keystore_resilience case are removed; Séance's
+  class is unaffected.
 
 ## app/poltergeist_app/test/keystore_resilience_test.dart
 
@@ -378,7 +382,9 @@ port candidates.
 - Ported: 2026-09-07
 - Divergences: the dropped API-key methods' tests map to `setKeystoreKey`
   write-failure coverage plus a master-key entry-name assertion; imports via
-  the poltergeist_core barrel.
+  the poltergeist_core barrel. Since 2026-10-04 the `LockedSecretVault`
+  read/write/delete case is dropped with that class; the locked-message
+  case is kept.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/vault_rekey_journal_test.dart
