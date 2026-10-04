@@ -178,6 +178,16 @@ void main() {
       ),
     ),
     (
+      'a new identity with a colon in its name',
+      'identity',
+      (_Fixture fixture) => _commit(
+        fixture.worktree,
+        'Change by a colon-named newcomer',
+        authorName: 'Dr. Who: The Doctor',
+        authorEmail: 'anne@example.test',
+      ),
+    ),
+    (
       'a new license line',
       'license scan',
       (_Fixture fixture) async {
@@ -221,6 +231,19 @@ void main() {
       expect(failing.stderr, contains('--write-record'));
     });
   }
+
+  test('rejects a leftover V2 block beside the V3 record', () async {
+    final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+    await ports.parent.create(recursive: true);
+    await ports.writeAsString(
+      '# Ports\n\n<!-- SEANCE_PIN_AUDIT_V2:START -->\n'
+      'old\n<!-- SEANCE_PIN_AUDIT_V2:END -->\n\n${await _record(fixture)}',
+    );
+
+    final failing = await _audit(fixture);
+    expect(failing.exitCode, isNot(0));
+    expect(failing.stderr, contains('V2'));
+  });
 
   test('rejects a record still in the V2 format', () async {
     final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));

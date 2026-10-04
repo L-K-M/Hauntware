@@ -77,7 +77,6 @@ final _byAttributionPattern = RegExp(
   r'^[A-Za-z][A-Za-z0-9_-]*-by:[ \t]+\S.*$',
   caseSensitive: false,
 );
-final _nameLinePattern = RegExp(r'^[^:]*<[^<>]*>$');
 final _emailAttributionPattern = RegExp(
   r'^[A-Za-z][A-Za-z0-9_-]*:[ \t]+\S.*<[^<>]*@[^<>]*>[ \t]*$',
 );
@@ -350,26 +349,33 @@ Future<String> _identityAudit(
   String componentRel,
   List<String> tips,
 ) async {
-  final result = await _lineageLog(worktree, componentRel, tips, [
+  const logOptions = [
     '-c',
     'log.mailmap=false',
     '-c',
     'i18n.logOutputEncoding=utf-8',
     'log',
-    '--format=%an <%ae>%n%cn <%ce>%n%(trailers)',
+  ];
+  // Author and committer lines count whatever the name contains;
+  // trailers count only as attributions. Other trailers (a
+  // `Codex-Session:` id, say) are per-commit noise that would change the
+  // record without any change in provenance.
+  final people = await _lineageLog(worktree, componentRel, tips, [
+    ...logOptions,
+    '--format=%an <%ae>%n%cn <%ce>',
+  ]);
+  final trailers = await _lineageLog(worktree, componentRel, tips, [
+    ...logOptions,
+    '--format=%(trailers)',
   ]);
 
-  // Authors, committers and attribution trailers name people; other
-  // trailers (a `Codex-Session:` id, say) are per-commit noise that
-  // would change the record without any change in provenance.
   return _sortUnique(
-    _nonEmptyLines(
-      result.stdout,
-    ).where((line) => _isAttribution(line) || _isNameLine(line)).join('\n'),
+    [
+      ..._nonEmptyLines(people.stdout),
+      ..._nonEmptyLines(trailers.stdout).where(_isAttribution),
+    ].join('\n'),
   );
 }
-
-bool _isNameLine(String value) => _nameLinePattern.hasMatch(value);
 
 Future<_CompanionEvidence> _companionAudit(
   Directory worktree,
@@ -943,11 +949,13 @@ void _verifyRecord(Directory root, String expected) {
   }
 
   final contents = file.readAsStringSync();
-  if (!contents.contains(_recordStart) &&
-      contents.contains(_legacyRecordStart)) {
-    throw const _AuditFailure(
-      '$_portsPath holds a V2 record, which binds every commit; '
-      '$_refreshHint to migrate it',
+  if (contents.contains(_legacyRecordStart)) {
+    throw _AuditFailure(
+      contents.contains(_recordStart)
+          ? '$_portsPath still holds a V2 record beside the V3 one; '
+                'delete the V2 block'
+          : '$_portsPath holds a V2 record, which binds every commit; '
+                '$_refreshHint to migrate it',
     );
   }
   final span = _recordSpan(contents, _recordStart, _recordEnd);
