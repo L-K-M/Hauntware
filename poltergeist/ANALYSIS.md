@@ -1863,9 +1863,9 @@ workaround goes unnoticed.
 - **Refs.** Effort S. Same in Séance.
 - **Update (2026-10-04).** The monorepo never read the nested
 `poltergeist/.github/dependabot.yml`, and it has been deleted along with
-Séance's and Planchette's. Dependabot reads only a root
-`.github/dependabot.yml`, which does not exist yet, so the fix is now one
-root file with a gradle entry per product's `app/*/android` directory.
+Séance's and Planchette's. Dependabot reads only the root
+`.github/dependabot.yml`, which now has a gradle entry for each
+product's `app/*/android` directory, so this item is resolved.
 
 ### X-24-P · P3 · Checkouts keep the write token in `.git/config`
 - **Problem.** No workflow sets `persist-credentials: false`, so the token
