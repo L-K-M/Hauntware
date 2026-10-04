@@ -108,30 +108,37 @@ done < scripts/release-manifest.txt
 # The reverse promise (the manifest header's own contract): every asset
 # name or glob a leg attaches through a `files:` stanza must be covered
 # by a manifest entry — an asset the floor does not know about would
-# publish outside the rehearsed, checksummed set. Templates normalize
-# to `*`; `files: ${{ matrix.files }}` becomes bare `*`, which the
-# asset filter drops because the matrix stanzas it expands to are read
-# directly.
+# publish outside the rehearsed, checksummed set. `files:` may be an
+# inline value, a block scalar (`|`, one name per line) or a YAML list
+# (`- name`). Templates normalize to `*`; `files: ${{ matrix.files }}`
+# becomes bare `*` and is dropped, because the matrix stanzas it
+# expands to are read directly. Any file name counts, whatever its
+# extension, so a new asset type cannot slip past.
 mapfile -t attached < <(
   awk '
     /^ *files:/ {
       key_indent = match($0, /[^ ]/) - 1
       value = $0
       sub(/^ *files: */, "", value)
-      listing = (value ~ /^[|>]/)
-      if (!listing && value != "") print value
+      mode = (value ~ /^[|>]/) ? "block" : (value == "" ? "list" : "")
+      if (mode == "") print value
       next
     }
-    listing {
-      if (match($0, /[^ ]/) - 1 <= key_indent || $0 !~ /[^ ]/) {
-        listing = 0
+    mode != "" {
+      indent = match($0, /[^ ]/) - 1
+      if ($0 ~ /[^ ]/ && mode == "list" && $1 == "-" && indent >= key_indent) {
+        print $2
         next
       }
-      print $1
+      if ($0 ~ /[^ ]/ && mode == "block" && indent > key_indent) {
+        print $1
+        next
+      }
+      mode = ""
     }
   ' .github/workflows/release.yml |
-    sed -E 's/\$\{\{[^}]*\}\}/*/g' |
-    grep -oE '[A-Za-z0-9_.*+-]+\.(apk|tar\.gz|zip|ipa|deb|AppImage|flatpak)' |
+    sed -E 's/\$\{\{[^}]*\}\}/*/g; s/^["'"'"']//; s/["'"'"']$//' |
+    awk '$0 != "*" && $0 ~ /\./' |
     sort -u
 )
 uncovered=0
@@ -209,8 +216,16 @@ package_writes="$(
   grep -cE '^[[:space:]]*packages: write([[:space:]]#.*)?$' \
     .github/workflows/release.yml || true
 )"
-[[ "$package_writes" -eq 1 ]] ||
-  err "release.yml must grant packages: write to the docker job only (found $package_writes)"
+docker_package_writes="$(
+  awk '
+    $0 == "  docker:" { inside = 1; next }
+    inside && /^  [A-Za-z0-9_-]+:/ { inside = 0 }
+    inside && /^[[:space:]]*packages: write([[:space:]]#.*)?$/ { n++ }
+    END { print n + 0 }
+  ' .github/workflows/release.yml
+)"
+[[ "$package_writes" -eq 1 && "$docker_package_writes" -eq 1 ]] ||
+  err "release.yml must grant packages: write to the docker job only (found $package_writes, $docker_package_writes in docker)"
 
 # --- 10. Re-runnable checksum job ------------------------------------------
 # The sums job downloads the draft's assets before recomputing
