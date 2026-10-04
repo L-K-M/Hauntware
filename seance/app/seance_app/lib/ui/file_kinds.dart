@@ -1,20 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:seance_core/seance_core.dart';
 
-/// A listed item's kind, for its glyph only: the Files tab names an
-/// item by its file type in words, so a wrong guess from an extension
-/// never misleads assistive tech.
-///
-/// The classifier and glyph/hue table now live in `ghost_ui`
-/// (`ghost_file_kinds.dart`), the code Poltergeist's
-/// `ui/panes/pane_format.dart` and `ui/panes/kind_glyph.dart` were
-/// ported into — the copy this file previously carried. [FileKind]
-/// stays a public typedef so call sites and tests keep their names.
-typedef FileKind = GhostFileKind;
-
 /// Projects [entry] onto the shared presentation model — the one place
-/// `RemoteFileEntry` meets `GhostFileItem`.
+/// `RemoteFileEntry` meets `GhostFileItem`. The kind classifier and its
+/// glyph/hue table live in `ghost_ui` (`ghost_file_kinds.dart`), the code
+/// Poltergeist's `ui/panes/pane_format.dart` and `ui/panes/kind_glyph.dart`
+/// were ported into.
 GhostFileItem ghostFileItemOf(RemoteFileEntry entry) => GhostFileItem(
   name: entry.name,
   type: switch (entry.type) {
@@ -26,24 +17,3 @@ GhostFileItem ghostFileItemOf(RemoteFileEntry entry) => GhostFileItem(
   size: entry.size,
   modifiedAt: entry.modifiedAt,
 );
-
-/// [entry]'s kind: its file type first (folders and links are never
-/// guessed from a name), then the lowercase extension after the last
-/// dot. A leading dot is part of a dotfile's stem, so `.bashrc` has no
-/// extension and reads as a generic file.
-FileKind fileKind(RemoteFileEntry entry) =>
-    ghostFileKind(ghostFileItemOf(entry));
-
-/// [kind]'s glyph and family hue. The glyphs are the filled faces,
-/// since a hairline outline at list size carries too little colour to
-/// be told apart at a glance.
-(IconData, FamilyHue) fileKindGlyph(FileKind kind) => ghostFileKindGlyph(kind);
-
-/// [entry]'s kind glyph as an [Icon] in its hue for [context]'s theme.
-/// An omitted [size] defers to the ambient IconTheme, like a plain Icon
-/// — the shared [ghostFileKindIcon] requires an explicit size, so this
-/// builds on the shared glyph/hue data directly instead.
-Icon fileKindIcon(BuildContext context, RemoteFileEntry entry, {double? size}) {
-  final (glyph, hue) = fileKindGlyph(fileKind(entry));
-  return Icon(glyph, size: size, color: FamilyPalette.of(context).glyph(hue));
-}

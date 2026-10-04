@@ -644,7 +644,8 @@ Do not "simplify" these away — they are load-bearing:
   only. The file is byte-identical to Poltergeist's
   `lib/theme/family_hues.dart`, so change both together. A new glyph takes its
   colour from `FamilyPalette.of(context).glyph(hue)`, never an ad-hoc colour;
-  file kinds come from `ui/file_kinds.dart` (see
+  file kinds come from ghost_ui's `ghost_file_kinds.dart`, fed by
+  `ui/file_kinds.dart` (see
   [POLTERGEIST.md](docs/POLTERGEIST.md#the-colour-vocabulary)).
 - Record model: `EncryptedRecord` is what the server sees (`kind` is *inside* the
   ciphertext); `DecryptedRecord` is app-side. Conflicts resolve by

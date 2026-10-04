@@ -389,10 +389,10 @@ become too bland to tell apart.
 - **The rule** is D11's quiet chrome with colour on glyphs only: the
   surfaces, the accent and the status dots are untouched, text stays in
   the ink, and a coloured verb keeps its colour only while it is live.
-- **The kind table** in `lib/ui/file_kinds.dart` is a port of
-  Poltergeist's `pane_format.dart` classifier and `kind_glyph.dart`
-  glyphs, so a folder, a photo or a script reads the same in both
-  Files views.
+- **The kind table**, now ghost_ui's `ghost_file_kinds.dart` (which
+  `lib/ui/file_kinds.dart` feeds), is a port of Poltergeist's
+  `pane_format.dart` classifier and `kind_glyph.dart` glyphs, so a
+  folder, a photo or a script reads the same in both Files views.
 - **Here it colours** the side panel's tabs (the Assistant purple,
   Snippets teal, Files blue, Git orange, glyphs named by their tooltips,
   the open one filled on a wash of its hue as in Poltergeist's
