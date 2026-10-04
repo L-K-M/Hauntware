@@ -735,6 +735,12 @@ counterpart is ported here.
   data produces identical placement. Re-synced 2026-09-29 so a filter keeps
   an otherwise-empty top-level section when it contains a hidden live server;
   the header remains the place that connection's status is exposed.
+- Pruned: 2026-10-04. The catalog stopped using this sectioning on
+  2026-09-24 (`477be0a4`) and groups its servers inline, so only
+  `existingServerGroups`, behind the server editor's group chips, is
+  carried. The section keys and labels, `groupServers`, the row model,
+  `sectionsHoldingLive` and `hiddenByHeader` are removed; a diff against
+  the source is now partial.
 - Port-back candidates: none — Séance owns the source.
 
 ## app/poltergeist_app/lib/ui/server_filter.dart
@@ -754,6 +760,8 @@ counterpart is ported here.
 - Ported: 2026-09-24
 - Divergences: none — carried verbatim (imports re-pointed), including the
   kept-section and `sectionsHoldingLive` regressions re-synced 2026-09-29.
+- Pruned: 2026-10-04, with the library above: only the
+  `existingServerGroups` group and its `_server` fixture are carried.
 - Port-back candidates: none.
 
 ## app/poltergeist_app/test/ui/server_filter_test.dart
