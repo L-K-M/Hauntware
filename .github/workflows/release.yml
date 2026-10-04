@@ -362,6 +362,7 @@ jobs:
       # Same dispatch-provenance pin as the other build legs.
       - name: Resolve the checkout ref
         id: checkout-ref
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -458,6 +459,7 @@ jobs:
       # there for the full rationale).
       - name: Resolve the checkout ref
         id: checkout-ref
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -712,6 +714,7 @@ jobs:
     steps:
       - name: Resolve the checkout ref
         id: checkout-ref
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -923,6 +926,7 @@ jobs:
     steps:
       - name: Resolve the checkout ref
         id: checkout-ref
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
