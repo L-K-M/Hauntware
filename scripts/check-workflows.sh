@@ -17,7 +17,9 @@
 #      gate runs; check-tag/check-order at the release gate),
 #   7. the shared GLM workflow stays byte-identical to the fleet
 #      canonical (the poltergeist copy — the evolved variant carrying
-#      the bounded retry and unfinished-review report).
+#      the bounded retry and unfinished-review report),
+#   8. multi-line run scripts in jobs that can run on Windows name
+#      their shell (Windows otherwise runs them under PowerShell).
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -137,6 +139,12 @@ python3 scripts/resolve-package-root.py --self-test ||
 cmp -s .github/workflows/zai-code-review.yml \
        poltergeist/.github/workflows/zai-code-review.yml ||
   err "zai-code-review.yml differs from the fleet canonical (poltergeist/)"
+
+# --- 8. Windows legs run bash scripts under bash ----------------------------
+python3 scripts/check-windows-shells.py --self-test ||
+  err "check-windows-shells self-test failed"
+python3 scripts/check-windows-shells.py .github/workflows/*.yml ||
+  err "a Windows-capable job runs a multi-line script without shell:"
 
 if [[ "$fail" -ne 0 || "$missing" -ne 0 ]]; then
   echo "workflow contract checks FAILED" >&2
