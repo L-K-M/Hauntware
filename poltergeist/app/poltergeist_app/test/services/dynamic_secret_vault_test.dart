@@ -62,6 +62,12 @@ void main() {
       vault.putSecrets([_secret('s1')]),
       throwsA(isA<VaultLockedException>()),
     );
+    // Unlike the retired LockedSecretVault, the production locked shape
+    // refuses deletes too.
+    await expectLater(
+      vault.deleteSecret('s1'),
+      throwsA(isA<VaultLockedException>()),
+    );
     expect(reports, isEmpty);
   });
 
