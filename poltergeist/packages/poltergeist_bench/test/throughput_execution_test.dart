@@ -109,7 +109,7 @@ void main() {
   });
 
   test(
-    'driver-reported byte/digest mismatches fail the trial before inspection',
+    'driver byte/digest mismatches fail a trial with an intact destination',
     () async {
       final cases = [
         (

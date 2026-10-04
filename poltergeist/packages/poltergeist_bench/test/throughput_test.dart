@@ -109,7 +109,7 @@ void main() {
     });
   });
 
-  test('runs trials in the result manifest\'s ABCCBA order', () async {
+  test('the shared ABCCBA trial order matches the result manifest', () async {
     // The aggregator validates live evidence against this manifest; the
     // runner's order must match it before any shard runs.
     final cell = affordableThroughputCells.first;
@@ -120,7 +120,7 @@ void main() {
       for (final trial in manifest) trial.variant.label,
     ]);
 
-    // The runner numbers each variant's replicates by occurrence.
+    // The manifest numbers each variant's replicates by occurrence.
     final seen = <ThroughputVariant, int>{};
     final replicates = [
       for (final variant in throughputTrialOrder)
