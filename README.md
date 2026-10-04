@@ -43,6 +43,9 @@ engine. It synchronizes all owned package/app versions, Android build codes,
 Apple metadata, lockfiles and README markers. Child release scripts forward
 to the whole suite.
 
+Update `release-tool` before releasing: the required pre-tag hook refreshes
+and commits the Séance provenance proof after the version-bump commit.
+
 ```bash
 scripts/release.sh --check
 scripts/release.sh 1.2.0 --push  # Explicit future release, not part of migration

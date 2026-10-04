@@ -22,6 +22,15 @@ void main() {
     fakeEngine.writeAsStringSync('''#!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "\$1" == "--capabilities" ]]; then
+  [[ -n "\${FAKE_ENGINE_LOG:-}" ]] && printf 'capabilities\\n' >> "\$FAKE_ENGINE_LOG"
+  case "\${FAKE_CAPABILITIES:-RELEASE_PRE_TAG}" in
+    reject) exit 1 ;;
+    *) printf '%s\\n' "\${FAKE_CAPABILITIES:-RELEASE_PRE_TAG}" ;;
+  esac
+  exit 0
+fi
+
 if [[ "\${FAKE_POST_BUMP_MODE:-skip}" == failSynchronization ]]; then
   cd "\$FAKE_POST_BUMP_ROOT"
   RELEASE_DART_BIN=false RELEASE_NEW_VERSION=0.2.0 bash -c "\$RELEASE_POST_BUMP"
@@ -39,6 +48,7 @@ printf 'pubspecs=%s\n' "\$RELEASE_PUBSPECS"
 printf 'regex=%s\n' "\$RELEASE_VERSION_REGEX"
 printf 'sign=%s\n' "\${RELEASE_SIGN_TAG:-}"
 printf 'post=%s\n' "\$RELEASE_POST_BUMP"
+printf 'pretag=%s\n' "\${RELEASE_PRE_TAG:-}"
 printf 'args=%s\n' "\$*"
 printf 'cwd=%s\n' "\$PWD"
 ''');
@@ -172,6 +182,31 @@ exit 1
     expect(result.stdout, isNot(contains('pubspecs=')));
   });
 
+  test('stops before the engine when pubspec discovery fails', () async {
+    final fakeDart = File(p.join(sandbox.path, 'fake-dart'))
+      ..writeAsStringSync(r'''#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+  *pubspecs) exit 1 ;;
+esac
+''');
+    Process.runSync('chmod', ['+x', fakeDart.path]);
+    final root = _repositoryRoot();
+    final result = await Process.run(
+      'bash',
+      [p.join(root.path, 'scripts/release.sh'), '2099.99.99'],
+      workingDirectory: sandbox.path,
+      environment: {
+        ...Platform.environment,
+        'DART_BIN': fakeDart.path,
+        'LKM_RELEASE_BIN': fakeEngine.path,
+      },
+    );
+
+    expect(result.exitCode, isNot(0));
+    expect(result.stdout, isNot(contains('args=')));
+  });
+
   test('post-bump stops when app metadata synchronization fails', () async {
     final result = await _runRelease(
       fakeEngine,
@@ -222,6 +257,83 @@ exit 1
     },
   );
 
+  test('wires the pre-tag audit hook into the engine', () async {
+    final result = await _runRelease(fakeEngine, ['2099.99.99'], git: fakeGit);
+
+    expect(result.exitCode, 0, reason: result.stderr as String);
+    // The audit driver is a dedicated root script; the stub hands it the
+    // configured Dart executable through DART_EXECUTABLE.
+    final pretag = _line(result, 'pretag=');
+    expect(pretag, contains('scripts/refresh-seance-release-audit.sh'));
+    expect(pretag, contains('DART_EXECUTABLE'));
+    expect(pretag, contains('RELEASE_DART_BIN'));
+    // An actual release probes the engine before letting it mutate.
+    final engineLog = _engineLog(sandbox);
+    expect(
+      engineLog.existsSync(),
+      isTrue,
+      reason: 'the stub did not probe the engine',
+    );
+    expect(engineLog.readAsStringSync(), contains('capabilities'));
+  });
+
+  test('accepts RELEASE_PRE_TAG among other capabilities', () async {
+    final result = await _runRelease(
+      fakeEngine,
+      ['2099.99.99'],
+      git: fakeGit,
+      capabilities: 'RELEASE_POST_BUMP\nRELEASE_PRE_TAG\nRELEASE_X',
+    );
+
+    expect(result.exitCode, 0, reason: result.stderr as String);
+    expect(result.stdout, contains('args=2099.99.99'));
+  });
+
+  test('fails closed when the engine rejects --capabilities', () async {
+    final result = await _runRelease(
+      fakeEngine,
+      ['2099.99.99'],
+      git: fakeGit,
+      capabilities: 'reject',
+    );
+
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('RELEASE_PRE_TAG'));
+    expect(result.stdout, isNot(contains('args=')));
+  });
+
+  test('fails closed when the engine lacks RELEASE_PRE_TAG', () async {
+    final result = await _runRelease(
+      fakeEngine,
+      ['2099.99.99'],
+      git: fakeGit,
+      capabilities: 'RELEASE_POST_BUMP',
+    );
+
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('RELEASE_PRE_TAG'));
+    expect(result.stdout, isNot(contains('args=')));
+  });
+
+  for (final arguments in [
+    ['--help'],
+    ['--version'],
+    ['--check'],
+  ]) {
+    test('${arguments.single} skips the capability probe', () async {
+      final result = await _runRelease(
+        fakeEngine,
+        arguments,
+        git: fakeGit,
+        capabilities: 'reject',
+      );
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, contains('args=${arguments.single}'));
+      expect(_engineLog(sandbox).existsSync(), isFalse);
+    });
+  }
+
   test('runs the engine from the repository root', () async {
     final result = await _runRelease(
       fakeEngine,
@@ -262,6 +374,7 @@ Future<ProcessResult> _runRelease(
   _GitFailure gitFailure = _GitFailure.none,
   _InvocationDirectory invocationDirectory = _InvocationDirectory.repository,
   _PostBumpMode postBumpMode = _PostBumpMode.skip,
+  String capabilities = '',
   String priorTags = '',
   String remoteTags = '',
 }) {
@@ -275,6 +388,8 @@ Future<ProcessResult> _runRelease(
     },
     environment: {
       ...Platform.environment,
+      'FAKE_CAPABILITIES': capabilities,
+      'FAKE_ENGINE_LOG': _engineLog(git.parent).path,
       'FAKE_GIT_FAILURE': gitFailure.name,
       'FAKE_POST_BUMP_MODE': postBumpMode.name,
       'FAKE_POST_BUMP_ROOT': git.parent.path,
@@ -369,6 +484,9 @@ Map<String, String> _lockedVersions(Directory root, String path) {
   }
   return versions;
 }
+
+File _engineLog(Directory sandbox) =>
+    File(p.join(sandbox.path, 'engine-queries.log'));
 
 String _line(ProcessResult result, String prefix) => (result.stdout as String)
     .split('\n')
