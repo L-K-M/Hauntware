@@ -28,7 +28,8 @@ git show 0a695971a411a6a754593e7c2598038039440c2f:packages/seance_core/pubspec.y
 ```
 
 Integration commits use the new project prefixes. Original repositories and
-their release artifacts remain intact; no release tags were published here.
+their release artifacts remain intact, archived after a final release that
+points here. Suite releases start at v1.9.0.
 
 ## Verifying and recovering metadata
 

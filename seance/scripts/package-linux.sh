@@ -326,7 +326,7 @@ install_icons "$DEBROOT/usr"
 
 cat > "$DEBROOT/usr/share/doc/seance/copyright" <<EOF
 Séance — a personal cross-platform SSH client
-Source: https://github.com/L-K-M/Seance
+Source: https://github.com/L-K-M/Hauntware
 License: as published in the source repository above.
 Upstream-Version: $VERSION
 EOF
@@ -357,7 +357,7 @@ Architecture: @ARCH@
 Installed-Size: @SIZE@
 Depends: @DEPENDS@
 Maintainer: L-K-M <l-k-m@users.noreply.github.com>
-Homepage: https://github.com/L-K-M/Seance
+Homepage: https://github.com/L-K-M/Hauntware
 Description: Séance — a personal cross-platform SSH client
  SSH client with trust-on-first-use host keys, an E2E-encrypted optional
  sync server, SFTP file browsing, and a built-in LLM assistant.

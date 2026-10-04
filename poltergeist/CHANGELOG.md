@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.9.0 — first suite release (2026-10-04)
 
 - **Import server bookmarks from other apps.** The Server menu now imports
   FileZilla, WinSCP and Cyberduck bookmarks through a bounded review screen.

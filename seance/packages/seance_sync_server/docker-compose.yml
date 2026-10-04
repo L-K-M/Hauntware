@@ -1,4 +1,4 @@
-# Séance sync server. Build from the repo root:
+# Séance sync server. Build from the seance/ directory:
 #   docker compose -f packages/seance_sync_server/docker-compose.yml up -d --build
 #
 # Put a TLS-terminating reverse proxy (Caddy, nginx, Traefik) in front for

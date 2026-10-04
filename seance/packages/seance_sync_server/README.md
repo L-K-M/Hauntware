@@ -7,11 +7,11 @@ a full database compromise leaks only opaque ciphertext.
 ## Run with Docker
 
 ```bash
-# from the repository root
+# from the seance/ directory of a Hauntware clone
 docker compose -f packages/seance_sync_server/docker-compose.yml up -d --build
 ```
 
-Or build the image directly (build context must be the repo root so the pub
+Or build the image directly (build context must be `seance/` so the pub
 workspace resolves):
 
 ```bash
@@ -27,9 +27,23 @@ The compose file and `docker run` example bind the host port to loopback only;
 publish it more broadly only behind TLS or on a trusted private network.
 
 To update a running deployment (pull the latest code, rebuild the image,
-recreate the container in one step), run `./update.sh` from the repository
-root. It probes the published `/healthz` after the recreate and fails with the
+recreate the container in one step), run `./update.sh` from `seance/`. It
+probes the published `/healthz` after the recreate and fails with the
 container's logs when the server doesn't answer.
+
+### Moving from a standalone Séance clone
+
+The standalone `L-K-M/Seance` repository is archived, so `./update.sh` there
+finds no new code. Deploy from a Hauntware clone instead. The compose project
+name comes from the compose file's directory, so the new clone reuses the
+existing container and its `seance-data` volume:
+
+```bash
+git clone https://github.com/L-K-M/Hauntware.git
+cp Seance/packages/seance_sync_server/.env \
+  Hauntware/seance/packages/seance_sync_server/.env   # if you have one
+cd Hauntware/seance && ./update.sh
+```
 
 ### Reverse proxy in a container (Nginx Proxy Manager, Traefik, …)
 
