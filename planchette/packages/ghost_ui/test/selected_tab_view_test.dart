@@ -2,7 +2,7 @@ import 'dart:ui' show SemanticsRole;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/ui/selected_tab_view.dart';
+import 'package:ghost_ui/ghost_ui.dart';
 
 /// The tab view's contract: the selected page in place, the frame after a
 /// tap, with no sideways paging; each page built when its tab is first
@@ -129,7 +129,10 @@ void main() {
         home: Scaffold(
           body: SelectedTabView(
             controller: tabs,
-            children: [TextField(focusNode: field), const TextField()],
+            children: [
+              TextField(focusNode: field),
+              const TextField(),
+            ],
           ),
         ),
       ),
@@ -234,9 +237,7 @@ void main() {
     await pumpTabs(tester, [const Text('first'), const Text('second')]);
 
     expect(
-      find.semantics.byPredicate(
-        (node) => node.role == SemanticsRole.tabPanel,
-      ),
+      find.semantics.byPredicate((node) => node.role == SemanticsRole.tabPanel),
       findsOne,
     );
     semantics.dispose();

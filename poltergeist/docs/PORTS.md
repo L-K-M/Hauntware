@@ -51,6 +51,7 @@ package. Historical copy entries below remain provenance records; active
 implementations are Git-pinned, with compatibility exports at old paths.
 Host adapters retain ARB strings, resolved chrome, controllers, operations
 and drag payloads. Both apps use the same desktop/touch file-row widgets.
+The in-place tab view, `SelectedTabView`, followed on 2026-10-04.
 
 ## Cross-app deep links (2026-10-02)
 
@@ -993,6 +994,11 @@ counterpart is ported here.
   the primary scroll direction unchanged, and a hidden page cannot retain
   focus.
 - Port-back candidates: none; Séance owns the source.
+- Moved: 2026-10-04. The widget and its test now live in Planchette's
+  `ghost_ui` (`lib/src/selected_tab_view.dart`,
+  `test/selected_tab_view_test.dart`). In both apps,
+  `lib/ui/selected_tab_view.dart` is a compatibility export, and both app
+  test copies are removed.
 
 ## app/poltergeist_app/lib/ui/server_editor.dart
 
