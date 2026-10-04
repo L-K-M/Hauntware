@@ -137,6 +137,8 @@ void main() {
           throw FileSystemException('forced read failure', path);
         }
 
+        // File(path) would call this override again; fromRawPath does not
+        // consult IOOverrides.
         return File.fromRawPath(Uint8List.fromList(utf8.encode(path)));
       },
     );

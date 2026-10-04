@@ -93,24 +93,27 @@ exit 1
     expect(pubspecs, startsWith('pubspecs=pubspec.yaml '));
     // Every owned pubspec, and nothing else: a package added to or
     // dropped from the suite has to change this list on purpose.
-    expect(pubspecs.substring('pubspecs='.length).split(' ').toSet(), {
-      'pubspec.yaml',
-      'planchette/app/planchette_app/pubspec.yaml',
-      'planchette/packages/ghost_desktop/pubspec.yaml',
-      'planchette/packages/ghost_ui/pubspec.yaml',
-      'planchette/packages/planchette_core/pubspec.yaml',
-      'planchette/packages/planchette_editor/pubspec.yaml',
-      'seance/app/seance_app/pubspec.yaml',
-      'seance/packages/seance_core/pubspec.yaml',
-      'seance/packages/seance_protocol/pubspec.yaml',
-      'seance/packages/seance_sync_server/pubspec.yaml',
-      'poltergeist/app/poltergeist_app/pubspec.yaml',
-      'poltergeist/packages/poltergeist_bench/pubspec.yaml',
-      'poltergeist/packages/poltergeist_core/pubspec.yaml',
-      'poltergeist/packages/poltergeist_sync/pubspec.yaml',
-      // The live bench compat shim bumps in lockstep with the suite.
-      'poltergeist/tool/bench/pubspec.yaml',
-    });
+    expect(
+      pubspecs.substring('pubspecs='.length).split(' '),
+      unorderedEquals([
+        'pubspec.yaml',
+        'planchette/app/planchette_app/pubspec.yaml',
+        'planchette/packages/ghost_desktop/pubspec.yaml',
+        'planchette/packages/ghost_ui/pubspec.yaml',
+        'planchette/packages/planchette_core/pubspec.yaml',
+        'planchette/packages/planchette_editor/pubspec.yaml',
+        'seance/app/seance_app/pubspec.yaml',
+        'seance/packages/seance_core/pubspec.yaml',
+        'seance/packages/seance_protocol/pubspec.yaml',
+        'seance/packages/seance_sync_server/pubspec.yaml',
+        'poltergeist/app/poltergeist_app/pubspec.yaml',
+        'poltergeist/packages/poltergeist_bench/pubspec.yaml',
+        'poltergeist/packages/poltergeist_core/pubspec.yaml',
+        'poltergeist/packages/poltergeist_sync/pubspec.yaml',
+        // The live bench compat shim bumps in lockstep with the suite.
+        'poltergeist/tool/bench/pubspec.yaml',
+      ]),
+    );
     // Not owned: vendored forks and the unversioned workspace roots.
     expect(pubspecs, isNot(contains('third_party')));
     expect(pubspecs, isNot(contains('_workspace')));

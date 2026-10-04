@@ -271,10 +271,13 @@ void main() {
       '<string>2.1.0</string>',
       '<string>2.0.1</string>',
     );
-    final others = [
-      for (final file in root.listSync(recursive: true).whereType<File>())
-        p.relative(file.path, from: root.path),
-    ]..removeWhere(_syncTargets.contains);
+    final others =
+        [
+          for (final file in root.listSync(recursive: true).whereType<File>())
+            p.relative(file.path, from: root.path),
+        ]..removeWhere(
+          (path) => _syncTargets.any((target) => p.equals(path, target)),
+        );
     expect(others, isNotEmpty);
     final before = _snapshot(root, others);
 
@@ -591,7 +594,7 @@ void main() {
         isA<ReleaseVersionStateException>().having(
           (e) => e.message,
           'message',
-          contains('version'),
+          contains('missing or non-string version'),
         ),
       ),
     );

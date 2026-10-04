@@ -24,7 +24,8 @@ void main() {
       });
     }
 
-    // Apple's first bundle-version component must be positive.
+    // Apple bundle versions add one to the major, so the first component
+    // stays positive even for a 0.x release.
     const appleBundleVersions = {
       '0.1.0': '1.1.0',
       '1.1.0': '2.1.0',

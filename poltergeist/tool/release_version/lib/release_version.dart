@@ -1,6 +1,6 @@
 // Release-version arithmetic that the suite tool at the repository root
 // (tool/release_version) re-exports. That tool owns the tree checks, the
-// metadata rewrites and the CLI; see README.md.
+// metadata rewrites and the CLI; see this package's README.md.
 
 const int _componentLimit = 99;
 const int _finalOrdinal = 99;
