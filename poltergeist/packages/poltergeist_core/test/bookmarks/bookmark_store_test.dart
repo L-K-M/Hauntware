@@ -966,6 +966,32 @@ Host web
         expect(isValidSortKey(bookmark.sortKey), isTrue);
       }
     });
+
+    test('a synced record carrying an invalid key is repaired on '
+        'applySyncedRecords', () async {
+      // The coordinator's pulled-record path: the same normalization must
+      // hold when the winning envelope's tuple rides along.
+      final path = pathIn('bookmarks.json');
+      final store = FileBookmarkStore(path: path);
+      const winner = BookmarkSyncTuple(updatedAt: 1, deviceId: 'device-b');
+      await store.applySyncedRecords([
+        (bookmark: _localBookmark('ok', sortKey: 'm'), winner: winner),
+        (
+          bookmark: _localBookmark('pulled', sortKey: 'x9-pulled-uuid'),
+          winner: winner,
+        ),
+      ]);
+
+      // A same-group move reads the repaired key, never the uuid.
+      final moved = await store.moveToGroup('ok', 'Work');
+      expect(isValidSortKey(moved.sortKey), isTrue);
+      await store.moveToGroup('pulled', 'Work');
+      final sections = await store.sections();
+      expect(sections.single.bookmarks.map((b) => b.id), ['ok', 'pulled']);
+      for (final bookmark in sections.single.bookmarks) {
+        expect(isValidSortKey(bookmark.sortKey), isTrue);
+      }
+    });
   });
 
   group('payload size cap', () {
@@ -1030,6 +1056,38 @@ Host web
 
       expect(events, isEmpty);
       expect(await store.load(), isEmpty);
+    });
+
+    test('the record-carrying sync-apply path stays quiet and keeps its '
+        'tombstone', () async {
+      // The coordinator applies pulled winners through these calls; neither
+      // may fire the local-save change the coordinator marks dirty on.
+      final path = pathIn('bookmarks.json');
+      final store = FileBookmarkStore(path: path);
+      final events = <BookmarkStoreChange>[];
+      final sub = store.changes.listen(events.add);
+      addTearDown(sub.cancel);
+      const winner = BookmarkSyncTuple(updatedAt: 1, deviceId: 'device-b');
+      const tombstone = BookmarkSyncTuple(
+        updatedAt: 2,
+        deviceId: 'device-b',
+        deleted: true,
+      );
+
+      await store.applySyncedRecords([
+        (bookmark: _localBookmark('a', sortKey: 'm'), winner: winner),
+      ]);
+      expect(await store.syncTupleOf('a'), winner);
+      await store.removeSyncedRecord('a', tombstone);
+      // A re-pulled copy of the same tombstone changes nothing.
+      await store.removeSyncedRecord('a', tombstone);
+
+      expect(events, isEmpty);
+      expect(await store.load(), isEmpty);
+      expect(await store.syncTupleOf('a'), tombstone);
+      final reopened = FileBookmarkStore(path: path);
+      expect(await reopened.load(), isEmpty);
+      expect(await reopened.syncTupleOf('a'), tombstone);
     });
   });
 }
