@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/theme/app_theme.dart';
@@ -20,10 +21,14 @@ const _failedConnect = ServerStatus(
   detail: 'Authentication failed for deploy@web.example.com:22.',
 );
 
-Future<void> _pump(WidgetTester tester, Widget child) async {
+Future<void> _pump(
+  WidgetTester tester,
+  Widget child, {
+  Brightness brightness = Brightness.light,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
-      theme: buildPoltergeistTheme(Brightness.light),
+      theme: buildPoltergeistTheme(brightness),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(body: Center(child: child)),
@@ -259,6 +264,164 @@ void main() {
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.byTooltip(_l10n.connectionStateConnecting), findsOneWidget);
+    });
+  });
+
+  group('ServerStateGlyph paints', () {
+    Finder inGlyph(Finder matching) =>
+        find.descendant(of: find.byType(ServerStateGlyph), matching: matching);
+
+    testWidgets('every glyph sits in the shared 24 px box', (tester) async {
+      for (final glyph in [
+        ServerIndicatorGlyph.none,
+        ServerIndicatorGlyph.pending,
+        ServerIndicatorGlyph.connected,
+        ServerIndicatorGlyph.idle,
+        ServerIndicatorGlyph.failed,
+        ServerIndicatorGlyph.blocked,
+      ]) {
+        await _pump(tester, ServerStateGlyph(glyph));
+        expect(
+          tester.getSize(find.byType(ServerStateGlyph)),
+          const Size(24, 24),
+          reason: glyph.name,
+        );
+        // A fresh tree per glyph: the pending spinner never settles.
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
+
+    testWidgets('dots are 10 px circles in the theme status colours', (
+      tester,
+    ) async {
+      for (final (glyph, colorOf)
+          in <(ServerIndicatorGlyph, Color Function(PoltergeistChrome))>[
+            (ServerIndicatorGlyph.connected, (c) => c.statusConnected),
+            (ServerIndicatorGlyph.failed, (c) => c.statusFailed),
+            (ServerIndicatorGlyph.idle, (c) => c.statusUnknown),
+          ]) {
+        await _pump(tester, ServerStateGlyph(glyph));
+        final chrome = PoltergeistChrome.of(
+          tester.element(find.byType(ServerStateGlyph)),
+        );
+        final dot = inGlyph(find.byType(Container));
+        expect(tester.getSize(dot), const Size(10, 10), reason: glyph.name);
+        final decoration =
+            tester.widget<Container>(dot).decoration! as BoxDecoration;
+        expect(decoration.shape, BoxShape.circle, reason: glyph.name);
+        expect(decoration.color, colorOf(chrome), reason: glyph.name);
+        expect(inGlyph(find.byType(Icon)), findsNothing, reason: glyph.name);
+      }
+    });
+
+    testWidgets('blocked paints the 14 px shield in the failure colour', (
+      tester,
+    ) async {
+      await _pump(tester, const ServerStateGlyph(ServerIndicatorGlyph.blocked));
+      final chrome = PoltergeistChrome.of(
+        tester.element(find.byType(ServerStateGlyph)),
+      );
+
+      final icon = tester.widget<Icon>(inGlyph(find.byType(Icon)));
+      expect(icon.icon, Icons.gpp_bad);
+      expect(icon.size, 14);
+      expect(icon.color, chrome.statusFailed);
+      expect(inGlyph(find.byType(CircularProgressIndicator)), findsNothing);
+    });
+
+    testWidgets('pending spins at 14 px in the primary colour', (tester) async {
+      await _pump(tester, const ServerStateGlyph(ServerIndicatorGlyph.pending));
+      final scheme = Theme.of(
+        tester.element(find.byType(ServerStateGlyph)),
+      ).colorScheme;
+
+      final spinner = inGlyph(find.byType(CircularProgressIndicator));
+      expect(spinner, findsOneWidget);
+      expect(tester.getSize(spinner), const Size(14, 14));
+      expect(
+        tester.widget<CircularProgressIndicator>(spinner).color,
+        scheme.primary,
+      );
+      expect(inGlyph(find.byType(Icon)), findsNothing);
+    });
+
+    testWidgets('none paints nothing inside its box', (tester) async {
+      await _pump(tester, const ServerStateGlyph(ServerIndicatorGlyph.none));
+
+      expect(inGlyph(find.byType(Container)), findsNothing);
+      expect(inGlyph(find.byType(Icon)), findsNothing);
+      expect(inGlyph(find.byType(CircularProgressIndicator)), findsNothing);
+    });
+
+    testWidgets('each dot paints its exact colour on screen', (tester) async {
+      // Pins the rendered pixels, not just the decoration: a golden-capture
+      // color-space artifact must never hide a real paint regression.
+      // Deliberately exact (no ±1 tolerance): an SDK color-pipeline change
+      // SHOULD fail this pin and be triaged as such, not absorbed silently.
+      for (final glyph in [
+        ServerIndicatorGlyph.connected,
+        ServerIndicatorGlyph.failed,
+        ServerIndicatorGlyph.idle,
+      ]) {
+        for (final brightness in Brightness.values) {
+          await _pump(
+            tester,
+            RepaintBoundary(
+              key: const ValueKey('dot-boundary'),
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: ServerStateGlyph(glyph),
+              ),
+            ),
+            brightness: brightness,
+          );
+
+          // The dot is centred in the box, so the box centre is the dot
+          // centre. toImage needs a real event loop; runAsync provides one
+          // inside the test zone.
+          final boundary = tester.renderObject<RenderRepaintBoundary>(
+            find.byKey(const ValueKey('dot-boundary')),
+          );
+          final pixel = (await tester.runAsync(() async {
+            final image = await boundary.toImage(pixelRatio: 3);
+            try {
+              final data = await image.toByteData();
+              final width = image.width;
+              final center = (width ~/ 2) * width + width ~/ 2;
+              // Honor the view's offset: a view-backed ByteData must sample
+              // from its own start, never the underlying buffer's zero.
+              return data!.buffer.asUint8List(
+                data.offsetInBytes + center * 4,
+                4,
+              );
+            } finally {
+              image.dispose();
+            }
+          }))!;
+          final context = tester.element(find.byType(ServerStateGlyph));
+          final scheme = Theme.of(context).colorScheme;
+          final expected = switch (glyph) {
+            ServerIndicatorGlyph.connected => PoltergeistChrome.of(
+              context,
+            ).statusConnected,
+            ServerIndicatorGlyph.failed => scheme.error,
+            _ => scheme.outline,
+          };
+          final name = '${glyph.name} (${brightness.name})';
+
+          expect(pixel[0], (expected.r * 255).round(), reason: 'red of $name');
+          expect(
+            pixel[1],
+            (expected.g * 255).round(),
+            reason: 'green of $name',
+          );
+          expect(pixel[2], (expected.b * 255).round(), reason: 'blue of $name');
+          expect(pixel[3], 255, reason: 'alpha of $name');
+          // A fresh tree per iteration keeps the captured picture current.
+          await tester.pumpWidget(const SizedBox());
+        }
+      }
     });
   });
 
