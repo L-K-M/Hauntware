@@ -53,16 +53,6 @@ Future<File> resolveBuiltInEditorTarget(File file) async {
   return file;
 }
 
-Future<String> loadBuiltInTextDocument(
-  File file, {
-  int maximumBytes = builtInEditorMaximumBytes,
-  Future<String> Function(File file)? sha256Of,
-}) async => (await loadBuiltInTextDocumentDetails(
-  file,
-  maximumBytes: maximumBytes,
-  sha256Of: sha256Of,
-)).text;
-
 Future<BuiltInTextDocument> loadBuiltInTextDocumentDetails(
   File file, {
   int maximumBytes = builtInEditorMaximumBytes,

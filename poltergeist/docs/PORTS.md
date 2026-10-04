@@ -194,6 +194,12 @@ literals, inventoried in the localization contract. The controller keeps
 its default `TextNormalization.normalize`, matching
 `loadBuiltInTextDocumentDetails` and `saveBuiltInTextDocument`.
 
+Retired (2026-10-04): the text-only `loadBuiltInTextDocument`
+compatibility wrapper had no caller outside core's own test; app code
+loads through `loadBuiltInTextDocumentDetails`. The ported
+`built_in_text_document_test.dart` now calls that function where
+upstream's `built_in_text_editor_test.dart` calls the wrapper.
+
 ## Destination collision ownership (2026-09-27)
 
 Original Poltergeist implementation; no Séance source was copied and no pin
