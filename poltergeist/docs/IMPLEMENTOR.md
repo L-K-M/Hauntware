@@ -1,5 +1,13 @@
 # Poltergeist — implementation directive
 
+> [!NOTE]
+> Historical brief from the standalone-repository era (milestones M0–M10,
+> through v1.0.1). Since 1.9.0 Poltergeist lives in `L-K-M/Hauntware`:
+> Séance's packages are path dependencies in the same repository, so there
+> are no Séance git pins, upstream Séance PRs or sibling checkouts, and the
+> root `scripts/release.sh` releases the whole suite. For current practice
+> read the root and Poltergeist `AGENTS.md`.
+
 You are the implementor for **Poltergeist** (repo `L-K-M/Poltergeist`), a
 cross-platform two-pane SFTP-first file transfer client. The design plan is
 complete, review-hardened, and merged: chapters `docs/plan/00-OVERVIEW.md`
