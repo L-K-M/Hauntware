@@ -112,11 +112,6 @@ final class _Production {
   int? total;
 }
 
-/// The preview verb's surface answer for one invocation: where Space
-/// routed the request. Exposed for the pane's key dispatch (and tests)
-/// — the card/panel rendering keys off [phase] instead.
-enum PreviewSurface { none, panel, quickLook }
-
 enum _ThresholdDecision { unconfirmed, confirmed }
 
 final class _PendingStart {

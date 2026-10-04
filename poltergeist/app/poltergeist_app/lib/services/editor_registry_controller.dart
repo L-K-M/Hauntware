@@ -76,9 +76,6 @@ final class EditorRegistryController extends ChangeNotifier
   Future<void> setExtensionDefault(String extension, String editorId) =>
       _mutate(() => _registry.setDefaultForExtension(extension, editorId));
 
-  Future<void> clearExtensionDefault(String extension) =>
-      _mutate(() => _registry.clearDefaultForExtension(extension));
-
   Future<void> _mutate(void Function() apply) async {
     final before = _registry.toJson();
     apply();

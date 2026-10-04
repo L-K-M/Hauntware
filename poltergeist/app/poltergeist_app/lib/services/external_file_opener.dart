@@ -217,12 +217,6 @@ class EditorRegistry {
     extensionDefaults[normalized.single] = editorId;
   }
 
-  void clearDefaultForExtension(String extension) {
-    final normalized = normalizeEditorExtensions([extension]);
-    if (normalized.isEmpty) return;
-    extensionDefaults.remove(normalized.single);
-  }
-
   /// Resolves the editor id the Open verb launches for [path] (06
   /// §4.2): the per-extension binding first — validated at read so a
   /// binding whose editor vanished or disclaimed the extension falls

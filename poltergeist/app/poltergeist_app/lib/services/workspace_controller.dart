@@ -235,8 +235,6 @@ class WorkspaceController extends ChangeNotifier {
     }
   }
 
-  void togglePreviewPanel() => toggleInspectorTab(InspectorTab.info);
-
   /// Whether pane B is on screen: not user-hidden and not layout-hidden.
   bool get secondPaneShown => !_secondPaneHidden && _secondPaneLayoutShown;
 

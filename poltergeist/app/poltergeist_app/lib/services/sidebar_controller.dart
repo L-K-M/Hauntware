@@ -359,17 +359,6 @@ final class SidebarController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void removePendingGroup(String name) {
-    if (_disposed) return;
-    final next = [
-      for (final pending in _pendingGroups)
-        if (pending != name) pending,
-    ];
-    if (next.length == _pendingGroups.length) return;
-    _pendingGroups = List.unmodifiable(next);
-    notifyListeners();
-  }
-
   /// Reads the store's sections. Re-runnable: a store change reloads, and
   /// a superseded read drops itself on the generation counter (09 §3.1).
   Future<void> reload() async {
