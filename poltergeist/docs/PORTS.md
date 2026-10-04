@@ -1850,14 +1850,14 @@ reproduce them without adding names to docs.
 
 - Source: `seance_core` at `seance/packages/seance_core` (path dependency)
 - Source: `seance_protocol` at `seance/packages/seance_protocol` (path dependency)
-- Component: `seance/` tree `db8b3c9bbd9abe4276e28c916715dedc1320ff46` at `HEAD`
+- Component: `seance/` tree `17db8f5ac51956d2ba5baf36ec84c27ab6f4cdcd` at `HEAD`
 - Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
-- Identity: 109 lines; `sha256:fbe70edea4d37436b7e41a92ac533bcf0414a08c9d737ad43938af829f552018`
-- Companion: 732 lines; `sha256:f2a8eeab0f67759a07ddb0b9e08bb07b6bf29b2a485f24986ecda8cc8b299dca`
-- Companion orphans: 2 lines; `sha256:08ae6a9bd59c6c0d3780e68016a800782f4c060814cfd766385aa5413e78ffbf`
-- Pinpoints: 1345 lines; `sha256:bea44b92faf8ee86b821311b62f8170b925fe0b8d6ec2e77e9a36f69f6460219`
-- License scan: 63 lines; `sha256:d62ba05746643c6d45f1e080842780df974429ebf9464b91d9860d313bb74c92`
-- Vendored paths: 280 lines; `sha256:8c74dc7a7ff7def8f5691d23ac39ba0c1c2349890cd667b2d834672fc4c7ed43`
-- Gitlinks: 0 lines; `sha256:e440538add34e1a9b266175cf46fabfd6568f437cecc86c26e775b7727afb172`
-- Tree: 680 lines; `sha256:93e97dfd0acfc518e088d7ae02d44f0679654e4664fee39cc857636e1af32a95`
+- Identity: 109 lines; `sha256:bd7e8863412678f526090fb16680a02a4b4f6695ba15db224dcb11ba615dd3db`
+- Companion: 735 lines; `sha256:b11959c17b5057e56f9bd764a1517b0a100289697500be0dcd93a20981b26a50`
+- Companion orphans: 2 lines; `sha256:9c71c6627e49839769aa60d0b4753896f35eaad3969e03d3100522f114b07dca`
+- Pinpoints: 1348 lines; `sha256:8f0dd913ed0c2150f8c54f9159b7e4f9450e8650b4d425a119929404e5e20c46`
+- License scan: 63 lines; `sha256:8bef307fd7fcccd8459a0905b878642338699f64c5a4cfb2c6fa813aa7714ad7`
+- Vendored paths: 280 lines; `sha256:0b7106ad3c90f976a3fa93a2c6b91ec204ded456dc2e3f1476d7a91a1f668228`
+- Gitlinks: 0 lines; `sha256:bd20e877083029375c3c02fdde6447ab46587fa7e78258749b402920a184c72b`
+- Tree: 680 lines; `sha256:4df29e44ddcaf19509e2eb96734501dfd49fc8cc512e7279546a8a76490d48a7`
 <!-- SEANCE_PIN_AUDIT_V2:END -->

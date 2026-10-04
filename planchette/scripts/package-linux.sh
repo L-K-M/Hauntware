@@ -410,7 +410,7 @@ write_copyright() {  # $1 = destination; uses $VERSION and $LICENSE_FILE
   {
     cat <<EOF
 Planchette — a cross-platform text editor
-Source: https://github.com/L-K-M/Planchette
+Source: https://github.com/L-K-M/Hauntware
 Upstream-Version: $VERSION
 License: Unlicense — the full text follows.
 
@@ -448,7 +448,7 @@ Architecture: @ARCH@
 Installed-Size: @SIZE@
 Depends: @DEPENDS@
 Maintainer: L-K-M <l-k-m@users.noreply.github.com>
-Homepage: https://github.com/L-K-M/Planchette
+Homepage: https://github.com/L-K-M/Hauntware
 Description: Planchette — a cross-platform text editor
  Text editor for macOS, Windows, Linux, and Android, built as a sibling of
  Séance and Poltergeist.

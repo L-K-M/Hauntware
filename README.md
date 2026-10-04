@@ -63,8 +63,9 @@ Vendored package versions and historical benchmark measurements stay intact.
 407 captured refs and exact historical tag metadata. Full-history imports
 retain original commit IDs; rejected/experimental trees remain historical.
 
-Existing installations keep their data identities. Older releases still check
-their original repositories; install the first suite build manually. Séance's
-macOS container migration preserves the original snapshot. Sandbox rollback
-requires deliberate data/key reconciliation; see its [status](seance/docs/STATUS.md).
-Native macOS migration checks remain required before an actual release.
+The standalone repositories are archived. Their final releases point here,
+so standalone installs see the suite release through their update check.
+Séance 0.9.2, Poltergeist 1.0.1 and earlier used `com.lkm.*` application
+IDs; suite builds use `ch.lkmc.*`, install as new apps and start without
+the old apps' data. Séance's macOS sandbox migration covers only sandboxed
+builds with the current bundle ID; see its [status](seance/docs/STATUS.md).

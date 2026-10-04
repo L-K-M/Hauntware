@@ -1143,7 +1143,10 @@ jobs:
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6 (SHA-pinned)
         with:
-          images: ghcr.io/${{ github.repository }}
+          # The image keeps the name the standalone Séance repo published
+          # (0.2.0–0.9.2), so existing `docker pull` users keep updating.
+          # The package must grant this repository Actions write access.
+          images: ghcr.io/${{ github.repository_owner }}/seance
           # `value` feeds the semver parser the tag on workflow_dispatch runs
           # (where the git ref is a branch, not the tag); on tag pushes it is
           # the pushed tag itself, same as deriving from the ref.
@@ -1244,15 +1247,19 @@ jobs:
             cat <<'NOTES'
           **Planchette** — desktop bundles for Linux (.deb, AppImage,
           Flatpak, plain bundle, x64), macOS and Windows.
-          **Séance** — Android APK (sideload, upgrades in place), Linux
-          packages (x64), macOS/Windows bundles, an unsigned iOS IPA, and
-          the sync-server binaries (linux-x64, macos-arm64, windows-x64).
+          **Séance** — Android APK (sideload; later suite APKs upgrade it
+          in place), Linux packages (x64), macOS/Windows bundles, an
+          unsigned iOS IPA, and the sync-server binaries (linux-x64,
+          macos-arm64, windows-x64).
           **Poltergeist** — same client matrix as Séance (no server).
+          Séance 0.9.2 and Poltergeist 1.0.1 and earlier used `com.lkm.*`
+          app IDs. Suite builds use `ch.lkmc.*`: they install as new apps
+          beside those versions and start without their data.
           Desktop bundles are unsigned; first launch needs the usual
           unidentified-developer step (macOS: right-click ▸ Open; Windows:
           SmartScreen ▸ Run anyway). The iOS IPAs must be re-signed to
           install (AltStore / Sideloadly / Xcode with a free Apple ID).
-          The sync server also ships as `ghcr.io/<owner>/hauntware` image.
+          The sync server also ships as the `ghcr.io/l-k-m/seance` image.
 
           `SHA256SUMS` ships beside the assets; the same sums follow below.
 

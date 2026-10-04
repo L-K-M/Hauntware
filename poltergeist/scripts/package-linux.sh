@@ -398,7 +398,7 @@ write_copyright() {  # $1 = destination; uses $VERSION and $LICENSE_FILE
   {
     cat <<EOF
 Poltergeist — a cross-platform two-pane file transfer client
-Source: https://github.com/L-K-M/Poltergeist
+Source: https://github.com/L-K-M/Hauntware
 Upstream-Version: $VERSION
 License: Unlicense — the full text follows.
 
@@ -436,7 +436,7 @@ Architecture: @ARCH@
 Installed-Size: @SIZE@
 Depends: @DEPENDS@
 Maintainer: L-K-M <l-k-m@users.noreply.github.com>
-Homepage: https://github.com/L-K-M/Poltergeist
+Homepage: https://github.com/L-K-M/Hauntware
 Description: Poltergeist — a two-pane file transfer client
  Dual-pane file manager and transfer client (SFTP first) with tabs per
  pane, a bookmarks sidebar, previewable sync, and a built-in editor.

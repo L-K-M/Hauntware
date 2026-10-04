@@ -1,7 +1,8 @@
 # Installing Poltergeist
 
 Download Poltergeist only from this repository's
-[Releases page](https://github.com/L-K-M/Poltergeist/releases). The desktop
+[Releases page](https://github.com/L-K-M/Hauntware/releases) (the
+`poltergeist-*` assets). The desktop
 builds are unsigned (macOS: ad-hoc), so the first launch on each platform
 takes one extra step — below. On Android you sideload the APK.
 
@@ -93,7 +94,9 @@ is no Play Store listing; you install the APK yourself:
    replaces an installed copy, keeping its data).
 
 A later release's APK installs over the current one and keeps your
-servers, favorites, and settings.
+servers, favorites, and settings. Poltergeist 1.0.1 and earlier used the
+`com.lkm.poltergeist_app` ID: the first suite APK installs beside such an
+install and starts without its data.
 
 The APK is signed with a committed, deliberately public debug-grade key.
 That is what lets each release's APK upgrade an installed one in place.
@@ -115,6 +118,6 @@ re-signing step (AltStore, Sideloadly, or an Xcode free account).
 
 ## Getting help
 
-File issues at <https://github.com/L-K-M/Poltergeist/issues>. The release
+File issues at <https://github.com/L-K-M/Hauntware/issues>. The release
 notes and [`README`](../README.md)'s known-issues section list the
 limitations we already know about.
