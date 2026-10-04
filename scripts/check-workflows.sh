@@ -8,8 +8,10 @@
 #   2. every `uses:` is pinned — immutable SHAs on the publish path
 #      (release.yml), version tags elsewhere, matching the subtree
 #      workflows' pinning convention,
-#   3. every asset the release legs attach is covered by
-#      scripts/release-manifest.txt (the publish floor),
+#   3. release assets and scripts/release-manifest.txt cover each
+#      other: every manifest entry is attached by some release leg,
+#      and every asset a leg attaches (`files:` in release.yml) has
+#      a manifest entry — the manifest header's own promise,
 #   4. all tracked helper scripts pass `bash -n`,
 #   5. scripts/test.sh and this script are executable,
 #   6. the preserved-history gate and the root release_version contract
@@ -19,7 +21,12 @@
 #      canonical (the poltergeist copy — the evolved variant carrying
 #      the bounded retry and unfinished-review report),
 #   8. multi-line run scripts in jobs that can run on Windows name
-#      their shell (Windows otherwise runs them under PowerShell).
+#      their shell (Windows otherwise runs them under PowerShell),
+#   9. release.yml grants packages: write to the docker job only
+#      (least-privilege tokens: only that job pushes to GHCR),
+#  10. the checksum job drops a stale SHA256SUMS before recomputing,
+#      so re-running it stays idempotent,
+#  11. both Android client legs verify the built APK's version code.
 
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -72,7 +79,7 @@ for wf in .github/workflows/*.yml; do
   done < <(grep -oE 'uses: [^ #]+@[^ #]+' "$wf" | sed 's/^uses: //')
 done
 
-# --- 3. Manifest covers every attached asset ------------------------------
+# --- 3. Manifest and attached assets cover each other ----------------------
 # Collect every asset-looking name or template the workflow produces —
 # literal `files:` lines and matrix `files: |` lists — then match each
 # manifest entry against them. `${{ matrix.X }}` templates behave like
@@ -97,6 +104,58 @@ while IFS= read -r pattern; do
     { err "release-manifest entry not attached by any leg: $pattern"; missing=1; }
 done < scripts/release-manifest.txt
 [[ "${#candidates[@]}" -gt 0 ]] || err "no asset candidates found in release.yml"
+
+# The reverse promise (the manifest header's own contract): every asset
+# name or glob a leg attaches through a `files:` stanza must be covered
+# by a manifest entry — an asset the floor does not know about would
+# publish outside the rehearsed, checksummed set. `files:` may be an
+# inline value, a block scalar (`|`, one name per line) or a YAML list
+# (`- name`). Templates normalize to `*`; `files: ${{ matrix.files }}`
+# becomes bare `*` and is dropped, because the matrix stanzas it
+# expands to are read directly. Any file name counts, whatever its
+# extension, so a new asset type cannot slip past.
+mapfile -t attached < <(
+  awk '
+    /^ *files:/ {
+      key_indent = match($0, /[^ ]/) - 1
+      value = $0
+      sub(/^ *files: */, "", value)
+      mode = (value ~ /^[|>]/) ? "block" : (value == "" ? "list" : "")
+      if (mode == "") print value
+      next
+    }
+    mode != "" {
+      indent = match($0, /[^ ]/) - 1
+      if ($0 ~ /[^ ]/ && mode == "list" && $1 == "-" && indent >= key_indent) {
+        print $2
+        next
+      }
+      if ($0 ~ /[^ ]/ && mode == "block" && indent > key_indent) {
+        print $1
+        next
+      }
+      mode = ""
+    }
+  ' .github/workflows/release.yml |
+    sed -E 's/\$\{\{[^}]*\}\}/*/g; s/^["'"'"']//; s/["'"'"']$//' |
+    awk '$0 != "*" && $0 ~ /\./' |
+    sort -u
+)
+uncovered=0
+for name in "${attached[@]}"; do
+  covered=0
+  while IFS= read -r pattern; do
+    [[ -z "$pattern" || "$pattern" =~ ^# ]] && continue
+    # shellcheck disable=SC2053
+    if [[ "$name" == $pattern || "$pattern" == $name ]]; then
+      covered=1
+      break
+    fi
+  done < scripts/release-manifest.txt
+  [[ "$covered" -eq 1 ]] ||
+    { err "leg asset not covered by any manifest entry: $name"; uncovered=1; }
+done
+[[ "${#attached[@]}" -gt 0 ]] || err "no attached assets found in release.yml files: stanzas"
 
 # --- 4. Shell syntax on helper scripts ------------------------------------
 while IFS= read -r script; do
@@ -146,7 +205,53 @@ python3 scripts/check-windows-shells.py --self-test ||
 python3 scripts/check-windows-shells.py .github/workflows/*.yml ||
   err "a Windows-capable job runs a multi-line script without shell:"
 
-if [[ "$fail" -ne 0 || "$missing" -ne 0 ]]; then
+# --- 9. Least-privilege release tokens --------------------------------------
+# Only the docker job pushes to GHCR, so a `packages: write` grant may
+# appear exactly once in release.yml — in that job's block, nowhere else
+# (workflow-level defaults included). A second occurrence would hand
+# image-push rights to a job that never uses them. The pattern matches
+# grant lines only (an optional trailing comment), not prose that
+# mentions the permission.
+package_writes="$(
+  grep -cE '^[[:space:]]*packages: write([[:space:]]#.*)?$' \
+    .github/workflows/release.yml || true
+)"
+docker_package_writes="$(
+  awk '
+    $0 == "  docker:" { inside = 1; next }
+    inside && /^  [A-Za-z0-9_-]+:/ { inside = 0 }
+    inside && /^[[:space:]]*packages: write([[:space:]]#.*)?$/ { n++ }
+    END { print n + 0 }
+  ' .github/workflows/release.yml
+)"
+[[ "$package_writes" -eq 1 && "$docker_package_writes" -eq 1 ]] ||
+  err "release.yml must grant packages: write to the docker job only (found $package_writes, $docker_package_writes in docker)"
+
+# --- 10. Re-runnable checksum job ------------------------------------------
+# The sums job downloads the draft's assets before recomputing
+# SHA256SUMS; a stale sums asset from a failed attempt must be dropped
+# first, or the re-run folds it into the new sums and fails the verify
+# bijection on every retry.
+grep -q 'rm -f "$assets_dir/SHA256SUMS"' .github/workflows/release.yml ||
+  err "release.yml sums job must drop a stale SHA256SUMS before computing sums"
+
+# --- 11. Android legs verify the APK version code ---------------------------
+# Both APK legs must prove Gradle consumed the synchronized pubspec
+# version code in the real APK (Poltergeist's mechanism), so a stale
+# build cannot ship an APK that refuses to upgrade in place.
+# awk matches by itself: `| grep -q` would exit at the first hit and,
+# under pipefail, the SIGPIPE awk gets would fail a passing check.
+for leg in client_seance client_poltergeist; do
+  awk -v leg="$leg" '
+    $0 == "  " leg ":" { inside = 1; next }
+    inside && /^  [A-Za-z0-9_-]+:/ { inside = 0 }
+    inside && /verify-android-version\.sh/ { found = 1 }
+    END { exit !found }
+  ' .github/workflows/release.yml ||
+    err "release.yml $leg must verify the APK version code (verify-android-version.sh)"
+done
+
+if [[ "$fail" -ne 0 || "$missing" -ne 0 || "$uncovered" -ne 0 ]]; then
   echo "workflow contract checks FAILED" >&2
   exit 1
 fi

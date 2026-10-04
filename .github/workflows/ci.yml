@@ -1240,7 +1240,7 @@ jobs:
         if: matrix.target == 'android'
         working-directory: poltergeist/app/poltergeist_app
         shell: bash
-        run: bash "$GITHUB_WORKSPACE/poltergeist/scripts/verify-android-version.sh"
+        run: bash "$GITHUB_WORKSPACE/scripts/verify-android-version.sh"
       # Exercise the same packaging the release workflow ships. Do not upload
       # binaries from ordinary CI: a build may embed code whose grants to
       # recipients are not yet audited for distribution.
