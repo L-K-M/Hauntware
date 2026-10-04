@@ -1644,12 +1644,6 @@ final class DocumentWorkspace extends ChangeNotifier {
 
   String _pathKey(String path) => _paths.canonicalize(path);
 
-  /// A failed native destruction must not leave the surviving window locked.
-  void quitFailed(Object error) {
-    _quitAccepted = false;
-    _reportError('Could not close Planchette: $error');
-  }
-
   /// The quit decision's consent, released: a cancelled app quit, or a
   /// teardown that failed after this workspace already said yes, means the
   /// app is not exiting and the lock its answer left behind goes.
