@@ -515,7 +515,7 @@ Do not "simplify" these away — they are load-bearing:
   *physical* pixels: window_manager scales bounds by the current monitor's
   ratio while screen_retriever scales each display by its own, so on mixed-DPI
   setups their "logical" spaces disagree — physical is the one space both map
-  into exactly (`WindowStateSnapshot` doc has the details).
+  into exactly (ghost_desktop's `GhostWindowSnapshot` doc has the details).
 
 - **The macOS integrated titlebar is macos_window_utils', not
   window_manager's.** The main window draws its header under an empty

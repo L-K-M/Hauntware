@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/services/app_preferences.dart';
 import 'package:poltergeist_app/services/desktop_window_lifecycle.dart';
@@ -37,7 +38,7 @@ void main() {
       window: window,
       displays: displays,
       titlebar: titlebar,
-      platform: DesktopPlatform.macos,
+      platform: GhostDesktopPlatform.macos,
     );
 
     await lifecycle.prepare();
@@ -60,7 +61,7 @@ void main() {
     await lifecycle.show();
 
     expect(window.readyOptions?.size, const Size(900, 600));
-    expect(window.readyOptions?.placement, WindowPlacement.restored);
+    expect(window.readyOptions?.placement, GhostWindowPlacement.restored);
     expect(window.bounds, const Rect.fromLTWH(510, 220, 900, 600));
     expect(window.events, ['ready', 'bounds', 'show', 'focus']);
   });
@@ -562,7 +563,7 @@ DesktopWindowLifecycle _lifecycle({
   ControlledSettingsWriter? writer,
   FakeDisplayAdapter? displays,
   FakeMacTitlebarAdapter? titlebar,
-  DesktopPlatform platform = DesktopPlatform.linux,
+  GhostDesktopPlatform platform = GhostDesktopPlatform.linux,
   Duration saveDelay = const Duration(milliseconds: 1),
   FakeDebounceScheduler? debounce,
   Future<bool> Function()? confirmClose,

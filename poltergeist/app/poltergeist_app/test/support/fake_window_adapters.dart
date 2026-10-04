@@ -8,7 +8,7 @@ import 'package:poltergeist_app/services/desktop_window_lifecycle.dart';
 /// records into [FakeWindowAdapter.events] and block/fail switches let a
 /// test hold or break any stage. `emitClose` drives the intercepted
 /// window-close callback the way `window_manager` delivers it.
-final class FakeWindowAdapter implements DesktopWindowAdapter {
+final class FakeWindowAdapter implements GhostWindowAdapter {
   int ensureInitializedCalls = 0;
   bool failEnsureInitialized = false;
   bool blockEnsureInitialized = false;
@@ -28,7 +28,7 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
   Size? minimumSize;
   final minimumSizes = <Size>[];
   final callsAfterDestroy = <String>[];
-  WindowShowOptions? readyOptions;
+  GhostWindowOptions? readyOptions;
   final events = <String>[];
   final ensureInitializedStarted = Completer<void>();
   final readyToShowStarted = Completer<void>();
@@ -118,7 +118,7 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
   }
 
   @override
-  Future<void> waitUntilReadyToShow(WindowShowOptions? options) async {
+  Future<void> waitUntilReadyToShow(GhostWindowOptions? options) async {
     _recordCall('waitUntilReadyToShow');
     readyOptions = options;
     events.add('ready');
@@ -199,7 +199,7 @@ final class FakeWindowAdapter implements DesktopWindowAdapter {
   }
 }
 
-final class FakeDisplayAdapter implements DisplayAdapter {
+final class FakeDisplayAdapter implements GhostDisplayAdapter {
   @override
   Future<GhostDisplay> primaryDisplay() async =>
       const GhostDisplay(workArea: Rect.fromLTWH(0, 0, 1920, 1040));

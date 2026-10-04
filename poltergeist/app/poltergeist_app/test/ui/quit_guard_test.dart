@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/app.dart';
 import 'package:poltergeist_app/services/app_preferences.dart';
@@ -523,7 +524,7 @@ final class _Harness {
       window: window,
       displays: FakeDisplayAdapter(),
       titlebar: FakeMacTitlebarAdapter(),
-      platform: DesktopPlatform.linux,
+      platform: GhostDesktopPlatform.linux,
       confirmClose: guard.confirmClose,
       onError: (error, _) => errors.add(error),
     );
