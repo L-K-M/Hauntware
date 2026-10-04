@@ -11,6 +11,8 @@
 - **Folders spring open more slowly.** Holding a drag over a folder opens
   it after 1.5 seconds instead of 1, so passing over folders opens them
   less often by accident.
+- **⌘← and ⌘→ go back and forward on a Mac**, like ⌘[ and ⌘]. In a text
+  field they still move to the start or end of the line.
 
 ## 1.9.0 — first suite release (2026-10-04)
 

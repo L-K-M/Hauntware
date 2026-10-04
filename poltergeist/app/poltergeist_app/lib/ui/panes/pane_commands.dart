@@ -124,10 +124,14 @@ List<RegisteredCommand> buildPaneCommands({
       scope: CommandScope.pane,
       label: (l10n) => l10n.goBackLabel,
       icon: Icons.arrow_back_outlined,
-      // ⌘[ on macOS, Alt+Left elsewhere (02 §8.3's table).
+      // ⌘[ (menu key) plus browser-style ⌘← on macOS, Alt+Left elsewhere
+      // (02 §8.3's table). The bracket chord stays first so menus show
+      // and bind it. Text fields keep ⌘← as line start: the chord layer
+      // stands down while an EditableText holds focus.
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true),
+          SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true),
         ],
         other: const [SingleActivator(LogicalKeyboardKey.arrowLeft, alt: true)],
       ),
@@ -151,10 +155,12 @@ List<RegisteredCommand> buildPaneCommands({
       scope: CommandScope.pane,
       label: (l10n) => l10n.goForwardLabel,
       icon: Icons.arrow_forward_outlined,
-      // ⌘] on macOS, Alt+Right elsewhere (02 §8.3's table).
+      // ⌘] (menu key) plus ⌘→ on macOS, Alt+Right elsewhere (02 §8.3's
+      // table). Order and field-first reasons as go.back above.
       activators: _perPlatform(
         macOS: const [
           SingleActivator(LogicalKeyboardKey.bracketRight, meta: true),
+          SingleActivator(LogicalKeyboardKey.arrowRight, meta: true),
         ],
         other: const [
           SingleActivator(LogicalKeyboardKey.arrowRight, alt: true),

@@ -1741,16 +1741,17 @@ class PaneController extends ChangeNotifier {
       !connectionLost &&
       _historyIndex < _history.length - 1;
 
-  /// 02 §2.1's Back (Alt+Left / ⌘[): reissues the previous trail entry
-  /// through the SAME navigation seam a typed path takes — generation
-  /// bump, stale-answer drop, optimistic location — after walking the
-  /// index so a later Forward still names where the user was heading.
+  /// 02 §2.1's Back (Alt+Left; ⌘[ and ⌘← on macOS): reissues the
+  /// previous trail entry through the SAME navigation seam a typed path
+  /// takes — generation bump, stale-answer drop, optimistic location —
+  /// after walking the index so a later Forward still names where the
+  /// user was heading.
   void goBack() {
     if (_disposed || !canGoBack) return;
     _traverseHistory(-1);
   }
 
-  /// Forward (Alt+Right / ⌘]): [goBack]'s mirror.
+  /// Forward (Alt+Right; ⌘] and ⌘→ on macOS): [goBack]'s mirror.
   void goForward() {
     if (_disposed || !canGoForward) return;
     _traverseHistory(1);
