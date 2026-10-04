@@ -133,6 +133,16 @@ Everything security- or correctness-critical is covered by tests that run in CI
 - The assistant treats terminal scrollback as untrusted (prompt-injection),
   gets no execution/file tools, and every suggested command passes a
   review-before-run gate and an independent danger linter.
+- **macOS is deliberately not sandboxed.** The App Sandbox is inherited by
+  child processes, so with it on the local shell opens confined to Séance's
+  container with no job control — not a terminal. Séance ships ad-hoc signed
+  outside the Mac App Store, so nothing requires the sandbox. The cost is
+  real and permanent: a compromise of the app or any dependency reaches
+  everything the user can, not one container. Putting
+  `com.apple.security.app-sandbox` back changes the store location again.
+  The container is a pre-migration snapshot, not a reverse migration:
+  reconcile both support trees and the vault/key pairing from backups
+  before rolling back. See `docs/STATUS.md`, "macOS: no App Sandbox".
 
 See [PROPOSAL.md §7](PROPOSAL.md) for the full checklist and open questions.
 
@@ -331,6 +341,47 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   `dart analyze` and the app's `flutter analyze` are clean; the vendored
   fork carries 11 upstream `info` lints and is deliberately not analyze-
   gated in CI (only its tests run).
+- The sandbox-container migration is tested against **real temp directories**
+  (`test/sandbox_migration_test.dart`) — the thing under test is filesystem
+  behaviour, and a fake would prove nothing about the case that matters: an
+  interrupted copy that leaves an install looking migrated when it is not.
+  `SandboxMigration.copyFile` is injectable for exactly one reason: a mid-copy
+  failure cannot be provoked with permissions here, because CI and the dev
+  container both run as **root**, where `chmod 000` keeps nothing out.
+
+  What is **not** covered anywhere is the macOS half of the story — no Mac ran
+  any of this. Before releasing an unsandboxed build, verify by hand on a Mac
+  with an existing sandboxed install: data appears after the first launch
+  (servers, snippets, sync still enrolled, **same `deviceId`**); the keychain
+  prompt appears once and "Always Allow" sticks; denying it leaves the vault
+  locked without replacing its key, and restored access can be retried;
+  a missing keystore entry with an existing vault stops startup with
+  `MasterKeyUnavailableException`; a Browse…-picked identity file outside
+  `~/.ssh` still connects;
+  the local shell opens in the real `$HOME` with `^C` interrupting a
+  `sleep 30`; and killing the app mid-copy leaves the destination untouched —
+  the next launch either retries the migration or stops with the explanation,
+  never starts looking empty.
+- Local-shell wiring uses fakes. CI and release Linux builds also run the
+  real PTY tests after compiling the plugin; normal `flutter test` skips
+  them when the native library is unavailable. To verify them locally:
+
+  ```bash
+  # From the repository root, compile the vendored unity target:
+  clang -shared -fPIC -pthread -DDART_SHARED_LIB -o /tmp/libflutter_pty.so \
+    third_party/flutter_pty/src/flutter_pty.c \
+    -I third_party/flutter_pty/src -I third_party/flutter_pty/src/include
+  # From app/seance_app; a missing native library is a failure:
+  LD_LIBRARY_PATH=/tmp SEANCE_NATIVE_PTY_REQUIRED=1 \
+    flutter test test/local_shell_native_test.dart
+  ```
+
+  What was checked this way (Linux, `/bin/sh`): the shell starts and echoes
+  (so the line discipline is real, not a pipe); `stty size` reports `24 80`
+  and, after `session.resize(TerminalSize(132, 43))`, `43 132` — the pty API
+  takes **rows first** while `TerminalSize` is columns-first, and this is the
+  test that catches the transposition; `^C` kills a `sleep 30` and the shell
+  survives it; `exit` fires `onClosed` with status 0; `close()` tears down.
 - Sync correctness is proven two ways: `packages/seance_core/test/sync_test.dart` (engine,
   two devices converge, concurrent-edit LWW, tombstones) and
   `packages/seance_sync_server/test/integration_test.dart` (the real `HttpSyncClient` +
@@ -385,6 +436,23 @@ compiles the app for android/linux/macos/ios/windows on their native runners
   subproject as a workaround — remove it once file_picker fixes
   [issue #1973](https://github.com/miguelpruivo/flutter_file_picker/issues/1973)
   or Flutter enables built-in Kotlin.
+
+- **`flutter_pty` does not inherit the process environment.** `Pty.start`
+  builds a fresh one from `TERM`, `LANG`, and exactly six copied names
+  (`LOGNAME`, `USER`, `DISPLAY`, `LC_CTYPE`,
+  `HOME`, `PATH`), then merges the caller's map over it. `LocalShellCommand`
+  therefore returns the **whole** environment, not a delta; passing a delta
+  silently drops `SSH_AUTH_SOCK`, `XDG_*`, and everything else.
+- **`flutter_pty` is broken on Windows** (0.4.2). `build_command` in
+  `src/flutter_pty_win.c` writes `options->executable` *and* every element of
+  `argv` — whose first element the Dart side already set to `executable` — so
+  `Pty.start('cmd.exe')` becomes the command line `cmd.exe cmd.exe`. The same
+  function byte-casts to `WCHAR`, mangling any non-ASCII path. That is why
+  `localShellSupportedOn` refuses Windows; enabling it means vendoring the
+  package under `third_party/` (as xterm is) and deleting six lines.
+- **`Pty.start` is a synchronous constructor that throws `StateError`** — not
+  a future. Call it directly inside `try`/`catch`; awaiting a non-Future is
+  legal Dart but adds nothing and triggers `await_only_futures`.
 
 ---
 
@@ -494,6 +562,36 @@ Do not "simplify" these away — they are load-bearing:
 - `TerminalEngine` (`seance_core`) — bytes in (`feed`), user input stream out,
   `resize`. xterm backend in the app (`XtermTerminalEngine`); libghostty is the
   intended future backend (proposal M10). `HeadlessTerminalEngine` is for tests.
+- `MasterKeyManager.loadOrCreateFromKeystore` — takes `hasExistingVault`,
+  and that argument is load-bearing. A keystore reporting no key reads
+  identically for a first run and for a read the OS refused; minting a fresh
+  key in the second case makes every stored password and private key
+  permanently undecryptable. The vault on disk is the tiebreaker. On macOS the
+  realistic trigger is the login-keychain prompt being dismissed — ad-hoc
+  signing binds the ACL to an exact code hash, so **every rebuild you install
+  asks again**.
+- `SandboxMigration` — copies an install's data out of the macOS App Sandbox
+  container that older builds used. The whole tree is copied to a staging
+  directory *beside* the destination and put in place with **one directory
+  rename**, so what the app can see is all-or-nothing. That is load-bearing:
+  a half-filled support directory is indistinguishable from one already in
+  use, so the next launch would skip the migration and strand the remainder
+  silently and forever. The container is copied, never moved.
+  **A failed migration ends startup** (`SandboxMigrationFailure`) rather than
+  letting the app continue — everything after that point writes, and the
+  `deviceId` mint alone creates `settings.json`, which is enough to make the
+  retry impossible. Refusing to launch is what keeps "quit and reopen" true.
+- `SessionTransport` (`seance_core`) — what carries a session's bytes:
+  `SshSession` (dartssh2) or `LocalShellSession` (a local pty). Four members —
+  `resize`, `close`, `isClosed`, `onClosed` — and `close()` **owns disposing
+  the engine**; `AppState._disposeSession` relies on that. A `TerminalSession`
+  with a null `config` is a local shell; keep display reads going through
+  `displayLabel` / `displayTarget` rather than reintroducing `config!`.
+- `LocalPty` (`seance_core`) — one pseudo-terminal. `seance_core` is pure Dart
+  and a pty needs native code, so the only implementation
+  (`FlutterPtyLocalPty`, over `flutter_pty`) lives in the app and the launcher
+  is injectable — `flutter test` runs on the host VM where the plugin's native
+  library cannot be opened at all.
 - `ConfigStore` / `VaultStore` / `HostKeyStore` — in-memory (tests) and JSON-file
   (app) impls; SQLite/drift is the documented future swap.
 - `SyncApi` (pull/push) — `HttpSyncClient` in prod, `FakeServer` in tests.
@@ -749,4 +847,3 @@ may waive review; report that waiver rather than claiming review passed.
   status, review rounds completed, and whether it is merged.
 
 <!-- shared-rules:end -->
-

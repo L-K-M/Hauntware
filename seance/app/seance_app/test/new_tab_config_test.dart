@@ -70,33 +70,39 @@ void main() {
         },
   );
 
-  test('a new tab opened from an existing one uses the edited config', () async {
-    final dialed = <String>[];
-    final app = stateRecording(dialed);
-    app.servers = [server(host: 'old.example.com')];
-    await app.newTab(app.servers.single);
-    final first = app.tabs.single as TerminalSession;
+  test(
+    'a new tab opened from an existing one uses the edited config',
+    () async {
+      final dialed = <String>[];
+      final app = stateRecording(dialed);
+      app.servers = [server(host: 'old.example.com')];
+      await app.newTab(app.servers.single);
+      final first = app.tabs.single as TerminalSession;
 
-    // The user edits the server while its tab stays open.
-    app.servers = [server(host: 'new.example.com', port: 2222)];
+      // The user edits the server while its tab stays open.
+      app.servers = [server(host: 'new.example.com', port: 2222)];
 
-    // ⌘T, the tab strip's "+" and the macOS New Tab item all pass the
-    // config the existing tab connected with.
-    await app.newTab(first.config);
+      // ⌘T, the tab strip's "+" and the macOS New Tab item all pass the
+      // config the existing tab connected with.
+      await app.newTab(first.config!);
 
-    expect(dialed, ['old.example.com:22', 'new.example.com:2222']);
-    expect(
-      (app.tabs.last as TerminalSession).config.host,
-      'new.example.com',
-    );
-  });
+      expect(dialed, ['old.example.com:22', 'new.example.com:2222']);
+      expect(
+        (app.tabs.last as TerminalSession).config!.host,
+        'new.example.com',
+      );
+    },
+  );
 
-  test('a server no longer in the list still opens with its tab config', () async {
-    final dialed = <String>[];
-    final app = stateRecording(dialed);
-    await app.newTab(server(host: 'solo.example.com'));
-    await app.newTab((app.tabs.single as TerminalSession).config);
+  test(
+    'a server no longer in the list still opens with its tab config',
+    () async {
+      final dialed = <String>[];
+      final app = stateRecording(dialed);
+      await app.newTab(server(host: 'solo.example.com'));
+      await app.newTab((app.tabs.single as TerminalSession).config!);
 
-    expect(dialed, ['solo.example.com:22', 'solo.example.com:22']);
-  });
+      expect(dialed, ['solo.example.com:22', 'solo.example.com:22']);
+    },
+  );
 }

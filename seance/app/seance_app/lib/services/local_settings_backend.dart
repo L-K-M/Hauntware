@@ -56,6 +56,17 @@ class LocalSettingsBackend implements SettingsBackend {
   }
 
   @override
+  LocalShellInfo get localShell =>
+      LocalShellInfo.of(_state.services.localShell);
+
+  /// [AppState.setLocalShellEnabled] writes the setting and closes the local
+  /// tabs itself; the keep-alive setter's rollback dance is not needed here
+  /// because a failed save reverts inside the same method.
+  @override
+  Future<void> setLocalShellEnabled(bool enabled) =>
+      _state.setLocalShellEnabled(enabled);
+
+  @override
   Future<void> setKeepSessionsAlive(bool enabled) async {
     _s.keepSessionsAliveInBackground = enabled;
     try {

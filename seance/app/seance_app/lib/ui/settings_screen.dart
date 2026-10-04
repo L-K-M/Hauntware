@@ -98,6 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late bool _syncSecrets;
   late bool _commandSuggestions;
   late bool _checkForUpdates;
+  late bool _localShell;
   late bool _keepSessionsAlive;
 
   /// This screen's own copy, edited here and handed to the backend whole:
@@ -162,6 +163,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _syncAssistant = s.syncAssistant;
     _commandSuggestions = s.commandSuggestions;
     _checkForUpdates = s.checkForUpdates;
+    _localShell = s.localShell;
     _keepSessionsAlive = s.keepSessionsAliveInBackground;
     _editorRegistry = EditorRegistry.fromJson(s.editorRegistry.toJson());
     _terminalFontSize = clampTerminalFontSize(s.terminalFontSize);
@@ -491,6 +493,8 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
       ],
       const Divider(height: 40),
+      ..._localShellSection(),
+      const Divider(height: 40),
       SettingsSectionHeader(
         'Terminal',
         helpTitle: 'Terminal appearance',
@@ -604,6 +608,55 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
     ],
   );
+
+  /// The local-shell opt-in, or — where no shell can be opened — the reason.
+  List<Widget> _localShellSection() {
+    final localShell = _backend.localShell;
+    return [
+      SettingsSectionHeader(
+        'Local shell',
+        helpTitle: 'A shell on this machine',
+        help:
+            'Séance is an SSH client; this adds a terminal on the machine it '
+            'is running on, pinned above the servers in the list. It is off by '
+            'default because it is a real change in what the app can do — the '
+            'program holding your keys can now also run commands beside them, '
+            'and the assistant, snippets and the command generator all point '
+            'at this machine while a local tab is focused. Nothing about it is '
+            'stored or synced, and no shell starts until you open one.',
+      ),
+      if (localShell.supported)
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Show a local shell'),
+          subtitle: Text(
+            localShell.sandboxed
+                // Said before the switch is flipped, not after: inside the
+                // macOS App Sandbox the shell is real but confined, and a
+                // prompt is a bad place to discover that.
+                ? 'Runs ${localShell.shellName} on this machine. Inside the '
+                      'macOS sandbox it reaches only Séance’s own container — '
+                      'not your home folder — and job control is unavailable.'
+                : 'Runs ${localShell.shellName} on this machine, in a tab '
+                      'above your servers.',
+          ),
+          value: _localShell,
+          onChanged: (value) {
+            setState(() => _localShell = value);
+            _persistLocalShell();
+          },
+        )
+      else
+        // A disabled switch explains nothing, and every refusal here has a
+        // different cause the user cannot act on. Name it instead.
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.terminal_outlined),
+          title: const Text('Local shell unavailable here'),
+          subtitle: Text(localShell.unavailableReason),
+        ),
+    ];
+  }
 
   Widget _filesTab() {
     final defaultItems = <DropdownMenuItem<String>>[
@@ -1128,6 +1181,13 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _persistCheckForUpdates() => _persist(
     'Update check',
     () => _backend.setCheckForUpdates(_checkForUpdates),
+  );
+
+  /// Persist the local-shell opt-in; off closes every open local tab, so a
+  /// hidden row cannot strand live shells.
+  Future<void> _persistLocalShell() => _persist(
+    'Local shell',
+    () => _backend.setLocalShellEnabled(_localShell),
   );
 
   /// Persist the background keep-alive toggle and apply it to live sessions.

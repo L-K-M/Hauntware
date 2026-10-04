@@ -66,6 +66,10 @@ class _Session implements TerminalSession {
   @override
   bool get isConnected => true;
   @override
+  bool get isLocal => false;
+  @override
+  String get displayTarget => id;
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

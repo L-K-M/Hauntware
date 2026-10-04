@@ -55,10 +55,14 @@ class ServerListPane extends StatefulWidget {
   final void Function(ServerConfig server) onOpen;
   final ServerListPosture posture;
 
+  /// Open the local shell.
+  final VoidCallback? onOpenLocal;
+
   const ServerListPane({
     super.key,
     required this.onOpen,
     required this.posture,
+    this.onOpenLocal,
   });
 
   /// Below this many servers the list is short enough to read at a glance
@@ -344,6 +348,35 @@ class _ServerListPaneState extends State<ServerListPane> {
           _UpdateBanner(info: update, onDismiss: state.dismissUpdateNotice),
         // Proposals from connected apps wait here for review.
         InboxBanner(state: state),
+        // This machine, above the servers and outside the filter: it is
+        // not a server, so it is not a search result either, and it must
+        // not vanish behind a query the way a filtered-out host does.
+        // Also above the onboarding empty state — with no servers yet it
+        // is the one thing here that can actually be opened.
+        if (state.localShellAvailable && widget.onOpenLocal != null) ...[
+          Builder(
+            builder: (context) {
+              final tabs = state
+                  .tabsForServer(kLocalShellServerId)
+                  .whereType<TerminalSession>()
+                  .toList();
+              return LocalShellTile(
+                dot: serverDotFor(
+                  session: aggregateSessionStatus(tabs),
+                  probe: ProbeStatus.unknown,
+                ),
+                tabCount: tabs.length,
+                shellName: state.services.localShell.shellName,
+                selected: state.activeServerId == kLocalShellServerId,
+                onTap: widget.onOpenLocal!,
+                onNewTab: state.newLocalTab,
+                onCloseAll: () =>
+                    state.closeAllTabsForServer(kLocalShellServerId),
+              );
+            },
+          ),
+          const Divider(height: 1, thickness: 2),
+        ],
         if (showFilter)
           SidebarFilterField(
             key: const ValueKey('servers.filter'),
@@ -827,6 +860,83 @@ class _ServerListPaneState extends State<ServerListPane> {
   }
 }
 
+/// The pinned "this machine" row above the servers.
+///
+/// Deliberately shaped like a [ServerTile] — the same mark shape, the same
+/// status dot, the same `\u00d7N` tab count and verbs menu — because it
+/// opens into the same terminal pane and behaves the same way once it does.
+/// What it drops is what a local shell has no answer for: there is no
+/// reachability probe (this machine is here), no colour, nothing to edit,
+/// and nothing to delete.
+class LocalShellTile extends StatelessWidget {
+  /// The dot for the aggregate of its tabs' statuses ([serverDotFor] with
+  /// no probe and no host-key block): connected while one runs, connecting
+  /// while one starts, failed if one died, none while none is open or all
+  /// have exited.
+  final ServerDot dot;
+  final int tabCount;
+  final String shellName;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onNewTab;
+  final VoidCallback onCloseAll;
+
+  const LocalShellTile({
+    super.key,
+    required this.dot,
+    required this.tabCount,
+    required this.shellName,
+    required this.selected,
+    required this.onTap,
+    required this.onNewTab,
+    required this.onCloseAll,
+  });
+
+  String get _closeLabel => tabCount > 1 ? 'Close all shells' : 'Close';
+
+  @override
+  Widget build(BuildContext context) {
+    return SidebarRow(
+      mark: const LocalShellRailMark(),
+      // The ring is what the eye reads as "live" in this list; a local
+      // shell that is connected wears it like a connected server does.
+      markRing: dot == ServerDot.connected
+          ? StatusColors.online(context)
+          : null,
+      title: 'Local shell',
+      status: switch (dot.color(context)) {
+        final color? => SidebarStatusDot(color, style: dot.style),
+        null => null,
+      },
+      subtitle: '$shellName \u00b7 this machine',
+      trailingText: tabCount > 1 ? '\u00d7$tabCount' : null,
+      selected: selected,
+      onActivate: (_) => onTap(),
+      menuEntries: () => [
+        SidebarMenuAction(
+          key: const ValueKey('localShell.menu.newShell'),
+          label: 'New shell',
+          onSelected: onNewTab,
+        ),
+        // Kept while nothing is open, greyed out, so the menu's shape does
+        // not shift under the pointer with the state.
+        SidebarMenuAction(
+          key: const ValueKey('localShell.menu.closeAll'),
+          label: _closeLabel,
+          onSelected: tabCount > 0 ? onCloseAll : null,
+        ),
+      ],
+      tooltip: 'Local shell\n$shellName \u00b7 this machine',
+      semanticLabel: [
+        'Local shell',
+        '$shellName \u00b7 this machine',
+        ?dot.description,
+        if (tabCount > 1) '$tabCount tabs',
+      ].join(', '),
+    );
+  }
+}
+
 /// How long ago a sync round finished, as the chip says it: "just now",
 /// "2 min", "3 h", "2 d".
 String syncAgeLabel(Duration age) {
@@ -838,8 +948,7 @@ String syncAgeLabel(Duration age) {
 
 /// The home screen's app-bar sync affordance: a spinner while a round runs,
 /// an error badge if the last one failed (tapping retries, as the rail's
-/// chip does). Hidden when idle and healthy: the gear beside it leads to
-/// sync.
+/// chip does). Hidden when idle and healthy: the gear beside it
 class _SyncIndicator extends StatelessWidget {
   final AppState state;
   final VoidCallback onRetry;

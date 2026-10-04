@@ -161,6 +161,16 @@ class AppSettings {
   /// never downloads or installs anything.
   bool checkForUpdates;
 
+  /// Offer a shell on *this* machine, above the SSH servers. Off by default:
+  /// Séance is an SSH client, and a local shell is a genuinely new capability
+  /// — the app that holds your keys can now also run commands beside them —
+  /// so it is something you turn on rather than something you find on.
+  ///
+  /// Device-local like every other setting here, and independently gated by
+  /// whether the platform can host a shell at all: a value enabled on a laptop
+  /// must never surface a dead row after this file is copied to a phone.
+  bool localShell;
+
   /// Keep SSH sessions alive while the app is backgrounded (Android: a
   /// foreground-service anchor). On by default — without it, Android freezes
   /// the cached process and every connection drops within moments of leaving
@@ -264,6 +274,7 @@ class AppSettings {
     this.autoSync = true,
     this.commandSuggestions = false,
     this.checkForUpdates = true,
+    this.localShell = false,
     this.keepSessionsAliveInBackground = true,
     EditorRegistry? editorRegistry,
     Map<String, List<String>>? remotePathBookmarks,
@@ -315,6 +326,7 @@ class AppSettings {
     'autoSync': autoSync,
     'commandSuggestions': commandSuggestions,
     'checkForUpdates': checkForUpdates,
+    'localShell': localShell,
     'keepSessionsAliveInBackground': keepSessionsAliveInBackground,
     'editorRegistry': editorRegistry.toJson(),
     // Keep old versions on a safe supported default if settings are downgraded.
@@ -368,6 +380,7 @@ class AppSettings {
     autoSync: json['autoSync'] as bool? ?? true,
     commandSuggestions: json['commandSuggestions'] as bool? ?? false,
     checkForUpdates: json['checkForUpdates'] as bool? ?? true,
+    localShell: json['localShell'] as bool? ?? false,
     keepSessionsAliveInBackground:
         json['keepSessionsAliveInBackground'] as bool? ?? true,
     editorRegistry: EditorRegistry.fromJson(

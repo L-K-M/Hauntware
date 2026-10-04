@@ -234,6 +234,14 @@ jobs:
       - name: Build
         working-directory: app/seance_app
         run: flutter build ${{ matrix.build }}
+      # A release must prove the compiled PTY releases its owned resources.
+      - name: Test native local-shell lifecycle
+        if: matrix.target == 'linux'
+        working-directory: app/seance_app
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/app/seance_app/build/linux/x64/release/bundle/lib
+          SEANCE_NATIVE_PTY_REQUIRED: '1'
+        run: flutter test --no-pub test/local_shell_native_test.dart
       - name: Test native accessibility lifecycle
         if: matrix.target == 'macos'
         run: scripts/test-macos-accessibility.sh
