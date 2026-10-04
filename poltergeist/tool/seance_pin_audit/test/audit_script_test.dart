@@ -79,8 +79,161 @@ void main() {
     expect(record.exitCode, 0, reason: record.stderr as String);
     final output = record.stdout as String;
     expect(output, contains('Lineage: `${fixture.standaloneTip}`'));
-    expect(output, contains('Component: `seance/` tree'));
+    expect(output, contains('Component: `seance/` at `HEAD`'));
+    // The tree id would change the record on every commit.
+    expect(output, isNot(contains(fixture.componentTree)));
     expect(output, contains('(path dependency)'));
+  });
+
+  test('an ordinary commit by a known identity keeps the record', () async {
+    final before = await _record(fixture);
+
+    await _write(
+      fixture.worktree,
+      '$_component/packages/seance_core/lib/core.dart',
+      'const core = 2;\n',
+    );
+    await _commit(fixture.worktree, 'Tune the core constant');
+
+    expect(await _record(fixture), before);
+  });
+
+  test('a new first-party source file keeps the record', () async {
+    final before = await _record(fixture);
+
+    await _write(
+      fixture.worktree,
+      '$_component/packages/seance_core/lib/added.dart',
+      'const added = 1;\n',
+    );
+    await _commit(fixture.worktree, 'Add a source file');
+
+    expect(await _record(fixture), before);
+  });
+
+  test('a non-attribution trailer keeps the record', () async {
+    final before = await _record(fixture);
+
+    await _write(
+      fixture.worktree,
+      '$_component/packages/seance_core/lib/core.dart',
+      'const core = 3;\n',
+    );
+    await _commit(
+      fixture.worktree,
+      'Tune the core constant\n\nCodex-Session: paseo://agent/fixture',
+    );
+
+    expect(await _record(fixture), before);
+  });
+
+  test('a merged branch adds no lineage tip', () async {
+    final before = await _record(fixture);
+
+    await _run('git', [
+      'switch',
+      '-c',
+      'feature',
+    ], workingDirectory: fixture.worktree.path);
+    await _write(
+      fixture.worktree,
+      '$_component/packages/seance_core/lib/feature.dart',
+      'const feature = 1;\n',
+    );
+    await _commit(fixture.worktree, 'Add a feature');
+    await _run('git', [
+      'switch',
+      'main',
+    ], workingDirectory: fixture.worktree.path);
+    await _write(
+      fixture.worktree,
+      '$_component/packages/seance_core/lib/core.dart',
+      'const core = 4;\n',
+    );
+    await _commit(fixture.worktree, 'Tune the core constant');
+    await _run(
+      'git',
+      ['merge', '--no-ff', '-m', 'Merge feature', 'feature'],
+      workingDirectory: fixture.worktree.path,
+      environment: _identityEnvironment(
+        authorName: _ownerName,
+        authorEmail: _ownerEmail,
+        committerName: _ownerName,
+        committerEmail: _ownerEmail,
+      ),
+    );
+
+    expect(await _record(fixture), before);
+  });
+
+  for (final (label, section, change) in [
+    (
+      'a new identity',
+      'identity',
+      (_Fixture fixture) => _commit(
+        fixture.worktree,
+        'Change by a newcomer',
+        authorName: 'Newcomer',
+        authorEmail: 'newcomer@example.test',
+      ),
+    ),
+    (
+      'a new license line',
+      'license scan',
+      (_Fixture fixture) async {
+        await _write(
+          fixture.worktree,
+          '$_component/docs/notice.txt',
+          'Copyright 2026 Somebody Else\n',
+        );
+        return _commit(fixture.worktree, 'Add a notice');
+      },
+    ),
+    (
+      'a new vendored path',
+      'vendored paths',
+      (_Fixture fixture) async {
+        await _write(
+          fixture.worktree,
+          '$_component/third_party/widget/widget.dart',
+          'const widget = 1;\n',
+        );
+        return _commit(fixture.worktree, 'Vendor a widget');
+      },
+    ),
+  ]) {
+    test('$label changes the record and verify names it', () async {
+      final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+      await ports.parent.create(recursive: true);
+      await ports.writeAsString('# Ports\n\n${await _record(fixture)}');
+      await _commit(fixture.worktree, 'Record the audit');
+
+      await _write(
+        fixture.worktree,
+        '$_component/packages/seance_core/lib/core.dart',
+        'const core = 5;\n',
+      );
+      await change(fixture);
+
+      final failing = await _audit(fixture);
+      expect(failing.exitCode, isNot(0));
+      expect(failing.stderr, contains('changed: $section'));
+      expect(failing.stderr, contains('--write-record'));
+    });
+  }
+
+  test('rejects a record still in the V2 format', () async {
+    final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
+    await ports.parent.create(recursive: true);
+    await ports.writeAsString(
+      '# Ports\n\n<!-- SEANCE_PIN_AUDIT_V2:START -->\n'
+      'old\n<!-- SEANCE_PIN_AUDIT_V2:END -->\n',
+    );
+
+    final failing = await _audit(fixture);
+    expect(failing.exitCode, isNot(0));
+    expect(failing.stderr, contains('V2'));
+    expect(failing.stderr, contains('--write-record'));
   });
 
   test(
@@ -100,13 +253,10 @@ void main() {
 
       for (final section in [
         'Identity',
-        'Companion',
-        'Companion orphans',
-        'Pinpoints',
+        'Unmatched attributions',
         'License scan',
         'Vendored paths',
         'Gitlinks',
-        'Tree',
       ]) {
         final expression = RegExp('($section:.*sha256:)([0-9a-f])');
         final tampered = record.replaceFirstMapped(
@@ -123,7 +273,7 @@ void main() {
     },
   );
 
-  test('writes the record into one marked block preserving bytes', () async {
+  test('migrates a V2 block into the V3 record preserving bytes', () async {
     final ports = File(p.join(fixture.root.path, 'docs', 'PORTS.md'));
     await ports.parent.create(recursive: true);
     const prefix = '# Ports\n\nintro paragraph\n\n';
@@ -181,12 +331,12 @@ void main() {
     expect(ports.readAsStringSync(), unmarked);
 
     const duplicated =
-        '<!-- SEANCE_PIN_AUDIT_V2:START -->\n'
+        '<!-- SEANCE_PIN_AUDIT_V3:START -->\n'
         'one\n'
-        '<!-- SEANCE_PIN_AUDIT_V2:END -->\n'
-        '<!-- SEANCE_PIN_AUDIT_V2:START -->\n'
+        '<!-- SEANCE_PIN_AUDIT_V3:END -->\n'
+        '<!-- SEANCE_PIN_AUDIT_V3:START -->\n'
         'two\n'
-        '<!-- SEANCE_PIN_AUDIT_V2:END -->\n';
+        '<!-- SEANCE_PIN_AUDIT_V3:END -->\n';
     await ports.writeAsString(duplicated);
     result = await _audit(fixture, ['--write-record']);
     expect(result.exitCode, isNot(0));
@@ -370,6 +520,14 @@ Future<ProcessResult> _audit(
     arguments,
     environment: {'DART_EXECUTABLE': Platform.resolvedExecutable},
   );
+}
+
+/// The record `--print-record` generates for [fixture]'s current HEAD.
+Future<String> _record(_Fixture fixture) async {
+  final generated = await _audit(fixture, ['--print-record']);
+  expect(generated.exitCode, 0, reason: generated.stderr as String);
+
+  return generated.stdout as String;
 }
 
 Future<ProcessResult> _run(

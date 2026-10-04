@@ -1876,26 +1876,28 @@ behaviour, and is not repeated below.
 - Port-back candidates: the frozen whole-`ThemeData` comparison, which
   would catch a component theme Séance's key-colour list does not name.
 
-<!-- SEANCE_PIN_AUDIT_V2:START -->
+<!-- SEANCE_PIN_AUDIT_V3:START -->
 ## Séance source audit
 
 Deterministic local-source audit. Séance packages resolve
-by path inside this worktree; evidence binds the committed
-component tree and its full lineage (imported standalone
-ancestry included). Raw streams are content-addressed by
-SHA-256; line counts aid review. Use `--print-findings` to
-reproduce them without adding names to docs.
+by path inside this worktree. The record binds provenance
+over the component's full lineage (imported standalone
+ancestry included): the people named as authors, committers
+or attribution trailers, attributions that match none of
+them, license and copyright lines, vendored paths and
+gitlinks. Ordinary changes by known contributors leave it
+unchanged; when it changes, provenance changed and needs
+review. Sections are content-addressed by SHA-256; line
+counts aid review. Use `--print-findings` to see them, with
+the commit-level detail, without adding names to docs.
 
 - Source: `seance_core` at `seance/packages/seance_core` (path dependency)
 - Source: `seance_protocol` at `seance/packages/seance_protocol` (path dependency)
-- Component: `seance/` tree `d1fd806574693d43b84795980a7bf6a0f8d30877` at `HEAD`
+- Component: `seance/` at `HEAD`
 - Lineage: `75b1e84bf231d149d64c295430a9dda9dc7f4ffb`, `76e466fbcbfe5dc90b4fa399e5dfac990b23c30d`
-- Identity: 109 lines; `sha256:083d6384491a44f2692d1077ca29065d8e0557ec5d26697c1626fc59a89337e2`
-- Companion: 748 lines; `sha256:ab49ea20fd377756ae388bd289564d1cf7ade523382951f389114fca7c23cace`
-- Companion orphans: 2 lines; `sha256:d374c935dec580d08ec1fd78f0ce8e0829235941582db277458afa225589100b`
-- Pinpoints: 1361 lines; `sha256:d0a2687e67fc4efc4cfd28fcd4bcef3947477ab8f7100c9a37bfce3c205cc4e8`
-- License scan: 63 lines; `sha256:ed58317d6e98f8f9069cecec90da739ab0c09ae889df9c50e766ab133ba57501`
-- Vendored paths: 280 lines; `sha256:d7f426314055c68f6f98b9eccd8110d23581283e41df77c310ba069bc1582100`
-- Gitlinks: 0 lines; `sha256:246a69690d9b3ab3634a43aac81e8f54e8d99c18978bc852182e3e28cac2a6f7`
-- Tree: 672 lines; `sha256:a87ead78ab533aed97a4aee04a9cff52d739597ceca670ebd2080ff95e83e9c6`
-<!-- SEANCE_PIN_AUDIT_V2:END -->
+- Identity: 32 lines; `sha256:2e10b1bab6544e2c08709838075d83be92605d33beb72ed328cb15b1579ce232`
+- Unmatched attributions: 1 lines; `sha256:41240f7bf814a29257ba1dcf6ca3af20d744a98f374fdd6781eef8d4950b4bab`
+- License scan: 63 lines; `sha256:9ad9cba72703271dbc203b7847e6079b2d2d6f01402adb7c00751d2be7eefe76`
+- Vendored paths: 149 lines; `sha256:3db9b9db1b6387c54f4ddfc16ef203896d189db0a2a9f48da7ff56e61892bf57`
+- Gitlinks: 0 lines; `sha256:8c9771035e10619d9c2e084cc0f914772bfff45bd0b0a37c831f98bdf4a94839`
+<!-- SEANCE_PIN_AUDIT_V3:END -->

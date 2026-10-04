@@ -293,8 +293,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # The audit walks the preserved Séance history (the recorded
-          # pin and its ancestors); a shallow checkout fails its
+          # The audit walks the preserved Séance history (the imported
+          # standalone ancestry included); a shallow checkout fails its
           # non-shallow requirement by design.
           fetch-depth: 0
       - uses: dorny/paths-filter@v4
@@ -324,10 +324,11 @@ jobs:
           steps.changes.outputs.pin == 'true'
         working-directory: poltergeist
         run: dart pub get
-      # The script audits the recorded Séance pin — the git ref the
-      # dependency was reviewed at. With a path dependency it fails
-      # closed until main reconciles the audit's subject, which is the
-      # intended behavior for the transition.
+      # Verifies the provenance record in poltergeist/docs/PORTS.md
+      # against the Séance component's full lineage. It fails only when
+      # provenance changed (a new contributor or attribution, license
+      # text, a vendored path or a gitlink): review --print-findings,
+      # then commit scripts/audit-seance-pin.sh --write-record.
       - name: Verify recorded Séance pin audit
         if: >-
           github.event_name == 'workflow_dispatch' ||
