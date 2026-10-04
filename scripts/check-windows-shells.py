@@ -6,7 +6,7 @@ one-line command such as ``dart pub get`` behaves the same there, but a
 multi-line bash script (``set -euo pipefail``, ``case``, ``$(...)``)
 does not even parse. In a job that can run on Windows (its header,
 ``runs-on`` or matrix, names ``windows``), every ``run: |`` or
-``run: >`` step must therefore name its shell, or inherit one from the
+``run: >`` step must therefore name its shell, or inherit bash from the
 job's or workflow's ``defaults``, unless an ``if:`` limits it to another
 platform (``== 'linux'``, ``startsWith(matrix.target, 'linux')``; a
 ``!=`` test does not count).
@@ -29,7 +29,7 @@ from pathlib import Path
 
 _BLOCK_SCALAR = re.compile(r"^[|>][-+]?\s*(#.*)?$")
 _OTHER_PLATFORM = re.compile(
-    r"(==\s*|startsWith\([^,]+,\s*)'(linux|macos|android|ios|ubuntu)", re.I
+    r"(==\s*|startsWith\([^,]+,\s*)['\"](linux|macos|android|ios|ubuntu)", re.I
 )
 
 
@@ -51,8 +51,8 @@ def _step_keys(step: list) -> dict:
     return keys
 
 
-def _has_default_shell(lines: list, indent: int) -> bool:
-    """Whether a ``defaults:`` at [indent] carries a ``run.shell``."""
+def _has_bash_default(lines: list, indent: int) -> bool:
+    """Whether a ``defaults:`` at [indent] makes ``run`` steps use bash."""
     inside = False
     for line in lines:
         if _key(line, indent) and _key(line, indent)[0] == "defaults":
@@ -62,7 +62,7 @@ def _has_default_shell(lines: list, indent: int) -> bool:
             if line.strip() and not line.startswith(" " * (indent + 1)):
                 inside = False
             elif _key(line, indent + 4) and _key(line, indent + 4)[0] == "shell":
-                return True
+                return _key(line, indent + 4)[1].split()[:1] in (["bash"], ["sh"])
     return False
 
 
@@ -73,8 +73,8 @@ def _gated_off_windows(condition: str) -> bool:
 
 
 def violations(path: Path) -> list:
-    lines = path.read_text().split("\n")
-    if _has_default_shell(lines, 0):
+    lines = path.read_text(encoding="utf-8").split("\n")
+    if _has_bash_default(lines, 0):
         return []
     starts = []
     in_jobs = False
@@ -82,7 +82,8 @@ def violations(path: Path) -> list:
         if line.startswith("jobs:"):
             in_jobs = True
             continue
-        if in_jobs and re.match(r"^\S", line):
+        # A column-zero comment between jobs does not end the mapping.
+        if in_jobs and re.match(r"^[^\s#]", line):
             in_jobs = False
         if in_jobs and _key(line, 2):
             starts.append(index)
@@ -101,7 +102,7 @@ def violations(path: Path) -> list:
         header = [line for line in block[:steps_at] if not line.strip().startswith("#")]
         if "windows" not in "\n".join(header).lower():
             continue
-        if _has_default_shell(header, 4):
+        if _has_bash_default(header, 4):
             continue
         steps = []
         for offset, line in enumerate(block[steps_at + 1:], start + steps_at + 2):
@@ -144,13 +145,18 @@ def self_test() -> int:
         "job default shell": (header + "    defaults:\n      run:\n        shell: bash\n    steps:\n      - name: S\n" + script, 0),
         "workflow default shell": ("defaults:\n  run:\n    shell: bash\n" + header + "    steps:\n      - name: S\n" + script, 0),
         "windows named only in a comment": ("jobs:\n  leg:\n    # not windows\n    runs-on: ubuntu-latest\n    steps:\n      - name: S\n" + script, 0),
+        "comment between jobs": ("jobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: true\n# windows legs\n  b:\n    runs-on: windows-latest\n    steps:\n      - name: S\n" + script, 1),
+        "double-quoted linux gate": (header + "    steps:\n      - name: S\n        if: runner.os == \"Linux\"\n" + script, 0),
+        "double-quoted windows gate": (header + "    steps:\n      - name: S\n        if: runner.os == \"Windows\"\n" + script, 1),
+        "workflow default pwsh": ("defaults:\n  run:\n    shell: pwsh\n" + header + "    steps:\n      - name: S\n" + script, 1),
+        "non-ASCII step name": (header + "    steps:\n      - name: Séance 👻\n" + script, 1),
         "folded script": (header + "    steps:\n      - name: S\n        run: >-\n          echo a\n          && echo b\n", 1),
     }
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
         for label, (text, want) in cases.items():
             path = Path(tmp) / "workflow.yml"
-            path.write_text(text)
+            path.write_text(text, encoding="utf-8")
             got = len(violations(path))
             if got != want:
                 failures += 1
