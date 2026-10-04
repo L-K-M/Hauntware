@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
 
 import 'repository_root.dart';
 
@@ -53,6 +54,7 @@ printf 'post=%s\n' "\$RELEASE_POST_BUMP"
 printf 'pretag=%s\n' "\${RELEASE_PRE_TAG:-}"
 printf 'args=%s\n' "\$*"
 printf 'cwd=%s\n' "\$PWD"
+printf 'app=%s\n' "\$RELEASE_APP_NAME"
 ''');
     fakeGit = File(p.join(sandbox.path, 'git'));
     fakeGit.writeAsStringSync(r'''#!/usr/bin/env bash
@@ -89,19 +91,29 @@ exit 1
     final pubspecs = _line(result, 'pubspecs=');
     // The suite manifest leads — the engine reads the version from it.
     expect(pubspecs, startsWith('pubspecs=pubspec.yaml '));
-    for (final expected in [
-      'planchette/app/planchette_app/pubspec.yaml',
-      'planchette/packages/planchette_core/pubspec.yaml',
-      'seance/app/seance_app/pubspec.yaml',
-      'seance/packages/seance_sync_server/pubspec.yaml',
-      'poltergeist/app/poltergeist_app/pubspec.yaml',
-      'poltergeist/packages/poltergeist_bench/pubspec.yaml',
-      'poltergeist/packages/poltergeist_core/pubspec.yaml',
-      // The live bench compat shim bumps in lockstep with the suite.
-      'poltergeist/tool/bench/pubspec.yaml',
-    ]) {
-      expect(pubspecs, contains(expected), reason: expected);
-    }
+    // Every owned pubspec, and nothing else: a package added to or
+    // dropped from the suite has to change this list on purpose.
+    expect(
+      pubspecs.substring('pubspecs='.length).split(' '),
+      unorderedEquals([
+        'pubspec.yaml',
+        'planchette/app/planchette_app/pubspec.yaml',
+        'planchette/packages/ghost_desktop/pubspec.yaml',
+        'planchette/packages/ghost_ui/pubspec.yaml',
+        'planchette/packages/planchette_core/pubspec.yaml',
+        'planchette/packages/planchette_editor/pubspec.yaml',
+        'seance/app/seance_app/pubspec.yaml',
+        'seance/packages/seance_core/pubspec.yaml',
+        'seance/packages/seance_protocol/pubspec.yaml',
+        'seance/packages/seance_sync_server/pubspec.yaml',
+        'poltergeist/app/poltergeist_app/pubspec.yaml',
+        'poltergeist/packages/poltergeist_bench/pubspec.yaml',
+        'poltergeist/packages/poltergeist_core/pubspec.yaml',
+        'poltergeist/packages/poltergeist_sync/pubspec.yaml',
+        // The live bench compat shim bumps in lockstep with the suite.
+        'poltergeist/tool/bench/pubspec.yaml',
+      ]),
+    );
     // Not owned: vendored forks and the unversioned workspace roots.
     expect(pubspecs, isNot(contains('third_party')));
     expect(pubspecs, isNot(contains('_workspace')));
@@ -117,6 +129,7 @@ exit 1
     );
     expect(result.stdout, contains(RegExp('^sign=\$', multiLine: true)));
     expect(result.stdout, contains('args=2099.99.99 --push'));
+    expect(result.stdout, contains('app=Hauntware'));
   });
 
   test('rejects an invalid version before invoking the engine', () async {
@@ -152,6 +165,20 @@ exit 1
 
     expect(result.exitCode, isNot(0));
     expect(result.stderr, contains('prior tag v2099.99.99'));
+    expect(result.stdout, isNot(contains('pubspecs=')));
+  });
+
+  test('rejects re-releasing the version of an existing tag', () async {
+    final current = _suiteVersion();
+    final result = await _runRelease(
+      fakeEngine,
+      [current],
+      git: fakeGit,
+      priorTags: 'v$current',
+    );
+
+    expect(result.exitCode, isNot(0));
+    expect(result.stderr, contains('must exceed prior tag v$current'));
     expect(result.stdout, isNot(contains('pubspecs=')));
   });
 
@@ -368,6 +395,7 @@ esac
       expect(result.exitCode, 0, reason: result.stderr as String);
       expect(result.stdout, contains('args=--help'));
       expect(result.stdout, contains('cwd=${root.path}'));
+      expect(result.stdout, contains('app=Hauntware'));
     });
   }
 }
@@ -405,6 +433,19 @@ Future<ProcessResult> _runRelease(
       'PATH': '${git.parent.path}:${Platform.environment['PATH']}',
     },
   );
+}
+
+/// The suite version the root manifest declares; deriving it keeps the
+/// real-tree cases true after every release bump.
+String _suiteVersion() {
+  final manifest =
+      loadYaml(
+            File(
+              p.join(findRepositoryRoot().path, 'pubspec.yaml'),
+            ).readAsStringSync(),
+          )
+          as YamlMap;
+  return manifest['version'] as String;
 }
 
 enum _GitFailure { localTags, none, remoteTags }

@@ -301,8 +301,7 @@ final class SuiteReleaseWorkspace {
 
   /// Rewrites every product's app pubspec to `X.Y.Z+code` and each
   /// literal `CFBundleVersion` to the Apple form. Every rewrite is staged
-  /// and verified before any target is replaced — like the poltergeist
-  /// tool this mirrors.
+  /// and verified before any target is replaced.
   void syncAppMetadata({required ReleaseVersion version}) {
     final rewrites = <_PreparedRewrite>[];
     for (final product in _products) {

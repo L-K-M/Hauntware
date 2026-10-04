@@ -1,7 +1,9 @@
 // Release tooling stays outside the shipped applications.
 // ignore_for_file: avoid_relative_lib_imports
 
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -94,6 +96,55 @@ void main() {
       0,
     );
     expect(output.single, contains('preserves release order'));
+  });
+
+  test('check-order refuses a target equal to a prior tag', () {
+    expect(
+      run(['check-order', '--version', '1.1.0', '--prior-tag', 'v1.1.0']),
+      1,
+    );
+    expect(errors.single, contains('must exceed prior tag v1.1.0'));
+  });
+
+  test('validate accepts an explicit root', () {
+    expect(run(['validate', '--version', '1.1.0', '--root', root.path]), 0);
+    expect(output, ['1.1.0+1010099']);
+    expect(errors, isEmpty);
+  });
+
+  test('check accepts the expected tree version', () {
+    expect(run(['check', '--version', '1.1.0']), 0);
+    expect(output.single, contains('1.1.0+1010099'));
+    expect(errors, isEmpty);
+  });
+
+  test('check-tag refuses a tag without the v prefix', () {
+    expect(run(['check-tag', '--tag', '1.1.0']), 1);
+    expect(errors.single, contains('invalid release tag'));
+  });
+
+  test('check-order refuses a target behind the current tree', () {
+    expect(run(['check-order', '--version', '1.0.9']), 1);
+    expect(errors.single, contains('current tree'));
+  });
+
+  test('file-system failures identify the affected path', () {
+    final readmePath = p.join(root.path, 'seance', 'README.md');
+    final result = IOOverrides.runZoned(
+      () => run(['check']),
+      createFile: (path) {
+        if (p.equals(path, readmePath)) {
+          throw FileSystemException('forced read failure', path);
+        }
+
+        // File(path) would call this override again; fromRawPath does not
+        // consult IOOverrides.
+        return File.fromRawPath(Uint8List.fromList(utf8.encode(path)));
+      },
+    );
+
+    expect(result, 1);
+    expect(errors.single, contains(readmePath));
   });
 
   test('check-tag compares a release tag with the tree', () {

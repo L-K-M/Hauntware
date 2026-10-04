@@ -1,7 +1,9 @@
 // Release tooling stays outside the shipped applications.
 // ignore_for_file: avoid_relative_lib_imports
 
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
@@ -261,6 +263,37 @@ void main() {
     );
   });
 
+  test('sync changes only app release metadata', () {
+    _bump(root, 'seance/app/seance_app/pubspec.yaml', '0.9.2');
+    _replace(
+      root,
+      'poltergeist/app/poltergeist_app/ios/Runner/Info.plist',
+      '<string>2.1.0</string>',
+      '<string>2.0.1</string>',
+    );
+    final others =
+        [
+          for (final file in root.listSync(recursive: true).whereType<File>())
+            p.relative(file.path, from: root.path),
+        ]..removeWhere(
+          (path) => _syncTargets.any((target) => p.equals(path, target)),
+        );
+    expect(others, isNotEmpty);
+    final before = _snapshot(root, others);
+
+    SuiteReleaseWorkspace(
+      root,
+    ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1'));
+
+    expect(
+      _pubspecVersion(root, 'seance/app/seance_app/pubspec.yaml'),
+      '1.1.1+1010199',
+    );
+    // Package pubspecs, lockfiles, READMEs and Flutter-variable plists
+    // belong to post-bump and the release engine, not to sync.
+    expect(_snapshot(root, others), before);
+  });
+
   test('checkReleaseOrder accepts a target ahead of tree and tags', () {
     final checked = SuiteReleaseWorkspace(root).checkReleaseOrder(
       target: ReleaseVersion.parse('1.1.1'),
@@ -316,6 +349,402 @@ void main() {
       throwsA(isA<ReleaseVersionStateException>()),
     );
   });
+
+  test('check refuses an app pubspec with a drifted semantic version', () {
+    _bump(root, 'seance/app/seance_app/pubspec.yaml', '1.2.0+1020099');
+
+    expect(
+      () => SuiteReleaseWorkspace(root).check(),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('seance app pubspec declares 1.2.0; expected 1.1.0'),
+        ),
+      ),
+    );
+  });
+
+  test('check refuses whitespace inside a README version marker', () {
+    _replace(
+      root,
+      'planchette/README.md',
+      '<!-- version -->1.1.0<!-- /version -->',
+      '<!-- version --> 1.1.0 <!-- /version -->',
+    );
+
+    expect(
+      () => SuiteReleaseWorkspace(root).check(),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('planchette README version marker must equal 1.1.0'),
+        ),
+      ),
+    );
+  });
+
+  test('checkReleaseOrder refuses a target equal to the newest tag', () {
+    expect(
+      () => SuiteReleaseWorkspace(root).checkReleaseOrder(
+        target: ReleaseVersion.parse('1.1.0'),
+        priorTags: const ['v1.1.0'],
+      ),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('must exceed prior tag v1.1.0'),
+        ),
+      ),
+    );
+  });
+
+  test('checkReleaseOrder without a target refuses re-tagging the tree', () {
+    expect(
+      () => SuiteReleaseWorkspace(
+        root,
+      ).checkReleaseOrder(priorTags: const ['v1.1.0']),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('must exceed prior tag v1.1.0'),
+        ),
+      ),
+    );
+  });
+
+  test('checkReleaseOrder fails closed on an unsupported prior tag', () {
+    expect(
+      () => SuiteReleaseWorkspace(root).checkReleaseOrder(
+        target: ReleaseVersion.parse('1.2.0'),
+        priorTags: const ['v1.1.0-alpha1'],
+      ),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('cannot establish release order from prior tag'),
+        ),
+      ),
+    );
+  });
+
+  test('checkReleaseOrder accepts duplicate prior tags', () {
+    final checked = SuiteReleaseWorkspace(root).checkReleaseOrder(
+      target: ReleaseVersion.parse('1.2.0'),
+      priorTags: const ['v1.1.0', 'v1.1.0'],
+    );
+
+    expect(checked.semantic, '1.2.0');
+  });
+
+  test('sync preserves a trailing app version comment', () {
+    const pubspecPath = 'planchette/app/planchette_app/pubspec.yaml';
+    _replace(
+      root,
+      pubspecPath,
+      'version: 1.1.0+1010099',
+      'version: 1.1.0+1010099 # release metadata',
+    );
+
+    SuiteReleaseWorkspace(
+      root,
+    ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1'));
+
+    expect(
+      _read(root, pubspecPath),
+      contains('version: 1.1.1+1010199 # release metadata\n'),
+    );
+  });
+
+  for (final (name, contents) in [
+    ('a missing', 'name: seance_app\n'),
+    ('a bare', 'name: seance_app\nversion:\n'),
+  ]) {
+    test('sync rejects $name app version before writing', () {
+      _write(root, 'seance/app/seance_app/pubspec.yaml', contents);
+      final before = _snapshot(root, _syncTargets);
+
+      expect(
+        () => SuiteReleaseWorkspace(
+          root,
+        ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+        throwsA(
+          isA<ReleaseVersionStateException>().having(
+            (e) => e.message,
+            'message',
+            contains('exactly one top-level version'),
+          ),
+        ),
+      );
+      expect(_snapshot(root, _syncTargets), before);
+    });
+  }
+
+  test('sync validates every metadata source before writing', () {
+    _replace(
+      root,
+      'poltergeist/app/poltergeist_app/macos/Runner/Info.plist',
+      '<key>CFBundleVersion</key>',
+      '<key>CFBundleIdentifier</key>',
+    );
+    final before = _snapshot(root, _syncTargets);
+
+    expect(
+      () => SuiteReleaseWorkspace(
+        root,
+      ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('exactly one CFBundleVersion'),
+        ),
+      ),
+    );
+    expect(_snapshot(root, _syncTargets), before);
+  });
+
+  test('sync stages every rewrite before replacing metadata', () {
+    final before = _snapshot(root, _syncTargets);
+    var temporaryCount = 0;
+
+    expect(
+      () => IOOverrides.runZoned(
+        () => SuiteReleaseWorkspace(
+          root,
+        ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+        createFile: (path) {
+          final file = _unoverriddenFile(path);
+          if (!_isReleaseTemporary(path)) return file;
+
+          temporaryCount++;
+          if (temporaryCount == 2) return _CreateFailingFile(file);
+
+          return file;
+        },
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(_snapshot(root, _syncTargets), before);
+    expect(
+      _releaseTemporaries(root),
+      isEmpty,
+      reason: 'staging failure must not leak temporary files',
+    );
+  });
+
+  test('post-bump stages every lock rewrite before replacing a lock', () {
+    const failingDirectory = 'poltergeist/tool/bench';
+    final locks = [
+      'planchette/app/planchette_app/pubspec.lock',
+      'planchette/pubspec.lock',
+      'poltergeist/app/poltergeist_app/pubspec.lock',
+      '$failingDirectory/pubspec.lock',
+      'seance/app/seance_app/pubspec.lock',
+    ];
+    final before = _snapshot(root, locks);
+
+    expect(
+      () => IOOverrides.runZoned(
+        () =>
+            SuiteReleaseWorkspace(root).postBump(ReleaseVersion.parse('1.1.1')),
+        createFile: (path) {
+          final file = _unoverriddenFile(path);
+          if (!_isReleaseTemporary(path)) return file;
+          // Only the bench lock is rewritten in this directory, and it
+          // stages after the planchette and poltergeist app locks.
+          if (p.equals(p.dirname(path), p.join(root.path, failingDirectory))) {
+            return _CreateFailingFile(file);
+          }
+
+          return file;
+        },
+      ),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(_snapshot(root, locks), before);
+    expect(
+      _releaseTemporaries(root),
+      isEmpty,
+      reason: 'staging failure must not leak temporary files',
+    );
+  });
+
+  test('sync removes a temporary file after staged validation fails', () {
+    late File temporary;
+
+    expect(
+      () => IOOverrides.runZoned(
+        () => SuiteReleaseWorkspace(
+          root,
+        ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+        createFile: (path) {
+          final file = _unoverriddenFile(path);
+          if (!_isReleaseTemporary(path)) return file;
+
+          temporary = file;
+          return _InvalidatingFile(file, _DeleteMode.delegate);
+        },
+      ),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('missing or non-string version'),
+        ),
+      ),
+    );
+    expect(temporary.existsSync(), isFalse);
+  });
+
+  test('sync preserves the primary error when temporary cleanup fails', () {
+    late File temporary;
+
+    expect(
+      () => IOOverrides.runZoned(
+        () => SuiteReleaseWorkspace(
+          root,
+        ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+        createFile: (path) {
+          final file = _unoverriddenFile(path);
+          if (!_isReleaseTemporary(path)) return file;
+
+          temporary = file;
+          return _InvalidatingFile(file, _DeleteMode.fail);
+        },
+      ),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('missing or non-string version'),
+        ),
+      ),
+    );
+    expect(temporary.existsSync(), isTrue);
+  });
+
+  test('sync does not follow a predictable dangling temporary link', () {
+    const pubspecPath = 'planchette/app/planchette_app/pubspec.yaml';
+    final target = File(p.join(root.path, pubspecPath));
+    final outside = File(p.join(sandbox.path, 'outside-pubspec.yaml'));
+    Link('${target.path}.$pid.release-version.tmp').createSync(outside.path);
+
+    SuiteReleaseWorkspace(
+      root,
+    ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1'));
+
+    expect(outside.existsSync(), isFalse);
+    expect(_pubspecVersion(root, pubspecPath), '1.1.1+1010199');
+  }, skip: Platform.isWindows ? 'requires symbolic-link permission' : false);
+
+  test('sync does not delete a path recreated after its rename', () {
+    const foreignContents = 'concurrent file';
+    final recreated = <File>[];
+
+    IOOverrides.runZoned(
+      () => SuiteReleaseWorkspace(
+        root,
+      ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+      createFile: (path) {
+        final file = _unoverriddenFile(path);
+        if (!_isReleaseTemporary(path)) return file;
+
+        recreated.add(file);
+        return _RecreatingRenameFile(file, foreignContents);
+      },
+    );
+
+    // Three app pubspecs plus the two literal poltergeist plists.
+    expect(recreated, hasLength(5));
+    for (final file in recreated) {
+      expect(file.readAsStringSync(), foreignContents);
+    }
+  });
+
+  test('sync rejects the repository root as a product file', () {
+    expect(
+      () => SuiteReleaseWorkspace(
+        root,
+        products: const [
+          SuiteProduct(name: 'root', appPubspecPath: '.', readmePath: '.'),
+        ],
+      ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('must identify a file inside repository root'),
+        ),
+      ),
+    );
+  });
+
+  test('sync rejects a product path outside the repository', () {
+    const outsideContents = 'name: outside\nversion: 0.1.0\n';
+    _write(sandbox, 'outside-pubspec.yaml', outsideContents);
+
+    expect(
+      () => SuiteReleaseWorkspace(
+        root,
+        products: const [
+          SuiteProduct(
+            name: 'outside',
+            appPubspecPath: '../outside-pubspec.yaml',
+            readmePath: 'README.md',
+          ),
+        ],
+      ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+      throwsA(
+        isA<ReleaseVersionStateException>().having(
+          (e) => e.message,
+          'message',
+          contains('path leaves repository root'),
+        ),
+      ),
+    );
+    expect(_read(sandbox, 'outside-pubspec.yaml'), outsideContents);
+  });
+
+  for (final (name, pubspecPath) in [
+    ('a product path through a symlink', 'linked/pubspec.yaml'),
+    (
+      'a symlinked product path with a missing tail',
+      'linked/missing/pubspec.yaml',
+    ),
+  ]) {
+    test('sync rejects $name leaving the repository', () {
+      final outside = Directory(p.join(sandbox.path, 'outside'))..createSync();
+      const outsideContents = 'name: outside\nversion: 0.1.0\n';
+      _write(outside, 'pubspec.yaml', outsideContents);
+      Link(p.join(root.path, 'linked')).createSync(outside.path);
+
+      expect(
+        () => SuiteReleaseWorkspace(
+          root,
+          products: [
+            SuiteProduct(
+              name: 'linked',
+              appPubspecPath: pubspecPath,
+              readmePath: 'README.md',
+            ),
+          ],
+        ).syncAppMetadata(version: ReleaseVersion.parse('1.1.1')),
+        throwsA(
+          isA<ReleaseVersionStateException>().having(
+            (e) => e.message,
+            'message',
+            contains('path leaves repository root'),
+          ),
+        ),
+      );
+      expect(_read(outside, 'pubspec.yaml'), outsideContents);
+    }, skip: Platform.isWindows ? 'requires symbolic-link permission' : false);
+  }
 }
 
 void _writeFixture(Directory root) {
@@ -486,6 +915,25 @@ void _replace(
   );
 }
 
+// Every file a default-products sync may rewrite.
+const _syncTargets = [
+  'planchette/app/planchette_app/pubspec.yaml',
+  'seance/app/seance_app/pubspec.yaml',
+  'poltergeist/app/poltergeist_app/pubspec.yaml',
+  'poltergeist/app/poltergeist_app/ios/Runner/Info.plist',
+  'poltergeist/app/poltergeist_app/macos/Runner/Info.plist',
+];
+
+Map<String, String> _snapshot(Directory root, List<String> relativePaths) => {
+  for (final path in relativePaths) path: _read(root, path),
+};
+
+void _write(Directory root, String relativePath, String contents) {
+  File(p.join(root.path, relativePath))
+    ..parent.createSync(recursive: true)
+    ..writeAsStringSync(contents);
+}
+
 String _read(Directory root, String relativePath) =>
     File(p.join(root.path, relativePath)).readAsStringSync();
 
@@ -495,3 +943,151 @@ String _pubspecVersion(Directory root, String relativePath) =>
         .firstWhere((line) => line.startsWith('version:'))
         .split(':')[1]
         .trim();
+
+final RegExp _releaseTemporaryNamePattern = RegExp(
+  r'^\.hauntware-[0-9a-f]{32}\.tmp$',
+);
+
+bool _isReleaseTemporary(String path) {
+  return _releaseTemporaryNamePattern.hasMatch(p.basename(path));
+}
+
+Iterable<File> _releaseTemporaries(Directory root) => root
+    .listSync(recursive: true)
+    .whereType<File>()
+    .where((file) => _isReleaseTemporary(file.path));
+
+/// Bypasses the zone's `createFile` override, which would otherwise
+/// recurse into itself.
+File _unoverriddenFile(String path) {
+  return File.fromRawPath(Uint8List.fromList(utf8.encode(path)));
+}
+
+final class _CreateFailingFile implements File {
+  final File _delegate;
+
+  const _CreateFailingFile(this._delegate);
+
+  @override
+  String get path => _delegate.path;
+
+  @override
+  void createSync({bool recursive = false, bool exclusive = false}) {
+    throw FileSystemException('temporary creation failed', path);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    return super.noSuchMethod(invocation);
+  }
+}
+
+/// Recreates its own path right after a successful rename, standing in
+/// for a concurrent writer that must not lose its file to cleanup.
+final class _RecreatingRenameFile implements File {
+  final File _delegate;
+  final String _foreignContents;
+
+  const _RecreatingRenameFile(this._delegate, this._foreignContents);
+
+  @override
+  String get path => _delegate.path;
+
+  @override
+  bool existsSync() => _delegate.existsSync();
+
+  @override
+  void createSync({bool recursive = false, bool exclusive = false}) {
+    _delegate.createSync(recursive: recursive, exclusive: exclusive);
+  }
+
+  @override
+  void writeAsStringSync(
+    String contents, {
+    FileMode mode = FileMode.write,
+    Encoding encoding = utf8,
+    bool flush = false,
+  }) {
+    _delegate.writeAsStringSync(
+      contents,
+      mode: mode,
+      encoding: encoding,
+      flush: flush,
+    );
+  }
+
+  @override
+  String readAsStringSync({Encoding encoding = utf8}) {
+    return _delegate.readAsStringSync(encoding: encoding);
+  }
+
+  @override
+  File renameSync(String newPath) {
+    final renamed = _delegate.renameSync(newPath);
+    _delegate.writeAsStringSync(_foreignContents);
+    return renamed;
+  }
+
+  @override
+  void deleteSync({bool recursive = false}) {
+    _delegate.deleteSync(recursive: recursive);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    return super.noSuchMethod(invocation);
+  }
+}
+
+enum _DeleteMode { delegate, fail }
+
+/// Reads back malformed contents so staged validation fails.
+final class _InvalidatingFile implements File {
+  final File _delegate;
+  final _DeleteMode _deleteMode;
+
+  const _InvalidatingFile(this._delegate, this._deleteMode);
+
+  @override
+  String get path => _delegate.path;
+
+  @override
+  bool existsSync() => _delegate.existsSync();
+
+  @override
+  void createSync({bool recursive = false, bool exclusive = false}) {
+    _delegate.createSync(recursive: recursive, exclusive: exclusive);
+  }
+
+  @override
+  void writeAsStringSync(
+    String contents, {
+    FileMode mode = FileMode.write,
+    Encoding encoding = utf8,
+    bool flush = false,
+  }) {
+    _delegate.writeAsStringSync(
+      contents,
+      mode: mode,
+      encoding: encoding,
+      flush: flush,
+    );
+  }
+
+  @override
+  String readAsStringSync({Encoding encoding = utf8}) => ': malformed';
+
+  @override
+  void deleteSync({bool recursive = false}) {
+    if (_deleteMode == _DeleteMode.fail) {
+      throw FileSystemException('temporary cleanup failed', path);
+    }
+
+    _delegate.deleteSync(recursive: recursive);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    return super.noSuchMethod(invocation);
+  }
+}

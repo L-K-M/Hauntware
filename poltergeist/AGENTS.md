@@ -128,6 +128,13 @@ Environment facts that carry over from Séance's containers (same family):
 
 ## 2. CI/CD overview
 
+GitHub runs only the repository root's `../.github/workflows`, whose
+`poltergeist_*`, `dart_tools`, `integration`, `sync_integration` and
+`bench` jobs carry the gates below. The `ci.yml`, `release.yml` and
+`zai-code-review.yml` under `poltergeist/.github/workflows` are frozen
+copies of the standalone workflows, kept only because tests and
+`scripts/check-workflows.sh` read them.
+
 - **`.github/workflows/ci.yml`** — on push to main and on PRs:
   - `dart` job: `dart pub get`, then analyze + test over `packages/*`
     (discovered dynamically, so adding a package needs no workflow edit).
