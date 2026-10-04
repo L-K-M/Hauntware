@@ -20,23 +20,6 @@ class Account {
     required this.argonSalt,
     required this.argonParams,
   });
-
-  Map<String, dynamic> toJson() => {
-        'username': username,
-        'authVerifierHash': authVerifierHash,
-        'verifierSalt': verifierSalt,
-        'argonSalt': argonSalt,
-        'argonParams': argonParams.toJson(),
-      };
-
-  factory Account.fromJson(Map<String, dynamic> json) => Account(
-        username: json['username'] as String,
-        authVerifierHash: json['authVerifierHash'] as String,
-        verifierSalt: json['verifierSalt'] as String,
-        argonSalt: json['argonSalt'] as String,
-        argonParams:
-            Argon2Params.fromJson((json['argonParams'] as Map).cast()),
-      );
 }
 
 /// A backend disabled after an unrecoverable transaction failure.
