@@ -10,7 +10,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # Bootstrap the first migration PR before this workflow reaches main.
+    branches: [main, feat/monorepo]
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
