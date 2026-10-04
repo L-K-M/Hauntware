@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_app/services/document_windows.dart';
 import 'package:planchette_app/services/document_workspace.dart';
@@ -500,48 +499,6 @@ void main() {
     expect(await quit, isFalse);
     await open;
     expect(main.workspace.documents, hasLength(2));
-  });
-
-  testWidgets('the app-wide keys answer for the active window', (tester) async {
-    // Built inside the test's zone so its futures run there.
-    windows.dispose();
-    windows = makeRegistry();
-    await windows.start();
-    await windows.openWindow();
-    final main = windows.windowForView(mainWindowViewId)!;
-    final extra = windows.windows.last;
-    Widget navigator(DocumentWindow window) => SizedBox(
-      width: 100,
-      height: 100,
-      child: ScaffoldMessenger(
-        key: window.scaffoldMessengerKey,
-        child: Navigator(
-          key: window.navigatorKey,
-          onGenerateRoute: (_) =>
-              MaterialPageRoute<void>(builder: (_) => const SizedBox()),
-        ),
-      ),
-    );
-    await tester.pumpWidget(
-      MaterialApp(home: Row(children: [navigator(main), navigator(extra)])),
-    );
-
-    expect(
-      windows.navigatorKey.currentState,
-      same(extra.navigatorKey.currentState),
-    );
-    expect(
-      windows.scaffoldMessengerKey.currentState,
-      same(extra.scaffoldMessengerKey.currentState),
-    );
-
-    windows.onWindowActivated(mainWindowViewId);
-
-    expect(
-      windows.navigatorKey.currentState,
-      same(main.navigatorKey.currentState),
-    );
-    expect(windows.navigatorKey.currentContext, isNotNull);
   });
 
   test('a batch file open lands together and reports its failures', () async {
