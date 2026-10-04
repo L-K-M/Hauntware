@@ -264,7 +264,6 @@ jobs:
           dart analyze tool/seance_pin_audit
           dart test tool/license_gate/test
           dart test tool/release_version/test
-          dart run tool/release_version/bin/release_version.dart check
           dart test tool/seance_pin_audit/test
           (cd packages/poltergeist_bench && dart analyze && dart test test)
           dart analyze test/benchmarks

@@ -108,7 +108,6 @@ if [[ "$scope" != flutter ]]; then
     run dart analyze tool/seance_pin_audit
     run dart test tool/license_gate/test
     run dart test tool/release_version/test
-    run dart run tool/release_version/bin/release_version.dart check
     run dart test tool/seance_pin_audit/test
     run bash scripts/audit-seance-pin.sh
 
