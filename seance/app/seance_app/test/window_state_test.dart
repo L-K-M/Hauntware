@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Rect;
 
@@ -176,6 +177,34 @@ void main() {
     test('an unparseable file loads as nothing saved', () async {
       await storeFile().writeAsString('{not json');
       expect(await WindowStateStore(storeFile()).load(), isNull);
+    });
+
+    test('a window_state.json from an earlier release still loads', () async {
+      await storeFile().writeAsString(
+        '{"x":10.0,"y":20.0,"width":1000.0,"height":700.0,'
+        '"isMaximized":false,"isFullScreen":true}',
+      );
+      final restored = await WindowStateStore(storeFile()).load();
+      expect(restored!.bounds, const Rect.fromLTWH(10, 20, 1000, 700));
+      expect(restored.isMaximized, isFalse);
+      expect(restored.isFullScreen, isTrue);
+    });
+
+    test('the file keeps the window_state.json schema', () async {
+      await WindowStateStore(storeFile()).save(
+        const WindowStateSnapshot(
+          bounds: Rect.fromLTWH(10, 20, 1000, 700),
+          isFullScreen: true,
+        ),
+      );
+      expect(jsonDecode(await storeFile().readAsString()), {
+        'x': 10.0,
+        'y': 20.0,
+        'width': 1000.0,
+        'height': 700.0,
+        'isMaximized': false,
+        'isFullScreen': true,
+      });
     });
 
     test('queued saves land last-writer-wins', () async {
