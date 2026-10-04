@@ -11,13 +11,27 @@
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:convert';
 
-import 'package:crypto/crypto.dart';
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import 'journal.dart';
 import 'plan.dart';
+import 'trash_purge.dart';
+import 'trash_root.dart';
+
+final class _RunTrashDirectory {
+  const _RunTrashDirectory({
+    required this.requestedRoot,
+    required this.runDirectory,
+    required this.rootId,
+    required this.pathStyle,
+  });
+
+  final String requestedRoot;
+  final String runDirectory;
+  final String rootId;
+  final SyncTrashPathStyle pathStyle;
+}
 
 /// Which clause of the >50 % rail (05 §8 rail 3) tripped — the typed
 /// confirmation's copy differs per clause.
@@ -115,6 +129,30 @@ final class SyncConfirmationRequiredException implements Exception {
       'sync run needs typed confirmation: ${gate.deleteCount} of '
       '${gate.sideFileCount} files on ${gate.side.name} would be '
       'deleted (${gate.clause.name})';
+}
+
+/// A prior rule-4 restore owns this pair or one of its trash roots.
+final class SyncRestoreRecoveryRequiredException implements Exception {
+  const SyncRestoreRecoveryRequiredException({
+    required this.runId,
+    required this.pairId,
+    required this.journalPath,
+    required this.journalState,
+  });
+
+  final String runId;
+  final String? pairId;
+  final String journalPath;
+  final SyncRestoreJournalState journalState;
+
+  @override
+  String toString() {
+    final owner = pairId == null ? '' : ' for pair $pairId';
+    final detail = journalState == SyncRestoreJournalState.unreadableRecovery
+        ? ' (its journal is unreadable)'
+        : '';
+    return 'sync run refused: restore run $runId$owner first$detail';
+  }
 }
 
 /// Per-side rail accounting — the unit every surface reconciles on
@@ -225,6 +263,48 @@ bool _carriesPreDelete(SyncItem item) {
     SyncActionType.updateRightToLeft => dest.kind != EntryKind.file,
     _ => false,
   };
+}
+
+bool _preDeleteCanTrash(SyncItem item, EntrySnapshot destination) {
+  if (destination.kind != EntryKind.directory) return true;
+
+  final subtree = item.destinationSubtree;
+  return subtree == null ||
+      subtree.values.any((entry) => entry.kind != EntryKind.directory);
+}
+
+/// Sides whose planned actions can create recoverable trash entries.
+Set<SyncSide> _trashSidesForPlan(SyncPlan plan) {
+  final sides = <SyncSide>{};
+  for (final item in plan.items) {
+    final side = _destinationSide(item.effective);
+    if (side == null) continue;
+    final destination = side == SyncSide.left ? item.left : item.right;
+
+    if (_carriesPreDelete(item)) {
+      if (plan.pair.rules.deletions != DeletionPolicy.permanent &&
+          destination != null &&
+          _preDeleteCanTrash(item, destination)) {
+        sides.add(side);
+      }
+      continue;
+    }
+
+    switch (item.effective) {
+      case SyncActionType.deleteLeft || SyncActionType.deleteRight:
+        if (plan.pair.rules.deletions == DeletionPolicy.trash &&
+            destination != null &&
+            destination.kind != EntryKind.directory) {
+          sides.add(side);
+        }
+      case SyncActionType.updateLeftToRight || SyncActionType.updateRightToLeft:
+        if (plan.pair.rules.backups == BackupPolicy.trash) sides.add(side);
+      default:
+        break;
+    }
+  }
+
+  return sides;
 }
 
 /// Removal weight of a delete-phase item's destination entry — files
@@ -383,6 +463,14 @@ final class SyncExecutor {
     required this.rightRoot,
     required this.syncRunsDirectory,
     required this.deviceId,
+    this.trashRootLeft,
+    this.trashRootRight,
+    this.trashScopeLeft,
+    this.trashScopeRight,
+    this.trashLocationKeyLeft,
+    this.trashLocationKeyRight,
+    this.trashPathStyleLeft = SyncTrashPathStyle.posix,
+    this.trashPathStyleRight = SyncTrashPathStyle.posix,
     this.mtimeUnreliableLeft = false,
     this.mtimeUnreliableRight = false,
     Future<void> Function(String destinationPath)? flushLocalDestination,
@@ -407,6 +495,17 @@ final class SyncExecutor {
   /// slice of the raw id).
   final String deviceId;
 
+  /// App-resolved physical trash roots and their stable host/root keys.
+  /// Null preserves the pure-package default derivation.
+  final String? trashRootLeft;
+  final String? trashRootRight;
+  final String? trashScopeLeft;
+  final String? trashScopeRight;
+  final String? trashLocationKeyLeft;
+  final String? trashLocationKeyRight;
+  final SyncTrashPathStyle trashPathStyleLeft;
+  final SyncTrashPathStyle trashPathStyleRight;
+
   /// The §4 per-side flags at run start — either flag (or
   /// `preserveMtime: false`, or `sizeOnly`) puts precondition checks
   /// and conflict defaults on the distrusted-clock path.
@@ -424,16 +523,66 @@ final class SyncExecutor {
   /// interleave journal appends and share mutable plan state.
   var _runInProgress = false;
 
+  String _effectiveTrashRoot(SyncRuleSet rules, SyncSide side) {
+    final pathStyle = side == SyncSide.left
+        ? trashPathStyleLeft
+        : trashPathStyleRight;
+    final context = syncTrashPathContext(pathStyle);
+    final resolved = side == SyncSide.left ? trashRootLeft : trashRootRight;
+    if (resolved != null) return resolved;
+
+    final configured = side == SyncSide.left
+        ? rules.trashPathLeft
+        : rules.trashPathRight;
+    final syncRoot = side == SyncSide.left ? leftRoot : rightRoot;
+    if (configured == null) {
+      return context.join(syncRoot, RemoteTrash.rootDirectoryName);
+    }
+    if (context.isAbsolute(configured)) return configured;
+
+    return context.join(syncRoot, configured);
+  }
+
+  Future<String> _resolveTrashScope(SyncRuleSet rules, SyncSide side) async {
+    final fileSystem = side == SyncSide.left ? leftFileSystem : rightFileSystem;
+    final pathStyle = side == SyncSide.left
+        ? trashPathStyleLeft
+        : trashPathStyleRight;
+    final identity = await resolveSyncTrashRoot(
+      fileSystem,
+      _effectiveTrashRoot(rules, side),
+      pathStyle: pathStyle,
+      access: SyncTrashRootAccess.createOrClaim,
+    );
+
+    return identity.scopeKey;
+  }
+
+  Future<void> _requireNoIncompleteRestore(
+    String pairId,
+    Iterable<String?> trashScopes,
+  ) async {
+    final incomplete = await SyncRunJournal.findIncompleteRestoreOverlap(
+      syncRunsDirectory,
+      pairId: pairId,
+      trashScopes: trashScopes,
+    );
+    if (incomplete == null) return;
+
+    throw SyncRestoreRecoveryRequiredException(
+      runId: incomplete.runId,
+      pairId: incomplete.pairId,
+      journalPath: incomplete.journalPath,
+      journalState: incomplete.journalState,
+    );
+  }
+
   /// `<first 8 hex of sha256(deviceId)>-<uuidV4>` (05 §6) — the uuid
   /// half comes from the RemoteTrash seam's minter so one injected
-  /// instance controls run-id shape for trash and journal alike.
-  String mintRunId() {
-    final prefix = sha256
-        .convert(utf8.encode(deviceId))
-        .toString()
-        .substring(0, 8);
-    return '$prefix-${_trash.newRunId()}';
-  }
+  /// instance controls run-id shape for trash and journal alike. The
+  /// prefix half is [syncRunDevicePrefix], shared with the trash purge's
+  /// orphan classification so the two can never disagree.
+  String mintRunId() => '${syncRunDevicePrefix(deviceId)}-${_trash.newRunId()}';
 
   /// Whether the pair's clocks are untrusted for precondition
   /// comparisons — §4's flags, the size-only fallback, or
@@ -450,6 +599,9 @@ final class SyncExecutor {
   ///
   /// [pairId] is §9's canonical state key (endpoint-derived), supplied
   /// by the caller — never the favorite's bookmark id.
+  /// [runId] lets app code reserve and register the run's identity
+  /// before execution (the trash notice keys in-flight runs by it);
+  /// null mints a fresh id exactly as before.
   /// [deleteConfirmationAcknowledged] is the typed-`DELETE` result when
   /// rail 3 trips; without it a tripping plan throws
   /// [SyncConfirmationRequiredException]. Rail 4 always throws
@@ -457,6 +609,7 @@ final class SyncExecutor {
   Future<SyncRun> run(
     SyncPlan plan, {
     required String pairId,
+    String? runId,
     bool deleteConfirmationAcknowledged = false,
     RemoteTransferCancellation? cancellation,
     SyncRunPause? pause,
@@ -473,17 +626,66 @@ final class SyncExecutor {
       if (gate is SyncRunRefused) {
         throw SyncRunRefusedException(gate);
       }
-      if (gate is SyncRunNeedsConfirmation &&
-          !deleteConfirmationAcknowledged) {
+      if (gate is SyncRunNeedsConfirmation && !deleteConfirmationAcknowledged) {
         throw SyncConfirmationRequiredException(gate);
       }
+
+      final effectiveRunId = runId ?? mintRunId();
+      final expectedPrefix = '${syncRunDevicePrefix(deviceId)}-';
+      if (!isSyncTrashRunId(effectiveRunId) ||
+          !effectiveRunId.startsWith(expectedPrefix)) {
+        throw ArgumentError.value(
+          effectiveRunId,
+          'runId',
+          'must use this device prefix and a UUID v4',
+        );
+      }
+
+      final trashSides = _trashSidesForPlan(plan);
+
+      // Recovery admission precedes every trash-root mutation. Path candidates
+      // also catch legacy journals that predate marker identities.
+      await _requireNoIncompleteRestore(pairId, [
+        trashScopeLeft,
+        trashScopeRight,
+        if (trashSides.contains(SyncSide.left))
+          _effectiveTrashRoot(plan.pair.rules, SyncSide.left),
+        if (trashSides.contains(SyncSide.right))
+          _effectiveTrashRoot(plan.pair.rules, SyncSide.right),
+      ]);
+
+      // Package callers may omit pre-resolved scopes. Bind every side that can
+      // write trash before the header so later purge markers remain exact.
+      final effectiveTrashScopeLeft =
+          trashScopeLeft ??
+          (trashSides.contains(SyncSide.left)
+              ? await _resolveTrashScope(plan.pair.rules, SyncSide.left)
+              : null);
+      final effectiveTrashScopeRight =
+          trashScopeRight ??
+          (trashSides.contains(SyncSide.right)
+              ? await _resolveTrashScope(plan.pair.rules, SyncSide.right)
+              : null);
+
+      // Recheck with physical identities after claiming them. Another pair's
+      // recovery can overlap the same root through a different path alias.
+      await _requireNoIncompleteRestore(pairId, [
+        effectiveTrashScopeLeft,
+        effectiveTrashScopeRight,
+      ]);
 
       final journal = await SyncRunJournal.create(
         syncRunsDirectory,
         SyncRunRecord(
-          runId: mintRunId(),
+          runId: effectiveRunId,
           pairId: pairId,
           startedAt: startedAt ?? DateTime.now(),
+          canonicalRootLeft: leftRoot,
+          canonicalRootRight: rightRoot,
+          trashScopeLeft: effectiveTrashScopeLeft,
+          trashScopeRight: effectiveTrashScopeRight,
+          trashLocationKeyLeft: trashLocationKeyLeft,
+          trashLocationKeyRight: trashLocationKeyRight,
           rules: plan.pair.rules,
           totals: plan.totals,
           warnings: plan.warnings,
@@ -525,29 +727,58 @@ final class SyncExecutor {
     if (_runInProgress) {
       throw StateError('a sync run is already in progress on this executor');
     }
-    previous.plan.pair.rules.ensureSupported();
-    final session = _RunSession(
-      executor: this,
-      plan: previous.plan,
-      journal: previous.journal,
-      cancellation: cancellation,
-      pause: pause,
-      onEvent: onEvent,
-      retry: true,
-    );
     _runInProgress = true;
     try {
+      // Purge may append through another journal instance. Reopen before
+      // retry so no new trash lands behind an already-effective marker.
+      final journal = await SyncRunJournal.open(previous.journal.path);
+      final restoreState = journal.hasIncompleteRestore
+          ? SyncRestoreJournalState.incomplete
+          : await SyncRunJournal.inspectRestoreRecovery(journal.path);
+      if (restoreState != SyncRestoreJournalState.none) {
+        throw SyncRestoreRecoveryRequiredException(
+          runId: journal.record.runId,
+          pairId: journal.record.pairId,
+          journalPath: journal.path,
+          journalState: restoreState,
+        );
+      }
+      if (journal.hasPurgeMarker) {
+        throw StateError('cannot retry after sync trash was purged');
+      }
+      final leftTrashScope =
+          journal.trashScopeForSide(SyncSide.left) ?? trashScopeLeft;
+      final rightTrashScope =
+          journal.trashScopeForSide(SyncSide.right) ?? trashScopeRight;
+
+      // A restore may have claimed either root since the original attempt.
+      await _requireNoIncompleteRestore(journal.record.pairId, [
+        leftTrashScope,
+        rightTrashScope,
+        _effectiveTrashRoot(previous.plan.pair.rules, SyncSide.left),
+        _effectiveTrashRoot(previous.plan.pair.rules, SyncSide.right),
+      ]);
+      previous.plan.pair.rules.ensureSupported();
+      final session = _RunSession(
+        executor: this,
+        plan: previous.plan,
+        journal: journal,
+        cancellation: cancellation,
+        pause: pause,
+        onEvent: onEvent,
+        retry: true,
+      );
       await session.execute();
+      return SyncRun(
+        journal: journal,
+        plan: previous.plan,
+        mtimeUnreliableLeft: mtimeUnreliableLeft,
+        mtimeUnreliableRight: mtimeUnreliableRight,
+        cancelled: session.cancelled,
+      );
     } finally {
       _runInProgress = false;
     }
-    return SyncRun(
-      journal: previous.journal,
-      plan: previous.plan,
-      mtimeUnreliableLeft: mtimeUnreliableLeft,
-      mtimeUnreliableRight: mtimeUnreliableRight,
-      cancelled: session.cancelled,
-    );
   }
 }
 
@@ -586,7 +817,7 @@ final class _RunSession {
 
   /// The run's trash directories per side (lazy — a run that trashes
   /// nothing never creates them).
-  final Map<SyncSide, String> _trashDirs = {};
+  final Map<SyncSide, _RunTrashDirectory> _trashDirs = {};
 
   /// Sides whose server refused an upload's mode stamp this run —
   /// subsequent items skip `preserveMode` instead of paying a doomed
@@ -672,9 +903,9 @@ final class _RunSession {
         case SyncActionType.deleteLeft || SyncActionType.deleteRight:
           deletes.add(item);
         case SyncActionType.copyLeftToRight ||
-              SyncActionType.copyRightToLeft ||
-              SyncActionType.updateLeftToRight ||
-              SyncActionType.updateRightToLeft:
+            SyncActionType.copyRightToLeft ||
+            SyncActionType.updateLeftToRight ||
+            SyncActionType.updateRightToLeft:
           transfers.add(item);
         case SyncActionType.skip || SyncActionType.conflict:
           break;
@@ -826,8 +1057,7 @@ final class _RunSession {
   Future<_ItemOutcome> _executeItem(SyncItem item) async {
     final destSide = _destinationSide(item.effective);
     if (destSide == null) return const _ItemOutcome();
-    final srcSide =
-        destSide == SyncSide.left ? SyncSide.right : SyncSide.left;
+    final srcSide = destSide == SyncSide.left ? SyncSide.right : SyncSide.left;
     final destFs = _fs(destSide);
     final srcFs = _fs(srcSide);
     final destAbs = _abs(destSide, item.relativePath);
@@ -868,8 +1098,13 @@ final class _RunSession {
           destSnapshot,
           forDelete: true,
         );
-        return _deletePhaseEntry(item, destFs, destSide, destAbs,
-            destSnapshot!);
+        return _deletePhaseEntry(
+          item,
+          destFs,
+          destSide,
+          destAbs,
+          destSnapshot!,
+        );
       case SyncActionType.copyLeftToRight ||
           SyncActionType.copyRightToLeft ||
           SyncActionType.updateLeftToRight ||
@@ -894,8 +1129,12 @@ final class _RunSession {
           // The per-file trash lines the removal wrote carry the
           // origin map; the item line does not repeat them.
         } else if (isUpdate) {
-          final liveDest =
-              await _verifyDestination(item, destFs, destAbs, destSnapshot);
+          final liveDest = await _verifyDestination(
+            item,
+            destFs,
+            destAbs,
+            destSnapshot,
+          );
           if (rules.backups == BackupPolicy.trash) {
             final moved = await _trashEntry(
               destFs,
@@ -932,8 +1171,9 @@ final class _RunSession {
         // `_stampAndVerify` can observe it — retry the copy without
         // mode preservation; the setTimes refusal that follows flags
         // the side for §9's sizeOnly fallback as designed.
-        final preserveMode =
-            _noPreserveMode.contains(destSide) ? null : liveSource.mode;
+        final preserveMode = _noPreserveMode.contains(destSide)
+            ? null
+            : liveSource.mode;
         RemoteFileEntry uploaded;
         try {
           uploaded = await _transfer(
@@ -1158,12 +1398,7 @@ final class _RunSession {
         size: snapshot.size,
       );
       if (toTrash) {
-        final moved = await _trashEntry(
-          destFs,
-          side,
-          entry,
-          item.relativePath,
-        );
+        final moved = await _trashEntry(destFs, side, entry, item.relativePath);
         await journal.appendTrash(
           SyncJournalTrashLine(
             parentPath: item.relativePath,
@@ -1381,7 +1616,10 @@ final class _RunSession {
       if (entry.type != RemoteFileType.file) rethrow;
       final name =
           '${_nextSequence().toString().padLeft(6, '0')}-${entry.name}';
-      final target = remoteJoin(runDir, name);
+      // Rename failure can yield before copy fallback starts. Reopen the
+      // owned root and run directory before writing through that path.
+      final fallbackRunDir = await _runTrashDir(fs, side);
+      final target = remoteJoin(fallbackRunDir, name);
       final uploaded = await _transfer(
         fs,
         entry.path,
@@ -1424,17 +1662,59 @@ final class _RunSession {
   /// `trashPath*` (§8 rail 5), created 0700 by the RemoteTrash seam.
   Future<String> _runTrashDir(RemoteFileSystem fs, SyncSide side) async {
     final cached = _trashDirs[side];
-    if (cached != null) return cached;
-    final configured =
-        side == SyncSide.left ? rules.trashPathLeft : rules.trashPathRight;
-    final runDir = configured == null
-        ? remoteJoin(
-            remoteJoin(_root(side), RemoteTrash.rootDirectoryName),
-            journal.record.runId,
-          )
-        : remoteJoin(configured, journal.record.runId);
+    if (cached != null) return _verifyRunTrashDir(fs, cached);
+    final pathStyle = side == SyncSide.left
+        ? executor.trashPathStyleLeft
+        : executor.trashPathStyleRight;
+    final context = syncTrashPathContext(pathStyle);
+    final trashRoot = executor._effectiveTrashRoot(rules, side);
+    final expectedScope =
+        journal.trashScopeForSide(side) ??
+        (side == SyncSide.left
+            ? executor.trashScopeLeft
+            : executor.trashScopeRight);
+
+    // A scoped journal may only reopen its claimed root. Recreating a lost
+    // root would mutate the replacement before rejecting its new identity.
+    final SyncTrashRootIdentity identity;
     try {
-      await executor._trash.ensureExistingRunDirectory(fs, runDir);
+      identity = await resolveSyncTrashRoot(
+        fs,
+        trashRoot,
+        pathStyle: pathStyle,
+        access: expectedScope == null
+            ? SyncTrashRootAccess.createOrClaim
+            : SyncTrashRootAccess.openExisting,
+      );
+    } on RemoteFileException catch (error) {
+      if (expectedScope == null ||
+          error.kind != RemoteFileErrorKind.notFound) {
+        rethrow;
+      }
+
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'trash',
+        path: trashRoot,
+        message: 'The sync-trash root changed after planning.',
+      );
+    }
+    if (expectedScope != null && expectedScope != identity.scopeKey) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'trash',
+        path: trashRoot,
+        message: 'The sync-trash root changed after planning.',
+      );
+    }
+    final runDir = context.join(identity.canonicalRoot, journal.record.runId);
+    try {
+      if (pathStyle == SyncTrashPathStyle.windows) {
+        await _ensureDir(fs, identity.canonicalRoot);
+        await _ensureDir(fs, runDir);
+      } else {
+        await executor._trash.ensureExistingRunDirectory(fs, runDir);
+      }
     } on RemoteFileException catch (error) {
       // The 0700 rule guards server-side exposure; a Windows local
       // filesystem cannot express POSIX modes at all (setMode is
@@ -1446,10 +1726,98 @@ final class _RunSession {
           error.kind != RemoteFileErrorKind.unsupported) {
         rethrow;
       }
-      await _ensureDir(fs, remoteParent(runDir));
+      await _ensureDir(fs, context.dirname(runDir));
       await _ensureDir(fs, runDir);
     }
-    return _trashDirs[side] = runDir;
+    final cachedDirectory = _RunTrashDirectory(
+      requestedRoot: trashRoot,
+      runDirectory: runDir,
+      rootId: identity.rootId,
+      pathStyle: pathStyle,
+    );
+    _trashDirs[side] = cachedDirectory;
+    return _verifyRunTrashDir(fs, cachedDirectory);
+  }
+
+  Future<String> _verifyRunTrashDir(
+    RemoteFileSystem fs,
+    _RunTrashDirectory cached,
+  ) async {
+    final context = syncTrashPathContext(cached.pathStyle);
+    final first = await resolveSyncTrashRoot(
+      fs,
+      cached.requestedRoot,
+      pathStyle: cached.pathStyle,
+      access: SyncTrashRootAccess.openExisting,
+    );
+    _requireCachedTrashRoot(first, cached);
+
+    final expectedRunDirectory = context.join(
+      first.canonicalRoot,
+      journal.record.runId,
+    );
+    final runEntry = await fs.stat(cached.runDirectory, followLinks: false);
+    final canonicalRunDirectory = context.normalize(
+      await fs.canonicalize(cached.runDirectory),
+    );
+    if (!runEntry.isDirectory ||
+        !_sameTrashPath(
+          canonicalRunDirectory,
+          expectedRunDirectory,
+          cached.pathStyle,
+        )) {
+      throw _changedTrashRoot(cached.requestedRoot);
+    }
+
+    // The run-directory checks yield. Repeat the root identity before the
+    // caller mutates through the cached path.
+    final second = await resolveSyncTrashRoot(
+      fs,
+      cached.requestedRoot,
+      pathStyle: cached.pathStyle,
+      access: SyncTrashRootAccess.openExisting,
+    );
+    _requireCachedTrashRoot(second, cached);
+    return cached.runDirectory;
+  }
+
+  void _requireCachedTrashRoot(
+    SyncTrashRootIdentity actual,
+    _RunTrashDirectory cached,
+  ) {
+    final context = syncTrashPathContext(cached.pathStyle);
+    if (actual.rootId == cached.rootId &&
+        _sameTrashPath(
+          actual.canonicalRoot,
+          context.dirname(cached.runDirectory),
+          cached.pathStyle,
+        )) {
+      return;
+    }
+
+    throw _changedTrashRoot(cached.requestedRoot);
+  }
+
+  RemoteFileException _changedTrashRoot(String path) => RemoteFileException(
+    kind: RemoteFileErrorKind.conflict,
+    operation: 'trash',
+    path: path,
+    message: 'The sync-trash root changed after planning.',
+  );
+
+  bool _sameTrashPath(
+    String first,
+    String second,
+    SyncTrashPathStyle pathStyle,
+  ) {
+    final context = syncTrashPathContext(pathStyle);
+    final normalizedFirst = context.normalize(first);
+    final normalizedSecond = context.normalize(second);
+    if (pathStyle == SyncTrashPathStyle.windows) {
+      return normalizedFirst.toLowerCase() == normalizedSecond.toLowerCase();
+    }
+
+    return normalizedFirst == normalizedSecond;
   }
 
   /// Creates [path] when absent, tolerating the create race; a
@@ -1475,7 +1843,8 @@ final class _RunSession {
         kind: RemoteFileErrorKind.conflict,
         operation: 'trash',
         path: path,
-        message: '"$path" exists and is not a directory; refusing to '
+        message:
+            '"$path" exists and is not a directory; refusing to '
             'use it as trash',
       );
     }
@@ -1508,7 +1877,7 @@ final class _RunSession {
       onProgress: item == null
           ? null
           : (transferred, total) =>
-              _emit(SyncRunEvent.itemProgress, item, transferred, total),
+                _emit(SyncRunEvent.itemProgress, item, transferred, total),
       cancellation: cancellation,
       computeHash: computeHash,
     );
@@ -1560,8 +1929,7 @@ final class _RunSession {
     // Verify against what was actually sent — a filesystem that
     // clamps an out-of-range mtime diverges and flags the side
     // unreliable; one that stores it (POSIX local) verifies true.
-    final requestedSecs =
-        (sourceMtime.millisecondsSinceEpoch / 1000).floor();
+    final requestedSecs = (sourceMtime.millisecondsSinceEpoch / 1000).floor();
     try {
       await destFs.setTimes(
         destAbs,
@@ -1643,10 +2011,7 @@ final class _RunSession {
     return path.startsWith(prefix) ? path.substring(prefix.length) : path;
   }
 
-  Future<RemoteFileEntry?> _statOrNull(
-    RemoteFileSystem fs,
-    String path,
-  ) async {
+  Future<RemoteFileEntry?> _statOrNull(RemoteFileSystem fs, String path) async {
     try {
       return await fs.stat(path, followLinks: false);
     } on RemoteFileException catch (error) {
@@ -1839,6 +2204,5 @@ RemoteFileType _remoteType(EntryKind kind) => switch (kind) {
   EntryKind.other => RemoteFileType.other,
 };
 
-int? _seconds(DateTime? time) => time == null
-    ? null
-    : (time.millisecondsSinceEpoch / 1000).floor();
+int? _seconds(DateTime? time) =>
+    time == null ? null : (time.millisecondsSinceEpoch / 1000).floor();

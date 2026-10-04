@@ -4,6 +4,56 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Sync trash purge (2026-10-03)
+
+The rail-5 purge surface is complete. Plans inventory trash per physical
+root, show the 30-day notice, and retain the newest cache when a side is
+offline. `sync.purgeTrash` provides the explicit all-device escape hatch.
+Both routes share one confirmation, progress, cancellation, and
+partial-failure report; active local runs block explicit purge.
+
+Trash roots carry a random ownership marker. Its identity scopes journals
+and host-local activity locks across endpoint aliases, while unowned paths,
+filesystem roots, malformed run directories, observed symlink swaps, and
+foreign quarantines fail closed. Purges re-list before acting, rename each
+selected run to an owner-tagged quarantine, delete without following links,
+and mark only the affected journal scope. Retry and restore use the same
+device-local leases, so a local purge cannot race a local undo or live run.
+There is no distributed cross-machine lease; sibling-machine or manual removal
+is reconciled from the next live listing.
+
+Review hardening adds conditional host-key conflict decisions, missing-suffix
+canonicalization, Windows UNC/case normalization, and portable legacy plus v2
+activity markers. Rule-4 undo records a staged transaction before mutation,
+validates ancestors without following links, resumes after disconnect, and
+can be cancelled between durable units. Restart preflight searches every
+pre-scan pair-id fold candidate, binds recorded journal sides to direct or
+swapped endpoints by scope/location and endpoint/root identity, opens existing
+roots read-only under the recorded rule snapshot, and resumes under an exclusive
+cross-process restore lease. Missing, ambiguous, or unreadable matching recovery
+blocks scan, run, and purge; unrelated corrupt journals do not. Completion
+rediscovers before scanning. Restore revalidates both canonical roots under held
+leases and rejects malformed or unsafe journal paths before filesystem access.
+Normal runs retain shared location gates across processes and app instances.
+Lease cleanup remains fail-closed without masking the operation result.
+Package-default executors bind marker scopes before journal creation, so a
+later purge releases their journals without weakening legacy path-only safety.
+Recovery lookup failures remain blocked but retryable; recovered-journal and
+lease failures become typed restore errors while retaining controller state.
+Retry rechecks identity and legacy-path restore overlaps, run admission retains
+cleanup ownership after lock-release errors, and kept host-key decisions
+outstamp the pulled record under clock skew.
+
+Core and sync analysis are clean; 1,930 core tests pass with 27 environment
+skips, and 390 sync tests pass with five SSH-fixture skips. Flutter analysis
+and the localization contract are clean, and all 130 affected app tests pass.
+Two pre-final full-suite runs hit
+the unrelated editor CRLF/BOM I/O timing case; its isolated rerun passes. All
+140 benchmark tests pass. Light-theme captures and provenance are in
+`tasks/sync-trash-purge/screenshots/`. Local native builds remain
+environment-gated by missing CMake and Java; the native matrix runs in CI. No
+Séance source or dependency pin changed in this PR.
+
 ## Séance current-core compatibility (2026-10-03)
 
 The live core/protocol dependencies now resolve to Séance main at
@@ -535,7 +585,7 @@ and destructive-action default are preserved. Validation used Flutter 3.47.3 on 
 `TMPDIR=/private/tmp`; CI uses the repository's 3.47.2 pin. Native assistive
 technology was not exercised by this change.
 
-_Last updated: 2026-10-01. **v1.0.0 IS SHIPPED**; D10 (SSH-agent
+_Last updated: 2026-10-03. **v1.0.0 IS SHIPPED**; D10 (SSH-agent
 authentication plus ProxyJump), D27 (local ZIP archives), and D22's
 FileZilla/WinSCP/Cyberduck importers are complete. v1.0.0 was tagged at
 d62f95af after the release pipeline's full first exercise
@@ -561,8 +611,8 @@ plan view + savedSync + activity-panel runs (#176), and rsync exporter
 (#177) landed, and the §3.9 exit-criteria audit closed the milestone
 per the dated section below (record:
 [tasks/m8-closure-record.md](../tasks/m8-closure-record.md)) — with
-recorded residuals: the purge surface (open item 27), the docroot
-warning chip (28), the run-startup temp sweep and rail-8 resume
+recorded residuals: the docroot warning chip (28), the run-startup temp sweep
+and rail-8 resume
 post-state rule (29), and the D28 chown UI deferral (30).
 v0.2.0 remains the latest published pre-release (M3–M8 closed untagged
 per their closure records). M0, M1, and M2 stay closed per the Done
@@ -10644,6 +10694,24 @@ unverified.
     `Restore Trashed Files…` keeps working, but nothing ever releases
     them. Spec: 05 §8 rail 5 (1096–1179); the surface is feature-sized
     and was deferred at audit close rather than rushed.
+    **2026-10-03 update — closed:** the plan notice and command now inventory,
+    confirm, purge, cancel, report, cache, and journal the full per-root
+    scope. Root ownership markers, endpoint-alias convergence, local and
+    cross-process activity locks, owner-tagged quarantine, live re-listing,
+    no-follow deletion, foreign-device handling, and scoped restore/prune
+    markers close the safety and concurrency boundaries. Review hardening adds
+    conditional host-key writes, dual portable markers, Windows path
+    normalization, durable staged replace restore, ancestor checks, and restore
+    cancellation. Restart preflight checks every pair-id fold candidate before
+    scanning, binds direct or swapped panes from recorded rule, scope, location,
+    endpoint, and root identities, opens existing trash roots read-only, then
+    resumes under an exclusive cross-process restore lease. Missing, ambiguous, or
+    unreadable matching recovery blocks scan, run, and purge; unrelated corrupt
+    journals do not. Completion rediscovers before scanning, while normal runs
+    keep shared location gates across app instances. Analysis is clean; 389 sync
+    tests pass with five SSH-fixture skips. All 3,338 app tests pass together.
+    Captures are in
+    `tasks/sync-trash-purge/screenshots/`.
 28. **2026-09-22: M8 — the rail-5 docroot warning chip is unbuilt.**
     05 §8 (1083–1095) requires a warning — in the pair editor AND as a
     persistent plan-view chip — when in-root trash will sit under a

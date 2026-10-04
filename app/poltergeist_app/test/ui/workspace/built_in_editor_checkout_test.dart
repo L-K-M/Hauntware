@@ -35,6 +35,13 @@ import '../../services/workspace_windows_test.dart' show FakeWindowHost;
 import '../../support/fake_bookmark_store.dart';
 import '../../support/shell_menus.dart';
 
+const _testEndpointIdentity = AuthenticatedEndpointIdentity(
+  host: 'example.com',
+  port: 22,
+  username: 'test',
+  fingerprintSha256: 'SHA256:test',
+);
+
 /// The remote path the harness seeds — the file the editor tests open.
 const remoteConfigPath = '/srv/www/config.txt';
 
@@ -332,6 +339,9 @@ final class _FakeLease implements TransferChannelLease {
   @override
   final RemoteFileSystem fs;
   var releaseCalls = 0;
+
+  @override
+  AuthenticatedEndpointIdentity get endpointIdentity => _testEndpointIdentity;
 
   @override
   Future<void> release() async {

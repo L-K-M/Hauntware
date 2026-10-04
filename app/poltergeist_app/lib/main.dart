@@ -313,6 +313,16 @@ Future<void> main(List<String> args) async {
     onError: errorReporter.report,
   );
 
+  // Sync cache display and backup share the engine mirror's TOFU truth.
+  final pinStore =
+      engineSession?.pinStore ??
+      FileHostKeyStore(
+        File(
+          '${supportDirectory.path}${Platform.pathSeparator}'
+          '$kPinStoreFileName',
+        ),
+      );
+
   // The bridged transfer lease (protocol v13, STATUS item 23): one
   // engine-backed ConnectionManager every remote byte path leases
   // through — the queue, the checkout manager, the preview producer, and
@@ -351,9 +361,10 @@ Future<void> main(List<String> args) async {
   );
   final syncEnvironment = SyncEnvironment.forSupportDirectory(
     supportDirectory.path,
-    deviceId: () async => syncEnrollmentState.cachedDeviceId ?? 'local',
+    deviceId: syncEnrollmentState.deviceId,
     connections: transferConnections,
     serverConfigs: serverConfigs,
+    acceptedHostKeys: pinStore,
   );
   final transferQueue = transferQueueSession?.queue;
   // Before anything can dispatch: a restored queue boots paused (03 §4.6).
@@ -416,17 +427,6 @@ Future<void> main(List<String> args) async {
     path: syncRecordsPath,
     onError: errorReporter.report,
   );
-  // The pin store the engine's mirror writes to, when an engine spawned —
-  // the backup coordinator's TOFU truth and the editor's trial verifier
-  // share the instance: two FileHostKeyStores over one path would race
-  // their load-once caches.
-  final pinStore = engineSession?.pinStore ??
-      FileHostKeyStore(
-        File(
-          '${supportDirectory.path}${Platform.pathSeparator}'
-          '$kPinStoreFileName',
-        ),
-      );
   final bookmarkBackup = BookmarkBackupService(
     credentials: SecureSyncCredentialStore(
       keys: masterKeys,

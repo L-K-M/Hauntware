@@ -28,6 +28,35 @@ void main() {
   );
 
   group('syncPairId (05 §9)', () {
+    test('candidates cover every pre-probe case and NFC combination', () {
+      final subject = pair(
+        const LocalEndpoint('/CAFE\u0301'),
+        const LocalEndpoint('/RE\u0301SUME\u0301'),
+      );
+      final expected = <String>{
+        for (final leftCase in [false, true])
+          for (final rightCase in [false, true])
+            for (final leftForm in [false, true])
+              for (final rightForm in [false, true])
+                syncPairId(
+                  subject,
+                  leftCaseInsensitive: leftCase,
+                  rightCaseInsensitive: rightCase,
+                  leftNormalizationInsensitive: leftForm,
+                  rightNormalizationInsensitive: rightForm,
+                ),
+      };
+
+      final candidates = syncPairIdCandidates(subject);
+
+      expect(candidates, expected);
+      expect(candidates, hasLength(16));
+      expect(
+        syncPairIdCandidates(pair(subject.right, subject.left)),
+        candidates,
+      );
+    });
+
     test('stable across pane swaps — the digests sort', () {
       final a = syncPairId(
         pair(const LocalEndpoint('/a'), const LocalEndpoint('/b')),
@@ -42,22 +71,26 @@ void main() {
       final plain = syncPairId(
         pair(
           const LocalEndpoint('/data'),
-          const RemoteEndpoint(server: BookmarkServerRef(
-            identity: identity,
-          ), path: '/srv'),
+          const RemoteEndpoint(
+            server: BookmarkServerRef(identity: identity),
+            path: '/srv',
+          ),
         ),
       );
       final spelled = syncPairId(
         pair(
           const LocalEndpoint('/data/'),
-          const RemoteEndpoint(server: BookmarkServerRef(
-            identity: EmbeddedHostIdentity(
-              host: 'example.COM',
-              port: 22,
-              username: 'alice',
-              authMethod: AuthMethod.agent,
+          const RemoteEndpoint(
+            server: BookmarkServerRef(
+              identity: EmbeddedHostIdentity(
+                host: 'example.COM',
+                port: 22,
+                username: 'alice',
+                authMethod: AuthMethod.agent,
+              ),
             ),
-          ), path: '/srv/'),
+            path: '/srv/',
+          ),
         ),
       );
       expect(plain, spelled);
@@ -85,75 +118,62 @@ void main() {
       expect(a, isNot(b));
     });
 
-    test(
-      'the sorted-digest construction defeats prefix-shaped aliasing',
-      () {
-        // 'local:/a' + 'local:/bc' vs 'local:/ab' + 'local:/c' — raw
-        // concatenation would collide; per-side digests never do.
-        final x = syncPairId(
-          pair(const LocalEndpoint('/a'), const LocalEndpoint('/bc')),
-        );
-        final y = syncPairId(
-          pair(const LocalEndpoint('/ab'), const LocalEndpoint('/c')),
-        );
-        expect(x, isNot(y));
-      },
-    );
+    test('the sorted-digest construction defeats prefix-shaped aliasing', () {
+      // 'local:/a' + 'local:/bc' vs 'local:/ab' + 'local:/c' — raw
+      // concatenation would collide; per-side digests never do.
+      final x = syncPairId(
+        pair(const LocalEndpoint('/a'), const LocalEndpoint('/bc')),
+      );
+      final y = syncPairId(
+        pair(const LocalEndpoint('/ab'), const LocalEndpoint('/c')),
+      );
+      expect(x, isNot(y));
+    });
 
-    test(
-      'known-insensitive sides case-fold their identity input',
-      () {
-        final folded = syncPairId(
-          pair(const LocalEndpoint('/Data'), const LocalEndpoint('/x')),
-          leftCaseInsensitive: true,
-        );
-        final lower = syncPairId(
-          pair(const LocalEndpoint('/data'), const LocalEndpoint('/x')),
-          leftCaseInsensitive: true,
-        );
-        expect(folded, lower);
+    test('known-insensitive sides case-fold their identity input', () {
+      final folded = syncPairId(
+        pair(const LocalEndpoint('/Data'), const LocalEndpoint('/x')),
+        leftCaseInsensitive: true,
+      );
+      final lower = syncPairId(
+        pair(const LocalEndpoint('/data'), const LocalEndpoint('/x')),
+        leftCaseInsensitive: true,
+      );
+      expect(folded, lower);
 
-        // …but a case-SENSITIVE side never folds — '/Data' and '/data'
-        // are genuinely different roots there.
-        final sensitive = syncPairId(
-          pair(const LocalEndpoint('/Data'), const LocalEndpoint('/x')),
-        );
-        final sensitiveLower = syncPairId(
-          pair(const LocalEndpoint('/data'), const LocalEndpoint('/x')),
-        );
-        expect(sensitive, isNot(sensitiveLower));
-      },
-    );
+      // …but a case-SENSITIVE side never folds — '/Data' and '/data'
+      // are genuinely different roots there.
+      final sensitive = syncPairId(
+        pair(const LocalEndpoint('/Data'), const LocalEndpoint('/x')),
+      );
+      final sensitiveLower = syncPairId(
+        pair(const LocalEndpoint('/data'), const LocalEndpoint('/x')),
+      );
+      expect(sensitive, isNot(sensitiveLower));
+    });
 
-    test(
-      'normalization-insensitive sides NFC-fold their identity input',
-      () {
-        // 'café' NFC vs NFD spellings of one root path.
-        final nfc = syncPairId(
-          pair(const LocalEndpoint('/caf\u00e9'), const LocalEndpoint('/x')),
-          leftNormalizationInsensitive: true,
-        );
-        final nfd = syncPairId(
-          pair(
-            const LocalEndpoint('/cafe\u0301'),
-            const LocalEndpoint('/x'),
-          ),
-          leftNormalizationInsensitive: true,
-        );
-        expect(nfc, nfd);
+    test('normalization-insensitive sides NFC-fold their identity input', () {
+      // 'café' NFC vs NFD spellings of one root path.
+      final nfc = syncPairId(
+        pair(const LocalEndpoint('/caf\u00e9'), const LocalEndpoint('/x')),
+        leftNormalizationInsensitive: true,
+      );
+      final nfd = syncPairId(
+        pair(const LocalEndpoint('/cafe\u0301'), const LocalEndpoint('/x')),
+        leftNormalizationInsensitive: true,
+      );
+      expect(nfc, nfd);
 
-        final sensitive = syncPairId(
-          pair(const LocalEndpoint('/caf\u00e9'), const LocalEndpoint('/x')),
-        );
-        final sensitiveNfd = syncPairId(
-          pair(const LocalEndpoint('/cafe\u0301'), const LocalEndpoint('/x')),
-        );
-        expect(sensitive, isNot(sensitiveNfd));
-      },
-    );
+      final sensitive = syncPairId(
+        pair(const LocalEndpoint('/caf\u00e9'), const LocalEndpoint('/x')),
+      );
+      final sensitiveNfd = syncPairId(
+        pair(const LocalEndpoint('/cafe\u0301'), const LocalEndpoint('/x')),
+      );
+      expect(sensitive, isNot(sensitiveNfd));
+    });
 
-    test('a serverConfigId ref keys distinctly from a resolved identity',
-        () {
+    test('a serverConfigId ref keys distinctly from a resolved identity', () {
       final configured = syncPairId(
         pair(
           const LocalEndpoint('/a'),

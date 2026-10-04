@@ -39,6 +39,10 @@ final class AppServerConfigSource implements ServerConfigSource {
   set catalogLookup(ServerConfig? Function(String serverConfigId)? lookup) =>
       _catalogLookup = lookup;
 
+  /// Resolves jump ids from the catalog only, matching the engine host.
+  ServerConfig? catalogConfigFor(String serverConfigId) =>
+      _catalogLookup?.call(serverConfigId);
+
   /// Registers [config] under [serverId] for callers that dial without a
   /// stored bookmark. Re-registering replaces.
   void register(String serverId, ServerConfig config) =>
@@ -58,6 +62,19 @@ final class AppServerConfigSource implements ServerConfigSource {
               '${identity.port}';
     _refs[serverId] = ref;
     return serverId;
+  }
+
+  /// Captures the registered endpoint and its current route synchronously.
+  /// Sync mutation guards use this after awaited marker reads so no catalog
+  /// change can interleave before they enter the bound filesystem action.
+  ({String serverId, ServerConfig config}) resolveEndpoint(
+    BookmarkServerRef ref,
+  ) {
+    final serverId = registerEndpoint(ref);
+    return (
+      serverId: serverId,
+      config: _configForRef(serverId, ref, label: serverId),
+    );
   }
 
   @override

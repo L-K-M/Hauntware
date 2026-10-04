@@ -69,7 +69,10 @@ class LeaseHost {
     }
     final leaseId = _nextLeaseId++;
     _leases[leaseId] = _HostLease(serverId, lease);
-    return TransferLeaseGranted(leaseId: leaseId);
+    return TransferLeaseGranted(
+      leaseId: leaseId,
+      endpointIdentity: lease.endpointIdentity,
+    );
   }
 
   /// Retires the lease id at once (no new operation can start on it),

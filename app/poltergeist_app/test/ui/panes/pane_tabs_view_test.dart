@@ -79,6 +79,11 @@ void main() {
     addTearDown(focusNode.dispose);
     final compared = <String>[];
 
+    await tester.runAsync(() async {
+      session.start();
+      await pumpUntil(() => session.phase != SyncPlanPhase.scanning);
+    });
+
     SyncPlanController? activeSession() =>
         workspace.activePane.activeTab?.syncSession;
 
@@ -111,9 +116,6 @@ void main() {
         ),
       ),
     );
-    for (var i = 0; i < 20 && session.phase != SyncPlanPhase.ready; i++) {
-      await tester.pump();
-    }
     await tester.pump();
     expect(session.phase, SyncPlanPhase.ready);
     final row = find.byKey(const ValueKey('sync.row.a.txt'));

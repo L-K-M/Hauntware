@@ -30,6 +30,8 @@ void main() {
     test('a lease carries its config, so no browse is needed first', () async {
       final lease = await harness.connections.leaseTransferChannel('srv');
       expect(harness.resolveCalls, ['srv']);
+      expect(lease.endpointIdentity.host, 'srv.test');
+      expect(lease.endpointIdentity.fingerprintSha256, bridgeFingerprint);
       expect(await lease.fs.listDirectory('/srv'), hasLength(2));
       await lease.release();
       // Release belongs to the borrower: a second call is a no-op.

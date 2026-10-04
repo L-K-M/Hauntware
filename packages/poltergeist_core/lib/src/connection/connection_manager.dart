@@ -157,9 +157,36 @@ abstract interface class PaneChannel {
   void reportFailure(RemoteFileSystem source, RemoteFileException error);
 }
 
+/// The target authenticated by one SSH transport.
+final class AuthenticatedEndpointIdentity {
+  const AuthenticatedEndpointIdentity({
+    required this.host,
+    required this.port,
+    required this.username,
+    required this.fingerprintSha256,
+    this.jumpHostId,
+    this.routeContext,
+  });
+
+  /// Normalized like [PoolKey]: trimmed and lowercased.
+  final String host;
+  final int port;
+
+  /// Trimmed but case-sensitive, like [PoolKey].
+  final String username;
+  final String fingerprintSha256;
+  final String? jumpHostId;
+
+  /// Canonical resolved jump route, or null for a direct connection.
+  final String? routeContext;
+}
+
 /// A borrowed transfer channel (03 §3.2).
 abstract interface class TransferChannelLease {
   RemoteFileSystem get fs;
+
+  /// The target and key authenticated by this channel's own handshake.
+  AuthenticatedEndpointIdentity get endpointIdentity;
 
   /// Returns the channel to the pool.
   Future<void> release();
@@ -1144,7 +1171,16 @@ class PooledConnectionManager implements ConnectionManager {
       // only metadata. Never open with a secret returned to a retired pool.
       final trustEpoch = pool._trustEpoch;
       final reviewedIncident = pool._incident;
+      String? targetFingerprint;
+      var recordAuthenticatedTarget = false;
       final observation = _TrustObservation(
+        onChecked: (decision) {
+          if (!recordAuthenticatedTarget ||
+              !_namesEndpoint(decision.presented, config)) {
+            return;
+          }
+          targetFingerprint = decision.presented.fingerprintSha256;
+        },
         onTrusted: (decision) {
           if (reviewedIncident == null ||
               !_isCurrentTrustEpoch(pool, trustEpoch) ||
@@ -1192,6 +1228,7 @@ class PooledConnectionManager implements ConnectionManager {
 
       var routeChallenged = false;
       final keyboard = _onKeyboardInteractive;
+      recordAuthenticatedTarget = true;
       final transport = await _openTransport(
         config: config,
         credentials: route.target.credentials,
@@ -1207,6 +1244,14 @@ class PooledConnectionManager implements ConnectionManager {
         prompting: ConnectPrompting.enabled,
         log: log,
       );
+      recordAuthenticatedTarget = false;
+      final acceptedFingerprint = targetFingerprint;
+      if (acceptedFingerprint == null) {
+        await closeSshResource(transport.close);
+        throw StateError(
+          'The authenticated transport did not verify the target host key.',
+        );
+      }
 
       // Every serverId may have disconnected while the connect was in
       // flight (the disconnect hook tears the pool down immediately). A
@@ -1233,7 +1278,11 @@ class PooledConnectionManager implements ConnectionManager {
           transport.authKind == AuthKind.keyboardInteractive ||
           transport.authKind == AuthKind.promptedPassword;
 
-      final slot = _TransportSlot(transport, _TransportRole.primary);
+      final slot = _TransportSlot(
+        transport,
+        _TransportRole.primary,
+        _authenticatedEndpoint(pool.key, acceptedFingerprint),
+      );
       pool.transports.add(slot);
       _watchTransport(pool, slot);
 
@@ -1434,12 +1483,20 @@ class PooledConnectionManager implements ConnectionManager {
 
     final reference = pool.references.values.first;
     final trustEpoch = pool._trustEpoch;
+    String? targetFingerprint;
+    final observation = _TrustObservation(
+      onChecked: (decision) {
+        if (!_namesEndpoint(decision.presented, reference.config)) return;
+        targetFingerprint = decision.presented.fingerprintSha256;
+      },
+      onTrusted: (_) {},
+    );
 
     try {
       final transport = await _openTransport(
         config: reference.config,
         credentials: pool.resolvedCredentials!,
-        tofu: _tofu,
+        tofu: _observingTofu(observation),
         onHostKey: _hostKeyPrompterFor(pool, ConnectPrompting.disabled),
         // Rule 3: growth connects with prompting disabled — a server that
         // demands interaction per TCP connection must never pop a second
@@ -1452,6 +1509,13 @@ class PooledConnectionManager implements ConnectionManager {
         prompting: ConnectPrompting.disabled,
         log: _forwardingLogFor(pool),
       );
+      final acceptedFingerprint = targetFingerprint;
+      if (acceptedFingerprint == null) {
+        await closeSshResource(transport.close);
+        throw StateError(
+          'The authenticated transport did not verify the target host key.',
+        );
+      }
 
       // Approval cannot revive an older handshake. A concurrent first connect
       // may also have imposed a stricter interactive-auth cap.
@@ -1460,7 +1524,11 @@ class PooledConnectionManager implements ConnectionManager {
         return;
       }
 
-      final slot = _TransportSlot(transport, _TransportRole.extra);
+      final slot = _TransportSlot(
+        transport,
+        _TransportRole.extra,
+        _authenticatedEndpoint(pool.key, acceptedFingerprint),
+      );
       pool.transports.add(slot);
       _watchTransport(pool, slot);
       _updateIdleTimer(pool, slot);
@@ -2519,14 +2587,37 @@ enum _PinMatch {
 /// the prompter for a trusted key, so the callback synchronously lifts a
 /// matching current incident before a routed open verifies later hops.
 class _TrustObservation {
+  final void Function(HostKeyDecision decision) _onChecked;
   final void Function(HostKeyDecision decision) _onTrusted;
 
-  _TrustObservation({required this._onTrusted});
+  _TrustObservation({
+    void Function(HostKeyDecision decision)? onChecked,
+    required this._onTrusted,
+  }) : _onChecked = onChecked ?? _ignoreTrustDecision;
 
   void record(HostKeyDecision decision) {
+    _onChecked(decision);
     if (decision.isTrusted) _onTrusted(decision);
   }
 }
+
+void _ignoreTrustDecision(HostKeyDecision _) {}
+
+bool _namesEndpoint(HostKey key, ServerConfig config) =>
+    key.host.trim().toLowerCase() == config.host.trim().toLowerCase() &&
+    key.port == config.port;
+
+AuthenticatedEndpointIdentity _authenticatedEndpoint(
+  PoolKey poolKey,
+  String fingerprint,
+) => AuthenticatedEndpointIdentity(
+  host: poolKey.host,
+  port: poolKey.port,
+  username: poolKey.username,
+  fingerprintSha256: fingerprint,
+  jumpHostId: poolKey.jumpHostId,
+  routeContext: poolKey.routeContext,
+);
 
 /// A [TofuVerifier] decorator that records each check's verdict and
 /// delegates every other overridable member (pin) to the wrapped verifier,
@@ -2599,6 +2690,7 @@ enum _TransportRole { primary, extra }
 
 class _TransportSlot {
   final SshTransport transport;
+  final AuthenticatedEndpointIdentity endpointIdentity;
   final _TransportRole _role;
   final Set<_ChannelHandle> channels = {};
 
@@ -2615,7 +2707,7 @@ class _TransportSlot {
   /// A keepalive roundtrip in flight — at most one per transport (03 §3.3).
   bool _pingOutstanding = false;
 
-  _TransportSlot(this.transport, this._role);
+  _TransportSlot(this.transport, this._role, this.endpointIdentity);
 }
 
 enum _ChannelUse { browse, transferIdle, transferLeased }
@@ -2702,6 +2794,10 @@ class _LeaseView implements TransferChannelLease {
 
   @override
   RemoteFileSystem get fs => _manager._liveFileSystem(_pool, _handle);
+
+  @override
+  AuthenticatedEndpointIdentity get endpointIdentity =>
+      _handle.slot.endpointIdentity;
 
   @override
   void reportFailure(RemoteFileSystem source, RemoteFileException error) {

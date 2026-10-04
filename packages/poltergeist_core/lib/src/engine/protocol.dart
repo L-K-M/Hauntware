@@ -3,7 +3,7 @@ import 'dart:isolate' show SendPort, TransferableTypedData;
 import 'package:seance_core/seance_core.dart';
 
 import '../connection/connection_manager.dart'
-    show CredentialOrigin, ServerConnectionState;
+    show AuthenticatedEndpointIdentity, CredentialOrigin, ServerConnectionState;
 import '../connection/incident_store.dart' show IncidentRecord;
 import '../connection/pool_key.dart' show PoolKey;
 import '../connection/pool_policy.dart' show PoolPolicy;
@@ -33,8 +33,9 @@ import '../transfer/trash_service.dart' show TrashErrorKind, TrashException;
 /// the generic [VfsOpRequest] over a lease or a browse channel, the
 /// credit-flow-controlled download/upload streams, and the engine-side
 /// local-trash requests. v14 adds [ReplaceServerCatalogRequest] and the
-/// trusted endpoint on [KeyboardInteractivePromptData].
-const engineProtocolVersion = 14;
+/// trusted endpoint on [KeyboardInteractivePromptData]. v15 carries the
+/// authenticated endpoint identity on [TransferLeaseGranted].
+const engineProtocolVersion = 15;
 
 // ── Engine → UI events ──────────────────────────────────────────────────
 
@@ -1159,11 +1160,16 @@ final class EngineAck extends EngineResult {
 }
 
 /// A granted transfer lease; the id addresses [LeaseTarget] and the
-/// stream requests until [ReleaseTransferLeaseRequest].
+/// stream requests until [ReleaseTransferLeaseRequest]. The identity belongs
+/// to the transport backing this lease, not a process-wide configuration.
 final class TransferLeaseGranted extends EngineResult {
   final int leaseId;
+  final AuthenticatedEndpointIdentity endpointIdentity;
 
-  const TransferLeaseGranted({required this.leaseId});
+  const TransferLeaseGranted({
+    required this.leaseId,
+    required this.endpointIdentity,
+  });
 }
 
 /// A VFS call's entry answer (stat, committed download/upload, digest).

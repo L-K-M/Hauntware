@@ -31,6 +31,13 @@ import 'package:test/test.dart';
 import '../../benchmark/p3_listing_overhead.dart' show medianOf;
 import '../../benchmark/p5_drop_to_start.dart';
 
+const _testEndpointIdentity = AuthenticatedEndpointIdentity(
+  host: 'example.com',
+  port: 22,
+  username: 'test',
+  fingerprintSha256: 'SHA256:test',
+);
+
 void main() {
   late Directory tempDir;
 
@@ -1838,6 +1845,9 @@ class FakeTransferLease implements TransferChannelLease {
 
   @override
   final FakeDropVfs fs;
+
+  @override
+  AuthenticatedEndpointIdentity get endpointIdentity => _testEndpointIdentity;
 
   @override
   Future<void> release() async {

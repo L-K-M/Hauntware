@@ -76,6 +76,67 @@ void main() {
     await fs.release();
   });
 
+  test('release waits for an authenticated operation hold', () async {
+    final fs = LeasedRemoteFileSystem(connections, 'srv', idleRelease: null);
+    final gate = Completer<void>();
+    final held = fs.withAuthenticatedFileSystem((_, _) => gate.future);
+    await pump();
+
+    final releasing = fs.release();
+    await pump();
+    expect(connections.totalReleased, 0);
+
+    gate.complete();
+    await held;
+    await releasing;
+    expect(connections.totalReleased, 1);
+  });
+
+  test('an authenticated hold never reacquires after disconnect', () async {
+    const firstIdentity = AuthenticatedEndpointIdentity(
+      host: 'first.example.com',
+      port: 22,
+      username: 'test',
+      fingerprintSha256: 'SHA256:first',
+    );
+    const secondIdentity = AuthenticatedEndpointIdentity(
+      host: 'second.example.com',
+      port: 22,
+      username: 'test',
+      fingerprintSha256: 'SHA256:second',
+    );
+    final first = FakeTreeFileSystem()
+      ..statFailure = (_) => const RemoteFileException(
+        kind: RemoteFileErrorKind.disconnected,
+        operation: 'stat',
+        message: 'gone',
+      );
+    final second = FakeTreeFileSystem()..addFile('/srv/b.txt', [1]);
+    var currentIdentity = firstIdentity;
+    final manager = FakeQueueConnectionManager(
+      {'srv': first},
+      endpointIdentityFor: (_) => currentIdentity,
+    );
+    final fs = LeasedRemoteFileSystem(manager, 'srv', idleRelease: null);
+
+    await fs.withAuthenticatedFileSystem((bound, identity) async {
+      expect(identity.host, firstIdentity.host);
+      await expectLater(bound.stat('/srv/a.txt'), throwsA(isA<RemoteFileException>()));
+      manager.filesystems['srv'] = second;
+      currentIdentity = secondIdentity;
+
+      await expectLater(bound.stat('/srv/b.txt'), throwsA(isA<RemoteFileException>()));
+      expect(manager.leaseCalls, 1);
+      expect(second.statCalls, 0);
+    });
+    await fs.release();
+
+    expect((await fs.stat('/srv/b.txt')).size, 1);
+    expect(manager.leaseCalls, 2);
+    expect((await fs.heldEndpointIdentity())?.host, secondIdentity.host);
+    await fs.release();
+  });
+
   test('a failed lease is not cached', () async {
     connections.leaseFailure = (_) => const RemoteFileException(
       kind: RemoteFileErrorKind.disconnected,

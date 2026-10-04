@@ -54,7 +54,7 @@ final class EngineConnectionManager implements ConnectionManager {
   @override
   Future<TransferChannelLease> leaseTransferChannel(String serverId) async {
     final config = await _configs.configFor(serverId);
-    final leaseId = await _client.leaseTransferChannel(
+    final grant = await _client.leaseTransferChannel(
       serverId: serverId,
       config: config,
     );
@@ -62,10 +62,11 @@ final class EngineConnectionManager implements ConnectionManager {
       _client,
       EngineRemoteFileSystem(
         _client,
-        LeaseTarget(leaseId),
+        LeaseTarget(grant.leaseId),
         windowBytes: windowBytes,
       ),
-      leaseId,
+      grant.leaseId,
+      grant.endpointIdentity,
     );
   }
 
@@ -109,7 +110,12 @@ final class EngineConnectionManager implements ConnectionManager {
 
 /// One engine-held lease, mirrored UI-side.
 final class _EngineTransferLease implements TransferChannelLease {
-  _EngineTransferLease(this._client, this.fs, this._leaseId);
+  _EngineTransferLease(
+    this._client,
+    this.fs,
+    this._leaseId,
+    this.endpointIdentity,
+  );
 
   final EngineClient _client;
   final int _leaseId;
@@ -119,6 +125,9 @@ final class _EngineTransferLease implements TransferChannelLease {
   /// `disconnected` engine-side — the retired id is unknown there.
   @override
   final EngineRemoteFileSystem fs;
+
+  @override
+  final AuthenticatedEndpointIdentity endpointIdentity;
 
   @override
   Future<void> release() async {

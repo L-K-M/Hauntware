@@ -209,7 +209,7 @@ final class SyncPlanTable extends StatelessWidget {
                       label: syncSectionLabel(l10n, group.section),
                       items: group.items,
                       collapsed: collapsed.contains(group.section),
-                      running: controller.isRunning,
+                      mutationsBlocked: controller.planMutationsBlocked,
                       onToggleCollapsed: () => onToggleCollapsed(group.section),
                       onSetIncluded: onSetIncluded,
                     ),
@@ -221,7 +221,7 @@ final class SyncPlanTable extends StatelessWidget {
                     selected: selected.contains(item),
                     focused: identical(item, focused),
                     tableFocused: tableFocused,
-                    running: controller.isRunning,
+                    mutationsBlocked: controller.planMutationsBlocked,
                     now: now,
                     onTap: () => onRowTap(item),
                     onDoubleTap: syncRowComparable(item)
@@ -311,7 +311,7 @@ class _SectionHeader extends StatelessWidget {
     required this.label,
     required this.items,
     required this.collapsed,
-    required this.running,
+    required this.mutationsBlocked,
     required this.onToggleCollapsed,
     required this.onSetIncluded,
   });
@@ -320,7 +320,7 @@ class _SectionHeader extends StatelessWidget {
   final String label;
   final List<SyncItem> items;
   final bool collapsed;
-  final bool running;
+  final bool mutationsBlocked;
   final VoidCallback onToggleCollapsed;
   final void Function(Iterable<SyncItem> items, bool include) onSetIncluded;
 
@@ -330,7 +330,7 @@ class _SectionHeader extends StatelessWidget {
     final theme = Theme.of(context);
     final chrome = PoltergeistChrome.of(context);
     final state = syncSectionState(items);
-    final toggleable = !running && items.any(syncRowToggleable);
+    final toggleable = !mutationsBlocked && items.any(syncRowToggleable);
     return Semantics(
       container: true,
       label: l10n.syncSectionSemantics(label, items.length),
@@ -431,7 +431,7 @@ class _SyncItemRow extends StatelessWidget {
     required this.selected,
     required this.focused,
     required this.tableFocused,
-    required this.running,
+    required this.mutationsBlocked,
     required this.onTap,
     required this.onDoubleTap,
     required this.onGlyphTap,
@@ -446,7 +446,7 @@ class _SyncItemRow extends StatelessWidget {
   final bool selected;
   final bool focused;
   final bool tableFocused;
-  final bool running;
+  final bool mutationsBlocked;
   final DateTime? now;
   final VoidCallback onTap;
   final VoidCallback? onDoubleTap;
@@ -566,7 +566,7 @@ class _SyncItemRow extends StatelessWidget {
                   child: _CompactCheckbox(
                     checkKey: ValueKey('sync.row.${item.relativePath}.check'),
                     value: included,
-                    onChanged: running || !syncRowToggleable(item)
+                    onChanged: mutationsBlocked || !syncRowToggleable(item)
                         ? null
                         : (value) => onSetIncluded(value ?? false),
                   ),
@@ -584,10 +584,10 @@ class _SyncItemRow extends StatelessWidget {
                       label: actionLabel,
                       // The excluded InkWell's tap, kept for screen
                       // readers: activating the glyph cycles the action.
-                      onTap: running ? null : onGlyphTap,
+                      onTap: mutationsBlocked ? null : onGlyphTap,
                       excludeSemantics: true,
                       child: InkWell(
-                        onTap: running ? null : onGlyphTap,
+                        onTap: mutationsBlocked ? null : onGlyphTap,
                         borderRadius: BorderRadius.circular(4),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 2),

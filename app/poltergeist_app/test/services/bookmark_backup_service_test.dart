@@ -55,7 +55,7 @@ final class _Harness {
   final bookmarks = FakeSyncTrackingBookmarkStore();
   final servers = FakeSyncTrackingServerStore();
   final vaultStore = InMemoryVaultStore();
-  final hostKeys = InMemoryHostKeyStore();
+  final hostKeys = InMemoryConflictAwareHostKeyStore();
   final pinVerdicts = InMemoryPinVerdictStore();
   final tripwires = InMemorySyncTripwireStore();
   var records = InMemorySyncRecordStore();
@@ -469,6 +469,53 @@ void main() {
           isNot(contains('hostkey:conflict.example.com:22')));
     });
 
+    test('adopt-fleet ignores a stale conflict decision', () async {
+      await h.enrollSeparateDirectly();
+      await h.hostKeys.put(_pin('conflict.example.com', 'SHA256:local'));
+      h.server.records.add(
+        await h.fleetSealed(
+          DecryptedRecord(
+            id: 'hostkey:conflict.example.com:22',
+            kind: RecordKind.hostKey,
+            updatedAt: 4000,
+            deviceId: 'fleet-device',
+            data: _pin('conflict.example.com', 'SHA256:fleet').toJson(),
+          ),
+        ),
+      );
+
+      final outcome = await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+      final displayed = outcome.held.single;
+      await h.records.putRemote(
+        await h.fleetSealed(
+          DecryptedRecord(
+            id: 'hostkey:conflict.example.com:22',
+            kind: RecordKind.hostKey,
+            updatedAt: 5000,
+            deviceId: 'newer-device',
+            data: _pin('conflict.example.com', 'SHA256:newer').toJson(),
+          ),
+          seq: 8,
+        ),
+      );
+
+      await h.service.resolvePinConflict(displayed, keepLocal: false);
+
+      expect(
+        (await h.hostKeys.get('conflict.example.com', 22))!.fingerprintSha256,
+        'SHA256:local',
+      );
+      expect(
+        h.service.pinConflicts.single.pulled.fingerprintSha256,
+        'SHA256:newer',
+      );
+    });
+
     test('keep-local records the kept verdict and re-pushes the pin',
         () async {
       await h.enrollSeparateDirectly();
@@ -505,6 +552,42 @@ void main() {
         (await h.hostKeys.get('conflict.example.com', 22))!
             .fingerprintSha256,
         'SHA256:local',
+      );
+    });
+
+    test('keep-local ignores a stale conflict decision', () async {
+      await h.enrollSeparateDirectly();
+      await h.hostKeys.put(_pin('conflict.example.com', 'SHA256:local'));
+      h.server.records.add(
+        await h.fleetSealed(
+          DecryptedRecord(
+            id: 'hostkey:conflict.example.com:22',
+            kind: RecordKind.hostKey,
+            updatedAt: 4000,
+            deviceId: 'fleet-device',
+            data: _pin('conflict.example.com', 'SHA256:fleet').toJson(),
+          ),
+        ),
+      );
+
+      final outcome = await h.service.switchToShared(
+        baseUrl: 'https://sync.example',
+        username: 'fleet',
+        password: 'pw',
+        encryptionPassphrase: 'pw',
+      );
+      final displayed = outcome.held.single;
+      await h.hostKeys.put(_pin('conflict.example.com', 'SHA256:newer-local'));
+
+      await h.service.resolvePinConflict(displayed, keepLocal: true);
+
+      expect(
+        await h.pinVerdicts.rejectedFingerprintFor(displayed.locator),
+        isNull,
+      );
+      expect(
+        h.service.pinConflicts.single.local.fingerprintSha256,
+        'SHA256:newer-local',
       );
     });
 

@@ -4,8 +4,9 @@
 // it in the Sync sheet; `sync.newSavedSync` opens the same sheet in its
 // new-favorite mode, which persists a savedSync bookmark;
 // `sync.copyRsyncCommand` copies the active plan's rsync export (05
-// §2.1); `sync.compareSelected` opens 06 §6's paired-file view. All
-// live in the Server menu.
+// §2.1); `sync.purgeTrash` empties live sync-trash roots after the rail-5
+// confirmation; `sync.compareSelected` opens 06 §6's paired-file view.
+// All live in the Server menu.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,7 @@ import '../../theme/family_hues.dart';
 const kSyncSynchronizePanesCommandId = 'sync.synchronizePanes';
 const kSyncNewSavedSyncCommandId = 'sync.newSavedSync';
 const kSyncCopyRsyncCommandId = 'sync.copyRsyncCommand';
+const kSyncPurgeTrashCommandId = 'sync.purgeTrash';
 const kSyncCompareSelectedCommandId = 'sync.compareSelected';
 
 /// The sync command registrations. The verbs themselves are shell
@@ -30,10 +32,12 @@ List<RegisteredCommand> buildSyncCommands({
   required bool Function() synchronizeEnabled,
   required bool Function() savedSyncEnabled,
   required bool Function() copyRsyncEnabled,
+  required bool Function() purgeTrashEnabled,
   required bool Function() compareEnabled,
   required FutureOr<void> Function(BuildContext context) synchronizePanes,
   required FutureOr<void> Function(BuildContext context) newSavedSync,
   required FutureOr<void> Function(BuildContext context) copyRsync,
+  required FutureOr<void> Function(BuildContext context) purgeTrash,
   required FutureOr<void> Function(BuildContext context) compareSelected,
 }) {
   return [
@@ -108,6 +112,21 @@ List<RegisteredCommand> buildSyncCommands({
       menuPlacement: const CommandMenuPlacement(
         menu: AppMenuId.server,
         order: 37,
+        group: 1,
+      ),
+    ),
+    RegisteredCommand(
+      id: kSyncPurgeTrashCommandId,
+      scope: CommandScope.app,
+      label: (l10n) => l10n.syncPurgeTrash,
+      icon: Icons.delete_sweep,
+      hue: FamilyHue.red,
+      enabled: purgeTrashEnabled,
+      disabledReason: (l10n) => l10n.commandDisabledNoSyncTrash,
+      run: (context) async => purgeTrash(context),
+      menuPlacement: const CommandMenuPlacement(
+        menu: AppMenuId.server,
+        order: 38,
         group: 1,
       ),
     ),

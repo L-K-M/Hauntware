@@ -152,6 +152,12 @@ export 'src/sync/persistent_record_store.dart'
         SyncRecordStore,
         recordStoreQuarantinePath;
 export 'src/sync/record_crypto.dart' show RecordCrypto, isDecryptableSyncId;
+export 'src/sync/host_key_mutations.dart'
+    show
+        ConflictAwareHostKeyStore,
+        HostKeyInstallResult,
+        HostKeyMutationGate,
+        InMemoryConflictAwareHostKeyStore;
 export 'src/sync/enrollment.dart'
     show
         EnrollmentResult,
@@ -196,6 +202,7 @@ export 'src/browse/file_entry_sort.dart'
 export 'src/browse/quick_select_query.dart' show QuickSelectQuery;
 export 'src/connection/connection_manager.dart'
     show
+        AuthenticatedEndpointIdentity,
         ConnectionManager,
         ConnectLogLine,
         PaneChannel,

@@ -75,19 +75,26 @@ void main() {
 
       _edit(harness, _moved(harness, 's1'));
       final fresh = browsePane(time, harness, 'new-tab');
+      final freshLease = completeWithoutTimers(
+        time,
+        harness.manager.leaseTransferChannel('s1'),
+      );
 
       expect(_dialedHosts(harness), ['old.example', 'new.example']);
       final current = harness.opener.transports.last;
-      expect(fresh.fs, same(current.channels.single.fs));
+      expect(fresh.fs, same(current.channels.first.fs));
       // Work begun before the edit stays on the endpoint it authenticated to.
       expect(pane.fs, same(old.channels[0].fs));
       expect(lease.fs, same(old.channels[1].fs));
+      expect(lease.endpointIdentity.host, 'old.example');
+      expect(freshLease.endpointIdentity.host, 'new.example');
       expect(old.closed, isFalse);
 
       completeWithoutTimers(time, pane.close());
       expect(old.closed, isFalse, reason: 'the lease still holds it');
       completeWithoutTimers(time, lease.release());
       expect(old.closed, isTrue);
+      completeWithoutTimers(time, freshLease.release());
       expect(current.closed, isFalse);
       expect(
         completeWithoutTimers(time, harness.manager.connectedServerIds()),
