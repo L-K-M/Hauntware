@@ -16,8 +16,8 @@ each subtree's `AGENTS.md`; shared library implementations are never copied.
   Flutter workspace. Each product keeps its own pure-Dart workspace.
 
 Use Flutter 3.47.2 and its bundled Dart (SDK constraint 3.12+), Python 3,
-SQLite for server tests, Docker with Compose for the Poltergeist fixture
-checks in `scripts/test.sh dart`, and each target's native build tools. Shared packages
+SQLite for server tests, and each target's native build tools.
+`scripts/test.sh dart` also needs Linux and Docker with the Compose plugin. Shared packages
 use relative paths. Do not resolve dependencies concurrently or use Flutter's
 unsupported `--directory` option.
 

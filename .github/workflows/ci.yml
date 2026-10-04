@@ -367,7 +367,8 @@ jobs:
               - 'poltergeist/packages/**/test/**'
               - 'poltergeist/packages/**/pubspec.yaml'
               - 'poltergeist/test/integration/**'
-              # Shared code the Poltergeist packages consume by path.
+              # Shared code the Poltergeist packages consume by path
+              # (same list as the bench filter below).
               - 'seance/packages/seance_core/lib/**'
               - 'seance/packages/seance_core/pubspec.yaml'
               - 'seance/packages/seance_protocol/lib/**'
@@ -517,7 +518,8 @@ jobs:
               - 'poltergeist/app/poltergeist_app/lib/bench/**'
               - 'poltergeist/app/poltergeist_app/integration_test/**'
               - 'poltergeist/app/poltergeist_app/test_driver/**'
-              # Shared code the Poltergeist packages consume by path.
+              # Shared code the Poltergeist packages consume by path
+              # (same list as the integration filter above).
               - 'seance/packages/seance_core/lib/**'
               - 'seance/packages/seance_core/pubspec.yaml'
               - 'seance/packages/seance_protocol/lib/**'
