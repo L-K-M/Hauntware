@@ -5,8 +5,13 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:yaml/yaml.dart';
 
-const _recordStart = '<!-- SEANCE_PIN_AUDIT_V2:START -->';
-const _recordEnd = '<!-- SEANCE_PIN_AUDIT_V2:END -->';
+const _recordStart = '<!-- SEANCE_PIN_AUDIT_V3:START -->';
+const _recordEnd = '<!-- SEANCE_PIN_AUDIT_V3:END -->';
+const _legacyRecordStart = '<!-- SEANCE_PIN_AUDIT_V2:START -->';
+const _legacyRecordEnd = '<!-- SEANCE_PIN_AUDIT_V2:END -->';
+const _refreshHint =
+    'review `scripts/audit-seance-pin.sh --print-findings`, then run '
+    'scripts/audit-seance-pin.sh --write-record';
 const _portsPath = 'docs/PORTS.md';
 const _successExitCode = 0;
 const _failureExitCode = 1;
@@ -247,7 +252,17 @@ Future<List<String>> _lineageTips(
     ]);
     final fields = parents.stdout.trim().split(RegExp(r'\s+'));
     if (fields.length < 3) continue;
-    tips.addAll(fields.skip(2));
+    for (final parent in fields.skip(2)) {
+      // A standalone tip predates the monorepo prefix. A merged branch
+      // carries the prefix; its commits are already in the post-import
+      // log, and counting it would change the record on every such merge.
+      final prefixed = await _runGit(
+        worktree,
+        ['rev-parse', '--verify', '--quiet', '$parent:$componentRel'],
+        acceptedExitCodes: {_successExitCode, _noMatchesExitCode},
+      );
+      if (prefixed.stdout.trim().isEmpty) tips.add(parent);
+    }
   }
 
   return tips.toList()..sort();
@@ -334,16 +349,32 @@ Future<String> _identityAudit(
   String componentRel,
   List<String> tips,
 ) async {
-  final result = await _lineageLog(worktree, componentRel, tips, [
+  const logOptions = [
     '-c',
     'log.mailmap=false',
     '-c',
     'i18n.logOutputEncoding=utf-8',
     'log',
-    '--format=%an <%ae>%n%cn <%ce>%n%(trailers)',
+  ];
+  // Author and committer lines count whatever the name contains;
+  // trailers count only as attributions. Other trailers (a
+  // `Codex-Session:` id, say) are per-commit noise that would change the
+  // record without any change in provenance.
+  final people = await _lineageLog(worktree, componentRel, tips, [
+    ...logOptions,
+    '--format=%an <%ae>%n%cn <%ce>',
+  ]);
+  final trailers = await _lineageLog(worktree, componentRel, tips, [
+    ...logOptions,
+    '--format=%(trailers)',
   ]);
 
-  return _sortUnique(result.stdout);
+  return _sortUnique(
+    [
+      ..._nonEmptyLines(people.stdout),
+      ..._nonEmptyLines(trailers.stdout).where(_isAttribution),
+    ].join('\n'),
+  );
 }
 
 Future<_CompanionEvidence> _companionAudit(
@@ -446,7 +477,12 @@ String _vendoredPaths(String tree) {
     if (separator < 0) continue;
 
     final path = line.substring(separator + 1);
-    final components = p.posix.split(path).toSet();
+    final segments = p.posix.split(path);
+    // The component's own top-level packages/ holds its first-party
+    // packages (seance_core, seance_protocol, ...), not vendored code;
+    // a vendoring directory anywhere below still counts.
+    final components =
+        (segments.first == 'packages' ? segments.skip(1) : segments).toSet();
     if (components.intersection(_vendoredComponents).isEmpty) continue;
 
     matches.add(path);
@@ -871,11 +907,16 @@ String _renderRecord(List<_LocalSource> sources, _Evidence evidence) {
     ..writeln('## Séance source audit')
     ..writeln()
     ..writeln('Deterministic local-source audit. Séance packages resolve')
-    ..writeln('by path inside this worktree; evidence binds the committed')
-    ..writeln('component tree and its full lineage (imported standalone')
-    ..writeln('ancestry included). Raw streams are content-addressed by')
-    ..writeln('SHA-256; line counts aid review. Use `--print-findings` to')
-    ..writeln('reproduce them without adding names to docs.')
+    ..writeln('by path inside this worktree. The record binds provenance')
+    ..writeln('over the component\'s full lineage (imported standalone')
+    ..writeln('ancestry included): the people named as authors, committers')
+    ..writeln('or attribution trailers, attributions that match none of')
+    ..writeln('them, license and copyright lines, vendored paths and')
+    ..writeln('gitlinks. Ordinary changes by known contributors leave it')
+    ..writeln('unchanged; when it changes, provenance changed and needs')
+    ..writeln('review. Sections are content-addressed by SHA-256; line')
+    ..writeln('counts aid review. Use `--print-findings` to see them, with')
+    ..writeln('the commit-level detail, without adding names to docs.')
     ..writeln();
   for (final source in sources) {
     buffer.writeln(
@@ -884,42 +925,20 @@ String _renderRecord(List<_LocalSource> sources, _Evidence evidence) {
     );
   }
   for (final audit in evidence.audits) {
-    buffer.writeln(
-      '- Component: `${audit.componentRel}/` tree '
-      '`${audit.treeRevision}` at `HEAD`',
-    );
+    buffer.writeln('- Component: `${audit.componentRel}/` at `HEAD`');
     if (audit.lineageTips.isNotEmpty) {
       buffer.writeln(
         '- Lineage: ${audit.lineageTips.map((tip) => '`$tip`').join(', ')}',
       );
     }
   }
-  buffer
-    ..writeln(
-      '- Identity: ${evidence.identity.lineCount} lines; `${evidence.identity.digest}`',
-    )
-    ..writeln(
-      '- Companion: ${evidence.companion.lineCount} lines; `${evidence.companion.digest}`',
-    )
-    ..writeln(
-      '- Companion orphans: ${evidence.companionOrphans.lineCount} lines; `${evidence.companionOrphans.digest}`',
-    )
-    ..writeln(
-      '- Pinpoints: ${evidence.pinpoints.lineCount} lines; `${evidence.pinpoints.digest}`',
-    )
-    ..writeln(
-      '- License scan: ${evidence.license.lineCount} lines; `${evidence.license.digest}`',
-    )
-    ..writeln(
-      '- Vendored paths: ${evidence.vendored.lineCount} lines; `${evidence.vendored.digest}`',
-    )
-    ..writeln(
-      '- Gitlinks: ${evidence.gitlinks.lineCount} lines; `${evidence.gitlinks.digest}`',
-    )
-    ..writeln(
-      '- Tree: ${evidence.tree.lineCount} lines; `${evidence.tree.digest}`',
-    )
-    ..writeln(_recordEnd);
+  for (final section in evidence.recordSections.entries) {
+    buffer.writeln(
+      '- ${section.key}: ${section.value.lineCount} lines; '
+      '`${section.value.digest}`',
+    );
+  }
+  buffer.writeln(_recordEnd);
   return buffer.toString();
 }
 
@@ -930,13 +949,44 @@ void _verifyRecord(Directory root, String expected) {
   }
 
   final contents = file.readAsStringSync();
-  final span = _recordSpan(contents);
+  if (contents.contains(_legacyRecordStart)) {
+    throw _AuditFailure(
+      contents.contains(_recordStart)
+          ? '$_portsPath still holds a V2 record beside the V3 one; '
+                'delete the V2 block'
+          : '$_portsPath holds a V2 record, which binds every commit; '
+                '$_refreshHint to migrate it',
+    );
+  }
+  final span = _recordSpan(contents, _recordStart, _recordEnd);
   final actual = '${contents.substring(span.$1, span.$2)}\n';
   if (actual == expected) return;
 
-  throw const _AuditFailure(
-    '$_portsPath record does not match; run scripts/audit-seance-pin.sh --print-record',
+  final changed = _changedLabels(actual, expected);
+  throw _AuditFailure(
+    '$_portsPath record does not match '
+    '(changed: ${changed.isEmpty ? 'record text' : changed.join(', ')}); '
+    '$_refreshHint',
   );
+}
+
+/// The `- Label:` lines whose values differ between two records, in the
+/// expected record's order, lower-cased for the failure message.
+List<String> _changedLabels(String actual, String expected) {
+  Map<String, String> fields(String record) => {
+    for (final match in RegExp(
+      r'^- ([^:]+): (.*)$',
+      multiLine: true,
+    ).allMatches(record))
+      match[1]!: match[2]!,
+  };
+
+  final before = fields(actual);
+  final after = fields(expected);
+  return [
+    for (final label in {...after.keys, ...before.keys})
+      if (before[label] != after[label]) label.toLowerCase(),
+  ];
 }
 
 /// Replaces the single recorded block in `$_portsPath` with the freshly
@@ -956,7 +1006,11 @@ void _writeRecord(Directory root, String record) {
   }
 
   final contents = file.readAsStringSync();
-  final span = _recordSpan(contents);
+  // A V2 block is replaced in place: the migration to V3.
+  final span =
+      !contents.contains(_recordStart) && contents.contains(_legacyRecordStart)
+      ? _recordSpan(contents, _legacyRecordStart, _legacyRecordEnd)
+      : _recordSpan(contents, _recordStart, _recordEnd);
   final actual = '${contents.substring(span.$1, span.$2)}\n';
   if (actual == record) {
     stdout.writeln('$_portsPath record already matches');
@@ -972,21 +1026,21 @@ void _writeRecord(Directory root, String record) {
   stdout.writeln('$_portsPath record updated');
 }
 
-/// Byte offsets of the single `$_recordStart`…`$_recordEnd` span, or a
+/// Byte offsets of the single [startMarker]…[endMarker] span, or a
 /// failure when the file has zero or more than one marked record.
-(int, int) _recordSpan(String contents) {
-  final start = contents.indexOf(_recordStart);
-  final end = contents.indexOf(_recordEnd);
+(int, int) _recordSpan(String contents, String startMarker, String endMarker) {
+  final start = contents.indexOf(startMarker);
+  final end = contents.indexOf(endMarker);
   final duplicateStart =
-      start >= 0 && contents.indexOf(_recordStart, start + 1) >= 0;
-  final duplicateEnd = end >= 0 && contents.indexOf(_recordEnd, end + 1) >= 0;
+      start >= 0 && contents.indexOf(startMarker, start + 1) >= 0;
+  final duplicateEnd = end >= 0 && contents.indexOf(endMarker, end + 1) >= 0;
   if (start < 0 || end < start || duplicateStart || duplicateEnd) {
     throw const _AuditFailure(
       '$_portsPath must contain one source audit record',
     );
   }
 
-  return (start, end + _recordEnd.length);
+  return (start, end + endMarker.length);
 }
 
 Future<_CommandResult> _runGit(
@@ -1139,14 +1193,18 @@ final class _Evidence {
 
   const _Evidence(this.audits);
 
-  _Section get identity => _combine((audit) => audit.identity);
-  _Section get companion => _combine((audit) => audit.companion);
-  _Section get companionOrphans => _combine((audit) => audit.companionOrphans);
-  _Section get pinpoints => _combine((audit) => audit.pinpoints);
-  _Section get license => _combine((audit) => audit.license);
-  _Section get tree => _combine((audit) => audit.tree);
-  _Section get vendored => _combine((audit) => audit.vendored);
-  _Section get gitlinks => _combine((audit) => audit.gitlinks);
+  /// The record's sections, keyed by their label. Each is headed by the
+  /// component path only: the tree id would change every section on any
+  /// commit, which is exactly what the record must not bind.
+  Map<String, _Section> get recordSections => {
+    'Identity': _combine((audit) => audit.identity),
+    'Unmatched attributions': _combine(
+      (audit) => _unmatchedAttributions(audit.companionOrphans),
+    ),
+    'License scan': _combine((audit) => audit.license),
+    'Vendored paths': _combine((audit) => audit.vendored),
+    'Gitlinks': _combine((audit) => audit.gitlinks),
+  };
 
   _Section _combine(String Function(_ComponentEvidence) select) {
     final buffer = StringBuffer();
@@ -1154,12 +1212,23 @@ final class _Evidence {
     for (final audit in audits) {
       final output = select(audit);
       buffer
-        ..writeln('${audit.componentRel}@${audit.treeRevision}')
+        ..writeln(audit.componentRel)
         ..writeln(output);
       lineCount += _countLines(output);
     }
     return _Section(buffer.toString().trimRight(), lineCount);
   }
+
+  /// Orphaned attributions without the commits that carry them
+  /// (`email<TAB>commit<TAB>attribution` becomes `email<TAB>attribution`).
+  static String _unmatchedAttributions(String orphans) => _sortUnique(
+    _nonEmptyLines(orphans)
+        .map((line) {
+          final fields = line.split('\t');
+          return [fields.first, ...fields.skip(2)].join('\t');
+        })
+        .join('\n'),
+  );
 
   String renderFindings() {
     final buffer = StringBuffer();

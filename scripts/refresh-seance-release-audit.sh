@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Refresh the committed Séance proof after the version bump, before tagging.
-# Its history includes the bump commit's SHA, so it cannot run pre-commit.
-# Called by RELEASE_PRE_TAG; requires Git and the resolved audit tool.
+# Refresh the committed Séance provenance record after the version bump,
+# before tagging. The record changes only when provenance does (a new
+# contributor or attribution, license text, vendored path or gitlink), so
+# this is usually a no-op; it still runs so a tag never carries a stale
+# record. Called by RELEASE_PRE_TAG; requires Git and the resolved audit tool.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
