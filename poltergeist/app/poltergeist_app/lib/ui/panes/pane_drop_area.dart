@@ -29,7 +29,7 @@ const paneSpringLoadDelay = Duration(milliseconds: 1500);
 
 /// One pane's drop zone (02 §5.1, D14): the in-app `DragTarget` for
 /// pane↔pane row drags plus the [WindowDropTarget] for OS drop-in,
-/// wrapped around the pane body. Owns the hover affordances — the
+/// wrapped around the pane surface. Owns the hover affordances — the
 /// hovered folder row's highlight (reported to the parent so the
 /// row itself paints it), the action overlay, the zone border — and
 /// the spring-load timer. Resolution is honest against the virtualized
@@ -43,6 +43,7 @@ class PaneDropArea extends StatefulWidget {
     required this.scrollController,
     required this.listAreaKey,
     required this.rowExtent,
+    required this.rowGutter,
     required this.onHoverFolderRow,
     required this.supportsOsDrop,
     required this.child,
@@ -70,6 +71,13 @@ class PaneDropArea extends StatefulWidget {
   /// the fixed extent the virtualized list lays out with, so hit math
   /// is honest about what is on screen.
   final double rowExtent;
+
+  /// The width of a row's leading gutter: its padding, nesting indent
+  /// and disclosure column, everything before the kind glyph. A folder
+  /// row targets the folder from its glyph on; its gutter drops where a
+  /// file row would, so a listing of folders only keeps a strip beside
+  /// every row for the directory itself.
+  final double Function(int row) rowGutter;
 
   /// Reports the folder row the hover currently targets (null = the
   /// current directory or a refused hover) so the parent can paint the
@@ -177,8 +185,9 @@ class _PaneDropAreaState extends State<PaneDropArea> {
       return (dir: location.path, folderRow: null);
     }
     final local = listObject.globalToLocal(global);
-    // Above the rows (the column header shares the zone): the current
-    // directory, never a row scrolled out of view above the viewport.
+    // Above the rows (the headers and banners share the zone): the
+    // current directory, never a row scrolled out of view above the
+    // viewport.
     if (local.dy < 0) return (dir: location.path, folderRow: null);
     final scrollOffset = widget.scrollController.hasClients
         ? widget.scrollController.offset
@@ -187,7 +196,8 @@ class _PaneDropAreaState extends State<PaneDropArea> {
     final entries = controller.entries;
     if (index >= 0 &&
         index < entries.length &&
-        entries[index].type == RemoteFileType.directory) {
+        entries[index].type == RemoteFileType.directory &&
+        !_inRowGutter(listObject, local, index)) {
       return (dir: entries[index].path, folderRow: index);
     }
     // A row inside a folder opened in place (02 §2.5) drops into that
@@ -200,6 +210,17 @@ class _PaneDropAreaState extends State<PaneDropArea> {
       return (dir: paneParentPath(entries[index].path), folderRow: null);
     }
     return (dir: location.path, folderRow: null);
+  }
+
+  /// Whether [local] (list coordinates) lies in [row]'s leading gutter,
+  /// measured from the leading edge as the row lays out: the left in
+  /// LTR, the right in RTL.
+  bool _inRowGutter(RenderBox list, Offset local, int row) {
+    final gutter = widget.rowGutter(row);
+    return switch (Directionality.of(context)) {
+      TextDirection.ltr => local.dx < gutter,
+      TextDirection.rtl => local.dx > list.size.width - gutter,
+    };
   }
 
   /// The overlay's verb line (02 §5.1's "Copy to /var/www /

@@ -5,9 +5,11 @@
 - **Escape cancels a drag.** Pressing Escape while dragging files ends
   the drag: nothing is copied or moved when you let go, and no folder or
   tab opens under the pointer.
-- **Drop on the column header.** Dropping files on a pane's column header
-  puts them in that pane's folder, so a listing too long to leave empty
-  space still takes a drop.
+- **Drop on a pane's header or beside a folder.** Dropping files on a
+  pane's header (its folder name, item count or column header) puts them
+  in that pane's folder. The margin left of a folder's icon drops beside
+  the folder rather than into it. A listing of folders too long to leave
+  empty space still takes a drop.
 - **Folders spring open more slowly.** Holding a drag over a folder opens
   it after 1.5 seconds instead of 1, so passing over folders opens them
   less often by accident.

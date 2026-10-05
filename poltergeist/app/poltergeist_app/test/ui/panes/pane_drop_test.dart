@@ -8,16 +8,19 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ghost_ui/ghost_ui.dart' show GhostFileRow;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/pane_drop.dart';
 import 'package:poltergeist_app/services/pane_location.dart';
 import 'package:poltergeist_app/services/pane_tabs_controller.dart';
 import 'package:poltergeist_app/services/selection_state.dart';
+import 'package:poltergeist_app/services/view_preferences.dart';
 import 'package:poltergeist_app/services/window_drop_in.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
 import 'package:poltergeist_app/services/workspace_windows/workspace_window_scope.dart';
 import 'package:poltergeist_app/services/workspace_windows/workspace_windows.dart';
+import 'package:poltergeist_app/ui/panes/pane_column_header.dart';
 import 'package:poltergeist_app/ui/panes/pane_drop_area.dart';
 import 'package:poltergeist_app/ui/panes/pane_tabs_view.dart';
 import 'package:poltergeist_app/ui/panes/pane_view.dart';
@@ -220,6 +223,36 @@ void main() {
     await right.connectRemote(_bookmark('srv-1'));
   }
 
+  /// Binds left to '/home/tester' (report.txt) and right to '/srv/other'
+  /// holding sixty folders: more rows than the viewport shows, so the
+  /// listing leaves no background below its last row.
+  Future<void> bindFoldersOnlyRight() async {
+    final leftChannel = controller_test.FakePaneChannel('/home/tester');
+    leftChannel.listings['/home/tester'] = [
+      _entryAt('/home/tester', 'report.txt', size: 2048),
+    ];
+    lanes.nextLocalChannel = leftChannel;
+    await left.openLocalHome();
+
+    rightChannel = controller_test.FakePaneChannel('/home/tester');
+    rightChannel.listings['/srv/other'] = [
+      for (var i = 0; i < 60; i++)
+        _entryAt('/srv/other', 'd$i', type: RemoteFileType.directory),
+    ];
+    lanes.nextLocalChannel = rightChannel;
+    await right.openLocalAt('/srv/other');
+  }
+
+  /// The listing row showing [name].
+  Rect rowRect(WidgetTester tester, String name) => tester.getRect(
+    find.ancestor(of: find.text(name), matching: find.byType(GhostFileRow)),
+  );
+
+  /// The rows painting the folder-row drop highlight.
+  Iterable<GhostFileRow> dropTargetedRows(WidgetTester tester) => tester
+      .widgetList<GhostFileRow>(find.byType(GhostFileRow))
+      .where((row) => row.dropTargeted);
+
   Future<void> pumpShell(
     WidgetTester tester, {
     bool withDelegate = true,
@@ -229,6 +262,7 @@ void main() {
     bool rightHidden = false,
     WorkspaceWindow? window,
     int? viewId,
+    TextDirection textDirection = TextDirection.ltr,
   }) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
@@ -266,7 +300,10 @@ void main() {
     await tester.pumpWidget(
       wrapWithView: viewId == null,
       inView(MaterialApp(
-        builder: (context, child) => _inWindow(window, child!),
+        builder: (context, child) => Directionality(
+          textDirection: textDirection,
+          child: _inWindow(window, child!),
+        ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
@@ -634,6 +671,143 @@ void main() {
     expect(spec.operation, TransferOperation.move);
     expect(spec.rootPaths, ['/home/tester/report.txt']);
     expect(spec.destinationDir, '/srv/other');
+  });
+
+  for (final mode in PaneViewMode.values) {
+    dndWidgets('a row drag onto the location header lands in the pane’s '
+        'current directory (${mode.name} view)', (tester) async {
+      // The avatar hangs below and right of the pointer, so aiming it at
+      // the column header puts the pointer on the location header above;
+      // the list view has no column header at all.
+      await bindFoldersOnlyRight();
+      right.viewMode = mode;
+      await pumpShell(tester);
+
+      final gesture = await dragRowOnto(
+        tester,
+        find.text('report.txt'),
+        tester.getCenter(find.text('60 items')),
+      );
+      expect(find.text('Move to /srv/other'), findsOneWidget);
+      await endDrag(tester, gesture);
+
+      expect(queue.enqueuedSpecs, hasLength(1));
+      expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other');
+    });
+  }
+
+  dndWidgets('a folder row’s leading gutter drops into the pane’s '
+      'directory, not the folder', (tester) async {
+    // A folder row claims its glyph onward. The padding and disclosure
+    // column before it stay a current-directory target, so a listing
+    // of folders only still has one beside every row.
+    await bindFoldersOnlyRight();
+    await pumpShell(tester);
+    final row = rowRect(tester, 'd0');
+    const glyphStart =
+        PaneColumnMetrics.startPadding + PaneColumnMetrics.disclosureWidth;
+
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('report.txt'),
+      Offset(row.left + 2, row.center.dy),
+    );
+    expect(find.text('Move to /srv/other'), findsOneWidget);
+    expect(dropTargetedRows(tester), isEmpty);
+
+    // The disclosure column is gutter too, and never spring-loads.
+    await gesture.moveTo(Offset(row.left + glyphStart - 2, row.center.dy));
+    await tester.pump();
+    expect(find.text('Move to /srv/other'), findsOneWidget);
+    await tester.pump(paneSpringLoadDelay + const Duration(milliseconds: 100));
+    expect(right.location!.path, '/srv/other');
+
+    await gesture.moveTo(Offset(row.left + glyphStart + 2, row.center.dy));
+    await tester.pump();
+    expect(find.text('Move to /srv/other/d0'), findsOneWidget);
+    expect(dropTargetedRows(tester).single.item.name, 'd0');
+
+    await gesture.moveTo(Offset(row.left + 2, row.center.dy));
+    await tester.pump();
+    await endDrag(tester, gesture);
+
+    expect(queue.enqueuedSpecs, hasLength(1));
+    expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other');
+  });
+
+  dndWidgets('a nested folder row’s gutter drops into the folder that '
+      'lists it', (tester) async {
+    // 02 §2.5's nested-row rule: beside the glyph, a row inside a folder
+    // opened in place is that folder's target, like a nested file row.
+    final leftChannel = controller_test.FakePaneChannel('/home/tester');
+    leftChannel.listings['/home/tester'] = [
+      _entryAt('/home/tester', 'report.txt', size: 2048),
+    ];
+    lanes.nextLocalChannel = leftChannel;
+    await left.openLocalHome();
+    rightChannel = controller_test.FakePaneChannel('/home/tester');
+    rightChannel.listings['/srv/other'] = [
+      _entryAt('/srv/other', 'images', type: RemoteFileType.directory),
+    ];
+    rightChannel.listings['/srv/other/images'] = [
+      _entryAt('/srv/other/images', 'thumbs', type: RemoteFileType.directory),
+    ];
+    lanes.nextLocalChannel = rightChannel;
+    await right.openLocalAt('/srv/other');
+    await tester.pump();
+    expect(right.expandAt(0), isTrue); // images
+    await pumpShell(tester);
+    await tester.pump();
+    final row = rowRect(tester, 'thumbs');
+    const glyphStart =
+        PaneColumnMetrics.startPadding +
+        PaneColumnMetrics.depthIndent +
+        PaneColumnMetrics.disclosureWidth;
+
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('report.txt'),
+      Offset(row.left + glyphStart - 2, row.center.dy),
+    );
+    expect(find.text('Move to /srv/other/images'), findsOneWidget);
+    expect(dropTargetedRows(tester), isEmpty);
+
+    await gesture.moveTo(Offset(row.left + glyphStart + 2, row.center.dy));
+    await tester.pump();
+    expect(find.text('Move to /srv/other/images/thumbs'), findsOneWidget);
+
+    await gesture.moveTo(Offset(row.left + glyphStart - 2, row.center.dy));
+    await tester.pump();
+    await endDrag(tester, gesture);
+
+    expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other/images');
+  });
+
+  dndWidgets('a right-to-left row’s gutter sits on its right edge', (
+    tester,
+  ) async {
+    await bindFoldersOnlyRight();
+    await pumpShell(tester, textDirection: TextDirection.rtl);
+    final row = rowRect(tester, 'd0');
+    const glyphStart =
+        PaneColumnMetrics.startPadding + PaneColumnMetrics.disclosureWidth;
+
+    final gesture = await dragRowOnto(
+      tester,
+      find.text('report.txt'),
+      Offset(row.right - glyphStart + 2, row.center.dy),
+    );
+    expect(find.text('Move to /srv/other'), findsOneWidget);
+
+    await gesture.moveTo(Offset(row.right - glyphStart - 2, row.center.dy));
+    await tester.pump();
+    expect(find.text('Move to /srv/other/d0'), findsOneWidget);
+
+    await gesture.moveTo(Offset(row.right - 2, row.center.dy));
+    await tester.pump();
+    await endDrag(tester, gesture);
+
+    expect(queue.enqueuedSpecs.single.destinationDir, '/srv/other');
   });
 
   dndWidgets('a row drag onto its own directory’s header refuses the '
@@ -1297,10 +1471,10 @@ void main() {
     rightStrip.activateTab(rightStrip.tabs.first);
     await pumpShell(tester, rightTabs: true);
 
-    // The chip's DragTarget is the ancestor — the left pane's path bar
-    // also spells 'tester', so a bare text finder could land there.
-    final chipTarget = find.ancestor(
-      of: find.text('tester'),
+    // The chip's own DragTarget, found by its key: the left pane's path
+    // bar also spells 'tester', inside that pane's drop zone.
+    final chipTarget = find.descendant(
+      of: find.byKey(ValueKey('entry-drop-${secondTab.id}')),
       matching: find.byType(DragTarget<PaneEntryDrag>),
     );
     final chip = tester.getCenter(chipTarget);
