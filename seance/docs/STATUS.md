@@ -3,6 +3,20 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Built-in editor by default (2026-10-05)
+
+Double-clicking a remote file on desktop, like Enter and a touch tap,
+now opens it in a built-in editor tab beside the terminals. The built-in
+editor is the default editor and the fallback on every platform. Editor
+settings move to format version 2. Version 1 always stored System default
+for an untouched setting, so loading a version 1 System default switches
+it to the built-in editor once. Version 2 keeps an explicit System
+default, and an added desktop editor chosen as default keeps working.
+
+Validated on Linux: registry unit tests, settings round trips and a
+desktop Files test that double-clicks a file and expects an active
+editor tab. The macOS and Windows open paths were not exercised.
+
 ## macOS migration reconciliation (2026-10-03)
 
 PR #45 follows the merged local-shell implementation (`ab7f7b8`). The

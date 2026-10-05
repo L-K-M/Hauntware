@@ -80,11 +80,20 @@ class EditorRegistry {
   static const builtInId = 'seance.builtin';
   static const migratedBbeditId = 'macos.com.barebones.bbedit';
 
+  /// The serialized format.
+  static const _version = 2;
+
+  /// The first format that stores System default only once it is picked.
+  /// Version 1 stored it for a setting nobody had touched, so that value
+  /// cannot be told apart from a choice. Fixed, unlike [_version], so a
+  /// later format bump does not reset a System default chosen since.
+  static const _explicitSystemDefaultVersion = 2;
+
   String defaultEditorId;
   final List<ExternalEditorDefinition> editors;
 
   EditorRegistry({
-    this.defaultEditorId = systemDefaultId,
+    this.defaultEditorId = builtInId,
     Iterable<ExternalEditorDefinition> editors = const [],
   }) : editors = List.of(editors) {
     _repairDefault();
@@ -110,12 +119,20 @@ class EditorRegistry {
           }
         }
       }
-      return EditorRegistry(
-        defaultEditorId: json['defaultEditorId'] is String
-            ? json['defaultEditorId'] as String
-            : systemDefaultId,
-        editors: editors,
-      );
+      var defaultEditorId = json['defaultEditorId'] is String
+          ? json['defaultEditorId'] as String
+          : builtInId;
+
+      // Move a version 1 System default to the built-in editor once, e.g.
+      // `{'version': 1, 'defaultEditorId': 'seance.system'}`. Most of those
+      // were never chosen; the rest can pick System default again.
+      final version = json['version'] is int ? json['version'] as int : 1;
+      if (version < _explicitSystemDefaultVersion &&
+          defaultEditorId == systemDefaultId) {
+        defaultEditorId = builtInId;
+      }
+
+      return EditorRegistry(defaultEditorId: defaultEditorId, editors: editors);
     }
     if (legacyEditor == 'bbedit') {
       return EditorRegistry(
@@ -134,7 +151,7 @@ class EditorRegistry {
   }
 
   Map<String, dynamic> toJson() => {
-    'version': 1,
+    'version': _version,
     'defaultEditorId': defaultEditorId,
     'editors': editors.map((editor) => editor.toJson()).toList(),
   };
@@ -165,7 +182,7 @@ class EditorRegistry {
     if (editor == null ||
         !editor.isAvailableOnCurrentPlatform ||
         !editor.acceptsPath(path)) {
-      return currentEditorHostPlatform == null ? builtInId : systemDefaultId;
+      return builtInId;
     }
     return editor.id;
   }
@@ -191,14 +208,14 @@ class EditorRegistry {
 
   void remove(String id) {
     editors.removeWhere((editor) => editor.id == id);
-    if (defaultEditorId == id) defaultEditorId = systemDefaultId;
+    if (defaultEditorId == id) defaultEditorId = builtInId;
   }
 
   void _repairDefault() {
     if (defaultEditorId == systemDefaultId || defaultEditorId == builtInId) {
       return;
     }
-    if (byId(defaultEditorId) == null) defaultEditorId = systemDefaultId;
+    if (byId(defaultEditorId) == null) defaultEditorId = builtInId;
   }
 }
 

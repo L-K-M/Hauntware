@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -190,6 +191,35 @@ void main() {
     await tester.pump();
     expect(files.currentPath, '$_home/docs');
   });
+
+  platformTest(
+    'a double-click on a file opens it in a built-in editor tab',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+
+      await tester.tap(find.text('a.txt'));
+      await tester.pump();
+      await tester.tap(find.text('a.txt'));
+      await tester.pump();
+
+      // The checkout writes a real file: let that I/O land between frames,
+      // and the fake clock run for the timers it waits on.
+      for (var i = 0; i < 200 && state!.activeTab is! EditorTab; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+
+      final editor = state!.activeTab;
+      expect(editor, isA<EditorTab>());
+      expect((editor! as EditorTab).remotePath, '$_home/a.txt');
+      expect(state!.tabs, hasLength(2));
+
+      await tester.runAsync(() => files.removeLocalCopy('$_home/a.txt'));
+    },
+  );
 
   platformTest(
     'arrows move the cursor and select; Enter opens',
@@ -446,6 +476,19 @@ class _ListFileSystem implements RemoteFileSystem {
   @override
   Future<List<RemoteFileEntry>> listDirectory(String path) async =>
       _entries[path] ?? const [];
+
+  @override
+  Future<RemoteFileEntry> download(
+    String path,
+    StreamSink<List<int>> destination, {
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) async {
+    final entry = await stat(path);
+    destination.add(List.filled(entry.size ?? 0, 0x61));
+    return entry;
+  }
 
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) async {
