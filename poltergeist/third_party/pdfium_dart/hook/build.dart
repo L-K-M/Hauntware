@@ -120,8 +120,7 @@ final class _PdfiumTarget {
         archiveLibraryPath: 'lib/libpdfium.dylib',
         // Poltergeist: Flutter names the framework after this file, and
         // `pdfium.framework` collides with the XCFramework's
-        // `PDFium.framework` on case-insensitive volumes. Debug builds skip
-        // link hooks, so the omission in hook/link.dart does not cover them.
+        // `PDFium.framework` on case-insensitive volumes (see PATCHES.md).
         libraryFileName: 'libpdfium_dart.dylib',
       ),
       _ => throw UnsupportedError(

@@ -12,23 +12,10 @@ const _pdfiumAssetId = 'package:pdfium_dart/libpdfium';
 
 void main() {
   group('link hook', () {
-    // Poltergeist: upstream expects macOS to keep the asset; see hook/link.dart.
-    test('omits PDFium native asset for macOS Flutter apps', () async {
+    test('keeps PDFium native asset for macOS Flutter tests', () async {
       final input = _linkInput(
         targetOS: OS.macOS,
         pdfiumProvidedByFlutter: true,
-      );
-      final output = LinkOutputBuilder();
-
-      await link_hook.linkPdfiumAssets(input, output);
-
-      expect(_assetIds(output), isNot(contains(_pdfiumAssetId)));
-    });
-
-    test('keeps PDFium native asset without the Flutter XCFramework', () async {
-      final input = _linkInput(
-        targetOS: OS.macOS,
-        pdfiumProvidedByFlutter: false,
       );
       final output = LinkOutputBuilder();
 

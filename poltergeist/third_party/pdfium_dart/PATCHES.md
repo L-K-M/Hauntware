@@ -6,7 +6,7 @@ as published on pub.dev: archive sha256
 reaches it through `pdfrx` and selects this copy with `dependency_overrides`
 in `app/poltergeist_app/pubspec.yaml`. Upstream's own commit is the
 "Import pdfium_dart 0.3.1 unchanged" commit; `git diff` against it shows
-every change below. All edits are marked `// Poltergeist:` (or `#` in YAML)
+every change below. Each edit is marked `// Poltergeist:` (or `#` in YAML)
 at the site.
 
 ## Why
@@ -31,19 +31,21 @@ signature is broken.
 
 ## Changes
 
-- `hook/link.dart`: omit the PDFium asset on macOS as well as iOS when
-  `pdfium_flutter` reports that its XCFramework provides PDFium. Upstream
-  keeps the macOS asset for `flutter test`, but Flutter runs link hooks
-  only for profile and release builds, so test runs are unaffected.
-  Release builds stop shipping the redundant copy.
 - `hook/build.dart`: the macOS asset file is `libpdfium_dart.dylib`, so
-  Flutter names its framework `pdfium_dart.framework`. Debug builds skip
-  link hooks, so without this they would still collide.
+  Flutter names its framework `pdfium_dart.framework` and it no longer
+  lands on `PDFium.framework`. The app still loads PDFium from the
+  XCFramework through `DynamicLibrary.process()`; `flutter test` loads the
+  asset by its id, which the rename does not change.
 - `pubspec.yaml`: `resolution: workspace` removed; this copy is not a
   member of upstream's pub workspace.
-- `test/link_hook_test.dart`: the macOS case now expects the asset to be
-  omitted, and a new case checks it is kept when no XCFramework provides
-  PDFium.
+
+The macOS app therefore still carries the asset as an unused second copy
+of PDFium. Upstream's `hook/link.dart` is meant to drop it, but
+`hook/build.dart` adds the asset with the default `ToAppBundle()` routing,
+so it never reaches the link hook (upstream's iOS case works only because
+the build hook returns early on iOS). Making the link hook effective
+would change how every platform's release build routes PDFium, so this
+fork leaves it alone.
 
 ## Removing this fork
 
