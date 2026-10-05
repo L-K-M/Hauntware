@@ -80,11 +80,14 @@ class EditorRegistry {
   static const builtInId = 'seance.builtin';
   static const migratedBbeditId = 'macos.com.barebones.bbedit';
 
-  /// The serialized format. Version 1 stored System default for a setting
-  /// nobody had touched, so that value cannot be told apart from a choice;
-  /// version 2 made the built-in editor the default and stores System
-  /// default only once it is picked.
+  /// The serialized format.
   static const _version = 2;
+
+  /// The first format that stores System default only once it is picked.
+  /// Version 1 stored it for a setting nobody had touched, so that value
+  /// cannot be told apart from a choice. Fixed, unlike [_version], so a
+  /// later format bump does not reset a System default chosen since.
+  static const _explicitSystemDefaultVersion = 2;
 
   String defaultEditorId;
   final List<ExternalEditorDefinition> editors;
@@ -124,7 +127,8 @@ class EditorRegistry {
       // `{'version': 1, 'defaultEditorId': 'seance.system'}`. Most of those
       // were never chosen; the rest can pick System default again.
       final version = json['version'] is int ? json['version'] as int : 1;
-      if (version < _version && defaultEditorId == systemDefaultId) {
+      if (version < _explicitSystemDefaultVersion &&
+          defaultEditorId == systemDefaultId) {
         defaultEditorId = builtInId;
       }
 
