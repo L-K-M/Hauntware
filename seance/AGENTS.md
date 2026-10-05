@@ -267,8 +267,12 @@ The macOS floor is **12.0**, not the 10.15 the Flutter template once
 generated. It is `MACOSX_DEPLOYMENT_TARGET` in
 `macos/Runner.xcodeproj/project.pbxproj`, set in all three configurations and
 maintained **by hand** — nothing in the SDK rewrites an existing project's
-target, and this app has no Podfile to carry a `platform :osx` line either
-(plugins come through Swift Package Manager). What it has to keep up with is
+target, and this app has no committed Podfile to carry a `platform :osx` line
+either (plugins come through Swift Package Manager). The one exception is the
+vendored `flutter_pty`, which ships only a podspec: Flutter generates a
+Podfile for it at build time, so building the macOS app needs CocoaPods
+(`brew install cocoapods`; GitHub's macOS runners preinstall it).
+`scripts/build.sh` checks for `pod` before starting Flutter. What it has to keep up with is
 the SDK's own macOS minimum, which reached 12.0; raising it is what an
 `unsupported deployment target` build failure after a Flutter upgrade is
 asking for. Anything guarded by `#available(macOS 11.0, *)` or

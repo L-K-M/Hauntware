@@ -274,8 +274,10 @@ build_app() {
             # Post-install sanity: surface the known "can't be opened" causes
             # here, instead of leaving Finder's generic refusal as the only
             # signal.
-            if ! codesign --verify --deep --strict "$INSTALLED" 2>/dev/null; then
+            local verify_output
+            if ! verify_output=$(codesign --verify --deep --strict --verbose=2 "$INSTALLED" 2>&1); then
               echo "!! app: $INSTALLED fails codesign verification — it will not launch." >&2
+              sed 's/^/   /' <<<"$verify_output" >&2
               record "app: WARNING — installed app fails codesign verify"
             fi
             if codesign -d --entitlements - "$INSTALLED" 2>/dev/null \

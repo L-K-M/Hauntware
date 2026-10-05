@@ -159,6 +159,47 @@ void main() {
     );
   });
 
+  test('Séance stops before Flutter on macOS without CocoaPods', () async {
+    // A copy of the real product script in a scratch tree, so a regression
+    // cannot reach Flutter or write into the checkout.
+    final seance = Directory(p.join(sandbox.path, 'seance-real'));
+    Directory(
+      p.join(seance.path, 'app', 'seance_app', 'macos'),
+    ).createSync(recursive: true);
+    final script = File(p.join(seance.path, 'scripts', 'build.sh'));
+    script.parent.createSync();
+    File(
+      p.join(_repositoryRoot().path, 'seance', 'scripts', 'build.sh'),
+    ).copySync(script.path);
+    final host = _fakeHost(sandbox, 'Darwin');
+    final bin = p.join(sandbox.path, 'fake-bin');
+    final flutterLog = File(p.join(sandbox.path, 'flutter.log'));
+    Directory(bin).createSync(recursive: true);
+    File(p.join(bin, 'flutter')).writeAsStringSync('''#!/usr/bin/env bash
+printf '%s\\n' "\$*" >> "${flutterLog.path}"
+''');
+    Process.runSync('chmod', ['+x', p.join(bin, 'flutter')]);
+
+    final result = await Process.run(
+      'bash',
+      [script.path, 'app'],
+      environment: {
+        ...Platform.environment,
+        ...host.environment,
+        // System directories only: no CocoaPods, whatever the test host has.
+        'PATH': '$bin:/usr/bin:/bin',
+      },
+    );
+
+    expect(
+      result.exitCode,
+      isNot(0),
+      reason: '${result.stdout}${result.stderr}',
+    );
+    expect(result.stderr, contains('CocoaPods'));
+    expect(flutterLog.existsSync(), isFalse);
+  });
+
   test('runs from an arbitrary working directory', () async {
     final elsewhere = Directory(p.join(sandbox.path, 'elsewhere'))
       ..createSync();

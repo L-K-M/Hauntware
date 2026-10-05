@@ -258,6 +258,14 @@ build_app() {
     skip_or_fail app "unrecognized host platform"; return
   fi
   if ! have flutter; then skip_or_fail app "Flutter SDK (flutter) not found"; return; fi
+  # The vendored flutter_pty ships only a podspec (no Swift Package Manager
+  # manifest), so Flutter integrates it through CocoaPods even though every
+  # other plugin comes through SwiftPM. Without `pod` the build fails late
+  # with a bare "CocoaPods not installed".
+  if [[ "$HOST" == "macos" ]] && ! have pod; then
+    skip_or_fail app "CocoaPods (pod) not found; flutter_pty needs it (brew install cocoapods)"
+    return
+  fi
   if ! ensure_platform "$HOST"; then
     echo "!! app: flutter create failed" >&2
     record "app: FAILED (flutter create)"; return 1
@@ -317,8 +325,10 @@ build_app() {
             # Post-install sanity: surface the known "can't be opened" causes
             # here, instead of leaving Finder's generic refusal as the only
             # signal.
-            if ! codesign --verify --deep --strict "$INSTALLED" 2>/dev/null; then
+            local verify_output
+            if ! verify_output=$(codesign --verify --deep --strict --verbose=2 "$INSTALLED" 2>&1); then
               echo "!! app: $INSTALLED fails codesign verification — it will not launch." >&2
+              sed 's/^/   /' <<<"$verify_output" >&2
               record "app: WARNING — installed app fails codesign verify"
             fi
             if codesign -d --entitlements - "$INSTALLED" 2>/dev/null \
