@@ -27,8 +27,8 @@ const _m0ShardNames = [
 ];
 const _m0SourceArtifactPrefix = 'm0-bench-source';
 const _m0CanonicalArtifact = 'm0-bench-results';
-const _m0ShardPath = 'packages/poltergeist_bench/bench-shard.json';
-const _m0EvidencePath = 'packages/poltergeist_bench/evidence';
+const _m0ShardPath = 'poltergeist/packages/poltergeist_bench/bench-shard.json';
+const _m0EvidencePath = 'poltergeist/packages/poltergeist_bench/evidence';
 const _m0CommittedEvidencePath = 'docs/evidence/m0';
 const _m0ReportPath = 'docs/M0-DARTSSH2-REPORT.md';
 // Selected by action name, never by tag (as in release_workflow_test.dart):
@@ -222,9 +222,7 @@ void main() {
   });
 
   test('shards M0 measurements without shortening their budget', () {
-    final workflow =
-        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
-            as YamlMap;
+    final workflow = _suiteWorkflow();
     final events = workflow['on'] as YamlMap;
     final dispatch = events['workflow_dispatch'] as YamlMap;
     final inputs = dispatch['inputs'] as YamlMap;
@@ -235,7 +233,7 @@ void main() {
     final matrix = strategy['matrix'] as YamlMap;
 
     expect((benchmark['needs'] as YamlList).toList(), [
-      'dart',
+      'poltergeist_dart',
       'dart_tools',
       'seance_pin_audit',
     ]);
@@ -255,7 +253,10 @@ void main() {
     final sourceStart = _stepNamed(steps, 'Start M0 source evidence');
     final measurement = _stepNamed(steps, 'Run fixture and measurements');
     expect(steps.indexOf(sourceStart), lessThan(steps.indexOf(measurement)));
-    expect(sourceStart['working-directory'], 'packages/poltergeist_bench');
+    expect(
+      sourceStart['working-directory'],
+      'poltergeist/packages/poltergeist_bench',
+    );
     final sourceStartCommand = '${sourceStart['run']}'
         .replaceAll('\\\n', ' ')
         .replaceAll(RegExp(r'\s+'), ' ');
@@ -318,9 +319,7 @@ void main() {
   });
 
   test('aggregates exact M0 sources into one canonical artifact', () {
-    final workflow =
-        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
-            as YamlMap;
+    final workflow = _suiteWorkflow();
     final jobs = workflow['jobs'] as YamlMap;
     final aggregate = jobs[_m0AggregateJobName] as YamlMap;
 
@@ -335,14 +334,20 @@ void main() {
     final downloadOptions = download['with'] as YamlMap;
     expect(download['uses'], 'actions/download-artifact@v8');
     expect(downloadOptions['pattern'], '$_m0SourceArtifactPrefix-*');
-    expect(downloadOptions['path'], 'packages/poltergeist_bench/shards');
+    expect(
+      downloadOptions['path'],
+      'poltergeist/packages/poltergeist_bench/shards',
+    );
     expect(downloadOptions['merge-multiple'], isFalse);
 
     final aggregation = _stepNamed(steps, 'Aggregate M0 measurements');
     final command = '${aggregation['run']}'
         .replaceAll('\\\n', ' ')
         .replaceAll(RegExp(r'\s+'), ' ');
-    expect(aggregation['working-directory'], 'packages/poltergeist_bench');
+    expect(
+      aggregation['working-directory'],
+      'poltergeist/packages/poltergeist_bench',
+    );
     expect(
       command,
       contains(
@@ -370,9 +375,7 @@ void main() {
   });
 
   test('validates committed M0 evidence in ordinary CI', () {
-    final workflow =
-        loadYaml(File('.github/workflows/ci.yml').readAsStringSync())
-            as YamlMap;
+    final workflow = _suiteWorkflow();
     final jobs = workflow['jobs'] as YamlMap;
     final dartJob = jobs['dart_tools'] as YamlMap;
     final steps = (dartJob['steps'] as YamlList).cast<YamlMap>();
@@ -383,7 +386,10 @@ void main() {
     final command = '${validation['run']}'.replaceAll(RegExp(r'\s+'), ' ');
 
     expect((checkout['with'] as YamlMap)['fetch-depth'], 0);
-    expect(validation['working-directory'], 'packages/poltergeist_bench');
+    expect(
+      validation['working-directory'],
+      'poltergeist/packages/poltergeist_bench',
+    );
     expect(
       command,
       contains(
@@ -393,8 +399,10 @@ void main() {
       ),
     );
 
+    // Full history is deliberate: the M0 bundle validation here, the
+    // preserved-history gate (contracts) and the Séance audit's lineage.
     for (final entry in jobs.entries) {
-      if (entry.key == 'dart_tools') continue;
+      if (_fullHistoryJobs.contains(entry.key)) continue;
 
       final job = entry.value as YamlMap;
       final otherSteps = (job['steps'] as YamlList).cast<YamlMap>();
@@ -709,6 +717,13 @@ void main() {
     expect('${result.stderr}', contains('usage: run.sh'));
   });
 }
+
+const _fullHistoryJobs = {'dart_tools', 'contracts', 'seance_pin_audit'};
+
+/// GitHub runs only the monorepo root's workflows; the subtree's own
+/// `.github/workflows/ci.yml` is a frozen copy of the standalone one.
+YamlMap _suiteWorkflow() =>
+    loadYaml(File('../.github/workflows/ci.yml').readAsStringSync()) as YamlMap;
 
 final _repositoryRoot = Directory.current.absolute.path;
 final _fixtureRoot = '$_repositoryRoot/test/integration/runtime/data';
