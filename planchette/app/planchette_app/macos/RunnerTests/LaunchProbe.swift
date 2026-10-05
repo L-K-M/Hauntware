@@ -12,6 +12,9 @@ import Cocoa
 private let minimumWindowHeight: CGFloat = 400
 private let appMenuTitle = "File"
 private let pollInterval: useconds_t = 200_000
+/// How long the app must stay up once it is: a launch that dies a few
+/// seconds in is as broken as one that never shows.
+private let stableSeconds: TimeInterval = 5
 
 private func hasOnScreenWindow(_ pid: pid_t) -> Bool {
   let windows =
@@ -74,6 +77,14 @@ while Date() < deadline {
   if windowShown && (!checksMenus || menus.contains(appMenuTitle)) {
     print("Planchette is up: main window on screen"
       + (checksMenus ? ", menus \(menus.joined(separator: ", "))." : "."))
+    let stableUntil = Date().addingTimeInterval(stableSeconds)
+    while Date() < stableUntil {
+      if kill(pid, 0) != 0 {
+        print("Planchette (pid \(pid)) exited after coming up.")
+        exit(1)
+      }
+      usleep(pollInterval)
+    }
     exit(0)
   }
   usleep(pollInterval)

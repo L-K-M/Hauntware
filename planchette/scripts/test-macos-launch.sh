@@ -93,6 +93,8 @@ PY
 mkdir "$test_dir/home"
 HOME="$test_dir/home" "$binary" >"$test_dir/output.txt" 2>&1 &
 pid=$!
+# The cleanup's kill is expected; keep bash from reporting it as a job.
+disown "$pid"
 
 status=0
 "$test_dir/launch-probe" "$pid" "$launch_timeout" || status=$?
