@@ -754,13 +754,14 @@ void main() {
       await tester.pump();
       await pressMetaArrow(LogicalKeyboardKey.arrowLeft);
       expect(left.location?.path, '/home/tester/a');
-      expect(field.selection, const TextSelection.collapsed(offset: 0));
+      // Offsets only: the caret affinity Flutter reports is an
+      // implementation detail.
+      expect(field.selection.isCollapsed, isTrue);
+      expect(field.selection.extentOffset, 0);
       await pressMetaArrow(LogicalKeyboardKey.arrowRight);
       expect(left.location?.path, '/home/tester/a');
-      expect(
-        field.selection,
-        const TextSelection.collapsed(offset: 11, affinity: TextAffinity.upstream),
-      );
+      expect(field.selection.isCollapsed, isTrue);
+      expect(field.selection.extentOffset, 'hello world'.length);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }

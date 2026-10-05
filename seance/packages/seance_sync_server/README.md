@@ -33,16 +33,19 @@ container's logs when the server doesn't answer.
 
 ### Moving from a standalone Séance clone
 
-The standalone `L-K-M/Seance` repository is archived, so `./update.sh` there
-finds no new code. Deploy from a Hauntware clone instead. The compose project
-name comes from the compose file's directory, so the new clone reuses the
-existing container and its `seance-data` volume:
+The standalone `L-K-M/Seance` repository is archived, and its `./update.sh`
+now only prints these instructions. Deploy from a Hauntware clone instead. The
+compose project name comes from the compose file's directory, so the new clone
+reuses the existing container and its `seance-data` volume. Run this from the
+directory that contains your `Seance` clone:
 
 ```bash
 git clone https://github.com/L-K-M/Hauntware.git
 if [ -f Seance/packages/seance_sync_server/.env ]; then
   cp Seance/packages/seance_sync_server/.env \
     Hauntware/seance/packages/seance_sync_server/.env
+else
+  echo "No Seance/packages/seance_sync_server/.env here; continuing without overrides." >&2
 fi
 cd Hauntware/seance && ./update.sh
 ```
