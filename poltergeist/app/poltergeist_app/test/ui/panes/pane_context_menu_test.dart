@@ -181,6 +181,59 @@ void main() {
     expect(ran, [kFileRenameCommandId]);
   });
 
+  // The registry's verbs resolve against the ACTIVE pane. A listing can
+  // hold focus while the other pane is active (activated by command,
+  // focus left in place); a right-click there requested focus it
+  // already had, so nothing re-activated the pane and the menu showed
+  // the other pane's enablement until a hover moved focus.
+  testWidgets('right-click makes its pane the menu\'s subject while the '
+      'other pane is active', (tester) async {
+    await openRows();
+    await pumpPane(tester);
+    leftNode.requestFocus();
+    await tester.pump();
+    workspace.setActivePane(rightStrip);
+    await tester.pump();
+
+    await rightClick(tester, tester.getCenter(find.text('b.txt')));
+
+    expect(workspace.activePane, leftStrip);
+    for (final id in [
+      kGoOpenCommandId,
+      kFileRenameCommandId,
+      kSelectionCopyPathCommandId,
+      kFileNewFolderCommandId,
+    ]) {
+      expect(
+        tester.widget<MenuItemButton>(item(id)).enabled,
+        isTrue,
+        reason: id,
+      );
+    }
+  });
+
+  testWidgets('Shift+F10 makes its pane the menu\'s subject while the '
+      'other pane is active', (tester) async {
+    await openRows();
+    await pumpPane(tester);
+    leftNode.requestFocus();
+    left.setCursorIndex(1);
+    await tester.pump();
+    workspace.setActivePane(rightStrip);
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.f10);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+
+    expect(workspace.activePane, leftStrip);
+    expect(
+      tester.widget<MenuItemButton>(item(kFileRenameCommandId)).enabled,
+      isTrue,
+    );
+  });
+
   testWidgets('right-click inside a multi-selection keeps it as the '
       'menu\'s subject', (tester) async {
     await openRows();

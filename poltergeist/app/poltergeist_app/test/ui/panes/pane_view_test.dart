@@ -776,6 +776,31 @@ void main() {
     expect(rightNode.hasFocus, isTrue);
   });
 
+  testWidgets('a click activates its pane even when the listing already '
+      'held focus', (tester) async {
+    localChannelWithEntries();
+    await left.openLocalHome();
+    final rightChannel = controller_test.FakePaneChannel('/home/tester');
+    rightChannel.listings['/home/tester'] = const [];
+    lanes.nextLocalChannel = rightChannel;
+    await right.openLocalHome();
+    await pumpShell(tester);
+    leftNode.requestFocus();
+    await tester.pump();
+
+    // Activated by command while the left listing kept focus: the
+    // click below requests focus it already has, so no focus change
+    // can activate the pane for it.
+    workspace.setActivePane(rightStrip);
+    await tester.pump();
+
+    await tester.tap(find.text('report.txt'));
+    await tester.pumpAndSettle();
+
+    expect(workspace.activePane, leftStrip);
+    expect(leftNode.hasPrimaryFocus, isTrue);
+  });
+
   testWidgets('Shift+Tab does not swap panes (reverse traversal keeps it)', (
     tester,
   ) async {
