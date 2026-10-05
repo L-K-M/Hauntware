@@ -544,6 +544,12 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: planchette
         run: scripts/test-macos-accessibility.sh
+      # A release-only startup failure leaves a running app with no window;
+      # unit tests run with asserts on and never see one.
+      - name: Release app launch
+        if: matrix.target == 'macos'
+        working-directory: planchette
+        run: scripts/test-macos-launch.sh
       # Stage each platform's product under its release asset name: product +
       # platform, no version (the release page already carries the version) —
       # except the .deb, whose filename is Debian's versioned convention.

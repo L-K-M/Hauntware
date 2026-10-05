@@ -1052,6 +1052,12 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: planchette
         run: scripts/test-macos-accessibility.sh
+      # A release-only startup failure leaves a running app with no window;
+      # unit tests run with asserts on and never see one.
+      - name: Release app launch
+        if: matrix.target == 'macos'
+        working-directory: planchette
+        run: scripts/test-macos-launch.sh
 
   seance_client:
     name: Séance client (${{ matrix.target }})
