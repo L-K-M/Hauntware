@@ -57,7 +57,8 @@ print_crash_report() {
     return
   fi
   echo "--- Crash report $report" >&2
-  python3 - "$report" >&2 <<'PY'
+  # A report it cannot read leaves a traceback, not a different exit status.
+  python3 - "$report" >&2 <<'PY' || true
 import json
 import sys
 
@@ -94,7 +95,7 @@ mkdir "$test_dir/home"
 HOME="$test_dir/home" "$binary" >"$test_dir/output.txt" 2>&1 &
 pid=$!
 # The cleanup's kill is expected; keep bash from reporting it as a job.
-disown "$pid"
+disown "$pid" 2>/dev/null || true
 
 status=0
 "$test_dir/launch-probe" "$pid" "$launch_timeout" || status=$?
