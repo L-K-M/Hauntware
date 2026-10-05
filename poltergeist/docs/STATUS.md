@@ -6663,14 +6663,16 @@ Command/Shift forces move, and OS drop-in always copies; remote→remote
 across servers is a copy through the local machine, and same-server remote
 moves ride server-side rename when the engine path lands.
 
-`PaneDropArea` (`ui/panes/pane_drop_area.dart`) wraps each pane's listing:
+`PaneDropArea` (`ui/panes/pane_drop_area.dart`) wraps each pane's surface:
 it owns the in-app `DragTarget<PaneEntryDrag>`, the OS `DropTarget`,
 folder-row vs current-directory resolution, the target border and action
 pill ("Move to …" / "Copy to …"), and the spring-load dwell — a folder row
 held 1.5 s opens in place, a tab chip held 700 ms activates. Drop position
 decides the
-destination — a rendered folder row means that folder, background means
-the pane's current directory — and hit testing works on rendered row
+destination — a rendered folder row, from its glyph on, means that
+folder; background, the headers above the rows and the gutter before a
+row's glyph mean the directory the row is listed in (the pane's own for
+background and headers) — and hit testing works on rendered row
 rects inside the virtualized list rather than model indices, so a
 scrolled-out folder cannot shadow the row actually under the pointer.
 Rows drag only on desktop platforms (mobile keeps touch scrolling), only

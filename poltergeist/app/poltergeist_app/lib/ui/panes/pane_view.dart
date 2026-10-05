@@ -1632,7 +1632,7 @@ class _PaneSurface extends StatelessWidget {
     AppLocalizations l10n,
     bool loadingVisible,
   ) {
-    return Column(
+    final surface = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _LocationHeader(
@@ -1654,44 +1654,45 @@ class _PaneSurface extends StatelessWidget {
             onClosed: onQuickSelectClosed,
           ),
         ..._bannerSlot(context),
-        // D14's drop zone wraps the column header and the listing body;
-        // the location header and banners stay outside it. The column
-        // header is a current-directory target, the only one left when
-        // the rows overflow the viewport. The OS-drop gate resolves per build: a
-        // busy or unbound pane advertises no droppable bounds at all.
-        Expanded(
-          child: PaneDropArea(
-            controller: controller,
-            delegate: dropDelegate,
-            scrollController: scrollController,
-            listAreaKey: listAreaKey,
-            rowExtent: scaledPaneRowExtent(context),
-            onHoverFolderRow: onDropHoverRow,
-            dragOut: dragOut,
-            supportsOsDrop: supportsOsDrop ?? _isDesktopPlatform(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // D32 §6's column header: outside the listing's scroll
-                // view, so the list origin stays row 0.
-                if (_listingShown &&
-                    controller.viewMode == PaneViewMode.details)
-                  PaneColumnHeader(
-                    paneTabId: controller.paneTabId,
-                    sortKey: controller.sortKey,
-                    sortDirection: controller.sortDirection,
-                    onSort: controller.sortByColumn,
-                    enabled:
-                        !controller.connectionLost &&
-                        !controller.restoredPending &&
-                        !controller.staleRows,
-                  ),
-                Expanded(child: _body(context, l10n)),
-              ],
-            ),
+        // D32 §6's column header: outside the listing's scroll view, so
+        // the list origin stays row 0.
+        if (_listingShown && controller.viewMode == PaneViewMode.details)
+          PaneColumnHeader(
+            paneTabId: controller.paneTabId,
+            sortKey: controller.sortKey,
+            sortDirection: controller.sortDirection,
+            onSort: controller.sortByColumn,
+            enabled:
+                !controller.connectionLost &&
+                !controller.restoredPending &&
+                !controller.staleRows,
           ),
-        ),
+        Expanded(child: _body(context, l10n)),
       ],
+    );
+
+    // D14's drop zone wraps the whole surface. Everything above the
+    // rows is a current-directory target: with the rows overflowing the
+    // viewport it is the only one left, and the drag avatar hangs below
+    // the pointer, so aiming it at the column header points just above.
+    // The OS-drop gate resolves per build: a busy or unbound pane
+    // advertises no droppable bounds at all.
+    return PaneDropArea(
+      controller: controller,
+      delegate: dropDelegate,
+      scrollController: scrollController,
+      listAreaKey: listAreaKey,
+      rowExtent: scaledPaneRowExtent(context),
+      rowGutter: (row) =>
+          PaneColumnMetrics.startPadding +
+          PaneColumnMetrics.outlineInset(
+            outline: !gestures.touch,
+            depth: controller.rowDepth(row),
+          ),
+      onHoverFolderRow: onDropHoverRow,
+      dragOut: dragOut,
+      supportsOsDrop: supportsOsDrop ?? _isDesktopPlatform(),
+      child: surface,
     );
   }
 
