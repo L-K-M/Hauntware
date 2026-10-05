@@ -496,7 +496,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
           libsecret-1-dev libjsoncpp-dev imagemagick file
-          dpkg-dev binutils
+          dpkg-dev binutils xvfb xdotool
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -544,12 +544,22 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: planchette
         run: scripts/test-macos-accessibility.sh
-      # A release-only startup failure leaves a running app with no window;
-      # unit tests run with asserts on and never see one.
-      - name: Release app launch
+      # A release-only startup failure leaves a running app without its UI;
+      # unit tests run with asserts on and never see one. The title is the
+      # new document's, which only Dart sets.
+      - name: Release app launch (macOS)
         if: matrix.target == 'macos'
-        working-directory: planchette
-        run: scripts/test-macos-launch.sh
+        working-directory: planchette/app/planchette_app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Planchette.app --menu File --title '^Untitled . Planchette$'
+      - name: Release app launch (Linux)
+        if: matrix.target == 'linux'
+        working-directory: planchette/app/planchette_app
+        run: xvfb-run -a python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/linux/x64/release/bundle/planchette --title '^Untitled . Planchette$'
+      - name: Release app launch (Windows)
+        if: matrix.target == 'windows'
+        working-directory: planchette/app/planchette_app
+        shell: bash
+        run: python "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/windows/x64/runner/Release/planchette.exe --title '^Untitled . Planchette$'
       # Stage each platform's product under its release asset name: product +
       # platform, no version (the release page already carries the version) —
       # except the .deb, whose filename is Debian's versioned convention.
