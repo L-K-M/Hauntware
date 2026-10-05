@@ -209,6 +209,7 @@ def throwaway_env(home: Path) -> dict[str, str]:
     the launch, and the launch's out of them."""
     places = {
         "HOME": home,
+        "USERPROFILE": home,
         "XDG_CONFIG_HOME": home / ".config",
         "XDG_DATA_HOME": home / ".local" / "share",
         "XDG_STATE_HOME": home / ".local" / "state",
@@ -281,6 +282,12 @@ def watch(process: subprocess.Popen, probe, readiness: Readiness, name: str) -> 
                         crashed=True,
                     )
                 time.sleep(POLL_SECONDS)
+            # Checked once, at the end: a window that blinks while the app
+            # settles is fine, one that is gone is not.
+            if not probe.look(process.pid).windows:
+                return Outcome(
+                    False, f"{name} lost its window within {STABLE_SECONDS} s."
+                )
             return Outcome(True, f"{name} stayed up for {STABLE_SECONDS} s.")
         time.sleep(POLL_SECONDS)
 
@@ -314,10 +321,14 @@ def print_crash_report(executable_name: str, since: float) -> None:
 
     print(f"--- Crash report {report}")
     try:
-        body = json.loads(report.read_text().split("\n", 1)[1])
-    except (ValueError, IndexError) as error:
-        print(f"(unreadable: {error})")
-        return
+        summarize_crash_report(json.loads(report.read_text().split("\n", 1)[1]))
+    except (ValueError, LookupError, TypeError, AttributeError) as error:
+        # The output above already shows the failure; say why the report
+        # adds nothing rather than replacing both with a traceback.
+        print(f"(unreadable crash report: {error!r})")
+
+
+def summarize_crash_report(body: dict) -> None:
     images = body.get("usedImages", [])
 
     def show(frames) -> None:
@@ -341,6 +352,13 @@ def print_crash_report(executable_name: str, since: float) -> None:
     show(body["threads"][faulting]["frames"])
 
 
+def title_pattern(value: str) -> re.Pattern[str]:
+    try:
+        return re.compile(value)
+    except re.error as error:
+        raise argparse.ArgumentTypeError(f"invalid regex {value!r}: {error}")
+
+
 def main() -> int:
     # Titles are Unicode (Planchette's has an em dash); a Windows code page
     # would print them garbled in the CI log.
@@ -349,7 +367,7 @@ def main() -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("app", type=Path)
-    parser.add_argument("--title", type=re.compile, help="window title regex")
+    parser.add_argument("--title", type=title_pattern, help="window title regex")
     parser.add_argument("--menu", help="menu bar title Dart installs (macOS)")
     parser.add_argument(
         "--home",
