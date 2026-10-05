@@ -19,10 +19,14 @@ Future<void> linkPdfiumAssets(LinkInput input, LinkOutputBuilder output) async {
   final pdfiumProvidedByFlutter =
       input.metadata[_darwinPdfiumProviderMetadataKey] ==
       _pdfiumFlutterXcframeworkProvider;
-  // On macOS, PDFium is linked into the app by the XCFramework, but Flutter tests still need to load the PDFium asset
-  // directly. Therefore we omit the PDFium asset only for iOS when provided by Flutter, but include it for macOS.
+  // Poltergeist: omit the asset on macOS too. Upstream keeps it for
+  // `flutter test`, but Flutter runs link hooks only for profile and release
+  // builds, so a test run never reaches this filter. In an app build the
+  // asset becomes `pdfium.framework`, which on a case-insensitive volume
+  // lands on top of the XCFramework's signed `PDFium.framework` and breaks
+  // the app's code signature.
   final shouldOmitDarwinPdfiumAsset =
-      pdfiumProvidedByFlutter && targetOS == OS.iOS;
+      pdfiumProvidedByFlutter && (targetOS == OS.iOS || targetOS == OS.macOS);
 
   for (final asset in input.assets.encodedAssets) {
     final isPdfiumAsset =

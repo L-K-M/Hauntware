@@ -58,6 +58,13 @@ dependencies:
   window_manager: 0.5.2
   pdfrx: 2.6.1
 
+# pdfrx's pdfium_dart 0.3.1, patched so macOS builds stop bundling a second
+# PDFium that overwrites the signed PDFium.framework (see
+# third_party/pdfium_dart/PATCHES.md). Drop once upstream fixes it.
+dependency_overrides:
+  pdfium_dart:
+    path: ../../third_party/pdfium_dart
+
 dev_dependencies:
   analyzer: 14.1.0
   # MockClient for the update-check request-shape test (01 §6's pinned

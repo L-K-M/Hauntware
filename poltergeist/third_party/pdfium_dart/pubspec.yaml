@@ -7,7 +7,8 @@ issue_tracker: https://github.com/espresso3389/pdfrx/issues
 
 environment:
   sdk: ^3.13.0
-resolution: workspace
+# Poltergeist: `resolution: workspace` removed; this copy is not a member of
+# upstream's pub workspace.
 
 dependencies:
   archive:

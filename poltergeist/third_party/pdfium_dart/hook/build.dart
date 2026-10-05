@@ -118,7 +118,11 @@ final class _PdfiumTarget {
         archivePlatform: 'mac',
         archiveArch: arch,
         archiveLibraryPath: 'lib/libpdfium.dylib',
-        libraryFileName: 'libpdfium.dylib',
+        // Poltergeist: Flutter names the framework after this file, and
+        // `pdfium.framework` collides with the XCFramework's
+        // `PDFium.framework` on case-insensitive volumes. Debug builds skip
+        // link hooks, so the omission in hook/link.dart does not cover them.
+        libraryFileName: 'libpdfium_dart.dylib',
       ),
       _ => throw UnsupportedError(
         'Unsupported PDFium platform: ${config.targetOS}',
