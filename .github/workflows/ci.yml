@@ -57,7 +57,7 @@ jobs:
           # The history gate walks every preserved source graph; a
           # shallow checkout cannot reach the M0-era objects.
           fetch-depth: 0
-      - uses: rhysd/actionlint@v1.7.9
+      - uses: rhysd/actionlint@v1.7.12
       - name: Check workflow contracts
         run: scripts/check-workflows.sh
       # Frozen provenance: all imported source refs must be ancestors
