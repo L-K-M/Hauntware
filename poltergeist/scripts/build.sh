@@ -219,13 +219,22 @@ build_app() {
   fi
   local mode_flag=""
   [[ "$PROFILE" == "debug" ]] && mode_flag="--debug"
+  local cfg="Release" out=""
+  [[ "$PROFILE" == "debug" ]] && cfg="Debug"
+  # Xcode re-signs an existing .app only when one of its own inputs
+  # changed, but Flutter's embed phase rewrites App.framework and the
+  # native-asset frameworks afterwards. An incremental build can then keep
+  # a stale outer seal (codesign: "a sealed resource is missing or
+  # invalid") and the old bundle date. Deleting the previous bundle makes
+  # Xcode assemble and sign it afresh; compiled code stays cached.
+  if [[ "$HOST" == "macos" ]]; then
+    rm -rf "$APP_DIR"/build/macos/Build/Products/"$cfg"/*.app
+  fi
   echo "-- flutter build $HOST ${mode_flag}"
   if ( cd "$APP_DIR" && flutter pub get && flutter build "$HOST" $mode_flag ); then
     # Stage the final product; the nested output path differs per platform
     # (and per arch on linux), so glob for it. Poltergeist is ASCII, so no
     # post-sign rename is needed on macOS (Séance's accented name needs one).
-    local cfg="Release" out=""
-    [[ "$PROFILE" == "debug" ]] && cfg="Debug"
     case "$HOST" in
       macos)
         out=$(ls -d "$APP_DIR"/build/macos/Build/Products/"$cfg"/*.app 2>/dev/null | head -1)
