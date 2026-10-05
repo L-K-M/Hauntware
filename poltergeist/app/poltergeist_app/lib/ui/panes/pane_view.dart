@@ -1232,6 +1232,9 @@ class _PaneViewState extends State<PaneView> {
     if (_resolvedSections(sections).isEmpty) return;
     final anchor = _contextMenuAnchorKey.currentContext?.findRenderObject();
     if (anchor is! RenderBox || !anchor.hasSize) return;
+    // The rows render registry verbs, which resolve against the active
+    // pane: the menu's pane must be it, however the menu was opened.
+    widget.workspace.setActivePane(widget.pane);
     setState(() => _contextMenuSections = sections);
     _contextMenu.open(position: anchor.globalToLocal(global));
   }
@@ -1276,6 +1279,8 @@ class _PaneViewState extends State<PaneView> {
     final run = widget.onRunCommand;
     final resolved = _resolvedSections(sections);
     if (run == null || resolved.isEmpty) return;
+    // Same rule as the pointer menu: the sheet's verbs act on this pane.
+    widget.workspace.setActivePane(widget.pane);
     final cursor = widget.controller.cursorIndex;
     final entries = widget.controller.entries;
     unawaited(
@@ -1325,12 +1330,18 @@ class _PaneViewState extends State<PaneView> {
               if (focused) widget.workspace.setActivePane(widget.pane);
             },
             child: Listener(
-              // Clicking anywhere in the pane focuses its listing (and so
-              // activates the pane) — the two-pane muscle-memory basic. A
-              // raw pointer listener, not a gesture: a pane-level tap
-              // recognizer would join the arena against the rows' own
-              // gestures and both would lose.
+              // Clicking anywhere in the pane activates it and focuses its
+              // listing — the two-pane muscle-memory basic. A raw pointer
+              // listener, not a gesture: a pane-level tap recognizer would
+              // join the arena against the rows' own gestures and both
+              // would lose.
               onPointerDown: (event) {
+                // Activated outright, not through onFocusChange: a pane
+                // activated by command can leave focus on this listing,
+                // and a request for focus it already holds changes
+                // nothing. The rows' handlers run first, but the build
+                // they schedule (a context menu's rows) sees this pane.
+                widget.workspace.setActivePane(widget.pane);
                 // The pane's fields keep their own clicks: a pointer
                 // down inside the Quick Select strip, the path field, or
                 // the rename editor must not bounce focus to the listing
