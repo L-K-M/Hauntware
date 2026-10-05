@@ -261,7 +261,7 @@ void main() {
     expect(find.text('motd'), findsOneWidget);
   });
 
-  testWidgets('the server accent colours the strip\'s rule', (tester) async {
+  testWidgets('the server accent rules the strip\'s top edge', (tester) async {
     final config = ServerConfig(
       id: 'server',
       label: 'Server',
@@ -282,7 +282,7 @@ void main() {
     );
     addTearDown(tab.dispose);
 
-    BorderSide ruleOf(WidgetTester tester) {
+    Border bordersOf(WidgetTester tester) {
       final container = tester.widget<Container>(
         find
             .descendant(
@@ -291,7 +291,7 @@ void main() {
             )
             .first,
       );
-      return (container.decoration as BoxDecoration).border!.bottom;
+      return (container.decoration as BoxDecoration).border! as Border;
     }
 
     Future<void> pump(Color? accent) => tester.pumpWidget(
@@ -311,13 +311,21 @@ void main() {
     );
 
     await pump(null);
-    final plain = ruleOf(tester);
-    expect(plain.width, 1, reason: 'an uncoloured server keeps the hairline');
+    final plain = bordersOf(tester);
+    expect(plain.top, BorderSide.none);
+    expect(
+      plain.bottom.width,
+      1,
+      reason: 'an uncoloured server keeps the hairline',
+    );
 
+    // Above the tabs, as Poltergeist marks its active pane; the hairline
+    // still separates the tabs from the terminal.
     await pump(const Color(0xFFE03131));
-    final accented = ruleOf(tester);
-    expect(accented.color, const Color(0xFFE03131));
-    expect(accented.width, greaterThan(plain.width));
+    final accented = bordersOf(tester);
+    expect(accented.top.color, const Color(0xFFE03131));
+    expect(accented.top.width, greaterThan(plain.bottom.width));
+    expect(accented.bottom, plain.bottom);
   });
   testWidgets('tabs take Poltergeist\'s pane-tab shape', (tester) async {
     // Disposed at the end of the body: flutter_test checks for live

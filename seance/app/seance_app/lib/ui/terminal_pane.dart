@@ -283,8 +283,8 @@ class TerminalTabStrip extends StatelessWidget {
   /// automatic naming. Optional so the strip can be built without one.
   final void Function(String sessionId, String? name)? onRename;
 
-  /// The server's accent colour, drawn as the strip's bottom rule. Null keeps
-  /// the ordinary hairline — a server with no colour looks exactly as before.
+  /// The server's accent colour, drawn as a rule along the strip's top edge.
+  /// Null draws none — a server with no colour looks exactly as before.
   final Color? accent;
 
   const TerminalTabStrip({
@@ -303,18 +303,24 @@ class TerminalTabStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final chrome = SeanceChrome.of(context);
+    final accent = this.accent;
     return Container(
       height: 38,
       decoration: BoxDecoration(
         // The header's colour, as Poltergeist's pane tab bars take theirs.
         color: chrome.headerBackground,
         border: Border(
-          bottom: BorderSide(
-            color: accent ?? chrome.separator,
-            // Thickened as well as coloured: on a dim accent against a dark
-            // theme, a hairline is a hairline whatever colour it is.
-            width: accent == null ? 1 : 2,
-          ),
+          // Above the tabs, where Poltergeist marks its active pane. Below
+          // them it sat against the terminal's first row.
+          top: accent == null
+              ? BorderSide.none
+              : BorderSide(
+                  color: accent,
+                  // Thickened as well as coloured: on a dim accent against a
+                  // dark theme, a hairline is a hairline whatever colour it is.
+                  width: 2,
+                ),
+          bottom: BorderSide(color: chrome.separator),
         ),
       ),
       child: Row(
