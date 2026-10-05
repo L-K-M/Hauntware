@@ -24,15 +24,15 @@ final class PlanchetteBinding extends WidgetsFlutterBinding {
   /// harness's, say, which stays in charge rather than being replaced
   /// (a second BindingBase would assert in debug).
   static WidgetsBinding ensureInitialized() {
-    if (_initialized) return WidgetsBinding.instance;
-    try {
-      // checkInstance throws a FlutterError until a binding's
-      // constructor has run.
+    // Asking WidgetsBinding.instance cannot tell: before any binding it
+    // throws a FlutterError only from an assert, and release builds hit a
+    // null check instead. Only debug builds record the running binding's
+    // type, so null in release means none, which holds there: no harness.
+    if (_initialized || BindingBase.debugBindingType() != null) {
       return WidgetsBinding.instance;
-    } on FlutterError {
-      _initialized = true;
-      return PlanchetteBinding._();
     }
+    _initialized = true;
+    return PlanchetteBinding._();
   }
 
   @override

@@ -391,11 +391,49 @@ void main() {
     expect(window.destroyCalls, 1);
   });
 
-  test('an unchanged title is not sent to the window again', () {
+  // The document windows name the main window before main() initializes
+  // it; window_manager's macOS plugin crashes on a title before its
+  // ensureInitialized, and its pre-show options apply the default title.
+  test('a title asked for before the window is ready waits for it', () async {
+    final window = FakeWindowAdapter();
+    final desktop = desktopFor(
+      window: window,
+      setWindowTitle: (title) async => window.events.add('title $title'),
+    );
+    desktop
+      ..setTitle('Planchette')
+      ..setTitle('Untitled — Planchette');
+    await Future<void>.delayed(Duration.zero);
+    expect(window.events, isEmpty);
+
+    await desktop.initialize();
+    expect(window.events, contains('title Untitled — Planchette'));
+    expect(window.events, isNot(contains('title Planchette')));
+    expect(
+      window.events.indexOf('title Untitled — Planchette'),
+      greaterThan(window.events.indexOf('waitUntilReadyToShow')),
+    );
+  });
+
+  test('a window that never got ready is never sent a title', () async {
+    final titles = <String>[];
+    final desktop = desktopFor(
+      window: FakeWindowAdapter()..failReady = true,
+      setWindowTitle: (title) async => titles.add(title),
+    );
+    desktop.setTitle('a — Planchette');
+    await desktop.initialize();
+    desktop.setTitle('b — Planchette');
+    await Future<void>.delayed(Duration.zero);
+    expect(titles, isEmpty);
+  });
+
+  test('an unchanged title is not sent to the window again', () async {
     final titles = <String>[];
     final desktop = desktopFor(
       setWindowTitle: (title) async => titles.add(title),
     );
+    await desktop.initialize();
     desktop
       ..setTitle('a — Planchette')
       ..setTitle('a — Planchette')
@@ -413,6 +451,7 @@ void main() {
         return title == 'a — Planchette' ? older.future : Future.value();
       },
     );
+    await desktop.initialize();
     desktop
       ..setTitle('a — Planchette')
       ..setTitle('b — Planchette');
@@ -435,6 +474,7 @@ void main() {
         }
       },
     );
+    await desktop.initialize();
     desktop.setTitle('a — Planchette');
     await Future<void>.delayed(Duration.zero);
     desktop.setTitle('a — Planchette');
