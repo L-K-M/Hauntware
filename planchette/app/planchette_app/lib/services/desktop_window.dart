@@ -55,6 +55,8 @@ final class DesktopWindow with WindowListener {
       confirmClose: confirmQuit,
       onError: (error, _) => onQuitFailed(error),
     );
+    // Never completes when the window failed to come up: no title then.
+    unawaited(_lifecycle.windowReady.then((_) => _onWindowReady()));
   }
 
   final Future<bool> Function() confirmQuit;
@@ -80,6 +82,7 @@ final class DesktopWindow with WindowListener {
   final Future<void> Function(String title) _setWindowTitle;
   AppLifecycleListener? _appLifecycle;
   bool _quitRequested = false;
+  bool _windowReady = false;
   String? _title;
 
   /// Public rather than inline in [initialize] so the geometry and the
@@ -159,9 +162,25 @@ final class DesktopWindow with WindowListener {
 
   /// Each call is a platform channel message; skip the ones that would not
   /// change what the window shows.
+  ///
+  /// The document windows name the main window before [initialize] runs.
+  /// window_manager has no window until the lifecycle's windowReady (its
+  /// macOS plugin crashes on an earlier title), and the pre-show options
+  /// set the default title then, so only the latest title waits for it.
   void setTitle(String title) {
     if (title == _title) return;
     _title = title;
+    if (!_windowReady) return;
+    _sendTitle(title);
+  }
+
+  void _onWindowReady() {
+    _windowReady = true;
+    final title = _title;
+    if (title != null) _sendTitle(title);
+  }
+
+  void _sendTitle(String title) {
     unawaited(
       _setWindowTitle(title).catchError((Object _) {
         // Forget a title that never arrived so the next request retries it.
