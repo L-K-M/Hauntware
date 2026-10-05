@@ -27,8 +27,11 @@ const _m0ShardNames = [
 ];
 const _m0SourceArtifactPrefix = 'm0-bench-source';
 const _m0CanonicalArtifact = 'm0-bench-results';
-const _m0ShardPath = 'poltergeist/packages/poltergeist_bench/bench-shard.json';
-const _m0EvidencePath = 'poltergeist/packages/poltergeist_bench/evidence';
+
+/// The bench package as the root workflow addresses it.
+const _benchPackage = 'poltergeist/packages/poltergeist_bench';
+const _m0ShardPath = '$_benchPackage/bench-shard.json';
+const _m0EvidencePath = '$_benchPackage/evidence';
 const _m0CommittedEvidencePath = 'docs/evidence/m0';
 const _m0ReportPath = 'docs/M0-DARTSSH2-REPORT.md';
 // Selected by action name, never by tag (as in release_workflow_test.dart):
@@ -253,10 +256,7 @@ void main() {
     final sourceStart = _stepNamed(steps, 'Start M0 source evidence');
     final measurement = _stepNamed(steps, 'Run fixture and measurements');
     expect(steps.indexOf(sourceStart), lessThan(steps.indexOf(measurement)));
-    expect(
-      sourceStart['working-directory'],
-      'poltergeist/packages/poltergeist_bench',
-    );
+    expect(sourceStart['working-directory'], _benchPackage);
     final sourceStartCommand = '${sourceStart['run']}'
         .replaceAll('\\\n', ' ')
         .replaceAll(RegExp(r'\s+'), ' ');
@@ -334,20 +334,14 @@ void main() {
     final downloadOptions = download['with'] as YamlMap;
     expect(download['uses'], 'actions/download-artifact@v8');
     expect(downloadOptions['pattern'], '$_m0SourceArtifactPrefix-*');
-    expect(
-      downloadOptions['path'],
-      'poltergeist/packages/poltergeist_bench/shards',
-    );
+    expect(downloadOptions['path'], '$_benchPackage/shards');
     expect(downloadOptions['merge-multiple'], isFalse);
 
     final aggregation = _stepNamed(steps, 'Aggregate M0 measurements');
     final command = '${aggregation['run']}'
         .replaceAll('\\\n', ' ')
         .replaceAll(RegExp(r'\s+'), ' ');
-    expect(
-      aggregation['working-directory'],
-      'poltergeist/packages/poltergeist_bench',
-    );
+    expect(aggregation['working-directory'], _benchPackage);
     expect(
       command,
       contains(
@@ -386,10 +380,7 @@ void main() {
     final command = '${validation['run']}'.replaceAll(RegExp(r'\s+'), ' ');
 
     expect((checkout['with'] as YamlMap)['fetch-depth'], 0);
-    expect(
-      validation['working-directory'],
-      'poltergeist/packages/poltergeist_bench',
-    );
+    expect(validation['working-directory'], _benchPackage);
     expect(
       command,
       contains(
@@ -401,6 +392,8 @@ void main() {
 
     // Full history is deliberate: the M0 bundle validation here, the
     // preserved-history gate (contracts) and the Séance audit's lineage.
+    // A renamed job must not silently fall out of the exemption.
+    expect(jobs.keys, containsAll(_fullHistoryJobs));
     for (final entry in jobs.entries) {
       if (_fullHistoryJobs.contains(entry.key)) continue;
 
