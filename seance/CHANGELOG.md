@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A server's colour runs along the top of the terminal's tab strip,
+  above the tabs, where Poltergeist marks its active pane. Under the
+  tabs, the terminal's first line could be drawn over it.
+
 ## 1.9.0 (2026-10-04)
 
 - Built-in editor: the shared Planchette editor brings its text tools. A

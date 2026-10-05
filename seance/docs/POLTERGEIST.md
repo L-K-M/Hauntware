@@ -367,8 +367,9 @@ over the rail, and a header across the terminal and the side panel
   the tabs (2026-09-26). Divergences: the strip is 38 px, not 30, like
   Séance's other chrome rows. A chip leads with the session's status
   dot or the editor's file glyph, not a server badge. A coloured server
-  colours the rule. There is no active-pane line, because Séance has
-  one strip.
+  draws its colour above the tabs, where Poltergeist draws its
+  active-pane line; Séance has one strip, so the line marks the server
+  rather than the active pane.
 
 ## The colour vocabulary
 

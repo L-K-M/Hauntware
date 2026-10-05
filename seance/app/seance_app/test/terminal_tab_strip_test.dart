@@ -261,7 +261,7 @@ void main() {
     expect(find.text('motd'), findsOneWidget);
   });
 
-  testWidgets('the server accent colours the strip\'s rule', (tester) async {
+  testWidgets('the server accent rules the strip\'s top edge', (tester) async {
     final config = ServerConfig(
       id: 'server',
       label: 'Server',
@@ -282,17 +282,18 @@ void main() {
     );
     addTearDown(tab.dispose);
 
-    BorderSide ruleOf(WidgetTester tester) {
-      final container = tester.widget<Container>(
-        find
-            .descendant(
-              of: find.byType(TerminalTabStrip),
-              matching: find.byType(Container),
-            )
-            .first,
-      );
-      return (container.decoration as BoxDecoration).border!.bottom;
-    }
+    Container strip() => tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byType(TerminalTabStrip),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    BorderSide hairline() =>
+        (strip().decoration! as BoxDecoration).border!.bottom;
+    BorderSide? accentLine() =>
+        (strip().foregroundDecoration as BoxDecoration?)?.border?.top;
 
     Future<void> pump(Color? accent) => tester.pumpWidget(
       MaterialApp(
@@ -311,13 +312,22 @@ void main() {
     );
 
     await pump(null);
-    final plain = ruleOf(tester);
-    expect(plain.width, 1, reason: 'an uncoloured server keeps the hairline');
+    expect(accentLine(), isNull);
+    expect(
+      hairline().width,
+      1,
+      reason: 'an uncoloured server keeps the hairline',
+    );
+    final plainLabel = tester.getRect(find.text('Session 1'));
 
+    // Over the tabs' top edge, as Poltergeist marks its active pane; the
+    // hairline still separates the tabs from the terminal, and the line
+    // takes no height from the tabs.
     await pump(const Color(0xFFE03131));
-    final accented = ruleOf(tester);
-    expect(accented.color, const Color(0xFFE03131));
-    expect(accented.width, greaterThan(plain.width));
+    expect(accentLine()?.color, const Color(0xFFE03131));
+    expect(accentLine()?.width, 2);
+    expect(hairline().width, 1);
+    expect(tester.getRect(find.text('Session 1')), plainLabel);
   });
   testWidgets('tabs take Poltergeist\'s pane-tab shape', (tester) async {
     // Disposed at the end of the body: flutter_test checks for live
