@@ -123,8 +123,9 @@ Opening a remote file locally is a managed checkout:
 1. Download to a private application-support directory with a sanitized local
    filename.
 2. Record the remote path, size, modification time, type, and mode.
-3. Open UTF-8 text up to 4 MB in Séance's built-in editor, or use the platform
-   default app or a configured desktop editor.
+3. Open UTF-8 text up to 4 MB in Séance's built-in editor, the default, in a
+   tab beside the terminals; or choose the platform default app or a
+   configured desktop editor.
 4. Keep the checkout visible in a **Local edits** section.
 5. Offer **Upload changes**; do not silently overwrite the remote file. In
    the built-in editor, ⌘S/Ctrl+S on a server file is an explicit **save and

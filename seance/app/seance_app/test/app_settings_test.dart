@@ -198,7 +198,7 @@ void main() {
 
     expect(
       restored.editorRegistry.defaultEditorId,
-      EditorRegistry.systemDefaultId,
+      EditorRegistry.builtInId,
     );
     expect(restored.remotePathBookmarks, {
       'server': ['/valid'],
@@ -228,7 +228,7 @@ void main() {
     });
     expect(
       restored.editorRegistry.defaultEditorId,
-      EditorRegistry.systemDefaultId,
+      EditorRegistry.builtInId,
     );
   });
 

@@ -690,8 +690,8 @@ class _SettingsScreenState extends State<SettingsScreen>
           help:
               'Séance downloads a private managed copy, watches it for saves, '
               'and checks the remote SHA-256 before upload. Saving never silently '
-              'overwrites the server. The built-in editor supports UTF-8 text up '
-              'to 4 MB and is available on mobile and desktop.',
+              'overwrites the server. The built-in editor, the default on mobile '
+              'and desktop, supports UTF-8 text up to 4 MB.',
         ),
         DropdownButtonFormField<String>(
           initialValue: _editorRegistry.defaultEditorId,
@@ -1343,7 +1343,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         content: Text(
           _editorRegistry.defaultEditorId == editor.id
               ? 'This is the current default. Removing it resets the default '
-                    'to System default.'
+                    'to the built-in editor.'
               : 'The application is only removed from Séance settings.',
         ),
         actions: [
