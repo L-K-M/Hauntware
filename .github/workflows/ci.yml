@@ -1016,6 +1016,12 @@ jobs:
       - name: Build
         working-directory: planchette/app/planchette_app
         run: flutter build ${{ matrix.target }} --release
+      # The check scripts/build.sh --install runs: an app whose nested code
+      # fails strict verification is refused at launch.
+      - name: Verify macOS code signature
+        if: matrix.target == 'macos'
+        working-directory: planchette/app/planchette_app
+        run: codesign --verify --deep --strict --verbose=2 build/macos/Build/Products/Release/*.app
       - name: Native-platform app regressions
         if: matrix.target != 'linux'
         working-directory: planchette/app/planchette_app
@@ -1115,6 +1121,12 @@ jobs:
       - name: Build
         working-directory: seance/app/seance_app
         run: flutter build ${{ matrix.build }}
+      # The check scripts/build.sh --install runs: an app whose nested code
+      # fails strict verification is refused at launch.
+      - name: Verify macOS code signature
+        if: matrix.target == 'macos'
+        working-directory: seance/app/seance_app
+        run: codesign --verify --deep --strict --verbose=2 build/macos/Build/Products/Release/*.app
       # Exercise the compiled PTY, including child and descriptor cleanup.
       # The vendored plugin must be built first — the flag makes a missing
       # native library a failure, never a skip.
@@ -1232,6 +1244,12 @@ jobs:
       - name: Build
         working-directory: poltergeist/app/poltergeist_app
         run: flutter build ${{ matrix.build }}
+      # The check scripts/build.sh --install runs: an app whose nested code
+      # fails strict verification is refused at launch.
+      - name: Verify macOS code signature
+        if: matrix.target == 'macos'
+        working-directory: poltergeist/app/poltergeist_app
+        run: codesign --verify --deep --strict --verbose=2 build/macos/Build/Products/Release/*.app
       - name: Verify native macOS keyboard compatibility
         if: matrix.target == 'macos'
         working-directory: poltergeist
