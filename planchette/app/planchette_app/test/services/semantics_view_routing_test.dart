@@ -70,7 +70,7 @@ void main() {
   });
 
   // Release builds, where no harness exists, are covered by
-  // scripts/test-macos-launch.sh: asserts are always on here.
+  // scripts/test-desktop-launch.py: asserts are always on here.
   testWidgets('ensureInitialized defers to a running binding', (tester) async {
     expect(PlanchetteBinding.ensureInitialized(), same(tester.binding));
   });

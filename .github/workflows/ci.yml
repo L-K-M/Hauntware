@@ -1004,7 +1004,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          dpkg-dev file binutils imagemagick
+          dpkg-dev file binutils imagemagick xvfb xdotool
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1052,12 +1052,22 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: planchette
         run: scripts/test-macos-accessibility.sh
-      # A release-only startup failure leaves a running app with no window;
-      # unit tests run with asserts on and never see one.
-      - name: Release app launch
+      # A release-only startup failure leaves a running app without its UI;
+      # unit tests run with asserts on and never see one. The title is the
+      # new document's, which only Dart sets.
+      - name: Release app launch (macOS)
         if: matrix.target == 'macos'
-        working-directory: planchette
-        run: scripts/test-macos-launch.sh
+        working-directory: planchette/app/planchette_app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Planchette.app --menu File --title '^Untitled . Planchette$'
+      - name: Release app launch (Linux)
+        if: matrix.target == 'linux'
+        working-directory: planchette/app/planchette_app
+        run: xvfb-run -a python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/linux/x64/release/bundle/planchette --title '^Untitled . Planchette$'
+      - name: Release app launch (Windows)
+        if: matrix.target == 'windows'
+        working-directory: planchette/app/planchette_app
+        shell: bash
+        run: python "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/windows/x64/runner/Release/planchette.exe --title '^Untitled . Planchette$'
 
   seance_client:
     name: Séance client (${{ matrix.target }})
@@ -1151,6 +1161,14 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: seance
         run: scripts/test-macos-keyboard.sh
+      # A release-only startup failure leaves a running app without its UI;
+      # unit tests run with asserts on and never see one. The window shows
+      # once Dart has restored it. The vault's login keychain lives under
+      # the real home, so the launch keeps it.
+      - name: Release app launch
+        if: matrix.target == 'macos'
+        working-directory: seance/app/seance_app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Seance.app --home user
       # Exercise the same packaging the release workflow ships (keep the two
       # in step) and expose the artifacts for inspection on every CI run.
       - name: Package Linux artifacts (.deb + AppImage)
@@ -1260,6 +1278,14 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: poltergeist
         run: bash scripts/test-macos-keyboard.sh
+      # A release-only startup failure leaves a running app without its UI;
+      # unit tests run with asserts on and never see one. The window shows
+      # after Dart mounts the app, and File is a Dart menu. The login
+      # keychain lives under the real home, so the launch keeps it.
+      - name: Release app launch
+        if: matrix.target == 'macos'
+        working-directory: poltergeist/app/poltergeist_app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Poltergeist.app --menu File --home user
       # Prove Gradle consumed the synchronized pubspec code in the real APK.
       - name: Verify Android version code
         if: matrix.target == 'android'
