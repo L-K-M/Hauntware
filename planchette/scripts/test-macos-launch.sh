@@ -36,6 +36,58 @@ xcrun swiftc \
   "$repo_root/app/planchette_app/macos/RunnerTests/LaunchProbe.swift" \
   -o "$test_dir/launch-probe"
 
+# ReportCrash writes to the user's real home (this script's), whatever HOME
+# the app ran with.
+crash_reports="$HOME/Library/Logs/DiagnosticReports"
+crash_report_wait=20
+touch "$test_dir/launched"
+
+# The crash report of a launch that died: exception, crash
+# info and the faulting thread, so CI shows the cause and not only "exited".
+print_crash_report() {
+  local report=
+  for _ in $(seq "$crash_report_wait"); do
+    report="$(find "$crash_reports" -maxdepth 1 -name 'Planchette*.ips' \
+      -newer "$test_dir/launched" 2>/dev/null | head -n 1 || true)"
+    [[ -n "$report" ]] && break
+    sleep 1
+  done
+  if [[ -z "$report" ]]; then
+    echo "No crash report appeared in $crash_reports." >&2
+    return
+  fi
+  echo "--- Crash report $report" >&2
+  python3 - "$report" >&2 <<'PY'
+import json
+import sys
+
+with open(sys.argv[1]) as file:
+    report = json.loads(file.read().split("\n", 1)[1])
+images = report.get("usedImages", [])
+
+
+def show(frames):
+    for frame in frames[:30]:
+        image = images[frame["imageIndex"]].get("name", "?") if "imageIndex" in frame else "?"
+        symbol = frame.get("symbol", hex(frame.get("imageOffset", 0)))
+        source = frame.get("sourceFile")
+        where = f" ({source}:{frame.get('sourceLine')})" if source else ""
+        print(f"  {image} {symbol}{where}")
+
+
+print("exception:", json.dumps(report.get("exception")))
+print("termination:", json.dumps(report.get("termination")))
+for key, value in (report.get("asi") or {}).items():
+    print("crash info:", key, json.dumps(value))
+if "lastExceptionBacktrace" in report:
+    print("last exception backtrace:")
+    show(report["lastExceptionBacktrace"])
+faulting = report.get("faultingThread", 0)
+print(f"faulting thread {faulting}:")
+show(report["threads"][faulting]["frames"])
+PY
+}
+
 # A throwaway HOME keeps this machine's settings and remembered window frame
 # out of the test, and the test's out of them.
 mkdir "$test_dir/home"
@@ -52,5 +104,8 @@ fi
 if [[ "$status" -ne 0 ]]; then
   echo "--- Planchette output" >&2
   cat "$test_dir/output.txt" >&2
+  if ! kill -0 "$pid" 2>/dev/null; then
+    print_crash_report
+  fi
 fi
 exit "$status"
