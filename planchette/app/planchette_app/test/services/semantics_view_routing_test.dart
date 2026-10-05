@@ -68,4 +68,10 @@ void main() {
   test('an action already addressed to an extra window is left alone', () {
     expect(route(3, mainButton.id), 3);
   });
+
+  // Release builds, where no harness exists, are covered by
+  // scripts/test-macos-launch.sh: asserts are always on here.
+  testWidgets('ensureInitialized defers to a running binding', (tester) async {
+    expect(PlanchetteBinding.ensureInitialized(), same(tester.binding));
+  });
 }
