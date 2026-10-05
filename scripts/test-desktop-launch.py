@@ -19,6 +19,12 @@ report. A check this process may not read (window titles need Screen
 Recording, menus Accessibility) is reported as skipped, never as passed.
 
   scripts/test-desktop-launch.py APP [--title REGEX] [--menu TITLE]
+                                 [--home {throwaway,user}]
+
+--home user keeps this machine's home: on macOS the login keychain lives
+under it, and an app that stores secrets there blocks behind a "Keychain
+Not Found" dialog in a throwaway one. Use it on disposable machines such
+as CI runners; it lets the app read and write the user's real settings.
 
 APP is the .app bundle on macOS, the bundle's binary on Linux (needs an
 X display, e.g. under xvfb-run, and xdotool) and the .exe on Windows.
@@ -345,6 +351,12 @@ def main() -> int:
     parser.add_argument("app", type=Path)
     parser.add_argument("--title", type=re.compile, help="window title regex")
     parser.add_argument("--menu", help="menu bar title Dart installs (macOS)")
+    parser.add_argument(
+        "--home",
+        choices=("throwaway", "user"),
+        default="throwaway",
+        help="the home the app sees (default: throwaway)",
+    )
     args = parser.parse_args()
     if args.menu is not None and sys.platform != "darwin":
         parser.error("--menu is macOS only")
@@ -372,7 +384,11 @@ def main() -> int:
                 [str(binary)],
                 stdout=sink,
                 stderr=subprocess.STDOUT,
-                env=throwaway_env(work / "home"),
+                env=(
+                    throwaway_env(work / "home")
+                    if args.home == "throwaway"
+                    else dict(os.environ)
+                ),
             )
         try:
             outcome = watch(

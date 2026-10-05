@@ -825,6 +825,14 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: seance
         run: scripts/test-macos-keyboard.sh
+      # A release-only startup failure leaves a running app without its UI;
+      # unit tests run with asserts on and never see one. The window shows
+      # once Dart has restored it. The vault's login keychain lives under
+      # the real home, so the launch keeps it.
+      - name: Release app launch
+        if: matrix.target == 'macos'
+        working-directory: seance/app/seance_app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Seance.app --home user
       # Prove Gradle consumed the synchronized pubspec code in the real APK.
       - name: Verify Android version code
         if: matrix.target == 'android'
@@ -1044,6 +1052,14 @@ jobs:
         if: matrix.target == 'macos'
         working-directory: poltergeist
         run: bash scripts/test-macos-keyboard.sh
+      # A release-only startup failure leaves a running app without its UI;
+      # unit tests run with asserts on and never see one. The window shows
+      # after Dart mounts the app, and File is a Dart menu. The login
+      # keychain lives under the real home, so the launch keeps it.
+      - name: Release app launch
+        if: matrix.target == 'macos'
+        working-directory: poltergeist/app/poltergeist_app
+        run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Poltergeist.app --menu File --home user
       # Prove Gradle consumed the synchronized pubspec code in the real APK.
       - name: Verify Android version code
         if: matrix.target == 'android'
