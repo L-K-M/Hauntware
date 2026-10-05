@@ -174,6 +174,7 @@ void main() {
     final host = _fakeHost(sandbox, 'Darwin');
     final bin = p.join(sandbox.path, 'fake-bin');
     final flutterLog = File(p.join(sandbox.path, 'flutter.log'));
+    Directory(bin).createSync(recursive: true);
     File(p.join(bin, 'flutter')).writeAsStringSync('''#!/usr/bin/env bash
 printf '%s\\n' "\$*" >> "${flutterLog.path}"
 ''');
@@ -190,7 +191,11 @@ printf '%s\\n' "\$*" >> "${flutterLog.path}"
       },
     );
 
-    expect(result.exitCode, isNot(0), reason: result.stdout as String);
+    expect(
+      result.exitCode,
+      isNot(0),
+      reason: '${result.stdout}${result.stderr}',
+    );
     expect(result.stderr, contains('CocoaPods'));
     expect(flutterLog.existsSync(), isFalse);
   });
