@@ -200,6 +200,63 @@ printf '%s\\n' "\$*" >> "${flutterLog.path}"
     expect(flutterLog.existsSync(), isFalse);
   });
 
+  // An incremental Xcode build does not re-seal an existing bundle after
+  // Flutter's embed phase rewrites its frameworks, so each product script
+  // must hand Flutter a build tree without the previous app.
+  group('a macOS build starts without the previous app bundle', () {
+    for (final (product, appDir, bundle) in const [
+      ('planchette', 'planchette_app', 'Planchette.app'),
+      ('seance', 'seance_app', 'Seance.app'),
+      ('poltergeist', 'poltergeist_app', 'Poltergeist.app'),
+    ]) {
+      test(product, () async {
+        final root = Directory(p.join(sandbox.path, '$product-real'));
+        final app = p.join(root.path, 'app', appDir);
+        Directory(p.join(app, 'macos')).createSync(recursive: true);
+        final products = p.join(app, 'build', 'macos', 'Build', 'Products');
+        Directory(
+          p.join(products, 'Release', bundle, 'Contents'),
+        ).createSync(recursive: true);
+        final script = File(p.join(root.path, 'scripts', 'build.sh'))
+          ..parent.createSync();
+        File(
+          p.join(_repositoryRoot().path, product, 'scripts', 'build.sh'),
+        ).copySync(script.path);
+
+        final host = _fakeHost(sandbox, 'Darwin');
+        final bin = p.join(sandbox.path, 'fake-bin');
+        final buildLog = File(p.join(sandbox.path, 'flutter-build.log'));
+        // At `flutter build`, record which bundles the build tree still has.
+        File(p.join(bin, 'flutter')).writeAsStringSync('''#!/usr/bin/env bash
+if [[ "\$1" == build ]]; then
+  ls "${p.join(products, 'Release')}" > "${buildLog.path}"
+fi
+''');
+        File(p.join(bin, 'pod')).writeAsStringSync('#!/usr/bin/env bash\n');
+        Process.runSync('chmod', [
+          '+x',
+          p.join(bin, 'flutter'),
+          p.join(bin, 'pod'),
+        ]);
+
+        final result = await Process.run(
+          'bash',
+          [script.path, 'app'],
+          environment: {...Platform.environment, ...host.environment},
+        );
+
+        expect(
+          buildLog.existsSync(),
+          isTrue,
+          reason: '${result.stdout}${result.stderr}',
+        );
+        expect(buildLog.readAsStringSync(), isNot(contains(bundle)));
+        // Only the bundle goes; the rest of the build tree is the cache.
+        expect(Directory(p.join(products, 'Release')).existsSync(), isTrue);
+      });
+    }
+  });
+
   test('runs from an arbitrary working directory', () async {
     final elsewhere = Directory(p.join(sandbox.path, 'elsewhere'))
       ..createSync();

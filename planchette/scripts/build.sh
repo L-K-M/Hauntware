@@ -29,6 +29,15 @@ esac
 command -v flutter >/dev/null || { echo 'Flutter is required.' >&2; exit 1; }
 app="$root/app/planchette_app"
 [[ -d "$app/$target" ]] || { echo "Missing committed $target scaffold." >&2; exit 1; }
+configuration=Release
+[[ "$mode" == debug ]] && configuration=Debug
+# Xcode re-signs an existing .app only when one of its own inputs changed,
+# but Flutter's embed phase rewrites App.framework afterwards, so an
+# incremental build can keep a stale seal and the old bundle date. Start
+# from a fresh bundle; compiled code stays cached.
+if [[ "$target" == macos ]]; then
+  rm -rf "$app/build/macos/Build/Products/$configuration/Planchette.app"
+fi
 (
   cd "$app"
   flutter pub get
@@ -37,8 +46,6 @@ app="$root/app/planchette_app"
 mkdir -p "$root/dist"
 case "$target" in
   macos)
-    configuration=Release
-    [[ "$mode" == debug ]] && configuration=Debug
     source="$app/build/macos/Build/Products/$configuration/Planchette.app"
     destination="$root/dist/Planchette.app"
     rm -rf "$destination"
