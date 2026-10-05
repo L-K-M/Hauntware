@@ -309,20 +309,24 @@ class TerminalTabStrip extends StatelessWidget {
       decoration: BoxDecoration(
         // The header's colour, as Poltergeist's pane tab bars take theirs.
         color: chrome.headerBackground,
-        border: Border(
-          // Above the tabs, where Poltergeist marks its active pane. Below
-          // them it sat against the terminal's first row.
-          top: accent == null
-              ? BorderSide.none
-              : BorderSide(
+        border: Border(bottom: BorderSide(color: chrome.separator)),
+      ),
+      // Over the tabs' top edge, where Poltergeist paints its active-pane
+      // line. In front rather than a border, so it takes no height: the tabs
+      // sit the same with or without a colour. Below the tabs it sat against
+      // the terminal's first row.
+      foregroundDecoration: accent == null
+          ? null
+          : BoxDecoration(
+              border: Border(
+                top: BorderSide(
                   color: accent,
                   // Thickened as well as coloured: on a dim accent against a
                   // dark theme, a hairline is a hairline whatever colour it is.
                   width: 2,
                 ),
-          bottom: BorderSide(color: chrome.separator),
-        ),
-      ),
+              ),
+            ),
       child: Row(
         children: [
           Expanded(

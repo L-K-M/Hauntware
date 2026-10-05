@@ -282,17 +282,18 @@ void main() {
     );
     addTearDown(tab.dispose);
 
-    Border bordersOf(WidgetTester tester) {
-      final container = tester.widget<Container>(
-        find
-            .descendant(
-              of: find.byType(TerminalTabStrip),
-              matching: find.byType(Container),
-            )
-            .first,
-      );
-      return (container.decoration as BoxDecoration).border! as Border;
-    }
+    Container strip() => tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byType(TerminalTabStrip),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    BorderSide hairline() =>
+        (strip().decoration! as BoxDecoration).border!.bottom;
+    BorderSide? accentLine() =>
+        (strip().foregroundDecoration as BoxDecoration?)?.border?.top;
 
     Future<void> pump(Color? accent) => tester.pumpWidget(
       MaterialApp(
@@ -311,21 +312,22 @@ void main() {
     );
 
     await pump(null);
-    final plain = bordersOf(tester);
-    expect(plain.top, BorderSide.none);
+    expect(accentLine(), isNull);
     expect(
-      plain.bottom.width,
+      hairline().width,
       1,
       reason: 'an uncoloured server keeps the hairline',
     );
+    final plainLabel = tester.getRect(find.text('Session 1'));
 
-    // Above the tabs, as Poltergeist marks its active pane; the hairline
-    // still separates the tabs from the terminal.
+    // Over the tabs' top edge, as Poltergeist marks its active pane; the
+    // hairline still separates the tabs from the terminal, and the line
+    // takes no height from the tabs.
     await pump(const Color(0xFFE03131));
-    final accented = bordersOf(tester);
-    expect(accented.top.color, const Color(0xFFE03131));
-    expect(accented.top.width, greaterThan(plain.bottom.width));
-    expect(accented.bottom, plain.bottom);
+    expect(accentLine()?.color, const Color(0xFFE03131));
+    expect(accentLine()?.width, 2);
+    expect(hairline().width, 1);
+    expect(tester.getRect(find.text('Session 1')), plainLabel);
   });
   testWidgets('tabs take Poltergeist\'s pane-tab shape', (tester) async {
     // Disposed at the end of the body: flutter_test checks for live
