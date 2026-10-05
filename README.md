@@ -29,6 +29,7 @@ scripts/test.sh dart       # Pure-Dart packages, guards and tooling
 scripts/test.sh flutter    # Shared Flutter packages and applications
 scripts/build.sh --check   # Inspect available products/toolchains
 scripts/build.sh seance    # Build the selected product
+scripts/build.sh --install # Build all three apps and install them (macOS: /Applications)
 python3 scripts/check-history.py
 ```
 

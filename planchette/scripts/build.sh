@@ -44,7 +44,16 @@ case "$target" in
     rm -rf "$destination"
     ditto "$source" "$destination"
     if $install; then
+      # Replace, never merge: ditto over an existing bundle keeps stale
+      # files, and LaunchServices keeps the old registration for the path
+      # (the app then fails to open with -10810). Same as Séance and
+      # Poltergeist.
+      rm -rf /Applications/Planchette.app
       ditto "$destination" /Applications/Planchette.app
+      lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+      if [[ -x "$lsregister" ]]; then
+        "$lsregister" -f /Applications/Planchette.app >/dev/null 2>&1 || true
+      fi
       echo 'Installed /Applications/Planchette.app'
     fi ;;
   linux)

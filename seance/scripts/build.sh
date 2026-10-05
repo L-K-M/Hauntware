@@ -413,7 +413,11 @@ for line in "${RESULTS[@]}"; do echo "  $line"; done
 # Reveal the result: the installed copy when --install ran, else the dist/
 # folder with everything this run produced (macOS only — elsewhere the paths
 # in the summary are the deliverable).
-if [[ -n "$INSTALLED" ]]; then
+# Under the root scripts/build.sh the root reveals the whole run instead.
+if [[ -n "${HAUNTWARE_BUILD_ORCHESTRATED:-}" ]]; then
+  [[ -n "$INSTALLED" ]] && echo "  installed: $INSTALLED"
+  [[ "$STAGED" -gt 0 ]] && echo "  artifacts: $DIST"
+elif [[ -n "$INSTALLED" ]]; then
   echo "  installed: $INSTALLED"
   if [[ "$(uname -s)" == "Darwin" ]]; then
     open -R "$INSTALLED"          # Finder, with the app selected

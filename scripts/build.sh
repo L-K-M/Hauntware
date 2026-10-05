@@ -7,6 +7,9 @@
 #   scripts/build.sh seance           # only the named products (an
 #                                     # explicit selection is mandatory)
 #   scripts/build.sh --debug          # forward the debug build profile
+#   scripts/build.sh --install        # build each product's app for this host
+#                                     # and install it (macOS: /Applications,
+#                                     # which then opens in the Finder)
 #   scripts/build.sh --check          # print the resolved config; build nothing
 #
 # Each product keeps its own build (planchette/scripts/build.sh and
@@ -18,7 +21,9 @@
 # product's own decision (see each <product>/scripts/build.sh).
 #
 # Environment: HAUNTWARE_BUILD_ROOT overrides the repository root (used by
-# the contract tests).
+# the contract tests). Product builds run with HAUNTWARE_BUILD_ORCHESTRATED=1,
+# so they leave revealing the result to this script: one Finder window for
+# the whole run.
 set -uo pipefail
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,12 +32,14 @@ PRODUCTS="planchette seance poltergeist"
 DIST="$ROOT/dist"
 MODE=release
 CHECK=false
+INSTALL=false
 SELECTED=""
 
 for argument in "$@"; do
   case "$argument" in
     --debug) MODE=debug ;;
     --check) CHECK=true ;;
+    --install) INSTALL=true ;;
     --help|-h)
       sed -n '2,/^set -uo/p' "$SELF_DIR/build.sh" | sed 's/^# \?//;/^set -uo/d'
       exit 0 ;;
@@ -51,6 +58,7 @@ script_for() {
 if $CHECK; then
   echo "Host:  $(uname -s) $(uname -m)"
   echo "Mode:  $MODE"
+  echo "Install: $($INSTALL && echo yes || echo no)"
   echo "Root:  $ROOT"
   echo "Dist:  $DIST"
   echo
@@ -96,7 +104,9 @@ for product in $WANTED; do
   echo "== Building $product ($MODE) =="
   child_args=()
   [[ "$MODE" == debug ]] && child_args+=(--debug)
-  if (cd "$ROOT/$product" && scripts/build.sh ${child_args[@]+"${child_args[@]}"}); then
+  $INSTALL && child_args+=(--install)
+  if (cd "$ROOT/$product" &&
+      HAUNTWARE_BUILD_ORCHESTRATED=1 scripts/build.sh ${child_args[@]+"${child_args[@]}"}); then
     RESULTS+=("$product  built")
     BUILT=$((BUILT + 1))
     if [[ -d "$ROOT/$product/dist" ]]; then
@@ -117,7 +127,7 @@ done
 echo "Artifacts: $DIST"
 
 if [[ $BUILT -gt 0 && "$(uname -s)" == Darwin ]]; then
-  open "$DIST"
+  if $INSTALL; then open /Applications; else open "$DIST"; fi
 fi
 
 [[ $FAILED -eq 0 ]] || exit 1

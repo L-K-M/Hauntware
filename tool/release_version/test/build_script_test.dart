@@ -101,6 +101,64 @@ void main() {
     );
   });
 
+  group('--install', () {
+    test('forwards --install to each product and opens /Applications on '
+        'macOS', () async {
+      final host = _fakeHost(sandbox, 'Darwin');
+      final result = await _runBuild(sandbox, [
+        '--install',
+        '--debug',
+      ], environment: host.environment);
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      for (final product in ['planchette', 'seance']) {
+        final args = File(
+          p.join(sandbox.path, product, 'mode.marker'),
+        ).readAsStringSync();
+        expect(args, contains('--install'), reason: product);
+        expect(args, contains('--debug'), reason: product);
+      }
+      // One Finder window: /Applications, not dist/.
+      expect(host.opened(), ['/Applications']);
+    });
+
+    test('opens nothing on other hosts', () async {
+      final host = _fakeHost(sandbox, 'Linux');
+      final result = await _runBuild(sandbox, [
+        '--install',
+      ], environment: host.environment);
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(host.opened(), isEmpty);
+    });
+
+    test('--check reports the install mode', () async {
+      final result = await _runBuild(sandbox, ['--check', '--install']);
+
+      expect(result.exitCode, 0, reason: result.stderr as String);
+      expect(result.stdout, contains('Install: yes'));
+    });
+  });
+
+  test('a default macOS run opens dist/ once, not per product', () async {
+    final host = _fakeHost(sandbox, 'Darwin');
+    final result = await _runBuild(
+      sandbox,
+      const [],
+      environment: host.environment,
+    );
+
+    expect(result.exitCode, 0, reason: result.stderr as String);
+    expect(host.opened(), [p.join(sandbox.path, 'dist')]);
+    // Products learn they are orchestrated, so they reveal nothing.
+    expect(
+      File(
+        p.join(sandbox.path, 'seance', 'orchestrated.marker'),
+      ).readAsStringSync(),
+      '1',
+    );
+  });
+
   test('runs from an arbitrary working directory', () async {
     final elsewhere = Directory(p.join(sandbox.path, 'elsewhere'))
       ..createSync();
@@ -136,6 +194,34 @@ Future<ProcessResult> _runBuild(
   );
 }
 
+/// A fake host on PATH: `uname -s` reports [system], and `open` records
+/// its arguments instead of opening Finder.
+({Map<String, String> environment, List<String> Function() opened}) _fakeHost(
+  Directory root,
+  String system,
+) {
+  final bin = Directory(p.join(root.path, 'fake-bin'))..createSync();
+  final log = File(p.join(root.path, 'open.log'));
+  void writeTool(String name, String body) {
+    final tool = File(p.join(bin.path, name))..writeAsStringSync(body);
+    Process.runSync('chmod', ['+x', tool.path]);
+  }
+
+  writeTool('uname', '''#!/usr/bin/env bash
+if [[ "\${1:-}" == -s ]]; then echo $system; else echo fake; fi
+''');
+  writeTool('open', '''#!/usr/bin/env bash
+printf '%s\\n' "\$*" >> "${log.path}"
+''');
+
+  return (
+    environment: {'PATH': '${bin.path}:${Platform.environment['PATH']}'},
+    opened: () => log.existsSync()
+        ? log.readAsLinesSync().where((line) => line.isNotEmpty).toList()
+        : <String>[],
+  );
+}
+
 /// Fake product scripts: planchette and seance build (each emits a dist
 /// marker and records its args in mode.marker), seance fails on demand via
 /// FAKE_BUILD_FAIL, and poltergeist has no script at all.
@@ -157,6 +243,7 @@ touch "\$dist/planchette-artifact"
   writeScript('seance', '''#!/usr/bin/env bash
 set -euo pipefail
 [[ "\${FAKE_BUILD_FAIL:-}" == seance ]] && exit 1
+printf '%s' "\${HAUNTWARE_BUILD_ORCHESTRATED:-}" > "\$(dirname "\${BASH_SOURCE[0]}")/../orchestrated.marker"
 dist="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)/dist"
 printf '%s' "\$*" > "\$(dirname "\${BASH_SOURCE[0]}")/../mode.marker"
 mkdir -p "\$dist"
