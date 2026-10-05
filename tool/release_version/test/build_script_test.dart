@@ -251,6 +251,8 @@ fi
           reason: '${result.stdout}${result.stderr}',
         );
         expect(buildLog.readAsStringSync(), isNot(contains(bundle)));
+        // Only the bundle goes; the rest of the build tree is the cache.
+        expect(Directory(p.join(products, 'Release')).existsSync(), isTrue);
       });
     }
   });
