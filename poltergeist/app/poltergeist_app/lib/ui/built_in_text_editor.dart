@@ -221,8 +221,9 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     final uploadOnSave = widget.onUpload != null;
     // Command alone on Apple platforms, as the shared editor binds it:
     // there Control+F and Control+N are Cocoa text bindings (forward a
-    // character, down a line) the document keeps. Elsewhere both stay.
-    // Save keeps both everywhere; Control+S is no text binding.
+    // character, down a line) the document keeps, and Close and Find
+    // Next/Previous follow the same Command convention. Elsewhere both
+    // stay. Save keeps both everywhere; Control+S is no text binding.
     final apple = switch (Theme.of(context).platform) {
       TargetPlatform.iOS || TargetPlatform.macOS => true,
       _ => false,

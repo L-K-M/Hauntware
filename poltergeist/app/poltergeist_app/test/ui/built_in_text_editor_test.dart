@@ -220,6 +220,7 @@ void main() {
     'macOS keeps Control+F and Control+N for moving the caret',
     (tester) async {
       var newWindows = 0;
+      var closeRequests = 0;
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -227,7 +228,7 @@ void main() {
           home: BuiltInTextEditorScreen(
             file: file,
             initialText: 'ab\ncd\n',
-            onCloseRequested: () async {},
+            onCloseRequested: () async => closeRequests++,
             onNewWindowRequested: () async => newWindows++,
             showToast: (_, _) {},
             monoFontFallback: const ['monospace'],
@@ -259,6 +260,10 @@ void main() {
       expect(text.selection.baseOffset, 4);
       expect(newWindows, 0);
 
+      // Close is Command+W there; Control+W does nothing.
+      await control(LogicalKeyboardKey.keyW);
+      expect(closeRequests, 0);
+
       // Command keeps Find and New Window.
       await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
@@ -267,6 +272,43 @@ void main() {
       expect(find.byTooltip('Close search'), findsOneWidget);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+
+  testWidgets(
+    'Linux keeps the Control chords for Find and Close',
+    (tester) async {
+      var closeRequests = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: BuiltInTextEditorScreen(
+            file: file,
+            initialText: 'ab\n',
+            onCloseRequested: () async => closeRequests++,
+            showToast: (_, _) {},
+            monoFontFallback: const ['monospace'],
+            basenameOf: remoteBasename,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+
+      Future<void> control(LogicalKeyboardKey key) async {
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(key);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+      }
+
+      await control(LogicalKeyboardKey.keyF);
+      expect(find.byTooltip('Close search'), findsOneWidget);
+      await control(LogicalKeyboardKey.keyW);
+      expect(closeRequests, 1);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
 
   testWidgets('Ctrl-S falls back to reconciling when the upload fails', (
