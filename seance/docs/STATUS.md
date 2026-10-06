@@ -3,6 +3,29 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Remote programs never reach the system app (2026-10-06)
+
+Finding P1-03 (`docs/reviews/deep-review-2026-09-26.md`): opening a
+remote checkout with the system's default app could run it, e.g. a `.js`
+through Windows Script Host. `ExternalFileOpener.openSystemDefault` now
+refuses a name the host would run, with Poltergeist's message and no
+"run anyway". The Files pane refuses by the listed name before
+downloading when System default was chosen, and after the download when
+the built-in editor refuses a file and would hand it to the system app.
+Open with a configured editor still opens the file as a document.
+
+The classifier (`isExecutableLaunchName`, `LaunchHost`,
+`windowsExecutableExtensions`) moved from `poltergeist_core` to
+`seance_core`, which both apps consume; `poltergeist_core` re-exports
+it, so Poltergeist's behaviour is unchanged. Not done: Mark-of-the-Web
+or quarantine stamping on checkouts, and owner-only checkout modes on
+macOS (P1-03a).
+
+Validated on Linux: the moved classifier tests, opener tests that a
+host's program never reaches the OS and a document does, and desktop
+Files tests for a refused binary `.jar` and a System default `.desktop`
+(no download). macOS and Windows hosts were not exercised.
+
 ## Local shell output after exit (2026-10-06)
 
 The vendored `flutter_pty` closed its output port as soon as the exit

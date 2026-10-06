@@ -5,6 +5,10 @@
 - Local shell: the last lines a shell prints as it exits, such as the
   error from a command that failed to start, are no longer sometimes
   lost.
+- Files: a remote file that the system would run as a program, such as
+  `.exe` or `.js` on Windows, `.command` on macOS or `.desktop` on Linux,
+  is no longer handed to the system's default app; Séance says so
+  instead. Open with and an editor of your choice still opens it.
 - A server's colour runs along the top of the terminal's tab strip,
   above the tabs, where Poltergeist marks its active pane. Under the
   tabs, the terminal's first line could be drawn over it.

@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/services/editor_document.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 
+import 'support/system_open_recorder.dart';
+
 void main() {
   test('normalizes extension filters and matches compound extensions', () {
     final extensions = normalizeEditorExtensions([
@@ -225,5 +227,41 @@ void main() {
         throwsFormatException,
       );
     }
+  });
+
+  group('the system default app never runs a remote program', () {
+    // What runs is decided by the host: each one gets its own launcher.
+    final program = switch (currentEditorHostPlatform!) {
+      EditorHostPlatform.linux => 'app.desktop',
+      EditorHostPlatform.macos => 'run.command',
+      EditorHostPlatform.windows => 'payload.exe',
+    };
+
+    test('a program this host would run never reaches the OS', () async {
+      final opened = recordSystemOpens();
+
+      await expectLater(
+        const ExternalFileOpener().openSystemDefault('/srv/checkout/$program'),
+        throwsA(isA<ExecutableLaunchRefused>()),
+      );
+      expect(opened, isEmpty);
+      expect(const ExternalFileOpener().launchWouldExecute(program), isTrue);
+    });
+
+    test('a document still opens', () async {
+      final opened = recordSystemOpens();
+
+      await const ExternalFileOpener().openSystemDefault('/srv/report.pdf');
+
+      expect(opened, ['/srv/report.pdf']);
+    });
+
+    test('the refusal names the file in a plain sentence', () {
+      expect(
+        '${const ExecutableLaunchRefused('/srv/checkout/app.desktop')}',
+        '“app.desktop” could run as a program on this computer, so it '
+            "wasn't opened with the system default app.",
+      );
+    });
   });
 }

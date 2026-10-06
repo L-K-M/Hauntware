@@ -8,15 +8,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart';
-import 'package:open_file_platform_interface/open_file_platform_interface.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
 import 'package:seance_app/services/editor_document.dart';
+import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/ui/files_pane.dart';
 import 'package:seance_core/seance_core.dart';
+
+import 'support/system_open_recorder.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 const _home = '/home/test';
@@ -109,23 +111,17 @@ void main() {
 
   /// Pumps until [done]: a checkout writes real files, so its I/O lands
   /// between frames while the fake clock runs for the timers it waits on.
+  /// Bounded by wall time, not frames: a loaded machine took over 4 s to
+  /// check out a 4 MB file.
   Future<void> settleCheckout(WidgetTester tester, bool Function() done) async {
-    for (var i = 0; i < 200 && !done(); i++) {
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (!done() && DateTime.now().isBefore(deadline)) {
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 20)),
       );
       await tester.pump(const Duration(milliseconds: 20));
     }
-  }
-
-  /// Records what the system's default app is asked to open, instead of
-  /// launching it.
-  List<String> recordSystemOpens() {
-    final previous = OpenFilePlatform.platform;
-    final recorder = _RecordingOpenFile();
-    OpenFilePlatform.platform = recorder;
-    addTearDown(() => OpenFilePlatform.platform = previous);
-    return recorder.opened;
+    expect(done(), isTrue, reason: 'the checkout did not settle in 30 s');
   }
 
   /// Two presses with no frame between them: the pane times the
@@ -286,6 +282,120 @@ void main() {
       expect(find.textContaining('4 MB'), findsNothing);
 
       await tester.runAsync(() => files.removeLocalCopy('$_home/big.log'));
+    },
+  );
+
+  platformTest(
+    'a double-click never hands a program to the system\'s default app',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(
+          extra: [
+            const RemoteFileEntry(
+              path: '$_home/tool.jar',
+              name: 'tool.jar',
+              type: RemoteFileType.file,
+              size: 64,
+            ),
+          ],
+        ),
+      );
+
+      // Binary, so the built-in editor refuses it; Linux runs a jar.
+      await doubleClick(tester, 'tool.jar');
+      await settleCheckout(
+        tester,
+        () =>
+            find.textContaining('could run as a program').evaluate().isNotEmpty,
+      );
+
+      expect(
+        find.textContaining('“tool.jar” could run as a program'),
+        findsOneWidget,
+      );
+      expect(opened, isEmpty);
+      expect(state!.tabs, hasLength(1));
+
+      await tester.runAsync(() => files.removeLocalCopy('$_home/tool.jar'));
+    },
+  );
+
+  platformTest(
+    'System default refuses a program before downloading it',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(
+          extra: [
+            RemoteFileEntry(
+              path: '$_home/$_hostProgram',
+              name: _hostProgram,
+              type: RemoteFileType.file,
+              size: 64,
+            ),
+          ],
+        ),
+      );
+      services!.settings.editorRegistry.defaultEditorId =
+          EditorRegistry.systemDefaultId;
+
+      await doubleClick(tester, _hostProgram);
+      await settleCheckout(
+        tester,
+        () =>
+            find.textContaining('could run as a program').evaluate().isNotEmpty,
+      );
+
+      expect(
+        find.textContaining('“$_hostProgram” could run as a program'),
+        findsOneWidget,
+      );
+      expect(opened, isEmpty);
+      expect(files.localCopies, isEmpty);
+    },
+  );
+
+  platformTest(
+    'Open with System default refuses a program before downloading it',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(
+          extra: [
+            RemoteFileEntry(
+              path: '$_home/$_hostProgram',
+              name: _hostProgram,
+              type: RemoteFileType.file,
+              size: 64,
+            ),
+          ],
+        ),
+      );
+
+      await tester.tap(find.text(_hostProgram), buttons: kSecondaryMouseButton);
+      await tester.pump();
+      // Past the menu's entrance: a tap during it dismisses the menu.
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('Open with System default'));
+      await settleCheckout(
+        tester,
+        () =>
+            find.textContaining('could run as a program').evaluate().isNotEmpty,
+      );
+
+      expect(
+        find.textContaining('“$_hostProgram” could run as a program'),
+        findsOneWidget,
+      );
+      expect(opened, isEmpty);
+      expect(files.localCopies, isEmpty);
     },
   );
 
@@ -505,9 +615,21 @@ class _OpenSshSession implements SshSession {
   Object? noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// A text file this test host's default app would run as a program. The
+/// launch rules follow the real host OS, not the target platform a test
+/// pins, so the name must too.
+final _hostProgram = switch (currentEditorHostPlatform!) {
+  EditorHostPlatform.linux => 'app.desktop',
+  EditorHostPlatform.macos => 'run.command',
+  EditorHostPlatform.windows => 'run.cmd',
+};
+
+/// Names whose download is NUL bytes rather than text.
+final _binaryNames = RegExp(r'\.(bin|jar)$');
+
 /// `/home/test` holding a directory and three files, plus [extra];
-/// `docs` lists empty. A `.bin` file downloads as NUL bytes, anything else
-/// as text.
+/// `docs` lists empty. A `.bin` or `.jar` file downloads as NUL bytes,
+/// anything else as text.
 class _ListFileSystem implements RemoteFileSystem {
   _ListFileSystem({List<RemoteFileEntry> extra = const []}) {
     _entries[_home]!.addAll(extra);
@@ -561,7 +683,7 @@ class _ListFileSystem implements RemoteFileSystem {
   }) async {
     final entry = await stat(path);
     destination.add(
-      List.filled(entry.size ?? 0, path.endsWith('.bin') ? 0 : 0x61),
+      List.filled(entry.size ?? 0, _binaryNames.hasMatch(path) ? 0 : 0x61),
     );
     return entry;
   }
@@ -583,22 +705,4 @@ class _ListFileSystem implements RemoteFileSystem {
 
   @override
   Object? noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-/// Records what the system's default app is asked to open.
-class _RecordingOpenFile extends OpenFilePlatform {
-  final opened = <String>[];
-
-  @override
-  Future<OpenResult> open(
-    String? filePath, {
-    String? type,
-    bool isIOSAppOpen = false,
-    String linuxDesktopName = 'xdg',
-    bool linuxUseGio = false,
-    bool linuxByProcess = false,
-  }) async {
-    opened.add(filePath!);
-    return OpenResult();
-  }
 }

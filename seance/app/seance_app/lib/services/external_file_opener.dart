@@ -295,15 +295,53 @@ List<String> normalizeEditorExtensions(Iterable<String> values) {
   return result.toList()..sort();
 }
 
+/// A file the system's default app would run as a program, refused before
+/// the OS saw it: `payload.exe` on Windows, `run.command` on macOS.
+final class ExecutableLaunchRefused implements Exception {
+  const ExecutableLaunchRefused(this.path);
+
+  final String path;
+
+  @override
+  String toString() =>
+      '“${path.split(_pathSeparators).last}” could run as a program on this '
+      "computer, so it wasn't opened with the system default app.";
+}
+
+final _pathSeparators = RegExp(r'[/\\]');
+
 /// Opens managed checkouts without ever constructing a shell command.
 class ExternalFileOpener {
   static const channel = MethodChannel('seance/files');
 
   const ExternalFileOpener();
 
+  /// Hands a checkout of a remote file to the system's default app,
+  /// unless that app would run it as a program (finding P1-03). There is
+  /// no "run anyway"; an editor picked under Open with ([openWith]) still
+  /// opens the file as a document.
   Future<void> openSystemDefault(String path) async {
+    if (launchWouldExecute(path)) throw ExecutableLaunchRefused(path);
+
     final result = await OpenFile.open(path);
     if (result.type != ResultType.done) throw StateError(result.message);
+  }
+
+  /// Whether the system's default app would run [path] as a program on
+  /// this host. A host with no desktop launch rules (mobile) answers for
+  /// every desktop host, the conservative reading.
+  bool launchWouldExecute(String path) {
+    final host = switch (currentEditorHostPlatform) {
+      EditorHostPlatform.macos => LaunchHost.macos,
+      EditorHostPlatform.linux => LaunchHost.linux,
+      EditorHostPlatform.windows => LaunchHost.windows,
+      null => null,
+    };
+    if (host != null) return isExecutableLaunchName(path, host: host);
+
+    return LaunchHost.values.any(
+      (each) => isExecutableLaunchName(path, host: each),
+    );
   }
 
   Future<void> openWith(String path, ExternalEditorDefinition editor) async {

@@ -117,6 +117,10 @@ export 'package:seance_core/seance_core.dart'
         VaultCrypto,
         VaultKeys,
         VaultStore,
+        // The remote launch guard (06 §5.3), shared with Séance.
+        LaunchHost,
+        isExecutableLaunchName,
+        windowsExecutableExtensions,
         expandHomePath,
         normalizeServerCustomColor,
         normalizeServerGroup,
@@ -265,12 +269,10 @@ export 'src/checkout/managed_checkout_spec.dart'
 export 'src/checkout/checkout_manager.dart' show CheckoutManager;
 export 'src/preview/preview_kinds.dart'
     show
-        LaunchHost,
         PreviewKind,
         defaultLargeDownloadThresholdBytes,
         defaultPreviewCacheCapacityBytes,
         dragOutProduceSlotLimit,
-        isExecutableLaunchName,
         previewCacheKey,
         previewImageKindCapBytes,
         previewKindCapBytes,
@@ -280,7 +282,6 @@ export 'src/preview/preview_kinds.dart'
         previewProduceSlotLimit,
         previewRawExtension,
         previewTextMaximumBytes,
-        previewWindowsExecutableExtensions,
         sanitizePreviewExtension;
 export 'src/preview/preview_text.dart'
     show PreviewTextContent, fileLooksLikeUtf8Text, loadPreviewText;

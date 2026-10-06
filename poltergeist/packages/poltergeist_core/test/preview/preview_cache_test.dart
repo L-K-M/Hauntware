@@ -398,7 +398,7 @@ void main() {
     () async {
       // 06 §5.3: `.bat`/`.exe` pass the charset rule and stay on the cache
       // name (Quick Look keys type off it); the launch-boundary blocklist
-      // lives in previewWindowsExecutableExtensions, not the write path.
+      // lives in windowsExecutableExtensions, not the write path.
       final key = previewCacheKey('s', '/setup.exe', null, 1);
       final file = await commitEntry(key, [1], extension: 'exe');
       expect(file.path, endsWith('$key.exe'));

@@ -16,6 +16,7 @@ export 'src/terminal/local_shell.dart';
 export 'src/terminal/paste_sanitizer.dart';
 export 'src/terminal/shell_command.dart';
 
+export 'src/ssh/executable_launch.dart';
 export 'src/ssh/home_path.dart';
 export 'src/ssh/remote_command.dart';
 export 'src/ssh/remote_git.dart';

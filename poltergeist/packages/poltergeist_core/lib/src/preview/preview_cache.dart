@@ -214,7 +214,7 @@ final class PreviewCache {
   /// one is dropped and the committed name carries none at all (06
   /// §5.3). Executable-looking extensions are deliberately KEPT: the
   /// hash-named cache is never executed, and the launch-boundary
-  /// blocklist lives in [previewWindowsExecutableExtensions] for the
+  /// blocklist lives in seance_core's `windowsExecutableExtensions` for the
   /// disclosed-location download path instead.
   ///
   /// Throws [StateError] when the key is already committed — callers
