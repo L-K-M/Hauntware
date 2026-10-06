@@ -42,7 +42,8 @@ void main() {
     focusNode.requestFocus();
     await tester.pump();
 
-    // The premise: an unfocused view draws every type as an outlined box.
+    // The premise. Unfocused, every type is drawn as an outlined box in the
+    // cursor cell, which would pass without testing the underline or bar.
     expect(focusNode.hasFocus, isTrue);
     expect(terminal.buffer.cursorX, cursorCell.x);
     expect(terminal.buffer.cursorY, cursorCell.y);
