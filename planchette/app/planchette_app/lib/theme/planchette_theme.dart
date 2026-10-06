@@ -8,8 +8,9 @@ import 'package:planchette_editor/planchette_editor.dart'
 ///
 /// Every syntax color keeps at least 4.5:1 contrast (WCAG AA) against the
 /// page, the current-line band, the chrome and the selection, and the
-/// selection is a cool tint so it never looks like a gold search hit;
-/// `planchette_theme_test.dart` checks both.
+/// selection is a cool tint so it never looks like a gold search hit. On
+/// Séance the selection is also lighter than the page, since hue alone
+/// barely shows near black; `planchette_theme_test.dart` checks all three.
 abstract final class PlanchettePalette {
   static const parchment = (
     page: Color(0xFFF7F1E3),
@@ -30,7 +31,7 @@ abstract final class PlanchettePalette {
     faded: Color(0xFFB8AA99),
     rule: Color(0xFF3D3431),
     accent: Color(0xFFE6B56A),
-    selection: Color(0x66333E72),
+    selection: Color(0x66466CB8),
   );
 
   /// Sepia comments, verdigris strings, brass numbers, oxblood keywords.
@@ -49,7 +50,7 @@ abstract final class PlanchettePalette {
 
   /// Smoke comments, moss strings, brass numbers, ember keywords.
   static const seanceSyntax = EditorSyntaxTheme(
-    comment: Color(0xFF9A8D83),
+    comment: Color(0xFFAEA197),
     string: Color(0xFFA3CF8F),
     number: Color(0xFFE6B56A),
     keyword: Color(0xFFF2916A),

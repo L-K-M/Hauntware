@@ -4,6 +4,13 @@ All notable changes to Planchette are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Selected text stands out in the dark look. Its indigo highlight was
+  barely lighter than the page; it is now lighter and bluer, and comments
+  are a little lighter so they stay readable on it.
+
 ## [1.9.0] - 2026-10-04
 
 ### Added

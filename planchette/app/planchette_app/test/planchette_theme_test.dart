@@ -118,6 +118,12 @@ void main() {
       // Selected text and inactive search hits must not look alike.
       expect(deltaE(selection, match), greaterThanOrEqualTo(20));
       expect(deltaE(selection, page), greaterThanOrEqualTo(10));
+      // Near black, hue barely registers, so a dark selection must lift
+      // the page's lightness: a 1.21:1 indigo passed the distance above
+      // and was all but invisible.
+      if (brightness == Brightness.dark) {
+        expect(contrast(selection, page), greaterThanOrEqualTo(1.5));
+      }
       for (final color in [
         scheme.onSurface,
         for (final type in SyntaxTokenType.values) syntax.colorFor(type),
