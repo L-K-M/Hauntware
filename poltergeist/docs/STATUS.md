@@ -4,6 +4,20 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Fixture repair — Alpine OpenSSH pin (2026-10-06)
+
+PR #56's SSH integration and D12 benchmark jobs failed building the
+sshd fixture: Alpine edge rotated the OpenSSH set to `10.5_p1-r3`, so
+apk could no longer select the `10.5_p1-r2` pins in
+`test/integration/sshd-modern/Dockerfile`. `iproute2=7.2.0-r0` still
+resolves. Bumped the three OpenSSH pins and the fixture-tool constant
+together, as the iproute2 repair below did; `docs/M0-DARTSSH2-REPORT.md`
+keeps the versions it measured.
+
+Validation: `pins the current modern OpenSSH fixture` failed against
+the old Dockerfile and passes after the bump. Docker is unavailable on
+the dev host, so the image build itself is proven by this PR's CI.
+
 ## Editing commands in the text-tools browser (2026-10-06)
 
 The shared browser behind the editor's Text Tools icon now lists
