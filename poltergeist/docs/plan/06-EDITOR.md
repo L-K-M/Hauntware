@@ -1272,8 +1272,11 @@ they clicked another row.
   `.vbs`, `.vbe`, `.wsf`, `.wsh`, `.hta`, `.exe`, `.pif`, `.scf`,
   `.cpl`, `.msp`, `.mst`, plus the types whose default verb runs code
   anyway: `.msi`, `.lnk`, `.url`, `.reg`, `.chm`, `.msc`, `.jar`,
-  `.vb`, `.ws`, `.wsc`, `.sct`, `.application`, `.diagcab`, and the
-  Python launcher's `.py`, `.pyw`, `.pyz`, `.pyzw` — the
+  `.vb`, `.ws`, `.wsc`, `.sct`, `.application`, `.diagcab`, the
+  Python launcher's `.py`, `.pyw`, `.pyz`, `.pyzw`, and the packages
+  App Installer and ClickOnce install and launch: `.appx`,
+  `.appxbundle`, `.msix`, `.msixbundle`, `.appinstaller`,
+  `.appref-ms` — the
   encoded/Script-Host and control-panel
   twins double-click-execute and pass the `^[A-Za-z0-9_-]{1,16}$`
   sanitizer just like the rest, so the list lives as **one named
@@ -1284,7 +1287,9 @@ they clicked another row.
   (case-insensitive, trailing dots and spaces stripped as Win32 does)
   against this list on Windows and small macOS (`.app`, `.command`,
   `.tool`, `.terminal`, `.term`, `.workflow`, `.fileloc`, `.inetloc`,
-  `.webloc`, `.jar`, `.pkg`, `.mpkg`) and Linux (`.desktop`, `.jar`,
+  `.webloc`, `.jar`, `.pkg`, `.mpkg`, and the bundles whose panel
+  installs and loads them on open: `.prefpane`, `.saver`, `.slidesaver`,
+  `.action`) and Linux (`.desktop`, `.jar`,
   `.appimage`) lists; the system-default launch of a checkout refuses
   such a name with a toast carrying §1's `Open With ▸` router, never
   a "run anyway"); Quick Look and

@@ -4,6 +4,19 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Launch guard: installers and loadable bundles (2026-10-06)
+
+The shared launch classifier (`seance_core` `executable_launch.dart`)
+now also refuses, on Windows, `appx`, `appxbundle`, `msix`,
+`msixbundle` and `appinstaller` (App Installer installs and launches
+them on open, like `msi`) and `appref-ms` (ClickOnce, like
+`application`); on macOS, `prefpane`, `saver`, `slidesaver` and
+`action`, whose stock panels install and load the bundle on open.
+Considered and left out: `gadget` (no handler since Windows 8), Access
+databases and Office macro documents (open as documents behind a
+Trust Center gate), and QuickLook, Spotlight and Audio Unit plug-ins
+(no open flow; they load only once copied into place).
+
 ## Frozen sshd-modern base (2026-10-07)
 
 The modern fixture no longer installs Alpine packages in CI. Alpine
