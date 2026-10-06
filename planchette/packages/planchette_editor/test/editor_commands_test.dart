@@ -115,8 +115,26 @@ void main() {
         reason: '$command',
       );
     }
-    expect(await editor.runCommand(EditorCommand.duplicateLines), isFalse);
+    // Each refused command's own guard agrees with its row.
+    _mockClipboard();
+    for (final command in EditorCommand.values) {
+      if (caretOnly.contains(command)) continue;
+      expect(await editor.runCommand(command), isFalse, reason: '$command');
+    }
     expect(editor.text.text, _script);
+  });
+
+  test('a locked document still finds in its selection', () async {
+    // Find reads the document; the lock only refuses edits.
+    final editor = _controller(locked: true);
+    editor.text.selection = const TextSelection(
+      baseOffset: 4,
+      extentOffset: 14,
+    );
+
+    expect(editor.canRunCommand(EditorCommand.findInSelection), isTrue);
+    expect(await editor.runCommand(EditorCommand.findInSelection), isTrue);
+    expect(editor.searchScope, const TextRange(start: 4, end: 14));
   });
 
   test('Toggle Comment needs a language with a comment marker', () {

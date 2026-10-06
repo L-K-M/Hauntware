@@ -269,12 +269,38 @@ void main() {
 
   test('every editing command label comes from the ARB catalog', () {
     final strings = PoltergeistEditorStrings(_KeyNames());
-    expect(strings.editorCommandsGroup, contains('editorCommandsGroup'));
-    for (final command in EditorCommand.values) {
+    expect(strings.editorCommandsGroup, 'Symbol("editorCommandsGroup")');
+    // Exact keys, so a swapped case such as Move Up/Down fails too.
+    const keys = {
+      EditorCommand.duplicateLines: 'editorCommandDuplicateLine',
+      EditorCommand.moveLinesUp: 'editorCommandMoveLineUp',
+      EditorCommand.moveLinesDown: 'editorCommandMoveLineDown',
+      EditorCommand.deleteLines: 'editorCommandDeleteLine',
+      EditorCommand.joinLines: 'editorCommandJoinLines',
+      EditorCommand.toggleComment: 'editorCommandToggleComment',
+      EditorCommand.selectLine: 'editorCommandSelectLine',
+      EditorCommand.selectParagraph: 'editorCommandSelectParagraph',
+      EditorCommand.selectEnclosingBrackets:
+          'editorCommandSelectEnclosingBrackets',
+      EditorCommand.insertLineAbove: 'editorCommandInsertLineAbove',
+      EditorCommand.insertLineBelow: 'editorCommandInsertLineBelow',
+      EditorCommand.copyLine: 'editorCommandCopyLine',
+      EditorCommand.cutLine: 'editorCommandCutLine',
+      EditorCommand.incrementNumber: 'editorCommandIncrementNumber',
+      EditorCommand.decrementNumber: 'editorCommandDecrementNumber',
+      EditorCommand.pasteAndMatchIndentation:
+          'editorCommandPasteMatchIndentation',
+      EditorCommand.goToMatchingBracket: 'editorCommandGoToMatchingBracket',
+      EditorCommand.selectToMatchingBracket:
+          'editorCommandSelectToMatchingBracket',
+      EditorCommand.findInSelection: 'editorFindInSelection',
+    };
+    expect(keys.keys, unorderedEquals(EditorCommand.values));
+    for (final MapEntry(key: command, value: key) in keys.entries) {
       expect(
         strings.editorCommandLabel(command),
-        startsWith('Symbol("editor'),
-        reason: '$command has no ARB label',
+        'Symbol("$key")',
+        reason: '$command',
       );
     }
   });
