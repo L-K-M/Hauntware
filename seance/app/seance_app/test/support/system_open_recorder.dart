@@ -23,7 +23,7 @@ class _RecordingOpenFile extends OpenFilePlatform {
     bool linuxUseGio = false,
     bool linuxByProcess = false,
   }) async {
-    opened.add(filePath!);
+    opened.add(filePath ?? '<null>');
     return OpenResult();
   }
 }

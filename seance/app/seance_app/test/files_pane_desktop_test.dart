@@ -121,6 +121,7 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 20));
     }
+    expect(done(), isTrue, reason: 'the checkout did not settle in 30 s');
   }
 
   /// Two presses with no frame between them: the pane times the
@@ -331,9 +332,9 @@ void main() {
         tester,
         _ListFileSystem(
           extra: [
-            const RemoteFileEntry(
-              path: '$_home/app.desktop',
-              name: 'app.desktop',
+            RemoteFileEntry(
+              path: '$_home/$_hostProgram',
+              name: _hostProgram,
               type: RemoteFileType.file,
               size: 64,
             ),
@@ -343,7 +344,7 @@ void main() {
       services!.settings.editorRegistry.defaultEditorId =
           EditorRegistry.systemDefaultId;
 
-      await doubleClick(tester, 'app.desktop');
+      await doubleClick(tester, _hostProgram);
       await settleCheckout(
         tester,
         () =>
@@ -351,7 +352,7 @@ void main() {
       );
 
       expect(
-        find.textContaining('“app.desktop” could run as a program'),
+        find.textContaining('“$_hostProgram” could run as a program'),
         findsOneWidget,
       );
       expect(opened, isEmpty);
@@ -368,9 +369,9 @@ void main() {
         tester,
         _ListFileSystem(
           extra: [
-            const RemoteFileEntry(
-              path: '$_home/app.desktop',
-              name: 'app.desktop',
+            RemoteFileEntry(
+              path: '$_home/$_hostProgram',
+              name: _hostProgram,
               type: RemoteFileType.file,
               size: 64,
             ),
@@ -378,10 +379,7 @@ void main() {
         ),
       );
 
-      await tester.tap(
-        find.text('app.desktop'),
-        buttons: kSecondaryMouseButton,
-      );
+      await tester.tap(find.text(_hostProgram), buttons: kSecondaryMouseButton);
       await tester.pump();
       // Past the menu's entrance: a tap during it dismisses the menu.
       await tester.pump(const Duration(milliseconds: 500));
@@ -393,7 +391,7 @@ void main() {
       );
 
       expect(
-        find.textContaining('“app.desktop” could run as a program'),
+        find.textContaining('“$_hostProgram” could run as a program'),
         findsOneWidget,
       );
       expect(opened, isEmpty);
@@ -616,6 +614,15 @@ class _OpenSshSession implements SshSession {
   @override
   Object? noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+/// A text file this test host's default app would run as a program. The
+/// launch rules follow the real host OS, not the target platform a test
+/// pins, so the name must too.
+final _hostProgram = switch (currentEditorHostPlatform!) {
+  EditorHostPlatform.linux => 'app.desktop',
+  EditorHostPlatform.macos => 'run.command',
+  EditorHostPlatform.windows => 'run.cmd',
+};
 
 /// Names whose download is NUL bytes rather than text.
 final _binaryNames = RegExp(r'\.(bin|jar)$');
