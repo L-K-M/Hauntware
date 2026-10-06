@@ -445,6 +445,94 @@ void main() {
       expect(find.text('Sort Lines…'), findsOneWidget);
     });
 
+    testWidgets('lists the editing commands after the tool groups', (
+      tester,
+    ) async {
+      await _pumpBrowser(tester, 'b\na');
+
+      // "Duplicate" names a Lines tool and an editing command.
+      await tester.enterText(_filterField(), 'duplicate');
+      await tester.pump();
+
+      expect(find.text('Remove Duplicate Lines…'), findsOneWidget);
+      expect(find.text('Editing'), findsOneWidget);
+      expect(find.text('Duplicate Line'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Remove Duplicate Lines…')).dy,
+        lessThan(tester.getTopLeft(find.text('Editing')).dy),
+      );
+    });
+
+    testWidgets('an editing command runs at once and refocuses the document', (
+      tester,
+    ) async {
+      final editor = await _pumpBrowser(tester, 'one\ntwo');
+
+      await tester.enterText(_filterField(), 'duplicate line');
+      await tester.pump();
+      await tester.tap(find.text('Duplicate Line'));
+      await tester.pump();
+
+      expect(editor.text.text, 'one\none\ntwo');
+      expect(editor.textToolsOpen, isFalse);
+      expect(editor.editorFocus.hasFocus, isTrue);
+    });
+
+    testWidgets('a locked document still offers selection commands', (
+      tester,
+    ) async {
+      final editor = await _pumpBrowser(tester, 'one\ntwo');
+      editor.setEditingLocked(true);
+      // The group name matches every editing command and no tool.
+      await tester.enterText(_filterField(), 'editing');
+      await tester.pump();
+
+      Future<bool> enabled(String label) async {
+        await _reveal(tester, find.text(label));
+        return tester
+            .widget<ListTile>(find.widgetWithText(ListTile, label))
+            .enabled;
+      }
+
+      expect(await enabled('Duplicate Line'), isFalse);
+      expect(await enabled('Select Line'), isTrue);
+
+      await tester.tap(find.text('Select Line'));
+      await tester.pump();
+      expect(
+        editor.text.selection,
+        const TextSelection(baseOffset: 0, extentOffset: 3),
+      );
+      expect(editor.text.text, 'one\ntwo');
+    });
+
+    testWidgets('Find in Selection waits for a selection, then scopes find', (
+      tester,
+    ) async {
+      final editor = await _pumpBrowser(tester, 'one\ntwo');
+      await tester.enterText(_filterField(), 'find in selection');
+      await tester.pump();
+
+      ListTile row() => tester.widget<ListTile>(
+        find.widgetWithText(ListTile, 'Find in Selection'),
+      );
+      expect(row().enabled, isFalse);
+
+      editor.text.selection = const TextSelection(
+        baseOffset: 0,
+        extentOffset: 3,
+      );
+      await tester.pump();
+      expect(row().enabled, isTrue);
+      await tester.tap(find.text('Find in Selection'));
+      await tester.pump();
+
+      expect(editor.textToolsOpen, isFalse);
+      expect(editor.searchOpen, isTrue);
+      expect(editor.searchScope, const TextRange(start: 0, end: 3));
+      expect(editor.searchFocus.hasFocus, isTrue);
+    });
+
     testWidgets('the title and groups announce as headings', (tester) async {
       await _pumpBrowser(tester, 'b\na');
 

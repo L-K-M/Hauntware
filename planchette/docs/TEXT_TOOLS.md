@@ -346,8 +346,10 @@ the file and does not make a document dirty.
 
 ### Hosts
 
-Séance and Poltergeist expose no line command in any menu today. On a phone
-without a hardware keyboard none is reachable.
+Séance and Poltergeist expose no line command in any menu. Since
+2026-10-06 the browser lists them under Editing after the tool groups, so
+the hosts' header entry reaches them, also on a phone without a hardware
+keyboard.
 
 What a pin bump shows in the hosts:
 

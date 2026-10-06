@@ -161,6 +161,34 @@ class PoltergeistEditorStrings extends EditorStrings {
   @override
   String get textToolsHistoryGroup => l10n.editorTextToolsHistoryGroup;
   @override
+  String get editorCommandsGroup => l10n.editorCommandsGroup;
+  @override
+  String editorCommandLabel(EditorCommand command) => switch (command) {
+    EditorCommand.duplicateLines => l10n.editorCommandDuplicateLine,
+    EditorCommand.moveLinesUp => l10n.editorCommandMoveLineUp,
+    EditorCommand.moveLinesDown => l10n.editorCommandMoveLineDown,
+    EditorCommand.deleteLines => l10n.editorCommandDeleteLine,
+    EditorCommand.joinLines => l10n.editorCommandJoinLines,
+    EditorCommand.toggleComment => l10n.editorCommandToggleComment,
+    EditorCommand.selectLine => l10n.editorCommandSelectLine,
+    EditorCommand.selectParagraph => l10n.editorCommandSelectParagraph,
+    EditorCommand.selectEnclosingBrackets =>
+      l10n.editorCommandSelectEnclosingBrackets,
+    EditorCommand.insertLineAbove => l10n.editorCommandInsertLineAbove,
+    EditorCommand.insertLineBelow => l10n.editorCommandInsertLineBelow,
+    EditorCommand.copyLine => l10n.editorCommandCopyLine,
+    EditorCommand.cutLine => l10n.editorCommandCutLine,
+    EditorCommand.incrementNumber => l10n.editorCommandIncrementNumber,
+    EditorCommand.decrementNumber => l10n.editorCommandDecrementNumber,
+    EditorCommand.pasteAndMatchIndentation =>
+      l10n.editorCommandPasteMatchIndentation,
+    EditorCommand.goToMatchingBracket => l10n.editorCommandGoToMatchingBracket,
+    EditorCommand.selectToMatchingBracket =>
+      l10n.editorCommandSelectToMatchingBracket,
+    // Already in the catalog for the find bar's own copy.
+    EditorCommand.findInSelection => findInSelection,
+  };
+  @override
   String get browseTextTools => l10n.editorTextToolsTooltip;
 
   @override

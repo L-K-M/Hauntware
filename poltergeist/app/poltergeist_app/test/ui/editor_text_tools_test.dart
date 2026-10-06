@@ -202,6 +202,33 @@ void main() {
     expect(find.text('Apply'), findsOneWidget);
   });
 
+  testWidgets('a phone reaches the editing commands through the browser', (
+    tester,
+  ) async {
+    // Without a hardware keyboard the browser is the only way to these.
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _mount(tester);
+    await _openBrowser(tester);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Filter tools'),
+      // The group name keeps the Lines tools out of the short list.
+      'editing duplicate',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Editing'), findsOneWidget);
+    await tester.tap(find.text('Duplicate Line'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Text Tools'), findsNothing);
+    expect(
+      find.widgetWithText(TextField, 'beta\nbeta\nalpha\ngamma\nalpha\n'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a normalized edit keeps the document CRLF and BOM on save', (
     tester,
   ) async {

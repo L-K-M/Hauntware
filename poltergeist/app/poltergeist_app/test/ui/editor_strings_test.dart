@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
+import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/l10n/app_localizations_en.dart';
 import 'package:poltergeist_app/ui/editor_strings.dart';
 
@@ -71,6 +72,15 @@ class _Marked extends AppLocalizationsEn {
   String get editorLanguagePlainText => '[plain]';
   @override
   String get editorLanguageCStyle => '[c-like]';
+}
+
+/// Answers every lookup with the name of the ARB key it read, so a
+/// string the adapter leaves to the package's English shows up as text
+/// with no key name in it.
+class _KeyNames implements AppLocalizations {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      invocation.memberName.toString();
 }
 
 void main() {
@@ -255,6 +265,44 @@ void main() {
     expect(strings.languageName(syntaxLanguageFor('/srv/main.c')), '[c-like]');
     // Proper-noun language names stay the package's own.
     expect(strings.languageName(syntaxLanguageFor('/srv/app.py')), 'Python');
+  });
+
+  test('every editing command label comes from the ARB catalog', () {
+    final strings = PoltergeistEditorStrings(_KeyNames());
+    expect(strings.editorCommandsGroup, 'Symbol("editorCommandsGroup")');
+    // Exact keys, so a swapped case such as Move Up/Down fails too.
+    const keys = {
+      EditorCommand.duplicateLines: 'editorCommandDuplicateLine',
+      EditorCommand.moveLinesUp: 'editorCommandMoveLineUp',
+      EditorCommand.moveLinesDown: 'editorCommandMoveLineDown',
+      EditorCommand.deleteLines: 'editorCommandDeleteLine',
+      EditorCommand.joinLines: 'editorCommandJoinLines',
+      EditorCommand.toggleComment: 'editorCommandToggleComment',
+      EditorCommand.selectLine: 'editorCommandSelectLine',
+      EditorCommand.selectParagraph: 'editorCommandSelectParagraph',
+      EditorCommand.selectEnclosingBrackets:
+          'editorCommandSelectEnclosingBrackets',
+      EditorCommand.insertLineAbove: 'editorCommandInsertLineAbove',
+      EditorCommand.insertLineBelow: 'editorCommandInsertLineBelow',
+      EditorCommand.copyLine: 'editorCommandCopyLine',
+      EditorCommand.cutLine: 'editorCommandCutLine',
+      EditorCommand.incrementNumber: 'editorCommandIncrementNumber',
+      EditorCommand.decrementNumber: 'editorCommandDecrementNumber',
+      EditorCommand.pasteAndMatchIndentation:
+          'editorCommandPasteMatchIndentation',
+      EditorCommand.goToMatchingBracket: 'editorCommandGoToMatchingBracket',
+      EditorCommand.selectToMatchingBracket:
+          'editorCommandSelectToMatchingBracket',
+      EditorCommand.findInSelection: 'editorFindInSelection',
+    };
+    expect(keys.keys, unorderedEquals(EditorCommand.values));
+    for (final MapEntry(key: command, value: key) in keys.entries) {
+      expect(
+        strings.editorCommandLabel(command),
+        'Symbol("$key")',
+        reason: '$command',
+      );
+    }
   });
 
   test('the ARB catalog covers every shared text tool, option and choice', () {

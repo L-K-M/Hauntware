@@ -4,6 +4,7 @@ library;
 export 'package:planchette_core/planchette_core.dart'
     hide SearchResult, findSearchMatches, searchText;
 export 'src/code_editing_controller.dart';
+export 'src/editor_commands.dart';
 export 'src/editor_controller.dart';
 export 'src/editor_fonts.dart';
 export 'src/editor_strings.dart';

@@ -2601,6 +2601,66 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editorTextToolsHistoryGroup => 'Repeat and Recent';
 
   @override
+  String get editorCommandsGroup => 'Editing';
+
+  @override
+  String get editorCommandDuplicateLine => 'Duplicate Line';
+
+  @override
+  String get editorCommandMoveLineUp => 'Move Line Up';
+
+  @override
+  String get editorCommandMoveLineDown => 'Move Line Down';
+
+  @override
+  String get editorCommandDeleteLine => 'Delete Line';
+
+  @override
+  String get editorCommandJoinLines => 'Join Lines';
+
+  @override
+  String get editorCommandToggleComment => 'Toggle Comment';
+
+  @override
+  String get editorCommandSelectLine => 'Select Line';
+
+  @override
+  String get editorCommandSelectParagraph => 'Select Paragraph';
+
+  @override
+  String get editorCommandSelectEnclosingBrackets =>
+      'Select Enclosing Brackets';
+
+  @override
+  String get editorCommandInsertLineAbove => 'Insert Line Above';
+
+  @override
+  String get editorCommandInsertLineBelow => 'Insert Line Below';
+
+  @override
+  String get editorCommandCopyLine => 'Copy Line';
+
+  @override
+  String get editorCommandCutLine => 'Cut Line';
+
+  @override
+  String get editorCommandIncrementNumber => 'Increment Number';
+
+  @override
+  String get editorCommandDecrementNumber => 'Decrement Number';
+
+  @override
+  String get editorCommandPasteMatchIndentation =>
+      'Paste and Match Indentation';
+
+  @override
+  String get editorCommandGoToMatchingBracket => 'Go to Matching Bracket';
+
+  @override
+  String get editorCommandSelectToMatchingBracket =>
+      'Select to Matching Bracket';
+
+  @override
   String get editorTextToolGroupLines => 'Lines';
 
   @override
