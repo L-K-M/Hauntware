@@ -8,13 +8,17 @@ Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 The shared launch classifier (`seance_core` `executable_launch.dart`)
 now also refuses, on Windows, `appx`, `appxbundle`, `msix`,
 `msixbundle` and `appinstaller` (App Installer installs and launches
-them on open, like `msi`) and `appref-ms` (ClickOnce, like
-`application`); on macOS, `prefpane`, `saver`, `slidesaver` and
+them on open, like `msi`), `appref-ms` (ClickOnce, like `application`)
+and `vsto` (the Office customization installer); on macOS, `prefpane`, `saver`, `slidesaver` and
 `action`, whose stock panels install and load the bundle on open.
 Considered and left out: `gadget` (no handler since Windows 8), Access
 databases and Office macro documents (open as documents behind a
-Trust Center gate), and QuickLook, Spotlight and Audio Unit plug-ins
-(no open flow; they load only once copied into place).
+Trust Center gate), QuickLook, Spotlight and Audio Unit plug-ins (no
+open flow; they load only once copied into place), `settingcontent-ms`
+(blocked outside Windows' own folder since the CVE-2018-8414 fix),
+`qtz` (no stock handler on current macOS) and the Store artifacts
+`appxupload`, `msixupload`, `eappx` and `emsix` (no double-click
+installer).
 
 ## flutter_pty: no half-started pty on Windows (2026-10-06)
 

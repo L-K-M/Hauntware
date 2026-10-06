@@ -13,8 +13,8 @@ library;
 /// its `py` launcher. App packages (`appx`, `msix` and their bundles) and
 /// their `appinstaller` referrals open in App Installer, which installs
 /// and launches them like `msi`; ClickOnce runs an `appref-ms` the way it
-/// runs an `application`. [isExecutableLaunchName] reads it for Windows
-/// hosts.
+/// runs an `application`, and the Office customization installer installs
+/// a `vsto` add-in. [isExecutableLaunchName] reads it for Windows hosts.
 const windowsExecutableExtensions = <String>{
   'bat',
   'cmd',
@@ -57,6 +57,7 @@ const windowsExecutableExtensions = <String>{
   'msixbundle',
   'appinstaller',
   'appref-ms',
+  'vsto',
 };
 
 /// The desktop hosts [isExecutableLaunchName] knows. What an OS "open"

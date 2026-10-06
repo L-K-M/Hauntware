@@ -1276,7 +1276,7 @@ they clicked another row.
   Python launcher's `.py`, `.pyw`, `.pyz`, `.pyzw`, and the packages
   App Installer and ClickOnce install and launch: `.appx`,
   `.appxbundle`, `.msix`, `.msixbundle`, `.appinstaller`,
-  `.appref-ms` — the
+  `.appref-ms`, plus `.vsto` for the Office customization installer — the
   encoded/Script-Host and control-panel
   twins double-click-execute and pass the `^[A-Za-z0-9_-]{1,16}$`
   sanitizer just like the rest, so the list lives as **one named

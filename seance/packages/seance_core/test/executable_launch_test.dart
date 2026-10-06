@@ -47,6 +47,7 @@ void main() {
         'msixbundle',
         'appinstaller',
         'appref-ms',
+        'vsto',
       }),
     );
   });
@@ -123,6 +124,10 @@ void main() {
         'Suite.appxbundle',
         'App.appinstaller',
         'Tool.appref-ms',
+        'Report.vsto',
+        // Case and Win32's trailing-dot stripping apply to these too.
+        'SETUP.MSIX',
+        'Tool.APPREF-MS.',
       ]) {
         expect(windows(name), isTrue, reason: name);
       }
