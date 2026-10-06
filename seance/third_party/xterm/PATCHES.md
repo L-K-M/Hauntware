@@ -480,8 +480,8 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     landed one inset to the left of the text under the finger. The grid
     now fits between the side insets, and rows, the cursor (and with it
     the IME caret rect and composing text), selections and highlights are
-    drawn from the left one. Such a phone loses the columns the insets
-    cover.
+    drawn from the left one. Composing text wraps where the grid ends.
+    Such a phone loses the columns the insets cover.
 
 ### App-layer notes (outside this package)
 

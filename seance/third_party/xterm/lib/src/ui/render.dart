@@ -745,8 +745,9 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     );
     builder.addText(composingText);
 
+    // [seance fork] Wraps where the grid ends, not under the right inset.
     final paragraph = builder.build();
-    paragraph.layout(ParagraphConstraints(width: size.width));
+    paragraph.layout(ParagraphConstraints(width: size.width - _padding.right));
 
     canvas.drawParagraph(paragraph, Offset(0, offset.dy));
   }
