@@ -27,6 +27,10 @@ class _EditorTextSizeSectionState extends State<EditorTextSizeSection> {
   /// app, so the thumb would otherwise jump back, also once released.
   int? _dragging;
 
+  /// Counts [_write] calls. Each write carries every earlier one, so only
+  /// the newest may hand the thumb back or tell the user it failed.
+  int _writes = 0;
+
   @override
   void initState() {
     super.initState();
@@ -56,11 +60,14 @@ class _EditorTextSizeSectionState extends State<EditorTextSizeSection> {
   }
 
   Future<void> _write(int size) async {
+    final write = ++_writes;
     try {
       await widget.model.setTextSize(size);
     } on Object catch (error, stackTrace) {
       ApplicationErrorReporter().report(error, stackTrace);
-      if (!mounted) return;
+      // A newer write is out: the thumb shows its size, and it reports for
+      // itself.
+      if (!mounted || write != _writes) return;
       // The size never arrives: show the one the editors use.
       setState(() => _dragging = null);
       showTopToastIn(context, message: error.toString());

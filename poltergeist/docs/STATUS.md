@@ -58,6 +58,9 @@ under Settings → Appearance in the dialog and the Settings window. Every
 editor window and route resizes at once; the size persists as
 `editor.textSize`. Range and steps come from Planchette's shared
 `EditorTextSize` (9 to 48, standard 14), so all three apps zoom alike.
+A failed slider write puts the thumb back where the editors are and says
+why, unless a newer write is still out: that one carries the change and
+reports for itself.
 
 ## Sync trash purge (2026-10-03)
 

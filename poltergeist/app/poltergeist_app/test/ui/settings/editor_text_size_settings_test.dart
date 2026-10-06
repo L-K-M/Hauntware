@@ -87,10 +87,34 @@ void main() {
     await tester.pump();
 
     expect(slider(tester).value, 14);
+    expect(find.text('Bad state: link closed'), findsOneWidget);
     // Reported through the app's error reporter; drained so the framework
     // does not flag it as unexpected.
     expect(tester.takeException(), isA<StateError>());
     // The toast's timer.
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a superseded write that fails leaves the thumb to the newer', (
+    tester,
+  ) async {
+    await pump(tester);
+
+    slider(tester).onChanged!(20);
+    await tester.pump();
+    slider(tester).onChanged!(22);
+    await tester.pump();
+    // The write for 20 fails while the one for 22 is still out.
+    model.answer(error: StateError('link closed'));
+    await tester.pump();
+
+    expect(slider(tester).value, 22);
+    expect(find.text('Bad state: link closed'), findsNothing);
+    // Still reported, for the record.
+    expect(tester.takeException(), isA<StateError>());
+
+    model.answer();
+    await tester.pump();
+    expect(slider(tester).value, 22);
   });
 }
