@@ -1,12 +1,30 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/ui/terminal_pane.dart';
 import 'package:seance_core/seance_core.dart';
+
+/// The strip's own fill and rule, painted behind its tabs.
+BoxDecoration _stripBackground(WidgetTester tester) =>
+    tester
+            .widget<DecoratedBox>(
+              find
+                  .descendant(
+                    of: find.byType(TerminalTabStrip),
+                    matching: find.byWidgetPredicate(
+                      (w) =>
+                          w is DecoratedBox &&
+                          w.position == DecorationPosition.background,
+                    ),
+                  )
+                  .first,
+            )
+            .decoration
+        as BoxDecoration;
 
 void main() {
   testWidgets('a single session keeps tab actions reachable at phone width', (
@@ -290,8 +308,7 @@ void main() {
           )
           .first,
     );
-    BorderSide hairline() =>
-        (strip().decoration! as BoxDecoration).border!.bottom;
+    BorderSide hairline() => _stripBackground(tester).border!.bottom;
     BorderSide? accentLine() =>
         (strip().foregroundDecoration as BoxDecoration?)?.border?.top;
 
@@ -386,15 +403,7 @@ void main() {
       ),
     );
 
-    final strip = tester.widget<Container>(
-      find
-          .descendant(
-            of: find.byType(TerminalTabStrip),
-            matching: find.byType(Container),
-          )
-          .first,
-    );
-    expect((strip.decoration! as BoxDecoration).color, chrome.headerBackground);
+    expect(_stripBackground(tester).color, chrome.headerBackground);
     BoxDecoration chip(String label) =>
         tester
                 .widget<Container>(
@@ -497,6 +506,95 @@ void main() {
     );
     expect(closed, [other.id]);
     semantics.dispose();
+  });
+
+  testWidgets('the open tab joins the pane below the rule', (tester) async {
+    final config = ServerConfig(
+      id: 'server',
+      label: 'Server',
+      host: 'example.com',
+      username: 'user',
+      authMethod: AuthMethod.password,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+    TerminalSession session(String id) {
+      final engine = XtermTerminalEngine();
+      addTearDown(engine.dispose);
+      final tab = TerminalSession(
+        id: id,
+        serverId: config.id,
+        config: config,
+        engine: engine,
+        connecting: false,
+      );
+      addTearDown(tab.dispose);
+      return tab;
+    }
+
+    final open = session('one');
+    final other = session('two');
+    final theme = SeanceTheme.dark();
+    final chrome = theme.extension<SeanceChrome>()!;
+    final captured = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: theme,
+        home: Scaffold(
+          body: RepaintBoundary(
+            key: captured,
+            child: TerminalTabStrip(
+              tabs: [open, other],
+              activeTabId: open.id,
+              onFocus: (_) {},
+              onClose: (_) {},
+              onNewTab: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // The strip's last pixel row as painted: the rule between the tabs
+    // and the pane.
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(captured),
+    );
+    final (pixels, width) = (await tester.runAsync(() async {
+      // One image pixel per logical pixel, so strip coordinates index it.
+      final image = await boundary.toImage(pixelRatio: 1);
+      try {
+        return ((await image.toByteData())!, image.width);
+      } finally {
+        image.dispose();
+      }
+    }))!;
+    final bottom = boundary.size.height.round() - 1;
+    Color pixelAt(Offset global) {
+      final x = boundary.globalToLocal(global).dx.round();
+      final i = (bottom * width + x) * 4;
+      return Color.fromARGB(
+        pixels.getUint8(i + 3),
+        pixels.getUint8(i),
+        pixels.getUint8(i + 1),
+        pixels.getUint8(i + 2),
+      );
+    }
+
+    Offset chipCenter(String label) => tester.getCenter(
+      find.ancestor(of: find.text(label), matching: find.byType(InkWell)),
+    );
+
+    // The open tab paints over the rule, so it runs on into the pane; the
+    // rest of the strip, other tabs and the empty end alike, keeps it.
+    expect(pixelAt(chipCenter('Session 1')), chrome.paneBackground);
+    expect(pixelAt(chipCenter('Session 2')), chrome.separator);
+    expect(
+      pixelAt(
+        tester.getTopLeft(find.byTooltip('New tab')) - const Offset(8, 0),
+      ),
+      chrome.separator,
+    );
   });
   test('tab labels keep 4.5:1 on the strip, hovered or open', () {
     double contrast(Color a, Color b) {

@@ -306,11 +306,6 @@ class TerminalTabStrip extends StatelessWidget {
     final accent = this.accent;
     return Container(
       height: 38,
-      decoration: BoxDecoration(
-        // The header's colour, as Poltergeist's pane tab bars take theirs.
-        color: chrome.headerBackground,
-        border: Border(bottom: BorderSide(color: chrome.separator)),
-      ),
       // Over the tabs' top edge, where Poltergeist paints its active-pane
       // line. In front rather than a border, so it takes no height: the tabs
       // sit the same with or without a colour. Below the tabs it sat against
@@ -327,112 +322,124 @@ class TerminalTabStrip extends StatelessWidget {
                 ),
               ),
             ),
-      child: Row(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              // One listenable over every tab's name sources, not one per
-              // chip: a name change on one tab can add or remove another
-              // tab's disambiguating suffix, so labels are computed across
-              // the strip. Still scoped to this server's tabs — nothing here
-              // repaints the rest of the app.
-              child: ListenableBuilder(
-                listenable: Listenable.merge([
-                  for (final tab in tabs)
-                    if (tab is TerminalSession) ...[
-                      tab.metadata,
-                      tab.customName,
-                    ] else if (tab is EditorTab)
-                      tab.dirty,
-                ]),
-                builder: (context, _) {
-                  // Editor tabs do not count for a terminal's "Session N"
-                  // fallback: the ordinal numbers the shell sessions. One
-                  // map keyed on the tab feeds both the label pass and the
-                  // chip, so the two can never disagree.
-                  final ordinals = <TerminalSession, int>{};
-                  for (final tab in tabs) {
-                    if (tab is TerminalSession) {
-                      ordinals[tab] = ordinals.length + 1;
-                    }
-                  }
-                  final labels = disambiguateTabLabels([
+      // Behind the tabs rather than this Container's decoration, which would
+      // inset them by the rule. At full height the open tab paints over the
+      // rule and runs on into the pane below; the others leave it showing.
+      // Poltergeist keeps the rule under its open tab (its 10 §3).
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          // The header's colour, as Poltergeist's pane tab bars take theirs.
+          color: chrome.headerBackground,
+          border: Border(bottom: BorderSide(color: chrome.separator)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                // One listenable over every tab's name sources, not one per
+                // chip: a name change on one tab can add or remove another
+                // tab's disambiguating suffix, so labels are computed across
+                // the strip. Still scoped to this server's tabs — nothing here
+                // repaints the rest of the app.
+                child: ListenableBuilder(
+                  listenable: Listenable.merge([
                     for (final tab in tabs)
-                      switch (tab) {
-                        TerminalSession() => sessionTabLabel(
-                          // 1-based ordinal within the server, used only as
-                          // the fallback name when the shell reports nothing.
-                          ordinal: ordinals[tab]!,
-                          customName: tab.customName.value,
-                          workingDirectory: tab.metadata.value.workingDirectory,
-                          terminalTitle: tab.metadata.value.terminalTitle,
-                          runningCommand: tab.metadata.value.runningCommand,
-                        ),
-                        EditorTab() => editorTabLabel(tab.remotePath),
-                      },
-                  ]);
-                  Widget chip(PaneTab tab, String label) => switch (tab) {
-                    TerminalSession() => _TabChip(
-                      ordinal: ordinals[tab]!,
-                      label: label,
-                      session: tab,
-                      selected: tab.id == activeTabId,
-                      onTap: () => onFocus(tab.id),
-                      onClose: () => onClose(tab.id),
-                      onRename: onRename == null
-                          ? null
-                          : () => _rename(context, tab),
-                    ),
-                    EditorTab() => _EditorTabChip(
-                      tab: tab,
-                      label: label,
-                      selected: tab.id == activeTabId,
-                      onTap: () => onFocus(tab.id),
-                      onClose: () => onClose(tab.id),
-                    ),
-                  };
-                  return Row(
-                    children: [
-                      for (var i = 0; i < tabs.length; i++)
-                        chip(tabs[i], labels[i]),
-                    ],
-                  );
-                },
+                      if (tab is TerminalSession) ...[
+                        tab.metadata,
+                        tab.customName,
+                      ] else if (tab is EditorTab)
+                        tab.dirty,
+                  ]),
+                  builder: (context, _) {
+                    // Editor tabs do not count for a terminal's "Session N"
+                    // fallback: the ordinal numbers the shell sessions. One
+                    // map keyed on the tab feeds both the label pass and the
+                    // chip, so the two can never disagree.
+                    final ordinals = <TerminalSession, int>{};
+                    for (final tab in tabs) {
+                      if (tab is TerminalSession) {
+                        ordinals[tab] = ordinals.length + 1;
+                      }
+                    }
+                    final labels = disambiguateTabLabels([
+                      for (final tab in tabs)
+                        switch (tab) {
+                          TerminalSession() => sessionTabLabel(
+                            // 1-based ordinal within the server, used only as
+                            // the fallback name when the shell reports nothing.
+                            ordinal: ordinals[tab]!,
+                            customName: tab.customName.value,
+                            workingDirectory:
+                                tab.metadata.value.workingDirectory,
+                            terminalTitle: tab.metadata.value.terminalTitle,
+                            runningCommand: tab.metadata.value.runningCommand,
+                          ),
+                          EditorTab() => editorTabLabel(tab.remotePath),
+                        },
+                    ]);
+                    Widget chip(PaneTab tab, String label) => switch (tab) {
+                      TerminalSession() => _TabChip(
+                        ordinal: ordinals[tab]!,
+                        label: label,
+                        session: tab,
+                        selected: tab.id == activeTabId,
+                        onTap: () => onFocus(tab.id),
+                        onClose: () => onClose(tab.id),
+                        onRename: onRename == null
+                            ? null
+                            : () => _rename(context, tab),
+                      ),
+                      EditorTab() => _EditorTabChip(
+                        tab: tab,
+                        label: label,
+                        selected: tab.id == activeTabId,
+                        onTap: () => onFocus(tab.id),
+                        onClose: () => onClose(tab.id),
+                      ),
+                    };
+                    return Row(
+                      children: [
+                        for (var i = 0; i < tabs.length; i++)
+                          chip(tabs[i], labels[i]),
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-          IconButton(
-            tooltip: 'New tab',
-            iconSize: 18,
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
-            icon: const Icon(Icons.add),
-            onPressed: onNewTab,
-          ),
-          if (onGenerateCommand case final generate?) ...[
-            VerticalDivider(
-              width: 1,
-              indent: 7,
-              endIndent: 7,
-              color: scheme.outlineVariant,
-            ),
             IconButton(
-              tooltip: 'Generate command',
+              tooltip: 'New tab',
               iconSize: 18,
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
-              // The assistant's purple (Poltergeist's D34).
-              icon: Icon(
-                Icons.auto_fix_high,
-                color: FamilyPalette.of(context).glyph(FamilyHue.purple),
-              ),
-              onPressed: generate,
+              icon: const Icon(Icons.add),
+              onPressed: onNewTab,
             ),
+            if (onGenerateCommand case final generate?) ...[
+              VerticalDivider(
+                width: 1,
+                indent: 7,
+                endIndent: 7,
+                color: scheme.outlineVariant,
+              ),
+              IconButton(
+                tooltip: 'Generate command',
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 38),
+                // The assistant's purple (Poltergeist's D34).
+                icon: Icon(
+                  Icons.auto_fix_high,
+                  color: FamilyPalette.of(context).glyph(FamilyHue.purple),
+                ),
+                onPressed: generate,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
