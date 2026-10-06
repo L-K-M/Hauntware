@@ -7,7 +7,7 @@ sparse, zero-filled benchmark payloads at runtime, so no large blobs enter Git.
 test/integration/run.sh
 ```
 
-`run.sh` regenerates the user key, builds the digest-pinned OpenSSH 10.5p1
+`run.sh` regenerates the user key, builds the digest-pinned OpenSSH 10.6p1
 image, pulls the frozen legacy image by digest, checks every rendered Compose
 profile for unsafe publishing, waits for real SSH banners, runs the OpenSSH
 smoke checks, then runs tagged Dart integration tests serially. Its exit trap
@@ -55,7 +55,7 @@ Benchmark defaults:
 
 | Endpoint | Port | Purpose |
 |---|---:|---|
-| `sshd-modern` | 2201 | OpenSSH 10.5p1 LAN baseline |
+| `sshd-modern` | 2201 | OpenSSH 10.6p1 LAN baseline |
 | `sshd-modern` | 2201 | ~100 ms RTT after `network-profile.sh rtt100` |
 | `sshd-legacy` | 2202 | OpenSSH 8.4 defaults |
 | `sshd-chroot` | 2203 | chrooted `internal-sftp` only |
