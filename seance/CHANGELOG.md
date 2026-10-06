@@ -5,6 +5,8 @@
 - A server's colour runs along the top of the terminal's tab strip,
   above the tabs, where Poltergeist marks its active pane. Under the
   tabs, the terminal's first line could be drawn over it.
+- Terminal text stays inside the terminal. With scrollback, the partly
+  hidden top line was drawn over the tab strip above it.
 - Files: double-clicking a file opens it in the built-in editor, in a new
   tab beside your terminals. The built-in editor is now the default editor
   on desktop too, where files used to open in the system's default app.

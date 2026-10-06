@@ -635,7 +635,17 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
 
   @override
   void paint(PaintingContext context, Offset offset) {
+    // [seance fork] Clipped to the view. Rows land wherever the scroll offset
+    // puts them, so a view that is not a whole number of rows tall has one
+    // partly outside it: the top row when pinned to the bottom, the last when
+    // scrolled up. Upstream painted that row over the widgets beside the
+    // view. A canvas clip, not a clip layer: everything here is drawn on the
+    // one canvas.
+    final canvas = context.canvas;
+    canvas.save();
+    canvas.clipRect(offset & size);
     _paint(context, offset);
+    canvas.restore();
     context.setWillChangeHint();
   }
 
