@@ -193,6 +193,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'\$supportDirectoryPath\${Platform.pathSeparator}checkouts'",
   },
   'lib/services/app_preferences.dart': {
+    "'editor.textSize'",
     "'layout.paneRatio'",
     "'window.left'",
     "'window.top'",
@@ -414,6 +415,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'general.settings.close'",
     "'updates.checkEnabled'",
   },
+  // The editor text size slider's key — plumbing for tests, never rendered.
+  'lib/ui/settings/editor_text_size_settings.dart': {"'editor.textSize'"},
   // The Settings command id (D21 plumbing) — registered, never rendered.
   // Its construction assert is a programmer diagnostic.
   'lib/ui/settings/app_settings_command.dart': {
@@ -768,6 +771,9 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'editor.copy'",
     "'editor.paste'",
     "'editor.selectAll'",
+    "'editor.zoomIn'",
+    "'editor.zoomOut'",
+    "'editor.actualSize'",
   },
   // The shared-editor strings adapter: the text-tool, option and choice
   // ids it switches on (the shared catalog's stable machine identifiers),

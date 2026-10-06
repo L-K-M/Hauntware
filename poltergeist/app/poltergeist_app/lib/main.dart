@@ -17,6 +17,7 @@ import 'services/app_preferences.dart';
 import 'services/app_session_lifecycle.dart';
 import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
+import 'services/editor_text_size_controller.dart';
 import 'services/application_error_reporter.dart';
 import 'services/bookmark_backup_service.dart';
 import 'services/checkout_prompt_ledger.dart';
@@ -530,6 +531,11 @@ Future<void> main(List<String> args) async {
     initial: await preferences.loadAppearance(),
     save: preferences.saveAppearance,
   );
+  // The built-in editor's text size, shared by every editor window.
+  final editorTextSize = EditorTextSizeController(
+    initial: await preferences.loadEditorTextSize(),
+    save: preferences.saveEditorTextSize,
+  );
 
   // What every window shares beyond the models above (00 D39): the
   // reachability owner (it drives the engine's one probe target set),
@@ -666,6 +672,7 @@ Future<void> main(List<String> args) async {
       syncTasks: syncTasks,
       updateCheck: updateCheck,
       appearance: appearance,
+      editorTextSize: editorTextSize,
       deepLinks: deepLinks,
       seanceLauncher: seanceLauncher,
       settingsWindow: settingsWindow,

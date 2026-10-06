@@ -34,7 +34,8 @@ import 'services/recent_locations.dart';
 import 'services/seance_links.dart';
 import 'services/session_persistence.dart';
 import 'services/session_state.dart';
-import 'services/settings_models.dart' show AppearanceSettingsModel;
+import 'services/settings_models.dart'
+    show AppearanceSettingsModel, EditorTextSizeModel;
 import 'services/settings_window/settings_window_host.dart';
 import 'services/sidebar_controller.dart'
     show CollapsedSectionWriter, PinnedServerWriter, SidebarDensity;
@@ -124,6 +125,7 @@ class PoltergeistApp extends StatefulWidget {
     this.previewThreshold,
     this.checkoutPrompts,
     this.appearance,
+    this.editorTextSize,
     this.deepLinks,
     this.seanceLauncher,
   });
@@ -355,6 +357,10 @@ class PoltergeistApp extends StatefulWidget {
   /// section out.
   final AppearanceSettingsModel? appearance;
 
+  /// The built-in editor's text size on this device, behind Settings →
+  /// Appearance and View › Zoom. Null keeps editors at the standard size.
+  final EditorTextSizeModel? editorTextSize;
+
   final DeepLinkCoordinator? deepLinks;
   final SeanceLauncher? seanceLauncher;
 
@@ -555,6 +561,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       previewThreshold: widget.previewThreshold,
       checkoutPrompts: widget.checkoutPrompts,
       appearance: widget.appearance,
+      editorTextSize: widget.editorTextSize,
       deepLinks: widget.deepLinks,
       seanceLauncher: widget.seanceLauncher,
     );

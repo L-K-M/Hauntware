@@ -8,6 +8,7 @@ export 'src/editor_commands.dart';
 export 'src/editor_controller.dart';
 export 'src/editor_fonts.dart';
 export 'src/editor_strings.dart';
+export 'src/editor_text_size.dart';
 export 'src/editor_view.dart';
 export 'src/ghost_menus.dart';
 export 'src/search_history.dart';

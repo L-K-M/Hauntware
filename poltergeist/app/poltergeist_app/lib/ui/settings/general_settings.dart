@@ -9,9 +9,11 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../services/application_error_reporter.dart';
-import '../../services/settings_models.dart' show AppearanceSettingsModel;
+import '../../services/settings_models.dart'
+    show AppearanceSettingsModel, EditorTextSizeModel;
 import '../top_toast.dart';
 import 'appearance_settings.dart';
+import 'editor_text_size_settings.dart';
 
 /// The live value and write sink the General section needs — assembled
 /// by the shell so the dialog reads fresh state at open and never
@@ -42,6 +44,7 @@ Future<void> showGeneralSettingsDialog(
   BuildContext context, {
   GeneralSettings? settings,
   AppearanceSettingsModel? appearance,
+  EditorTextSizeModel? editorTextSize,
 }) => showDialog<void>(
   context: context,
   builder: (dialogContext) {
@@ -60,6 +63,11 @@ Future<void> showGeneralSettingsDialog(
               if (settings != null && appearance != null)
                 const Divider(height: 32),
               if (appearance != null) AppearanceSection(model: appearance),
+              if ((settings != null || appearance != null) &&
+                  editorTextSize != null)
+                const Divider(height: 32),
+              if (editorTextSize != null)
+                EditorTextSizeSection(model: editorTextSize),
             ],
           ),
         ),

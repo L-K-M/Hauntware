@@ -173,36 +173,11 @@ class _DocumentShellState extends State<_DocumentShell>
 
   SettingsController get settings => widget.settings;
 
-  /// The text sizes View › Zoom steps through. The stored size need not be one
-  /// of them (the Settings slider reaches every size between), and a step
-  /// goes to the nearest one past it.
-  static const _zoomSizes = [
-    9,
-    10,
-    11,
-    12,
-    13,
-    14,
-    16,
-    18,
-    20,
-    22,
-    24,
-    28,
-    32,
-    36,
-    AppSettings.maximumFontSize,
-  ];
-
   int get _fontSize => settings.value.fontSize;
 
-  void _zoomIn() => _setFontSize(
-    _zoomSizes.firstWhere((size) => size > _fontSize, orElse: () => _fontSize),
-  );
-
-  void _zoomOut() => _setFontSize(
-    _zoomSizes.lastWhere((size) => size < _fontSize, orElse: () => _fontSize),
-  );
+  /// View › Zoom steps through the sizes every Ghost editor shares.
+  void _zoom(EditorZoom zoom) =>
+      _setFontSize(EditorTextSize.zoomed(_fontSize, zoom));
 
   /// Zoom is a setting: it applies to every tab and outlasts the session.
   void _setFontSize(int size) =>
@@ -615,6 +590,24 @@ class _DocumentShellState extends State<_DocumentShell>
     bool shift = false,
     bool alt = false,
   }) => SingleActivator(key, meta: mac, control: !mac, shift: shift, alt: alt);
+
+  /// A View › Zoom row. Its first chord shows in the menu; the rest cover
+  /// where `+` and `-` sit across layouts and on the keypad.
+  _Command _zoomCommand(
+    String label,
+    EditorZoom zoom, {
+    required String mnemonic,
+  }) {
+    final chords = EditorTextSize.activators(zoom, defaultTargetPlatform);
+    return _Command(
+      label,
+      () => _zoom(zoom),
+      mnemonic: mnemonic,
+      shortcut: chords.first,
+      aliases: chords.skip(1).toList(),
+      enabled: EditorTextSize.canZoom(_fontSize, zoom),
+    );
+  }
 
   List<_ShellMenu> _menus() {
     final active = workspace.active;
@@ -1067,36 +1060,9 @@ class _DocumentShellState extends State<_DocumentShell>
         ),
       ], mnemonic: 'n'),
       _ShellMenu('View', [
-        _Command(
-          'Zoom In',
-          _zoomIn,
-          mnemonic: 'i',
-          shortcut: _shortcut(LogicalKeyboardKey.equal),
-          // `+` sits on different keys, shifted or not, across layouts.
-          aliases: [
-            _shortcut(LogicalKeyboardKey.equal, shift: true),
-            _shortcut(LogicalKeyboardKey.add),
-            _shortcut(LogicalKeyboardKey.add, shift: true),
-            _shortcut(LogicalKeyboardKey.numpadAdd),
-          ],
-          enabled: _fontSize < _zoomSizes.last,
-        ),
-        _Command(
-          'Zoom Out',
-          _zoomOut,
-          mnemonic: 'o',
-          shortcut: _shortcut(LogicalKeyboardKey.minus),
-          aliases: [_shortcut(LogicalKeyboardKey.numpadSubtract)],
-          enabled: _fontSize > _zoomSizes.first,
-        ),
-        _Command(
-          'Actual Size',
-          () => _setFontSize(AppSettings.defaultFontSize),
-          mnemonic: 'a',
-          shortcut: _shortcut(LogicalKeyboardKey.digit0),
-          aliases: [_shortcut(LogicalKeyboardKey.numpad0)],
-          enabled: _fontSize != AppSettings.defaultFontSize,
-        ),
+        _zoomCommand('Zoom In', EditorZoom.zoomIn, mnemonic: 'i'),
+        _zoomCommand('Zoom Out', EditorZoom.zoomOut, mnemonic: 'o'),
+        _zoomCommand('Actual Size', EditorZoom.actualSize, mnemonic: 'a'),
       ], mnemonic: 'v'),
       _ShellMenu('Window', [
         _Command(

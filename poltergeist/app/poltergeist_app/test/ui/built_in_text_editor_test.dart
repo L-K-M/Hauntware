@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/ui/built_in_text_editor.dart';
 import 'package:poltergeist_app/ui/editor_syntax.dart';
 import 'package:poltergeist_app/ui/top_toast.dart';
@@ -310,6 +311,62 @@ void main() {
     },
     variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
+
+  testWidgets('the zoom chords resize the text through the shared size', (
+    tester,
+  ) async {
+    final textSize = EditorTextSizeController();
+    addTearDown(textSize.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: BuiltInTextEditorScreen(
+          file: file,
+          initialText: 'one\n',
+          showToast: (_, _) {},
+          monoFontFallback: const ['monospace'],
+          basenameOf: remoteBasename,
+          textSize: textSize,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+    double? fontSize() =>
+        tester.widget<TextField>(find.byType(TextField)).style?.fontSize;
+    expect(fontSize(), 14);
+
+    Future<void> control(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await control(LogicalKeyboardKey.equal);
+    expect(textSize.value, 16);
+    expect(fontSize(), 16);
+    await control(LogicalKeyboardKey.numpadSubtract);
+    await control(LogicalKeyboardKey.minus);
+    expect(fontSize(), 13);
+    await control(LogicalKeyboardKey.digit0);
+    expect(fontSize(), 14);
+    // The document kept its text: the chords never reached the field.
+    expect(find.widgetWithText(TextField, 'one\n'), findsOneWidget);
+  });
+
+  testWidgets('without a size model the editor draws at the standard size', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      editorApp(remotePath: '/etc/config.txt', initialText: 'one\n'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<TextField>(find.byType(TextField)).style?.fontSize, 14);
+  });
 
   testWidgets('Ctrl-S falls back to reconciling when the upload fails', (
     tester,

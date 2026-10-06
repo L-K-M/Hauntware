@@ -11,7 +11,7 @@ versioned dependency updates.
 | Layer | Owns |
 |---|---|
 | `planchette_core` | Language detection, tokenization, search ranges, document encoding metadata, bounded loading, guarded local-file writes |
-| `planchette_editor` | Editing state, highlighting, search and replace, gutter, status, focus, editing surface, and shared save/close contracts |
+| `planchette_editor` | Editing state, highlighting, search and replace, gutter, status, focus, editing surface, text-size range and zoom steps, and shared save/close contracts |
 | `ghost_ui` | Shared leaf UI primitives: family hues, WCAG contrast math, middle-ellipsis text, top toasts, the in-place tab view, the sidebar kit, ghost menus, and the file-list presentation helpers |
 | `ghost_desktop` | Desktop window lifecycle shared by all three apps: remembered frame, missing-monitor policy, maximized/full-screen restore, and the intercepted close path behind host-owned adapters |
 | Planchette app | Local document tabs, native menus, Open/New/Save/Save As, file-open events, and application close/quit |

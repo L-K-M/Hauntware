@@ -2791,6 +2791,48 @@ abstract class AppLocalizations {
   /// **'General'**
   String get settingsGeneralSection;
 
+  /// Settings → Appearance section header for the built-in text editor's text size.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in editor'**
+  String get editorTextSizeSection;
+
+  /// Label beside the built-in editor's text size slider in Settings → Appearance.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get editorTextSizeLabel;
+
+  /// The built-in editor's text size as the slider shows and announces it.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} pt'**
+  String editorTextSizeValue(int size);
+
+  /// Note under the built-in editor's text size slider: the editor's View menu zoom commands set the same size.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom In, Zoom Out and Actual Size in an editor change it too.'**
+  String get editorTextSizeHint;
+
+  /// Editor window View menu: make the editor's text larger (Cmd/Ctrl and +).
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom In'**
+  String get editorZoomInLabel;
+
+  /// Editor window View menu: make the editor's text smaller (Cmd/Ctrl and -).
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom Out'**
+  String get editorZoomOutLabel;
+
+  /// Editor window View menu: return the editor's text to its standard size (Cmd/Ctrl and 0).
+  ///
+  /// In en, this message translates to:
+  /// **'Actual Size'**
+  String get editorActualSizeLabel;
+
   /// Tab label for the General rows in the desktop Settings window (02 §10).
   ///
   /// In en, this message translates to:

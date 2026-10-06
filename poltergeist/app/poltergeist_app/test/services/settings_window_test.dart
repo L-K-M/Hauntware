@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
+import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
 import 'package:poltergeist_app/services/external_file_opener.dart';
@@ -176,6 +177,8 @@ void main() {
   late bool checkForUpdates;
   late int threshold;
   late AppearanceController appearance;
+  late EditorTextSizeController editorTextSize;
+  late List<int> savedTextSizes;
   late List<AppAppearance> savedAppearances;
   Object? appearanceSaveFailure;
 
@@ -221,9 +224,15 @@ void main() {
       sharedIncludesSeance56Fix: true,
     ),
     appearance: appearance,
+    editorTextSize: editorTextSize,
   );
 
   setUp(() {
+    savedTextSizes = [];
+    editorTextSize = EditorTextSizeController(
+      save: (size) async => savedTextSizes.add(size),
+    );
+    addTearDown(editorTextSize.dispose);
     backup = _FakeBackup();
     editors = _FakeEditors();
     checkForUpdates = true;
@@ -308,7 +317,42 @@ void main() {
     expect(remote.backup, isNull);
     // No Appearance tab, and the window draws the default theme.
     expect(remote.appearance, isNull);
+    expect(remote.editorTextSize, isNull);
     expect(remote.theme.value, AppAppearance.initial);
+  });
+
+  group('the editor text size', () {
+    test('crosses in the first snapshot', () async {
+      await editorTextSize.setTextSize(22);
+
+      final remote = await openWindow(SettingsWindowTab.appearance);
+
+      expect(remote.editorTextSize?.value, 22);
+    });
+
+    test('set in the window, resizes the app\'s editors', () async {
+      final remote = await openWindow();
+      var moved = 0;
+      remote.editorTextSize!.addListener(() => moved++);
+
+      await remote.editorTextSize!.setTextSize(30);
+
+      expect(editorTextSize.value, 30);
+      expect(savedTextSizes, [30]);
+      // The window's slider follows through the snapshot that write sent.
+      await pumpEventQueue();
+      expect(remote.editorTextSize!.value, 30);
+      expect(moved, 1);
+    });
+
+    test('a zoom in the app reaches an open window', () async {
+      final remote = await openWindow();
+
+      await editorTextSize.setTextSize(11);
+      await pumpEventQueue();
+
+      expect(remote.editorTextSize!.value, 11);
+    });
   });
 
   group('the theme', () {
