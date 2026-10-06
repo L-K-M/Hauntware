@@ -310,7 +310,8 @@ final class _YamlReader {
   }
 
   /// The text of the quoted scalar between [open] and [close], with the
-  /// escapes keys use resolved, so `"a\"b"` and `'a"b'` compare equal.
+  /// common escapes resolved, so `"a\"b"` and `'a"b'` compare equal. Rarer
+  /// ones such as `\u0041` stay as written, which can only miss a repeat.
   String _unquote(int open, int close, int quote) {
     final raw = _text.substring(open + 1, close);
     if (quote == 0x27) return raw.replaceAll("''", "'");

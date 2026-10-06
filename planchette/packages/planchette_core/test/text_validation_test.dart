@@ -366,6 +366,13 @@ void main() {
       ]);
     });
 
+    test('reads escaped quotes inside a multi-line basic string', () {
+      // \" is a quote, and "" may sit anywhere inside """: the string
+      // only closes on line 4.
+      const text = 'a = 1\nx = """v\\"""\na = 2\n"""\n';
+      expect(_problems(text, TextFormat.toml), isEmpty);
+    });
+
     test('starts afresh for each array-of-tables element', () {
       const text =
           '[[fruits]]\n'

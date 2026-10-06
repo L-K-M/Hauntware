@@ -143,8 +143,8 @@ final class _TomlReader {
   void _scanValue(int pos, int end) {
     while (pos < end) {
       if (_multiline case final delimiter?) {
-        final close = _text.indexOf(delimiter, pos);
-        if (close < 0 || close >= end) return;
+        final close = _multilineClose(pos, end, delimiter);
+        if (close < 0) return;
         _multiline = null;
         pos = close + delimiter.length;
         continue;
@@ -169,6 +169,23 @@ final class _TomlReader {
       }
       pos++;
     }
+  }
+
+  /// The [delimiter] that closes a multi-line string, at or after [from] on
+  /// the line, or -1. Searching only the line keeps a long string linear,
+  /// and in a basic string a backslash escapes the next character, so
+  /// `\"""` is a quote and two more inside the string.
+  int _multilineClose(int from, int end, String delimiter) {
+    for (var i = from; i < end; i++) {
+      if (delimiter == '"""' && _text.codeUnitAt(i) == 0x5c /* backslash */ ) {
+        i++;
+        continue;
+      }
+      if (i + delimiter.length <= end && _text.startsWith(delimiter, i)) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /// The closing [quote] of a one-line string from [from], or -1. Basic
