@@ -74,7 +74,9 @@ void main() {
     }
     await tester.pump();
 
-    // The premise: the view really does end partway through a row.
+    // The premise: there is scrollback to sit in, and the view really does
+    // end partway through a row.
+    expect(scroll.position.maxScrollExtent, greaterThan(0));
     final render = viewKey.currentState!.renderTerminal;
     final remainder = render.size.height % render.lineHeight;
     expect(remainder, inExclusiveRange(0, render.lineHeight));
@@ -89,7 +91,9 @@ void main() {
           as RenderRepaintBoundary;
       final image = await boundary.toImage();
       final bytes = await image.toByteData();
-      return (image.width, bytes!);
+      final width = image.width;
+      image.dispose();
+      return (width, bytes!);
     });
     final (width, ByteData bytes) = capture!;
 
