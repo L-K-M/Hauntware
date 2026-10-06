@@ -8,9 +8,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ghost_ui/ghost_ui.dart';
+import 'package:open_file_platform_interface/open_file_platform_interface.dart';
 import 'package:seance_app/app_state.dart';
 import 'package:seance_app/main.dart';
 import 'package:seance_app/services/app_services.dart';
+import 'package:seance_app/services/editor_document.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/ui/files_pane.dart';
@@ -103,6 +105,36 @@ void main() {
     );
     await tester.pump();
     return files;
+  }
+
+  /// Pumps until [done]: a checkout writes real files, so its I/O lands
+  /// between frames while the fake clock runs for the timers it waits on.
+  Future<void> settleCheckout(WidgetTester tester, bool Function() done) async {
+    for (var i = 0; i < 200 && !done(); i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+  }
+
+  /// Records what the system's default app is asked to open, instead of
+  /// launching it.
+  List<String> recordSystemOpens() {
+    final previous = OpenFilePlatform.platform;
+    final recorder = _RecordingOpenFile();
+    OpenFilePlatform.platform = recorder;
+    addTearDown(() => OpenFilePlatform.platform = previous);
+    return recorder.opened;
+  }
+
+  /// Two presses with no frame between them: the pane times the
+  /// double-click against the wall clock, which a loaded machine could
+  /// otherwise stretch past the window.
+  Future<void> doubleClick(WidgetTester tester, String name) async {
+    await tester.tap(find.text(name));
+    await tester.tap(find.text(name));
+    await tester.pump();
   }
 
   /// A test pinned to [platform] — the pane picks its posture from
@@ -198,19 +230,8 @@ void main() {
     (tester) async {
       final files = await pumpFilesPane(tester, _ListFileSystem());
 
-      await tester.tap(find.text('a.txt'));
-      await tester.pump();
-      await tester.tap(find.text('a.txt'));
-      await tester.pump();
-
-      // The checkout writes a real file: let that I/O land between frames,
-      // and the fake clock run for the timers it waits on.
-      for (var i = 0; i < 200 && state!.activeTab is! EditorTab; i++) {
-        await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 20)),
-        );
-        await tester.pump(const Duration(milliseconds: 20));
-      }
+      await doubleClick(tester, 'a.txt');
+      await settleCheckout(tester, () => state!.activeTab is EditorTab);
 
       final editor = state!.activeTab;
       expect(editor, isA<EditorTab>());
@@ -218,6 +239,53 @@ void main() {
       expect(state!.tabs, hasLength(2));
 
       await tester.runAsync(() => files.removeLocalCopy('$_home/a.txt'));
+    },
+  );
+
+  platformTest(
+    'a double-click gives a binary file to the system\'s default app',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+
+      await doubleClick(tester, 'b.bin');
+      await settleCheckout(tester, () => opened.isNotEmpty);
+
+      expect(opened, [endsWith('b.bin')]);
+      expect(state!.tabs, hasLength(1));
+
+      await tester.runAsync(() => files.removeLocalCopy('$_home/b.bin'));
+    },
+  );
+
+  platformTest(
+    'a double-click gives a file over 4 MB to the system\'s default app',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(
+          extra: [
+            const RemoteFileEntry(
+              path: '$_home/big.log',
+              name: 'big.log',
+              type: RemoteFileType.file,
+              size: builtInEditorMaximumBytes + 1,
+            ),
+          ],
+        ),
+      );
+
+      await doubleClick(tester, 'big.log');
+      await settleCheckout(tester, () => opened.isNotEmpty);
+
+      expect(opened, [endsWith('big.log')]);
+      expect(state!.tabs, hasLength(1));
+      expect(find.textContaining('4 MB'), findsNothing);
+
+      await tester.runAsync(() => files.removeLocalCopy('$_home/big.log'));
     },
   );
 
@@ -437,8 +505,14 @@ class _OpenSshSession implements SshSession {
   Object? noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-/// `/home/test` holding a directory and three files; `docs` lists empty.
+/// `/home/test` holding a directory and three files, plus [extra];
+/// `docs` lists empty. A `.bin` file downloads as NUL bytes, anything else
+/// as text.
 class _ListFileSystem implements RemoteFileSystem {
+  _ListFileSystem({List<RemoteFileEntry> extra = const []}) {
+    _entries[_home]!.addAll(extra);
+  }
+
   final _entries = <String, List<RemoteFileEntry>>{
     _home: [
       RemoteFileEntry(
@@ -486,7 +560,9 @@ class _ListFileSystem implements RemoteFileSystem {
     bool computeHash = true,
   }) async {
     final entry = await stat(path);
-    destination.add(List.filled(entry.size ?? 0, 0x61));
+    destination.add(
+      List.filled(entry.size ?? 0, path.endsWith('.bin') ? 0 : 0x61),
+    );
     return entry;
   }
 
@@ -507,4 +583,22 @@ class _ListFileSystem implements RemoteFileSystem {
 
   @override
   Object? noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// Records what the system's default app is asked to open.
+class _RecordingOpenFile extends OpenFilePlatform {
+  final opened = <String>[];
+
+  @override
+  Future<OpenResult> open(
+    String? filePath, {
+    String? type,
+    bool isIOSAppOpen = false,
+    String linuxDesktopName = 'xdg',
+    bool linuxUseGio = false,
+    bool linuxByProcess = false,
+  }) async {
+    opened.add(filePath!);
+    return OpenResult();
+  }
 }

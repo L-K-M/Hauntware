@@ -510,7 +510,7 @@ packages:
     source: hosted
     version: "1.1.0"
   open_file_platform_interface:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: open_file_platform_interface
       sha256: dc302e4bd5c1d77acec4240bd0dbc1d9f2ee6882b1ce52bca5298369da7acf12

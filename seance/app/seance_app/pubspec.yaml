@@ -85,6 +85,9 @@ dev_dependencies:
   # Deterministic timer control for the termination-watchdog tests —
   # real-time waits race under a loaded CI runner.
   fake_async: ^1.3.3
+  # Stands in for the system's default app, so tests that open a file
+  # there never launch one.
+  open_file_platform_interface: ^1.1.0
   flutter_lints: ^5.0.0
   # Regenerates every platform's launcher icon from media-sources/seance-icon.png
   # (config in flutter_launcher_icons.yaml): dart run flutter_launcher_icons
