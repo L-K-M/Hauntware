@@ -3,6 +3,32 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Downloads marked as untrusted, macOS copies owner-only (2026-10-06)
+
+Finding P1-03a: files Séance writes from a server carried no download
+mark, so the OS treated them as local files. `DownloadProvenance`
+(`lib/services/download_provenance.dart`) now marks new checkouts,
+refreshed checkouts, Download targets and Save as destinations: a
+`Zone.Identifier` stream with `ZoneId=3` on Windows (no `HostUrl`, so
+the server's address does not travel with copies) and
+`com.apple.quarantine` (`0081;<time>;Seance;<UUID>`, written as hex with
+`/usr/bin/xattr -wx`, no shell) on macOS. Share's staged copy is marked
+too. Marking is best effort and only logged on
+failure: FAT, exFAT and some SMB volumes have no streams or attributes,
+and that must not block an open. Checkouts are now owner-only on macOS
+as on Linux (0700 directory, 0600 file), and a refresh sets the mode
+and mark on its new file before renaming it into place: the renamed-in
+file used to arrive 0644, and a failure now leaves the old copy intact.
+An editor's atomic save still drops the mark, as it does for any
+downloaded file the user edits.
+
+Validated on Linux: service tests that simulate the Windows stream and
+the macOS `xattr` call, failures that never throw, controller tests
+that checkouts, refreshes and Download targets are marked, a failed
+mark still opening, and a refreshed copy staying 0600 (it was 0644
+before). Not exercised: real NTFS streams, Gatekeeper prompts, or
+macOS modes on a Mac.
+
 ## Launch guard: installers and loadable bundles (2026-10-06)
 
 The shared launch classifier (`seance_core` `executable_launch.dart`)

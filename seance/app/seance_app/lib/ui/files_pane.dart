@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../app_state.dart';
 import '../main.dart';
+import '../services/download_provenance.dart';
 import '../services/external_file_opener.dart';
 import '../services/file_export_service.dart';
 import '../services/managed_remote_file.dart';
@@ -1314,6 +1315,8 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       await widget.controller.download(entry, sink);
       await sink.flush();
       await sink.close();
+      // Share hands this copy on as it is.
+      await DownloadProvenance().markDownloaded(file.path);
       return StagedExportFile(
         file: file,
         fileName: _safeLocalName(entry.name),
@@ -1337,6 +1340,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
           );
           if (destination == null) return null;
           await _copyExportAtomically(file.file, File(destination));
+          await DownloadProvenance().markDownloaded(destination);
           return destination;
         },
       );

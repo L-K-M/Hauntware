@@ -7,6 +7,11 @@
   preference panes, screen savers and Automator actions on a Mac, and
   `.deb` and `.rpm` packages on Linux join the files Séance won't hand
   to the system's default app, which would install and run them.
+- Files: files Séance downloads, the local copies it opens and the ones
+  you Download or Save as, are marked as downloaded from the internet
+  (Mark-of-the-Web on Windows, quarantine on macOS), so the system warns
+  before running one. Local copies on a Mac are now readable only by
+  you, as on Linux, and stay that way after Séance refreshes them.
 - Files: a double-click with nothing selected opens the item under the
   pointer. The selection count, Download and Clear moved from above the
   list to the footer, so the first click no longer moves the rows. The
