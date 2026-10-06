@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -152,8 +153,13 @@ void main() {
   /// double-click against the wall clock, which a loaded machine could
   /// otherwise stretch past the window.
   Future<void> doubleClick(WidgetTester tester, String name) async {
-    await tester.tap(find.text(name));
-    await tester.tap(find.text(name));
+    // The listing's row, not a Local edits entry of the same name.
+    final row = find.descendant(
+      of: find.byType(GhostFileRow),
+      matching: find.text(name),
+    );
+    await tester.tap(row);
+    await tester.tap(row);
     await tester.pump();
   }
 
@@ -608,6 +614,54 @@ void main() {
   );
 
   platformTest(
+    'a double-click asks before downloading a file over 100 MB',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(extra: [_huge]),
+      );
+
+      await doubleClick(tester, 'huge.iso');
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Download huge.iso?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(files.localCopies, isEmpty);
+      expect(opened, isEmpty);
+    },
+  );
+
+  platformTest(
+    'confirming the large download opens the file',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(extra: [_huge]),
+      );
+
+      await doubleClick(tester, 'huge.iso');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('Download'));
+      await settleCheckout(tester, () => opened.isNotEmpty);
+
+      expect(opened, [endsWith('huge.iso')]);
+
+      // The same file again reuses the local copy, so it does not ask.
+      await doubleClick(tester, 'huge.iso');
+      await settleCheckout(tester, () => opened.length == 2);
+      expect(find.text('Download huge.iso?'), findsNothing);
+      expect(opened, hasLength(2));
+
+      await tester.runAsync(() => files.removeLocalCopy('$_home/huge.iso'));
+    },
+  );
+
+  platformTest(
     'arrows move the cursor and select; Enter opens',
     TargetPlatform.linux,
     (tester) async {
@@ -832,6 +886,14 @@ final _hostProgram = switch (currentEditorHostPlatform!) {
   EditorHostPlatform.windows => 'run.cmd',
 };
 
+/// A listed file well over the size a default open asks about.
+const _huge = RemoteFileEntry(
+  path: '$_home/huge.iso',
+  name: 'huge.iso',
+  type: RemoteFileType.file,
+  size: 200 * 1024 * 1024,
+);
+
 /// Names whose download is NUL bytes rather than text.
 final _binaryNames = RegExp(r'\.(bin|jar)$');
 
@@ -931,8 +993,11 @@ class _ListFileSystem implements RemoteFileSystem {
     bool computeHash = true,
   }) async {
     final entry = await stat(path);
+    // Capped: a listed size can be far larger than the test needs to
+    // write, as long as it stays over the built-in editor's 4 MB.
+    final length = min(entry.size ?? 0, 5 * 1024 * 1024);
     destination.add(
-      List.filled(entry.size ?? 0, _binaryNames.hasMatch(path) ? 0 : 0x61),
+      List.filled(length, _binaryNames.hasMatch(path) ? 0 : 0x61),
     );
     return entry;
   }

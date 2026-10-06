@@ -128,7 +128,8 @@ Opening a remote file locally is a managed checkout:
    configured desktop editor. On desktop, a default open hands any other
    file to the platform default app, except one that app would run as a
    program (e.g. `.exe`, `.js` and `.hta` on Windows, `.command` and
-   `.app` on macOS, `.desktop` and `.jar` on Linux), which is refused.
+   `.app` on macOS, `.desktop` and `.jar` on Linux), which is refused. A
+   default open of a file over 100 MiB asks before downloading it.
 4. Keep the checkout visible in a **Local edits** section.
 5. Offer **Upload changes**; do not silently overwrite the remote file. In
    the built-in editor, ⌘S/Ctrl+S on a server file is an explicit **save and

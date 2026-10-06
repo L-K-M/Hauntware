@@ -21,6 +21,11 @@ import '../services/xterm_engine.dart';
 import 'built_in_text_editor.dart';
 import 'file_kinds.dart';
 
+/// The size above which a default open asks before downloading: the
+/// threshold Poltergeist's preview asks at
+/// (`defaultLargeDownloadThresholdBytes`).
+const _largeDownloadBytes = 100 * 1024 * 1024;
+
 class FilesScreen extends StatelessWidget {
   const FilesScreen({super.key});
 
@@ -1009,6 +1014,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       _showError('The built-in editor supports text files up to 4 MB.');
       return;
     }
+    if (maximumBytes == null && !await _confirmLargeDownload(entry)) return;
     try {
       final copy = await widget.controller.checkoutRemoteFile(
         entry,
@@ -1044,6 +1050,29 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     } catch (error) {
       _showError(error);
     }
+  }
+
+  /// Asks before a default open downloads all of [entry] when it is over
+  /// [_largeDownloadBytes]: a double-click is easy to make by accident.
+  /// A local copy of the same listed size is reused rather than
+  /// downloaded again, so it does not ask.
+  Future<bool> _confirmLargeDownload(RemoteFileEntry entry) async {
+    final size = entry.size;
+    if (size == null || size <= _largeDownloadBytes) return true;
+    final copy = widget.controller.localCopies[entry.path];
+    if (copy?.remoteSnapshot.size == size) return true;
+
+    final shown = ghostFormatFileSize(
+      size,
+      platform: Theme.of(context).platform,
+    );
+    return _confirm(
+      title: 'Download ${entry.name}?',
+      message:
+          'It is $shown. Séance downloads the whole file before '
+          'opening it.',
+      confirmLabel: 'Download',
+    );
   }
 
   /// Refuses [entry] by its listed name before anything downloads when
