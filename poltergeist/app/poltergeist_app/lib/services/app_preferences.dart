@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorTextSize;
 import 'package:poltergeist_core/poltergeist_core.dart'
     show
         TransferConcurrency,
@@ -39,6 +41,7 @@ const _previewThresholdKey = 'preview.largeDownloadThresholdBytes';
 const _updateChecksEnabledKey = 'updates.checkEnabled';
 const _themePaletteKey = 'theme.palette';
 const _themeModeKey = 'theme.mode';
+const _editorTextSizeKey = 'editor.textSize';
 
 /// How a server's own Automatic is spelled in the stored overrides; a
 /// fixed cap is stored as its number.
@@ -469,6 +472,22 @@ class AppPreferences {
     _themePaletteKey: appearance.palette.toJson(),
     _themeModeKey: appearance.mode.name,
   });
+
+  /// The built-in editor's text size on this device, clamped to the shared
+  /// range; a missing or corrupt value is the standard size.
+  Future<int> loadEditorTextSize() async {
+    num? stored;
+    try {
+      stored = await _store.get<num>(_editorTextSizeKey);
+    } catch (_) {
+      return EditorTextSize.standard;
+    }
+    if (stored == null || !stored.isFinite) return EditorTextSize.standard;
+    return EditorTextSize.clamp(stored.round());
+  }
+
+  Future<void> saveEditorTextSize(int size) =>
+      _store.set(_editorTextSizeKey, EditorTextSize.clamp(size));
 
   /// The §8 "Preview & downloads" cache cap (06 §8): bytes, default
   /// 512 MiB. A missing or corrupt value decodes to the default.

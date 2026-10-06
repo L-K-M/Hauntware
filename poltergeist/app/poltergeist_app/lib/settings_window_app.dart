@@ -17,6 +17,7 @@ import 'ui/selected_tab_view.dart';
 import 'ui/settings/appearance_settings.dart';
 import 'ui/settings/backup_settings.dart';
 import 'ui/settings/editor_settings.dart';
+import 'ui/settings/editor_text_size_settings.dart';
 import 'ui/settings/general_settings.dart';
 import 'ui/settings/preview_settings.dart';
 
@@ -143,7 +144,9 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
   /// app either has or has not.
   late final List<SettingsWindowTab> _tabs = [
     if (widget.remote.general != null) SettingsWindowTab.general,
-    if (widget.remote.appearance != null) SettingsWindowTab.appearance,
+    if (widget.remote.appearance != null ||
+        widget.remote.editorTextSize != null)
+      SettingsWindowTab.appearance,
     if (widget.remote.editors != null || widget.remote.previewDownloads != null)
       SettingsWindowTab.editing,
     if (widget.remote.backup != null) SettingsWindowTab.sync,
@@ -215,7 +218,15 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
       case SettingsWindowTab.general:
         children = [GeneralSection(settings: remote.general!)];
       case SettingsWindowTab.appearance:
-        children = [AppearanceSection(model: remote.appearance!)];
+        final appearance = remote.appearance;
+        final editorTextSize = remote.editorTextSize;
+        children = [
+          if (appearance != null) AppearanceSection(model: appearance),
+          if (appearance != null && editorTextSize != null)
+            const SizedBox(height: 32),
+          if (editorTextSize != null)
+            EditorTextSizeSection(model: editorTextSize),
+        ];
       case SettingsWindowTab.editing:
         final editors = remote.editors;
         final preview = remote.previewDownloads;

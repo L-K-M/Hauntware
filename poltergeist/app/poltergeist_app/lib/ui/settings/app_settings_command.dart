@@ -2,7 +2,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../services/registered_command.dart';
-import '../../services/settings_models.dart' show AppearanceSettingsModel;
+import '../../services/settings_models.dart'
+    show AppearanceSettingsModel, EditorTextSizeModel;
 import '../../services/settings_window/settings_window_link.dart';
 import 'general_settings.dart';
 
@@ -19,16 +20,17 @@ const kAppSettingsCommandId = 'app.settings';
 ///
 /// On desktop it opens the Settings window on General ([openWindow]); the
 /// Settings dialog remains for a runner without one, and is what phones and
-/// tablets get: General's rows ([settings]) and Appearance ([appearance]),
-/// whichever the app has.
+/// tablets get: General's rows ([settings]) and Appearance ([appearance]
+/// with the editor's [editorTextSize]), whichever the app has.
 RegisteredCommand buildAppSettingsCommand({
   GeneralSettings Function()? settings,
   AppearanceSettingsModel? appearance,
+  EditorTextSizeModel? editorTextSize,
   required bool Function() enabled,
   OpenSettingsWindow? openWindow,
 }) {
   assert(
-    settings != null || appearance != null,
+    settings != null || appearance != null || editorTextSize != null,
     'Settings needs a section to show.',
   );
   return RegisteredCommand(
@@ -51,6 +53,7 @@ RegisteredCommand buildAppSettingsCommand({
         context,
         settings: settings?.call(),
         appearance: appearance,
+        editorTextSize: editorTextSize,
       );
     },
     // 10 §8: the macOS app menu on Mac (AppKit convention), File's

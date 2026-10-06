@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
 import 'package:poltergeist_app/services/app_preferences.dart';
 import 'package:poltergeist_app/services/double_click_action.dart';
 import 'package:poltergeist_app/services/settings_store.dart';
@@ -246,6 +247,41 @@ void main() {
         stored.keys,
         unorderedEquals(['sidebar.density', 'theme.palette', 'theme.mode']),
       );
+    });
+  });
+
+  group('the built-in editor text size', () {
+    AppPreferences fresh() =>
+        AppPreferences(store: SettingsStore(path: settingsFile.path));
+
+    test('defaults to the standard size and round-trips', () async {
+      expect(await fresh().loadEditorTextSize(), EditorTextSize.standard);
+      await fresh().saveEditorTextSize(20);
+      expect(await fresh().loadEditorTextSize(), 20);
+      final stored =
+          jsonDecode(await settingsFile.readAsString()) as Map<String, Object?>;
+      expect(stored['editor.textSize'], 20);
+    });
+
+    test('a hand-edited size is clamped, a garbage one is standard', () async {
+      for (final (raw, expected) in [
+        ('3', EditorTextSize.minimum),
+        ('400', EditorTextSize.maximum),
+        ('17.6', 18),
+        ('"large"', EditorTextSize.standard),
+        ('null', EditorTextSize.standard),
+      ]) {
+        await settingsFile.writeAsString('{"editor.textSize":$raw}');
+        expect(await fresh().loadEditorTextSize(), expected, reason: raw);
+      }
+    });
+
+    test('an unreadable store reads as the standard size', () async {
+      await settingsFile.writeAsBytes([0xff]);
+      final preferences = AppPreferences(
+        store: SettingsStore(path: settingsFile.path, onError: (_, _) {}),
+      );
+      expect(await preferences.loadEditorTextSize(), EditorTextSize.standard);
     });
   });
 

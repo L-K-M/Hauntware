@@ -1515,7 +1515,9 @@ Sections (each with the `?` help-dialog affordance):
 via `openSettings(initialTab:)` (Séance's deep-link pattern). Editor
 *behavior* deliberately gets no settings in v1 — D17 pins the ported stack
 to Séance's behavior; a divergence wants an upstreamable reason, not a
-preference.
+preference. The text size is appearance, not behavior: since 2026-10-06
+Settings → Appearance and the editor's View › Zoom set it, with the range
+and steps Planchette and Séance share (`EditorTextSize`).
 
 ## Definition of done
 

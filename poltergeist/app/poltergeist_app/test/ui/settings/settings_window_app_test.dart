@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
+import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/settings_window/remote_settings.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_host.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_link.dart';
@@ -11,6 +12,7 @@ import 'package:poltergeist_app/settings_window_app.dart';
 import 'package:poltergeist_app/theme/app_appearance.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
+import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
 import 'package:poltergeist_app/ui/settings/preview_settings.dart';
 
@@ -27,6 +29,7 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   late SettingsWindowHost host;
   late AppearanceController appearance;
+  late EditorTextSizeController editorTextSize;
   late bool checkForUpdates;
   final updates = ChangeNotifier();
 
@@ -50,6 +53,7 @@ void main() {
       initial: AppAppearance(palette: ThemePresets.midnight),
     );
     checkForUpdates = true;
+    editorTextSize = EditorTextSizeController(initial: 18);
     host = SettingsWindowHost(control: _control, link: _appLink)
       ..attach(
         SettingsWindowSources(
@@ -58,6 +62,7 @@ void main() {
             onCheckForUpdatesChanged: (_) async {},
           ),
           appearance: appearance,
+          editorTextSize: editorTextSize,
           changes: [updates],
           previewDownloads: () => PreviewDownloadsSettings(
             available: true,
@@ -177,6 +182,25 @@ void main() {
     expect(find.byType(AppearanceSection), findsOneWidget);
     expect(find.byTooltip('Use the Midnight theme'), findsOneWidget);
     expect(find.text('Using Midnight.'), findsOneWidget);
+  });
+
+  testWidgets('the Appearance tab ends with the editor text size', (
+    tester,
+  ) async {
+    await pumpWindow(tester, SettingsWindowTab.appearance);
+
+    // The page is a lazy list: scroll the section into being.
+    await tester.scrollUntilVisible(
+      find.byType(EditorTextSizeSection),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const PageStorageKey(SettingsWindowTab.appearance)),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(find.text('18 pt'), findsOneWidget);
   });
 
   testWidgets('the window follows the app\'s theme, and only its theme', (

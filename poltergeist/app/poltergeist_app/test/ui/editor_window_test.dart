@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/quit_guard.dart';
+import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/workspace_windows/workspace_windows.dart';
 import 'package:poltergeist_app/ui/built_in_text_editor.dart';
 import 'package:poltergeist_app/ui/editor_window_app.dart';
@@ -19,6 +21,7 @@ void main() {
   Future<void> mount(
     WidgetTester tester, {
     Future<String> Function(File, String)? saveDocument,
+    EditorTextSizeController? textSize,
   }) async {
     host = FakeWindowHost();
     windows = WorkspaceWindows(
@@ -43,6 +46,7 @@ void main() {
           showToast: (_, _) {},
           monoFontFallback: const ['monospace'],
           basenameOf: (_) => 'config.txt',
+          textSize: textSize,
         ),
       ),
     );
@@ -201,5 +205,32 @@ void main() {
       expect(command.activators!(TargetPlatform.macOS), isNotEmpty);
       expect(command.activators!(TargetPlatform.windows), isNotEmpty);
     }
+  });
+
+  testWidgets('View › Zoom resizes every editor and greys out at the ends', (
+    tester,
+  ) async {
+    final textSize = EditorTextSizeController(initial: 36);
+    addTearDown(textSize.dispose);
+    await mount(tester, textSize: textSize);
+    AppMenuHost menu() => tester.widget<AppMenuHost>(find.byType(AppMenuHost));
+    RegisteredCommand command(String id) =>
+        menu().commands.singleWhere((command) => command.id == id);
+
+    expect(command('editor.zoomIn').menuPlacement?.menu, AppMenuId.view);
+    await menu().onRun(command('editor.zoomIn'));
+    await tester.pump();
+    expect(textSize.value, 48);
+    expect(command('editor.zoomIn').enabled(), isFalse);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).style?.fontSize,
+      48,
+    );
+
+    await menu().onRun(command('editor.actualSize'));
+    await tester.pump();
+    expect(textSize.value, 14);
+    expect(command('editor.actualSize').enabled(), isFalse);
+    expect(command('editor.zoomOut').enabled(), isTrue);
   });
 }

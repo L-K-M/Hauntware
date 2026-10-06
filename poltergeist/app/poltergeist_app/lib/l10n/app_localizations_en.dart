@@ -1808,6 +1808,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsGeneralSection => 'General';
 
   @override
+  String get editorTextSizeSection => 'Built-in editor';
+
+  @override
+  String get editorTextSizeLabel => 'Text size';
+
+  @override
+  String editorTextSizeValue(int size) {
+    return '$size pt';
+  }
+
+  @override
+  String get editorTextSizeHint =>
+      'Zoom In, Zoom Out and Actual Size in an editor change it too.';
+
+  @override
+  String get editorZoomInLabel => 'Zoom In';
+
+  @override
+  String get editorZoomOutLabel => 'Zoom Out';
+
+  @override
+  String get editorActualSizeLabel => 'Actual Size';
+
+  @override
   String get settingsGeneralTab => 'General';
 
   @override

@@ -7,6 +7,7 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../../theme/app_appearance.dart';
@@ -128,6 +129,10 @@ class RemoteSettings extends ChangeNotifier {
     _link,
   );
   bool _hasAppearance = false;
+  late final RemoteEditorTextSize _editorTextSize = RemoteEditorTextSize._(
+    _link,
+  );
+  bool _hasEditorTextSize = false;
   SyncAccountGate _gate = const SyncAccountGate.production();
 
   /// The General rows, or null when the app has none.
@@ -168,6 +173,11 @@ class RemoteSettings extends ChangeNotifier {
   /// The Appearance tab's model, or null when the app has no theme seam.
   AppearanceSettingsModel? get appearance =>
       _hasAppearance ? _appearance : null;
+
+  /// The Appearance tab's built-in editor part, or null when the app has
+  /// no editor text size.
+  EditorTextSizeModel? get editorTextSize =>
+      _hasEditorTextSize ? _editorTextSize : null;
 
   /// The theme the window draws itself in: the app's, from the latest
   /// snapshot, or the default theme when the app has no theme seam. One
@@ -233,6 +243,10 @@ class RemoteSettings extends ChangeNotifier {
       appearance == null ? AppAppearance.initial : decodeAppearance(appearance),
     );
 
+    final editorTextSize = snapshot[SettingsLinkKey.editorTextSize.name] as int?;
+    _hasEditorTextSize = editorTextSize != null;
+    if (editorTextSize != null) _editorTextSize._apply(editorTextSize);
+
     final gate = (snapshot[SettingsLinkKey.gate.name]! as Map)
         .cast<String, Object?>();
     _gate = SyncAccountGate(
@@ -284,6 +298,7 @@ class RemoteSettings extends ChangeNotifier {
     unawaited(_tabRequests.close());
     page.dispose();
     _appearance.dispose();
+    _editorTextSize.dispose();
     super.dispose();
   }
 }
@@ -317,6 +332,29 @@ final class RemoteAppearanceSettings extends ChangeNotifier
         SettingsLinkMethod.setAppearance,
         encodeAppearance(AppAppearance(palette: palette, mode: mode)),
       );
+}
+
+/// [EditorTextSizeModel] over the link: the app's size as the latest
+/// snapshot carries it, and writes that run in the app's isolate.
+final class RemoteEditorTextSize extends ChangeNotifier
+    implements EditorTextSizeModel {
+  RemoteEditorTextSize._(this._link);
+
+  final _Link _link;
+  int _value = EditorTextSize.standard;
+
+  void _apply(int size) {
+    if (size == _value) return;
+    _value = size;
+    notifyListeners();
+  }
+
+  @override
+  int get value => _value;
+
+  @override
+  Future<void> setTextSize(int size) =>
+      _link.call(SettingsLinkMethod.setEditorTextSize, size);
 }
 
 /// [EditorRegistryModel] over the link.

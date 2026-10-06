@@ -7,6 +7,8 @@
 // written against these interfaces rather than the concrete controllers —
 // which implement them unchanged.
 import 'package:flutter/foundation.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorTextSize, EditorZoom;
 import 'package:poltergeist_core/poltergeist_core.dart';
 
 import '../theme/app_appearance.dart';
@@ -28,6 +30,23 @@ abstract interface class AppearanceSettingsModel
   /// change: the app shows what the section shows, and the next write
   /// carries it.
   Future<void> setAppearance(ThemePalette palette, ThemeModePreference mode);
+}
+
+/// The built-in editor's text size on this device, in logical pixels:
+/// [EditorTextSizeController] in the app. Settings → Appearance writes it,
+/// View › Zoom steps it, and every open editor rebuilds for it.
+abstract interface class EditorTextSizeModel implements ValueListenable<int> {
+  /// Resizes every open editor, then persists. [size] is clamped to
+  /// [EditorTextSize]'s range; an unchanged size is a no-op. Throws when
+  /// the write fails, after the editors have taken the change: the next
+  /// write carries it.
+  Future<void> setTextSize(int size);
+}
+
+/// View › Zoom on an [EditorTextSizeModel].
+extension EditorTextSizeZoom on EditorTextSizeModel {
+  Future<void> zoom(EditorZoom zoom) =>
+      setTextSize(EditorTextSize.zoomed(value, zoom));
 }
 
 /// The Settings → Editing registry sections' model:

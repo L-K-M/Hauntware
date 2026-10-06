@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
+import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_link.dart';
 import 'package:poltergeist_app/ui/settings/app_settings_command.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
+import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
 
 void main() {
@@ -147,6 +149,35 @@ void main() {
               .top,
         ),
       );
+    });
+
+    testWidgets('the dialog ends with the editor text size, which writes '
+        'through as the slider moves', (tester) async {
+      final textSize = EditorTextSizeController();
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          appearance: AppearanceController(),
+          editorTextSize: textSize,
+          enabled: () => true,
+        ),
+      );
+
+      final section = find.byType(EditorTextSizeSection);
+      await tester.ensureVisible(section);
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(section).top,
+        greaterThan(tester.getRect(find.byType(AppearanceSection)).top),
+      );
+      expect(find.text('14 pt'), findsOneWidget);
+
+      tester
+          .widget<Slider>(find.byKey(const ValueKey('editor.textSize')))
+          .onChanged!(20);
+      await tester.pump();
+      expect(textSize.value, 20);
+      expect(find.text('20 pt'), findsOneWidget);
     });
 
     testWidgets('with only a theme to set, it is Appearance alone', (

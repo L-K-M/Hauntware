@@ -50,7 +50,8 @@ import '../services/seance_links.dart';
 import '../services/server_duplication.dart';
 import '../services/session_persistence.dart';
 import '../services/session_state.dart';
-import '../services/settings_models.dart' show AppearanceSettingsModel;
+import '../services/settings_models.dart'
+    show AppearanceSettingsModel, EditorTextSizeModel;
 import '../services/settings_window/settings_window_host.dart';
 import '../services/settings_window/settings_window_link.dart';
 import '../services/sidebar_controller.dart';
@@ -195,6 +196,7 @@ class WorkspaceShell extends StatefulWidget {
     this.previewThreshold,
     this.checkoutPrompts,
     this.appearance,
+    this.editorTextSize,
     this.deepLinks,
     this.seanceLauncher,
   });
@@ -492,6 +494,11 @@ class WorkspaceShell extends StatefulWidget {
   /// window's Appearance tab, and the Settings dialog's section after
   /// General). Null leaves the section out.
   final AppearanceSettingsModel? appearance;
+
+  /// The built-in editor's text size on this device: every editor window
+  /// and route draws in it, and Settings → Appearance shows it beside the
+  /// theme. Null keeps editors at the standard size.
+  final EditorTextSizeModel? editorTextSize;
 
   /// App-wide deep-link intake and the probed sibling-app handoff. Both are
   /// composition seams so tests and unsupported platforms remain inert.
@@ -1640,6 +1647,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     previewDownloads: _previewDownloadsSettings,
     backup: widget.bookmarkBackup,
     appearance: widget.appearance,
+    editorTextSize: widget.editorTextSize,
     changes: [?widget.updateCheck],
   );
 
@@ -1707,10 +1715,13 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       // 02 §9's `app.settings` row registers while it has a section to
       // show: D19's update-check opt-out (General's only row today) or
       // the device's theme (Appearance). A seam-less boot has neither.
-      if (widget.updateCheck != null || widget.appearance != null)
+      if (widget.updateCheck != null ||
+          widget.appearance != null ||
+          widget.editorTextSize != null)
         buildAppSettingsCommand(
           settings: widget.updateCheck == null ? null : _generalSettings,
           appearance: widget.appearance,
+          editorTextSize: widget.editorTextSize,
           enabled: () => !_commandSessionActive,
           openWindow: _openSettingsWindow,
         ),
@@ -3332,6 +3343,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
                 showTopToastIn(toastContext, message: message),
             monoFontFallback: poltergeistMonoFontFamilies,
             basenameOf: basenameOf,
+            textSize: widget.editorTextSize,
           ),
         ),
       );
@@ -3387,6 +3399,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
             showTopToastIn(toastContext, message: message),
         monoFontFallback: poltergeistMonoFontFamilies,
         basenameOf: basenameOf,
+        textSize: widget.editorTextSize,
       ),
     );
     _editorRoutes[key] = route;

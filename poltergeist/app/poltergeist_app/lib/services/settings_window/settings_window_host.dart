@@ -38,6 +38,7 @@ final class SettingsWindowSources {
     this.backup,
     this.gate = const SyncAccountGate.production(),
     this.appearance,
+    this.editorTextSize,
     this.changes = const [],
   });
 
@@ -61,9 +62,12 @@ final class SettingsWindowSources {
   /// draws itself in, from each snapshot.
   final AppearanceSettingsModel? appearance;
 
+  /// The built-in editor's text size: the Appearance tab's editor part.
+  final EditorTextSizeModel? editorTextSize;
+
   /// What else moves a value the window shows (the update-check
-  /// controller behind [general]); [editors], [backup] and [appearance]
-  /// are listened to already.
+  /// controller behind [general]); [editors], [backup], [appearance] and
+  /// [editorTextSize] are listened to already.
   final List<Listenable> changes;
 }
 
@@ -120,6 +124,7 @@ class SettingsWindowHost {
       ?sources.editors,
       ?sources.backup,
       ?sources.appearance,
+      ?sources.editorTextSize,
       ...sources.changes,
     ];
     for (final listenable in _listening) {
@@ -238,7 +243,9 @@ class SettingsWindowHost {
     final backup = _sources.backup;
     final gate = _sources.gate;
     final appearance = _sources.appearance;
+    final editorTextSize = _sources.editorTextSize;
     return {
+      SettingsLinkKey.editorTextSize.name: editorTextSize?.value,
       SettingsLinkKey.general.name: general == null
           ? null
           : {SettingsLinkKey.checkForUpdates.name: general.checkForUpdates},
@@ -341,6 +348,8 @@ class SettingsWindowHost {
         await _require(
           _sources.appearance,
         ).setAppearance(appearance.palette, appearance.mode);
+      case SettingsLinkMethod.setEditorTextSize:
+        await _require(_sources.editorTextSize).setTextSize(argument! as int);
       case SettingsLinkMethod.registerEditor:
         await _require(editors).register(
           ExternalEditorDefinition.fromJson(map().cast<String, dynamic>()),

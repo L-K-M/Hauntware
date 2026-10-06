@@ -13,6 +13,16 @@ phones. The 18 new labels and the group name come from `app_en.arb`;
 Find in Selection reuses `editorFindInSelection`. A test fails if any
 command falls back to the package's English.
 
+## Built-in editor text size (2026-10-06)
+
+The editor's text size is a device setting, as in Planchette: View ›
+Zoom In, Zoom Out and Actual Size in editor windows (⌘/Ctrl with +, −
+and 0, also on a hardware keyboard over the phone route), and a slider
+under Settings → Appearance in the dialog and the Settings window. Every
+editor window and route resizes at once; the size persists as
+`editor.textSize`. Range and steps come from Planchette's shared
+`EditorTextSize` (9 to 48, standard 14), so all three apps zoom alike.
+
 ## Sync trash purge (2026-10-03)
 
 The rail-5 purge surface is complete. Plans inventory trash per physical

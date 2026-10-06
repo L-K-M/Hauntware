@@ -11,6 +11,7 @@ import 'package:planchette_editor/planchette_editor.dart' as pe;
 
 import '../l10n/app_localizations.dart';
 import '../services/registered_command.dart';
+import '../services/settings_models.dart';
 import 'menus/app_menu_host.dart';
 import 'menus/app_menu_commands.dart';
 import 'editor_strings.dart';
@@ -36,6 +37,7 @@ class BuiltInTextEditorScreen extends StatefulWidget {
     required this.showToast,
     required this.monoFontFallback,
     required this.basenameOf,
+    this.textSize,
   });
 
   /// The local file or managed checkout being edited.
@@ -89,6 +91,11 @@ class BuiltInTextEditorScreen extends StatefulWidget {
   /// legal filename byte and is never split).
   final String Function(String path) basenameOf;
 
+  /// The app-wide text size every editor draws in, which View › Zoom and
+  /// its chords step. Null draws at [pe.EditorTextSize.standard] with no
+  /// zoom commands.
+  final EditorTextSizeModel? textSize;
+
   @override
   State<BuiltInTextEditorScreen> createState() =>
       _BuiltInTextEditorScreenState();
@@ -129,6 +136,7 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     super.initState();
     _editor.setEditingLocked(widget.quitPending, notify: false);
     _editor.addListener(_changed);
+    widget.textSize?.addListener(_changed);
     widget.onCloseGuardChanged?.call(_confirmClose);
     _editor.initialize();
   }
@@ -143,17 +151,34 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     _editor.onSaved = widget.onSaved;
     _editor.onPublish = widget.onUpload;
     _editor.setEditingLocked(widget.quitPending, notify: false);
+    if (!identical(widget.textSize, oldWidget.textSize)) {
+      oldWidget.textSize?.removeListener(_changed);
+      widget.textSize?.addListener(_changed);
+    }
   }
 
   @override
   void dispose() {
     widget.onCloseGuardChanged?.call(null);
+    widget.textSize?.removeListener(_changed);
     _editor.removeListener(_changed);
     _editor.dispose();
     super.dispose();
   }
 
   void _openSearch() => _editor.openSearch();
+
+  int get _textSize => widget.textSize?.value ?? pe.EditorTextSize.standard;
+
+  /// Zoom applies to every editor and outlasts the window, as in
+  /// Planchette: it is the app-wide setting, not this document's.
+  Future<void> _zoom(pe.EditorZoom zoom) async {
+    try {
+      await widget.textSize?.zoom(zoom);
+    } on Object catch (error) {
+      if (mounted) widget.showToast(context, error.toString());
+    }
+  }
   // The shared controller owns the browser's open/close state; a locked
   // document may still browse (its rows refuse to run), matching the
   // package's own contract.
@@ -290,6 +315,13 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
               _previousMatch,
           if (_searchOpen)
             const SingleActivator(LogicalKeyboardKey.escape): _closeSearch,
+          if (widget.textSize != null)
+            for (final zoom in pe.EditorZoom.values)
+              for (final chord in pe.EditorTextSize.activators(
+                zoom,
+                Theme.of(context).platform,
+              ))
+                chord: () => _zoom(zoom),
         },
         child: Scaffold(
           appBar: AppBar(
@@ -343,7 +375,7 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
             textStyle: TextStyle(
               fontFamily: widget.monoFontFallback.first,
               fontFamilyFallback: widget.monoFontFallback,
-              fontSize: 14,
+              fontSize: _textSize.toDouble(),
               height: 1.35,
             ),
           ),
@@ -415,6 +447,7 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
             ),
           ),
           ..._textCommands(context),
+          if (widget.textSize != null) ..._zoomCommands(),
           if (Theme.of(context).platform != TargetPlatform.macOS)
             buildQuitCommand(requestClose: widget.onQuitRequested),
         ],
@@ -425,6 +458,31 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
       ),
     );
   }
+
+  /// View › Zoom In, Zoom Out and Actual Size, after Planchette's View menu.
+  Iterable<RegisteredCommand> _zoomCommands() => [
+    for (final (index, zoom) in pe.EditorZoom.values.indexed)
+      RegisteredCommand(
+        id: switch (zoom) {
+          pe.EditorZoom.zoomIn => 'editor.zoomIn',
+          pe.EditorZoom.zoomOut => 'editor.zoomOut',
+          pe.EditorZoom.actualSize => 'editor.actualSize',
+        },
+        scope: CommandScope.editor,
+        label: (l10n) => switch (zoom) {
+          pe.EditorZoom.zoomIn => l10n.editorZoomInLabel,
+          pe.EditorZoom.zoomOut => l10n.editorZoomOutLabel,
+          pe.EditorZoom.actualSize => l10n.editorActualSizeLabel,
+        },
+        enabled: () => pe.EditorTextSize.canZoom(_textSize, zoom),
+        activators: (platform) => pe.EditorTextSize.activators(zoom, platform),
+        run: (_) => _zoom(zoom),
+        menuPlacement: CommandMenuPlacement(
+          menu: AppMenuId.view,
+          order: 10 * (index + 1),
+        ),
+      ),
+  ];
 
   Iterable<RegisteredCommand> _textCommands(BuildContext context) {
     final material = MaterialLocalizations.of(context);
