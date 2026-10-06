@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Files: a double-click with nothing selected opens the item under the
+  pointer. The selection count, Download and Clear moved from above the
+  list to the footer, so the first click no longer moves the rows. The
+  filter field's text lines up with its icons.
 - Local shell: the last lines a shell prints as it exits, such as the
   error from a command that failed to start, are no longer sometimes
   lost.

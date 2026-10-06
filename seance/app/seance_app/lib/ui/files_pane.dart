@@ -187,11 +187,6 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                   onCopyPath: () => _copyRemotePath(controller.currentPath),
                   onOpenTerminalHere: _openTerminalHere,
                   filterController: _filter,
-                  onDownloadSelected:
-                      _supportsDesktopDrop &&
-                          controller.selectedPaths.isNotEmpty
-                      ? _downloadSelected
-                      : null,
                 ),
                 if (controller.loading)
                   const LinearProgressIndicator(minHeight: 2),
@@ -216,6 +211,9 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                 _BrowserFooter(
                   key: const ValueKey('files.footer'),
                   controller: controller,
+                  onDownloadSelected: _supportsDesktopDrop
+                      ? _downloadSelected
+                      : null,
                 ),
               ],
             ),
@@ -1760,7 +1758,6 @@ class _BrowserHeader extends StatelessWidget {
   final VoidCallback onCopyPath;
   final VoidCallback onOpenTerminalHere;
   final TextEditingController filterController;
-  final VoidCallback? onDownloadSelected;
 
   const _BrowserHeader({
     required this.identity,
@@ -1774,7 +1771,6 @@ class _BrowserHeader extends StatelessWidget {
     required this.onCopyPath,
     required this.onOpenTerminalHere,
     required this.filterController,
-    this.onDownloadSelected,
   });
 
   @override
@@ -1972,6 +1968,9 @@ class _BrowserHeader extends StatelessWidget {
                 controller: filterController,
                 onChanged: controller.setFilterQuery,
                 textInputAction: TextInputAction.search,
+                // The underline border top-aligns text in the icons' taller
+                // box; center it on the search and clear icons.
+                textAlignVertical: TextAlignVertical.center,
                 decoration: InputDecoration(
                   isDense: true,
                   hintText: 'Filter files',
@@ -1989,28 +1988,6 @@ class _BrowserHeader extends StatelessWidget {
                 ),
               ),
             ),
-            if (controller.selectedPaths.isNotEmpty)
-              Row(
-                children: [
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text('${controller.selectedPaths.length} selected'),
-                  ),
-                  if (onDownloadSelected != null)
-                    IconButton(
-                      tooltip: 'Download selected',
-                      icon: Icon(
-                        Icons.download,
-                        color: FamilyPalette.of(context).glyph(FamilyHue.cyan),
-                      ),
-                      onPressed: onDownloadSelected,
-                    ),
-                  TextButton(
-                    onPressed: controller.clearSelection,
-                    child: const Text('Clear'),
-                  ),
-                ],
-              ),
           ],
         ),
       ),
@@ -2022,10 +1999,20 @@ class _BrowserFooter extends StatelessWidget {
   static const _desktopExtent = 30.0;
   static const _touchExtent = 48.0;
   static const _followLabel = 'Follow terminal directory';
+  static const _desktopIconSize = 16.0;
+
+  /// The follow checkbox, its gap and the waiting icon: the selection
+  /// never squeezes the toggle past them.
+  static const _followMinWidth = 58.0;
 
   final RemoteFilesController controller;
+  final VoidCallback? onDownloadSelected;
 
-  const _BrowserFooter({super.key, required this.controller});
+  const _BrowserFooter({
+    super.key,
+    required this.controller,
+    this.onDownloadSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2041,6 +2028,9 @@ class _BrowserFooter extends StatelessWidget {
     final height = MediaQuery.textScalerOf(
       context,
     ).scale(extent).clamp(extent, 4 * extent);
+    final labelStyle = theme.textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+    );
 
     return Container(
       height: height,
@@ -2052,60 +2042,131 @@ class _BrowserFooter extends StatelessWidget {
         type: MaterialType.transparency,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: MergeSemantics(
-                  child: Tooltip(
-                    message: _followLabel,
-                    excludeFromSemantics: true,
-                    child: InkWell(
+          // The selection takes what it needs first; the follow label
+          // ellipsizes into the rest. An even flex split ellipsized it
+          // early beside a short count.
+          child: LayoutBuilder(
+            builder: (context, constraints) => Row(
+              children: [
+                Expanded(
+                  child: MergeSemantics(
+                    child: Tooltip(
+                      message: _followLabel,
                       excludeFromSemantics: true,
-                      onTap: () => controller.setFollowTerminal(
-                        !controller.followTerminal,
-                      ),
-                      child: Row(
-                        children: [
-                          Checkbox(
-                            value: controller.followTerminal,
-                            semanticLabel: _followLabel,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                            onChanged: (value) =>
-                                controller.setFollowTerminal(value ?? false),
-                          ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: ExcludeSemantics(
-                              child: Text(
-                                _followLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: scheme.onSurfaceVariant,
+                      child: InkWell(
+                        excludeFromSemantics: true,
+                        onTap: () => controller.setFollowTerminal(
+                          !controller.followTerminal,
+                        ),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: controller.followTerminal,
+                              semanticLabel: _followLabel,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              onChanged: (value) =>
+                                  controller.setFollowTerminal(value ?? false),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: ExcludeSemantics(
+                                child: Text(
+                                  _followLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: labelStyle,
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              if (controller.followTerminal &&
-                  controller.reportedShellDirectory == null)
-                const Padding(
-                  padding: EdgeInsets.only(left: 6),
-                  child: Tooltip(
-                    message:
-                        'Waiting for directory metadata from the remote shell',
-                    child: Icon(Icons.info_outline, size: 16),
+                if (controller.followTerminal &&
+                    controller.reportedShellDirectory == null)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 6),
+                    child: Tooltip(
+                      message:
+                          'Waiting for directory metadata from the remote shell',
+                      child: Icon(Icons.info_outline, size: 16),
+                    ),
                   ),
-                ),
-            ],
+                if (controller.selectedPaths.isNotEmpty)
+                  _selection(
+                    context,
+                    labelStyle,
+                    maxWidth: (constraints.maxWidth - _followMinWidth).clamp(
+                      0.0,
+                      double.infinity,
+                    ),
+                  ),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  /// The selection's count and actions. They live in this fixed-height
+  /// footer: a bar above the listing pushed the rows down on the first
+  /// click, so a double-click's second click hit another row.
+  Widget _selection(
+    BuildContext context,
+    TextStyle? labelStyle, {
+    required double maxWidth,
+  }) {
+    // Desktop's 30 px footer needs compact buttons; touch keeps 48 px
+    // targets.
+    final buttonStyle = ghostIsDesktopPlatform(Theme.of(context).platform)
+        ? ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            minimumSize: const WidgetStatePropertyAll(Size.zero),
+            padding: const WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            ),
+            textStyle: WidgetStatePropertyAll(labelStyle),
+            iconSize: const WidgetStatePropertyAll(_desktopIconSize),
+          )
+        : null;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(start: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                '${controller.selectedPaths.length} selected',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: labelStyle,
+              ),
+            ),
+            if (onDownloadSelected != null)
+              IconButton(
+                tooltip: 'Download selected',
+                style: buttonStyle,
+                icon: Icon(
+                  Icons.download,
+                  color: FamilyPalette.of(context).glyph(FamilyHue.cyan),
+                ),
+                onPressed: onDownloadSelected,
+              ),
+            TextButton(
+              style: buttonStyle,
+              onPressed: controller.clearSelection,
+              child: const Text('Clear'),
+            ),
+          ],
         ),
       ),
     );

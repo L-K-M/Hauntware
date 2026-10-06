@@ -193,8 +193,15 @@ void main() {
             textScale: scale,
             paneWidth: scale == 1 ? 240 : 1000,
           );
+          // The selection's count and actions share the footer.
+          await tester.tap(find.text('a.txt'));
+          await tester.pump();
 
           final footer = find.byKey(const ValueKey('files.footer'));
+          expect(
+            find.descendant(of: footer, matching: find.text('1 selected')),
+            findsOneWidget,
+          );
           expect(footer, findsOneWidget);
           final filesRect = tester.getRect(footer);
           final terminalRect = tester.getRect(find.byType(SessionStatusBar));
@@ -427,6 +434,91 @@ void main() {
     await tester.pump();
     expect(files.currentPath, '$_home/docs');
   });
+
+  // The first click selects; nothing the selection shows may move the
+  // rows, or the second click lands on a different one.
+  platformTest(
+    'a double-click from no selection opens the row under the pointer',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final docs = tester.getCenter(find.text('docs'));
+
+      await tester.tapAt(docs);
+      await tester.pump();
+      expect(files.selectedPaths, {'$_home/docs'});
+      expect(tester.getCenter(find.text('docs')), docs);
+
+      await tester.tapAt(docs);
+      await tester.pump();
+      await tester.runAsync(() async {});
+      await tester.pump();
+      expect(files.currentPath, '$_home/docs');
+    },
+  );
+
+  platformTest(
+    'the selection summary and its actions sit in the footer',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final footer = find.byKey(const ValueKey('files.footer'));
+      final row = tester.getRect(find.text('a.txt'));
+      expect(find.text('1 selected'), findsNothing);
+
+      await tester.tap(find.text('a.txt'));
+      await tester.pump();
+      expect(
+        find.descendant(of: footer, matching: find.text('1 selected')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: footer,
+          matching: find.byTooltip('Download selected'),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.getRect(find.text('a.txt')), row);
+
+      await tester.tap(
+        find.descendant(of: footer, matching: find.text('Clear')),
+      );
+      await tester.pump();
+      expect(files.selectedPaths, isEmpty);
+      expect(find.text('1 selected'), findsNothing);
+      expect(tester.getRect(find.text('a.txt')), row);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final platform in [TargetPlatform.linux, TargetPlatform.android]) {
+    platformTest(
+      'the filter text centers on its icons on $platform',
+      platform,
+      (tester) async {
+        await pumpFilesPane(tester, _ListFileSystem());
+        double centerY(Finder finder) => tester.getCenter(finder).dy;
+
+        expect(
+          centerY(find.text('Filter files')),
+          moreOrLessEquals(centerY(find.byIcon(Icons.search)), epsilon: 1),
+        );
+
+        await tester.enterText(find.byType(TextField), 'a');
+        await tester.pump();
+        final text = centerY(find.byType(EditableText));
+        expect(
+          text,
+          moreOrLessEquals(centerY(find.byIcon(Icons.search)), epsilon: 1),
+        );
+        expect(
+          text,
+          moreOrLessEquals(centerY(find.byIcon(Icons.close)), epsilon: 1),
+        );
+      },
+    );
+  }
 
   platformTest(
     'a double-click on a file opens it in a built-in editor tab',
@@ -762,10 +854,20 @@ void main() {
       expect(find.byType(GhostFileRow), findsNothing);
       expect(find.byType(GhostFileColumnHeader), findsNothing);
 
-      // Long-press selects; a tap on a directory then opens it.
+      // Long-press selects without moving the rows; a tap on a directory
+      // then opens it.
+      final row = tester.getRect(find.text('a.txt'));
       await tester.longPress(find.text('a.txt'));
       await tester.pump();
       expect(files.selectedPaths, {'$_home/a.txt'});
+      expect(tester.getRect(find.text('a.txt')), row);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('files.footer')),
+          matching: find.text('1 selected'),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('a.txt'));
       await tester.pump();
       expect(files.selectedPaths, isEmpty);
