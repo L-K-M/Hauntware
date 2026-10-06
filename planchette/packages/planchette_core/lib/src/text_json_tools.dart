@@ -1,4 +1,5 @@
-// Strict whitespace-only JSON reformat for Format/Minify JSON.
+// Strict whitespace-only JSON reformat for Format/Minify JSON, and the
+// editor's JSON validation over the same grammar.
 //
 // The tools never decode values: numbers, strings and literals are copied
 // verbatim so large integers, exponents and escapes keep their source
@@ -6,13 +7,30 @@
 // between tokens is rewritten. Invalid input refuses with a line/column
 // rather than guessing.
 
+import 'dart:convert' show jsonDecode;
+
+import 'text_metrics.dart' show lineStartOffsets;
+import 'text_problem.dart';
+
 /// A strict-JSON syntax error with a 1-based position in the run's input.
 final class JsonFormatError implements Exception {
-  const JsonFormatError(this.message, this.line, this.column);
+  const JsonFormatError(
+    this.message,
+    this.line,
+    this.column, {
+    required this.start,
+    required this.end,
+  });
 
   final String message;
   final int line;
   final int column;
+
+  /// The offending text as offsets into the input, for an underline. It
+  /// starts at [line] and [column] unless the error is a string that a line
+  /// break cut short, which is flagged from its opening quote.
+  final int start;
+  final int end;
 
   @override
   String toString() => 'line $line, column $column: $message';
@@ -29,18 +47,36 @@ String formatJsonWhitespace(String input, {String newline = '\n'}) =>
 String minifyJsonWhitespace(String input) =>
     _JsonReformatter(input, pretty: false).run();
 
-class _JsonReformatter {
-  _JsonReformatter(this.input, {required this.pretty, this.newline = '\n'});
+/// Which JSON a document is read as.
+enum JsonDialect {
+  /// RFC 8259 JSON. Comments and trailing commas are still read past, so the
+  /// rest of the document is checked, but each one is reported.
+  strict,
 
-  final String input;
+  /// JSON with comments, as TypeScript and VS Code read their configuration:
+  /// `//` and `/* */` comments and trailing commas are accepted.
+  withComments,
+}
+
+/// Problems in [input] read as [dialect] JSON: each repeated object key, each
+/// comment or trailing comma the dialect does not allow, and the first syntax
+/// error, after which the input cannot be read further. Blank input has
+/// none, so a new file is not flagged before anything is typed. At most
+/// [limit] problems; the syntax error always fits.
+List<TextProblem> validateJsonText(
+  String input, {
+  required JsonDialect dialect,
+  int limit = textProblemLimit,
+}) => _JsonValidator(input, dialect: dialect, limit: limit).run();
+
+class _JsonReformatter extends _JsonScanner {
+  _JsonReformatter(super.input, {required this.pretty, this.newline = '\n'});
+
   final bool pretty;
 
   /// The separator pretty output breaks lines with. Minified output has
   /// no breaks, so it never reads this.
   final String newline;
-  int pos = 0;
-
-  static const _maxDepth = 200;
 
   String run() {
     _skipWhitespace();
@@ -52,7 +88,9 @@ class _JsonReformatter {
   }
 
   String _parseValue(int depth) {
-    if (depth > _maxDepth) throw _error('nesting too deep', pos);
+    if (depth > _JsonScanner._maxDepth) {
+      throw _error('nesting too deep', pos);
+    }
     if (pos >= input.length) throw _error('expected a value', pos);
     final c = input.codeUnitAt(pos);
     if (c == 0x7b) return _parseObject(depth);
@@ -169,13 +207,28 @@ class _JsonReformatter {
     return out.toString();
   }
 
+  String _indent(int level) => '  ' * level;
+}
+
+/// The token grammar Format JSON, Minify JSON and validation share:
+/// strict strings, numbers and literals read from [input] at [pos].
+abstract class _JsonScanner {
+  _JsonScanner(this.input);
+
+  final String input;
+  int pos = 0;
+
+  static const _maxDepth = 200;
+
   /// Copies a JSON string verbatim, validating escapes. Returns the raw
   /// source including its quotes.
   String _parseStringRaw() {
     final start = pos;
     pos++; // opening quote
     while (true) {
-      if (pos >= input.length) throw _error('unterminated string', start);
+      if (pos >= input.length) {
+        throw _error('unterminated string', start, end: _lineEnd(start));
+      }
       final c = input.codeUnitAt(pos);
       if (c == 0x22) {
         pos++;
@@ -209,8 +262,13 @@ class _JsonReformatter {
         }
         continue;
       }
-      // Unescaped controls (including literal line breaks) are invalid.
-      if (c < 0x20) throw _error('unescaped control character', pos);
+      // Unescaped controls (including literal line breaks) are invalid. A
+      // line break usually means a missing closing quote: flag the string.
+      if (c < 0x20) {
+        throw _isLineBreak(c)
+            ? _error('unescaped control character', pos, start: start, end: pos)
+            : _error('unescaped control character', pos);
+      }
       pos++;
     }
   }
@@ -282,11 +340,254 @@ class _JsonReformatter {
     }
   }
 
-  String _indent(int level) => '  ' * level;
-
-  JsonFormatError _error(String message, int at) {
+  /// An error at [at], flagging [start] to [end] when given, else the
+  /// token at [at].
+  JsonFormatError _error(String message, int at, {int? start, int? end}) {
     final (line, column) = _lineColumnAt(input, at);
-    return JsonFormatError(message, line, column);
+    final (tokenStart, tokenEnd) = _tokenAt(at);
+    return JsonFormatError(
+      message,
+      line,
+      column,
+      start: start ?? tokenStart,
+      end: end ?? tokenEnd,
+    );
+  }
+
+  /// The word or single character at [at]. At the end of the input, the
+  /// last character that is not whitespace: the nearest place a reader sees.
+  (int, int) _tokenAt(int at) {
+    if (input.isEmpty) return (0, 0);
+    if (at >= input.length) {
+      var last = input.length - 1;
+      while (last > 0 && _isJsonSpace(input.codeUnitAt(last))) {
+        last--;
+      }
+      return (last, last + 1);
+    }
+    var end = at + 1;
+    if (_isLiteralTail(input.codeUnitAt(at))) {
+      while (end < input.length && _isLiteralTail(input.codeUnitAt(end))) {
+        end++;
+      }
+    }
+    return (at, end);
+  }
+
+  /// The end of the line holding [from].
+  int _lineEnd(int from) {
+    var end = from;
+    while (end < input.length && !_isLineBreak(input.codeUnitAt(end))) {
+      end++;
+    }
+    return end;
+  }
+}
+
+/// Reads a document through the shared grammar without building output,
+/// collecting problems instead of stopping at the first.
+class _JsonValidator extends _JsonScanner {
+  _JsonValidator(super.input, {required this.dialect, required this.limit});
+
+  final JsonDialect dialect;
+  final int limit;
+  final _problems = <TextProblem>[];
+  List<int>? _lineStarts;
+
+  List<TextProblem> run() {
+    try {
+      _skipWhitespace();
+      if (pos >= input.length) return _problems;
+      _value(0);
+      _skipWhitespace();
+      if (pos < input.length) throw _error('unexpected trailing content', pos);
+    } on JsonFormatError catch (error) {
+      _problems.add(
+        TextProblem(
+          kind: TextProblemKind.syntaxError,
+          severity: TextProblemSeverity.error,
+          start: error.start,
+          end: error.end,
+          detail: error.message,
+        ),
+      );
+    }
+    return _problems;
+  }
+
+  void _value(int depth) {
+    if (depth > _JsonScanner._maxDepth) throw _error('nesting too deep', pos);
+    if (pos >= input.length) throw _error('expected a value', pos);
+    final c = input.codeUnitAt(pos);
+    if (c == 0x7b) return _object(depth);
+    if (c == 0x5b) return _array(depth);
+    if (c == 0x22) {
+      _parseStringRaw();
+    } else if (c == 0x74 || c == 0x66 || c == 0x6e) {
+      _parseLiteralRaw();
+    } else if (c == 0x2d || _isDigit(c)) {
+      _parseNumberRaw();
+    } else {
+      throw _error('expected a value', pos);
+    }
+  }
+
+  void _object(int depth) {
+    pos++; // consume '{'
+    _skipWhitespace();
+    if (_at(0x7d)) {
+      pos++;
+      return;
+    }
+    // Decoded names, so "a" and "\u0061" are the same key, as every reader
+    // decodes them.
+    final keys = <String, int>{};
+    while (true) {
+      _skipWhitespace();
+      if (!_at(0x22)) throw _error('expected a string key', pos);
+      final keyStart = pos;
+      final key = jsonDecode(_parseStringRaw()) as String;
+      final first = keys[key];
+      if (first == null) {
+        keys[key] = keyStart;
+      } else {
+        _warn(
+          TextProblemKind.duplicateKey,
+          keyStart,
+          pos,
+          subject: key,
+          relatedLine: _lineOf(first),
+        );
+      }
+      _skipWhitespace();
+      if (!_at(0x3a)) throw _error("expected ':' after the key", pos);
+      pos++;
+      _skipWhitespace();
+      _value(depth + 1);
+      _skipWhitespace();
+      if (pos >= input.length) throw _error("expected ',' or '}'", pos);
+      final next = input.codeUnitAt(pos);
+      if (next == 0x7d) {
+        pos++;
+        return;
+      }
+      if (next != 0x2c) throw _error("expected ',' or '}'", pos);
+      if (_trailingComma(0x7d)) return;
+    }
+  }
+
+  void _array(int depth) {
+    pos++; // consume '['
+    _skipWhitespace();
+    if (_at(0x5d)) {
+      pos++;
+      return;
+    }
+    while (true) {
+      _skipWhitespace();
+      _value(depth + 1);
+      _skipWhitespace();
+      if (pos >= input.length) throw _error("expected ',' or ']'", pos);
+      final next = input.codeUnitAt(pos);
+      if (next == 0x5d) {
+        pos++;
+        return;
+      }
+      if (next != 0x2c) throw _error("expected ',' or ']'", pos);
+      if (_trailingComma(0x5d)) return;
+    }
+  }
+
+  /// Consumes the comma at [pos], and the [closer] when only whitespace and
+  /// comments come between them, which strict JSON reports. Returns whether
+  /// the closer ended the container.
+  bool _trailingComma(int closer) {
+    final comma = pos;
+    pos++;
+    _skipWhitespace();
+    if (!_at(closer)) return false;
+    if (dialect == JsonDialect.strict) {
+      _warn(TextProblemKind.jsonTrailingComma, comma, comma + 1);
+    }
+    pos++;
+    return true;
+  }
+
+  /// Steps over whitespace and comments, reporting comments that strict JSON
+  /// does not allow. A `/` that opens no comment is left for the caller to
+  /// reject.
+  @override
+  void _skipWhitespace() {
+    while (pos < input.length) {
+      final c = input.codeUnitAt(pos);
+      if (_isJsonSpace(c)) {
+        pos++;
+        continue;
+      }
+      if (c != 0x2f || pos + 1 >= input.length) return;
+      final start = pos;
+      final opener = input.codeUnitAt(pos + 1);
+      if (opener == 0x2f) {
+        pos = _lineEnd(pos);
+      } else if (opener == 0x2a) {
+        final close = input.indexOf('*/', pos + 2);
+        if (close < 0) {
+          throw _error('unterminated comment', start, end: _lineEnd(start));
+        }
+        pos = close + 2;
+      } else {
+        return;
+      }
+      if (dialect == JsonDialect.strict) {
+        // Only the comment's first line: a long block comment would
+        // otherwise be one wide underline.
+        final firstLineEnd = _lineEnd(start);
+        _warn(
+          TextProblemKind.jsonComment,
+          start,
+          firstLineEnd < pos ? firstLineEnd : pos,
+        );
+      }
+    }
+  }
+
+  bool _at(int c) => pos < input.length && input.codeUnitAt(pos) == c;
+
+  /// Records a warning while it leaves room for a later syntax error.
+  void _warn(
+    TextProblemKind kind,
+    int start,
+    int end, {
+    String? subject,
+    int? relatedLine,
+  }) {
+    if (_problems.length >= limit - 1) return;
+    _problems.add(
+      TextProblem(
+        kind: kind,
+        severity: TextProblemSeverity.warning,
+        start: start,
+        end: end,
+        subject: subject,
+        relatedLine: relatedLine,
+      ),
+    );
+  }
+
+  /// The 1-based line holding [offset], as the editor's gutter numbers it.
+  int _lineOf(int offset) {
+    final starts = _lineStarts ??= lineStartOffsets(input);
+    var lo = 0;
+    var hi = starts.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi + 1) >> 1;
+      if (starts[mid] <= offset) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return lo + 1;
   }
 }
 
@@ -318,6 +619,8 @@ class _JsonReformatter {
 bool _isDigit(int c) => c >= 0x30 && c <= 0x39;
 bool _isHex(int c) =>
     _isDigit(c) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
+bool _isJsonSpace(int c) => c == 0x20 || c == 0x09 || _isLineBreak(c);
+bool _isLineBreak(int c) => c == 0x0a || c == 0x0d;
 bool _isLiteralTail(int c) =>
     (c >= 0x30 && c <= 0x39) ||
     (c >= 0x41 && c <= 0x5a) ||

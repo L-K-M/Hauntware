@@ -1,0 +1,202 @@
+part of 'text_validation.dart';
+
+/// Joins the parts of a dotted key, so `a."b.c"` and `a.b.c` stay distinct.
+const _tomlKeySeparator = '\u0000';
+
+/// Flags what TOML forbids and every reader rejects: a key defined twice in
+/// one table and a table declared twice. Each `[[array]]` header starts a
+/// new element, so its keys and sub-tables start afresh. Keys compare by
+/// their parts, so `a.b`, `a . b` and `"a".b` are the same key; a key that
+/// a dotted key implies is not compared with a later table header, so only
+/// plain repeats are flagged. Multi-line strings and arrays are stepped over.
+void _validateToml(String text, _ProblemSink sink) {
+  final reader = _TomlReader(text, sink);
+  for (final (start, end) in _lines(text)) {
+    if (sink.isFull) return;
+    reader.read(start, end);
+  }
+}
+
+/// A key or table name: its parts joined, as written, and where it ends.
+typedef _TomlKey = ({String identity, int start, int end, int after});
+
+final class _TomlReader {
+  _TomlReader(this._text, this._sink);
+
+  final String _text;
+  final _ProblemSink _sink;
+
+  /// Tables declared with `[name]`, and the line of each declaration.
+  final _tables = <String, int>{};
+
+  /// Keys defined in the current table, and the line of each definition.
+  var _keys = <String, int>{};
+
+  /// Inside a multi-line string that spans lines: its delimiter.
+  String? _multiline;
+
+  /// Brackets still open in an array or inline table that spans lines.
+  int _depth = 0;
+
+  void read(int start, int end) {
+    if (_multiline != null || _depth > 0) {
+      _scanValue(start, end);
+      return;
+    }
+    final pos = _skipBlanks(start, end);
+    if (pos == end || _text.codeUnitAt(pos) == 0x23 /* # */ ) return;
+    if (_text.codeUnitAt(pos) == 0x5b /* [ */ ) {
+      _header(pos, end);
+      return;
+    }
+
+    final key = _key(pos, end, 0x3d /* = */);
+    if (key == null) return;
+    final first = _keys[key.identity];
+    if (first == null) {
+      _keys[key.identity] = _sink.lineOf(key.start);
+    } else {
+      _sink.add(
+        TextProblemKind.duplicateKey,
+        TextProblemSeverity.error,
+        key.start,
+        key.end,
+        subject: _text.substring(key.start, key.end),
+        relatedLine: first,
+      );
+    }
+    _scanValue(key.after, end);
+  }
+
+  /// A `[table]` or `[[array]]` header at [pos].
+  void _header(int pos, int end) {
+    final array = pos + 1 < end && _text.codeUnitAt(pos + 1) == 0x5b;
+    final name = _key(pos + (array ? 2 : 1), end, 0x5d /* ] */);
+    if (name == null) return;
+    _keys = {};
+    if (array) {
+      // A new element: the previous element's sub-tables may be declared
+      // again for this one.
+      final prefix = '${name.identity}$_tomlKeySeparator';
+      _tables.removeWhere((table, _) => table.startsWith(prefix));
+      return;
+    }
+    final first = _tables[name.identity];
+    if (first == null) {
+      _tables[name.identity] = _sink.lineOf(name.start);
+      return;
+    }
+    _sink.add(
+      TextProblemKind.duplicateTable,
+      TextProblemSeverity.error,
+      name.start,
+      name.end,
+      subject: _text.substring(name.start, name.end),
+      relatedLine: first,
+    );
+  }
+
+  /// A dotted key at [pos] ending at [stop]: bare parts, `"basic"` and
+  /// `'literal'` parts, joined by dots with optional blanks.
+  _TomlKey? _key(int pos, int end, int stop) {
+    final parts = <String>[];
+    pos = _skipBlanks(pos, end);
+    final start = pos;
+    var keyEnd = pos;
+    while (pos < end) {
+      final c = _text.codeUnitAt(pos);
+      final String part;
+      if (c == 0x22 /* " */ || c == 0x27 /* ' */ ) {
+        final close = _closingQuote(pos + 1, end, c);
+        if (close < 0) return null;
+        part = _text.substring(pos + 1, close);
+        pos = close + 1;
+      } else if (_isBareKeyChar(c)) {
+        final from = pos;
+        while (pos < end && _isBareKeyChar(_text.codeUnitAt(pos))) {
+          pos++;
+        }
+        part = _text.substring(from, pos);
+      } else {
+        return null;
+      }
+      parts.add(part);
+      keyEnd = pos;
+      pos = _skipBlanks(pos, end);
+      if (pos < end && _text.codeUnitAt(pos) == 0x2e /* . */ ) {
+        pos = _skipBlanks(pos + 1, end);
+        continue;
+      }
+      if (pos >= end || _text.codeUnitAt(pos) != stop) return null;
+      return (
+        identity: parts.join(_tomlKeySeparator),
+        start: start,
+        end: keyEnd,
+        after: pos + 1,
+      );
+    }
+    return null;
+  }
+
+  /// Follows a value from [pos] to the line's end, noting a multi-line
+  /// string or bracket left open for the next lines.
+  void _scanValue(int pos, int end) {
+    while (pos < end) {
+      if (_multiline case final delimiter?) {
+        final close = _text.indexOf(delimiter, pos);
+        if (close < 0 || close >= end) return;
+        _multiline = null;
+        pos = close + delimiter.length;
+        continue;
+      }
+      final c = _text.codeUnitAt(pos);
+      if (c == 0x23 /* # */ ) return;
+      if (_text.startsWith('"""', pos) || _text.startsWith("'''", pos)) {
+        _multiline = _text.substring(pos, pos + 3);
+        pos += 3;
+        continue;
+      }
+      if (c == 0x22 || c == 0x27) {
+        final close = _closingQuote(pos + 1, end, c);
+        if (close < 0) return;
+        pos = close + 1;
+        continue;
+      }
+      if (c == 0x5b /* [ */ || c == 0x7b /* { */ ) {
+        _depth++;
+      } else if ((c == 0x5d /* ] */ || c == 0x7d /* } */ ) && _depth > 0) {
+        _depth--;
+      }
+      pos++;
+    }
+  }
+
+  /// The closing [quote] of a one-line string from [from], or -1. Basic
+  /// strings take backslash escapes; literal strings take none.
+  int _closingQuote(int from, int end, int quote) {
+    for (var i = from; i < end; i++) {
+      final c = _text.codeUnitAt(i);
+      if (quote == 0x22 && c == 0x5c /* backslash */ ) {
+        i++;
+        continue;
+      }
+      if (c == quote) return i;
+    }
+    return -1;
+  }
+
+  int _skipBlanks(int pos, int end) {
+    while (pos < end && _isBlank(_text.codeUnitAt(pos))) {
+      pos++;
+    }
+    return pos;
+  }
+}
+
+/// `A-Z a-z 0-9 _ -`, the characters of a bare key.
+bool _isBareKeyChar(int c) =>
+    (c >= 0x41 && c <= 0x5a) ||
+    (c >= 0x61 && c <= 0x7a) ||
+    (c >= 0x30 && c <= 0x39) ||
+    c == 0x5f ||
+    c == 0x2d;
