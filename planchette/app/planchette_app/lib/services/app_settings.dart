@@ -22,10 +22,11 @@ final class AppSettings {
   });
 
   /// Bounds a stored size so a bad file cannot make the editor unreadable.
-  /// The range is View › Zoom's, so every size it reaches can be stored.
-  static const int minimumFontSize = 9;
-  static const int maximumFontSize = 48;
-  static const int defaultFontSize = 14;
+  /// The range is View › Zoom's, shared with the host apps' editors, so
+  /// every size it reaches can be stored.
+  static const int minimumFontSize = EditorTextSize.minimum;
+  static const int maximumFontSize = EditorTextSize.maximum;
+  static const int defaultFontSize = EditorTextSize.standard;
 
   /// A stored indentation width outside this range is not one.
   static const int maximumIndentWidth = 16;

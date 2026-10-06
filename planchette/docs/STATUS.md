@@ -1,5 +1,13 @@
 # Status
 
+## Shared editor text size (2026-10-06)
+
+`EditorTextSize` in the shared editor holds the text-size range (9 to
+48, standard 14), View › Zoom's steps and the zoom chords: Command on
+Apple platforms, Control elsewhere, with the layout and keypad aliases.
+Planchette's View menu and settings read it unchanged; Poltergeist and
+Séance store their own device setting against it.
+
 ## Editing commands in the browser (2026-10-06)
 
 The text-tools browser lists the Edit and Find menu commands after the
