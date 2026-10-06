@@ -6328,17 +6328,65 @@ abstract class AppLocalizations {
   /// **'will join {changed, plural, =1{1 line} other{{changed} lines}}'**
   String editorTextToolPreviewWillJoinLines(int changed);
 
-  /// Editor status bar for a saved document (06 §2.3).
+  /// Editor status row's caret position and document size; tapping it opens Go to Line. bytes is the size the file has once saved.
   ///
   /// In en, this message translates to:
-  /// **'{lines} lines · {bytes} bytes'**
-  String editorStatusClean(int lines, int bytes);
+  /// **'Ln {line}, Col {column} · {lines, plural, =1{1 line} other{{lines} lines}} · {bytes, plural, =1{1 byte} other{{bytes} bytes}}'**
+  String editorStatusPosition(int line, int column, int lines, int bytes);
 
-  /// Editor status bar with unsaved edits (06 §2.3).
+  /// Editor status row segment for a selection within one line.
   ///
   /// In en, this message translates to:
-  /// **'{lines} lines · {bytes} bytes · Unsaved'**
-  String editorStatusDirty(int lines, int bytes);
+  /// **'{characters} selected'**
+  String editorStatusSelection(int characters);
+
+  /// Editor status row segment for a selection spanning several lines; lines is always more than one.
+  ///
+  /// In en, this message translates to:
+  /// **'{characters} selected on {lines} lines'**
+  String editorStatusSelectionLines(int characters, int lines);
+
+  /// Editor status row segment while a save is in flight.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get editorStatusSaving;
+
+  /// Editor status row segment while the document has unsaved edits.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved edits'**
+  String get editorStatusUnsaved;
+
+  /// Editor status row segment for a document too large to syntax-highlight.
+  ///
+  /// In en, this message translates to:
+  /// **'Large file: no highlighting'**
+  String get editorStatusLargeFile;
+
+  /// Editor status row segment: the document indents with spaces, width per level.
+  ///
+  /// In en, this message translates to:
+  /// **'Spaces: {width}'**
+  String editorStatusIndentSpaces(int width);
+
+  /// Editor status row segment: the document indents with tabs shown this many columns wide.
+  ///
+  /// In en, this message translates to:
+  /// **'Tab Size: {width}'**
+  String editorStatusIndentTabs(int width);
+
+  /// Editor status row language name for a file with no syntax highlighting.
+  ///
+  /// In en, this message translates to:
+  /// **'Plain Text'**
+  String get editorLanguagePlainText;
+
+  /// Editor status row language name for C, C++, Java and similar brace languages.
+  ///
+  /// In en, this message translates to:
+  /// **'C-style'**
+  String get editorLanguageCStyle;
 
   /// 06 §2.4's toast matrix: the upload completed but the user typed during it — the on-disk copy lags the editor.
   ///

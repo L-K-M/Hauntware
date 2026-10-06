@@ -10830,6 +10830,12 @@ unverified.
     status row (caret line/column, EOL, BOM, language, and remote state).
     Poltergeist retains its current lines/bytes/dirty row. This is unrelated
     to D10 and is recorded in PORTS.md for a focused UI task.
+    **Closed 2026-10-06:** the editor shows the shared status row: caret
+    line and column (a tap opens Go to Line), lines, saved size in bytes,
+    selection, saving and unsaved state, line ending, BOM, indentation,
+    language and the large-file notice. Its copy comes from the ARB
+    catalog; format and proper-noun language names stay the package's.
+    The gutter already came with the shared editor.
 37. **2026-09-29: D10 native/live QA and shared error copy.** The upstream
     Unix agent suite uses a real socket and the Windows client matrix compiles
     named-pipe support, but Poltergeist has not exercised a user's live agent

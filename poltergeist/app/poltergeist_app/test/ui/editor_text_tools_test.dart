@@ -264,8 +264,10 @@ void main() {
       await tester.pump();
     });
 
-    // The status row reports the normalized buffer: LF breaks, no mark.
-    expect(find.text('3 lines · 8 bytes'), findsOneWidget);
+    // The buffer is normalized to LF, but the status row reports what the
+    // save writes back: CRLF breaks and the mark, 13 bytes in all.
+    expect(find.textContaining('3 lines · 13 bytes'), findsOneWidget);
+    expect(find.textContaining('CRLF · UTF-8 BOM'), findsOneWidget);
 
     await tester.enterText(
       find.widgetWithText(TextField, 'one\ntwo\n'),

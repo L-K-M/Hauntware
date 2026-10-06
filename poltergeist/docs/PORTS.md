@@ -153,6 +153,8 @@ changed source set are:
   Poltergeist reconstructed each mixed ending was false, and that candidate
   is closed. Séance's later line-number gutter and richer status row are
   deliberately deferred as unrelated UI work (STATUS open item 36).
+  Both now come from the shared editor; the status row since 2026-10-06
+  (STATUS item 36, closed).
 
 The refreshed history adds only repository-owner and automation identities.
 The license scan still finds Séance's Unlicense and the recorded xterm.dart
