@@ -141,6 +141,7 @@ class Pty {
       // but the pid must stay valid for callers enforcing kill policies.
       pid = _bindings.pty_getpid(created);
 
+      _stdoutPort.listen(_onOutput);
       _exitPort.first.then(_onExitCode);
     } catch (_) {
       // A throwing constructor cannot hand back a usable Pty: release the
@@ -162,11 +163,17 @@ class Pty {
 
   final _exitCodeCompleter = Completer<int>();
 
+  final _output = StreamController<Uint8List>();
+
   late final Pointer<PtyHandle> _handle;
 
   /// The output stream from the pseudo-terminal. Note that pseudo-terminals
   /// do not distinguish between stdout and stderr.
-  Stream<Uint8List> get output => _stdoutPort.cast();
+  ///
+  /// Séance: it ends after the reader's last chunk, once every process
+  /// holding the pty has closed it or [close] stopped the reader. It used
+  /// to end when [exitCode] completed, dropping output still in flight.
+  Stream<Uint8List> get output => _output.stream;
 
   /// A `Future` which completes with the exit code of the process
   /// when the process completes.
@@ -254,8 +261,17 @@ class Pty {
     _bindings.pty_ack_read(_handle);
   }
 
-  void _onExitCode(dynamic exitCode) {
+  /// Séance: a chunk from the reader thread, or null once it has exited.
+  void _onOutput(dynamic message) {
+    if (message is Uint8List) {
+      _output.add(message);
+      return;
+    }
     _stdoutPort.close();
+    _output.close();
+  }
+
+  void _onExitCode(dynamic exitCode) {
     _exitPort.close();
     _exitCodeCompleter.complete(exitCode);
   }

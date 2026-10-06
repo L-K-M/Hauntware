@@ -73,6 +73,14 @@ All edits are marked `// Séance:` at the site.
   closes both `ReceivePort`s (field initializers create them before the
   body can fail) and releases a partially-created native handle — a
   failed spawn used to leak the ports for the isolate's lifetime.
+- `lib/flutter_pty.dart`, `src/flutter_pty_unix.c`, `src/flutter_pty_win.c`:
+  `output` ends after the reader thread's last chunk, marked by a null
+  message the reader posts as it exits. Upstream closed the output port
+  as soon as the exit status arrived on the other port, dropping output
+  the reader had not posted yet: sometimes a short-lived child's only
+  line, always the output of a job that outlives the child. The Windows
+  reader blocks until `ClosePseudoConsole`, so there `output` now ends at
+  `close()` rather than at exit.
 - `lib/src/flutter_pty_bindings_generated.dart`: `pty_close` entry added
   by hand, matching the shape `dart run ffigen --config ffigen.yaml`
   produces for the new header declaration.

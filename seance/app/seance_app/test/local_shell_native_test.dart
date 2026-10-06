@@ -14,6 +14,7 @@
 //
 // CI has no native library, so every test self-skips there — the same
 // environment-skip pattern seance_core already uses.
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -148,6 +149,32 @@ Future<LocalShellSession> _spawn(
   );
 }
 
+/// Runs `/bin/sh -c [script]` on a real pty, in [home].
+Future<LocalShellSession> _start(
+  HeadlessTerminalEngine engine,
+  Directory home,
+  String script,
+) {
+  final service = LocalShellService(
+    platform: LocalShellPlatform.linux,
+    environment: {
+      'HOME': home.path,
+      'PATH': '/usr/bin:/bin',
+      'SHELL': '/bin/sh',
+      'LANG': 'C.UTF-8',
+    },
+  );
+  return LocalShellSession.start(
+    launcher: service.launch,
+    command: LocalShellCommand(
+      executable: '/bin/sh',
+      arguments: ['-c', script],
+      workingDirectory: home.path,
+    ),
+    engine: engine,
+  );
+}
+
 void main() {
   // Fails loudly (rather than skip-hiding) when CI's required mode finds
   // no library — the release bundle is expected to have produced it.
@@ -235,6 +262,48 @@ void main() {
         'FWD:ARGV0MARK:ARGV1MARK:envmark42:'
         '${home!.resolveSymbolicLinksSync()}',
       );
+    },
+  );
+
+  // The exit status and the output travel on separate ports. The plugin
+  // used to close the output port as soon as the exit arrived, dropping
+  // whatever the reader had not posted yet: sometimes a short-lived
+  // child's only line (the test above flaked on CI), always the output of
+  // a job that outlives the shell.
+  test(
+    'output written after the shell exits still arrives',
+    skip: _ptySkip,
+    () async {
+      final engine = HeadlessTerminalEngine();
+      final session = await _start(
+        engine,
+        home!,
+        // The job inherits the ignored HUP, so it survives the shell
+        // exiting; it keeps the pty open, so its line comes after the exit
+        // status. Trapping inside the job would race the hangup.
+        'trap "" HUP; (sleep 0.3; printf "LATE:%s\\n" ok) & exit 0',
+      );
+      addTearDown(session.close);
+
+      await _waitFor(engine, 'LATE:ok');
+    },
+  );
+
+  test(
+    'a child that exits right after writing keeps its output',
+    skip: _ptySkip,
+    () async {
+      // Checked once the session has closed, so a line the teardown
+      // dropped cannot arrive late and pass.
+      for (var i = 0; i < 50; i++) {
+        final engine = HeadlessTerminalEngine();
+        final session = await _start(engine, home!, 'printf "OUT:%s\\n" $i');
+        final closed = Completer<void>();
+        session.onClosed = closed.complete;
+        await closed.future.timeout(const Duration(seconds: 10));
+
+        expect(engine.receivedText, contains('OUT:$i'));
+      }
     },
   );
 

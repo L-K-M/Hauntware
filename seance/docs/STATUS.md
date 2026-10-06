@@ -3,6 +3,20 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Local shell output after exit (2026-10-06)
+
+The vendored `flutter_pty` closed its output port as soon as the exit
+status arrived on its own port, so output the reader thread had not
+posted yet was dropped. A short-lived child lost its only line in about
+four of ten runs locally, which is how the native "argv, environment
+and cwd" test flaked on CI. The reader now posts a null message as it
+exits and `output` ends there (`third_party/flutter_pty/PATCHES.md`).
+
+Validated on Linux with the library built by `zig cc`: two new native
+tests, a job writing after its shell exits and 50 short-lived children,
+failed every run before the fix and passed four runs after it. macOS
+was not run; Windows refuses local shells.
+
 ## System app for files the built-in editor refuses (2026-10-06)
 
 On desktop, a default open (double-click, Enter, Open, a Local edits
