@@ -11,6 +11,9 @@ posted yet was dropped. A short-lived child lost its only line in about
 four of ten runs locally, which is how the native "argv, environment
 and cwd" test flaked on CI. The reader now posts a null message as it
 exits and `output` ends there (`third_party/flutter_pty/PATCHES.md`).
+The trade-off: when a job that ignores the hangup outlives the shell and
+still holds the pty, the pane now waits out the 2 s drain before it
+reports the exit, instead of dropping that job's output.
 
 Validated on Linux with the library built by `zig cc`: two new native
 tests, a job writing after its shell exits and 50 short-lived children,

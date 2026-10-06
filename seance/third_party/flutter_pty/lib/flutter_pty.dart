@@ -170,9 +170,11 @@ class Pty {
   /// The output stream from the pseudo-terminal. Note that pseudo-terminals
   /// do not distinguish between stdout and stderr.
   ///
-  /// Séance: it ends after the reader's last chunk, once every process
-  /// holding the pty has closed it or [close] stopped the reader. It used
-  /// to end when [exitCode] completed, dropping output still in flight.
+  /// Séance: it ends after the reader's last chunk. On unix that is once
+  /// every process holding the pty has closed it, or when [close] stops the
+  /// reader; on Windows the reader blocks until [close] closes the pseudo
+  /// console, so only [close] ends it. It used to end when [exitCode]
+  /// completed, dropping output still in flight.
   Stream<Uint8List> get output => _output.stream;
 
   /// A `Future` which completes with the exit code of the process
@@ -267,6 +269,7 @@ class Pty {
       _output.add(message);
       return;
     }
+    assert(message == null, 'Unexpected pty reader message: $message');
     _stdoutPort.close();
     _output.close();
   }

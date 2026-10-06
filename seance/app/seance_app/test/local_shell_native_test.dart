@@ -294,10 +294,12 @@ void main() {
     skip: _ptySkip,
     () async {
       // Checked once the session has closed, so a line the teardown
-      // dropped cannot arrive late and pass.
+      // dropped cannot arrive late and pass. onClosed waits for the output
+      // stream to end (or a 2 s drain), not just for the exit status.
       for (var i = 0; i < 50; i++) {
         final engine = HeadlessTerminalEngine();
         final session = await _start(engine, home!, 'printf "OUT:%s\\n" $i');
+        addTearDown(session.close);
         final closed = Completer<void>();
         session.onClosed = closed.complete;
         await closed.future.timeout(const Duration(seconds: 10));

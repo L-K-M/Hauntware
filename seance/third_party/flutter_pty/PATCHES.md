@@ -89,7 +89,8 @@ All edits are marked `// Séance:` at the site.
 
 - `ackRead` mode teardown: an ack-mode reader can park on the shared
   mutex where `poll()` never runs, so `pty_close` under `ackRead` hangs
-  up but does not join/free. Séance never enables `ackRead`; doing the
+  up but does not join/free, and that reader never posts the null that
+  ends `output`. Séance never enables `ackRead`; doing the
   right thing there needs a different protocol upstream.
 - The Windows backend is otherwise upstream-verbatim — including defects
   a review would call out: `CreateProcessW`'s `processInfo.hThread` and
@@ -102,7 +103,8 @@ All edits are marked `// Séance:` at the site.
   so a slow unblock never stalls the caller, but a truly stuck read
   would leave that thread outstanding. None of it is runtime-verified;
   the app refuses local shells on Windows, so these stay upstream bugs
-  to fix there, not Séance patches.
+  to fix there, not Séance patches. `pty_create` also ignores a failed
+  reader start there, which now leaves `output` open for good.
 - `waitpid` failure posts nothing to the exit port (upstream behaviour
   kept): a missing exit notification means "not proven dead", and
   callers must keep kill escalation armed — Séance's adapter does.
