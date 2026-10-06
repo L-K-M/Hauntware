@@ -12,6 +12,8 @@
 - A server's colour runs along the top of the terminal's tab strip,
   above the tabs, where Poltergeist marks its active pane. Under the
   tabs, the terminal's first line could be drawn over it.
+- The open tab joins the terminal or file below it: the line along the
+  bottom of the tab strip no longer runs under it.
 - Terminal text stays inside the terminal. With scrollback, the partly
   hidden top line was drawn over the tab strip above it.
 - Files: double-clicking a file opens it in the built-in editor, in a new
