@@ -788,6 +788,64 @@ void main() {
   );
 
   platformTest(
+    'reopening a local copy asks when its server file grew past 100 MiB',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      const path = '$_home/grow.log';
+      final remote = _ListFileSystem(
+        extra: [
+          const RemoteFileEntry(
+            path: path,
+            name: 'grow.log',
+            type: RemoteFileType.file,
+            size: builtInEditorMaximumBytes + 1,
+          ),
+        ],
+      );
+      final files = await pumpFilesPane(tester, remote);
+
+      // Over the built-in editor's 4 MB, so it opens in the system app.
+      await doubleClick(tester, 'grow.log');
+      await settleCheckout(tester, () => opened.isNotEmpty);
+      final copy = files.localCopies[path]!;
+
+      // The server file grows; reopening from Local edits would fetch it.
+      final listing = remote._entries[_home]!;
+      listing[listing.indexWhere(
+        (entry) => entry.path == path,
+      )] = RemoteFileEntry(
+        path: path,
+        name: 'grow.log',
+        type: RemoteFileType.file,
+        size: _huge.size,
+        modifiedAt: DateTime(2026, 2),
+      );
+      await tester.tap(find.text('Local edits (1)'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(ExpansionTile),
+          matching: find.text('grow.log'),
+        ),
+      );
+      await settleCheckout(
+        tester,
+        () => find.text('Download grow.log?').evaluate().isNotEmpty,
+      );
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(opened, hasLength(1));
+      expect(files.localCopies[path]?.id, copy.id);
+      expect(find.textContaining('cancelled'), findsNothing);
+
+      await tester.runAsync(() => files.removeLocalCopy(path));
+    },
+  );
+
+  platformTest(
     'arrows move the cursor and select; Enter opens',
     TargetPlatform.linux,
     (tester) async {

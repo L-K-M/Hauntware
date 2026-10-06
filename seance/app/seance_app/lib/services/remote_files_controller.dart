@@ -747,18 +747,29 @@ class RemoteFilesController extends ChangeNotifier {
   /// file can never serve stale content. A dirty copy is never overwritten —
   /// [remoteChangedFor] flags the drift and the editor's reload affordance
   /// becomes the deliberate discard path.
+  ///
+  /// [confirmDownload] is asked only when bytes are about to transfer: for a
+  /// new checkout, or for a refresh of a copy whose server file changed. It
+  /// receives the version that would arrive. A false answer throws
+  /// [CheckoutDeclined] and leaves any existing copy as it was.
   Future<ManagedRemoteFile> checkoutRemoteFile(
     RemoteFileEntry entry, {
     int? maximumBytes,
+    ConfirmCheckoutDownload? confirmDownload,
   }) async {
     var copy = await _checkoutFlights.putIfAbsent(entry.path, () async {
       try {
         final existing = localCopies[entry.path];
         return existing == null
-            ? await _checkoutRemoteFile(entry, maximumBytes: maximumBytes)
+            ? await _checkoutRemoteFile(
+                entry,
+                maximumBytes: maximumBytes,
+                confirmDownload: confirmDownload,
+              )
             : await _refreshExistingCheckout(
                 existing,
                 maximumBytes: maximumBytes,
+                confirmDownload: confirmDownload,
               );
       } finally {
         _checkoutFlights.remove(entry.path);
@@ -768,7 +779,11 @@ class RemoteFilesController extends ChangeNotifier {
     // a copy that is no longer tracked (its local file is gone). Never hand
     // that out — take a fresh flight so the caller gets a live checkout.
     if (!_disposed && localCopies[entry.path]?.id != copy.id) {
-      copy = await checkoutRemoteFile(entry, maximumBytes: maximumBytes);
+      copy = await checkoutRemoteFile(
+        entry,
+        maximumBytes: maximumBytes,
+        confirmDownload: confirmDownload,
+      );
     }
     return copy;
   }
@@ -780,6 +795,7 @@ class RemoteFilesController extends ChangeNotifier {
   Future<ManagedRemoteFile> _refreshExistingCheckout(
     ManagedRemoteFile copy, {
     int? maximumBytes,
+    ConfirmCheckoutDownload? confirmDownload,
   }) async {
     // Reconcile before deciding: an external editor's just-finished save must
     // be seen before the server copy is allowed to overwrite the checkout.
@@ -812,7 +828,15 @@ class RemoteFilesController extends ChangeNotifier {
       return current;
     }
     try {
-      return await _refreshLocalCopy(current, maximumBytes: maximumBytes);
+      return await _refreshLocalCopy(
+        current,
+        maximumBytes: maximumBytes,
+        confirmDownload: confirmDownload,
+      );
+    } on CheckoutDeclined {
+      // A refusal is the caller's answer, not a failed refresh to paper
+      // over with the stale copy.
+      rethrow;
     } catch (_) {
       return current;
     }
@@ -840,6 +864,7 @@ class RemoteFilesController extends ChangeNotifier {
   Future<ManagedRemoteFile> _refreshLocalCopy(
     ManagedRemoteFile copy, {
     int? maximumBytes,
+    ConfirmCheckoutDownload? confirmDownload,
   }) async {
     final local = localFile(copy);
     final partial = File('${local.path}.seance-${uuidV4()}.part');
@@ -849,6 +874,9 @@ class RemoteFilesController extends ChangeNotifier {
         copy.remotePath,
         followLinks: false,
       );
+      if (confirmDownload != null && !await confirmDownload(latest)) {
+        throw const CheckoutDeclined();
+      }
       sink = partial.openWrite();
       final snapshot = await download(
         latest,
@@ -980,9 +1008,13 @@ class RemoteFilesController extends ChangeNotifier {
   Future<ManagedRemoteFile> _checkoutRemoteFile(
     RemoteFileEntry entry, {
     int? maximumBytes,
+    ConfirmCheckoutDownload? confirmDownload,
   }) async {
     if (entry.type != RemoteFileType.file) {
       throw StateError('Only regular remote files can be opened for editing.');
+    }
+    if (confirmDownload != null && !await confirmDownload(entry)) {
+      throw const CheckoutDeclined();
     }
     final id = uuidV4();
     final localPath = managedFileStore.checkoutPathFor(
@@ -1534,6 +1566,20 @@ class _RemoteDownloadPlan {
   final String relativePath;
 
   const _RemoteDownloadPlan(this.entry, this.relativePath);
+}
+
+/// Asked before a checkout downloads [entry], the version that would
+/// actually arrive: the listed entry for a new checkout, a fresh stat for a
+/// refresh. Answering false cancels the download.
+typedef ConfirmCheckoutDownload = Future<bool> Function(RemoteFileEntry entry);
+
+/// A checkout whose download [ConfirmCheckoutDownload] declined. Nothing was
+/// written, and an existing copy is left as it was.
+class CheckoutDeclined implements Exception {
+  const CheckoutDeclined();
+
+  @override
+  String toString() => 'The download was cancelled.';
 }
 
 class _MaximumByteSink implements StreamSink<List<int>> {

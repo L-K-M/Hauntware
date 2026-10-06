@@ -1015,14 +1015,16 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       _showError('The built-in editor supports text files up to 4 MB.');
       return;
     }
-    if (maximumBytes == null && !await _confirmLargeDownload(entry)) return;
     try {
       final copy = await widget.controller.checkoutRemoteFile(
         entry,
         maximumBytes: maximumBytes,
+        confirmDownload: maximumBytes == null ? _confirmLargeDownload : null,
       );
       if (!mounted) return;
       await _openLocalCopy(copy);
+    } on CheckoutDeclined {
+      return;
     } catch (e) {
       _showError(e);
     }
@@ -1053,15 +1055,14 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     }
   }
 
-  /// Asks before a default open downloads all of [entry] when it is over
-  /// [_largeDownloadBytes]: a double-click is easy to make by accident.
-  /// A local copy of the same listed size is reused rather than
-  /// downloaded again, so it does not ask.
+  /// Asks before a default open downloads all of [entry], the version about
+  /// to arrive, when it is over [_largeDownloadBytes]: a double-click is easy
+  /// to make by accident. The controller asks only when a download will
+  /// start, so an unchanged local copy opens without a question.
   Future<bool> _confirmLargeDownload(RemoteFileEntry entry) async {
+    if (!mounted) return false;
     final size = entry.size;
     if (size == null || size <= _largeDownloadBytes) return true;
-    final copy = widget.controller.localCopies[entry.path];
-    if (copy?.remoteSnapshot.size == size) return true;
 
     final shown = ghostFormatFileSize(
       size,
@@ -1094,16 +1095,20 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     String? editorId,
   }) async {
     final registry = AppScope.of(context).services.settings.editorRegistry;
+    final maximumBytes = registry.checkoutMaximumBytes(
+      copy.remotePath,
+      editorId: editorId,
+    );
     try {
       final fresh = await widget.controller.checkoutRemoteFile(
         copy.remoteSnapshot,
-        maximumBytes: registry.checkoutMaximumBytes(
-          copy.remotePath,
-          editorId: editorId,
-        ),
+        maximumBytes: maximumBytes,
+        confirmDownload: maximumBytes == null ? _confirmLargeDownload : null,
       );
       if (!mounted) return;
       await _openLocalCopy(fresh, editorId: editorId);
+    } on CheckoutDeclined {
+      return;
     } catch (e) {
       _showError(e);
     }
