@@ -15,6 +15,13 @@ void main() {
     expect(EditorTextSize.zoomed(15, EditorZoom.zoomOut), 14);
   });
 
+  test('a size outside the range zooms back into it', () {
+    for (final zoom in [EditorZoom.zoomIn, EditorZoom.zoomOut]) {
+      expect(EditorTextSize.zoomed(60, zoom), EditorTextSize.maximum);
+      expect(EditorTextSize.zoomed(4, zoom), EditorTextSize.minimum);
+    }
+  });
+
   test('zooming past either end keeps the end', () {
     expect(EditorTextSize.zoomed(48, EditorZoom.zoomIn), 48);
     expect(EditorTextSize.zoomed(9, EditorZoom.zoomOut), 9);

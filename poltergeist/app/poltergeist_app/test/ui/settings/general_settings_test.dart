@@ -154,10 +154,13 @@ void main() {
     testWidgets('the dialog ends with the editor text size, which writes '
         'through as the slider moves', (tester) async {
       final textSize = EditorTextSizeController();
+      addTearDown(textSize.dispose);
+      final appearance = AppearanceController();
+      addTearDown(appearance.dispose);
       await run(
         tester,
         buildAppSettingsCommand(
-          appearance: AppearanceController(),
+          appearance: appearance,
           editorTextSize: textSize,
           enabled: () => true,
         ),

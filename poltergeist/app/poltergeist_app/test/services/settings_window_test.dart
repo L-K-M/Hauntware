@@ -232,6 +232,7 @@ void main() {
     editorTextSize = EditorTextSizeController(
       save: (size) async => savedTextSizes.add(size),
     );
+    addTearDown(editorTextSize.dispose);
     backup = _FakeBackup();
     editors = _FakeEditors();
     checkForUpdates = true;

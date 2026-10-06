@@ -232,5 +232,12 @@ void main() {
     expect(textSize.value, 14);
     expect(command('editor.actualSize').enabled(), isFalse);
     expect(command('editor.zoomOut').enabled(), isTrue);
+
+    // And at the other end.
+    while (command('editor.zoomOut').enabled()) {
+      await menu().onRun(command('editor.zoomOut'));
+      await tester.pump();
+    }
+    expect(textSize.value, 9);
   });
 }

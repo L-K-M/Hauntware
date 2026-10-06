@@ -54,6 +54,7 @@ void main() {
     );
     checkForUpdates = true;
     editorTextSize = EditorTextSizeController(initial: 18);
+    addTearDown(editorTextSize.dispose);
     host = SettingsWindowHost(control: _control, link: _appLink)
       ..attach(
         SettingsWindowSources(

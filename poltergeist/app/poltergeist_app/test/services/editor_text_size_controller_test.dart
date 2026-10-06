@@ -6,56 +6,59 @@ import 'package:poltergeist_app/services/settings_models.dart';
 /// The app's side of the editor text size: what every editor listens to,
 /// and what Settings and View › Zoom write through.
 void main() {
+  EditorTextSizeController controller({
+    int initial = EditorTextSize.standard,
+    Future<void> Function(int size)? save,
+  }) {
+    final created = EditorTextSizeController(initial: initial, save: save);
+    addTearDown(created.dispose);
+    return created;
+  }
+
   test('starts at the standard size, or the stored one clamped', () {
-    expect(EditorTextSizeController().value, EditorTextSize.standard);
-    expect(EditorTextSizeController(initial: 20).value, 20);
-    expect(EditorTextSizeController(initial: 99).value, EditorTextSize.maximum);
+    expect(controller().value, EditorTextSize.standard);
+    expect(controller(initial: 20).value, 20);
+    expect(controller(initial: 99).value, EditorTextSize.maximum);
   });
 
   test('resizes, then saves', () async {
     final events = <String>[];
-    late EditorTextSizeController controller;
-    controller = EditorTextSizeController(
-      save: (size) async => events.add('save ${controller.value}'),
-    );
-    controller.addListener(() => events.add('notify'));
+    late EditorTextSizeController sized;
+    sized = controller(save: (size) async => events.add('save ${sized.value}'));
+    sized.addListener(() => events.add('notify'));
 
-    await controller.setTextSize(18);
+    await sized.setTextSize(18);
 
     expect(events, ['notify', 'save 18']);
-    expect(controller.value, 18);
+    expect(sized.value, 18);
   });
 
   test('clamps, and writing what is already there does nothing', () async {
     final saved = <int>[];
-    final controller = EditorTextSizeController(
-      save: (size) async => saved.add(size),
-    );
+    final sized = controller(save: (size) async => saved.add(size));
 
-    await controller.setTextSize(EditorTextSize.standard);
-    await controller.setTextSize(500);
+    await sized.setTextSize(EditorTextSize.standard);
+    await sized.setTextSize(500);
 
     expect(saved, [EditorTextSize.maximum]);
   });
 
   test('zoom steps through the shared sizes', () async {
-    final controller = EditorTextSizeController();
+    final sized = controller();
 
-    await controller.zoom(EditorZoom.zoomIn);
-    expect(controller.value, 16);
-    await controller.zoom(EditorZoom.zoomOut);
-    await controller.zoom(EditorZoom.zoomOut);
-    expect(controller.value, 13);
-    await controller.zoom(EditorZoom.actualSize);
-    expect(controller.value, EditorTextSize.standard);
+    await sized.zoom(EditorZoom.zoomIn);
+    expect(sized.value, 16);
+    await sized.zoom(EditorZoom.zoomOut);
+    await sized.zoom(EditorZoom.zoomOut);
+    expect(sized.value, 13);
+    await sized.zoom(EditorZoom.actualSize);
+    expect(sized.value, EditorTextSize.standard);
   });
 
   test('a failed write keeps the size on screen, and says so', () async {
-    final controller = EditorTextSizeController(
-      save: (_) async => throw StateError('disk full'),
-    );
+    final sized = controller(save: (_) async => throw StateError('disk full'));
 
-    await expectLater(controller.setTextSize(20), throwsA(isA<StateError>()));
-    expect(controller.value, 20);
+    await expectLater(sized.setTextSize(20), throwsA(isA<StateError>()));
+    expect(sized.value, 20);
   });
 }
