@@ -279,7 +279,8 @@ For a remote checkout, the caller wires
 file, `onUpload` is null and the upload UI disappears. The screen keeps
 `PopScope(canPop: !dirty)` with the "Discard unsaved changes?" dialog, the
 two-line AppBar title (basename over the full path in `labelSmall`), and
-the status bar `N lines · M bytes · Unsaved`.
+the status bar `N lines · M bytes · Unsaved`. Since 2026-10-06 the shared
+editor's status row replaces that bar (STATUS item 36).
 
 ### 2.4 Save-and-upload semantics and toast copy
 
