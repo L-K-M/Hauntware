@@ -360,6 +360,48 @@ void main() {
   );
 
   platformTest(
+    'Open with System default refuses a program before downloading it',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(
+          extra: [
+            const RemoteFileEntry(
+              path: '$_home/app.desktop',
+              name: 'app.desktop',
+              type: RemoteFileType.file,
+              size: 64,
+            ),
+          ],
+        ),
+      );
+
+      await tester.tap(
+        find.text('app.desktop'),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pump();
+      // Past the menu's entrance: a tap during it dismisses the menu.
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.tap(find.text('Open with System default'));
+      await settleCheckout(
+        tester,
+        () =>
+            find.textContaining('could run as a program').evaluate().isNotEmpty,
+      );
+
+      expect(
+        find.textContaining('“app.desktop” could run as a program'),
+        findsOneWidget,
+      );
+      expect(opened, isEmpty);
+      expect(files.localCopies, isEmpty);
+    },
+  );
+
+  platformTest(
     'arrows move the cursor and select; Enter opens',
     TargetPlatform.linux,
     (tester) async {
