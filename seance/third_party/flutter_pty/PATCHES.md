@@ -81,6 +81,11 @@ All edits are marked `// Séance:` at the site.
   line, always the output of a job that outlives the child. The Windows
   reader blocks until `ClosePseudoConsole`, so there `output` now ends at
   `close()` rather than at exit.
+- `src/flutter_pty_win.c`: `pty_create` fails instead of returning a pty
+  whose reader or waiter thread did not start (no reader means `output`
+  never ends, no waiter means no exit status); it terminates the child,
+  releases what the missing waiter would have closed, and closes the
+  handle. Both thread-start helpers check their `malloc` first.
 - `lib/src/flutter_pty_bindings_generated.dart`: `pty_close` entry added
   by hand, matching the shape `dart run ffigen --config ffigen.yaml`
   produces for the new header declaration.
@@ -103,8 +108,7 @@ All edits are marked `// Séance:` at the site.
   so a slow unblock never stalls the caller, but a truly stuck read
   would leave that thread outstanding. None of it is runtime-verified;
   the app refuses local shells on Windows, so these stay upstream bugs
-  to fix there, not Séance patches. `pty_create` also ignores a failed
-  reader start there, which now leaves `output` open for good.
+  to fix there, not Séance patches.
 - `waitpid` failure posts nothing to the exit port (upstream behaviour
   kept): a missing exit notification means "not proven dead", and
   callers must keep kill escalation armed — Séance's adapter does.

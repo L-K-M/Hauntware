@@ -3,6 +3,20 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## flutter_pty: no half-started pty on Windows (2026-10-06)
+
+The Windows backend handed back a pty whose reader or waiter thread had
+failed to start: without the reader `output` never ended, without the
+waiter no exit arrived. `pty_create` now terminates the child, releases
+what the missing waiter owned, closes the handle and fails, as the unix
+backend does; both thread-start helpers check `malloc`. The
+end-of-output message is zero-initialized on both platforms.
+
+Validated by cross-compiling `flutter_pty.c` for `x86_64-windows-gnu`
+with `zig cc` (a shim maps `Windows.h` to MinGW's `windows.h`) and by
+the Linux native suite. The failure path itself was not exercised: it
+needs a failed thread start, and Séance refuses local shells on Windows.
+
 ## Asking before large default downloads (2026-10-06)
 
 Since a desktop default open downloads without the built-in editor's

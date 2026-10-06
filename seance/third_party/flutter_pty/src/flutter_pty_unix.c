@@ -154,9 +154,10 @@ static void *read_loop(void *arg)
     /* Séance: a null message tells the Dart side this reader is done, so
        the output stream ends after the last chunk. Ending it when the exit
        status arrived on its own port dropped output still in flight. */
-    Dart_CObject done;
+    Dart_CObject done = {0};
     done.type = Dart_CObject_kNull;
-    Dart_PostCObject_DL(options->port, &done);
+    /* Best effort: if this post fails, `output` stays open until close(). */
+    (void)Dart_PostCObject_DL(options->port, &done);
 
     free(options);
 

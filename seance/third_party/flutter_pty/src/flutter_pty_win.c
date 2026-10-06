@@ -200,9 +200,10 @@ static DWORD WINAPI read_loop(LPVOID arg)
     /* Séance: a null message tells the Dart side this reader is done, so
        the output stream ends after the last chunk. Ending it when the exit
        status arrived on its own port dropped output still in flight. */
-    Dart_CObject done;
+    Dart_CObject done = {0};
     done.type = Dart_CObject_kNull;
-    Dart_PostCObject_DL(options->port, &done);
+    /* Best effort: if this post fails, `output` stays open until close(). */
+    (void)Dart_PostCObject_DL(options->port, &done);
 
     /* Séance: thread-owned, freed here — upstream never released it. */
     free(options);
@@ -213,6 +214,12 @@ static DWORD WINAPI read_loop(LPVOID arg)
 static HANDLE start_read_thread(HANDLE fd, Dart_Port port, HANDLE mutex, BOOL ackRead)
 {
     ReadLoopOptions *options = malloc(sizeof(ReadLoopOptions));
+
+    /* Séance: upstream wrote through a failed malloc. */
+    if (options == NULL)
+    {
+        return NULL;
+    }
 
     options->fd = fd;
     options->port = port;
@@ -264,6 +271,12 @@ static DWORD WINAPI wait_exit_thread(LPVOID arg)
 static HANDLE start_wait_exit_thread(HANDLE pid, Dart_Port port, HANDLE mutex)
 {
     WaitExitOptions *options = malloc(sizeof(WaitExitOptions));
+
+    /* Séance: upstream wrote through a failed malloc. */
+    if (options == NULL)
+    {
+        return NULL;
+    }
 
     options->pid = pid;
     options->port = port;
@@ -452,6 +465,24 @@ FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
     pty->reader = start_read_thread(outputReadSide, options->stdout_port, mutex, options->ackRead);
 
     pty->waiter = start_wait_exit_thread(processInfo.hProcess, options->exit_port, mutex);
+
+    /* Séance: a pty without its reader never ends `output` (the reader
+       posts the null that ends it), and one without its waiter never
+       reports the exit. Undo the spawn instead of handing back a
+       half-started pty, as the unix backend does. */
+    if (pty->reader == NULL || pty->waiter == NULL)
+    {
+        TerminateProcess(processInfo.hProcess, 1);
+        if (pty->waiter == NULL)
+        {
+            /* A running waiter closes these itself. */
+            CloseHandle(processInfo.hProcess);
+            CloseHandle(mutex);
+        }
+        pty_close(pty);
+        error_message = "Failed to start pty threads";
+        return NULL;
+    }
 
     return pty;
 }
