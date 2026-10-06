@@ -117,4 +117,28 @@ void main() {
     await tester.pump();
     expect(slider(tester).value, 22);
   });
+
+  testWidgets('the newest write failing after a superseded one resets', (
+    tester,
+  ) async {
+    await pump(tester);
+
+    slider(tester).onChanged!(20);
+    await tester.pump();
+    slider(tester).onChanged!(22);
+    await tester.pump();
+    model.answer(error: StateError('link closed'));
+    await tester.pump();
+    expect(tester.takeException(), isA<StateError>());
+
+    // The newest write fails too: it owns the thumb and the toast.
+    model.answer(error: StateError('link closed'));
+    await tester.pump();
+
+    expect(slider(tester).value, 14);
+    expect(find.text('Bad state: link closed'), findsOneWidget);
+    expect(tester.takeException(), isA<StateError>());
+    // The toast's timer.
+    await tester.pump(const Duration(seconds: 5));
+  });
 }
