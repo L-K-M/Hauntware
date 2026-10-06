@@ -4488,14 +4488,56 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String editorStatusClean(int lines, int bytes) {
-    return '$lines lines · $bytes bytes';
+  String editorStatusPosition(int line, int column, int lines, int bytes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      lines,
+      locale: localeName,
+      other: '$lines lines',
+      one: '1 line',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      bytes,
+      locale: localeName,
+      other: '$bytes bytes',
+      one: '1 byte',
+    );
+    return 'Ln $line, Col $column · $_temp0 · $_temp1';
   }
 
   @override
-  String editorStatusDirty(int lines, int bytes) {
-    return '$lines lines · $bytes bytes · Unsaved';
+  String editorStatusSelection(int characters) {
+    return '$characters selected';
   }
+
+  @override
+  String editorStatusSelectionLines(int characters, int lines) {
+    return '$characters selected on $lines lines';
+  }
+
+  @override
+  String get editorStatusSaving => 'Saving…';
+
+  @override
+  String get editorStatusUnsaved => 'Unsaved edits';
+
+  @override
+  String get editorStatusLargeFile => 'Large file: no highlighting';
+
+  @override
+  String editorStatusIndentSpaces(int width) {
+    return 'Spaces: $width';
+  }
+
+  @override
+  String editorStatusIndentTabs(int width) {
+    return 'Tab Size: $width';
+  }
+
+  @override
+  String get editorLanguagePlainText => 'Plain Text';
+
+  @override
+  String get editorLanguageCStyle => 'C-style';
 
   @override
   String get editorSavedUploadedDirty =>

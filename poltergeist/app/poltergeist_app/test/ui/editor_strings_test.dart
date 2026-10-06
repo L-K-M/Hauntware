@@ -49,6 +49,28 @@ class _Marked extends AppLocalizationsEn {
   String get editorLineActions => '[line actions]';
   @override
   String get editorSearchHistory => '[history]';
+  @override
+  String editorStatusPosition(int line, int column, int lines, int bytes) =>
+      '[at $line:$column of $lines/$bytes]';
+  @override
+  String editorStatusSelection(int characters) => '[$characters picked]';
+  @override
+  String editorStatusSelectionLines(int characters, int lines) =>
+      '[$characters picked on $lines]';
+  @override
+  String get editorStatusSaving => '[saving]';
+  @override
+  String get editorStatusUnsaved => '[unsaved]';
+  @override
+  String get editorStatusLargeFile => '[large]';
+  @override
+  String editorStatusIndentSpaces(int width) => '[spaces $width]';
+  @override
+  String editorStatusIndentTabs(int width) => '[tabs $width]';
+  @override
+  String get editorLanguagePlainText => '[plain]';
+  @override
+  String get editorLanguageCStyle => '[c-like]';
 }
 
 void main() {
@@ -176,6 +198,59 @@ void main() {
     controller.openSearch();
     await tester.pumpAndSettle();
     expect(find.byTooltip('[line actions]'), findsOneWidget);
+  });
+
+  testWidgets('the shared status row uses the ARB copy', (tester) async {
+    final controller = EditorController(
+      displayPath: '/srv/notes.txt',
+      initialText: 'one\ntwo\n',
+    );
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlanchetteEditor(
+            controller: controller,
+            strings: PoltergeistEditorStrings(_Marked()),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('[at 1:1 of 3/8]'), findsOneWidget);
+    expect(find.textContaining('[spaces 4]'), findsOneWidget);
+    expect(find.textContaining('[plain]'), findsOneWidget);
+
+    // "one\nt" spans two lines; the edit after it dirties the buffer.
+    controller.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 5,
+    );
+    await tester.pump();
+    expect(find.textContaining('[5 picked on 2]'), findsOneWidget);
+    controller.text.selection = const TextSelection(
+      baseOffset: 0,
+      extentOffset: 2,
+    );
+    await tester.pump();
+    expect(find.textContaining('[2 picked]'), findsOneWidget);
+    controller.text.value = const TextEditingValue(
+      text: 'uno\ntwo\n',
+      selection: TextSelection.collapsed(offset: 0),
+    );
+    await tester.pump();
+    expect(find.textContaining('[unsaved]'), findsOneWidget);
+  });
+
+  test('every status row string routes through the ARB copy', () {
+    final strings = PoltergeistEditorStrings(_Marked());
+    expect(strings.saving, '[saving]');
+    expect(strings.largeFile, '[large]');
+    expect(strings.indentation(const Indentation.tabs(width: 8)), '[tabs 8]');
+    expect(strings.languageName(null), '[plain]');
+    expect(strings.languageName(syntaxLanguageFor('/srv/main.c')), '[c-like]');
+    // Proper-noun language names stay the package's own.
+    expect(strings.languageName(syntaxLanguageFor('/srv/app.py')), 'Python');
   });
 
   test('the ARB catalog covers every shared text tool, option and choice', () {

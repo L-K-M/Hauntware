@@ -123,8 +123,6 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
   bool get _saving => _editor.isSaving;
   String? get _error => _editor.error;
   bool get _searchOpen => _editor.searchOpen;
-  int get _statusLines => _editor.lineStarts.length;
-  int get _statusBytes => _editor.byteCount;
 
   @override
   void initState() {
@@ -328,7 +326,6 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
             controller: _editor,
             strings: PoltergeistEditorStrings(l10n),
             editingLocked: widget.quitPending,
-            showStatus: false,
             textStyle: TextStyle(
               fontFamily: widget.monoFontFallback.first,
               fontFamilyFallback: widget.monoFontFallback,
@@ -336,23 +333,6 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
               height: 1.35,
             ),
           ),
-          bottomNavigationBar: _loading || _error != null
-              ? null
-              : SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    child: Text(
-                      _dirty
-                          ? l10n.editorStatusDirty(_statusLines, _statusBytes)
-                          : l10n.editorStatusClean(_statusLines, _statusBytes),
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                  ),
-                ),
         ),
       ),
     );

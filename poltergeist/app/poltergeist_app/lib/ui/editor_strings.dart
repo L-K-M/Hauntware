@@ -5,10 +5,10 @@ import '../l10n/app_localizations.dart';
 /// Adapt the shared editor's user-facing copy to Poltergeist's localization
 /// resources. Every string the shared surface can render while this host
 /// shows it — find and replace bars, Go to Line, the text-tools browser,
-/// the tool bar, and the post-run notice — comes from the ARB catalog. The
-/// shared status row stays unadapted: this editor hides that row and draws
-/// its own from the same catalog. [regexHint] stays the package's own
-/// technical text, like the engine detail inside [patternInvalid].
+/// the tool bar, the post-run notice and the status row — comes from the
+/// ARB catalog. [regexHint] stays the package's own technical text, like
+/// the engine detail inside [patternInvalid]; so do the status row's
+/// format names (LF, CRLF, UTF-8) and the proper-noun language names.
 class PoltergeistEditorStrings extends EditorStrings {
   const PoltergeistEditorStrings(this.l10n);
   final AppLocalizations l10n;
@@ -57,6 +57,34 @@ class PoltergeistEditorStrings extends EditorStrings {
   String goToLineHint(int lines) => l10n.editorGoToLineHint(lines);
   @override
   String goToLineInvalid(int lines) => l10n.editorGoToLineInvalid(lines);
+
+  // ── Status row ──
+
+  @override
+  String documentPosition(int line, int column, int lines, int bytes) =>
+      l10n.editorStatusPosition(line, column, lines, bytes);
+  @override
+  String selectionSummary(int characters, int lines) => lines > 1
+      ? l10n.editorStatusSelectionLines(characters, lines)
+      : l10n.editorStatusSelection(characters);
+  @override
+  String get saving => l10n.editorStatusSaving;
+  @override
+  String get unsaved => l10n.editorStatusUnsaved;
+  @override
+  String get largeFile => l10n.editorStatusLargeFile;
+  @override
+  String indentation(Indentation value) => value.style == IndentStyle.tabs
+      ? l10n.editorStatusIndentTabs(value.width)
+      : l10n.editorStatusIndentSpaces(value.width);
+  @override
+  String languageName(SyntaxLanguage? language) {
+    if (language == null) return l10n.editorLanguagePlainText;
+    if (language.id == SyntaxLanguages.cFamily.id) {
+      return l10n.editorLanguageCStyle;
+    }
+    return super.languageName(language);
+  }
 
   // ── Find-bar extras ──
 

@@ -5622,10 +5622,16 @@
       }
     }
   },
-  "editorStatusClean": "{lines} lines · {bytes} bytes",
-  "@editorStatusClean": {
-    "description": "Editor status bar for a saved document (06 §2.3).",
+  "editorStatusPosition": "Ln {line}, Col {column} · {lines, plural, =1{1 line} other{{lines} lines}} · {bytes, plural, =1{1 byte} other{{bytes} bytes}}",
+  "@editorStatusPosition": {
+    "description": "Editor status row's caret position and document size; tapping it opens Go to Line. bytes is the size the file has once saved.",
     "placeholders": {
+      "line": {
+        "type": "int"
+      },
+      "column": {
+        "type": "int"
+      },
       "lines": {
         "type": "int"
       },
@@ -5634,17 +5640,64 @@
       }
     }
   },
-  "editorStatusDirty": "{lines} lines · {bytes} bytes · Unsaved",
-  "@editorStatusDirty": {
-    "description": "Editor status bar with unsaved edits (06 §2.3).",
+  "editorStatusSelection": "{characters} selected",
+  "@editorStatusSelection": {
+    "description": "Editor status row segment for a selection within one line.",
     "placeholders": {
-      "lines": {
-        "type": "int"
-      },
-      "bytes": {
+      "characters": {
         "type": "int"
       }
     }
+  },
+  "editorStatusSelectionLines": "{characters} selected on {lines} lines",
+  "@editorStatusSelectionLines": {
+    "description": "Editor status row segment for a selection spanning several lines; lines is always more than one.",
+    "placeholders": {
+      "characters": {
+        "type": "int"
+      },
+      "lines": {
+        "type": "int"
+      }
+    }
+  },
+  "editorStatusSaving": "Saving…",
+  "@editorStatusSaving": {
+    "description": "Editor status row segment while a save is in flight."
+  },
+  "editorStatusUnsaved": "Unsaved edits",
+  "@editorStatusUnsaved": {
+    "description": "Editor status row segment while the document has unsaved edits."
+  },
+  "editorStatusLargeFile": "Large file: no highlighting",
+  "@editorStatusLargeFile": {
+    "description": "Editor status row segment for a document too large to syntax-highlight."
+  },
+  "editorStatusIndentSpaces": "Spaces: {width}",
+  "@editorStatusIndentSpaces": {
+    "description": "Editor status row segment: the document indents with spaces, width per level.",
+    "placeholders": {
+      "width": {
+        "type": "int"
+      }
+    }
+  },
+  "editorStatusIndentTabs": "Tab Size: {width}",
+  "@editorStatusIndentTabs": {
+    "description": "Editor status row segment: the document indents with tabs shown this many columns wide.",
+    "placeholders": {
+      "width": {
+        "type": "int"
+      }
+    }
+  },
+  "editorLanguagePlainText": "Plain Text",
+  "@editorLanguagePlainText": {
+    "description": "Editor status row language name for a file with no syntax highlighting."
+  },
+  "editorLanguageCStyle": "C-style",
+  "@editorLanguageCStyle": {
+    "description": "Editor status row language name for C, C++, Java and similar brace languages."
   },
   "editorSavedUploadedDirty": "Uploaded the saved version; newer edits remain unsaved.",
   "@editorSavedUploadedDirty": {

@@ -457,6 +457,45 @@ void main() {
     expect(find.text('/etc/nginx/nginx.conf'), findsOneWidget);
   });
 
+  testWidgets('the status row shows the caret and opens Go to Line', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      editorApp(remotePath: '/etc/config.txt', initialText: 'one\ntwo\n'),
+    );
+    await tester.pumpAndSettle();
+
+    final position = find.text('Ln 1, Col 1 · 3 lines · 8 bytes');
+    expect(position, findsOneWidget);
+    expect(find.textContaining('LF · UTF-8 · Spaces: 4'), findsOneWidget);
+
+    await tester.tap(position);
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField &&
+            widget.decoration?.hintText == 'Line or line:column, 1 to 3',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the status row clears the bottom safe area', (tester) async {
+    const homeIndicator = 34.0;
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(bottom: homeIndicator);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      editorApp(remotePath: '/etc/config.txt', initialText: 'one\n'),
+    );
+    await tester.pumpAndSettle();
+
+    final position = tester.getRect(find.textContaining('Ln 1, Col 1'));
+    expect(position.bottom, lessThanOrEqualTo(844 - homeIndicator));
+  });
+
   // ---- §2.5 production-path saves (no saveDocument override) ---------------
 
   testWidgets(
