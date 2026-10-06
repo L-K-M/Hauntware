@@ -467,6 +467,22 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     current height while preserving the saved column, including its pending
     wrap state, and the saved text attributes and character map.
 
+### Side safe-area insets (regressions: `test/src/ui/safe_area_test.dart`)
+
+37. **The side insets are honoured like the top and bottom ones**
+    (`ui/render.dart#_viewportWidth`, `#cursorOffset`, `#_paint`,
+    `#_paintSegment`): `RenderTerminal` takes the ambient `MediaQuery`
+    padding. Upstream applied the top and bottom insets to the grid and to
+    drawing, but the left inset only to pointer mapping
+    (`getOffset`/`getCellOffset`) and the right one not at all. With a
+    notch or a side navigation bar, as on a phone in landscape, the text
+    sat under the inset and every tap, selection, link and mouse report
+    landed one inset to the left of the text under the finger. The grid
+    now fits between the side insets, and rows, the cursor (and with it
+    the IME caret rect and composing text), selections and highlights are
+    drawn from the left one. Such a phone loses the columns the insets
+    cover.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on

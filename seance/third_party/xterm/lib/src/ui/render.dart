@@ -572,7 +572,7 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     }
 
     final viewportSize = TerminalSize(
-      size.width ~/ _painter.cellSize.width,
+      _viewportWidth ~/ _painter.cellSize.width,
       _viewportHeight ~/ _painter.cellSize.height,
     );
 
@@ -613,6 +613,15 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     return size.height - _padding.vertical;
   }
 
+  // [seance fork] The side insets are honoured like the top and bottom ones:
+  // the grid fits between them and is drawn from the left one. Upstream only
+  // mapped pointer positions through the left inset (see [getCellOffset]),
+  // so with a notch or a side navigation bar every tap landed one inset to
+  // the left of the text it was on, and the text sat under the inset.
+  double get _viewportWidth {
+    return size.width - _padding.horizontal;
+  }
+
   double get _maxScrollExtent {
     return max(_terminalHeight - _viewportHeight, 0.0);
   }
@@ -624,7 +633,7 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
   /// The offset of the cursor from the top left corner of this render object.
   Offset get cursorOffset {
     return Offset(
-      _terminal.buffer.cursorX * _painter.cellSize.width,
+      _terminal.buffer.cursorX * _painter.cellSize.width + _padding.left,
       _terminal.buffer.absoluteCursorY * _painter.cellSize.height + _lineOffset,
     );
   }
@@ -669,7 +678,10 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     for (var i = effectFirstLine; i <= effectLastLine; i++) {
       _painter.paintLine(
         canvas,
-        offset.translate(0, (i * charHeight + _lineOffset).truncateToDouble()),
+        offset.translate(
+          _padding.left,
+          (i * charHeight + _lineOffset).truncateToDouble(),
+        ),
         lines[i],
         recolor?[i - effectFirstLine],
       );
@@ -840,7 +852,7 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     final end = segment.end ?? _terminal.viewWidth;
 
     final startOffset = Offset(
-      start * _painter.cellSize.width,
+      start * _painter.cellSize.width + _padding.left,
       segment.line * _painter.cellSize.height + _lineOffset,
     );
 
