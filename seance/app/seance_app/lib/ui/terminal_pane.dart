@@ -1356,20 +1356,32 @@ class _SessionViewState extends State<_SessionView> {
     }
     // Zoom (see _zoomInKeys).
     if (clip && _zoomInKeys.contains(event.logicalKey)) {
-      widget.state.zoomTerminal(kTerminalFontSizeStep);
+      unawaited(_zoom(kTerminalFontSizeStep));
       return KeyEventResult.handled;
     }
     if (clip && _zoomOutKeys.contains(event.logicalKey)) {
-      widget.state.zoomTerminal(-kTerminalFontSizeStep);
+      unawaited(_zoom(-kTerminalFontSizeStep));
       return KeyEventResult.handled;
     }
     if (clip &&
         (event.logicalKey == LogicalKeyboardKey.digit0 ||
             event.logicalKey == LogicalKeyboardKey.numpad0)) {
-      widget.state.zoomTerminal(null);
+      unawaited(_zoom(null));
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// Zooms every terminal. The size applies at once; a failed save says so
+  /// rather than leaving an unhandled error behind text that looks saved.
+  Future<void> _zoom(double? delta) async {
+    try {
+      await widget.state.zoomTerminal(delta);
+    } catch (e) {
+      if (mounted) {
+        showTopToastIn(context, message: 'Terminal font size not saved — $e');
+      }
+    }
   }
 
   /// Right-click menu: Copy (when there's a selection), Paste, Select all,

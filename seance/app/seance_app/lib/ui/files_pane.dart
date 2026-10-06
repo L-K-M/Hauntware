@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorZoom;
 import 'package:seance_core/seance_core.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -2588,6 +2589,17 @@ class EditorTabView extends StatelessWidget {
     required this.isActive,
   });
 
+  /// Zooms every editor. The size applies at once; a failed save says so
+  /// rather than leaving an unhandled error behind text that looks saved.
+  Future<void> _zoom(BuildContext context, EditorZoom zoom) async {
+    try {
+      await state.zoomEditor(zoom);
+    } catch (e) {
+      if (!context.mounted) return;
+      showTopToastIn(context, message: 'Editor text size not saved — $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final owner = state.ownerSessionFor(tab);
@@ -2600,7 +2612,7 @@ class EditorTabView extends StatelessWidget {
       remoteFiles: files,
       dirtyNotifier: tab.dirty,
       fontSize: state.services.settings.editorFontSize,
-      onZoom: (zoom) => unawaited(state.zoomEditor(zoom)),
+      onZoom: (zoom) => unawaited(_zoom(context, zoom)),
       onSaved: () => _reconcileAfterSave(owner),
       onUpload: files == null
           ? null
