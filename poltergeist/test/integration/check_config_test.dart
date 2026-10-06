@@ -146,7 +146,11 @@ void main() {
     for (final path in _modernDockerfiles) {
       final dockerfile = File(path).readAsStringSync();
 
-      expect(dockerfile.split('\n').first, 'FROM $_modernAlpineImage');
+      expect(
+        dockerfile.split('\n').first,
+        'FROM $_modernAlpineImage',
+        reason: path,
+      );
       for (final package in _modernOpenSshPackages) {
         expect(
           dockerfile,
@@ -169,7 +173,7 @@ void main() {
     }
   });
 
-  test('publishes the modern base by hand from its own directory', () {
+  test('builds the modern base on PRs and publishes it from main', () {
     final workflow =
         loadYaml(
               File(
@@ -178,17 +182,39 @@ void main() {
             )
             as YamlMap;
     final events = workflow['on'] as YamlMap;
-    final job = (workflow['jobs'] as YamlMap)['sshd-modern-base'] as YamlMap;
-    final build = (job['steps'] as YamlList).cast<YamlMap>().singleWhere(
-      (step) => step['id'] == 'build',
+    final env = workflow['env'] as YamlMap;
+    final jobs = workflow['jobs'] as YamlMap;
+    YamlMap build(String job) =>
+        ((jobs[job] as YamlMap)['steps'] as YamlList)
+                .cast<YamlMap>()
+                .singleWhere((step) => step['id'] == 'build')['with']
+            as YamlMap;
+
+    expect(env['IMAGE'], _modernBaseImage);
+    expect(env['CONTEXT'], 'poltergeist/test/integration/sshd-modern-base');
+    expect(env['PLATFORMS'], 'linux/amd64,linux/arm64');
+    expect(
+      (events['pull_request'] as YamlMap)['paths'],
+      contains('poltergeist/test/integration/sshd-modern-base/**'),
     );
 
-    expect(events.keys, ['workflow_dispatch']);
-    expect((job['env'] as YamlMap)['IMAGE'], _modernBaseImage);
+    final verify = jobs['verify'] as YamlMap;
+    expect(verify['if'], "github.event_name == 'pull_request'");
+    expect(verify.containsKey('permissions'), isFalse);
+    expect(build('verify')['push'], isFalse);
+
+    final publish = jobs['publish'] as YamlMap;
     expect(
-      (build['with'] as YamlMap)['context'],
-      'poltergeist/test/integration/sshd-modern-base',
+      publish['if'],
+      "github.event_name == 'workflow_dispatch' && "
+      "github.ref == 'refs/heads/main'",
     );
+    expect((publish['permissions'] as YamlMap)['packages'], 'write');
+    expect(build('publish')['push'], isTrue);
+    for (final job in ['verify', 'publish']) {
+      expect(build(job)['context'], r'${{ env.CONTEXT }}', reason: job);
+      expect(build(job)['platforms'], r'${{ env.PLATFORMS }}', reason: job);
+    }
   });
 
   test('pins matching legacy OpenSSH client and server packages', () {
