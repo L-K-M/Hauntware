@@ -432,6 +432,20 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     anchor with its line instead (ring-buffer eviction, CSI 3J and a whole
     buffer clear alike, successor or not); `migrate` stays the default.
 
+### Painting stays inside the view (regressions: `test/src/ui/paint_bounds_test.dart`)
+
+34. **Rows are clipped to the view** (`ui/render.dart#paint`): rows are
+    painted at their scroll position, so a view that is not a whole number
+    of rows tall leaves one partly outside it: the top row while pinned to
+    the bottom of a scrollback, the last row while scrolled up. Upstream
+    did not clip, so that row painted over the widgets beside the view. In
+    Séance the top row ran across the tab strip and the server's colour
+    line; the status bar happened to paint over the bottom one. `paint` now
+    clips the canvas to the render box. `TerminalView.padding` sits outside
+    the box, so its band stays clear too. The partial row still shows
+    inside the view. Snapping the scroll offset to whole rows would remove
+    it, but would also lift the prompt off the bottom edge.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on
