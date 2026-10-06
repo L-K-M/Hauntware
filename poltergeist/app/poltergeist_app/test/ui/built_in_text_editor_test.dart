@@ -216,6 +216,59 @@ void main() {
     expect(find.text('Saved and uploaded.'), findsOneWidget);
   });
 
+  testWidgets(
+    'macOS keeps Control+F and Control+N for moving the caret',
+    (tester) async {
+      var newWindows = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: BuiltInTextEditorScreen(
+            file: file,
+            initialText: 'ab\ncd\n',
+            onCloseRequested: () async {},
+            onNewWindowRequested: () async => newWindows++,
+            showToast: (_, _) {},
+            monoFontFallback: const ['monospace'],
+            basenameOf: remoteBasename,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(TextField));
+      await tester.pumpAndSettle();
+      final text = tester.widget<TextField>(find.byType(TextField)).controller!;
+      text.selection = const TextSelection.collapsed(offset: 0);
+      await tester.pump();
+
+      Future<void> control(LogicalKeyboardKey key) async {
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+        await tester.sendKeyEvent(key);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+        await tester.pumpAndSettle();
+      }
+
+      // Cocoa's text bindings: Control+F moves forward a character and
+      // Control+N down a line, as in the shared editor on its own.
+      await control(LogicalKeyboardKey.keyF);
+      expect(text.selection.baseOffset, 1);
+      expect(find.byTooltip('Close search'), findsNothing);
+
+      await control(LogicalKeyboardKey.keyN);
+      expect(text.selection.baseOffset, 4);
+      expect(newWindows, 0);
+
+      // Command keeps Find and New Window.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Close search'), findsOneWidget);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+
   testWidgets('Ctrl-S falls back to reconciling when the upload fails', (
     tester,
   ) async {

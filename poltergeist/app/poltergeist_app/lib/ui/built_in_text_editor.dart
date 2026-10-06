@@ -219,6 +219,14 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
     final l10n = AppLocalizations.of(context);
     final name = widget.basenameOf(_displayPath);
     final uploadOnSave = widget.onUpload != null;
+    // Command alone on Apple platforms, as the shared editor binds it:
+    // there Control+F and Control+N are Cocoa text bindings (forward a
+    // character, down a line) the document keeps. Elsewhere both stay.
+    // Save keeps both everywhere; Control+S is no text binding.
+    final apple = switch (Theme.of(context).platform) {
+      TargetPlatform.iOS || TargetPlatform.macOS => true,
+      _ => false,
+    };
     final editor = PopScope(
       canPop: !_dirty && (!_saving || widget.onCloseRequested == null),
       onPopInvokedWithResult: (didPop, _) async {
@@ -230,14 +238,16 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
           if (widget.onNewWindowRequested != null) ...{
             const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
                 widget.onNewWindowRequested!,
-            const SingleActivator(LogicalKeyboardKey.keyN, control: true):
-                widget.onNewWindowRequested!,
+            if (!apple)
+              const SingleActivator(LogicalKeyboardKey.keyN, control: true):
+                  widget.onNewWindowRequested!,
           },
           if (widget.onCloseRequested != null) ...{
             const SingleActivator(LogicalKeyboardKey.keyW, meta: true):
                 widget.onCloseRequested!,
-            const SingleActivator(LogicalKeyboardKey.keyW, control: true):
-                widget.onCloseRequested!,
+            if (!apple)
+              const SingleActivator(LogicalKeyboardKey.keyW, control: true):
+                  widget.onCloseRequested!,
           },
           // ⌘S/Ctrl+S is "save and upload" for a server file; hold Shift to
           // deliberately keep a save local-only.
@@ -257,22 +267,25 @@ class _BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen> {
           ): _save,
           const SingleActivator(LogicalKeyboardKey.keyF, meta: true):
               _openSearch,
-          const SingleActivator(LogicalKeyboardKey.keyF, control: true):
-              _openSearch,
+          if (!apple)
+            const SingleActivator(LogicalKeyboardKey.keyF, control: true):
+                _openSearch,
           const SingleActivator(LogicalKeyboardKey.keyG, meta: true):
               _nextMatch,
-          const SingleActivator(LogicalKeyboardKey.keyG, control: true):
-              _nextMatch,
+          if (!apple)
+            const SingleActivator(LogicalKeyboardKey.keyG, control: true):
+                _nextMatch,
           const SingleActivator(
             LogicalKeyboardKey.keyG,
             meta: true,
             shift: true,
           ): _previousMatch,
-          const SingleActivator(
-            LogicalKeyboardKey.keyG,
-            control: true,
-            shift: true,
-          ): _previousMatch,
+          if (!apple)
+            const SingleActivator(
+              LogicalKeyboardKey.keyG,
+              control: true,
+              shift: true,
+            ): _previousMatch,
           const SingleActivator(LogicalKeyboardKey.f3): _nextMatch,
           const SingleActivator(LogicalKeyboardKey.f3, shift: true):
               _previousMatch,
