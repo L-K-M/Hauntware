@@ -111,6 +111,9 @@ class LocalSettingsBackend implements SettingsBackend {
     await _state.services.saveSettings();
   }
 
+  @override
+  Future<void> setEditorFontSize(int size) => _state.setEditorFontSize(size);
+
   /// Applied before the write, like the terminal's appearance: the screen
   /// writes through on every change, and the app repainting only after the
   /// disk had caught up would make each edit lag by a save.

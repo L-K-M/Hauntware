@@ -43,6 +43,13 @@ class BuiltInTextEditorScreen extends StatefulWidget {
   /// focus-on-activation never fight the tab that is actually showing.
   final bool isActive;
 
+  /// The text size every editor tab draws in (Settings → General).
+  final int fontSize;
+
+  /// View › Zoom on the app-wide [fontSize], from the zoom chords. Null
+  /// leaves the chords unbound.
+  final void Function(EditorZoom zoom)? onZoom;
+
   const BuiltInTextEditorScreen({
     super.key,
     required this.file,
@@ -54,6 +61,8 @@ class BuiltInTextEditorScreen extends StatefulWidget {
     this.onUpload,
     this.dirtyNotifier,
     this.isActive = true,
+    this.fontSize = EditorTextSize.standard,
+    this.onZoom,
   });
 
   @override
@@ -320,6 +329,13 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
         control: true,
         shift: true,
       ): _save,
+      if (widget.onZoom case final zoomTo?)
+        for (final zoom in EditorZoom.values)
+          for (final chord in EditorTextSize.activators(
+            zoom,
+            Theme.of(context).platform,
+          ))
+            chord: () => zoomTo(zoom),
     },
     child: Scaffold(
       body: Column(
@@ -336,7 +352,7 @@ class BuiltInTextEditorScreenState extends State<BuiltInTextEditorScreen>
               textStyle: TextStyle(
                 fontFamily: SeanceTheme.monoFallback.first,
                 fontFamilyFallback: SeanceTheme.monoFallback,
-                fontSize: 14,
+                fontSize: widget.fontSize.toDouble(),
                 height: 1.35,
               ),
               banner: widget.remoteFiles == null ? null : _remoteBanner(),

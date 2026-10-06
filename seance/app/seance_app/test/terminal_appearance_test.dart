@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
 import 'package:seance_app/services/app_settings.dart';
 import 'package:seance_app/theme.dart';
 import 'package:seance_app/theme/contrast.dart';
@@ -245,8 +246,25 @@ void main() {
       expect(restored.terminalPalette, TerminalPalette.followApp);
     });
 
+    test('the editor text size round-trips and is clamped on read', () {
+      final restored = AppSettings.fromJson(
+        jsonDecode(jsonEncode(AppSettings(editorFontSize: 22).toJson()))
+            as Map<String, dynamic>,
+      );
+      expect(restored.editorFontSize, 22);
+      expect(
+        AppSettings.fromJson({'editorFontSize': 400}).editorFontSize,
+        EditorTextSize.maximum,
+      );
+      expect(
+        AppSettings.fromJson({'editorFontSize': 'big'}).editorFontSize,
+        EditorTextSize.standard,
+      );
+    });
+
     test('a settings file written before this feature keeps the default', () {
       final restored = AppSettings.fromJson({'deviceId': 'abc'});
+      expect(restored.editorFontSize, EditorTextSize.standard);
       expect(restored.terminalFontSize, kDefaultTerminalFontSize);
       expect(restored.terminalFontFamily, isEmpty);
       expect(restored.terminalPalette, TerminalPalette.followApp);

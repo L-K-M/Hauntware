@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
 import 'package:seance_core/seance_core.dart';
 
 import '../family_hues.dart';
@@ -113,6 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   SystemFonts get _systemFonts => widget.systemFonts ?? hostSystemFonts();
 
   late double _terminalFontSize;
+  late int _editorFontSize;
   late TerminalPalette _terminalPalette;
   final _terminalFont = TextEditingController();
   SyncEnrollmentMode _syncMode = SyncEnrollmentMode.login;
@@ -167,6 +169,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _keepSessionsAlive = s.keepSessionsAliveInBackground;
     _editorRegistry = EditorRegistry.fromJson(s.editorRegistry.toJson());
     _terminalFontSize = clampTerminalFontSize(s.terminalFontSize);
+    _editorFontSize = EditorTextSize.clamp(s.editorFontSize);
     _terminalPalette = s.terminalPalette;
     _terminalFont.text = s.terminalFontFamily;
     _syncUrl.text = s.syncBaseUrl ?? '';
@@ -585,6 +588,41 @@ class _SettingsScreenState extends State<SettingsScreen>
           setState(() => _terminalPalette = value);
           _persistTerminalAppearance();
         },
+      ),
+      const Divider(height: 40),
+      SettingsSectionHeader(
+        'Built-in editor',
+        helpTitle: 'Editor text size',
+        help:
+            'The text size of every built-in editor tab on this device. In an '
+            'editor tab you can zoom without opening Settings: ⌘ with +, − or '
+            '0 on macOS and iPadOS, Ctrl with the same keys elsewhere. The '
+            'sizes match Planchette and Poltergeist.',
+      ),
+      Row(
+        children: [
+          Expanded(
+            child: Slider(
+              key: const ValueKey('editor.textSize'),
+              min: EditorTextSize.minimum.toDouble(),
+              max: EditorTextSize.maximum.toDouble(),
+              divisions: EditorTextSize.maximum - EditorTextSize.minimum,
+              value: _editorFontSize.toDouble(),
+              label: '$_editorFontSize pt',
+              onChanged: (value) =>
+                  setState(() => _editorFontSize = value.round()),
+              onChangeEnd: (_) => _persistEditorFontSize(),
+            ),
+          ),
+          SizedBox(
+            width: 56,
+            child: Text(
+              '$_editorFontSize pt',
+              textAlign: TextAlign.end,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
       ),
       const Divider(height: 40),
       SettingsSectionHeader(
@@ -1219,6 +1257,11 @@ class _SettingsScreenState extends State<SettingsScreen>
       fontFamily: _terminalFont.text.trim(),
       palette: _terminalPalette,
     ),
+  );
+
+  Future<void> _persistEditorFontSize() => _persist(
+    'Editor text size',
+    () => _backend.setEditorFontSize(_editorFontSize),
   );
 
   /// Opens the installed-font picker and applies what it returns.

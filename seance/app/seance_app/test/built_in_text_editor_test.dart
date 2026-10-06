@@ -243,6 +243,47 @@ void main() {
     expect(find.textContaining('Saved locally'), findsOneWidget);
   });
 
+  testWidgets('draws at the app\'s text size and zooms by chord', (
+    tester,
+  ) async {
+    final zooms = <EditorZoom>[];
+    Widget editor(int fontSize) => MaterialApp(
+      home: BuiltInTextEditorScreen(
+        file: file,
+        remotePath: '/etc/config.txt',
+        initialText: 'one\n',
+        fontSize: fontSize,
+        onZoom: zooms.add,
+      ),
+    );
+    await tester.pumpWidget(editor(20));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(find.byType(TextField)).style?.fontSize, 20);
+
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+    for (final key in [
+      LogicalKeyboardKey.equal,
+      LogicalKeyboardKey.minus,
+      LogicalKeyboardKey.digit0,
+    ]) {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    }
+    await tester.pump();
+    expect(zooms, [
+      EditorZoom.zoomIn,
+      EditorZoom.zoomOut,
+      EditorZoom.actualSize,
+    ]);
+    // The chords never reached the document.
+    expect(find.widgetWithText(TextField, 'one\n'), findsOneWidget);
+
+    await tester.pumpWidget(editor(11));
+    expect(tester.widget<TextField>(find.byType(TextField)).style?.fontSize, 11);
+  });
+
   testWidgets('protects unsaved changes when its tab is closed', (
     tester,
   ) async {
