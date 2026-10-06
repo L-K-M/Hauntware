@@ -3,6 +3,25 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## System app for files the built-in editor refuses (2026-10-06)
+
+On desktop, a default open (double-click, Enter, Open, a Local edits
+tap) of a file the built-in editor refuses, over 4 MB, binary or not
+UTF-8, goes to the system's default app instead of showing the editor's
+error. The check runs the editor's own loader on the checkout, so a
+default open on desktop downloads without the 4 MB cap. Picking the
+built-in editor under Open with still shows its error. Mobile keeps the
+refusal, since its open APIs hand other apps a copy.
+
+This restores how desktop opened those files before the built-in editor
+became the default, including the OS launching a remote executable
+(P1-03 in `docs/reviews/deep-review-2026-09-26.md`).
+
+Validated on Linux: registry tests and desktop Files tests that
+double-click a binary file and a file over 4 MB and expect the system
+opener rather than a tab. The macOS and Windows open paths were not
+exercised.
+
 ## Built-in editor by default (2026-10-05)
 
 Double-clicking a remote file on desktop, like Enter and a touch tap,

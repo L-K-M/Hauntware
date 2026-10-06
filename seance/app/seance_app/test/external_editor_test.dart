@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:seance_app/services/editor_document.dart';
 import 'package:seance_app/services/external_file_opener.dart';
 
 void main() {
@@ -91,6 +94,53 @@ void main() {
     expect(
       restored.effectiveDefaultFor('/tmp/readme.txt'),
       EditorRegistry.systemDefaultId,
+    );
+  });
+
+  test('a default open on desktop downloads a file of any size', () {
+    final registry = EditorRegistry();
+
+    expect(registry.checkoutMaximumBytes('/srv/big.log'), isNull);
+    expect(
+      registry.checkoutMaximumBytes(
+        '/srv/big.log',
+        editorId: EditorRegistry.builtInId,
+      ),
+      builtInEditorMaximumBytes,
+    );
+  });
+
+  test('a default open on desktop gives the system app what the built-in '
+      'editor refuses', () async {
+    final directory = await Directory.systemTemp.createTemp('seance-open-');
+    addTearDown(() => directory.delete(recursive: true));
+    final text = File('${directory.path}/notes.txt')
+      ..writeAsStringSync('hello\n');
+    final binary = File('${directory.path}/photo.png')
+      ..writeAsBytesSync([0, 1, 2]);
+    final registry = EditorRegistry();
+
+    expect(
+      await registry.effectiveDefaultForCheckout('/srv/notes.txt', text),
+      EditorRegistry.builtInId,
+    );
+    expect(
+      await registry.effectiveDefaultForCheckout('/srv/photo.png', binary),
+      EditorRegistry.systemDefaultId,
+    );
+  });
+
+  test('a missing checkout stays with the built-in editor', () async {
+    final directory = await Directory.systemTemp.createTemp('seance-open-');
+    addTearDown(() => directory.delete(recursive: true));
+    final missing = File('${directory.path}/gone.txt');
+
+    expect(
+      await EditorRegistry().effectiveDefaultForCheckout(
+        '/srv/gone.txt',
+        missing,
+      ),
+      EditorRegistry.builtInId,
     );
   });
 

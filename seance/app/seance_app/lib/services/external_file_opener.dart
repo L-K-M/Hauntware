@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:open_file/open_file.dart';
 import 'package:seance_core/seance_core.dart';
 
+import 'editor_document.dart';
+
 enum EditorHostPlatform { macos, linux, windows }
 
 class ExternalEditorDefinition {
@@ -187,6 +189,31 @@ class EditorRegistry {
     return editor.id;
   }
 
+  /// The editor a default open uses for [local], the checkout of [path]:
+  /// [effectiveDefaultFor], except that on desktop a file the built-in editor
+  /// cannot open, e.g. a PNG or a 6 MB log, goes to the system's default app.
+  Future<String> effectiveDefaultForCheckout(String path, File local) async {
+    final selected = effectiveDefaultFor(path);
+    final fallback = _builtInFallbackId;
+    if (selected != builtInId || fallback == null) return selected;
+    return await _builtInEditorCanOpen(local) ? selected : fallback;
+  }
+
+  /// The most a checkout opened in [editorId], or in the default editor when
+  /// null, may download: the built-in editor's limit, unless a default open
+  /// can still hand a larger file to the system's default app.
+  int? checkoutMaximumBytes(String path, {String? editorId}) {
+    final selected = editorId ?? effectiveDefaultFor(path);
+    if (selected != builtInId) return null;
+    if (editorId == null && _builtInFallbackId != null) return null;
+    return builtInEditorMaximumBytes;
+  }
+
+  /// Where a default open sends a file the built-in editor refuses. Mobile
+  /// has nowhere: see [effectiveDefaultFor].
+  static String? get _builtInFallbackId =>
+      currentEditorHostPlatform == null ? null : systemDefaultId;
+
   void put(ExternalEditorDefinition editor) {
     _validatedId(editor.id);
     if (_isReservedEditorId(editor.id)) {
@@ -216,6 +243,22 @@ class EditorRegistry {
       return;
     }
     if (byId(defaultEditorId) == null) defaultEditorId = builtInId;
+  }
+}
+
+/// Whether the built-in editor accepts [file]'s content: UTF-8 text without
+/// NULs, up to [builtInEditorMaximumBytes], by the same rules its tab
+/// applies. A checkout that is missing or not a regular file counts as
+/// accepted, so the tab names that problem instead of the system app.
+Future<bool> _builtInEditorCanOpen(File file) async {
+  final type = await FileSystemEntity.type(file.path, followLinks: false);
+  if (type != FileSystemEntityType.file) return true;
+
+  try {
+    await loadBuiltInTextDocumentDetails(file);
+    return true;
+  } on BuiltInEditorException {
+    return false;
   }
 }
 

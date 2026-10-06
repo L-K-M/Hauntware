@@ -994,22 +994,20 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       return;
     }
     final registry = AppScope.of(context).services.settings.editorRegistry;
-    final editorId = registry.effectiveDefaultFor(entry.path);
-    if (editorId == EditorRegistry.builtInId &&
+    final maximumBytes = registry.checkoutMaximumBytes(entry.path);
+    if (maximumBytes != null &&
         entry.size != null &&
-        entry.size! > builtInEditorMaximumBytes) {
+        entry.size! > maximumBytes) {
       _showError('The built-in editor supports text files up to 4 MB.');
       return;
     }
     try {
       final copy = await widget.controller.checkoutRemoteFile(
         entry,
-        maximumBytes: editorId == EditorRegistry.builtInId
-            ? builtInEditorMaximumBytes
-            : null,
+        maximumBytes: maximumBytes,
       );
       if (!mounted) return;
-      await _openLocalCopy(copy, editorId: editorId);
+      await _openLocalCopy(copy);
     } catch (e) {
       _showError(e);
     }
@@ -1046,13 +1044,13 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     String? editorId,
   }) async {
     final registry = AppScope.of(context).services.settings.editorRegistry;
-    final selected = editorId ?? registry.effectiveDefaultFor(copy.remotePath);
     try {
       final fresh = await widget.controller.checkoutRemoteFile(
         copy.remoteSnapshot,
-        maximumBytes: selected == EditorRegistry.builtInId
-            ? builtInEditorMaximumBytes
-            : null,
+        maximumBytes: registry.checkoutMaximumBytes(
+          copy.remotePath,
+          editorId: editorId,
+        ),
       );
       if (!mounted) return;
       await _openLocalCopy(fresh, editorId: editorId);
@@ -1068,8 +1066,10 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     try {
       final state = AppScope.of(context);
       final registry = state.services.settings.editorRegistry;
+      final file = widget.controller.localFile(copy);
       final selected =
-          editorId ?? registry.effectiveDefaultFor(copy.remotePath);
+          editorId ??
+          await registry.effectiveDefaultForCheckout(copy.remotePath, file);
       if (selected == EditorRegistry.builtInId) {
         // The built-in editor is a tab beside the terminals, not a route —
         // the shell and the file stay one tap apart.
@@ -1081,7 +1081,6 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
         }
         return;
       }
-      final file = widget.controller.localFile(copy);
       if (selected == EditorRegistry.systemDefaultId) {
         await _fileOpener.openSystemDefault(file.path);
       } else {
@@ -2476,12 +2475,7 @@ class _RecoveredLocalEdits extends StatelessWidget {
                 ),
                 onTap: copy.missing
                     ? null
-                    : () => _open(
-                        context,
-                        copy,
-                        state.services.settings.editorRegistry
-                            .effectiveDefaultFor(copy.remotePath),
-                      ),
+                    : () => _open(context, copy),
                 trailing: Wrap(
                   children: [
                     PopupMenuButton<String>(
@@ -2523,13 +2517,21 @@ class _RecoveredLocalEdits extends StatelessWidget {
     );
   }
 
+  /// Opens [copy] in [editorId], or in the default editor when null.
   Future<void> _open(
     BuildContext context,
-    ManagedRemoteFile copy,
-    String editorId,
-  ) async {
+    ManagedRemoteFile copy, [
+    String? editorId,
+  ]) async {
     try {
-      if (editorId == EditorRegistry.builtInId) {
+      final registry = state.services.settings.editorRegistry;
+      final file = state.services.managedRemoteFiles.checkoutFile(
+        copy.localPath,
+      );
+      final selected =
+          editorId ??
+          await registry.effectiveDefaultForCheckout(copy.remotePath, file);
+      if (selected == EditorRegistry.builtInId) {
         // A tab beside the terminals, like the live browser's open — the
         // checkout keeps the placeholder session's edit identity, so the tab
         // lands on it.
@@ -2541,13 +2543,10 @@ class _RecoveredLocalEdits extends StatelessWidget {
         }
         return;
       }
-      final file = state.services.managedRemoteFiles.checkoutFile(
-        copy.localPath,
-      );
-      if (editorId == EditorRegistry.systemDefaultId) {
+      if (selected == EditorRegistry.systemDefaultId) {
         await const ExternalFileOpener().openSystemDefault(file.path);
       } else {
-        final editor = state.services.settings.editorRegistry.byId(editorId);
+        final editor = registry.byId(selected);
         if (editor == null) {
           throw StateError('The selected editor no longer exists.');
         }
