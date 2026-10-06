@@ -1,0 +1,75 @@
+name: Fixture images
+
+# Publishes the frozen base of Poltergeist's modern sshd fixture
+# (poltergeist/test/integration/sshd-modern-base): Alpine plus pinned
+# OpenSSH and iproute2 packages. Alpine keeps only the newest build of
+# each package, so installing those pins in every CI run broke whenever
+# Alpine moved on. CI builds the fixture on this image by digest instead
+# and never runs apk.
+#
+# Run by hand after a reviewed change to sshd-modern-base/Dockerfile,
+# then pin the digest from the run summary in sshd-modern/Dockerfile.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fixture-images
+  cancel-in-progress: false
+
+jobs:
+  sshd-modern-base:
+    name: Publish the sshd-modern base image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Only this job pushes to GHCR.
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/l-k-m/poltergeist-sshd-modern-base
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA-pinned)
+      # arm64 too, so the fixture still builds natively on Apple silicon.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4 (SHA-pinned)
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4 (SHA-pinned)
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4 (SHA-pinned)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6 (SHA-pinned)
+        with:
+          images: ${{ env.IMAGE }}
+          # The commit it was built from; CI pins the digest, not a tag.
+          tags: type=sha,format=long
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7 (SHA-pinned)
+        with:
+          context: poltergeist/test/integration/sshd-modern-base
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Report the digest to pin
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::build-push-action reported no digest: '$DIGEST'"
+            exit 1
+          }
+          {
+            echo '### sshd-modern base'
+            echo
+            echo 'Pin in poltergeist/test/integration/sshd-modern/Dockerfile:'
+            echo
+            echo '```'
+            echo "FROM $IMAGE@$DIGEST"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
