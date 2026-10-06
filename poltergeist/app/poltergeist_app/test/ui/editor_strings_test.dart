@@ -244,6 +244,10 @@ void main() {
 
   test('every status row string routes through the ARB copy', () {
     final strings = PoltergeistEditorStrings(_Marked());
+    expect(strings.documentPosition(1, 2, 3, 8), '[at 1:2 of 3/8]');
+    expect(strings.selectionSummary(5, 2), '[5 picked on 2]');
+    expect(strings.selectionSummary(2, 1), '[2 picked]');
+    expect(strings.unsaved, '[unsaved]');
     expect(strings.saving, '[saving]');
     expect(strings.largeFile, '[large]');
     expect(strings.indentation(const Indentation.tabs(width: 8)), '[tabs 8]');
