@@ -16,6 +16,7 @@ import 'package:seance_app/services/external_file_opener.dart';
 import 'package:seance_app/services/remote_files_controller.dart';
 import 'package:seance_app/services/xterm_engine.dart';
 import 'package:seance_app/ui/files_pane.dart';
+import 'package:seance_app/ui/terminal_pane.dart';
 import 'package:seance_core/seance_core.dart';
 
 import 'support/system_open_recorder.dart';
@@ -62,8 +63,10 @@ void main() {
   /// The files pane over a connected session backed by [remote].
   Future<RemoteFilesController> pumpFilesPane(
     WidgetTester tester,
-    _ListFileSystem remote,
-  ) async {
+    _ListFileSystem remote, {
+    double textScale = 1,
+    double? paneWidth,
+  }) async {
     late final RemoteFilesController files;
     final session = TerminalSession(
       id: 'tab',
@@ -101,8 +104,29 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        builder: (context, child) => AppScope(state: state!, child: child!),
-        home: const Scaffold(body: FilesPane()),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: AppScope(state: state!, child: child!),
+        ),
+        home: Scaffold(
+          body: paneWidth == null
+              ? const FilesPane()
+              : Row(
+                  children: [
+                    SizedBox(width: paneWidth, child: const FilesPane()),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const Expanded(child: SizedBox.shrink()),
+                          SessionStatusBar(session: session),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
     await tester.pump();
@@ -150,6 +174,190 @@ void main() {
       }
     });
   }
+
+  for (final platform in [
+    TargetPlatform.linux,
+    TargetPlatform.macOS,
+    TargetPlatform.windows,
+  ]) {
+    for (final scale in [1.0, 2.0, 4.0]) {
+      platformTest(
+        'directory-follow footer aligns on $platform at $scale×',
+        platform,
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(1600, 800));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          await pumpFilesPane(
+            tester,
+            _ListFileSystem(),
+            textScale: scale,
+            paneWidth: scale == 1 ? 240 : 1000,
+          );
+
+          final footer = find.byKey(const ValueKey('files.footer'));
+          expect(footer, findsOneWidget);
+          final filesRect = tester.getRect(footer);
+          final terminalRect = tester.getRect(find.byType(SessionStatusBar));
+          expect(filesRect.height, terminalRect.height);
+          expect(filesRect.top, terminalRect.top);
+          expect(
+            filesRect.bottom,
+            tester.getRect(find.byType(FilesPane)).bottom,
+          );
+          expect(
+            find.descendant(of: footer, matching: find.byType(Checkbox)),
+            findsOneWidget,
+          );
+          expect(find.byType(Switch), findsNothing);
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  }
+
+  platformTest(
+    'directory-follow checkbox and label toggle following',
+    TargetPlatform.linux,
+    (tester) async {
+      final files = await pumpFilesPane(tester, _ListFileSystem());
+      final checkbox = find.byType(Checkbox);
+      expect(tester.widget<Checkbox>(checkbox).value, isTrue);
+      expect(
+        find.byTooltip('Waiting for directory metadata from the remote shell'),
+        findsOneWidget,
+      );
+
+      await tester.tap(checkbox);
+      await tester.pump();
+      expect(files.followTerminal, isFalse);
+      expect(tester.widget<Checkbox>(checkbox).value, isFalse);
+      expect(find.byIcon(Icons.info_outline), findsNothing);
+
+      await tester.tap(find.text('Follow terminal directory'));
+      await tester.pump();
+      expect(files.followTerminal, isTrue);
+      expect(tester.widget<Checkbox>(checkbox).value, isTrue);
+    },
+  );
+
+  Future<void> openNewFile(WidgetTester tester) async {
+    await tester.tap(find.byTooltip('File actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('New file…'));
+    await tester.pumpAndSettle();
+  }
+
+  Finder nameField() => find.descendant(
+    of: find.byType(AlertDialog),
+    matching: find.byType(TextField),
+  );
+
+  for (final platform in [TargetPlatform.linux, TargetPlatform.android]) {
+    platformTest(
+      'New file creates an empty file in the displayed directory on $platform',
+      platform,
+      (tester) async {
+        final remote = _ListFileSystem();
+        final files = await pumpFilesPane(tester, remote);
+        files.setFollowTerminal(false);
+        await files.navigate('$_home/docs');
+        await tester.pump();
+
+        await openNewFile(tester);
+        await tester.enterText(nameField(), 'notes.txt');
+        await tester.tap(find.text('Create'));
+        await tester.pumpAndSettle();
+
+        expect(remote.uploaded['$_home/docs/notes.txt'], isEmpty);
+        expect(remote.overwrites, [false]);
+        expect(files.entries.single.name, 'notes.txt');
+        expect(files.entries.single.size, 0);
+        expect(
+          find.descendant(
+            of: find.byWidgetPredicate(
+              (widget) =>
+                  widget is GhostFileRow || widget is GhostFileCompactRow,
+            ),
+            matching: find.text('notes.txt'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester.getRect(find.byKey(const ValueKey('files.footer'))).bottom,
+          tester.getRect(find.byType(FilesPane)).bottom,
+        );
+      },
+    );
+  }
+
+  platformTest(
+    'New file keeps its target if the browser moves while naming it',
+    TargetPlatform.linux,
+    (tester) async {
+      final remote = _ListFileSystem();
+      final files = await pumpFilesPane(tester, remote);
+      await openNewFile(tester);
+      await files.navigate('$_home/docs');
+      await tester.pump();
+
+      await tester.enterText(nameField(), 'notes.txt');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(remote.uploaded.keys, ['$_home/notes.txt']);
+      expect(remote.uploaded['$_home/notes.txt'], isEmpty);
+      expect(files.currentPath, '$_home/docs');
+      expect(files.entries, isEmpty);
+    },
+  );
+
+  platformTest(
+    'New file rejects invalid names and cancel creates nothing',
+    TargetPlatform.linux,
+    (tester) async {
+      final remote = _ListFileSystem();
+      await pumpFilesPane(tester, remote);
+      await openNewFile(tester);
+
+      for (final name in ['', '..', 'folder/file.txt']) {
+        await tester.enterText(nameField(), name);
+        await tester.tap(find.text('Create'));
+        await tester.pump();
+        expect(find.text('Enter one valid name.'), findsOneWidget);
+        expect(remote.uploaded, isEmpty);
+      }
+
+      await tester.enterText(nameField(), 'cancelled.txt');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(remote.uploaded, isEmpty);
+      expect(remote.overwrites, isEmpty);
+    },
+  );
+
+  platformTest(
+    'New file reports a conflict without replacing an existing file',
+    TargetPlatform.linux,
+    (tester) async {
+      final remote = _ListFileSystem();
+      final files = await pumpFilesPane(tester, remote);
+      await openNewFile(tester);
+      await tester.enterText(nameField(), 'a.txt');
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
+
+      expect(remote.uploaded, isEmpty);
+      expect(remote.overwrites, [false]);
+      expect(
+        files.entries.singleWhere((entry) => entry.name == 'a.txt').size,
+        10,
+      );
+      expect(
+        find.text('A remote item named "a.txt" already exists.'),
+        findsWidgets,
+      );
+    },
+  );
 
   platformTest(
     'desktop lists dense shared rows under the column header',
@@ -663,8 +871,11 @@ class _ListFileSystem implements RemoteFileSystem {
         size: 5,
       ),
     ],
-    '$_home/docs': const [],
+    '$_home/docs': [],
   };
+
+  final uploaded = <String, List<int>>{};
+  final overwrites = <bool>[];
 
   @override
   Future<String> canonicalize(String path) async => path == '.' ? _home : path;
@@ -672,6 +883,44 @@ class _ListFileSystem implements RemoteFileSystem {
   @override
   Future<List<RemoteFileEntry>> listDirectory(String path) async =>
       _entries[path] ?? const [];
+
+  @override
+  Future<RemoteFileEntry> upload(
+    String path,
+    Stream<List<int>> content, {
+    int? length,
+    bool overwrite = false,
+    int? preserveMode,
+    RemoteFileEntry? expectedTarget,
+    RemoteTransferProgress? onProgress,
+    RemoteTransferCancellation? cancellation,
+    bool computeHash = true,
+  }) async {
+    overwrites.add(overwrite);
+    final entries = _entries[remoteParent(path)]!;
+    if (!overwrite && entries.any((entry) => entry.path == path)) {
+      throw RemoteFileException(
+        kind: RemoteFileErrorKind.conflict,
+        operation: 'upload',
+        path: path,
+        message:
+            'A remote item named "${remoteBasename(path)}" already exists.',
+      );
+    }
+    final bytes = <int>[];
+    await for (final chunk in content) {
+      bytes.addAll(chunk);
+    }
+    uploaded[path] = bytes;
+    final entry = RemoteFileEntry(
+      path: path,
+      name: remoteBasename(path),
+      type: RemoteFileType.file,
+      size: bytes.length,
+    );
+    entries.add(entry);
+    return entry;
+  }
 
   @override
   Future<RemoteFileEntry> download(
