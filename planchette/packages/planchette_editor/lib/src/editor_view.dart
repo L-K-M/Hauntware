@@ -178,6 +178,7 @@ class _PlanchetteEditorState extends State<PlanchetteEditor> {
     _installSeen = c.installGeneration;
     _lastCaretReveal = c.caretRevealRequest;
     c.setViewEditingLocked(this, widget.editingLocked);
+    _scheduleProblemCheck();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) c.initialize();
     });

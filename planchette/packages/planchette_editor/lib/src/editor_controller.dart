@@ -400,6 +400,8 @@ class EditorController extends ChangeNotifier {
   Indentation? _preferredIndentation;
 
   // Problem checks: the last result and the text and format it was for.
+  // Marks carried through an edit describe no checked text, so the text is
+  // then null.
   List<TextProblem> _problems = const [];
   String? _checkedText;
   TextFormat? _checkedFormat;
@@ -2605,6 +2607,9 @@ class EditorController extends ChangeNotifier {
     }
     if (_problems.isEmpty) return;
     final edit = _Edit.between(before, text.text);
+    // Undo can bring back the very string that was checked; these marks
+    // no longer describe it, so it must be checked again.
+    _checkedText = null;
     _setProblems([
       for (final problem in _problems)
         if (problem.end < edit._start)

@@ -105,6 +105,24 @@ void main() {
       expect(editor.problems, isEmpty);
     });
 
+    testWidgets('returning to the checked text, as undo does, still moves '
+        'the marks back and checks again', (tester) async {
+      final editor = await _mount(tester, 'a.env', _env);
+      // Undo restores the very string instance that was checked.
+      final checked = editor.text.text;
+      editor.text.value = TextEditingValue(
+        text: 'X$checked',
+        selection: const TextSelection.collapsed(offset: 1),
+      );
+      editor.text.value = TextEditingValue(
+        text: checked,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+      expect(_flagged(editor), ['PORT', 'HOST']);
+      await tester.pump(_settle);
+      expect(_flagged(editor), ['PORT', 'HOST']);
+    });
+
     testWidgets('without a view, edits wait for checkProblems', (tester) async {
       final editor = _controller('a.env', 'A=1\n');
       editor.text.value = const TextEditingValue(text: 'A=1\nA=2\n');

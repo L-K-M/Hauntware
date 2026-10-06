@@ -786,10 +786,12 @@ class EditorStrings {
   /// A syntax error's detail is the parser's own English, as in
   /// [patternInvalid].
   String problemMessage(TextProblem problem) {
-    final subject = problem.subject;
-    final line = problem.relatedLine;
+    // The kinds that name something always carry it; the fallbacks only
+    // keep a hand-built problem from reading "null".
+    final subject = problem.subject ?? '';
+    final line = problem.relatedLine ?? 0;
     return switch (problem.kind) {
-      TextProblemKind.syntaxError => 'Syntax error: ${problem.detail}',
+      TextProblemKind.syntaxError => 'Syntax error: ${problem.detail ?? ''}',
       TextProblemKind.duplicateKey =>
         'Duplicate key "$subject", first set on line $line',
       TextProblemKind.duplicateTable =>
@@ -802,7 +804,8 @@ class EditorStrings {
       TextProblemKind.tabIndentation =>
         'YAML does not allow tabs for indentation',
       TextProblemKind.mismatchedClosingTag =>
-        '</$subject> does not match <${problem.counterpart}> on line $line',
+        '</$subject> does not match <${problem.counterpart ?? ''}> on line '
+            '$line',
       TextProblemKind.unclosedElement => '<$subject> is never closed',
       TextProblemKind.unexpectedClosingTag =>
         '</$subject> closes no open element',

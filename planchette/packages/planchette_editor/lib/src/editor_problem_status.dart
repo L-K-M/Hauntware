@@ -116,30 +116,33 @@ class EditorStatusLead extends StatelessWidget {
   static const _problemMinimum = _gap + 32.0;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final problems = controller.problems.isNotEmpty;
-      final room = constraints.maxWidth;
-      return Row(
-        children: [
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: problems ? math.max(0, room - _problemMinimum) : room,
-            ),
-            child: position,
-          ),
-          if (problems) ...[
-            const SizedBox(width: _gap),
-            Flexible(
-              child: EditorProblemStatus(
-                controller: controller,
-                strings: strings,
-                style: style,
-              ),
-            ),
-          ],
-        ],
-      );
-    },
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: controller,
+    builder: (context, _) => LayoutBuilder(builder: _row),
   );
+
+  Widget _row(BuildContext context, BoxConstraints constraints) {
+    final problems = controller.problems.isNotEmpty;
+    final room = constraints.maxWidth;
+    return Row(
+      children: [
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: problems ? math.max(0, room - _problemMinimum) : room,
+          ),
+          child: position,
+        ),
+        if (problems) ...[
+          const SizedBox(width: _gap),
+          Flexible(
+            child: EditorProblemStatus(
+              controller: controller,
+              strings: strings,
+              style: style,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
