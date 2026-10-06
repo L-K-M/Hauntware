@@ -123,20 +123,35 @@ void main() {
     );
   });
 
-  testWidgets('composing text wraps before the right inset', (tester) async {
-    final render = await pumpTerminal(tester, Terminal());
+  testWidgets('composing text wraps within the grid', (tester) async {
+    final terminal = Terminal();
+    final render = await pumpTerminal(tester, terminal);
 
-    // Longer than a row, so it wraps; the first line runs to the wrap.
-    render.composingText = 'M' * 60;
+    // Composing at column 5, clear of the grid's edge, and two rows' worth
+    // long, so it wraps onto lines that start at that edge.
+    terminal.write('\x1b[1;6H');
+    render.composingText = 'M' * (terminal.viewWidth * 2);
     await tester.pump();
 
     final inkIn = await capture(tester);
-    final rightInset = Rect.fromLTWH(
-      render.size.width - insets.right,
+    final lines = render.cellSize.height * 3;
+    expect(terminal.buffer.cursorX, 5);
+    expect(
+      inkIn(Rect.fromLTWH(0, 0, insets.left, lines)),
       0,
-      insets.right,
-      render.cellSize.height,
+      reason: 'wrapped lines start at the grid, not under the left inset',
     );
-    expect(inkIn(rightInset), 0, reason: 'nothing under the right inset');
+    expect(
+      inkIn(
+        Rect.fromLTWH(
+          render.size.width - insets.right,
+          0,
+          insets.right,
+          lines,
+        ),
+      ),
+      0,
+      reason: 'nothing under the right inset',
+    );
   });
 }

@@ -734,9 +734,12 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
       underline: true,
     );
 
+    // [seance fork] Laid out across the grid, between the side insets: the
+    // placeholder runs from the grid's left edge to the cursor, and wrapped
+    // lines start at that edge rather than under the left inset.
     final builder = ParagraphBuilder(style.getParagraphStyle());
     builder.addPlaceholder(
-      offset.dx,
+      offset.dx - _padding.left,
       _painter.cellSize.height,
       PlaceholderAlignment.middle,
     );
@@ -745,11 +748,10 @@ class RenderTerminal extends RenderBox with RelayoutWhenSystemFontsChangeMixin {
     );
     builder.addText(composingText);
 
-    // [seance fork] Wraps where the grid ends, not under the right inset.
     final paragraph = builder.build();
-    paragraph.layout(ParagraphConstraints(width: size.width - _padding.right));
+    paragraph.layout(ParagraphConstraints(width: _viewportWidth));
 
-    canvas.drawParagraph(paragraph, Offset(0, offset.dy));
+    canvas.drawParagraph(paragraph, Offset(_padding.left, offset.dy));
   }
 
   void _paintSelection(
