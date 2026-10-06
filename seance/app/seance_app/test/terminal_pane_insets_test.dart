@@ -16,6 +16,10 @@ import 'package:xterm/xterm.dart';
 
 const _pathChannel = MethodChannel('plugins.flutter.io/path_provider');
 
+/// The terminal reports its focus to the macOS menu; mocked so the tests
+/// also run on a Mac.
+const _menuChannel = MethodChannel('seance/menu');
+
 /// The screen's insets around the terminal pane on a phone or tablet: a
 /// status bar above, a home indicator or gesture bar below, a notch or a
 /// navigation bar at a side. The tab strip is always above the terminal and
@@ -33,7 +37,8 @@ void main() {
     await services?.probe.dispose();
     services = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(_pathChannel, null);
+      ..setMockMethodCallHandler(_pathChannel, null)
+      ..setMockMethodCallHandler(_menuChannel, null);
     FlutterSecureStorage.setMockInitialValues({});
     try {
       await directory?.delete(recursive: true);
@@ -63,10 +68,8 @@ void main() {
     await tester.runAsync(() async {
       directory = await Directory.systemTemp.createTemp('seance-insets-');
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            _pathChannel,
-            (call) async => directory!.path,
-          );
+        ..setMockMethodCallHandler(_pathChannel, (_) async => directory!.path)
+        ..setMockMethodCallHandler(_menuChannel, (_) async => null);
       FlutterSecureStorage.setMockInitialValues({});
       services = await AppServices.initialize();
       state = AppState(services!);
@@ -111,8 +114,17 @@ void main() {
       tester.state<TerminalViewState>(find.byType(TerminalView));
 
   /// The grid fills the terminal's height: no rows are held back for an
-  /// inset at an edge the terminal does not have.
+  /// inset at an edge the terminal does not have. Checked at the source as
+  /// well, since a small inset can fit in the last row's slack.
   void expectFullHeight(WidgetTester tester) {
+    final insets = MediaQuery.paddingOf(
+      tester.element(find.byType(TerminalView)),
+    );
+    expect(
+      (insets.top, insets.bottom),
+      (0.0, 0.0),
+      reason: 'insets reaching it',
+    );
     final view = terminalView(tester);
     final render = view.renderTerminal;
     expect(render.getOffset(const CellOffset(0, 0)).dy, 0, reason: 'top');
@@ -134,10 +146,7 @@ void main() {
       insets: insets,
     );
 
-    expect(
-      tester.getRect(find.byType(TerminalTabStrip)).top,
-      greaterThanOrEqualTo(insets.top),
-    );
+    expect(tester.getRect(find.byType(TerminalTabStrip)).top, insets.top);
     expectFullHeight(tester);
   });
 
@@ -149,6 +158,11 @@ void main() {
       insets: const EdgeInsets.only(top: 47, bottom: 34),
     );
 
+    // The app bar took the status bar's inset; the tabs follow it directly.
+    expect(
+      tester.getRect(find.byType(TerminalTabStrip)).top,
+      tester.getRect(find.byType(AppBar)).bottom,
+    );
     expectFullHeight(tester);
   });
 
