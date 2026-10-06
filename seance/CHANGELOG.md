@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Local shell: the last lines a shell prints as it exits, such as the
+  error from a command that failed to start, are no longer sometimes
+  lost.
 - A server's colour runs along the top of the terminal's tab strip,
   above the tabs, where Poltergeist marks its active pane. Under the
   tabs, the terminal's first line could be drawn over it.

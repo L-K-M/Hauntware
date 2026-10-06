@@ -73,6 +73,14 @@ All edits are marked `// Séance:` at the site.
   closes both `ReceivePort`s (field initializers create them before the
   body can fail) and releases a partially-created native handle — a
   failed spawn used to leak the ports for the isolate's lifetime.
+- `lib/flutter_pty.dart`, `src/flutter_pty_unix.c`, `src/flutter_pty_win.c`:
+  `output` ends after the reader thread's last chunk, marked by a null
+  message the reader posts as it exits. Upstream closed the output port
+  as soon as the exit status arrived on the other port, dropping output
+  the reader had not posted yet: sometimes a short-lived child's only
+  line, always the output of a job that outlives the child. The Windows
+  reader blocks until `ClosePseudoConsole`, so there `output` now ends at
+  `close()` rather than at exit.
 - `lib/src/flutter_pty_bindings_generated.dart`: `pty_close` entry added
   by hand, matching the shape `dart run ffigen --config ffigen.yaml`
   produces for the new header declaration.
@@ -81,7 +89,8 @@ All edits are marked `// Séance:` at the site.
 
 - `ackRead` mode teardown: an ack-mode reader can park on the shared
   mutex where `poll()` never runs, so `pty_close` under `ackRead` hangs
-  up but does not join/free. Séance never enables `ackRead`; doing the
+  up but does not join/free, and that reader never posts the null that
+  ends `output`. Séance never enables `ackRead`; doing the
   right thing there needs a different protocol upstream.
 - The Windows backend is otherwise upstream-verbatim — including defects
   a review would call out: `CreateProcessW`'s `processInfo.hThread` and
@@ -94,7 +103,8 @@ All edits are marked `// Séance:` at the site.
   so a slow unblock never stalls the caller, but a truly stuck read
   would leave that thread outstanding. None of it is runtime-verified;
   the app refuses local shells on Windows, so these stay upstream bugs
-  to fix there, not Séance patches.
+  to fix there, not Séance patches. `pty_create` also ignores a failed
+  reader start there, which now leaves `output` open for good.
 - `waitpid` failure posts nothing to the exit port (upstream behaviour
   kept): a missing exit notification means "not proven dead", and
   callers must keep kill escalation armed — Séance's adapter does.
