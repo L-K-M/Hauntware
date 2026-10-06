@@ -475,10 +475,18 @@ FFI_PLUGIN_EXPORT PtyHandle *pty_create(PtyOptions *options)
         TerminateProcess(processInfo.hProcess, 1);
         if (pty->waiter == NULL)
         {
-            /* A running waiter closes these itself. */
+            /* A running waiter closes these itself. The semaphore stays
+               open while a reader runs (an ack-mode reader waits on it,
+               and pty_close does not join it): one leaked handle on this
+               path beats closing it under a live thread. */
             CloseHandle(processInfo.hProcess);
-            CloseHandle(mutex);
+            if (pty->reader == NULL)
+            {
+                CloseHandle(mutex);
+            }
         }
+        /* pty_close tolerates a missing thread, never closes the process
+           or semaphore handles, and frees the struct. */
         pty_close(pty);
         error_message = "Failed to start pty threads";
         return NULL;
