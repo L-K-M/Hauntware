@@ -773,7 +773,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          libsecret-1-dev libjsoncpp-dev imagemagick file
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -827,12 +827,22 @@ jobs:
         run: scripts/test-macos-keyboard.sh
       # A release-only startup failure leaves a running app without its UI;
       # unit tests run with asserts on and never see one. The window shows
-      # once Dart has restored it. The vault's login keychain lives under
-      # the real home, so the launch keeps it.
-      - name: Release app launch
+      # once Dart has restored it (macOS) or on the first frame (Linux,
+      # Windows). The vault's macOS login keychain lives under the real
+      # home, so that launch keeps it.
+      - name: Release app launch (macOS)
         if: matrix.target == 'macos'
         working-directory: seance/app/seance_app
         run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Seance.app --home user
+      - name: Release app launch (Linux)
+        if: matrix.target == 'linux'
+        working-directory: seance/app/seance_app
+        run: xvfb-run -a python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/linux/${{ matrix.flavor }}/release/bundle/seance_app
+      - name: Release app launch (Windows)
+        if: matrix.target == 'windows'
+        working-directory: seance/app/seance_app
+        shell: bash
+        run: python "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/windows/x64/runner/Release/seance_app.exe
       # Prove Gradle consumed the synchronized pubspec code in the real APK.
       - name: Verify Android version code
         if: matrix.target == 'android'
@@ -999,7 +1009,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
-          libsecret-1-dev libjsoncpp-dev imagemagick file
+          libsecret-1-dev libjsoncpp-dev imagemagick file xvfb xdotool
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2 (SHA-pinned)
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -1054,12 +1064,22 @@ jobs:
         run: bash scripts/test-macos-keyboard.sh
       # A release-only startup failure leaves a running app without its UI;
       # unit tests run with asserts on and never see one. The window shows
-      # after Dart mounts the app, and File is a Dart menu. The login
-      # keychain lives under the real home, so the launch keeps it.
-      - name: Release app launch
+      # after Dart mounts the app (macOS, where File is a Dart menu) or on
+      # the first frame (Linux, Windows). The macOS login keychain lives
+      # under the real home, so that launch keeps it.
+      - name: Release app launch (macOS)
         if: matrix.target == 'macos'
         working-directory: poltergeist/app/poltergeist_app
         run: python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/macos/Build/Products/Release/Poltergeist.app --menu File --home user
+      - name: Release app launch (Linux)
+        if: matrix.target == 'linux'
+        working-directory: poltergeist/app/poltergeist_app
+        run: xvfb-run -a python3 "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/linux/${{ matrix.flavor }}/release/bundle/poltergeist
+      - name: Release app launch (Windows)
+        if: matrix.target == 'windows'
+        working-directory: poltergeist/app/poltergeist_app
+        shell: bash
+        run: python "$GITHUB_WORKSPACE/scripts/test-desktop-launch.py" build/windows/x64/runner/Release/poltergeist_app.exe
       # Prove Gradle consumed the synchronized pubspec code in the real APK.
       - name: Verify Android version code
         if: matrix.target == 'android'
