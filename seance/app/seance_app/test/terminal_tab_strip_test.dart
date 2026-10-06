@@ -561,7 +561,8 @@ void main() {
       find.byKey(captured),
     );
     final (pixels, width) = (await tester.runAsync(() async {
-      final image = await boundary.toImage();
+      // One image pixel per logical pixel, so strip coordinates index it.
+      final image = await boundary.toImage(pixelRatio: 1);
       try {
         return ((await image.toByteData())!, image.width);
       } finally {
