@@ -12,11 +12,13 @@ now asks first, Poltergeist's preview threshold. It does not ask for an
 explicit Open with choice, for a local copy of the same listed size, on
 mobile (still capped at 4 MB) or when the server reports no size.
 Reopening a copy from the Local edits panel does not ask either, even
-if the server file grew since.
+if the server file grew since. A program over the built-in editor's
+4 MB can only go to the system app, so it is refused before the prompt
+rather than after the download.
 
 Validated on Linux: desktop Files tests for Cancel (nothing downloads),
-Download (the file opens) and a second open reusing the copy (no
-prompt). macOS and Windows were not exercised.
+Download (the file opens), a second open reusing the copy (no prompt)
+and a huge program (refused, no prompt). macOS and Windows were not exercised.
 
 ## Built-in editor text size (2026-10-06)
 

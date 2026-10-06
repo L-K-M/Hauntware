@@ -99,6 +99,30 @@ void main() {
     );
   });
 
+  test('a listing over 4 MB already tells a default open where it goes', () {
+    final registry = EditorRegistry();
+
+    // Too big for the built-in editor, so on desktop the system app gets it.
+    expect(
+      registry.effectiveDefaultForListing(
+        '/srv/big.log',
+        builtInEditorMaximumBytes + 1,
+      ),
+      EditorRegistry.systemDefaultId,
+    );
+    expect(
+      registry.effectiveDefaultForListing(
+        '/srv/notes.txt',
+        builtInEditorMaximumBytes,
+      ),
+      EditorRegistry.builtInId,
+    );
+    expect(
+      registry.effectiveDefaultForListing('/srv/notes.txt', null),
+      EditorRegistry.builtInId,
+    );
+  });
+
   test('a default open on desktop downloads a file of any size', () {
     final registry = EditorRegistry();
 

@@ -1004,9 +1004,11 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       return;
     }
     final registry = AppScope.of(context).services.settings.editorRegistry;
-    if (_refusesLaunch(entry, registry.effectiveDefaultFor(entry.path))) {
-      return;
-    }
+    final editorId = registry.effectiveDefaultForListing(
+      entry.path,
+      entry.size,
+    );
+    if (_refusesLaunch(entry, editorId)) return;
     final maximumBytes = registry.checkoutMaximumBytes(entry.path);
     if (maximumBytes != null &&
         entry.size != null &&

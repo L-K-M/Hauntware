@@ -662,6 +662,40 @@ void main() {
   );
 
   platformTest(
+    'a huge program is refused before the download prompt',
+    TargetPlatform.linux,
+    (tester) async {
+      final opened = recordSystemOpens();
+      final files = await pumpFilesPane(
+        tester,
+        _ListFileSystem(
+          extra: [
+            RemoteFileEntry(
+              path: '$_home/$_hostProgram',
+              name: _hostProgram,
+              type: RemoteFileType.file,
+              size: _huge.size,
+            ),
+          ],
+        ),
+      );
+
+      // Over the built-in editor's limit, so it could only go to the
+      // system app, which would run it: refuse before asking to download.
+      await doubleClick(tester, _hostProgram);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Download $_hostProgram?'), findsNothing);
+      expect(
+        find.textContaining('“$_hostProgram” could run as a program'),
+        findsOneWidget,
+      );
+      expect(files.localCopies, isEmpty);
+      expect(opened, isEmpty);
+    },
+  );
+
+  platformTest(
     'arrows move the cursor and select; Enter opens',
     TargetPlatform.linux,
     (tester) async {
