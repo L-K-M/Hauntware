@@ -180,6 +180,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                   onUploadFolder: _supportsDesktopDrop
                       ? _pickUploadFolder
                       : null,
+                  onNewFile: _createFile,
                   onNewFolder: _createFolder,
                   onNewSymbolicLink: _createSymbolicLink,
                   onEnterPath: _enterPath,
@@ -212,6 +213,10 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
                   ),
                 if (controller.transfers.isNotEmpty)
                   _TransfersPanel(controller: controller),
+                _BrowserFooter(
+                  key: const ValueKey('files.footer'),
+                  controller: controller,
+                ),
               ],
             ),
             if (_dragging)
@@ -1349,6 +1354,27 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     }
   }
 
+  Future<void> _createFile() async {
+    final controller = widget.controller;
+    final directory = controller.currentPath;
+    if (directory == null) return;
+
+    final name = await _askForName(title: 'New file', action: 'Create');
+    if (name == null || !mounted) return;
+
+    try {
+      // Reuse non-overwriting uploads; keep the directory shown when asked.
+      await controller.upload(
+        name: name,
+        content: const Stream<List<int>>.empty(),
+        length: 0,
+        directory: directory,
+      );
+    } catch (error) {
+      _showError(error);
+    }
+  }
+
   Future<void> _createFolder() async {
     final name = await _askForName(title: 'New folder', action: 'Create');
     if (name == null) return;
@@ -1553,20 +1579,22 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     String? initialValue,
     bool validateName = true,
   }) async {
-    final text = TextEditingController(text: initialValue);
+    var name = initialValue ?? '';
     String? validationError;
-    final result = await showDialog<String>(
+    return showDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(title),
-          content: TextField(
-            controller: text,
+          // The field owns its controller through the closing animation.
+          content: TextFormField(
+            initialValue: initialValue,
             autofocus: true,
+            onChanged: (value) => name = value,
             decoration: InputDecoration(errorText: validationError),
-            onSubmitted: (_) => _submitName(
+            onFieldSubmitted: (value) => _submitName(
               context,
-              text.text,
+              value,
               validateName,
               (message) => setDialogState(() => validationError = message),
             ),
@@ -1579,7 +1607,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
             FilledButton(
               onPressed: () => _submitName(
                 context,
-                text.text,
+                name,
                 validateName,
                 (message) => setDialogState(() => validationError = message),
               ),
@@ -1589,8 +1617,6 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
         ),
       ),
     );
-    text.dispose();
-    return result;
   }
 
   void _submitName(
@@ -1721,10 +1747,13 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
 }
 
 class _BrowserHeader extends StatelessWidget {
+  static const _newFileAction = 'file';
+
   final String identity;
   final RemoteFilesController controller;
   final VoidCallback onUpload;
   final VoidCallback? onUploadFolder;
+  final VoidCallback onNewFile;
   final VoidCallback onNewFolder;
   final VoidCallback onNewSymbolicLink;
   final VoidCallback onEnterPath;
@@ -1738,6 +1767,7 @@ class _BrowserHeader extends StatelessWidget {
     required this.controller,
     required this.onUpload,
     this.onUploadFolder,
+    required this.onNewFile,
     required this.onNewFolder,
     required this.onNewSymbolicLink,
     required this.onEnterPath,
@@ -1816,6 +1846,7 @@ class _BrowserHeader extends StatelessWidget {
                   onSelected: (value) {
                     if (value == 'upload') onUpload();
                     if (value == 'upload_folder') onUploadFolder?.call();
+                    if (value == _newFileAction) onNewFile();
                     if (value == 'folder') onNewFolder();
                     if (value == 'symlink') onNewSymbolicLink();
                     if (value == 'copy_path') onCopyPath();
@@ -1863,6 +1894,11 @@ class _BrowserHeader extends StatelessWidget {
                         value: 'upload_folder',
                         child: Text('Upload folder…'),
                       ),
+                    PopupMenuItem(
+                      value: _newFileAction,
+                      enabled: controller.currentPath != null,
+                      child: const Text('New file…'),
+                    ),
                     const PopupMenuItem(
                       value: 'folder',
                       child: Text('New folder…'),
@@ -1930,25 +1966,6 @@ class _BrowserHeader extends StatelessWidget {
                 ),
               ],
             ),
-            Row(
-              children: [
-                Switch(
-                  value: controller.followTerminal,
-                  onChanged: controller.setFollowTerminal,
-                ),
-                const Flexible(child: Text('Follow terminal directory')),
-                if (controller.followTerminal &&
-                    controller.reportedShellDirectory == null)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 6),
-                    child: Tooltip(
-                      message:
-                          'Waiting for directory metadata from the remote shell',
-                      child: Icon(Icons.info_outline, size: 16),
-                    ),
-                  ),
-              ],
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 2, 4, 0),
               child: TextField(
@@ -1995,6 +2012,100 @@ class _BrowserHeader extends StatelessWidget {
                 ],
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BrowserFooter extends StatelessWidget {
+  static const _desktopExtent = 30.0;
+  static const _touchExtent = 48.0;
+  static const _followLabel = 'Follow terminal directory';
+
+  final RemoteFilesController controller;
+
+  const _BrowserFooter({super.key, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final extent = switch (theme.platform) {
+      TargetPlatform.macOS ||
+      TargetPlatform.linux ||
+      TargetPlatform.windows => _desktopExtent,
+      _ => _touchExtent,
+    };
+    // Match the workspace footers, including their accessibility scaling.
+    final height = MediaQuery.textScalerOf(
+      context,
+    ).scale(extent).clamp(extent, 4 * extent);
+
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: MergeSemantics(
+                  child: Tooltip(
+                    message: _followLabel,
+                    excludeFromSemantics: true,
+                    child: InkWell(
+                      excludeFromSemantics: true,
+                      onTap: () => controller.setFollowTerminal(
+                        !controller.followTerminal,
+                      ),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            value: controller.followTerminal,
+                            semanticLabel: _followLabel,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                            onChanged: (value) =>
+                                controller.setFollowTerminal(value ?? false),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: ExcludeSemantics(
+                              child: Text(
+                                _followLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (controller.followTerminal &&
+                  controller.reportedShellDirectory == null)
+                const Padding(
+                  padding: EdgeInsets.only(left: 6),
+                  child: Tooltip(
+                    message:
+                        'Waiting for directory metadata from the remote shell',
+                    child: Icon(Icons.info_outline, size: 16),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
