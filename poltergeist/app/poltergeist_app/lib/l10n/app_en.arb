@@ -3449,6 +3449,82 @@
   "@editorTextToolsHistoryGroup": {
     "description": "The browser group listing Repeat and Recent runs."
   },
+  "editorCommandsGroup": "Editing",
+  "@editorCommandsGroup": {
+    "description": "Text-tools browser group listing editing commands such as Duplicate Line, after the tool groups."
+  },
+  "editorCommandDuplicateLine": "Duplicate Line",
+  "@editorCommandDuplicateLine": {
+    "description": "Editing command row in the text-tools browser: Copies the selected lines, or the caret line, below themselves."
+  },
+  "editorCommandMoveLineUp": "Move Line Up",
+  "@editorCommandMoveLineUp": {
+    "description": "Editing command row in the text-tools browser: Swaps the selected lines, or the caret line, with the line above."
+  },
+  "editorCommandMoveLineDown": "Move Line Down",
+  "@editorCommandMoveLineDown": {
+    "description": "Editing command row in the text-tools browser: Swaps the selected lines, or the caret line, with the line below."
+  },
+  "editorCommandDeleteLine": "Delete Line",
+  "@editorCommandDeleteLine": {
+    "description": "Editing command row in the text-tools browser: Removes the selected lines, or the caret line."
+  },
+  "editorCommandJoinLines": "Join Lines",
+  "@editorCommandJoinLines": {
+    "description": "Editing command row in the text-tools browser: Joins the selected lines, or the caret line with the next one."
+  },
+  "editorCommandToggleComment": "Toggle Comment",
+  "@editorCommandToggleComment": {
+    "description": "Editing command row in the text-tools browser: Comments or uncomments the touched lines in the file's language."
+  },
+  "editorCommandSelectLine": "Select Line",
+  "@editorCommandSelectLine": {
+    "description": "Editing command row in the text-tools browser: Selects the caret line, or every line the selection touches."
+  },
+  "editorCommandSelectParagraph": "Select Paragraph",
+  "@editorCommandSelectParagraph": {
+    "description": "Editing command row in the text-tools browser: Selects the run of non-blank lines around the caret."
+  },
+  "editorCommandSelectEnclosingBrackets": "Select Enclosing Brackets",
+  "@editorCommandSelectEnclosingBrackets": {
+    "description": "Editing command row in the text-tools browser: Selects the innermost bracket pair around the selection, widening on repeat."
+  },
+  "editorCommandInsertLineAbove": "Insert Line Above",
+  "@editorCommandInsertLineAbove": {
+    "description": "Editing command row in the text-tools browser: Inserts an empty indented line above the caret line."
+  },
+  "editorCommandInsertLineBelow": "Insert Line Below",
+  "@editorCommandInsertLineBelow": {
+    "description": "Editing command row in the text-tools browser: Inserts an empty indented line below the caret line."
+  },
+  "editorCommandCopyLine": "Copy Line",
+  "@editorCommandCopyLine": {
+    "description": "Editing command row in the text-tools browser: Copies the touched lines to the clipboard."
+  },
+  "editorCommandCutLine": "Cut Line",
+  "@editorCommandCutLine": {
+    "description": "Editing command row in the text-tools browser: Copies the touched lines to the clipboard and removes them."
+  },
+  "editorCommandIncrementNumber": "Increment Number",
+  "@editorCommandIncrementNumber": {
+    "description": "Editing command row in the text-tools browser: Adds one to the number at the caret, keeping its width."
+  },
+  "editorCommandDecrementNumber": "Decrement Number",
+  "@editorCommandDecrementNumber": {
+    "description": "Editing command row in the text-tools browser: Subtracts one from the number at the caret, keeping its width."
+  },
+  "editorCommandPasteMatchIndentation": "Paste and Match Indentation",
+  "@editorCommandPasteMatchIndentation": {
+    "description": "Editing command row in the text-tools browser: Pastes with later lines reindented to the caret line."
+  },
+  "editorCommandGoToMatchingBracket": "Go to Matching Bracket",
+  "@editorCommandGoToMatchingBracket": {
+    "description": "Editing command row in the text-tools browser: Moves the caret to the partner of the bracket beside it."
+  },
+  "editorCommandSelectToMatchingBracket": "Select to Matching Bracket",
+  "@editorCommandSelectToMatchingBracket": {
+    "description": "Editing command row in the text-tools browser: Extends the selection to the partner of the bracket beside the caret."
+  },
   "editorTextToolGroupLines": "Lines",
   "editorTextToolGroupChangeCase": "Case",
   "editorTextToolGroupWhitespace": "Whitespace",

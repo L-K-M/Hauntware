@@ -1,5 +1,17 @@
 # Status
 
+## Editing commands in the browser (2026-10-06)
+
+The text-tools browser lists the Edit and Find menu commands after the
+tool groups, under Editing: line duplicate, move, delete and join,
+Toggle Comment, the selection commands, Insert Line Above/Below,
+Copy/Cut Line, Increment/Decrement Number, Paste and Match Indentation,
+the matching-bracket jumps and Find in Selection. Hosts have no such
+menus, so their single header entry now reaches them, also on a phone
+without a hardware keyboard. `EditorCommand` names each command, its
+enablement rule and its controller method; rows follow the menus' rules,
+so a locked document still selects and copies. No new chord is bound.
+
 ## Recovered editor and file-drop work (2026-10-03)
 
 Supported leftovers from closed branches now use the current shared

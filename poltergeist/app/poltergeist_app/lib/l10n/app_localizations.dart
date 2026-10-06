@@ -4067,6 +4067,120 @@ abstract class AppLocalizations {
   /// **'Repeat and Recent'**
   String get editorTextToolsHistoryGroup;
 
+  /// Text-tools browser group listing editing commands such as Duplicate Line, after the tool groups.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing'**
+  String get editorCommandsGroup;
+
+  /// Editing command row in the text-tools browser: Copies the selected lines, or the caret line, below themselves.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate Line'**
+  String get editorCommandDuplicateLine;
+
+  /// Editing command row in the text-tools browser: Swaps the selected lines, or the caret line, with the line above.
+  ///
+  /// In en, this message translates to:
+  /// **'Move Line Up'**
+  String get editorCommandMoveLineUp;
+
+  /// Editing command row in the text-tools browser: Swaps the selected lines, or the caret line, with the line below.
+  ///
+  /// In en, this message translates to:
+  /// **'Move Line Down'**
+  String get editorCommandMoveLineDown;
+
+  /// Editing command row in the text-tools browser: Removes the selected lines, or the caret line.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Line'**
+  String get editorCommandDeleteLine;
+
+  /// Editing command row in the text-tools browser: Joins the selected lines, or the caret line with the next one.
+  ///
+  /// In en, this message translates to:
+  /// **'Join Lines'**
+  String get editorCommandJoinLines;
+
+  /// Editing command row in the text-tools browser: Comments or uncomments the touched lines in the file's language.
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle Comment'**
+  String get editorCommandToggleComment;
+
+  /// Editing command row in the text-tools browser: Selects the caret line, or every line the selection touches.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Line'**
+  String get editorCommandSelectLine;
+
+  /// Editing command row in the text-tools browser: Selects the run of non-blank lines around the caret.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Paragraph'**
+  String get editorCommandSelectParagraph;
+
+  /// Editing command row in the text-tools browser: Selects the innermost bracket pair around the selection, widening on repeat.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Enclosing Brackets'**
+  String get editorCommandSelectEnclosingBrackets;
+
+  /// Editing command row in the text-tools browser: Inserts an empty indented line above the caret line.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert Line Above'**
+  String get editorCommandInsertLineAbove;
+
+  /// Editing command row in the text-tools browser: Inserts an empty indented line below the caret line.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert Line Below'**
+  String get editorCommandInsertLineBelow;
+
+  /// Editing command row in the text-tools browser: Copies the touched lines to the clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Line'**
+  String get editorCommandCopyLine;
+
+  /// Editing command row in the text-tools browser: Copies the touched lines to the clipboard and removes them.
+  ///
+  /// In en, this message translates to:
+  /// **'Cut Line'**
+  String get editorCommandCutLine;
+
+  /// Editing command row in the text-tools browser: Adds one to the number at the caret, keeping its width.
+  ///
+  /// In en, this message translates to:
+  /// **'Increment Number'**
+  String get editorCommandIncrementNumber;
+
+  /// Editing command row in the text-tools browser: Subtracts one from the number at the caret, keeping its width.
+  ///
+  /// In en, this message translates to:
+  /// **'Decrement Number'**
+  String get editorCommandDecrementNumber;
+
+  /// Editing command row in the text-tools browser: Pastes with later lines reindented to the caret line.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste and Match Indentation'**
+  String get editorCommandPasteMatchIndentation;
+
+  /// Editing command row in the text-tools browser: Moves the caret to the partner of the bracket beside it.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to Matching Bracket'**
+  String get editorCommandGoToMatchingBracket;
+
+  /// Editing command row in the text-tools browser: Extends the selection to the partner of the bracket beside the caret.
+  ///
+  /// In en, this message translates to:
+  /// **'Select to Matching Bracket'**
+  String get editorCommandSelectToMatchingBracket;
+
   /// Text-tools browser group: line operations.
   ///
   /// In en, this message translates to:

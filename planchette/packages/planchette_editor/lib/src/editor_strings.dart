@@ -1,5 +1,6 @@
 import 'package:planchette_core/planchette_core.dart';
 
+import 'editor_commands.dart';
 import 'text_tool_history.dart';
 
 /// User-facing editor copy. Hosts can adapt their existing localization system
@@ -744,6 +745,32 @@ class EditorStrings {
 
   /// The group the browser lists Repeat and Recent under.
   String get textToolsHistoryGroup => 'Repeat and Recent';
+
+  /// The group the browser lists the [EditorCommand]s under.
+  String get editorCommandsGroup => 'Editing';
+
+  /// An [EditorCommand]'s row label, as the standalone app's menus name it.
+  String editorCommandLabel(EditorCommand command) => switch (command) {
+    EditorCommand.duplicateLines => 'Duplicate Line',
+    EditorCommand.moveLinesUp => 'Move Line Up',
+    EditorCommand.moveLinesDown => 'Move Line Down',
+    EditorCommand.deleteLines => 'Delete Line',
+    EditorCommand.joinLines => 'Join Lines',
+    EditorCommand.toggleComment => 'Toggle Comment',
+    EditorCommand.selectLine => 'Select Line',
+    EditorCommand.selectParagraph => 'Select Paragraph',
+    EditorCommand.selectEnclosingBrackets => 'Select Enclosing Brackets',
+    EditorCommand.insertLineAbove => 'Insert Line Above',
+    EditorCommand.insertLineBelow => 'Insert Line Below',
+    EditorCommand.copyLine => 'Copy Line',
+    EditorCommand.cutLine => 'Cut Line',
+    EditorCommand.incrementNumber => 'Increment Number',
+    EditorCommand.decrementNumber => 'Decrement Number',
+    EditorCommand.pasteAndMatchIndentation => 'Paste and Match Indentation',
+    EditorCommand.goToMatchingBracket => 'Go to Matching Bracket',
+    EditorCommand.selectToMatchingBracket => 'Select to Matching Bracket',
+    EditorCommand.findInSelection => findInSelection,
+  };
 
   // ── Find-bar pattern tools ──
 

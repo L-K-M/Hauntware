@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:planchette_editor/planchette_editor.dart';
+import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/l10n/app_localizations_en.dart';
 import 'package:poltergeist_app/ui/editor_strings.dart';
 
@@ -49,6 +50,15 @@ class _Marked extends AppLocalizationsEn {
   String get editorLineActions => '[line actions]';
   @override
   String get editorSearchHistory => '[history]';
+}
+
+/// Answers every lookup with the name of the ARB key it read, so a
+/// string the adapter leaves to the package's English shows up as text
+/// with no key name in it.
+class _KeyNames implements AppLocalizations {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      invocation.memberName.toString();
 }
 
 void main() {
@@ -176,6 +186,18 @@ void main() {
     controller.openSearch();
     await tester.pumpAndSettle();
     expect(find.byTooltip('[line actions]'), findsOneWidget);
+  });
+
+  test('every editing command label comes from the ARB catalog', () {
+    final strings = PoltergeistEditorStrings(_KeyNames());
+    expect(strings.editorCommandsGroup, contains('editorCommandsGroup'));
+    for (final command in EditorCommand.values) {
+      expect(
+        strings.editorCommandLabel(command),
+        startsWith('Symbol("editor'),
+        reason: '$command has no ARB label',
+      );
+    }
   });
 
   test('the ARB catalog covers every shared text tool, option and choice', () {

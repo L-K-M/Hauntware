@@ -4,6 +4,15 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Editing commands in the text-tools browser (2026-10-06)
+
+The shared browser behind the editor's Text Tools icon now lists
+Planchette's Edit and Find menu commands under Editing (Duplicate Line
+through Find in Selection), so they are reachable on desktop and on
+phones. The 18 new labels and the group name come from `app_en.arb`;
+Find in Selection reuses `editorFindInSelection`. A test fails if any
+command falls back to the package's English.
+
 ## Sync trash purge (2026-10-03)
 
 The rail-5 purge surface is complete. Plans inventory trash per physical

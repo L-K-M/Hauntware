@@ -3,13 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:planchette_core/planchette_core.dart';
 
+import 'editor_commands.dart';
 import 'editor_controller.dart';
 import 'editor_strings.dart';
 import 'ghost_menus.dart';
 import 'text_tool_history.dart';
 
 /// The shared text-tools catalog browser: Repeat and Recent first, then
-/// the seven groups with descriptions and a keyword filter. Hosts open it
+/// the seven groups with descriptions and a keyword filter, then the
+/// [EditorCommand]s the standalone app's Edit and Find menus offer, which
+/// a host has no other way to list. Hosts open it
 /// through [EditorController.openTextTools] — typically from one header
 /// icon — and the shared view renders it; choosing a row dispatches back
 /// through the controller, so every host runs the same transitions: a
@@ -160,6 +163,17 @@ class TextToolsBrowserState extends State<TextToolsBrowser> {
         visible++;
       }
     }
+    final commands = [
+      for (final command in EditorCommand.values)
+        if (words.isEmpty || _matchesCommand(command, words)) command,
+    ];
+    if (commands.isNotEmpty) {
+      rows.add(_header(strings.editorCommandsGroup));
+      for (final command in commands) {
+        rows.add(_commandTile(command));
+        visible++;
+      }
+    }
     if (visible == 0) {
       return Center(child: Text(strings.textToolsNoResults));
     }
@@ -205,6 +219,31 @@ class TextToolsBrowserState extends State<TextToolsBrowser> {
     enabled: _canRun,
     onTap: _canRun ? () => c.chooseTextTool(tool.id) : null,
   );
+
+  /// A command acts on the document at once. The browser closes first and
+  /// hands focus back, so a selection it makes shows; Find in Selection
+  /// moves focus to the find field it opens instead.
+  Widget _commandTile(EditorCommand command) {
+    final enabled = c.canRunCommand(command);
+    return ListTile(
+      title: Text(strings.editorCommandLabel(command)),
+      enabled: enabled,
+      onTap: enabled
+          ? () {
+              c.closeTextTools(
+                refocus: command != EditorCommand.findInSelection,
+              );
+              unawaited(c.runCommand(command));
+            }
+          : null,
+    );
+  }
+
+  bool _matchesCommand(EditorCommand command, List<String> words) =>
+      _containsAll(
+        '${strings.editorCommandLabel(command)} ${strings.editorCommandsGroup}',
+        words,
+      );
 
   /// The filter's words, lowercased: every word must match somewhere.
   static List<String> _words(String query) => [
