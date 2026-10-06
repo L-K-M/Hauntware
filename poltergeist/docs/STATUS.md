@@ -4,6 +4,19 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Fixture repair — Alpine OpenSSH 10.6 (2026-10-06)
+
+Main CI's SSH integration and D12 benchmark jobs failed building the
+sshd fixture again: Alpine edge replaced the `10.5_p1-r3` OpenSSH set
+with upstream `10.6_p1-r0`. `iproute2=7.2.0-r0` still resolves. Bumped
+the three pins, the fixture-tool constant and the README's fixture
+version; the M0 report and evidence keep the versions they measured.
+
+Validation: `pins the current modern OpenSSH fixture` failed against
+the old Dockerfile and passes after the bump. Docker is unavailable on
+the dev host, so the image build and the 10.6 server's behaviour under
+the integration suite are proven by this PR's CI.
+
 ## Launch guard shared with Séance (2026-10-06)
 
 `isExecutableLaunchName`, `LaunchHost` and the Windows list (now
