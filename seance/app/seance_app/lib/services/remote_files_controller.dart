@@ -749,9 +749,11 @@ class RemoteFilesController extends ChangeNotifier {
   /// becomes the deliberate discard path.
   ///
   /// [confirmDownload] is asked only when bytes are about to transfer: for a
-  /// new checkout, or for a refresh of a copy whose server file changed. It
-  /// receives the version that would arrive. A false answer throws
-  /// [CheckoutDeclined] and leaves any existing copy as it was.
+  /// new checkout (with the entry as listed, which may be stale), or for a
+  /// refresh of a copy whose server file changed (with a fresh stat). A
+  /// false answer throws [CheckoutDeclined] and leaves any existing copy as
+  /// it was. Concurrent checkouts of one path share a download, so the call
+  /// that starts it answers for all of them.
   Future<ManagedRemoteFile> checkoutRemoteFile(
     RemoteFileEntry entry, {
     int? maximumBytes,

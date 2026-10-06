@@ -1060,6 +1060,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
   /// to make by accident. The controller asks only when a download will
   /// start, so an unchanged local copy opens without a question.
   Future<bool> _confirmLargeDownload(RemoteFileEntry entry) async {
+    // Nothing could open the result, so no download starts.
     if (!mounted) return false;
     final size = entry.size;
     if (size == null || size <= _largeDownloadBytes) return true;
