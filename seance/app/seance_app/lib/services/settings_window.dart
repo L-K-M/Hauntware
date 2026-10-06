@@ -67,6 +67,7 @@ abstract final class _Link {
   static const setKeepSessionsAlive = 'setKeepSessionsAlive';
   static const setCommandSuggestions = 'setCommandSuggestions';
   static const setTerminalAppearance = 'setTerminalAppearance';
+  static const setEditorFontSize = 'setEditorFontSize';
   static const setAppearance = 'setAppearance';
   static const setEditorRegistry = 'setEditorRegistry';
   static const pickEditor = 'pickEditor';
@@ -277,6 +278,8 @@ class SettingsWindowHost {
           fontFamily: json['fontFamily'] as String,
           palette: TerminalPalette.values.byName(json['palette'] as String),
         );
+      case _Link.setEditorFontSize:
+        await _backend.setEditorFontSize(argument! as int);
       case _Link.setAppearance:
         final json = map();
         await _backend.setAppearance(
@@ -500,6 +503,10 @@ class RemoteSettingsBackend extends ChangeNotifier implements SettingsBackend {
     'fontFamily': fontFamily,
     'palette': palette.name,
   });
+
+  @override
+  Future<void> setEditorFontSize(int size) =>
+      _call(_Link.setEditorFontSize, size);
 
   @override
   Future<void> setAppearance(ThemePalette palette, ThemeModePreference mode) =>

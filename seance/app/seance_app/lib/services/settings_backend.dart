@@ -71,6 +71,10 @@ abstract class SettingsBackend implements Listenable {
     required TerminalPalette palette,
   });
 
+  /// Persists the built-in editor's text size and resizes every open
+  /// editor. A no-op when nothing changed.
+  Future<void> setEditorFontSize(int size);
+
   /// Persists the theme and re-themes the app — and an open settings
   /// window, through its next snapshot. A no-op when nothing changed.
   Future<void> setAppearance(ThemePalette palette, ThemeModePreference mode);

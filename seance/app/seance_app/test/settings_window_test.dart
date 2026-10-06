@@ -131,6 +131,20 @@ void main() {
     expect(reread.terminalPalette, TerminalPalette.alwaysDark);
   });
 
+  test('an editor text size set in the window resizes the app\'s editors', () async {
+    final window = await openWindow();
+    addTearDown(window.dispose);
+    var notified = 0;
+    state.addListener(() => notified++);
+
+    await window.setEditorFontSize(28);
+
+    expect(services.settings.editorFontSize, 28);
+    expect(notified, greaterThan(0));
+    final reread = await services.settingsStore.load();
+    expect(reread.editorFontSize, 28);
+  });
+
   test('a theme set in the window re-themes the app and the window', () async {
     final window = await openWindow();
     addTearDown(window.dispose);

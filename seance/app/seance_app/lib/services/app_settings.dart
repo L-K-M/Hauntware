@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:planchette_editor/planchette_editor.dart' show EditorTextSize;
 import 'package:seance_core/seance_core.dart';
 
 import '../theme/app_appearance.dart';
@@ -239,6 +240,10 @@ class AppSettings {
   String terminalFontFamily;
   TerminalPalette terminalPalette;
 
+  /// The built-in editor's text size, in the range and steps every Ghost
+  /// editor shares. Device-local like the terminal's, for the same reason.
+  int editorFontSize;
+
   /// The app's theme. Device-local like the terminal's appearance and for
   /// the same reason: a theme is chosen for the screen and the room in
   /// front of you, so it never syncs — and a theme is the one setting
@@ -290,6 +295,7 @@ class AppSettings {
     this.terminalFontSize = kDefaultTerminalFontSize,
     this.terminalFontFamily = '',
     this.terminalPalette = TerminalPalette.followApp,
+    this.editorFontSize = EditorTextSize.standard,
     ThemePalette? themePalette,
     this.themeMode = ThemeModePreference.system,
     this.deviceId = '',
@@ -351,6 +357,7 @@ class AppSettings {
     'terminalFontSize': terminalFontSize,
     'terminalFontFamily': terminalFontFamily,
     'terminalPalette': terminalPalette.name,
+    'editorFontSize': editorFontSize,
     'themePalette': themePalette.toJson(),
     'themeMode': themeMode.name,
     'deviceId': deviceId,
@@ -409,6 +416,12 @@ class AppSettings {
       (p) => p.name == json['terminalPalette'],
       orElse: () => TerminalPalette.followApp,
     ),
+    // Clamped on read, like the terminal's; anything but a number is the
+    // standard size rather than a failed load.
+    editorFontSize: switch (json['editorFontSize']) {
+      final num size => EditorTextSize.clamp(size.round()),
+      _ => EditorTextSize.standard,
+    },
     // Lenient all the way down: a hand-edited theme costs at most its own
     // bad values, never the rest of the settings file.
     themePalette: ThemePalette.decodeStored(json['themePalette']),

@@ -71,6 +71,10 @@ class _FakeBackend extends ChangeNotifier implements SettingsBackend {
     required TerminalPalette palette,
   }) => _write('setTerminalAppearance($fontSize, $fontFamily, $palette)');
 
+  @override
+  Future<void> setEditorFontSize(int size) =>
+      _write('setEditorFontSize($size)');
+
   /// Every theme written, in order.
   final List<(ThemePalette, ThemeModePreference)> appearances = [];
 
@@ -271,6 +275,26 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.calls, ['setCheckForUpdates(false)']);
+  });
+
+  testWidgets('the editor text size writes through when the slider settles', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+    final slider = find.byKey(const ValueKey('editor.textSize'));
+    await tester.ensureVisible(slider);
+    await tester.pumpAndSettle();
+    expect(find.text('14 pt'), findsOneWidget);
+
+    final widget = tester.widget<Slider>(slider);
+    widget.onChanged!(20);
+    await tester.pump();
+    expect(find.text('20 pt'), findsOneWidget);
+    expect(backend.calls, isEmpty);
+    widget.onChangeEnd!(20);
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, ['setEditorFontSize(20)']);
   });
 
   testWidgets('a failed write says so instead of failing silently', (

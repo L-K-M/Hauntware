@@ -3,6 +3,17 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Built-in editor text size (2026-10-06)
+
+Editor tabs zoom like Planchette's editor: ⌘ (Apple platforms) or Ctrl
+(elsewhere) with +, − and 0 in an editor tab, and a Built-in editor
+slider under Settings → General after Terminal. Every editor tab resizes
+at once. The size is device-local like the terminal's (`editorFontSize`
+in the settings file, never synced) and travels to the Settings window
+in its snapshot, with a new `setEditorFontSize` link method. Range and
+steps come from Planchette's shared `EditorTextSize` (9 to 48, standard
+14), so all three apps zoom alike. Terminal zoom is unchanged.
+
 ## Remote programs never reach the system app (2026-10-06)
 
 Finding P1-03 (`docs/reviews/deep-review-2026-09-26.md`): opening a

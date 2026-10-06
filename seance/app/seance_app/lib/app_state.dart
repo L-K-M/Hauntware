@@ -5,6 +5,8 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:planchette_editor/planchette_editor.dart'
+    show EditorTextSize, EditorZoom;
 import 'package:seance_core/seance_core.dart';
 import 'package:xterm/xterm.dart' show TerminalController;
 
@@ -2288,6 +2290,23 @@ class AppState extends ChangeNotifier {
     );
     if (next == settings.terminalFontSize) return;
     settings.terminalFontSize = next;
+    notifyListeners();
+    await services.saveSettings();
+  }
+
+  /// Resize every built-in editor: View › Zoom's steps (⌘ or Ctrl with +,
+  /// − and 0 in an editor tab), shared with Planchette and Poltergeist.
+  Future<void> zoomEditor(EditorZoom zoom) => setEditorFontSize(
+    EditorTextSize.zoomed(services.settings.editorFontSize, zoom),
+  );
+
+  /// Sets the built-in editor's text size, clamped to the shared range. A
+  /// no-op change neither notifies nor writes to disk.
+  Future<void> setEditorFontSize(int size) async {
+    final settings = services.settings;
+    final next = EditorTextSize.clamp(size);
+    if (next == settings.editorFontSize) return;
+    settings.editorFontSize = next;
     notifyListeners();
     await services.saveSettings();
   }

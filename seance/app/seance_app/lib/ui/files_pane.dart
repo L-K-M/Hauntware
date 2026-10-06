@@ -2396,6 +2396,8 @@ class EditorTabView extends StatelessWidget {
       isActive: isActive,
       remoteFiles: files,
       dirtyNotifier: tab.dirty,
+      fontSize: state.services.settings.editorFontSize,
+      onZoom: (zoom) => unawaited(state.zoomEditor(zoom)),
       onSaved: () => _reconcileAfterSave(owner),
       onUpload: files == null
           ? null
