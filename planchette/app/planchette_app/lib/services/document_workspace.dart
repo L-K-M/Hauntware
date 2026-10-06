@@ -161,6 +161,9 @@ typedef _ShellState = ({
   /// inside a selection never reaches the shell, but the Find menu's "Find
   /// in Selection" enablement still follows it.
   bool hasSelection,
+
+  /// Whether the document has problems: Next and Previous Problem follow it.
+  bool hasProblems,
 });
 
 /// Where one save writes: the resolved path, the digest the write expects to
@@ -345,6 +348,7 @@ final class DocumentWorkspace extends ChangeNotifier {
       canEditText: editor.canEditText,
       canToggleComment: editor.canToggleComment,
       hasSelection: editor.hasSelection,
+      hasProblems: editor.problems.isNotEmpty,
     );
     if (state == tab._shown) return;
     tab._shown = state;

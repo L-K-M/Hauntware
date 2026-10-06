@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Built-in editor: mistakes in common config files are underlined as
+  you type: JSON that doesn't parse, a key set twice in a `.env`, JSON,
+  YAML or TOML file, broken XML tags, and leftover merge-conflict
+  markers. The status bar counts them and describes the one on the
+  caret's line; tap it or press F8 to go to the next one, Shift+F8 for
+  the previous.
 - Files: remote app packages and installers (`.msix`, `.appx`, their
   bundles, `.appinstaller`, `.appref-ms`, `.vsto`, `.ppkg`) on Windows,
   preference panes, screen savers and Automator actions on a Mac, and

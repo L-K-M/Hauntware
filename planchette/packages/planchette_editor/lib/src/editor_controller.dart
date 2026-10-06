@@ -399,11 +399,23 @@ class EditorController extends ChangeNotifier {
   Indentation? _detectedIndentation;
   Indentation? _preferredIndentation;
 
+  // Problem checks: the last result and the text and format it was for.
+  List<TextProblem> _problems = const [];
+  String? _checkedText;
+  TextFormat? _checkedFormat;
+  bool _updatingProblems = false;
+  Map<int, TextProblemSeverity>? _problemLines;
+  List<TextProblem>? _problemLinesFor;
+  String? _problemLinesText;
+
   String get displayPath => _displayPath;
   set displayPath(String value) {
     if (_displayPath == value) return;
     _displayPath = value;
     _detectLanguage();
+    // A new name can change the format with the same language, as renaming
+    // a .json file to tsconfig.json lets it hold comments.
+    _checkProblems();
     _notify();
   }
 
@@ -1528,6 +1540,7 @@ class EditorController extends ChangeNotifier {
     );
     _detectLanguage();
     _detectIndentation(reset: true);
+    _checkProblems();
     if (_searchOpen) _updateMatches(resetActive: true);
     _revealRequest++;
     _installGeneration++;
@@ -1563,6 +1576,7 @@ class EditorController extends ChangeNotifier {
     // `SyntaxLanguages` instance, so identity is the comparison.
     if (identical(language, text.language)) return;
     text.language = language;
+    _checkProblems();
   }
 
   /// Bounds the per-keystroke language check. Every recogniser in
@@ -1648,7 +1662,12 @@ class EditorController extends ChangeNotifier {
       _lastCaretOffset = 0;
       _lastCaretText = text.text;
     }
-    if (_updatingSearch || _disposed || _applyingCodeInput) return;
+    if (_updatingSearch ||
+        _updatingProblems ||
+        _disposed ||
+        _applyingCodeInput) {
+      return;
+    }
     // An open tool bar dry-runs against where the caret lands; it reruns
     // when the selection or the text settles.
     if (_barTool != null) _markBarStale();
@@ -1659,6 +1678,7 @@ class EditorController extends ChangeNotifier {
       _applyCodeInput(before);
       _refreshLanguage();
       _detectIndentation();
+      _followProblems(before);
       if (_searchOpen) _followEdit(before);
     }
     _notify();
@@ -2432,13 +2452,7 @@ class EditorController extends ChangeNotifier {
   /// document, focuses the editor and asks the view to scroll there.
   void goToLine(int line, {int column = 1}) {
     if (_loading || _error != null) return;
-    // A stale find match would keep the active highlight after the jump;
-    // the caret this command just placed is the selection now.
-    if (_activeMatch >= 0) {
-      _activeMatch = -1;
-      text.setSearchMatches(_matches, _activeMatch);
-      _schedulePreview();
-    }
+    _releaseActiveMatch();
     final starts = lineStarts;
     final index = (line - 1).clamp(0, starts.length - 1);
     final start = starts[index];
@@ -2458,6 +2472,157 @@ class EditorController extends ChangeNotifier {
     text.selection = TextSelection.collapsed(offset: offset);
     _requestCaretReveal(CaretReveal.upperThird);
     editorFocus.requestFocus();
+    _notify();
+  }
+
+  /// Drops the active find match. A stale one would keep its highlight
+  /// after a jump; the caret the jump places is the selection now.
+  void _releaseActiveMatch() {
+    if (_activeMatch < 0) return;
+    _activeMatch = -1;
+    text.setSearchMatches(_matches, _activeMatch);
+    _schedulePreview();
+  }
+
+  /// What the last check found, in document order: syntax errors, repeated
+  /// keys and the like in the formats [textFormatFor] knows, and conflict
+  /// markers in any document; none above [syntaxHighlightingMaxChars].
+  ///
+  /// The document is checked when it is installed or renamed. After an
+  /// edit, problems the edit did not touch move with their text and those
+  /// it touched are gone, so a fix clears its mark at once; the view checks
+  /// again through [checkProblems] once typing pauses, so a half-typed key
+  /// or quote is not flagged at every keystroke.
+  List<TextProblem> get problems => _problems;
+
+  /// Whether an edit has changed the text since the last check.
+  bool get problemsOutdated => !identical(_checkedText, text.text);
+
+  /// Checks the document now, unless the last check was of this text.
+  void checkProblems() {
+    if (_disposed) return;
+    _checkProblems();
+  }
+
+  /// The problem the status row describes: the one at the caret, else the
+  /// first on the caret's line, or null when the line has none.
+  TextProblem? get problemAtCaret {
+    final selection = text.selection;
+    if (_problems.isEmpty || !selection.isValid) return null;
+    final length = text.text.length;
+    final caret = selection.extentOffset.clamp(0, length);
+    final starts = lineStarts;
+    final line = _lineIndexOf(caret);
+    final lineStart = starts[line];
+    final lineEnd = line + 1 < starts.length ? starts[line + 1] : length + 1;
+    TextProblem? first;
+    for (final problem in _problems) {
+      if (problem.start >= lineEnd) break;
+      if (problem.end <= lineStart) continue;
+      if (problem.start <= caret && caret <= problem.end) return problem;
+      first ??= problem;
+    }
+    return first;
+  }
+
+  /// The most severe problem on each line that has one, by 0-based line,
+  /// for the gutter.
+  Map<int, TextProblemSeverity> get problemLines {
+    final cached = _problemLines;
+    if (cached != null &&
+        identical(_problemLinesFor, _problems) &&
+        identical(_problemLinesText, text.text)) {
+      return cached;
+    }
+    final length = text.text.length;
+    final lines = <int, TextProblemSeverity>{};
+    for (final problem in _problems) {
+      final line = _lineIndexOf(problem.start.clamp(0, length));
+      if (lines[line] == TextProblemSeverity.error) continue;
+      lines[line] = problem.severity;
+    }
+    _problemLinesFor = _problems;
+    _problemLinesText = text.text;
+    return _problemLines = lines;
+  }
+
+  /// Moves the caret to the start of the next problem after it, round to
+  /// the first, and focuses the document. False when there is no problem or
+  /// the caret cannot move.
+  bool nextProblem() => _goToProblem(1);
+
+  /// Moves the caret to the start of the problem before it, round to the
+  /// last.
+  bool previousProblem() => _goToProblem(-1);
+
+  bool _goToProblem(int direction) {
+    if (!canMoveCaret || _problems.isEmpty) return false;
+    final caret = text.selection.extentOffset;
+    final target = direction > 0
+        ? _problems.firstWhere(
+            (problem) => problem.start > caret,
+            orElse: () => _problems.first,
+          )
+        : _problems.lastWhere(
+            (problem) => problem.start < caret,
+            orElse: () => _problems.last,
+          );
+    _releaseActiveMatch();
+    text.selection = TextSelection.collapsed(
+      offset: target.start.clamp(0, text.text.length),
+    );
+    _requestCaretReveal(CaretReveal.upperThird);
+    editorFocus.requestFocus();
+    _notify();
+    return true;
+  }
+
+  /// Checks the document now unless the result for this text and format is
+  /// already in.
+  void _checkProblems() {
+    final value = text.text;
+    final format = textFormatFor(_displayPath, text.language);
+    if (identical(value, _checkedText) && format == _checkedFormat) return;
+    _checkedText = value;
+    _checkedFormat = format;
+    _setProblems(
+      value.length > syntaxHighlightingMaxChars
+          ? const []
+          : validateText(value, format),
+    );
+  }
+
+  /// Carries the problems through the edit from [before], leaving the next
+  /// check to the view. A document with no format to check is only looked
+  /// at for conflict markers, which costs one search and cannot flag a key
+  /// half typed, so it is checked at once.
+  void _followProblems(String before) {
+    // A language change during this edit has checked the new text already.
+    if (identical(_checkedText, text.text)) return;
+    if (textFormatFor(_displayPath, text.language) == null) {
+      _checkProblems();
+      return;
+    }
+    if (_problems.isEmpty) return;
+    final edit = _Edit.between(before, text.text);
+    _setProblems([
+      for (final problem in _problems)
+        if (problem.end < edit._start)
+          problem
+        else if (problem.start > edit._end)
+          problem.moved(edit._delta),
+    ]);
+  }
+
+  void _setProblems(List<TextProblem> problems) {
+    if (_problems.isEmpty && problems.isEmpty) return;
+    _problems = List.unmodifiable(problems);
+    _updatingProblems = true;
+    try {
+      text.setProblems(_problems);
+    } finally {
+      _updatingProblems = false;
+    }
     _notify();
   }
 

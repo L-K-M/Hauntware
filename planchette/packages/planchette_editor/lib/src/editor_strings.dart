@@ -770,7 +770,45 @@ class EditorStrings {
     EditorCommand.goToMatchingBracket => 'Go to Matching Bracket',
     EditorCommand.selectToMatchingBracket => 'Select to Matching Bracket',
     EditorCommand.findInSelection => findInSelection,
+    EditorCommand.nextProblem => 'Next Problem',
+    EditorCommand.previousProblem => 'Previous Problem',
   };
+
+  // ── Problems ──
+
+  /// The status row's count of the document's problems.
+  String problemCount(int count) => _plural(count, 'problem');
+
+  /// The tooltip of that count, which goes to the next problem when tapped.
+  String get nextProblemHint => 'Go to the next problem (F8)';
+
+  /// What [problem] is, for the status row when the caret is on its line.
+  /// A syntax error's detail is the parser's own English, as in
+  /// [patternInvalid].
+  String problemMessage(TextProblem problem) {
+    final subject = problem.subject;
+    final line = problem.relatedLine;
+    return switch (problem.kind) {
+      TextProblemKind.syntaxError => 'Syntax error: ${problem.detail}',
+      TextProblemKind.duplicateKey =>
+        'Duplicate key "$subject", first set on line $line',
+      TextProblemKind.duplicateTable =>
+        'Duplicate table [$subject], first declared on line $line',
+      TextProblemKind.duplicateAttribute => 'Duplicate attribute "$subject"',
+      TextProblemKind.jsonComment => 'Comments are not allowed in JSON',
+      TextProblemKind.jsonTrailingComma =>
+        'Trailing commas are not allowed in JSON',
+      TextProblemKind.unterminatedQuote => 'This quoted value is never closed',
+      TextProblemKind.tabIndentation =>
+        'YAML does not allow tabs for indentation',
+      TextProblemKind.mismatchedClosingTag =>
+        '</$subject> does not match <${problem.counterpart}> on line $line',
+      TextProblemKind.unclosedElement => '<$subject> is never closed',
+      TextProblemKind.unexpectedClosingTag =>
+        '</$subject> closes no open element',
+      TextProblemKind.mergeConflict => 'Unresolved merge conflict',
+    };
+  }
 
   // ── Find-bar pattern tools ──
 

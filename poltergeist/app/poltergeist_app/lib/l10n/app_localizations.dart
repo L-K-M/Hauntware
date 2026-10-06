@@ -4223,6 +4223,18 @@ abstract class AppLocalizations {
   /// **'Select to Matching Bracket'**
   String get editorCommandSelectToMatchingBracket;
 
+  /// Editing command row in the text-tools browser: Moves the caret to the next problem the editor found, such as a key set twice or JSON that does not parse.
+  ///
+  /// In en, this message translates to:
+  /// **'Next Problem'**
+  String get editorCommandNextProblem;
+
+  /// Editing command row in the text-tools browser: Moves the caret to the previous problem the editor found.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous Problem'**
+  String get editorCommandPreviousProblem;
+
   /// Text-tools browser group: line operations.
   ///
   /// In en, this message translates to:
@@ -6405,6 +6417,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Large file: no highlighting'**
   String get editorStatusLargeFile;
+
+  /// Editor status row segment counting the problems found in the document; tapping it goes to the next one.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 problem} other{{count} problems}}'**
+  String editorStatusProblemCount(int count);
+
+  /// Tooltip of the editor status row's problem count.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to the next problem (F8)'**
+  String get editorStatusNextProblemHint;
+
+  /// Editor status row description of a syntax error at the caret; detail is the parser's own English explanation, such as "expected ',' or '}'".
+  ///
+  /// In en, this message translates to:
+  /// **'Syntax error: {detail}'**
+  String editorProblemSyntaxError(String detail);
+
+  /// Editor status row description of a key set twice in a .env, JSON, YAML or TOML file.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate key \"{key}\", first set on line {line}'**
+  String editorProblemDuplicateKey(String key, int line);
+
+  /// Editor status row description of a TOML table declared twice.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate table [{table}], first declared on line {line}'**
+  String editorProblemDuplicateTable(String table, int line);
+
+  /// Editor status row description of an XML attribute given twice in one tag.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate attribute \"{attribute}\"'**
+  String editorProblemDuplicateAttribute(String attribute);
+
+  /// Editor status row description of a comment in a strict JSON file.
+  ///
+  /// In en, this message translates to:
+  /// **'Comments are not allowed in JSON'**
+  String get editorProblemJsonComment;
+
+  /// Editor status row description of a comma before a closing bracket in a strict JSON file.
+  ///
+  /// In en, this message translates to:
+  /// **'Trailing commas are not allowed in JSON'**
+  String get editorProblemJsonTrailingComma;
+
+  /// Editor status row description of a quoted .env value that runs to the end of the file.
+  ///
+  /// In en, this message translates to:
+  /// **'This quoted value is never closed'**
+  String get editorProblemUnterminatedQuote;
+
+  /// Editor status row description of a YAML line indented with a tab.
+  ///
+  /// In en, this message translates to:
+  /// **'YAML does not allow tabs for indentation'**
+  String get editorProblemTabIndentation;
+
+  /// Editor status row description of an XML closing tag that does not close the element open there; tag and open are element names.
+  ///
+  /// In en, this message translates to:
+  /// **'</{tag}> does not match <{open}> on line {line}'**
+  String editorProblemMismatchedClosingTag(String tag, String open, int line);
+
+  /// Editor status row description of an XML element that is never closed; tag is its name.
+  ///
+  /// In en, this message translates to:
+  /// **'<{tag}> is never closed'**
+  String editorProblemUnclosedElement(String tag);
+
+  /// Editor status row description of an XML closing tag with no element open; tag is its name.
+  ///
+  /// In en, this message translates to:
+  /// **'</{tag}> closes no open element'**
+  String editorProblemUnexpectedClosingTag(String tag);
+
+  /// Editor status row description of version-control conflict markers left in the file.
+  ///
+  /// In en, this message translates to:
+  /// **'Unresolved merge conflict'**
+  String get editorProblemMergeConflict;
 
   /// Editor status row segment: the document indents with spaces, width per level.
   ///

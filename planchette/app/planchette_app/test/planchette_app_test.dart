@@ -987,6 +987,45 @@ void main() {
     }),
   );
 
+  testWidgets('Next and Previous Problem follow the problems found', (
+    tester,
+  ) async {
+    PlatformMenuItem item(String menuLabel, String label) {
+      final bar = tester.widget<PlatformMenuBar>(find.byType(PlatformMenuBar));
+      final menu = bar.menus.whereType<PlatformMenu>().firstWhere(
+        (menu) => menu.label == menuLabel,
+      );
+      return menu.menus
+          .whereType<PlatformMenuItemGroup>()
+          .expand((group) => group.members)
+          .whereType<PlatformMenuItem>()
+          .firstWhere((item) => item.label == label);
+    }
+
+    // An untitled document has no format, but conflict markers count.
+    const conflicted = 'top\n<<<<<<< ours\na\n=======\nb\n>>>>>>> theirs\n';
+    final tab = workspace.newDocument()!..editor.text.text = conflicted;
+    await mount(tester);
+    tab.editor.text.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pump();
+    expect(find.text('1 problem'), findsOneWidget);
+
+    item('Find', 'Next Problem').onSelected!();
+    await tester.pump();
+    expect(tab.editor.text.selection.baseOffset, conflicted.indexOf('<'));
+    expect(find.text('Unresolved merge conflict'), findsOneWidget);
+
+    tab.editor.text.value = const TextEditingValue(
+      text: 'resolved\n',
+      selection: TextSelection.collapsed(offset: 0),
+    );
+    await tester.pump();
+    expect(find.text('1 problem'), findsNothing);
+    expect(item('Find', 'Next Problem').onSelected, isNull);
+    expect(item('Find', 'Previous Problem').onSelected, isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  }, variant: const TargetPlatformVariant({TargetPlatform.macOS}));
+
   testWidgets('Find in Selection needs a selection and scopes the bar', (
     tester,
   ) async {

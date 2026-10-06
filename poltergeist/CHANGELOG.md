@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **The editor flags mistakes in config files.** JSON that doesn't
+  parse, a key set twice in a `.env`, JSON, YAML or TOML file, broken
+  XML tags and leftover merge-conflict markers are underlined as you
+  type. The status bar counts them and describes the one on the caret's
+  line; click it or press F8 to go to the next one, Shift+F8 for the
+  previous.
 - **More remote programs stay unlaunched.** Opening a remote app package
   or installer (`.msix`, `.appx`, their bundles, `.appinstaller`,
   `.appref-ms`, `.vsto`, `.ppkg`) on Windows, a preference pane, screen

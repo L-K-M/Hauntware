@@ -624,6 +624,9 @@ class _DocumentShellState extends State<_DocumentShell>
     final selectionCommands =
         inDocument && (active?.editor.canMoveCaret ?? false);
     final hasSelection = inDocument && (active?.editor.hasSelection ?? false);
+    final hasProblems =
+        ready &&
+        (active?.editor.canRunCommand(EditorCommand.nextProblem) ?? false);
     return [
       _ShellMenu('File', [
         _Command(
@@ -1044,6 +1047,22 @@ class _DocumentShellState extends State<_DocumentShell>
             mac ? LogicalKeyboardKey.keyL : LogicalKeyboardKey.keyG,
           ),
           enabled: ready,
+        ),
+        // F8 on every platform, as in the common code editors; the editor
+        // binds the same keys for hosts without menus.
+        _Command(
+          'Next Problem',
+          () => active?.editor.nextProblem(),
+          mnemonic: 'o',
+          shortcut: const SingleActivator(LogicalKeyboardKey.f8),
+          enabled: hasProblems,
+        ),
+        _Command(
+          'Previous Problem',
+          () => active?.editor.previousProblem(),
+          mnemonic: 'v',
+          shortcut: const SingleActivator(LogicalKeyboardKey.f8, shift: true),
+          enabled: hasProblems,
         ),
         const _Separator(),
         _Command(

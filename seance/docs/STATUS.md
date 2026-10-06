@@ -3,6 +3,16 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Editor problem checks (2026-10-06)
+
+The built-in editor shows the shared editor's problem checks: JSON that
+does not parse, keys set twice in `.env`, JSON, YAML and TOML files,
+broken XML nesting and leftover merge-conflict markers, underlined and
+marked in the gutter. The status row counts them, or describes the one
+on the caret's line, and a tap or F8 goes to the next (Shift+F8 back);
+the tool browser lists Next and Previous Problem. Both palettes gained
+the error and warning colours. Details in Planchette's `docs/STATUS.md`.
+
 ## Downloads marked as untrusted, macOS copies owner-only (2026-10-06)
 
 Finding P1-03a: files Séance writes from a server carried no download

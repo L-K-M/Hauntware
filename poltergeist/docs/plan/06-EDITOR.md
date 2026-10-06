@@ -1477,6 +1477,9 @@ comments and extensions such as backtick values, quoted keys and colon
 assignments are not claimed. This is highlighting rather than validation;
 unsupported forms remain editable as ordinary text. Regression tests pin
 token ranges, multiline boundaries, escaping, CRLF and Unicode offsets.
+Since 2026-10-06 the shared problem checks flag a key set twice and a
+quoted value that never closes; they read these same tokens, so they
+claim no more grammar than the highlighting does.
 
 ## 8. Editor settings (Settings > Editing)
 

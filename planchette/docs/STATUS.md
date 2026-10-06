@@ -1,5 +1,33 @@
 # Status
 
+## Problem checks (2026-10-06)
+
+The shared editor checks the formats it can read quickly and marks what
+it finds: a wavy underline, red for errors and amber for warnings, a
+mark and coloured number in the gutter, and a status segment that counts
+the problems or, on a problem's line, describes it. F8 and Shift+F8, the
+Find menu's Next and Previous Problem and the browser's Editing rows
+step through them. `validateText` in `planchette_core` checks:
+
+- JSON: the first syntax error, repeated keys, and comments or trailing
+  commas outside JSON-with-comments files (`.jsonc`, `tsconfig*.json`,
+  VS Code's own files and similar).
+- `.env`: keys set twice and quoted values that never close.
+- YAML: keys repeated in one block mapping and tab indentation; a
+  template with `{{` or `{%` lines is skipped.
+- TOML: keys and tables declared twice.
+- XML (`.xml`, `.svg`, `.plist`, `.xhtml`; not HTML): tag nesting and
+  repeated or malformed attributes.
+- Any file: unresolved merge-conflict markers, reported alone.
+
+INI dialects such as systemd units, SSH and Git configuration repeat
+keys by design and are not checked. A document is checked on open and
+rename, and again once typing pauses for half a second; until then marks
+move with their text and an edit clears the ones it touches. Documents
+over the 200,000-character highlighting limit are not checked. Séance
+and Poltergeist show the same marks; Poltergeist's copy comes from its
+ARB catalog.
+
 ## Shared editor text size (2026-10-06)
 
 `EditorTextSize` in the shared editor holds the text-size range (9 to

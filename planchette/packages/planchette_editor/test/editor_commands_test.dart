@@ -61,10 +61,15 @@ void main() {
 
   test('every command runs the controller method it names', () async {
     _mockClipboard();
-    // Find in Selection returns nothing to compare; it has its own test.
+    // Find in Selection returns nothing to compare, and the script has no
+    // problems to step through; each has its own test.
     expect(
       _direct.keys.toSet(),
-      EditorCommand.values.toSet()..remove(EditorCommand.findInSelection),
+      EditorCommand.values.toSet()..removeAll({
+        EditorCommand.findInSelection,
+        EditorCommand.nextProblem,
+        EditorCommand.previousProblem,
+      }),
     );
     for (final MapEntry(key: command, value: direct) in _direct.entries) {
       final viaCommand = _controller();

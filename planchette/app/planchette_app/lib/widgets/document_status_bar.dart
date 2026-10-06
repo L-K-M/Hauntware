@@ -60,6 +60,14 @@ class DocumentStatusBar extends StatelessWidget {
                 ),
               ),
             ),
+            if (controller.problems.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              EditorProblemStatus(
+                controller: controller,
+                strings: strings,
+                style: style,
+              ),
+            ],
             for (final label in passive) ...[
               const SizedBox(width: 8),
               Text(label, maxLines: 1, style: style),

@@ -3558,6 +3558,14 @@
   "@editorCommandSelectToMatchingBracket": {
     "description": "Editing command row in the text-tools browser: Extends the selection to the partner of the bracket beside the caret."
   },
+  "editorCommandNextProblem": "Next Problem",
+  "@editorCommandNextProblem": {
+    "description": "Editing command row in the text-tools browser: Moves the caret to the next problem the editor found, such as a key set twice or JSON that does not parse."
+  },
+  "editorCommandPreviousProblem": "Previous Problem",
+  "@editorCommandPreviousProblem": {
+    "description": "Editing command row in the text-tools browser: Moves the caret to the previous problem the editor found."
+  },
   "editorTextToolGroupLines": "Lines",
   "editorTextToolGroupChangeCase": "Case",
   "editorTextToolGroupWhitespace": "Whitespace",
@@ -5781,6 +5789,114 @@
   "editorStatusLargeFile": "Large file: no highlighting",
   "@editorStatusLargeFile": {
     "description": "Editor status row segment for a document too large to syntax-highlight."
+  },
+  "editorStatusProblemCount": "{count, plural, =1{1 problem} other{{count} problems}}",
+  "@editorStatusProblemCount": {
+    "description": "Editor status row segment counting the problems found in the document; tapping it goes to the next one.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editorStatusNextProblemHint": "Go to the next problem (F8)",
+  "@editorStatusNextProblemHint": {
+    "description": "Tooltip of the editor status row's problem count."
+  },
+  "editorProblemSyntaxError": "Syntax error: {detail}",
+  "@editorProblemSyntaxError": {
+    "description": "Editor status row description of a syntax error at the caret; detail is the parser's own English explanation, such as \"expected ',' or '}'\".",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "editorProblemDuplicateKey": "Duplicate key \"{key}\", first set on line {line}",
+  "@editorProblemDuplicateKey": {
+    "description": "Editor status row description of a key set twice in a .env, JSON, YAML or TOML file.",
+    "placeholders": {
+      "key": {
+        "type": "String"
+      },
+      "line": {
+        "type": "int"
+      }
+    }
+  },
+  "editorProblemDuplicateTable": "Duplicate table [{table}], first declared on line {line}",
+  "@editorProblemDuplicateTable": {
+    "description": "Editor status row description of a TOML table declared twice.",
+    "placeholders": {
+      "table": {
+        "type": "String"
+      },
+      "line": {
+        "type": "int"
+      }
+    }
+  },
+  "editorProblemDuplicateAttribute": "Duplicate attribute \"{attribute}\"",
+  "@editorProblemDuplicateAttribute": {
+    "description": "Editor status row description of an XML attribute given twice in one tag.",
+    "placeholders": {
+      "attribute": {
+        "type": "String"
+      }
+    }
+  },
+  "editorProblemJsonComment": "Comments are not allowed in JSON",
+  "@editorProblemJsonComment": {
+    "description": "Editor status row description of a comment in a strict JSON file."
+  },
+  "editorProblemJsonTrailingComma": "Trailing commas are not allowed in JSON",
+  "@editorProblemJsonTrailingComma": {
+    "description": "Editor status row description of a comma before a closing bracket in a strict JSON file."
+  },
+  "editorProblemUnterminatedQuote": "This quoted value is never closed",
+  "@editorProblemUnterminatedQuote": {
+    "description": "Editor status row description of a quoted .env value that runs to the end of the file."
+  },
+  "editorProblemTabIndentation": "YAML does not allow tabs for indentation",
+  "@editorProblemTabIndentation": {
+    "description": "Editor status row description of a YAML line indented with a tab."
+  },
+  "editorProblemMismatchedClosingTag": "</{tag}> does not match <{open}> on line {line}",
+  "@editorProblemMismatchedClosingTag": {
+    "description": "Editor status row description of an XML closing tag that does not close the element open there; tag and open are element names.",
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      },
+      "open": {
+        "type": "String"
+      },
+      "line": {
+        "type": "int"
+      }
+    }
+  },
+  "editorProblemUnclosedElement": "<{tag}> is never closed",
+  "@editorProblemUnclosedElement": {
+    "description": "Editor status row description of an XML element that is never closed; tag is its name.",
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "editorProblemUnexpectedClosingTag": "</{tag}> closes no open element",
+  "@editorProblemUnexpectedClosingTag": {
+    "description": "Editor status row description of an XML closing tag with no element open; tag is its name.",
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "editorProblemMergeConflict": "Unresolved merge conflict",
+  "@editorProblemMergeConflict": {
+    "description": "Editor status row description of version-control conflict markers left in the file."
   },
   "editorStatusIndentSpaces": "Spaces: {width}",
   "@editorStatusIndentSpaces": {
