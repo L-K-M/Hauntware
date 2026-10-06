@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -190,6 +191,69 @@ void main() {
       expect(state.activeServerId, 'alpha');
       expect(terminalFocus(tester).hasPrimaryFocus, isTrue);
       expect(betaFocus.hasFocus, isFalse);
+    },
+  );
+
+  testWidgets(
+    'restored shell output survives the editor tab changing terminal rows',
+    (tester) async {
+      await mount(tester);
+      await open(tester, 'alpha');
+      await complete(tester, 0);
+      final session = state.activeSession!;
+      final terminal = session.engine.terminal;
+      final terminalRows = terminal.viewHeight;
+      final checkout = services.managedRemoteFiles.checkoutFile('motd');
+      await tester.runAsync(() async {
+        await checkout.parent.create(recursive: true);
+        await checkout.writeAsString('Editable file\n');
+      });
+      final editor = EditorTab(
+        id: 'motd-editor',
+        serverId: session.serverId,
+        config: session.config!,
+        remotePath: '/etc/motd',
+        localPath: 'motd',
+        ownerEditSessionId: session.editSessionId,
+      );
+      state.tabs.add(editor);
+      state.focusTab(editor.id);
+      await pumpFrames(tester);
+      expect(terminal.viewHeight, greaterThan(terminalRows));
+
+      // A background shell can save its cursor at the bottom of the larger
+      // grid while the editor owns the status row. Its next prompt redraw
+      // restores that cursor after the terminal tab's status bar returns.
+      session.engine.feed(
+        Uint8List.fromList(utf8.encode('\x1b[${terminal.viewHeight};1H\x1b7')),
+      );
+      state.focusTab(session.id);
+      await pumpFrames(tester);
+      expect(terminal.viewHeight, terminalRows);
+      expect(
+        () => session.engine.feed(
+          Uint8List.fromList(utf8.encode('\x1b8Restored shell output')),
+        ),
+        returnsNormally,
+      );
+      await pumpFrames(tester);
+      expect(terminal.buffer.getText(), contains('Restored shell output'));
+      final render = tester
+          .state<TerminalViewState>(find.byType(TerminalView))
+          .renderTerminal;
+      expect(render.size.width, greaterThan(0));
+      expect(render.size.height, greaterThan(0));
+      expect(render.cursorOffset.dx, inInclusiveRange(0, render.size.width));
+      expect(render.cursorOffset.dy, inInclusiveRange(0, render.size.height));
+      expect(terminalFocus(tester).hasPrimaryFocus, isTrue);
+      final input = <int>[];
+      final subscription = session.engine.userInput.listen(input.addAll);
+      addTearDown(subscription.cancel);
+      tester.testTextInput.enterText('still usable');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(String.fromCharCodes(input), 'still usable\r');
+      expect(tester.takeException(), isNull);
     },
   );
 

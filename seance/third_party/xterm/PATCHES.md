@@ -456,6 +456,17 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     Séance never sets `TerminalView.cursorType`, so its block cursor was
     unaffected.
 
+### Saved cursor after resizing (regressions: `test/src/core/buffer/buffer_test.dart`)
+
+36. **Restored cursor rows stay inside the current viewport**
+    (`core/buffer/buffer.dart#restoreCursor`): a cursor saved on the last
+    row of a larger grid could be restored after the viewport shrank,
+    leaving it beyond the buffer. Subsequent output threw `RangeError`.
+    Séance's terminal/editor tabs can trigger this when their different
+    status rows change the terminal height. Clamp the restored row to the
+    current height while preserving the saved column, including its pending
+    wrap state, and the saved text attributes and character map.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on

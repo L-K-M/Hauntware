@@ -109,6 +109,67 @@ void main() {
     });
   });
 
+  group('Buffer.restoreCursor()', () {
+    for (final alternate in [false, true]) {
+      test(
+          'clamps the saved row after shrinking the '
+          '${alternate ? 'alternate' : 'main'} buffer', () {
+        final terminal = Terminal();
+        terminal.resize(10, 6);
+        if (alternate) terminal.useAltBuffer();
+        terminal.write('\x1b[6;3H\x1b7');
+
+        terminal.resize(10, 4);
+        terminal.write('\x1b8');
+
+        expect(terminal.buffer.cursorX, 2);
+        expect(terminal.buffer.cursorY, 3);
+        expect(
+            terminal.buffer.absoluteCursorY, lessThan(terminal.buffer.height));
+        terminal.write('restored');
+        expect(terminal.buffer.currentLine.getCodePoint(2), 'r'.codeUnitAt(0));
+        expect(terminal.buffer.currentLine.toString(), 'restored');
+      });
+    }
+
+    for (final height in [6, 8]) {
+      test('restores position, style and charset with height $height', () {
+        final terminal = Terminal();
+        terminal.resize(10, 6);
+        terminal.write('\x1b[3;4H\x1b[31;44;1m\x1b(0\x1b7');
+        final foreground = terminal.cursor.foreground;
+        final background = terminal.cursor.background;
+        final attrs = terminal.cursor.attrs;
+        terminal.write('\x1b[1;1H\x1b[0m\x1b(B');
+
+        terminal.resize(10, height);
+        terminal.write('\x1b8');
+
+        expect(terminal.buffer.cursorX, 3);
+        expect(terminal.buffer.cursorY, 2);
+        expect(terminal.cursor.foreground, foreground);
+        expect(terminal.cursor.background, background);
+        expect(terminal.cursor.attrs, attrs);
+        terminal.write('q');
+        expect(terminal.buffer.currentLine.getCodePoint(3), '─'.codeUnitAt(0));
+      });
+    }
+
+    test('preserves pending wrap at the saved last column', () {
+      final terminal = Terminal();
+      terminal.resize(4, 4);
+      terminal.write('abcd\x1b7');
+      terminal.write('\x1b[3;1H');
+
+      terminal.resize(4, 3);
+      terminal.write('\x1b8e');
+
+      expect(terminal.buffer.lines[0].toString(), 'abcd');
+      expect(terminal.buffer.lines[1].toString(), 'e');
+      expect(terminal.buffer.cursorY, 1);
+    });
+  });
+
   group('Buffer.deleteLines()', () {
     test('works', () {
       final terminal = Terminal();
