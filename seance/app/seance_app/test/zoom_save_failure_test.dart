@@ -62,6 +62,7 @@ const _server = ServerConfig(
 );
 
 const _diskFull = FileSystemException('disk full');
+const _menuChannel = MethodChannel('seance/menu');
 
 /// The zoom chords resize at once and save afterwards. A failed save says
 /// so, unless a newer zoom's save already carries the change.
@@ -70,7 +71,13 @@ void main() {
   late _Services services;
   late AppState state;
 
+  TestWidgetsFlutterBinding.ensureInitialized();
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
   setUp(() {
+    // A focused terminal reports to the native menu on macOS.
+    messenger.setMockMethodCallHandler(_menuChannel, (_) async => null);
     directory = Directory.systemTemp.createTempSync('seance-zoom-save-');
     services = _Services(
       ManagedRemoteFileStore(
@@ -83,7 +90,12 @@ void main() {
 
   tearDown(() {
     state.dispose();
-    directory.deleteSync(recursive: true);
+    messenger.setMockMethodCallHandler(_menuChannel, null);
+    try {
+      directory.deleteSync(recursive: true);
+    } on FileSystemException {
+      // Handles can outlive disposal briefly on Windows; the OS reaps temp dirs.
+    }
   });
 
   test('only the newest zoom reports a failed save', () async {
@@ -145,7 +157,7 @@ void main() {
 
     await chord(tester, LogicalKeyboardKey.equal, terminal: true);
     expect(services.settings.terminalFontSize, kDefaultTerminalFontSize + 1);
-    services.saves.single.completeError(_diskFull);
+    services.saves.last.completeError(_diskFull);
     await tester.pump();
 
     expect(
@@ -178,19 +190,21 @@ void main() {
         ),
       ),
     );
-    // The editor reads its checkout from disk, outside the fake clock.
-    for (var i = 0; i < 100 && find.byType(TextField).evaluate().isEmpty; i++) {
+    // The editor reads its checkout from disk, outside the fake clock; a
+    // loaded machine can take seconds.
+    for (var i = 0; i < 300 && find.byType(TextField).evaluate().isEmpty; i++) {
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
       await tester.pump();
     }
+    expect(find.byType(TextField), findsOneWidget, reason: 'editor loaded');
     await tester.tap(find.byType(TextField));
     await tester.pump();
 
     await chord(tester, LogicalKeyboardKey.equal, terminal: false);
     expect(services.settings.editorFontSize, 16);
-    services.saves.single.completeError(_diskFull);
+    services.saves.last.completeError(_diskFull);
     await tester.pump();
 
     expect(

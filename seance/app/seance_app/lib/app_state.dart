@@ -2319,14 +2319,20 @@ class AppState extends ChangeNotifier {
   /// Persists a text size change. Settings saves are whole snapshots written
   /// in order, so a newer zoom's save carries this one: a failure throws
   /// only while no newer zoom has started saving, which reports for itself.
-  /// Held ⌘+ on a full disk then says so once, not once per step.
+  /// Steps that queue behind a slow save so report once between them.
   Future<void> _saveZoom() async {
     final save = ++_zoomSaves;
     try {
       await services.saveSettings();
-    } catch (_) {
-      if (save != _zoomSaves) return;
-      rethrow;
+    } catch (error, stackTrace) {
+      if (save == _zoomSaves) rethrow;
+      developer.log(
+        'A text size save failed; a newer zoom is saving the size again',
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
