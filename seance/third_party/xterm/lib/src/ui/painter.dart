@@ -107,16 +107,19 @@ class TerminalPainter {
         paint.style = PaintingStyle.fill;
         canvas.drawRect(offset & _cellSize, paint);
         return;
+      // [seance fork] Both on the cursor's row: upstream dropped offset.dy
+      // and drew them at the top of the view, wherever the cursor was.
       case TerminalCursorType.underline:
+        final y = offset.dy + _cellSize.height - 1;
         return canvas.drawLine(
-          Offset(offset.dx, _cellSize.height - 1),
-          Offset(offset.dx + _cellSize.width, _cellSize.height - 1),
+          Offset(offset.dx, y),
+          Offset(offset.dx + _cellSize.width, y),
           paint,
         );
       case TerminalCursorType.verticalBar:
         return canvas.drawLine(
-          Offset(offset.dx, 0),
-          Offset(offset.dx, _cellSize.height),
+          offset,
+          Offset(offset.dx, offset.dy + _cellSize.height),
           paint,
         );
     }

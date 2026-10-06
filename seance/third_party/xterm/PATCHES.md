@@ -446,6 +446,16 @@ Regressions: `test/src/ui/selection_gesture_test.dart`, "void past the content".
     inside the view. Snapping the scroll offset to whole rows would remove
     it, but would also lift the prompt off the bottom edge.
 
+### Cursor placement (regressions: `test/src/ui/cursor_paint_test.dart`)
+
+35. **Underline and bar cursors are drawn on the cursor's row**
+    (`ui/painter.dart#paintCursor`): upstream took their x from the cursor
+    but used a fixed y, dropping `offset.dy`, so a focused underline or bar
+    cursor sat at the top of the view whatever row the cursor was on. The
+    block cursor and the unfocused outline already used the full offset.
+    Séance never sets `TerminalView.cursorType`, so its block cursor was
+    unaffected.
+
 ### App-layer notes (outside this package)
 
 - The app passes `shortcuts: {}` and instead routes ⌘C/⌘V/⌘A on

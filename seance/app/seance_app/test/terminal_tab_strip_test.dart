@@ -318,6 +318,7 @@ void main() {
       1,
       reason: 'an uncoloured server keeps the hairline',
     );
+    final plainHairline = hairline();
     final plainLabel = tester.getRect(find.text('Session 1'));
 
     // Over the tabs' top edge, as Poltergeist marks its active pane; the
@@ -326,7 +327,7 @@ void main() {
     await pump(const Color(0xFFE03131));
     expect(accentLine()?.color, const Color(0xFFE03131));
     expect(accentLine()?.width, 2);
-    expect(hairline().width, 1);
+    expect(hairline(), plainHairline);
     expect(tester.getRect(find.text('Session 1')), plainLabel);
   });
   testWidgets('tabs take Poltergeist\'s pane-tab shape', (tester) async {
