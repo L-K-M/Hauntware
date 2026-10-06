@@ -4,6 +4,15 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Launch guard shared with Séance (2026-10-06)
+
+`isExecutableLaunchName`, `LaunchHost` and the Windows list (now
+`windowsExecutableExtensions`, was `previewWindowsExecutableExtensions`)
+moved to `seance_core` so Séance refuses the same launches (P1-03).
+`poltergeist_core` re-exports them; the preview sanitizer test still
+pins the list against `sanitizePreviewExtension`. Behaviour is
+unchanged.
+
 ## Fixture repair — Alpine OpenSSH pin (2026-10-06)
 
 PR #56's SSH integration and D12 benchmark jobs failed building the

@@ -126,7 +126,9 @@ Opening a remote file locally is a managed checkout:
 3. Open UTF-8 text up to 4 MB in Séance's built-in editor, the default, in a
    tab beside the terminals; or choose the platform default app or a
    configured desktop editor. On desktop, a default open hands any other
-   file to the platform default app.
+   file to the platform default app, except one that app would run as a
+   program (`.exe`, `.js` and `.hta` on Windows, `.command` and `.app`
+   on macOS, `.desktop` and `.jar` on Linux), which is refused.
 4. Keep the checkout visible in a **Local edits** section.
 5. Offer **Upload changes**; do not silently overwrite the remote file. In
    the built-in editor, ⌘S/Ctrl+S on a server file is an explicit **save and

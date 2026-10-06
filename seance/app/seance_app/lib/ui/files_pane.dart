@@ -994,6 +994,9 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
       return;
     }
     final registry = AppScope.of(context).services.settings.editorRegistry;
+    if (_refusesLaunch(entry, registry.effectiveDefaultFor(entry.path))) {
+      return;
+    }
     final maximumBytes = registry.checkoutMaximumBytes(entry.path);
     if (maximumBytes != null &&
         entry.size != null &&
@@ -1017,6 +1020,7 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     RemoteFileEntry entry,
     String editorId,
   ) async {
+    if (_refusesLaunch(entry, editorId)) return;
     if (editorId == EditorRegistry.builtInId &&
         entry.size != null &&
         entry.size! > builtInEditorMaximumBytes) {
@@ -1035,6 +1039,17 @@ class _RemoteBrowserState extends State<_RemoteBrowser> {
     } catch (error) {
       _showError(error);
     }
+  }
+
+  /// Refuses [entry] by its listed name before anything downloads when
+  /// [editorId] is the system's default app and that app would run it.
+  /// The opener checks the checkout's name again at launch.
+  bool _refusesLaunch(RemoteFileEntry entry, String editorId) {
+    if (editorId != EditorRegistry.systemDefaultId) return false;
+    if (!_fileOpener.launchWouldExecute(entry.name)) return false;
+
+    _showError(ExecutableLaunchRefused(entry.name));
+    return true;
   }
 
   /// Opens a managed copy — routed through [RemoteFilesController]'s checkout
