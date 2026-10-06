@@ -199,6 +199,19 @@ class EditorRegistry {
     return await _builtInEditorCanOpen(local) ? selected : fallback;
   }
 
+  /// The editor a default open will use for [path], as far as its listed
+  /// [size] tells before anything downloads: [effectiveDefaultFor], except
+  /// that on desktop a file over the built-in editor's limit can only go
+  /// to the system's default app. Smaller files still depend on content,
+  /// which [effectiveDefaultForCheckout] reads.
+  String effectiveDefaultForListing(String path, int? size) {
+    final selected = effectiveDefaultFor(path);
+    final fallback = _builtInFallbackId;
+    if (selected != builtInId || fallback == null) return selected;
+    if (size == null || size <= builtInEditorMaximumBytes) return selected;
+    return fallback;
+  }
+
   /// The most a checkout opened in [editorId], or in the default editor when
   /// null, may download: the built-in editor's limit, unless a default open
   /// can still hand a larger file to the system's default app.
