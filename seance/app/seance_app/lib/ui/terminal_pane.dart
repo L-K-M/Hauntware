@@ -93,36 +93,45 @@ class TerminalPane extends StatelessWidget {
                 )
               : null,
           appBar: showAppBar ? _appBar(context, state, server) : null,
-          body: Column(
-            children: [
-              if (active != null)
-                TerminalTabStrip(
-                  tabs: state.tabsForServer(active.serverId),
-                  activeTabId: state.activeTabId,
-                  onFocus: state.focusTab,
-                  onClose: (id) => confirmAndCloseTab(context, state, id),
-                  // The tab in hand may be a local shell, with no server to
-                  // open a second one against — duplicateTab routes it.
-                  onNewTab: () => state.duplicateTab(active),
-                  onGenerateCommand: showGenerateCommandInStrip
-                      ? () => openCommandGenerator(state)
-                      : null,
-                  onRename: state.renameSession,
-                  // In the wide layout the strip is the only chrome the
-                  // terminal has, so it carries the server's colour: the
-                  // "am I on prod?" question gets an answer at the edge of
-                  // vision instead of one you have to read.
-                  accent: server == null
-                      ? null
-                      : serverAccent(context, ServerTint.of(server))?.line,
-                ),
-              Expanded(child: _body(state)),
-              // The editor writes its own status row; this one is the
-              // terminal's (connection state, exit status, cwd).
-              if (active is TerminalSession) SessionStatusBar(session: active),
-              if (active is TerminalSession && showKeyRow)
-                TerminalKeyboardBar(engine: active.engine),
-            ],
+          // In the wide layout the pane's top is the screen's, under a
+          // tablet's status bar: the tabs keep clear of it, as the side
+          // panel's do. The narrow layout's app bar has taken it already.
+          body: SafeArea(
+            left: false,
+            right: false,
+            bottom: false,
+            child: Column(
+              children: [
+                if (active != null)
+                  TerminalTabStrip(
+                    tabs: state.tabsForServer(active.serverId),
+                    activeTabId: state.activeTabId,
+                    onFocus: state.focusTab,
+                    onClose: (id) => confirmAndCloseTab(context, state, id),
+                    // The tab in hand may be a local shell, with no server to
+                    // open a second one against — duplicateTab routes it.
+                    onNewTab: () => state.duplicateTab(active),
+                    onGenerateCommand: showGenerateCommandInStrip
+                        ? () => openCommandGenerator(state)
+                        : null,
+                    onRename: state.renameSession,
+                    // In the wide layout the strip is the only chrome the
+                    // terminal has, so it carries the server's colour: the
+                    // "am I on prod?" question gets an answer at the edge of
+                    // vision instead of one you have to read.
+                    accent: server == null
+                        ? null
+                        : serverAccent(context, ServerTint.of(server))?.line,
+                  ),
+                Expanded(child: _body(state)),
+                // The editor writes its own status row; this one is the
+                // terminal's (connection state, exit status, cwd).
+                if (active is TerminalSession)
+                  SessionStatusBar(session: active),
+                if (active is TerminalSession && showKeyRow)
+                  TerminalKeyboardBar(engine: active.engine),
+              ],
+            ),
           ),
         );
       },
@@ -1183,7 +1192,16 @@ class _SessionViewState extends State<_SessionView> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _terminalView(tab, appearance),
+          // The status bar is always below the terminal, so the screen's
+          // bottom inset (a home indicator, a gesture bar) is never its edge;
+          // kept, it held rows back above the status bar whenever the soft
+          // keyboard was down. The side insets stay the terminal's: in the
+          // narrow layout it spans the screen.
+          MediaQuery.removePadding(
+            context: context,
+            removeBottom: true,
+            child: _terminalView(tab, appearance),
+          ),
           if (search != null)
             TerminalFindBarOverlay(
               child: TerminalFindBar(

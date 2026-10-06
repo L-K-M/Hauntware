@@ -26,6 +26,11 @@
 - On a phone in landscape, terminal text stays clear of the notch and of
   a side navigation bar, and taps, selections and links land on the text
   you touch. They used to land several columns to its left.
+- On a phone or tablet, the terminal no longer holds rows back above its
+  status bar for the home indicator or gesture bar while the keyboard is
+  down. On a tablet in the wide layout, the tabs sit below the system
+  status bar instead of under it, and the terminal starts right below
+  them.
 - Files: double-clicking a file opens it in the built-in editor, in a new
   tab beside your terminals. The built-in editor is now the default editor
   on desktop too, where files used to open in the system's default app.
