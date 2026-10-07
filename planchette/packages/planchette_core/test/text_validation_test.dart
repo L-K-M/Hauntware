@@ -403,6 +403,11 @@ void main() {
         _problems('"a\\tb" = 1\n\'a\\tb\' = 2\n', TextFormat.toml),
         isEmpty,
       );
+      // A sign is no hex digit: the escape stays as written.
+      expect(
+        _problems('"a\\u+0FF" = 1\n"a\u00ff" = 2\n', TextFormat.toml),
+        isEmpty,
+      );
       expect(_problems('"a\\u0062" = 1\nab = 2\n', TextFormat.toml), [
         'duplicateKey | error | ab | ab | line 1',
       ]);

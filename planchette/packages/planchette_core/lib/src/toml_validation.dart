@@ -248,10 +248,14 @@ String _tomlUnescape(String raw) {
       _ => 0,
     };
     if (digits > 0) {
-      final code = i + digits < raw.length
-          ? int.tryParse(raw.substring(i + 1, i + 1 + digits), radix: 16)
+      // Hex digits only: int.tryParse would also take a sign.
+      final hex = i + digits < raw.length
+          ? raw.substring(i + 1, i + 1 + digits)
+          : '';
+      final code = hex.isNotEmpty && hex.codeUnits.every(_isHexDigit)
+          ? int.parse(hex, radix: 16)
           : null;
-      if (code != null && code >= 0 && code <= 0x10ffff) {
+      if (code != null && code <= 0x10ffff) {
         out.writeCharCode(code);
         i += digits;
       } else {
@@ -272,6 +276,11 @@ String _tomlUnescape(String raw) {
   }
   return out.toString();
 }
+
+bool _isHexDigit(int c) =>
+    (c >= 0x30 && c <= 0x39) ||
+    (c >= 0x41 && c <= 0x46) ||
+    (c >= 0x61 && c <= 0x66);
 
 /// `A-Z a-z 0-9 _ -`, the characters of a bare key.
 bool _isBareKeyChar(int c) =>
