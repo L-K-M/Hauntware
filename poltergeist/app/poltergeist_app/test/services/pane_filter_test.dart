@@ -110,6 +110,43 @@ void main() {
       controller.dispose();
     });
 
+    test('matching is plain lowercase on the name: fold-only letters, '
+        'wildcards and parent folders are literal', () async {
+      final lanes = FakePaneLanes();
+      final controller = await browsing(lanes, [
+        _entry('ſlip.bin'),
+        _entry('end.ς'),
+        _entry('odd*.txt'),
+        _entry('report.txt'),
+        _entry('home movies.txt'),
+      ]);
+
+      controller.openFilter();
+      // Where the simple fold and toLowerCase disagree (long s, final
+      // sigma), the filter misses rather than surprise-matching.
+      controller.changeFilterQuery('s');
+      expect(
+        controller.entries.map((e) => e.name),
+        isNot(contains('ſlip.bin')),
+      );
+      controller.changeFilterQuery('σ');
+      expect(controller.entries.map((e) => e.name), isEmpty);
+      controller.changeFilterQuery('ς');
+      expect(controller.entries.map((e) => e.name), ['end.ς']);
+
+      // Quick Select's glob does not leak in: '*' is a literal character.
+      controller.changeFilterQuery('*.txt');
+      expect(controller.entries.map((e) => e.name), ['odd*.txt']);
+
+      // Rows live under /home/tester; only names are matched.
+      controller.changeFilterQuery('home');
+      expect(controller.entries.map((e) => e.name), ['home movies.txt']);
+
+      controller.changeFilterQuery('');
+      expect(controller.entries, hasLength(5));
+      controller.dispose();
+    });
+
     test('the strip reports visible-of-total while active', () async {
       final lanes = FakePaneLanes();
       final entries = [
