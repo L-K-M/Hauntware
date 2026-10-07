@@ -20,11 +20,11 @@ void _validateXml(String text, _ProblemSink sink) {
     if (lt < 0) break;
     final int? next;
     if (text.startsWith('<!--', lt)) {
-      next = _xmlSkip(text, sink, lt, '-->');
+      next = _xmlSkip(text, sink, lt, '<!--', '-->');
     } else if (text.startsWith('<![CDATA[', lt)) {
-      next = _xmlSkip(text, sink, lt, ']]>');
+      next = _xmlSkip(text, sink, lt, '<![CDATA[', ']]>');
     } else if (text.startsWith('<?', lt)) {
-      next = _xmlSkip(text, sink, lt, '?>');
+      next = _xmlSkip(text, sink, lt, '<?', '?>');
     } else if (text.startsWith('<!', lt)) {
       next = _xmlDeclaration(text, sink, lt);
     } else if (text.startsWith('</', lt)) {
@@ -48,10 +48,17 @@ void _validateXml(String text, _ProblemSink sink) {
   }
 }
 
-/// The offset after [terminator], which ends the construct opening at
-/// [start], or null after flagging a construct that never ends.
-int? _xmlSkip(String text, _ProblemSink sink, int start, String terminator) {
-  final close = text.indexOf(terminator, start + 2);
+/// The offset after [terminator], which ends the construct [opener] begins
+/// at [start], or null after flagging a construct that never ends. The
+/// search starts after the opener, so `<!--->` does not close itself.
+int? _xmlSkip(
+  String text,
+  _ProblemSink sink,
+  int start,
+  String opener,
+  String terminator,
+) {
+  final close = text.indexOf(terminator, start + opener.length);
   if (close >= 0) return close + terminator.length;
   _xmlUnterminated(text, sink, start, switch (terminator) {
     '-->' => 'unterminated comment',
@@ -197,6 +204,10 @@ int? _xmlStartTag(
         );
       }
       final value = _xmlAttributeValue(text, attributeEnd);
+      if (value.end < 0) {
+        _xmlUnterminated(text, sink, start, 'unterminated tag');
+        return null;
+      }
       if (value.problem == null) {
         pos = value.end;
         continue;
@@ -216,7 +227,7 @@ int? _xmlStartTag(
       problemEnd,
       detail: problem,
     );
-    final close = text.indexOf('>', pos);
+    final close = _xmlTagEnd(text, pos);
     if (close < 0) return null;
     if (text.codeUnitAt(close - 1) != 0x2f /* / */ ) {
       open.add((
@@ -231,20 +242,39 @@ int? _xmlStartTag(
 }
 
 /// Where the `="value"` after an attribute name ends, or the problem that
-/// makes it not one.
+/// makes it not one. An end below zero means the text ends inside the tag.
 ({int end, String? problem}) _xmlAttributeValue(String text, int from) {
   var pos = _xmlSkipSpace(text, from);
-  if (pos >= text.length || text.codeUnitAt(pos) != 0x3d /* = */ ) {
+  if (pos >= text.length) return (end: -1, problem: null);
+  if (text.codeUnitAt(pos) != 0x3d /* = */ ) {
     return (end: from, problem: 'attribute without a value');
   }
   pos = _xmlSkipSpace(text, pos + 1);
-  final quote = pos < text.length ? text.codeUnitAt(pos) : 0;
+  if (pos >= text.length) return (end: -1, problem: null);
+  final quote = text.codeUnitAt(pos);
   if (quote != 0x22 && quote != 0x27) {
     return (end: pos, problem: 'attribute value must be quoted');
   }
   final close = text.indexOf(String.fromCharCode(quote), pos + 1);
   if (close < 0) return (end: pos, problem: 'unterminated attribute value');
   return (end: close + 1, problem: null);
+}
+
+/// The `>` ending a tag, from [from] on, outside quoted attribute values,
+/// or -1.
+int _xmlTagEnd(String text, int from) {
+  var quote = 0;
+  for (var i = from; i < text.length; i++) {
+    final c = text.codeUnitAt(i);
+    if (quote != 0) {
+      if (c == quote) quote = 0;
+    } else if (c == 0x22 || c == 0x27) {
+      quote = c;
+    } else if (c == 0x3e /* > */ ) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 /// Flags a construct opening at [start] that runs to the end of the text,

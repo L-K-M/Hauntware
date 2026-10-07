@@ -26,9 +26,10 @@ final class JsonFormatError implements Exception {
   final int line;
   final int column;
 
-  /// The offending text as offsets into the input, for an underline. It
-  /// starts at [line] and [column] unless the error is a string that a line
-  /// break cut short, which is flagged from its opening quote.
+  /// The offending text as 0-based offsets into the input, `[start, end)`,
+  /// for an underline. It starts where [line] and [column] point unless the
+  /// error is a string that a line break cut short, which is flagged from
+  /// its opening quote.
   final int start;
   final int end;
 
@@ -266,7 +267,7 @@ abstract class _JsonScanner {
       // line break usually means a missing closing quote: flag the string.
       if (c < 0x20) {
         throw _isLineBreak(c)
-            ? _error('unescaped control character', pos, start: start, end: pos)
+            ? _error('line break in a string', pos, start: start, end: pos)
             : _error('unescaped control character', pos);
       }
       pos++;
@@ -385,7 +386,7 @@ abstract class _JsonScanner {
 }
 
 /// Reads a document through the shared grammar without building output,
-/// collecting problems instead of stopping at the first.
+/// collecting warnings as it goes and stopping at the first syntax error.
 class _JsonValidator extends _JsonScanner {
   _JsonValidator(super.input, {required this.dialect, required this.limit});
 

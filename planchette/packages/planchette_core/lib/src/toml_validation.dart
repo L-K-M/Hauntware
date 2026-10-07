@@ -4,11 +4,12 @@ part of 'text_validation.dart';
 const _tomlKeySeparator = '\u0000';
 
 /// Flags what TOML forbids and every reader rejects: a key defined twice in
-/// one table and a table declared twice. Each `[[array]]` header starts a
-/// new element, so its keys and sub-tables start afresh. Keys compare by
-/// their parts, so `a.b`, `a . b` and `"a".b` are the same key; a key that
-/// a dotted key implies is not compared with a later table header, so only
-/// plain repeats are flagged. Multi-line strings and arrays are stepped over.
+/// one table, and a table declared twice or both as a table and as an array
+/// of tables. Each `[[array]]` header starts a new element, so its keys and
+/// sub-tables start afresh. Keys compare by the parts they spell, so `a.b`,
+/// `a . b` and `"a".b` are the same key. Keys are not compared with table
+/// headers, nor keys inside inline tables, so a table a key implies goes
+/// unflagged. Multi-line strings and arrays are stepped over.
 void _validateToml(String text, _ProblemSink sink) {
   final reader = _TomlReader(text, sink);
   for (final (start, end) in _lines(text)) {
@@ -28,6 +29,10 @@ final class _TomlReader {
 
   /// Tables declared with `[name]`, and the line of each declaration.
   final _tables = <String, int>{};
+
+  /// Arrays of tables declared with `[[name]]`, and the line of the first
+  /// element.
+  final _arrays = <String, int>{};
 
   /// Keys defined in the current table, and the line of each definition.
   var _keys = <String, int>{};
@@ -74,11 +79,19 @@ final class _TomlReader {
     final name = _key(pos + (array ? 2 : 1), end, 0x5d /* ] */);
     if (name == null) return;
     _keys = {};
+    // A name is a table or an array of tables, never both.
+    final clash = array ? _tables[name.identity] : _arrays[name.identity];
+    if (clash != null) {
+      _flagTable(name, clash);
+      return;
+    }
     if (array) {
-      // A new element: the previous element's sub-tables may be declared
-      // again for this one.
+      _arrays.putIfAbsent(name.identity, () => _sink.lineOf(name.start));
+      // A new element: the previous element's sub-tables and nested arrays
+      // may be declared again for this one.
       final prefix = '${name.identity}$_tomlKeySeparator';
       _tables.removeWhere((table, _) => table.startsWith(prefix));
+      _arrays.removeWhere((nested, _) => nested.startsWith(prefix));
       return;
     }
     final first = _tables[name.identity];
@@ -86,6 +99,10 @@ final class _TomlReader {
       _tables[name.identity] = _sink.lineOf(name.start);
       return;
     }
+    _flagTable(name, first);
+  }
+
+  void _flagTable(_TomlKey name, int first) {
     _sink.add(
       TextProblemKind.duplicateTable,
       TextProblemSeverity.error,
@@ -109,7 +126,8 @@ final class _TomlReader {
       if (c == 0x22 /* " */ || c == 0x27 /* ' */ ) {
         final close = _closingQuote(pos + 1, end, c);
         if (close < 0) return null;
-        part = _text.substring(pos + 1, close);
+        final raw = _text.substring(pos + 1, close);
+        part = c == 0x22 ? _tomlUnescape(raw) : raw;
         pos = close + 1;
       } else if (_isBareKeyChar(c)) {
         final from = pos;
@@ -208,6 +226,51 @@ final class _TomlReader {
     }
     return pos;
   }
+}
+
+/// A basic string's escapes resolved, so `"a\u0062"` and `ab` are the same
+/// key while `"a\tb"`, holding a tab, and `'a\tb'` are not. An escape TOML
+/// does not define stays as written.
+String _tomlUnescape(String raw) {
+  if (!raw.contains(r'\')) return raw;
+  final out = StringBuffer();
+  for (var i = 0; i < raw.length; i++) {
+    final c = raw[i];
+    if (c != r'\' || i + 1 == raw.length) {
+      out.write(c);
+      continue;
+    }
+    final escaped = raw[++i];
+    final digits = switch (escaped) {
+      'x' => 2,
+      'u' => 4,
+      'U' => 8,
+      _ => 0,
+    };
+    if (digits > 0) {
+      final code = i + digits < raw.length
+          ? int.tryParse(raw.substring(i + 1, i + 1 + digits), radix: 16)
+          : null;
+      if (code != null && code >= 0 && code <= 0x10ffff) {
+        out.writeCharCode(code);
+        i += digits;
+      } else {
+        out.write('\\$escaped');
+      }
+      continue;
+    }
+    out.write(switch (escaped) {
+      'b' => '\b',
+      't' => '\t',
+      'n' => '\n',
+      'f' => '\f',
+      'r' => '\r',
+      'e' => '\x1b',
+      '"' || r'\' => escaped,
+      _ => '\\$escaped',
+    });
+  }
+  return out.toString();
 }
 
 /// `A-Z a-z 0-9 _ -`, the characters of a bare key.

@@ -129,7 +129,7 @@ void main() {
 
     test('flags a string that a line break cut short from its quote', () {
       expect(_problems('{"name": "Ada\n}', TextFormat.json), [
-        'syntaxError | error | "Ada | unescaped control character',
+        'syntaxError | error | "Ada | line break in a string',
       ]);
     });
 
@@ -180,6 +180,11 @@ void main() {
         'duplicateKey | warning | PORT | PORT | line 1',
         'duplicateKey | warning | PORT | PORT | line 1',
       ]);
+      // The export line and the spaced one, not the commented line.
+      expect(
+        [for (final p in validateText(text, TextFormat.dotenv)) p.start],
+        [text.indexOf('PORT=3'), text.indexOf('PORT = 4')],
+      );
     });
 
     test('accepts quoted values across lines and quotes in bare values', () {
@@ -242,7 +247,9 @@ void main() {
     });
 
     test('compares quoted and plain keys by their text', () {
-      const text = 'a: 1\n"a": 2\n\'b\': 3\nb: 4\ntrue: 5\n"true": 6\n';
+      const text =
+          'a: 1\n"a": 2\n\'b\': 3\nb: 4\ntrue: 5\n"true": 6\n'
+          '0b101: 7\n"0b101": 8\n-0x1F: 9\n"-0x1F": 10\n';
       expect(_problems(text, TextFormat.yaml), [
         'duplicateKey | warning | "a" | a | line 1',
         'duplicateKey | warning | b | b | line 3',
@@ -281,6 +288,13 @@ void main() {
           "d: 'it''s\n"
           "  d: quoted'\n";
       expect(_problems(text, TextFormat.yaml), isEmpty);
+    });
+
+    test('follows a quoted scalar across lines inside a flow collection', () {
+      const text = 'a: {\n  b: "x\n  y" }\nc: 1\nc: 2\n';
+      expect(_problems(text, TextFormat.yaml), [
+        'duplicateKey | warning | c | c | line 4',
+      ]);
     });
 
     test('starts afresh for each document', () {
@@ -373,6 +387,27 @@ void main() {
       expect(_problems(text, TextFormat.toml), isEmpty);
     });
 
+    test('flags a table that is also an array of tables', () {
+      expect(_problems('[a]\nx = 1\n[[a]]\n', TextFormat.toml), [
+        'duplicateTable | error | a | a | line 1',
+      ]);
+      expect(_problems('[[a]]\n[a]\n', TextFormat.toml), [
+        'duplicateTable | error | a | a | line 1',
+      ]);
+      expect(_problems('[[a]]\n[[a]]\n[a.b]\n', TextFormat.toml), isEmpty);
+    });
+
+    test('compares quoted keys by the key they spell', () {
+      // A tab and a literal backslash-t are different keys.
+      expect(
+        _problems('"a\\tb" = 1\n\'a\\tb\' = 2\n', TextFormat.toml),
+        isEmpty,
+      );
+      expect(_problems('"a\\u0062" = 1\nab = 2\n', TextFormat.toml), [
+        'duplicateKey | error | ab | ab | line 1',
+      ]);
+    });
+
     test('starts afresh for each array-of-tables element', () {
       const text =
           '[[fruits]]\n'
@@ -446,6 +481,31 @@ void main() {
       ]);
       expect(_problems('<input disabled></input>', TextFormat.xml), [
         'syntaxError | error | disabled | attribute without a value',
+      ]);
+    });
+
+    test('resumes after a bad attribute at the real end of the tag', () {
+      // The > and / inside the later quoted value are not the tag's end.
+      expect(_problems('<a href=x title="a/>b">hi</a>', TextFormat.xml), [
+        'syntaxError | error | href | attribute value must be quoted',
+      ]);
+      expect(_problems('<a href=x title="a > <em>b">t</a>', TextFormat.xml), [
+        'syntaxError | error | href | attribute value must be quoted',
+      ]);
+    });
+
+    test('a tag the text ends inside is unterminated', () {
+      expect(_problems('<r>\n<a foo', TextFormat.xml), [
+        'syntaxError | error | <a foo | unterminated tag',
+      ]);
+      expect(_problems('<r>\n<a foo=', TextFormat.xml), [
+        'syntaxError | error | <a foo= | unterminated tag',
+      ]);
+    });
+
+    test('a comment opener cannot also close it', () {
+      expect(_problems('<a><!---></a>', TextFormat.xml), [
+        'syntaxError | error | <!---></a> | unterminated comment',
       ]);
     });
 

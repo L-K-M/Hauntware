@@ -12,7 +12,8 @@ final _yamlNonString = RegExp(
   r'^(?:~|null|Null|NULL|true|True|TRUE|false|False|FALSE'
   r'|yes|Yes|YES|no|No|NO|on|On|ON|off|Off|OFF'
   r'|[-+]?(?:\.[0-9]+|[0-9][0-9_]*(?:\.[0-9_]*)?)(?:[eE][-+]?[0-9]+)?'
-  r'|0x[0-9a-fA-F_]+|0o[0-7_]+|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$',
+  r'|[-+]?0x[0-9a-fA-F_]+|[-+]?0o[0-7_]+|[-+]?0b[01_]+'
+  r'|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$',
 );
 
 /// A block scalar header after its indicator: an indentation digit and a
@@ -147,7 +148,14 @@ final class _YamlReader {
       _scalarParent = null;
     }
     if (_quote case final quote?) {
-      if (_closingQuote(start, end, quote) >= 0) _quote = null;
+      final close = _closingQuote(start, end, quote);
+      if (close < 0) return true;
+      _quote = null;
+      // Inside a flow collection the line goes on after the quote, and
+      // may close the collection.
+      if (_flowDepth > 0) {
+        _flowDepth = _flowDepthAfter(close + 1, end, _flowDepth);
+      }
       return true;
     }
     if (_flowDepth > 0) {
@@ -335,16 +343,22 @@ final class _YamlReader {
   }
 
   /// [depth] after the brackets between [from] and [end], ignoring quoted
-  /// text and a comment.
+  /// text and a comment. A quote still open at the end of the line is left
+  /// in [_quote], since flow scalars span lines too.
   int _flowDepthAfter(int from, int end, int depth) {
     for (var i = from; i < end; i++) {
       final c = _text.codeUnitAt(i);
       if (c == 0x22 || c == 0x27) {
         final close = _closingQuote(i + 1, end, c);
-        if (close < 0) return depth;
+        if (close < 0) {
+          _quote = c;
+          return depth;
+        }
         i = close;
       } else if (c == 0x23 &&
-          (i == from || _isBlank(_text.codeUnitAt(i - 1)))) {
+          (i == 0 ||
+              _isBlank(_text.codeUnitAt(i - 1)) ||
+              _isLineBreak(_text.codeUnitAt(i - 1)))) {
         return depth;
       } else if (c == 0x5b || c == 0x7b) {
         depth++;

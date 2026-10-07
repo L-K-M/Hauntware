@@ -97,6 +97,8 @@ final class TextProblem {
   final String? detail;
 
   /// The same problem [delta] code units further on, for text an edit moved.
+  /// [relatedLine] is kept: lines the edit added or removed are counted by
+  /// the next check.
   TextProblem moved(int delta) => TextProblem(
     kind: kind,
     severity: severity,
