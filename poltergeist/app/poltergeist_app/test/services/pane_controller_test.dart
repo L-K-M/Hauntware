@@ -1284,6 +1284,133 @@ void main() {
     controller.dispose();
   });
 
+  group('a server opened as itself', () {
+    final now = DateTime.utc(2026, 10, 7);
+
+    /// A SERVERS row's bind: a catalog reference with no landing path.
+    Bookmark catalogOpen({String? remotePath}) => Bookmark(
+      id: 'db',
+      kind: BookmarkKind.remotePath,
+      label: 'db',
+      server: const BookmarkServerRef(serverConfigId: 'db'),
+      remotePath: remotePath,
+      sortKey: '',
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    ServerConfig config({String? startDirectory}) => ServerConfig(
+      id: 'db',
+      label: 'db',
+      host: 'db.internal',
+      username: 'ops',
+      startDirectory: startDirectory,
+      createdAt: 0,
+      updatedAt: 0,
+    );
+
+    /// Binds [bookmark] on a channel whose only listable folder is
+    /// [landing], so a wrong landing fails rather than passing by accident.
+    Future<(PaneController, FakePaneChannel)> connect(
+      Bookmark bookmark,
+      ServerConfig resolved, {
+      required String landing,
+    }) async {
+      final lanes = FakePaneLanes();
+      final channel = FakePaneChannel('/srv/home')
+        ..listings[landing] = [_entry('ok.txt')];
+      lanes.nextRemoteChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+      await controller.connectRemote(bookmark, resolvedConfig: resolved);
+      await settle();
+      return (controller, channel);
+    }
+
+    test('lands in its start directory, resolved against the home', () async {
+      const cases = {
+        '~/sites': '/srv/home/sites',
+        '~': '/srv/home',
+        'sites/blog/': '/srv/home/sites/blog',
+        '/var/www': '/var/www',
+        '/var/./www/../log': '/var/log',
+      };
+      for (final MapEntry(key: start, value: landing) in cases.entries) {
+        final (controller, channel) = await connect(
+          catalogOpen(),
+          config(startDirectory: start),
+          landing: landing,
+        );
+
+        expect(channel.listCalls, [landing], reason: start);
+        expect(
+          controller.location,
+          RemotePaneLocation('db', landing),
+          reason: start,
+        );
+        expect(controller.error, isNull, reason: start);
+        controller.dispose();
+      }
+    });
+
+    test('without a start directory lands home', () async {
+      final (controller, channel) = await connect(
+        catalogOpen(),
+        config(),
+        landing: '/srv/home',
+      );
+
+      expect(channel.listCalls, ['/srv/home']);
+      expect(controller.error, isNull);
+      controller.dispose();
+    });
+
+    test('a landing path of its own outranks the start directory', () async {
+      // A deep link's path, and a restored record's '/' (home).
+      for (final (path, landing) in [
+        ('/srv/app', '/srv/app'),
+        ('/', '/srv/home'),
+      ]) {
+        final (controller, channel) = await connect(
+          catalogOpen(remotePath: path),
+          config(startDirectory: '/var/www'),
+          landing: landing,
+        );
+
+        expect(channel.listCalls, [landing], reason: path);
+        expect(controller.error, isNull, reason: path);
+        controller.dispose();
+      }
+    });
+
+    test('a start directory that fails to list is a pane error, not a '
+        'dead end', () async {
+      final lanes = FakePaneLanes();
+      // '/srv/gone' is unlisted, so it fails as notFound.
+      final channel = FakePaneChannel('/srv/home')
+        ..listings['/srv'] = [_entry('ok.txt')];
+      lanes.nextRemoteChannel = channel;
+      final controller = PaneController(paneTabId: 'pane.right', lanes: lanes);
+      addTearDown(controller.dispose);
+
+      await controller.connectRemote(
+        catalogOpen(),
+        resolvedConfig: config(startDirectory: '/srv/gone'),
+      );
+      await settle();
+
+      expect(controller.error?.kind, RemoteFileErrorKind.notFound);
+      expect(controller.errorExit, PaneErrorExit.pane);
+
+      // Cancel moves up out of the missing folder, as for any folder that
+      // never listed.
+      controller.cancelError();
+      await settle();
+
+      expect(controller.error, isNull);
+      expect(controller.location, const RemotePaneLocation('db', '/srv'));
+    });
+  });
+
   test('dispose closes the channel', () async {
     final lanes = FakePaneLanes();
     final channel = FakePaneChannel('/home/tester');

@@ -129,6 +129,7 @@ void main() {
       // this comparison pass by dropping the image on both sides.
       iconImage: 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAI',
       loginScript: 'tmux attach',
+      startDirectory: '~/sites',
       excludeFromSync: excludeFromSync,
       createdAt: 100,
       updatedAt: 200,
@@ -174,6 +175,7 @@ void main() {
       expect(original.iconImage, isNotNull, reason: 'fixture must be valid');
       expect(copy.icon, ServerIcon.rocket);
       expect(copy.loginScript, 'tmux attach');
+      expect(copy.startDirectory, '~/sites');
     });
 
     test('carries over every field a copy is allowed to share', () {

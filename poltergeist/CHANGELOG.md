@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Choose where a server opens.** A server's new Start folder setting
+  (Edit Server) picks the folder you land in when you connect from the
+  sidebar's Servers list: an absolute path such as `/var/www`, or one
+  relative to your home such as `~/sites`. It syncs with the server, so
+  every device opens the same folder. Favorites still open their own
+  folder.
 - **The editor flags mistakes in config files.** JSON that doesn't
   parse, a key set twice in a `.env`, JSON, YAML or TOML file, broken
   XML tags and leftover merge-conflict markers are underlined as you

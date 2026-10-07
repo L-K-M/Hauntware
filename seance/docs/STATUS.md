@@ -3,6 +3,15 @@
 Living snapshot of where Séance is, what's proven, and what to pick up next.
 Read [AGENTS.md](../AGENTS.md) first for how to build/test.
 
+## Server start folder carried for Poltergeist (2026-10-07)
+
+`ServerConfig` has an optional `startDirectory`, the folder Poltergeist
+opens when it connects to the server. Séance does not use or show it,
+but its editor and Duplicate carry it like `jumpHostId`: the editor
+rebuilds the record on save, and a save without the field would clear
+it on every device by last-writer-wins. Validated by the editor's
+preservation test, which fails without the change.
+
 ## Editor problem checks (2026-10-06)
 
 The built-in editor shows the shared editor's problem checks: JSON that

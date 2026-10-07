@@ -88,6 +88,7 @@ export 'package:seance_core/seance_core.dart'
         // services/uuid.dart, which the editor uses instead.)
         normalizeServerEmoji,
         normalizeLoginScript,
+        normalizeServerStartDirectory,
         kMaxServerIconImageBytes,
         runConnectionTest,
         liveHostAuthenticator,

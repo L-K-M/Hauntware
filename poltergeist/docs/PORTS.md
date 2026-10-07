@@ -928,6 +928,8 @@ counterpart is ported here.
   and the duplicate simply carries `identityFilePath` over. The label
   grammar, stale-source check (`SourceServerChanged`), and credential
   copy shape are upstream's.
+- 2026-10-07: both copies carry the new `startDirectory`, changed in the
+  same commit upstream; no divergence.
 - Port-back candidates: none — the omission is sandbox-specific.
 
 ## app/poltergeist_app/lib/services/server_editor_backend.dart
@@ -1054,6 +1056,10 @@ counterpart is ported here.
   wins last-write-wins on Séance's devices too. Test connection now passes
   the preserved route to the delegate, whose backend executes it through the
   PR-S4 resolver; the temporary fail-closed guard is retired.
+- Start folder (2026-10-07): Poltergeist adds a Start folder field for
+  `startDirectory`, which Séance carries over from the saved config
+  without showing it (changed in the same commit upstream, like
+  `jumpHostId`).
 - Port-back candidates: the delegate seam (see the backend entry). The
   agent and jump-route behavior is upstream already.
 

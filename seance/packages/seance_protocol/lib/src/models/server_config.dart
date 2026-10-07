@@ -157,6 +157,16 @@ class ServerConfig {
   /// is no place for secrets.
   final String? loginScript;
 
+  /// The remote folder a file browser opens when it connects to this server,
+  /// or null for the login's home folder.
+  ///
+  /// Either absolute (`/var/www`) or relative to the login's home: `~`,
+  /// `~/sites`, or a bare `sites/blog`, which SFTP itself resolves against the
+  /// home. Kept relative rather than resolved on save, so one record means the
+  /// same folder on every device even where the home is spelled differently.
+  /// Poltergeist opens it; Séance only carries it, so a save there keeps it.
+  final String? startDirectory;
+
   /// Keep this server on this device only: its configuration is never pushed
   /// to the sync server, and a copy pushed before the flag went on is
   /// retracted with a tombstone — which also removes it from the other devices
@@ -222,6 +232,7 @@ class ServerConfig {
     this.iconEmoji,
     this.iconImage,
     this.loginScript,
+    this.startDirectory,
     this.excludeFromSync = false,
     required this.createdAt,
     required this.updatedAt,
@@ -254,6 +265,8 @@ class ServerConfig {
     bool clearIconImage = false,
     String? loginScript,
     bool clearLoginScript = false,
+    String? startDirectory,
+    bool clearStartDirectory = false,
     bool? excludeFromSync,
     int? updatedAt,
   }) {
@@ -318,6 +331,10 @@ class ServerConfig {
       loginScript: clearLoginScript
           ? null
           : normalizeLoginScript(loginScript ?? this.loginScript),
+      startDirectory: clearStartDirectory
+          ? null
+          : normalizeServerStartDirectory(
+              startDirectory ?? this.startDirectory),
       excludeFromSync: excludeFromSync ?? this.excludeFromSync,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -330,6 +347,7 @@ class ServerConfig {
     final emoji = normalizeServerEmoji(iconEmoji);
     final image = normalizeServerIconImage(iconImage);
     final custom = normalizeServerCustomColor(customColor);
+    final start = normalizeServerStartDirectory(startDirectory);
     return {
         'id': id,
         'label': label,
@@ -351,6 +369,7 @@ class ServerConfig {
         if (emoji != null) 'iconEmoji': emoji,
         if (image != null) 'iconImage': image,
         if (loginScript != null) 'loginScript': loginScript,
+        if (start != null) 'startDirectory': start,
         // Written unconditionally, like `syncSecret` and unlike the optional
         // presentation fields above: the two sync-policy booleans are a pair
         // and should read the same way round, and "no, I want this synced" is
@@ -402,6 +421,11 @@ class ServerConfig {
             ? normalizeServerIconImage(json['iconImage'] as String)
             : null,
         loginScript: normalizeLoginScript(json['loginScript'] as String?),
+        // Type-tested like the mark fields: a malformed folder costs the
+        // folder, not the server.
+        startDirectory: json['startDirectory'] is String
+            ? normalizeServerStartDirectory(json['startDirectory'] as String)
+            : null,
         excludeFromSync: json['excludeFromSync'] as bool? ?? false,
         createdAt: (json['createdAt'] as num?)?.toInt() ?? 0,
         updatedAt: (json['updatedAt'] as num?)?.toInt() ?? 0,
@@ -451,6 +475,31 @@ String? normalizeLoginScript(String? script) {
       .trim();
   return trimmed.isEmpty ? null : trimmed;
 }
+
+/// The stored form of a start directory: trimmed, with blank meaning "the
+/// home folder", or null when [value] cannot name a folder.
+///
+/// Refused: control characters, which no path typed into the editor carries
+/// and which would reach the SFTP server verbatim, and `~name`, which names
+/// another user's home that SFTP has no way to look up. Everything else is a
+/// path some server may hold, so it is kept rather than second-guessed: a
+/// folder that does not exist fails when it is opened, where it can be fixed.
+String? normalizeServerStartDirectory(String? value) {
+  if (value == null) return null;
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+  if (trimmed.codeUnits.any(_isControlCharacter)) return null;
+  if (trimmed.startsWith('~') && trimmed != '~' && !trimmed.startsWith('~/')) {
+    return null;
+  }
+  return trimmed;
+}
+
+const _firstPrintableCodeUnit = 0x20;
+const _deleteCodeUnit = 0x7f;
+
+bool _isControlCharacter(int codeUnit) =>
+    codeUnit < _firstPrintableCodeUnit || codeUnit == _deleteCodeUnit;
 
 /// The key two group names are considered the same under: case-insensitive, so
 /// `Prod` and `prod` are one group rather than two adjacent near-identical

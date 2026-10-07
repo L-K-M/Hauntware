@@ -146,7 +146,8 @@ void main() {
       expect(find.textContaining('isn\'t supported yet'), findsNothing);
     });
 
-    testWidgets('editing preserves the saved jump host', (tester) async {
+    testWidgets('editing preserves the saved jump host and start directory',
+        (tester) async {
       await boot(tester);
       final existing = ServerConfig(
         id: 'target',
@@ -154,6 +155,7 @@ void main() {
         host: 'target.internal',
         username: 'deploy',
         jumpHostId: 'jump',
+        startDirectory: '/srv/www',
         createdAt: 1,
         updatedAt: 1,
       );
@@ -168,6 +170,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(state!.servers.single.jumpHostId, 'jump');
+      // Poltergeist's field, which this editor does not show.
+      expect(state!.servers.single.startDirectory, '/srv/www');
     });
   });
 
