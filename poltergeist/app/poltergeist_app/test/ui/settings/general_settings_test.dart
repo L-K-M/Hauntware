@@ -5,13 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
+import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_link.dart';
 import 'package:poltergeist_app/ui/settings/app_settings_command.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
+import 'package:poltergeist_app/ui/settings/directory_grouping_settings.dart';
 import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
+import 'package:poltergeist_core/poltergeist_core.dart' show DirectoryGrouping;
 
 void main() {
   Widget wrap(GeneralSettings settings) => MaterialApp(
@@ -69,6 +72,65 @@ void main() {
     expect(tester.takeException(), isA<StateError>());
   });
 
+  group('keep folders on top', () {
+    Widget section(DirectoryGroupingController model) => MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(body: DirectoryGroupingSection(model: model)),
+    );
+    Finder toggle() => find.byKey(const ValueKey('view.foldersOnTop'));
+
+    testWidgets('the switch writes the grouping both ways', (tester) async {
+      final saved = <DirectoryGrouping>[];
+      final model = DirectoryGroupingController(
+        save: (grouping) async => saved.add(grouping),
+      );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(section(model));
+      expect(tester.widget<SwitchListTile>(toggle()).value, isTrue);
+
+      await tester.tap(toggle());
+      await tester.pumpAndSettle();
+      expect(model.value, DirectoryGrouping.mixed);
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+
+      await tester.tap(toggle());
+      await tester.pumpAndSettle();
+      expect(model.value, DirectoryGrouping.first);
+      expect(tester.widget<SwitchListTile>(toggle()).value, isTrue);
+      expect(saved, [DirectoryGrouping.mixed, DirectoryGrouping.first]);
+    });
+
+    testWidgets('opens on the stored grouping', (tester) async {
+      final model = DirectoryGroupingController(
+        initial: DirectoryGrouping.mixed,
+      );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(section(model));
+
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+    });
+
+    testWidgets('a failed write shows what the panes sort by and says so', (
+      tester,
+    ) async {
+      final model = DirectoryGroupingController(
+        save: (_) async => throw StateError('disk full'),
+      );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(section(model));
+
+      await tester.tap(toggle());
+      await tester.pumpAndSettle();
+
+      // The panes took the change; the next write carries it.
+      expect(model.value, DirectoryGrouping.mixed);
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+      expect(find.textContaining('disk full'), findsOneWidget);
+      expect(tester.takeException(), isA<StateError>());
+    });
+  });
+
   group('app.settings command', () {
     final command = buildAppSettingsCommand(
       settings: () => settings(),
@@ -123,6 +185,30 @@ void main() {
       expect(
         find.byKey(const ValueKey('general.settings.dialog')),
         findsNothing,
+      );
+    });
+
+    testWidgets('the dialog carries the folders switch under General', (
+      tester,
+    ) async {
+      final grouping = DirectoryGroupingController();
+      addTearDown(grouping.dispose);
+      await run(
+        tester,
+        buildAppSettingsCommand(
+          settings: () => settings(),
+          directoryGrouping: grouping,
+          enabled: () => true,
+        ),
+      );
+
+      expect(
+        tester.getRect(find.byKey(const ValueKey('view.foldersOnTop'))).top,
+        greaterThan(
+          tester
+              .getRect(find.byKey(const ValueKey('updates.checkEnabled')))
+              .top,
+        ),
       );
     });
 

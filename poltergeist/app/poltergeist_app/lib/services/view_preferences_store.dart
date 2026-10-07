@@ -41,6 +41,17 @@ final class ViewPreferencesStore {
         await _write(state);
       });
 
+  /// [saveDefaults] for one option: [change] runs on the stored defaults
+  /// inside the same queue slot, so a concurrent write to another option
+  /// cannot be lost between the read and the write.
+  Future<void> updateDefaults(
+    ViewPreferences Function(ViewPreferences defaults) change,
+  ) => _serialized(() async {
+    final state = await _read();
+    state._defaults = change(state._defaults);
+    await _write(state);
+  });
+
   /// Resolves a folder and records access only when it has a saved override.
   /// Visiting an unsaved folder never evicts a customized folder.
   Future<ViewPreferences> load(ViewLocationKey location) =>

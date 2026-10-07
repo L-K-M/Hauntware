@@ -39,6 +39,7 @@ final class SettingsWindowSources {
     this.gate = const SyncAccountGate.production(),
     this.appearance,
     this.editorTextSize,
+    this.directoryGrouping,
     this.changes = const [],
   });
 
@@ -65,9 +66,12 @@ final class SettingsWindowSources {
   /// The built-in editor's text size: the Appearance tab's editor part.
   final EditorTextSizeModel? editorTextSize;
 
+  /// Whether lists keep folders on top: the General tab's file-list row.
+  final DirectoryGroupingModel? directoryGrouping;
+
   /// What else moves a value the window shows (the update-check
-  /// controller behind [general]); [editors], [backup], [appearance] and
-  /// [editorTextSize] are listened to already.
+  /// controller behind [general]); [editors], [backup], [appearance],
+  /// [editorTextSize] and [directoryGrouping] are listened to already.
   final List<Listenable> changes;
 }
 
@@ -125,6 +129,7 @@ class SettingsWindowHost {
       ?sources.backup,
       ?sources.appearance,
       ?sources.editorTextSize,
+      ?sources.directoryGrouping,
       ...sources.changes,
     ];
     for (final listenable in _listening) {
@@ -246,6 +251,8 @@ class SettingsWindowHost {
     final editorTextSize = _sources.editorTextSize;
     return {
       SettingsLinkKey.editorTextSize.name: editorTextSize?.value,
+      SettingsLinkKey.directoryGrouping.name:
+          _sources.directoryGrouping?.value.name,
       SettingsLinkKey.general.name: general == null
           ? null
           : {SettingsLinkKey.checkForUpdates.name: general.checkForUpdates},
@@ -350,6 +357,10 @@ class SettingsWindowHost {
         ).setAppearance(appearance.palette, appearance.mode);
       case SettingsLinkMethod.setEditorTextSize:
         await _require(_sources.editorTextSize).setTextSize(argument! as int);
+      case SettingsLinkMethod.setDirectoryGrouping:
+        await _require(
+          _sources.directoryGrouping,
+        ).setGrouping(DirectoryGrouping.values.byName(argument! as String));
       case SettingsLinkMethod.registerEditor:
         await _require(editors).register(
           ExternalEditorDefinition.fromJson(map().cast<String, dynamic>()),

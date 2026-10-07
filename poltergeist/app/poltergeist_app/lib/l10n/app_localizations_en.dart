@@ -2086,6 +2086,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsWindowEmpty => 'Nothing to set here yet.';
 
   @override
+  String get settingsFileListsSection => 'File lists';
+
+  @override
+  String get foldersOnTopLabel => 'Keep folders on top';
+
+  @override
+  String get foldersOnTopSubtitle =>
+      'When off, folders sort in among files by the same column.';
+
+  @override
   String get updateCheckEnabledLabel => 'Check for updates';
 
   @override

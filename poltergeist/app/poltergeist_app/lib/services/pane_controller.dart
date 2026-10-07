@@ -660,6 +660,10 @@ class PaneController extends ChangeNotifier {
   FileSortKey _sortKey = FileSortKey.name;
   FileSortDirection _sortDirection = FileSortDirection.ascending;
 
+  /// The app-wide "Keep folders on top" setting, stamped by the owning
+  /// strip. Like a column sort it orders only the projection.
+  DirectoryGrouping _directoryGrouping = DirectoryGrouping.first;
+
   /// The open inline-rename session (02 §2.6); null while the row's
   /// field is closed. The pane owns its invalidation: a location change
   /// ends it at navigation-issue time, every row-set replacement ends it
@@ -2305,6 +2309,19 @@ class PaneController extends ChangeNotifier {
     }
     _sortKey = key;
     _sortDirection = direction;
+    _setListing(_hiddenFiltered(_sortedListing));
+    _applyEntries(_filteredListing());
+    notifyListeners();
+  }
+
+  /// Whether folders sort ahead of files or among them (02 §2.3's
+  /// directories-first option), under any column and direction.
+  /// Re-orders the visible listing without a re-list, as [setSort] does.
+  DirectoryGrouping get directoryGrouping => _directoryGrouping;
+
+  set directoryGrouping(DirectoryGrouping value) {
+    if (_disposed || value == _directoryGrouping) return;
+    _directoryGrouping = value;
     _setListing(_hiddenFiltered(_sortedListing));
     _applyEntries(_filteredListing());
     notifyListeners();
@@ -4785,13 +4802,15 @@ class PaneController extends ChangeNotifier {
   /// unmodifiable copy over new row order, so the VFS-returned list is
   /// never mutated.
   ///
-  /// A non-default column sort (D32 §6) re-orders the projection here,
-  /// after the policy, so the default-ordered [_sortedListing] stays
-  /// the one snapshot every restore path shares.
+  /// A non-default column sort (D32 §6) or folders sorted in among files
+  /// ([directoryGrouping]) re-orders the projection here, after the
+  /// policy, so the default-ordered [_sortedListing] stays the one
+  /// snapshot every restore path shares.
   List<RemoteFileEntry> _hiddenFiltered(List<RemoteFileEntry> sorted) {
     final defaultOrder =
         _sortKey == FileSortKey.name &&
-        _sortDirection == FileSortDirection.ascending;
+        _sortDirection == FileSortDirection.ascending &&
+        _directoryGrouping == DirectoryGrouping.first;
     final Iterable<RemoteFileEntry> visible = _showHidden
         ? sorted
         : sorted.where((entry) => !entry.name.startsWith('.'));
@@ -4800,6 +4819,7 @@ class PaneController extends ChangeNotifier {
         visible,
         key: _sortKey,
         direction: _sortDirection,
+        directories: _directoryGrouping,
       );
     }
     if (_showHidden) return sorted;

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
+import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/settings_window/remote_settings.dart';
 import 'package:poltergeist_app/services/settings_window/settings_window_host.dart';
@@ -12,9 +13,11 @@ import 'package:poltergeist_app/settings_window_app.dart';
 import 'package:poltergeist_app/theme/app_appearance.dart';
 import 'package:poltergeist_app/theme/theme_presets.dart';
 import 'package:poltergeist_app/ui/settings/appearance_settings.dart';
+import 'package:poltergeist_app/ui/settings/directory_grouping_settings.dart';
 import 'package:poltergeist_app/ui/settings/editor_text_size_settings.dart';
 import 'package:poltergeist_app/ui/settings/general_settings.dart';
 import 'package:poltergeist_app/ui/settings/preview_settings.dart';
+import 'package:poltergeist_core/poltergeist_core.dart' show DirectoryGrouping;
 
 const _appLink = MethodChannel('test/settings_window_app/app');
 const _windowLink = MethodChannel('test/settings_window_app/window');
@@ -30,6 +33,7 @@ void main() {
   late SettingsWindowHost host;
   late AppearanceController appearance;
   late EditorTextSizeController editorTextSize;
+  late DirectoryGroupingController directoryGrouping;
   late bool checkForUpdates;
   final updates = ChangeNotifier();
 
@@ -55,6 +59,8 @@ void main() {
     checkForUpdates = true;
     editorTextSize = EditorTextSizeController(initial: 18);
     addTearDown(editorTextSize.dispose);
+    directoryGrouping = DirectoryGroupingController();
+    addTearDown(directoryGrouping.dispose);
     host = SettingsWindowHost(control: _control, link: _appLink)
       ..attach(
         SettingsWindowSources(
@@ -64,6 +70,7 @@ void main() {
           ),
           appearance: appearance,
           editorTextSize: editorTextSize,
+          directoryGrouping: directoryGrouping,
           changes: [updates],
           previewDownloads: () => PreviewDownloadsSettings(
             available: true,
@@ -202,6 +209,28 @@ void main() {
           .first,
     );
     expect(find.text('18 pt'), findsOneWidget);
+  });
+
+  testWidgets('the General tab ends with the folders switch, which '
+      "writes the app's grouping", (tester) async {
+    await pumpWindow(tester, SettingsWindowTab.general);
+    Finder toggle() => find.byKey(const ValueKey('view.foldersOnTop'));
+
+    expect(
+      tester.getRect(find.byType(DirectoryGroupingSection)).top,
+      greaterThan(tester.getRect(find.byType(GeneralSection)).top),
+    );
+    expect(tester.widget<SwitchListTile>(toggle()).value, isTrue);
+
+    await tester.tap(toggle());
+    // The switch shows the flip at once, before the app answers.
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
+    await tester.runAsync(pumpEventQueue);
+    await tester.pumpAndSettle();
+
+    expect(directoryGrouping.value, DirectoryGrouping.mixed);
+    expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
   });
 
   testWidgets('the window follows the app\'s theme, and only its theme', (

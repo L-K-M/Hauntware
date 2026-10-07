@@ -48,6 +48,29 @@ void main() {
     await temporaryDirectory.delete(recursive: true);
   });
 
+  test('updateDefaults changes one option inside a single queue slot',
+      () async {
+    await preferences.saveDefaults(
+      ViewPreferences(hiddenFiles: HiddenFiles.shown),
+    );
+
+    // Both run on what the other wrote: neither read precedes the other's
+    // write, so no option is lost.
+    await Future.wait([
+      preferences.updateDefaults(
+        (defaults) => defaults.copyWith(directories: DirectoryGrouping.mixed),
+      ),
+      preferences.updateDefaults(
+        (defaults) => defaults.copyWith(dates: FileDateStyle.absolute),
+      ),
+    ]);
+
+    final defaults = await reopened().loadDefaults();
+    expect(defaults.directories, DirectoryGrouping.mixed);
+    expect(defaults.dates, FileDateStyle.absolute);
+    expect(defaults.hiddenFiles, HiddenFiles.shown);
+  });
+
   test('fresh locations inherit defaults without creating settings', () async {
     final defaults = ViewPreferences();
 

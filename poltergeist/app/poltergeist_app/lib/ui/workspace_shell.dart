@@ -51,7 +51,7 @@ import '../services/server_duplication.dart';
 import '../services/session_persistence.dart';
 import '../services/session_state.dart';
 import '../services/settings_models.dart'
-    show AppearanceSettingsModel, EditorTextSizeModel;
+    show AppearanceSettingsModel, DirectoryGroupingModel, EditorTextSizeModel;
 import '../services/settings_window/settings_window_host.dart';
 import '../services/settings_window/settings_window_link.dart';
 import '../services/sidebar_controller.dart';
@@ -197,6 +197,7 @@ class WorkspaceShell extends StatefulWidget {
     this.checkoutPrompts,
     this.appearance,
     this.editorTextSize,
+    this.directoryGrouping,
     this.deepLinks,
     this.seanceLauncher,
   });
@@ -500,6 +501,10 @@ class WorkspaceShell extends StatefulWidget {
   /// theme. Null keeps editors at the standard size.
   final EditorTextSizeModel? editorTextSize;
 
+  /// Whether lists keep folders on top: every pane sorts by it, and
+  /// Settings → General shows it. Null keeps folders on top.
+  final DirectoryGroupingModel? directoryGrouping;
+
   /// App-wide deep-link intake and the probed sibling-app handoff. Both are
   /// composition seams so tests and unsupported platforms remain inert.
   final DeepLinkCoordinator? deepLinks;
@@ -754,6 +759,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     _attachLifecycle();
     _buildWorkspace();
     widget.workspaces?.addListener(_onWorkspacesChanged);
+    widget.directoryGrouping?.addListener(_onDirectoryGroupingChanged);
     widget.quitGuard?.bindQueue(_quitGuardQueue);
     _attachCheckoutSession(widget.checkoutSession);
     _scheduleDeepLinkBinding();
@@ -942,6 +948,11 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       oldWidget.workspaces?.removeListener(_onWorkspacesChanged);
       widget.workspaces?.addListener(_onWorkspacesChanged);
     }
+    if (!identical(oldWidget.directoryGrouping, widget.directoryGrouping)) {
+      oldWidget.directoryGrouping?.removeListener(_onDirectoryGroupingChanged);
+      widget.directoryGrouping?.addListener(_onDirectoryGroupingChanged);
+      _onDirectoryGroupingChanged();
+    }
     if (!identical(oldWidget.quitGuard, widget.quitGuard)) {
       oldWidget.quitGuard?.unbindQueue(_quitGuardQueue);
       widget.quitGuard?.bindQueue(_quitGuardQueue);
@@ -958,6 +969,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   void dispose() {
     widget.deepLinks?.deactivate(this);
     widget.workspaces?.removeListener(_onWorkspacesChanged);
+    widget.directoryGrouping?.removeListener(_onDirectoryGroupingChanged);
     widget.quitGuard?.unbindQueue(_quitGuardQueue);
     _attachCheckoutSession(null);
     _attachBookmarkBackup(null);
@@ -1424,6 +1436,15 @@ class _WorkspaceShellState extends State<WorkspaceShell>
   /// so unrelated workspace notifies must not re-run the save.
   bool _sidebarWasHidden = false;
 
+  DirectoryGrouping get _directoryGrouping =>
+      widget.directoryGrouping?.value ?? DirectoryGrouping.first;
+
+  /// Re-sorts both strips for the setting's new value.
+  void _onDirectoryGroupingChanged() {
+    _workspace?.left.directoryGrouping = _directoryGrouping;
+    _workspace?.right.directoryGrouping = _directoryGrouping;
+  }
+
   void _buildWorkspace() {
     final lanes = widget.engineSession?.paneLanes;
     PaneTabsController buildStrip(String paneId) {
@@ -1432,6 +1453,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         lanes: lanes,
         newTabTarget: widget.newTabTarget,
         doubleClickAction: widget.doubleClickAction,
+        directoryGrouping: _directoryGrouping,
         // 06 §4.2: the built-in editor's open route — wired on every
         // strip so `file.editBuiltIn` and the "Double-click action:
         // Edit in Poltergeist" preference resolve the same way. The
@@ -1648,6 +1670,7 @@ class _WorkspaceShellState extends State<WorkspaceShell>
     backup: widget.bookmarkBackup,
     appearance: widget.appearance,
     editorTextSize: widget.editorTextSize,
+    directoryGrouping: widget.directoryGrouping,
     changes: [?widget.updateCheck],
   );
 
@@ -1716,10 +1739,12 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       // show: D19's update-check opt-out (General's only row today) or
       // the device's theme (Appearance). A seam-less boot has neither.
       if (widget.updateCheck != null ||
+          widget.directoryGrouping != null ||
           widget.appearance != null ||
           widget.editorTextSize != null)
         buildAppSettingsCommand(
           settings: widget.updateCheck == null ? null : _generalSettings,
+          directoryGrouping: widget.directoryGrouping,
           appearance: widget.appearance,
           editorTextSize: widget.editorTextSize,
           enabled: () => !_commandSessionActive,

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/services/appearance_controller.dart';
+import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/editor_text_size_controller.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart'
     show BackupSwitchOutcome, RetainedBackupAccount;
@@ -179,6 +180,9 @@ void main() {
   late AppearanceController appearance;
   late EditorTextSizeController editorTextSize;
   late List<int> savedTextSizes;
+  late DirectoryGroupingController directoryGrouping;
+  late List<DirectoryGrouping> savedGroupings;
+  Object? groupingSaveFailure;
   late List<AppAppearance> savedAppearances;
   Object? appearanceSaveFailure;
 
@@ -225,9 +229,20 @@ void main() {
     ),
     appearance: appearance,
     editorTextSize: editorTextSize,
+    directoryGrouping: directoryGrouping,
   );
 
   setUp(() {
+    savedGroupings = [];
+    groupingSaveFailure = null;
+    directoryGrouping = DirectoryGroupingController(
+      save: (grouping) async {
+        final failure = groupingSaveFailure;
+        if (failure != null) throw failure;
+        savedGroupings.add(grouping);
+      },
+    );
+    addTearDown(directoryGrouping.dispose);
     savedTextSizes = [];
     editorTextSize = EditorTextSizeController(
       save: (size) async => savedTextSizes.add(size),
@@ -318,7 +333,54 @@ void main() {
     // No Appearance tab, and the window draws the default theme.
     expect(remote.appearance, isNull);
     expect(remote.editorTextSize, isNull);
+    expect(remote.directoryGrouping, isNull);
     expect(remote.theme.value, AppAppearance.initial);
+  });
+
+  group('keep folders on top', () {
+    test('crosses in the first snapshot', () async {
+      await directoryGrouping.setGrouping(DirectoryGrouping.mixed);
+
+      final remote = await openWindow();
+
+      expect(remote.directoryGrouping?.value, DirectoryGrouping.mixed);
+    });
+
+    test("set in the window, re-sorts the app's panes", () async {
+      final remote = await openWindow();
+      var moved = 0;
+      remote.directoryGrouping!.addListener(() => moved++);
+
+      await remote.directoryGrouping!.setGrouping(DirectoryGrouping.mixed);
+
+      expect(directoryGrouping.value, DirectoryGrouping.mixed);
+      expect(savedGroupings, [DirectoryGrouping.mixed]);
+      // The window's switch follows through the snapshot that write sent.
+      await pumpEventQueue();
+      expect(remote.directoryGrouping!.value, DirectoryGrouping.mixed);
+      expect(moved, 1);
+    });
+
+    test('a failed save reaches the window, which keeps the change',
+        () async {
+      final remote = await openWindow();
+      groupingSaveFailure = StateError('disk full');
+
+      await expectLater(
+        remote.directoryGrouping!.setGrouping(DirectoryGrouping.mixed),
+        throwsA(
+          isA<SettingsLinkException>().having(
+            (e) => '$e',
+            'message',
+            contains('disk full'),
+          ),
+        ),
+      );
+      // The panes took it, and the window's switch follows them.
+      expect(directoryGrouping.value, DirectoryGrouping.mixed);
+      await pumpEventQueue();
+      expect(remote.directoryGrouping!.value, DirectoryGrouping.mixed);
+    });
   });
 
   group('the editor text size', () {

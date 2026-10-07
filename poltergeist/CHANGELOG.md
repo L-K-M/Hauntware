@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **Keep folders on top, or mix them in.** Settings → General has a Keep
+  folders on top switch. Turn it off and folders sort in among files by
+  the same column, in every pane and window at once.
 - **Choose where a server opens.** A server's new Start folder setting
   (Edit Server) picks the folder you land in when you connect from the
   sidebar's Servers list: an absolute path such as `/var/www`, or one

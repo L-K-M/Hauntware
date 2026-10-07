@@ -283,6 +283,21 @@ void main() {
         'link',
       ]);
     });
+
+    test('folders mixed in with files apply inside open folders', () async {
+      await openTree();
+      await expand('.cache');
+      controller.directoryGrouping = DirectoryGrouping.mixed;
+      expect(rows(), [
+        '.cache',
+        '  .hidden-state',
+        '  codex-runtimes',
+        '  gh',
+        '.docker',
+        'link',
+        'notes.txt',
+      ]);
+    });
   });
 
   group('freshness', () {

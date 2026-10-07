@@ -16,6 +16,7 @@ import 'theme/app_theme.dart';
 import 'ui/selected_tab_view.dart';
 import 'ui/settings/appearance_settings.dart';
 import 'ui/settings/backup_settings.dart';
+import 'ui/settings/directory_grouping_settings.dart';
 import 'ui/settings/editor_settings.dart';
 import 'ui/settings/editor_text_size_settings.dart';
 import 'ui/settings/general_settings.dart';
@@ -143,7 +144,9 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
   /// Which tabs exist is fixed for the app's run: each follows a seam the
   /// app either has or has not.
   late final List<SettingsWindowTab> _tabs = [
-    if (widget.remote.general != null) SettingsWindowTab.general,
+    if (widget.remote.general != null ||
+        widget.remote.directoryGrouping != null)
+      SettingsWindowTab.general,
     if (widget.remote.appearance != null ||
         widget.remote.editorTextSize != null)
       SettingsWindowTab.appearance,
@@ -216,7 +219,15 @@ class _SettingsWindowScreenState extends State<SettingsWindowScreen>
     final List<Widget> children;
     switch (tab) {
       case SettingsWindowTab.general:
-        children = [GeneralSection(settings: remote.general!)];
+        final general = remote.general;
+        final directoryGrouping = remote.directoryGrouping;
+        children = [
+          if (general != null) GeneralSection(settings: general),
+          if (general != null && directoryGrouping != null)
+            const SizedBox(height: 16),
+          if (directoryGrouping != null)
+            DirectoryGroupingSection(model: directoryGrouping),
+        ];
       case SettingsWindowTab.appearance:
         final appearance = remote.appearance;
         final editorTextSize = remote.editorTextSize;
