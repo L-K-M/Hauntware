@@ -191,7 +191,8 @@ class EditorSyntaxTheme extends ThemeExtension<EditorSyntaxTheme> {
 /// a stored find-in-selection range, washes the text inside it — under any
 /// match, whose own background stays on top. [problems], in document order,
 /// add a wavy underline in their severity's colour over whatever else styles
-/// the text; where two overlap, the later one starts where the earlier ends.
+/// the text; where two overlap, the later one starts where the earlier ends,
+/// and one inside another takes that one's colour.
 ///
 /// One `TextStyle` per token type is built up front and shared by every
 /// span, because a highlighted document produces thousands of spans per

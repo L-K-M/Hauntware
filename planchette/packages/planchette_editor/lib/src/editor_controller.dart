@@ -2585,13 +2585,13 @@ class EditorController extends ChangeNotifier {
     final value = text.text;
     final format = textFormatFor(_displayPath, text.language);
     if (identical(value, _checkedText) && format == _checkedFormat) return;
+    // Checked first and recorded after, so a check that failed is retried.
+    final problems = value.length > syntaxHighlightingMaxChars
+        ? const <TextProblem>[]
+        : validateText(value, format);
     _checkedText = value;
     _checkedFormat = format;
-    _setProblems(
-      value.length > syntaxHighlightingMaxChars
-          ? const []
-          : validateText(value, format),
-    );
+    _setProblems(problems);
   }
 
   /// Carries the problems through the edit from [before], leaving the next
