@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:ghost_desktop/ghost_desktop.dart';
-import 'package:path/path.dart' as paths;
 
 import 'app_settings.dart';
+import 'json_file.dart';
 
 /// The desktop window's remembered frame and presentation flags, in a file
 /// of their own beside `settings.json`. Kept out of [SettingsStore] on
@@ -53,33 +53,8 @@ final class WindowStateStore implements GhostWindowPersistence {
   /// the previous state rather than a truncated file that would read as none
   /// at all — the same contract settings.json keeps.
   @override
-  Future<void> save(GhostWindowSnapshot snapshot) async {
-    final target = await _destination();
-    await target.parent.create(recursive: true);
-    final staging = File('${target.path}.tmp');
-    await staging.writeAsString(
-      '${const JsonEncoder.withIndent('  ').convert(snapshot.toJson())}\n',
-      flush: true,
-    );
-    await staging.rename(target.path);
-  }
-
-  /// The file a save replaces: where a link at [file] points, so a state file
-  /// kept elsewhere stays linked instead of being replaced by a copy.
-  Future<File> _destination() async {
-    if (!await FileSystemEntity.isLink(file.path)) return file;
-    try {
-      return File(await file.resolveSymbolicLinks());
-    } on FileSystemException {
-      // A link to a file that does not exist yet: write where it points.
-      final target = await Link(file.path).target();
-      return File(
-        paths.isAbsolute(target)
-            ? target
-            : paths.join(file.parent.path, target),
-      );
-    }
-  }
+  Future<void> save(GhostWindowSnapshot snapshot) =>
+      writeJsonFileAtomically(file, snapshot.toJson());
 }
 
 /// Window state kept in memory, for a system with nowhere to store it.
