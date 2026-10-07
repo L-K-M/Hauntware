@@ -2523,10 +2523,9 @@ class EditorController extends ChangeNotifier {
       return cached;
     }
     final length = text.text.length;
-    final starts = lineStarts;
     final lines = <int, TextProblemSeverity>{};
     for (final problem in _problems) {
-      final line = lineIndexAt(starts, problem.start.clamp(0, length));
+      final line = lineIndexAt(lineStarts, problem.start.clamp(0, length));
       if (lines[line] == TextProblemSeverity.error) continue;
       lines[line] = problem.severity;
     }
