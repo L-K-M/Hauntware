@@ -863,11 +863,17 @@ Future<ProcessResult> _runAndroidVersionVerifier(
 }) {
   final repository = Directory(p.join(sandbox.path, 'repository'))
     ..createSync();
+  // The suite's verifier, the one CI and release run from the app folder.
   final verifier = File(
     p.join(repository.path, 'scripts/verify-android-version.sh'),
   );
   verifier.parent.createSync(recursive: true);
-  _repositoryFile('scripts/verify-android-version.sh').copySync(verifier.path);
+  File(
+    p.join(_repositoryRoot.parent.path, 'scripts/verify-android-version.sh'),
+  ).copySync(verifier.path);
+  final appDirectory = Directory(
+    p.join(repository.path, 'app/poltergeist_app'),
+  )..createSync(recursive: true);
 
   final expectedCode = _expectedAndroidCode();
   final pubspec = File(
@@ -935,7 +941,7 @@ printf '%s\n' "$FAKE_ANDROID_VERSION_CODE"
       'FAKE_EXPECTED_APK_PATH': apk.path,
       'PATH': executablePath,
     },
-    workingDirectory: repository.path,
+    workingDirectory: appDirectory.path,
   );
 }
 

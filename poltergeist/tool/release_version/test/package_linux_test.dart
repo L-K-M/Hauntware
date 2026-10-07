@@ -14,7 +14,13 @@ void main() {
   final script = _repositoryFile('scripts/package-linux.sh').readAsStringSync();
 
   group('ABI-tag → GCC mapping', () {
-    final block = _markerBlock(script, 'ABI-tag → GCC mapping');
+    // The table is shared with Planchette's packager at the suite root.
+    final block = File(
+      p.join(
+        _repositoryRoot.parent.path,
+        'scripts/package-linux-gcc-floors.sh',
+      ),
+    ).readAsStringSync();
 
     // Mirrors GCC's ABI policy table
     // (https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html): the tag →
@@ -85,6 +91,32 @@ void main() {
         final result = await _sourceAndCall(block, call);
 
         expect(result.exitCode, isNot(0), reason: call);
+      }
+    });
+
+    test('both packagers load the shared table', () async {
+      for (final product in ['planchette', 'poltergeist']) {
+        final packager = File(
+          p.join(
+            _repositoryRoot.parent.path,
+            product,
+            'scripts/package-linux.sh',
+          ),
+        );
+        final stanza = RegExp(
+          r'^source .*package-linux-gcc-floors\.sh"$',
+          multiLine: true,
+        ).firstMatch(packager.readAsStringSync())?[0];
+        expect(stanza, isNotNull, reason: product);
+
+        final result = await Process.run('bash', [
+          '-euo',
+          'pipefail',
+          '-c',
+          'SELF=${_shellQuote(packager.path)}\n$stanza\nglibcxx_gcc 3.4.30',
+        ]);
+        expect(result.exitCode, 0, reason: '$product: ${result.stderr}');
+        expect((result.stdout as String).trim(), '12.1', reason: product);
       }
     });
 

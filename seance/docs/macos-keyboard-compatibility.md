@@ -57,7 +57,9 @@ key-equivalent selectors are runtime compatibility hooks.
 
 The normalization and `scripts/test-macos-keyboard.{sh,mm}` are mirrored from
 [Poltergeist's keyboard compatibility fix](https://github.com/L-K-M/Poltergeist/pull/220)
-and its `PoltergeistFlutterViewController`. Keep the behavior and fixture
-in step across the two repositories, adjusting only app names and surrounding
-accessibility lifecycle code. The earlier accessibility guard remains covered
+and its `PoltergeistFlutterViewController`. Keep the behavior in step across
+the products, adjusting only app names and surrounding accessibility
+lifecycle code. The fixture's checks live once in the suite's
+`scripts/macos-keyboard-fixture.mm`; each product's `.mm` only selects its
+controller and includes them. The earlier accessibility guard remains covered
 independently by `scripts/test-macos-accessibility.sh`.
