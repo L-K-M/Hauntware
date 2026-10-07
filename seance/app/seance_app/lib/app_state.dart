@@ -2319,7 +2319,7 @@ class AppState extends ChangeNotifier {
   /// Persists a text size change. Settings saves are whole snapshots written
   /// in order, so a newer zoom's save carries this one: a failure throws
   /// only while no newer zoom has started saving, which reports for itself.
-  /// Steps that queue behind a slow save so report once between them.
+  /// Steps whose saves queue behind a slow one thus report a failure once.
   Future<void> _saveZoom() async {
     final save = ++_zoomSaves;
     try {
