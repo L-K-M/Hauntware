@@ -10,9 +10,10 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/application_error_reporter.dart';
 import '../../services/settings_models.dart'
-    show AppearanceSettingsModel, EditorTextSizeModel;
+    show AppearanceSettingsModel, DirectoryGroupingModel, EditorTextSizeModel;
 import '../top_toast.dart';
 import 'appearance_settings.dart';
+import 'directory_grouping_settings.dart';
 import 'editor_text_size_settings.dart';
 
 /// The live value and write sink the General section needs — assembled
@@ -33,8 +34,9 @@ final class GeneralSettings {
   final Future<void> Function(bool enabled) onCheckForUpdatesChanged;
 }
 
-/// The bounded `app.settings` dialog: the General section and, after it,
-/// Appearance, which the desktop Settings window shows as the next tab.
+/// The bounded `app.settings` dialog: the General section with its
+/// file-list row and, after them, Appearance, which the desktop Settings
+/// window shows as the next tab.
 /// Here rather than behind a command of its own because this dialog is
 /// what the Settings gear opens on phones and tablets: the one place a
 /// reader looks for how the app looks. Either section is left out when the
@@ -43,6 +45,7 @@ final class GeneralSettings {
 Future<void> showGeneralSettingsDialog(
   BuildContext context, {
   GeneralSettings? settings,
+  DirectoryGroupingModel? directoryGrouping,
   AppearanceSettingsModel? appearance,
   EditorTextSizeModel? editorTextSize,
 }) => showDialog<void>(
@@ -60,10 +63,17 @@ Future<void> showGeneralSettingsDialog(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (settings != null) GeneralSection(settings: settings),
-              if (settings != null && appearance != null)
+              if (settings != null && directoryGrouping != null)
+                const SizedBox(height: 16),
+              if (directoryGrouping != null)
+                DirectoryGroupingSection(model: directoryGrouping),
+              if ((settings != null || directoryGrouping != null) &&
+                  appearance != null)
                 const Divider(height: 32),
               if (appearance != null) AppearanceSection(model: appearance),
-              if ((settings != null || appearance != null) &&
+              if ((settings != null ||
+                      directoryGrouping != null ||
+                      appearance != null) &&
                   editorTextSize != null)
                 const Divider(height: 32),
               if (editorTextSize != null)

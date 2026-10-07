@@ -417,6 +417,8 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
   },
   // The editor text size slider's key — plumbing for tests, never rendered.
   'lib/ui/settings/editor_text_size_settings.dart': {"'editor.textSize'"},
+  // The folders switch's key.
+  'lib/ui/settings/directory_grouping_settings.dart': {"'view.foldersOnTop'"},
   // The Settings command id (D21 plumbing) — registered, never rendered.
   // Its construction assert is a programmer diagnostic.
   'lib/ui/settings/app_settings_command.dart': {

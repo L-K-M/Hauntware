@@ -17,6 +17,7 @@ import 'services/app_preferences.dart';
 import 'services/app_session_lifecycle.dart';
 import 'services/archive_queue_tasks.dart';
 import 'services/appearance_controller.dart';
+import 'services/directory_grouping_controller.dart';
 import 'services/editor_text_size_controller.dart';
 import 'services/application_error_reporter.dart';
 import 'services/bookmark_backup_service.dart';
@@ -59,6 +60,7 @@ import 'services/transfer_queue_session.dart';
 import 'services/settings_window/settings_window_host.dart';
 import 'services/settings_window/settings_window_link.dart';
 import 'services/update_check_controller.dart';
+import 'services/view_preferences_store.dart';
 import 'services/workspace_library.dart';
 import 'services/workspace_list_store.dart';
 import 'services/workspace_windows/window_host.dart';
@@ -536,6 +538,16 @@ Future<void> main(List<String> args) async {
     initial: await preferences.loadEditorTextSize(),
     save: preferences.saveEditorTextSize,
   );
+  // Whether lists keep folders on top: the global default of the view
+  // options (02 §2.4), shared by every window's panes.
+  final viewPreferences = ViewPreferencesStore(store: settingsStore);
+  final directoryGrouping = DirectoryGroupingController(
+    initial: await DirectoryGroupingController.load(
+      viewPreferences,
+      onError: errorReporter.report,
+    ),
+    save: DirectoryGroupingController.saveTo(viewPreferences),
+  );
 
   // What every window shares beyond the models above (00 D39): the
   // reachability owner (it drives the engine's one probe target set),
@@ -673,6 +685,7 @@ Future<void> main(List<String> args) async {
       updateCheck: updateCheck,
       appearance: appearance,
       editorTextSize: editorTextSize,
+      directoryGrouping: directoryGrouping,
       deepLinks: deepLinks,
       seanceLauncher: seanceLauncher,
       settingsWindow: settingsWindow,

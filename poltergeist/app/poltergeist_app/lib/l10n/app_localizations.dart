@@ -3277,6 +3277,24 @@ abstract class AppLocalizations {
   /// **'Nothing to set here yet.'**
   String get settingsWindowEmpty;
 
+  /// Heading of the Settings → General rows about how file lists are ordered.
+  ///
+  /// In en, this message translates to:
+  /// **'File lists'**
+  String get settingsFileListsSection;
+
+  /// Switch in Settings → General: when on, folders sort ahead of files; when off, folders and files are sorted together.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep folders on top'**
+  String get foldersOnTopLabel;
+
+  /// Explainer under the Keep folders on top switch.
+  ///
+  /// In en, this message translates to:
+  /// **'When off, folders sort in among files by the same column.'**
+  String get foldersOnTopSubtitle;
+
   /// Settings toggle for the D19 link-only update check (opt-out).
   ///
   /// In en, this message translates to:

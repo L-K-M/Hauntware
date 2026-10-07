@@ -306,9 +306,11 @@ void main() {
   });
 
   group('column sort (D32 §6)', () {
+    late FakePaneChannel sortedChannel;
+
     Future<PaneController> sortedPane() async {
       final lanes = FakePaneLanes();
-      final channel = FakePaneChannel('/home/tester');
+      final channel = sortedChannel = FakePaneChannel('/home/tester');
       channel.listings['/home/tester'] = [
         _entry('b.txt', size: 10, modified: DateTime(2026, 9, 1)),
         _entry(
@@ -385,6 +387,26 @@ void main() {
 
       pane.setFilterQuery('');
       pane.showHidden = false;
+      expect(names(pane), ['docs', 'a.txt', 'b.txt']);
+    });
+
+    test('folders sort in among files when they are not kept on top, '
+        'without a re-list', () async {
+      final pane = await sortedPane();
+      final lists = sortedChannel.listCalls.length;
+      pane.setCursorIndex(names(pane).indexOf('a.txt'));
+
+      pane.directoryGrouping = DirectoryGrouping.mixed;
+      expect(names(pane), ['a.txt', 'b.txt', 'docs']);
+      // Under every column: newest first puts the folder back on top here.
+      pane.sortByColumn(FileSortKey.modified);
+      expect(names(pane), ['docs', 'a.txt', 'b.txt']);
+      pane.sortByColumn(FileSortKey.name);
+
+      expect(sortedChannel.listCalls, hasLength(lists));
+      expect(pane.entries[pane.cursorIndex!].name, 'a.txt');
+
+      pane.directoryGrouping = DirectoryGrouping.first;
       expect(names(pane), ['docs', 'a.txt', 'b.txt']);
     });
   });

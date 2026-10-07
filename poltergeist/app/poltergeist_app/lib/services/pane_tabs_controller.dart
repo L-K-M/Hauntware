@@ -189,6 +189,7 @@ class PaneTabsController extends ChangeNotifier {
     PaneEngineLanes? lanes,
     this.newTabTarget = NewTabTarget.duplicate,
     DoubleClickAction doubleClickAction = DoubleClickAction.open,
+    DirectoryGrouping directoryGrouping = DirectoryGrouping.first,
     this.builtInEditorOpen,
     this.externalEditorOpen,
     this.onLocationCommitted,
@@ -201,6 +202,8 @@ class PaneTabsController extends ChangeNotifier {
        // changes, not the seed (no tabs exist yet).
        // ignore: prefer_initializing_formals
        _doubleClickAction = doubleClickAction,
+       // ignore: prefer_initializing_formals
+       _directoryGrouping = directoryGrouping,
        // Keep the lanes seam private to the strip.
        // ignore: prefer_initializing_formals
        _lanes = lanes,
@@ -249,6 +252,20 @@ class PaneTabsController extends ChangeNotifier {
   }
 
   DoubleClickAction _doubleClickAction;
+
+  /// The "Keep folders on top" setting's live value (02 §2.3): stamped on
+  /// every tab like [doubleClickAction], so a change re-sorts open tabs at
+  /// once and every later arrival sorts under it.
+  DirectoryGrouping get directoryGrouping => _directoryGrouping;
+  set directoryGrouping(DirectoryGrouping value) {
+    if (_directoryGrouping == value) return;
+    _directoryGrouping = value;
+    for (final tab in _tabs) {
+      tab.controller.directoryGrouping = value;
+    }
+  }
+
+  DirectoryGrouping _directoryGrouping;
 
   /// The built-in editor's open seam (06 §4.2), wired once at strip
   /// construction by the shell and stamped on every arriving tab in
@@ -363,6 +380,7 @@ class PaneTabsController extends ChangeNotifier {
       onError: _onError,
     );
     controller.doubleClickAction = _doubleClickAction;
+    controller.directoryGrouping = _directoryGrouping;
     controller.addListener(_forwardTabChange);
     final tab = PaneTab(
       id: controller.paneTabId,
@@ -870,6 +888,7 @@ class PaneTabsController extends ChangeNotifier {
     // Keep the active pointer on its own tab through the insertion.
     if (_activeIndex >= insertion) _activeIndex++;
     tab.controller.doubleClickAction = _doubleClickAction;
+    tab.controller.directoryGrouping = _directoryGrouping;
     tab.controller.serverConfigLookup = serverConfigLookup;
     tab.controller.addListener(_forwardTabChange);
     _tabs.insert(insertion, tab);
@@ -902,6 +921,7 @@ class PaneTabsController extends ChangeNotifier {
     // Every arrival opens files under the strip's current setting —
     // adopted, new, and ghost-reopened controllers alike.
     controller.doubleClickAction = _doubleClickAction;
+    controller.directoryGrouping = _directoryGrouping;
     controller.builtInEditorOpen = builtInEditorOpen;
     controller.externalEditorOpen = externalEditorOpen;
     controller.onLocationCommitted = onLocationCommitted;

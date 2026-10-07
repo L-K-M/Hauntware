@@ -35,7 +35,7 @@ import 'services/seance_links.dart';
 import 'services/session_persistence.dart';
 import 'services/session_state.dart';
 import 'services/settings_models.dart'
-    show AppearanceSettingsModel, EditorTextSizeModel;
+    show AppearanceSettingsModel, DirectoryGroupingModel, EditorTextSizeModel;
 import 'services/settings_window/settings_window_host.dart';
 import 'services/sidebar_controller.dart'
     show CollapsedSectionWriter, PinnedServerWriter, SidebarDensity;
@@ -126,6 +126,7 @@ class PoltergeistApp extends StatefulWidget {
     this.checkoutPrompts,
     this.appearance,
     this.editorTextSize,
+    this.directoryGrouping,
     this.deepLinks,
     this.seanceLauncher,
   });
@@ -361,6 +362,10 @@ class PoltergeistApp extends StatefulWidget {
   /// Appearance and View › Zoom. Null keeps editors at the standard size.
   final EditorTextSizeModel? editorTextSize;
 
+  /// Whether file lists keep folders on top, behind Settings → General.
+  /// Null keeps folders on top and leaves the row out.
+  final DirectoryGroupingModel? directoryGrouping;
+
   final DeepLinkCoordinator? deepLinks;
   final SeanceLauncher? seanceLauncher;
 
@@ -562,6 +567,7 @@ class _PoltergeistAppState extends State<PoltergeistApp> {
       checkoutPrompts: widget.checkoutPrompts,
       appearance: widget.appearance,
       editorTextSize: widget.editorTextSize,
+      directoryGrouping: widget.directoryGrouping,
       deepLinks: widget.deepLinks,
       seanceLauncher: widget.seanceLauncher,
     );

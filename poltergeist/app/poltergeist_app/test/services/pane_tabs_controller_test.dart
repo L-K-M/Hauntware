@@ -407,6 +407,23 @@ void main() {
     });
   });
 
+  group('keep folders on top propagation (02 §2.3)', () {
+    test('writing the live value re-sorts open tabs and stamps new '
+        'arrivals', () async {
+      final controller = tabs();
+      final first = controller.newTab(target: NewTabTarget.launcher);
+      await settle();
+      expect(first.controller.directoryGrouping, DirectoryGrouping.first);
+
+      controller.directoryGrouping = DirectoryGrouping.mixed;
+      expect(first.controller.directoryGrouping, DirectoryGrouping.mixed);
+
+      final second = controller.newTab(target: NewTabTarget.launcher);
+      await settle();
+      expect(second.controller.directoryGrouping, DirectoryGrouping.mixed);
+    });
+  });
+
   group('activation and cycling', () {
     test('activateTab switches the visible tab', () {
       final controller = tabs();

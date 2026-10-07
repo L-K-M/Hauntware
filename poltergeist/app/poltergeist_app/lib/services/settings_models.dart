@@ -43,6 +43,17 @@ abstract interface class EditorTextSizeModel implements ValueListenable<int> {
   Future<void> setTextSize(int size);
 }
 
+/// Whether file lists keep folders on top or sort them in among files:
+/// [DirectoryGroupingController] in the app. Settings → General writes it,
+/// and every pane re-sorts for it.
+abstract interface class DirectoryGroupingModel
+    implements ValueListenable<DirectoryGrouping> {
+  /// Re-sorts every pane, then persists; an unchanged value is a no-op.
+  /// Throws when the write fails, after the panes have taken the change:
+  /// the next write carries it.
+  Future<void> setGrouping(DirectoryGrouping grouping);
+}
+
 /// View › Zoom on an [EditorTextSizeModel].
 extension EditorTextSizeZoom on EditorTextSizeModel {
   Future<void> zoom(EditorZoom zoom) =>

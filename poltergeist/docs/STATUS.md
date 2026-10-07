@@ -4,6 +4,24 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Keep folders on top setting (2026-10-07)
+
+Settings → General (dialog and Settings window) gains a "Keep folders on
+top" switch. Off sorts folders among files under every column and
+direction (`DirectoryGrouping.mixed`, which the core comparator already
+had). `DirectoryGroupingController` persists it as the global default of
+02 §2.4's view options through `ViewPreferencesStore.updateDefaults`,
+the store's first production use; per-folder overrides from the planned
+view popover will layer over it. An unreadable or newer view schema
+opens with folders on top and reports why; writes keep refusing to
+overwrite it. Panes keep `_sortedListing` in default order and apply the
+grouping in the hidden-file projection, as the column sort does, so a
+change re-sorts open tabs, expanded folders and restores without a
+re-list. Device-local, like every view option.
+
+Validation: controller, store, pane, strip, Settings dialog and Settings
+window tests (the switch round-trips through the window link).
+
 ## Server start folder (2026-10-07)
 
 `ServerConfig` (`seance_protocol`) gains an optional, synced

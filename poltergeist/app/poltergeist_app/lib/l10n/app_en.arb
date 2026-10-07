@@ -2761,6 +2761,18 @@
   "@settingsWindowEmpty": {
     "description": "Shown in the desktop Settings window when the app has none of its sections wired."
   },
+  "settingsFileListsSection": "File lists",
+  "@settingsFileListsSection": {
+    "description": "Heading of the Settings → General rows about how file lists are ordered."
+  },
+  "foldersOnTopLabel": "Keep folders on top",
+  "@foldersOnTopLabel": {
+    "description": "Switch in Settings → General: when on, folders sort ahead of files; when off, folders and files are sorted together."
+  },
+  "foldersOnTopSubtitle": "When off, folders sort in among files by the same column.",
+  "@foldersOnTopSubtitle": {
+    "description": "Explainer under the Keep folders on top switch."
+  },
   "updateCheckEnabledLabel": "Check for updates",
   "@updateCheckEnabledLabel": {
     "description": "Settings toggle for the D19 link-only update check (opt-out)."

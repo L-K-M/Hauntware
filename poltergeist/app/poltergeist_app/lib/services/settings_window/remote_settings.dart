@@ -133,6 +133,9 @@ class RemoteSettings extends ChangeNotifier {
     _link,
   );
   bool _hasEditorTextSize = false;
+  late final RemoteDirectoryGrouping _directoryGrouping =
+      RemoteDirectoryGrouping._(_link);
+  bool _hasDirectoryGrouping = false;
   SyncAccountGate _gate = const SyncAccountGate.production();
 
   /// The General rows, or null when the app has none.
@@ -178,6 +181,10 @@ class RemoteSettings extends ChangeNotifier {
   /// no editor text size.
   EditorTextSizeModel? get editorTextSize =>
       _hasEditorTextSize ? _editorTextSize : null;
+
+  /// The General tab's file-list row, or null when the app has none.
+  DirectoryGroupingModel? get directoryGrouping =>
+      _hasDirectoryGrouping ? _directoryGrouping : null;
 
   /// The theme the window draws itself in: the app's, from the latest
   /// snapshot, or the default theme when the app has no theme seam. One
@@ -247,6 +254,12 @@ class RemoteSettings extends ChangeNotifier {
     _hasEditorTextSize = editorTextSize != null;
     if (editorTextSize != null) _editorTextSize._apply(editorTextSize);
 
+    final grouping = snapshot[SettingsLinkKey.directoryGrouping.name] as String?;
+    _hasDirectoryGrouping = grouping != null;
+    if (grouping != null) {
+      _directoryGrouping._apply(DirectoryGrouping.values.byName(grouping));
+    }
+
     final gate = (snapshot[SettingsLinkKey.gate.name]! as Map)
         .cast<String, Object?>();
     _gate = SyncAccountGate(
@@ -298,6 +311,7 @@ class RemoteSettings extends ChangeNotifier {
     unawaited(_tabRequests.close());
     page.dispose();
     _appearance.dispose();
+    _directoryGrouping.dispose();
     _editorTextSize.dispose();
     super.dispose();
   }
@@ -355,6 +369,29 @@ final class RemoteEditorTextSize extends ChangeNotifier
   @override
   Future<void> setTextSize(int size) =>
       _link.call(SettingsLinkMethod.setEditorTextSize, size);
+}
+
+/// [DirectoryGroupingModel] over the link: the app's value as the latest
+/// snapshot carries it, and writes that run in the app's isolate.
+final class RemoteDirectoryGrouping extends ChangeNotifier
+    implements DirectoryGroupingModel {
+  RemoteDirectoryGrouping._(this._link);
+
+  final _Link _link;
+  DirectoryGrouping _value = DirectoryGrouping.first;
+
+  void _apply(DirectoryGrouping grouping) {
+    if (grouping == _value) return;
+    _value = grouping;
+    notifyListeners();
+  }
+
+  @override
+  DirectoryGrouping get value => _value;
+
+  @override
+  Future<void> setGrouping(DirectoryGrouping grouping) =>
+      _link.call(SettingsLinkMethod.setDirectoryGrouping, grouping.name);
 }
 
 /// [EditorRegistryModel] over the link.
