@@ -14,7 +14,13 @@ void main() {
   final script = _repositoryFile('scripts/package-linux.sh').readAsStringSync();
 
   group('ABI-tag → GCC mapping', () {
-    final block = _markerBlock(script, 'ABI-tag → GCC mapping');
+    // The table is shared with Planchette's packager at the suite root.
+    final block = File(
+      p.join(
+        _repositoryRoot.parent.path,
+        'scripts/package-linux-gcc-floors.sh',
+      ),
+    ).readAsStringSync();
 
     // Mirrors GCC's ABI policy table
     // (https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html): the tag →
