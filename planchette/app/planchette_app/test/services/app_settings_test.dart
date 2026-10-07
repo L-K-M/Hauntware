@@ -345,6 +345,48 @@ void main() {
           : null,
     );
 
+    test(
+      'a dangling relative link is written where it points',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'planchette-settings-dangling-',
+        );
+        addTearDown(() => directory.delete(recursive: true));
+        final config = await Directory('${directory.path}/config').create();
+        final linked = File('${config.path}/settings.json');
+        await Link(linked.path).create('../dotfiles/settings.json');
+
+        await LocalSettingsStore(linked).save(const AppSettings(fontSize: 22));
+
+        expect(FileSystemEntity.isLinkSync(linked.path), isTrue);
+        final real = File('${directory.path}/dotfiles/settings.json');
+        expect(
+          await real.readAsString(),
+          '${const JsonEncoder.withIndent('  ').convert(const AppSettings(fontSize: 22).toJson())}\n',
+        );
+      },
+      skip: Platform.isWindows
+          ? 'Creating symbolic links needs extra rights on Windows.'
+          : null,
+    );
+
+    test('a failed staging write leaves the previous file', () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'planchette-settings-staging-',
+      );
+      addTearDown(() => directory.delete(recursive: true));
+      final file = File('${directory.path}/settings.json');
+      final store = LocalSettingsStore(file);
+      await store.save(const AppSettings(fontSize: 16));
+      await Directory('${file.path}.tmp').create();
+
+      await expectLater(
+        store.save(const AppSettings(fontSize: 18)),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect((await store.load())?.fontSize, 16);
+    });
+
     test('an unwritable destination reports rather than throws', () async {
       // The parent is a regular file, so the path cannot be created on any
       // platform. An absolute path under the drive root is not enough: on a

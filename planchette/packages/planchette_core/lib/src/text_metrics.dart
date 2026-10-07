@@ -34,6 +34,23 @@ List<int> lineStartOffsets(String text) {
   return starts;
 }
 
+/// The 0-based line holding [offset], by binary search over [lineStarts] as
+/// [lineStartOffsets] builds them. A line's start belongs to that line, so
+/// the offset just after a `\n` is on the next one.
+int lineIndexAt(List<int> lineStarts, int offset) {
+  var lo = 0;
+  var hi = lineStarts.length - 1;
+  while (lo < hi) {
+    final mid = (lo + hi + 1) >> 1;
+    if (lineStarts[mid] <= offset) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return lo;
+}
+
 /// The 1-based display column the character at [offset] ends on, counting
 /// [lineStart] as column 1. A tab advances to the next multiple of
 /// [tabWidth] columns — the same convention the ruler readout implies and

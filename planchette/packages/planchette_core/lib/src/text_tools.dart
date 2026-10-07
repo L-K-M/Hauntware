@@ -1633,33 +1633,16 @@ TextToolOutcome _indentationToSpaces(TextToolRun run) {
       IndentStyle.tabs) {
     return const TextToolRefused(TextToolRefusal.requiresTabs);
   }
-  final width = _indentWidth(run);
-  final range = touchedLineRange(run.text, run.base, run.extent);
-  final block = _linesOf(run.text, range.start, range.end);
-  final edits = <_Edit>[];
-  for (var i = 0; i < block.contents.length; i++) {
-    final content = block.contents[i];
-    final end = _indentEnd(content);
-    if (end == 0) continue;
-    final replacement = ' ' * _indentColumnsTo(content, end, width);
-    if (content.substring(0, end) != replacement) {
-      edits.add((
-        start: block.starts[i],
-        end: block.starts[i] + end,
-        insert: replacement,
-      ));
-    }
-  }
-  return _spanEdit(
-    run,
-    edits,
-    changed: edits.length,
-    scope: block.contents.length,
-    indentation: Indentation.spaces(width),
-  );
+  return _convertIndentation(run, IndentStyle.spaces);
 }
 
-TextToolOutcome _indentationToTabs(TextToolRun run) {
+TextToolOutcome _indentationToTabs(TextToolRun run) =>
+    _convertIndentation(run, IndentStyle.tabs);
+
+/// Rewrites each touched line's leading run in [style] at the run's width,
+/// keeping its visual column: to tabs, a remainder short of a full level
+/// stays spaces (`'      '` at width 4 becomes `'\t  '`).
+TextToolOutcome _convertIndentation(TextToolRun run, IndentStyle style) {
   final width = _indentWidth(run);
   final range = touchedLineRange(run.text, run.base, run.extent);
   final block = _linesOf(run.text, range.start, range.end);
@@ -1669,7 +1652,10 @@ TextToolOutcome _indentationToTabs(TextToolRun run) {
     final end = _indentEnd(content);
     if (end == 0) continue;
     final column = _indentColumnsTo(content, end, width);
-    final replacement = '\t' * (column ~/ width) + ' ' * (column % width);
+    final replacement = switch (style) {
+      IndentStyle.spaces => ' ' * column,
+      IndentStyle.tabs => '\t' * (column ~/ width) + ' ' * (column % width),
+    };
     if (content.substring(0, end) != replacement) {
       edits.add((
         start: block.starts[i],
@@ -1683,7 +1669,10 @@ TextToolOutcome _indentationToTabs(TextToolRun run) {
     edits,
     changed: edits.length,
     scope: block.contents.length,
-    indentation: Indentation.tabs(width: width),
+    indentation: switch (style) {
+      IndentStyle.spaces => Indentation.spaces(width),
+      IndentStyle.tabs => Indentation.tabs(width: width),
+    },
   );
 }
 

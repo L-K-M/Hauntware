@@ -44,12 +44,8 @@ void main() {
   group('CommandPalette', () {
     late List<String> ran;
     late List<PaletteCommand> commands;
-    PaletteCommand command(String path, String label) => PaletteCommand(
-      id: '$path/$label',
-      path: path,
-      label: label,
-      run: () => ran.add(label),
-    );
+    PaletteCommand command(String path, String label) =>
+        PaletteCommand(path: path, label: label, run: () => ran.add(label));
     setUp(() {
       ran = [];
       commands = [
@@ -122,8 +118,8 @@ void main() {
       // matches were given, so the two tied and menu order decided.
       expect(fuzzyMatch('pe', 'Replace…')!.score, lessThanOrEqualTo(-1));
       commands = [
-        PaletteCommand(id: 'r', path: 'Open', label: 'Recent', run: () {}),
-        PaletteCommand(id: 'x', path: 'Find', label: 'Replace…', run: () {}),
+        PaletteCommand(path: 'Open', label: 'Recent', run: () {}),
+        PaletteCommand(path: 'Find', label: 'Replace…', run: () {}),
       ];
       await open(tester);
       await type(tester, 'pe');
@@ -193,7 +189,6 @@ void main() {
     testWidgets('a keyword matches a command and says so', (tester) async {
       commands = [
         PaletteCommand(
-          id: 'dedupe',
           path: 'Text > Lines',
           label: 'Remove Duplicate Lines…',
           description: 'Deletes repeated lines, keeping the first of each.',
@@ -217,7 +212,6 @@ void main() {
     ) async {
       commands = [
         PaletteCommand(
-          id: 'sort',
           path: 'Text > Lines',
           label: 'Sort Lines…',
           description: 'Orders lines alphabetically.',
@@ -248,7 +242,6 @@ void main() {
     testWidgets('a partial query matches a multi-word keyword', (tester) async {
       commands = [
         PaletteCommand(
-          id: 'trim',
           path: 'Text > Whitespace',
           label: 'Detab',
           description: 'Removes spaces and tabs from the ends of lines.',

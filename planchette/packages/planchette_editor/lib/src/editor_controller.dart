@@ -695,8 +695,9 @@ class EditorController extends ChangeNotifier {
           0,
           text.text.length,
         );
-    final line = _lineIndexOf(offset);
-    return (line + 1, displayColumnFor(text.text, lineStarts[line], offset));
+    final starts = lineStarts;
+    final line = lineIndexAt(starts, offset);
+    return (line + 1, displayColumnFor(text.text, starts[line], offset));
   }
 
   /// The UTF-16 code units a selection covers and the lines it touches, in
@@ -712,26 +713,11 @@ class EditorController extends ChangeNotifier {
     final start = selection.start.clamp(0, length);
     final end = selection.end.clamp(0, length);
     if (end <= start) return (characters: 0, lines: 0);
+    final starts = lineStarts;
     return (
       characters: end - start,
-      lines: _lineIndexOf(end - 1) - _lineIndexOf(start) + 1,
+      lines: lineIndexAt(starts, end - 1) - lineIndexAt(starts, start) + 1,
     );
-  }
-
-  /// The 0-based line holding [offset], by binary search over [lineStarts].
-  int _lineIndexOf(int offset) {
-    final starts = lineStarts;
-    var lo = 0;
-    var hi = starts.length - 1;
-    while (lo < hi) {
-      final mid = (lo + hi + 1) >> 1;
-      if (starts[mid] <= offset) {
-        lo = mid;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    return lo;
   }
 
   Future<void> initialize() =>
@@ -2514,7 +2500,7 @@ class EditorController extends ChangeNotifier {
     final length = text.text.length;
     final caret = selection.extentOffset.clamp(0, length);
     final starts = lineStarts;
-    final line = _lineIndexOf(caret);
+    final line = lineIndexAt(starts, caret);
     final lineStart = starts[line];
     final lineEnd = line + 1 < starts.length ? starts[line + 1] : length + 1;
     TextProblem? first;
@@ -2539,7 +2525,7 @@ class EditorController extends ChangeNotifier {
     final length = text.text.length;
     final lines = <int, TextProblemSeverity>{};
     for (final problem in _problems) {
-      final line = _lineIndexOf(problem.start.clamp(0, length));
+      final line = lineIndexAt(lineStarts, problem.start.clamp(0, length));
       if (lines[line] == TextProblemSeverity.error) continue;
       lines[line] = problem.severity;
     }

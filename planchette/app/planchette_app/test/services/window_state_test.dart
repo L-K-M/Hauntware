@@ -108,4 +108,20 @@ void main() {
     await File('${stateFile.path}.tmp').writeAsString('{"x":');
     expect(await store.load(), first);
   });
+
+  test('a failed staging write leaves the previous state', () async {
+    const first = GhostWindowSnapshot(bounds: Rect.fromLTWH(1, 1, 100, 100));
+    await store.save(first);
+    expect(
+      await stateFile.readAsString(),
+      '${const JsonEncoder.withIndent('  ').convert(first.toJson())}\n',
+    );
+    await Directory('${stateFile.path}.tmp').create();
+
+    await expectLater(
+      store.save(const GhostWindowSnapshot(isMaximized: true)),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(await store.load(), first);
+  });
 }

@@ -9,7 +9,7 @@
 
 import 'dart:convert' show jsonDecode;
 
-import 'text_metrics.dart' show lineStartOffsets;
+import 'text_metrics.dart' show lineIndexAt, lineStartOffsets;
 import 'text_problem.dart';
 
 /// A strict-JSON syntax error with a 1-based position in the run's input.
@@ -576,20 +576,8 @@ class _JsonValidator extends _JsonScanner {
   }
 
   /// The 1-based line holding [offset], as the editor's gutter numbers it.
-  int _lineOf(int offset) {
-    final starts = _lineStarts ??= lineStartOffsets(input);
-    var lo = 0;
-    var hi = starts.length - 1;
-    while (lo < hi) {
-      final mid = (lo + hi + 1) >> 1;
-      if (starts[mid] <= offset) {
-        lo = mid;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    return lo + 1;
-  }
+  int _lineOf(int offset) =>
+      lineIndexAt(_lineStarts ??= lineStartOffsets(input), offset) + 1;
 }
 
 /// The 1-based line/column of [pos] in [text]: \r\n counts once.

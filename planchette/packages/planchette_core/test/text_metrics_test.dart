@@ -13,6 +13,17 @@ void main() {
     expect(lineStartOffsets('😀\né'), [0, 3]);
   });
 
+  test('lineIndexAt finds the line holding an offset', () {
+    // 'one\r\n' | 'two\n' | '' (the trailing newline's empty line).
+    final starts = lineStartOffsets('one\r\ntwo\n');
+    expect(
+      [for (var offset = 0; offset <= 9; offset++) lineIndexAt(starts, offset)],
+      [0, 0, 0, 0, 0, 1, 1, 1, 1, 2],
+    );
+    expect(lineIndexAt(starts, 99), 2, reason: 'past the end: last line');
+    expect(lineIndexAt(lineStartOffsets(''), 0), 0);
+  });
+
   test('UTF-8 byte count matches encoding including unpaired surrogates', () {
     for (final text in [
       '',
