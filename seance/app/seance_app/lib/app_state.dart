@@ -2281,6 +2281,7 @@ class AppState extends ChangeNotifier {
   /// Change the terminal font size by [delta] points (the ⌘+ / ⌘− shortcuts),
   /// or reset it to the default when [delta] is null (⌘0). Clamped to the
   /// supported range; a no-op change neither notifies nor writes to disk.
+  /// The size applies at once; see [_saveZoom] for when a failed save throws.
   Future<void> zoomTerminal(double? delta) async {
     final settings = services.settings;
     final next = clampTerminalFontSize(
@@ -2291,7 +2292,7 @@ class AppState extends ChangeNotifier {
     if (next == settings.terminalFontSize) return;
     settings.terminalFontSize = next;
     notifyListeners();
-    await services.saveSettings();
+    await _saveZoom();
   }
 
   /// Resize every built-in editor: View › Zoom's steps (⌘ or Ctrl with +,
@@ -2301,14 +2302,38 @@ class AppState extends ChangeNotifier {
   );
 
   /// Sets the built-in editor's text size, clamped to the shared range. A
-  /// no-op change neither notifies nor writes to disk.
+  /// no-op change neither notifies nor writes to disk. The size applies at
+  /// once; see [_saveZoom] for when a failed save throws.
   Future<void> setEditorFontSize(int size) async {
     final settings = services.settings;
     final next = EditorTextSize.clamp(size);
     if (next == settings.editorFontSize) return;
     settings.editorFontSize = next;
     notifyListeners();
-    await services.saveSettings();
+    await _saveZoom();
+  }
+
+  /// Counts [_saveZoom] calls.
+  int _zoomSaves = 0;
+
+  /// Persists a text size change. Settings saves are whole snapshots written
+  /// in order, so a newer zoom's save carries this one: a failure throws
+  /// only while no newer zoom has started saving, which reports for itself.
+  /// Steps whose saves queue behind a slow one thus report a failure once.
+  Future<void> _saveZoom() async {
+    final save = ++_zoomSaves;
+    try {
+      await services.saveSettings();
+    } catch (error, stackTrace) {
+      if (save == _zoomSaves) rethrow;
+      developer.log(
+        'A text size save failed; a newer zoom is saving the size again',
+        name: 'seance.app',
+        level: 900,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Repaint live terminals after the appearance settings changed in place

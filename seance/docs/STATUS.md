@@ -45,6 +45,13 @@ in its snapshot, with a new `setEditorFontSize` link method. Range and
 steps come from Planchette's shared `EditorTextSize` (9 to 48, standard
 14), so all three apps zoom alike. Terminal zoom is unchanged.
 
+A zoom chord whose save fails says so ("Editor text size not saved —
+reason", "Terminal font size not saved — reason" in a terminal) instead
+of leaving an unhandled async error behind text that looks saved. The
+size stays applied for the session. A failed save stays quiet (logged
+only) once a newer zoom is saving: that save writes the whole settings
+file, so it carries the earlier ones and reports for itself.
+
 ## Remote programs never reach the system app (2026-10-06)
 
 Finding P1-03 (`docs/reviews/deep-review-2026-09-26.md`): opening a
