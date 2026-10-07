@@ -4,6 +4,27 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Launch guard: installers and loadable bundles (2026-10-06)
+
+The shared launch classifier (`seance_core` `executable_launch.dart`)
+now also refuses, on Windows, `appx`, `appxbundle`, `msix`, `msixbundle`
+and `appinstaller` (App Installer installs and launches them on open,
+like `msi`), `appref-ms` (ClickOnce, like `application`), `vsto` (the
+Office customization installer) and `ppkg` (provisioning packages, whose
+commands can run as SYSTEM once accepted); on macOS, `prefpane`,
+`saver`, `slidesaver` and `action`, whose stock panels install and load
+the bundle on open; on Linux, `deb` and `rpm`, which GNOME Software and
+Discover install on open, running maintainer scripts as root after the
+user authenticates. Considered and left out: `gadget` (no handler since
+Windows 8), `msu` (Windows Update installs only Microsoft-signed
+updates), Access databases and Office macro documents (open as
+documents behind a Trust Center gate), QuickLook, Spotlight and Audio
+Unit plug-ins (no open flow; they load only once copied into place),
+`settingcontent-ms` (blocked outside Windows' own folder since the
+CVE-2018-8414 fix), `qtz` (no stock handler on current macOS) and the
+Store artifacts `appxupload`, `msixupload`, `eappx` and `emsix` (no
+double-click installer).
+
 ## Frozen sshd-modern base (2026-10-07)
 
 The modern fixture no longer installs Alpine packages in CI. Alpine

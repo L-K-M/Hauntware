@@ -41,6 +41,14 @@ void main() {
         'pyw',
         'pyz',
         'pyzw',
+        'appx',
+        'appxbundle',
+        'msix',
+        'msixbundle',
+        'appinstaller',
+        'appref-ms',
+        'vsto',
+        'ppkg',
       }),
     );
   });
@@ -108,6 +116,28 @@ void main() {
       expect(macos('/Users/me/Library/checkouts/0a1b/run.command'), isTrue);
     });
 
+    test('Windows refuses app packages and their referrals', () {
+      // App Installer and ClickOnce install and launch these on open.
+      for (final name in [
+        'Setup.msix',
+        'Setup.appx',
+        'Suite.msixbundle',
+        'Suite.appxbundle',
+        'App.appinstaller',
+        'Tool.appref-ms',
+        'Report.vsto',
+        'Kiosk.ppkg',
+        // Case and Win32's trailing-dot stripping apply to these too.
+        'SETUP.MSIX',
+        'Tool.APPREF-MS.',
+      ]) {
+        expect(windows(name), isTrue, reason: name);
+      }
+      expect(macos('Setup.msix'), isFalse);
+      expect(windows('Old.gadget'), isFalse);
+      expect(windows('Orders.accdb'), isFalse);
+    });
+
     test('macOS refuses its own launch types, not Windows ones', () {
       for (final name in [
         'run.command',
@@ -122,6 +152,10 @@ void main() {
         'tool.jar',
         'Setup.PKG',
         'Bundle.mpkg',
+        'Clock.prefPane',
+        'Flurry.saver',
+        'Photos.slideSaver',
+        'Resize.action',
       ]) {
         expect(macos(name), isTrue, reason: name);
       }
@@ -131,7 +165,13 @@ void main() {
     });
 
     test('Linux refuses launchers that need no execute bit', () {
-      for (final name in ['app.desktop', 'Tool.AppImage', 'tool.jar']) {
+      for (final name in [
+        'app.desktop',
+        'Tool.AppImage',
+        'tool.jar',
+        'agent_1.0_amd64.deb',
+        'agent-1.0.x86_64.RPM',
+      ]) {
         expect(linux(name), isTrue, reason: name);
       }
       expect(linux('script.sh'), isFalse);
