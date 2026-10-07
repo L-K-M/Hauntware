@@ -547,6 +547,8 @@ void main() {
         activity: activity,
         localFileSystem: () => _TrashResolutionFailureFileSystem(
           const SyncTrashActivityLockException('claim trash'),
+          // The control arm aims the failure at a path holding neither
+          // trash root, so nothing fails.
           leftFails ? leftRoot.path : '${scratch.path}/elsewhere',
         ),
         plan: plan,

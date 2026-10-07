@@ -138,6 +138,10 @@ void main() {
       controller.changeFilterQuery('*.txt');
       expect(controller.entries.map((e) => e.name), ['odd*.txt']);
 
+      // An upper-case query still reaches a lower-case name.
+      controller.changeFilterQuery('REPORT');
+      expect(controller.entries.map((e) => e.name), ['report.txt']);
+
       // Rows live under /home/tester; only names are matched.
       controller.changeFilterQuery('home');
       expect(controller.entries.map((e) => e.name), ['home movies.txt']);

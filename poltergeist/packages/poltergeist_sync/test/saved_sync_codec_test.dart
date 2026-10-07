@@ -82,6 +82,8 @@ void main() {
             'maxDelete': 9,
           },
         );
+        // The map's globs do decode, so the field genuinely replaces them.
+        expect(syncRuleSetFromJson(spec.rules).excludeGlobs, ['legacy/']);
         final rules = syncPairFromSavedSync(spec, id: 'x', name: 'n').rules;
         expect(rules.excludeGlobs, ignoreRules);
         expect(rules.maxDelete, 9);

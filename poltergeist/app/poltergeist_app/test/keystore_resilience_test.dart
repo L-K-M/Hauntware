@@ -93,6 +93,12 @@ void main() {
       expect(keys.lastKeystoreError, contains('KeyringLocked'));
     });
 
+    test('reads degrade to "not set" instead of throwing', () async {
+      final keys = MasterKeyManager(_LockedKeystore());
+      expect(await keys.getApiKey('sync.token'), isNull);
+      expect(keys.keystoreStatus, KeystoreStatus.unavailable);
+    });
+
     test('writes throw a clear KeystoreException', () async {
       final keys = MasterKeyManager(_LockedKeystore());
       await expectLater(
