@@ -487,6 +487,82 @@ void main() {
     expect(File('${rightRoot.path}/a.txt').readAsStringSync(), 'older');
   });
 
+  for (final failure in const <Object>[
+    SyncTrashActivityLockException('claim trash'),
+    SyncTrashPurgeInProgressException(),
+  ]) {
+    test('a trash-writing plan reports a ${failure.runtimeType} as an '
+        'unavailable trash root', () async {
+      File('${leftRoot.path}/a.txt').writeAsStringSync('alpha');
+      File('${rightRoot.path}/a.txt').writeAsStringSync('older');
+      final plan = testPlan(pair, [
+        testItem(
+          'a.txt',
+          left: testFile(size: 5),
+          right: testFile(size: 5),
+          suggested: SyncActionType.updateLeftToRight,
+          reason: SyncReason.newerOnLeft,
+        ),
+      ]);
+      final controller = _controller(
+        pair: pair,
+        states: states,
+        activity: activity,
+        localFileSystem: () => _TrashResolutionFailureFileSystem(failure),
+        plan: plan,
+      );
+      addTearDown(controller.dispose);
+
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      expect(controller.trashPurgeBlocksActions, isFalse);
+      await controller.run();
+
+      expect(controller.phase, SyncPlanPhase.failed);
+      expect(
+        controller.errorMessage,
+        'Sync trash on the right side is unavailable: $failure',
+      );
+      expect(File('${rightRoot.path}/a.txt').readAsStringSync(), 'older');
+    });
+  }
+
+  for (final leftFails in [true, false]) {
+    test('a trash failure on one side ${leftFails ? 'still runs the other '
+        'but holds Restore' : 'is absent: Restore opens'}', () async {
+      File('${leftRoot.path}/a.txt').writeAsStringSync('alpha');
+      File('${rightRoot.path}/a.txt').writeAsStringSync('older');
+      final plan = testPlan(pair, [
+        testItem(
+          'a.txt',
+          left: testFile(size: 5),
+          right: testFile(size: 5),
+          suggested: SyncActionType.updateLeftToRight,
+          reason: SyncReason.newerOnLeft,
+        ),
+      ]);
+      final controller = _controller(
+        pair: pair,
+        states: states,
+        activity: activity,
+        localFileSystem: () => _TrashResolutionFailureFileSystem(
+          const SyncTrashActivityLockException('claim trash'),
+          leftFails ? leftRoot.path : '${scratch.path}/elsewhere',
+        ),
+        plan: plan,
+      );
+      addTearDown(controller.dispose);
+
+      controller.start();
+      await pumpUntil(() => controller.phase == SyncPlanPhase.ready);
+      await controller.run();
+
+      expect(controller.phase, SyncPlanPhase.completed);
+      expect(File('${rightRoot.path}/a.txt').readAsStringSync(), 'alpha');
+      expect(controller.canRestore, !leftFails);
+    });
+  }
+
   test('full purge includes foreign runs but refuses an active root', () async {
     final trashRoot = Directory('${leftRoot.path}/.poltergeist-trash')
       ..createSync();
@@ -744,15 +820,24 @@ final class _TrashListingFailureFileSystem extends LocalFileSystem {
 }
 
 final class _TrashResolutionFailureFileSystem extends LocalFileSystem {
+  /// What resolving the trash root throws, an offline answer by default,
+  /// for every trash root or only the one under [onlyUnder].
+  _TrashResolutionFailureFileSystem([this.failure, this.onlyUnder]);
+
+  final Object? failure;
+  final String? onlyUnder;
+
   @override
   Future<RemoteFileEntry> stat(String path, {bool followLinks = true}) {
-    if (path.endsWith('.poltergeist-trash')) {
-      throw RemoteFileException(
-        kind: RemoteFileErrorKind.disconnected,
-        operation: 'stat',
-        path: path,
-        message: 'offline',
-      );
+    if (path.endsWith('.poltergeist-trash') &&
+        (onlyUnder == null || p.isWithin(onlyUnder!, path))) {
+      throw failure ??
+          RemoteFileException(
+            kind: RemoteFileErrorKind.disconnected,
+            operation: 'stat',
+            path: path,
+            message: 'offline',
+          );
     }
     return super.stat(path, followLinks: followLinks);
   }
