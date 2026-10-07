@@ -48,6 +48,7 @@ void main() {
         'appinstaller',
         'appref-ms',
         'vsto',
+        'ppkg',
       }),
     );
   });
@@ -125,6 +126,7 @@ void main() {
         'App.appinstaller',
         'Tool.appref-ms',
         'Report.vsto',
+        'Kiosk.ppkg',
         // Case and Win32's trailing-dot stripping apply to these too.
         'SETUP.MSIX',
         'Tool.APPREF-MS.',
@@ -163,7 +165,13 @@ void main() {
     });
 
     test('Linux refuses launchers that need no execute bit', () {
-      for (final name in ['app.desktop', 'Tool.AppImage', 'tool.jar']) {
+      for (final name in [
+        'app.desktop',
+        'Tool.AppImage',
+        'tool.jar',
+        'agent_1.0_amd64.deb',
+        'agent-1.0.x86_64.RPM',
+      ]) {
         expect(linux(name), isTrue, reason: name);
       }
       expect(linux('script.sh'), isFalse);

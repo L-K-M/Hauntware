@@ -3,10 +3,10 @@
 ## Unreleased
 
 - Files: remote app packages and installers (`.msix`, `.appx`, their
-  bundles, `.appinstaller`, `.appref-ms`, `.vsto`) on Windows and
-  preference panes, screen savers and Automator actions on a Mac join
-  the files Séance won't hand to the system's default app, which would
-  install and run them.
+  bundles, `.appinstaller`, `.appref-ms`, `.vsto`, `.ppkg`) on Windows,
+  preference panes, screen savers and Automator actions on a Mac, and
+  `.deb` and `.rpm` packages on Linux join the files Séance won't hand
+  to the system's default app, which would install and run them.
 - Files: a double-click with nothing selected opens the item under the
   pointer. The selection count, Download and Clear moved from above the
   list to the footer, so the first click no longer moves the rows. The

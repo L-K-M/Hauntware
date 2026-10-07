@@ -4,10 +4,10 @@
 
 - **More remote programs stay unlaunched.** Opening a remote app package
   or installer (`.msix`, `.appx`, their bundles, `.appinstaller`,
-  `.appref-ms`, `.vsto`) on Windows, or a preference pane, screen saver
-  or Automator action on a Mac, no longer hands it to the system's
-  default app, which would install and run it. Open With an editor still
-  opens it.
+  `.appref-ms`, `.vsto`, `.ppkg`) on Windows, a preference pane, screen
+  saver or Automator action on a Mac, or a `.deb` or `.rpm` package on
+  Linux no longer hands it to the system's default app, which would
+  install and run it. Open With an editor still opens it.
 - **Escape cancels a drag.** Pressing Escape while dragging files ends
   the drag: nothing is copied or moved when you let go, and no folder or
   tab opens under the pointer.

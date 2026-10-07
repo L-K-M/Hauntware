@@ -1276,7 +1276,8 @@ they clicked another row.
   Python launcher's `.py`, `.pyw`, `.pyz`, `.pyzw`, and the packages
   App Installer and ClickOnce install and launch: `.appx`,
   `.appxbundle`, `.msix`, `.msixbundle`, `.appinstaller`,
-  `.appref-ms`, plus `.vsto` for the Office customization installer — the
+  `.appref-ms`, plus `.vsto` for the Office customization installer
+  and `.ppkg` provisioning packages — the
   encoded/Script-Host and control-panel
   twins double-click-execute and pass the `^[A-Za-z0-9_-]{1,16}$`
   sanitizer just like the rest, so the list lives as **one named
@@ -1290,7 +1291,8 @@ they clicked another row.
   `.webloc`, `.jar`, `.pkg`, `.mpkg`, and the bundles whose panel
   installs and loads them on open: `.prefpane`, `.saver`, `.slidesaver`,
   `.action`) and Linux (`.desktop`, `.jar`,
-  `.appimage`) lists; the system-default launch of a checkout refuses
+  `.appimage`, and the `.deb` and `.rpm` packages Software installs on
+  open) lists; the system-default launch of a checkout refuses
   such a name with a toast carrying §1's `Open With ▸` router, never
   a "run anyway"); Quick Look and
   image decoding key type off the extension, so the sanitized form is

@@ -13,8 +13,10 @@ library;
 /// its `py` launcher. App packages (`appx`, `msix` and their bundles) and
 /// their `appinstaller` referrals open in App Installer, which installs
 /// and launches them like `msi`; ClickOnce runs an `appref-ms` the way it
-/// runs an `application`, and the Office customization installer installs
-/// a `vsto` add-in. [isExecutableLaunchName] reads it for Windows hosts.
+/// runs an `application`, the Office customization installer installs a
+/// `vsto` add-in, and a provisioning package (`ppkg`) can run its commands
+/// as SYSTEM once accepted. [isExecutableLaunchName] reads it for Windows
+/// hosts.
 const windowsExecutableExtensions = <String>{
   'bat',
   'cmd',
@@ -58,6 +60,7 @@ const windowsExecutableExtensions = <String>{
   'appinstaller',
   'appref-ms',
   'vsto',
+  'ppkg',
 };
 
 /// The desktop hosts [isExecutableLaunchName] knows. What an OS "open"
@@ -96,9 +99,17 @@ const _macosExecutableExtensions = <String>{
 /// Linux launch types that run without an execute bit: file managers
 /// behind `xdg-open` launch `desktop` entries, the Java runtime's
 /// handler runs `jar`, and `appimage` is listed as defense in depth.
+/// GNOME Software and Discover install a `deb` or `rpm` on open and, once
+/// the user authenticates, run its maintainer scripts as root, like `msi`.
 /// Everything else that executes needs the execute bit, which managed
 /// checkouts never carry.
-const _linuxExecutableExtensions = <String>{'desktop', 'jar', 'appimage'};
+const _linuxExecutableExtensions = <String>{
+  'desktop',
+  'jar',
+  'appimage',
+  'deb',
+  'rpm',
+};
 
 /// Whether handing [name] to [host]'s default handler would run it as a
 /// program instead of opening it as a document: the "never executed"
