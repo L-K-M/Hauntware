@@ -47,7 +47,6 @@ final class SyncEffectiveStats {
     required this.counts,
     required this.bytes,
     required this.replacedFiles,
-    required this.replacedBytes,
     required this.replacedBySide,
     required this.replacedRowsBySide,
     required this.fileDeletesBySide,
@@ -69,7 +68,6 @@ final class SyncEffectiveStats {
   /// [replacedBySide] keeps the per-file toll.
   final Map<SyncSide, int> replacedRowsBySide;
   final int replacedFiles;
-  final int replacedBytes;
 
   /// File deletions per side — delete rows whose destination is not a
   /// directory (the §8 rail weight). Empty-directory cleanup rows stay
@@ -2994,7 +2992,6 @@ SyncEffectiveStats computeSyncEffectiveStats(SyncPlan plan) {
   final fileDeletes = <SyncSide, int>{SyncSide.left: 0, SyncSide.right: 0};
   final dirDeletes = <SyncSide, int>{SyncSide.left: 0, SyncSide.right: 0};
   var replacedFiles = 0;
-  var replacedBytes = 0;
   for (final item in plan.items) {
     counts[item.effective] = (counts[item.effective] ?? 0) + 1;
     // Delete-phase rows split by destination kind: files count on the
@@ -3051,21 +3048,15 @@ SyncEffectiveStats computeSyncEffectiveStats(SyncPlan plan) {
     };
     if (!typeChange) continue;
     var weight = 0;
-    var weightBytes = 0;
     if (dest.kind == EntryKind.directory) {
       for (final snapshot
           in item.destinationSubtree?.values ?? const <EntrySnapshot>[]) {
-        if (snapshot.kind != EntryKind.directory) {
-          weight++;
-          weightBytes += snapshot.size ?? 0;
-        }
+        if (snapshot.kind != EntryKind.directory) weight++;
       }
     } else {
       weight = 1;
-      weightBytes = dest.size ?? 0;
     }
     replacedFiles += weight;
-    replacedBytes += weightBytes;
     replacedBySide[destSide] = replacedBySide[destSide]! + weight;
     replacedRowsBySide[destSide] = replacedRowsBySide[destSide]! + 1;
   }
@@ -3073,7 +3064,6 @@ SyncEffectiveStats computeSyncEffectiveStats(SyncPlan plan) {
     counts: counts,
     bytes: bytes,
     replacedFiles: replacedFiles,
-    replacedBytes: replacedBytes,
     replacedBySide: replacedBySide,
     replacedRowsBySide: replacedRowsBySide,
     fileDeletesBySide: fileDeletes,
