@@ -2550,11 +2550,10 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     ..._portedServerIconVocabulary,
   },
   'lib/ui/server_filter.dart': {
-    // The match haystack and the term-split regex — corpus machinery.
+    // The match haystack — corpus machinery.
     r"'${server.label} ${server.username}@${server.host}:${server.port} '",
     r"'${server.group ?? ''}'",
     "''",
-    "r'\\s+'",
   },
   // D32 §11's platform integration: Dock progress diagnostics and the
   // file-manager reveal's process arguments (never user-facing copy).
