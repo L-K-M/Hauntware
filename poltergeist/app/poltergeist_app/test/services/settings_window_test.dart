@@ -182,6 +182,7 @@ void main() {
   late List<int> savedTextSizes;
   late DirectoryGroupingController directoryGrouping;
   late List<DirectoryGrouping> savedGroupings;
+  Object? groupingSaveFailure;
   late List<AppAppearance> savedAppearances;
   Object? appearanceSaveFailure;
 
@@ -233,8 +234,13 @@ void main() {
 
   setUp(() {
     savedGroupings = [];
+    groupingSaveFailure = null;
     directoryGrouping = DirectoryGroupingController(
-      save: (grouping) async => savedGroupings.add(grouping),
+      save: (grouping) async {
+        final failure = groupingSaveFailure;
+        if (failure != null) throw failure;
+        savedGroupings.add(grouping);
+      },
     );
     addTearDown(directoryGrouping.dispose);
     savedTextSizes = [];
@@ -353,6 +359,27 @@ void main() {
       await pumpEventQueue();
       expect(remote.directoryGrouping!.value, DirectoryGrouping.mixed);
       expect(moved, 1);
+    });
+
+    test('a failed save reaches the window, which keeps the change',
+        () async {
+      final remote = await openWindow();
+      groupingSaveFailure = StateError('disk full');
+
+      await expectLater(
+        remote.directoryGrouping!.setGrouping(DirectoryGrouping.mixed),
+        throwsA(
+          isA<SettingsLinkException>().having(
+            (e) => '$e',
+            'message',
+            contains('disk full'),
+          ),
+        ),
+      );
+      // The panes took it, and the window's switch follows them.
+      expect(directoryGrouping.value, DirectoryGrouping.mixed);
+      await pumpEventQueue();
+      expect(remote.directoryGrouping!.value, DirectoryGrouping.mixed);
     });
   });
 

@@ -96,7 +96,19 @@ void main() {
 
       await tester.tap(toggle());
       await tester.pumpAndSettle();
+      expect(model.value, DirectoryGrouping.first);
+      expect(tester.widget<SwitchListTile>(toggle()).value, isTrue);
       expect(saved, [DirectoryGrouping.mixed, DirectoryGrouping.first]);
+    });
+
+    testWidgets('opens on the stored grouping', (tester) async {
+      final model = DirectoryGroupingController(
+        initial: DirectoryGrouping.mixed,
+      );
+      addTearDown(model.dispose);
+      await tester.pumpWidget(section(model));
+
+      expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
     });
 
     testWidgets('a failed write shows what the panes sort by and says so', (
@@ -112,6 +124,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // The panes took the change; the next write carries it.
+      expect(model.value, DirectoryGrouping.mixed);
       expect(tester.widget<SwitchListTile>(toggle()).value, isFalse);
       expect(find.textContaining('disk full'), findsOneWidget);
       expect(tester.takeException(), isA<StateError>());

@@ -212,7 +212,7 @@ void main() {
   });
 
   testWidgets('the General tab ends with the folders switch, which '
-      're-sorts the app', (tester) async {
+      "writes the app's grouping", (tester) async {
     await pumpWindow(tester, SettingsWindowTab.general);
     Finder toggle() => find.byKey(const ValueKey('view.foldersOnTop'));
 
