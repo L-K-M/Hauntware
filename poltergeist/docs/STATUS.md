@@ -4,6 +4,24 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Frozen sshd-modern base (2026-10-07)
+
+The modern fixture no longer installs Alpine packages in CI. Alpine
+serves only the newest build of each package, so the exact pins broke
+SSH integration and D12 whenever it rebuilt OpenSSH (#57, #63).
+`test/integration/sshd-modern-base/` holds Alpine plus the pins; the
+manual **Fixture images** workflow publishes it for amd64 and arm64 to
+`ghcr.io/l-k-m/poltergeist-sshd-modern-base` (#72), and
+`sshd-modern/Dockerfile` builds on that image by digest, layering only
+`sshd-common`. The integration README has the bump procedure. The legacy
+fixture was already frozen this way.
+
+Validation: `builds the modern fixture on the frozen base by digest`
+failed against the apk-based Dockerfile and passes after. Docker is
+unavailable on the dev host, so the fixture build on the published base
+and the suite against it are proven by this PR's SSH integration and
+D12 jobs.
+
 ## Fixture repair — Alpine OpenSSH 10.6 (2026-10-06)
 
 Main CI's SSH integration and D12 benchmark jobs failed building the

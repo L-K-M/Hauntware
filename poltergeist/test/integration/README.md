@@ -7,11 +7,12 @@ sparse, zero-filled benchmark payloads at runtime, so no large blobs enter Git.
 test/integration/run.sh
 ```
 
-`run.sh` regenerates the user key, builds the digest-pinned OpenSSH 10.6p1
-image, pulls the frozen legacy image by digest, checks every rendered Compose
-profile for unsafe publishing, waits for real SSH banners, runs the OpenSSH
-smoke checks, then runs tagged Dart integration tests serially. Its exit trap
-removes all services, including the profiled keyswap service.
+`run.sh` regenerates the user key, builds the modern image on its frozen
+OpenSSH 10.6p1 base, pulls the frozen legacy image by digest, checks every
+rendered Compose profile for unsafe publishing, waits for real SSH banners,
+runs the OpenSSH smoke checks, then runs tagged Dart integration tests
+serially. Its exit trap removes all services, including the profiled keyswap
+service.
 
 The core pool suite covers transport growth, real keepalive round trips, and
 browse recovery after an sshd restart. Restart tests restore the service and
@@ -42,6 +43,15 @@ registration — the test file's header has the recipe.
 
 `sshd-legacy/Dockerfile` records how the public GHCR artifact was built. CI
 never rebuilds it, so an archive or package-index change cannot alter M0.
+
+`sshd-modern-base/Dockerfile` is the modern fixture's frozen base: Alpine plus
+the pinned OpenSSH and iproute2 packages. Alpine serves only the newest build
+of each package, so the integration jobs never build it;
+`sshd-modern/Dockerfile` layers the fixture's own files on the published image
+by digest. To move to a newer OpenSSH, change the pins there and the matching
+constants in `check_config_test.dart` (the pull request builds the base for
+both platforms), merge, run the **Fixture images** workflow on main, and pin
+the digest from its summary in `sshd-modern/Dockerfile`.
 
 Run a benchmark inside the same lifecycle owner (the harness lives at
 `packages/poltergeist_bench`; the old `tool/bench/run.sh` still works and
