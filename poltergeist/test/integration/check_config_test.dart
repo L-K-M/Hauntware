@@ -63,14 +63,9 @@ const _modernAlpineImage =
     'alpine:20260805@sha256:'
     '020dfcbaaf4cc1078bf2d9c7ba31a8466e334061dcd2f248001d68f79e52c000';
 const _modernOpenSshVersion = '10.6_p1-r0';
-// Keep in sync with the sshd-modern Dockerfile; bump both on rotation.
+// Keep in sync with the frozen base's Dockerfile; a bump republishes it.
 const _modernIproute2Version = '7.2.0-r0';
-// The fixture and its frozen base pin the same set until the fixture
-// builds on the published base.
-const _modernDockerfiles = [
-  'test/integration/sshd-modern/Dockerfile',
-  'test/integration/sshd-modern-base/Dockerfile',
-];
+const _modernBaseDockerfile = 'test/integration/sshd-modern-base/Dockerfile';
 const _modernBaseImage = 'ghcr.io/l-k-m/poltergeist-sshd-modern-base';
 const _modernOpenSshPackages = [
   'openssh-client-common',
@@ -143,34 +138,35 @@ void main() {
   });
 
   test('pins the current modern OpenSSH fixture', () {
-    for (final path in _modernDockerfiles) {
-      final dockerfile = File(path).readAsStringSync();
+    final dockerfile = File(_modernBaseDockerfile).readAsStringSync();
 
-      expect(
-        dockerfile.split('\n').first,
-        'FROM $_modernAlpineImage',
-        reason: path,
-      );
-      for (final package in _modernOpenSshPackages) {
-        expect(
-          dockerfile,
-          contains('$package=$_modernOpenSshVersion'),
-          reason: path,
-        );
-      }
+    expect(dockerfile.split('\n').first, 'FROM $_modernAlpineImage');
+    for (final package in _modernOpenSshPackages) {
+      expect(dockerfile, contains('$package=$_modernOpenSshVersion'));
     }
   });
 
   test('pins the current modern iproute2 package', () {
-    for (final path in _modernDockerfiles) {
-      final dockerfile = File(path).readAsStringSync();
+    final dockerfile = File(_modernBaseDockerfile).readAsStringSync();
 
-      expect(
-        dockerfile,
-        contains('iproute2=$_modernIproute2Version'),
-        reason: path,
-      );
-    }
+    expect(dockerfile, contains('iproute2=$_modernIproute2Version'));
+  });
+
+  test('builds the modern fixture on the frozen base by digest', () {
+    final dockerfile = File(
+      'test/integration/sshd-modern/Dockerfile',
+    ).readAsStringSync();
+
+    expect(
+      dockerfile.split('\n').first,
+      matches(
+        RegExp(
+          '^FROM ${RegExp.escape(_modernBaseImage)}@sha256:[a-f0-9]{64}\$',
+        ),
+      ),
+    );
+    // Alpine drops superseded packages, so CI must never resolve any.
+    expect(dockerfile, isNot(contains(RegExp(r'\bapk\b'))));
   });
 
   test('builds the modern base on PRs and publishes it from main', () {
