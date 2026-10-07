@@ -209,6 +209,19 @@ void main() {
       expect(copy.secretRef, isNull);
     });
 
+    test('a null credential never falls back to the source\'s entry', () {
+      // Sharing the source's vault entry is the hazard the copy avoids, so
+      // an explicit null must win even when the source holds a credential.
+      final copy = duplicateServerConfig(
+        source(secretRef: 'sec-old'),
+        id: 'fresh',
+        label: 'web copy',
+        secretRef: null,
+        now: 999,
+      );
+      expect(copy.secretRef, isNull);
+    });
+
     test('the sync answers are inherited, never widened', () {
       final copy = duplicateServerConfig(
         source(excludeFromSync: true, syncSecret: false),
