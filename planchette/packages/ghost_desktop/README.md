@@ -19,6 +19,9 @@ format, close guards, and native hooks kept in its own thin adapter.
   remembered normal one, close veto/retry, and a bounded close flush.
 - `WindowManagerAdapter` / `ScreenRetrieverAdapter` — the default native
   backs over `window_manager` and `screen_retriever`; tests inject fakes.
+- `semanticsActionView` — the view whose semantics tree holds a node, so a
+  host binding with extra windows can return a VoiceOver action that macOS
+  addressed to the main view to the window it belongs to.
 
 ## What hosts keep
 

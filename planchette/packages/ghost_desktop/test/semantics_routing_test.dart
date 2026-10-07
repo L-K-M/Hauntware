@@ -1,6 +1,6 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:poltergeist_app/services/semantics_view_routing.dart';
+import 'package:ghost_desktop/ghost_desktop.dart';
 
 /// A root (id 0, as every view's is) over [children].
 SemanticsNode _tree(List<SemanticsNode> children) {
@@ -18,7 +18,7 @@ SemanticsNode _leaf() =>
     SemanticsNode()..updateWith(config: SemanticsConfiguration());
 
 /// macOS addresses every accessibility action to the main window's view;
-/// the node id says which window it was meant for (00 D39).
+/// the node id says which window it was meant for.
 void main() {
   late SemanticsNode mainButton;
   late SemanticsNode extraButton;
@@ -41,8 +41,13 @@ void main() {
     };
   });
 
-  int route(int viewId, int nodeId) =>
-      semanticsActionView(viewId: viewId, nodeId: nodeId, trees: trees);
+  int route(int viewId, int nodeId, {int mainViewId = 0}) =>
+      semanticsActionView(
+        viewId: viewId,
+        nodeId: nodeId,
+        trees: trees,
+        mainViewId: mainViewId,
+      );
 
   test("the main window keeps the actions on its own nodes", () {
     expect(route(0, mainButton.id), 0);
@@ -67,5 +72,12 @@ void main() {
 
   test('an action already addressed to an extra window is left alone', () {
     expect(route(3, mainButton.id), 3);
+  });
+
+  test('the main view is whichever the host names', () {
+    trees = {7: trees[0], 3: trees[3]};
+    expect(route(7, extraButton.id, mainViewId: 7), 3);
+    expect(route(7, mainButton.id, mainViewId: 7), 7);
+    expect(route(0, extraButton.id, mainViewId: 7), 0);
   });
 }
