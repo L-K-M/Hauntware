@@ -15,8 +15,9 @@
   error from a command that failed to start, are no longer sometimes
   lost.
 - Files: double-clicking a file over 100 MiB asks before downloading it,
-  so a stray click no longer starts a multi-gigabyte download. Open with
-  still downloads without asking.
+  so a stray click no longer starts a multi-gigabyte download. Reopening
+  a local copy asks too when the server's version that would download is
+  that large. Open with still downloads without asking.
 - Files: a remote file that the system would run as a program, such as
   `.exe` or `.js` on Windows, `.command` on macOS or `.desktop` on Linux,
   is no longer handed to the system's default app; Séance says so

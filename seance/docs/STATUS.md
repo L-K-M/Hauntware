@@ -42,18 +42,25 @@ needs a failed thread start, and Séance refuses local shells on Windows.
 
 Since a desktop default open downloads without the built-in editor's
 4 MB cap, a stray double-click could start a multi-gigabyte download.
-A default open (double-click, Enter, Open) of a file listed over 100 MiB
-now asks first, Poltergeist's preview threshold. It does not ask for an
-explicit Open with choice, for a local copy of the same listed size, on
-mobile (still capped at 4 MB) or when the server reports no size.
-Reopening a copy from the Local edits panel does not ask either, even
-if the server file grew since. A program over the built-in editor's
-4 MB can only go to the system app, so it is refused before the prompt
-rather than after the download.
+A default open (double-click, Enter, Open) of a file over 100 MiB now
+asks first, Poltergeist's preview threshold. It does not ask for an
+explicit Open with choice, on mobile (still capped at 4 MB) or when the
+server reports no size. The controller asks only when a download will
+actually start (`checkoutRemoteFile`'s `confirmDownload`): an unchanged
+local copy opens without a question, while refreshing a copy whose
+server file changed, from a double-click or the Local edits panel, asks
+with the size that would arrive. Cancel leaves the copy untouched and
+opens nothing. A program over the built-in editor's 4 MB can only go to
+the system app, so it is refused before the prompt rather than after
+the download.
 
 Validated on Linux: desktop Files tests for Cancel (nothing downloads),
-Download (the file opens), a second open reusing the copy (no prompt)
-and a huge program (refused, no prompt). macOS and Windows were not exercised.
+Download (the file opens), a second open reusing the copy (no prompt),
+a huge program (refused, no prompt) and a Local edits reopen after the
+server file grew (prompt, Cancel keeps the copy); controller tests for a
+declined new checkout, a declined refresh (fresh stat, copy intact), a
+modified-time-only change (asks) and an unchanged copy (never asks).
+macOS and Windows were not exercised.
 
 ## Built-in editor text size (2026-10-06)
 

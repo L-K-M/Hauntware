@@ -468,6 +468,119 @@ void main() {
     shellDirectory.dispose();
   });
 
+  group('confirmDownload', () {
+    late _FakeRemoteFileSystem remote;
+    late ValueNotifier<String?> shellDirectory;
+    late RemoteFilesController controller;
+
+    setUp(() async {
+      remote = _FakeRemoteFileSystem();
+      shellDirectory = ValueNotifier<String?>(null);
+      controller = RemoteFilesController(
+        () async => remote,
+        shellDirectory: shellDirectory,
+        managedFileStore: _store(),
+        serverId: 'server',
+        editSessionId: 'session',
+      );
+      await controller.initialize();
+    });
+
+    tearDown(() {
+      controller.dispose();
+      shellDirectory.dispose();
+    });
+
+    RemoteFileEntry listed() =>
+        controller.entries.singleWhere((item) => item.name == 'a.txt');
+
+    test('a declined new checkout leaves nothing behind', () async {
+      await expectLater(
+        controller.checkoutRemoteFile(
+          listed(),
+          confirmDownload: (_) async => false,
+        ),
+        throwsA(isA<CheckoutDeclined>()),
+      );
+
+      expect(controller.localCopies, isEmpty);
+      expect(controller.transfers, isEmpty);
+    });
+
+    test(
+      'a refresh asks with the fresh stat; a decline keeps the copy',
+      () async {
+        final copy = await controller.checkoutRemoteFile(listed());
+        remote.contents[copy.remotePath] = [9, 8, 7, 6];
+        final grown = RemoteFileEntry(
+          path: copy.remotePath,
+          name: 'a.txt',
+          type: RemoteFileType.file,
+          size: 4,
+          modifiedAt: DateTime.utc(2024),
+        );
+        remote.directories['/home/test']![0] = grown;
+
+        final asked = <RemoteFileEntry>[];
+        await expectLater(
+          // The stale listing is passed on purpose: the question carries what
+          // would actually download.
+          controller.checkoutRemoteFile(
+            copy.remoteSnapshot,
+            confirmDownload: (entry) async {
+              asked.add(entry);
+              return false;
+            },
+          ),
+          throwsA(isA<CheckoutDeclined>()),
+        );
+
+        expect(asked.single.size, 4);
+        expect(controller.localCopies[copy.remotePath]?.id, copy.id);
+        expect(await controller.localFile(copy).readAsBytes(), [1, 2, 3]);
+        expect(controller.remoteChangedFor(copy.remotePath), isTrue);
+      },
+    );
+
+    test('a change of modified time alone still asks', () async {
+      final copy = await controller.checkoutRemoteFile(listed());
+      remote.directories['/home/test']![0] = RemoteFileEntry(
+        path: copy.remotePath,
+        name: 'a.txt',
+        type: RemoteFileType.file,
+        size: copy.remoteSnapshot.size,
+        modifiedAt: DateTime.utc(2025),
+      );
+
+      var asked = 0;
+      await controller.checkoutRemoteFile(
+        copy.remoteSnapshot,
+        confirmDownload: (_) async {
+          asked++;
+          return true;
+        },
+      );
+
+      expect(asked, 1);
+    });
+
+    test('an unchanged copy never asks', () async {
+      final copy = await controller.checkoutRemoteFile(listed());
+
+      var asked = 0;
+      final reopened = await controller.checkoutRemoteFile(
+        copy.remoteSnapshot,
+        confirmDownload: (_) async {
+          asked++;
+          return true;
+        },
+      );
+
+      expect(asked, 0);
+      expect(reopened.id, copy.id);
+    });
+  });
+
   test('reopening keeps a dirty copy but flags the remote drift', () async {
     final remote = _FakeRemoteFileSystem();
     final shellDirectory = ValueNotifier<String?>(null);
