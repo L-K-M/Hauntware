@@ -166,7 +166,7 @@ void main() {
       ),
     );
     // Alpine drops superseded packages, so CI must never resolve any.
-    expect(dockerfile, isNot(contains('apk ')));
+    expect(dockerfile, isNot(contains(RegExp(r'\bapk\b'))));
   });
 
   test('builds the modern base on PRs and publishes it from main', () {
