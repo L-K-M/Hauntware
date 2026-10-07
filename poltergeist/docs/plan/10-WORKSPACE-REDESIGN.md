@@ -370,7 +370,7 @@ source.**
 | Poltergeist (macOS) | About, Check for Updates…, Settings… ⌘, · Services · Hide, Hide Others, Show All · Quit |
 | File | New Window, New Tab, New Folder, New File │ Open, Open With ▸, Edit in Poltergeist, Quick Look │ Get Info, Rename, Duplicate │ Copy to Other Pane, Move to Other Pane │ Move to Trash │ Reopen Closed Tab, Close Tab, Close Window │ (Linux/Windows: Settings…, Quit) |
 | Edit | Undo, Redo │ Cut, Copy, Paste │ Select All, Invert Selection, Quick Select │ Copy Path │ Filter |
-| View | Show/Hide Sidebar, Use Compact/Comfortable Sidebar Rows (D33: one item naming the density it switches to, since the macOS menu cannot show a check), Inspector, Second Pane │ Info, Transfers, Alerts │ Show Hidden Files │ Refresh │ Enter Full Screen |
+| View | Show/Hide Sidebar, Use Compact/Comfortable Sidebar Rows (D33: one item naming the density it switches to, since the macOS menu cannot show a check), Inspector, Second Pane │ Info, Transfers, Alerts │ Show Hidden Files, Sort By ▸, Keep Folders on Top │ Refresh │ Enter Full Screen |
 | Go | Back, Forward, Enclosing Folder, Home │ Go to Folder…, Edit Path │ Focus Left/Right Pane, Sync Browsing │ Quick Open… |
 | Server | Connect… ⌘K, Disconnect │ Synchronize… ⌥⌘Y, New Saved Sync…, Copy as rsync Command │ Import from ssh config…, Import from another app ▸, Back up and sync… │ Save Workspace…, Workspaces ▸ │ Pause/Resume Transfers |
 | Window | Minimize, Zoom │ Next/Previous Tab │ Bring All to Front |

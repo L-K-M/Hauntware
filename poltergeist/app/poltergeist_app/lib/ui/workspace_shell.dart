@@ -1794,6 +1794,9 @@ class _WorkspaceShellState extends State<WorkspaceShell>
         ),
       // D33's View ▸ Use Compact/Comfortable Sidebar Rows.
       if (sidebar != null) buildSidebarDensityCommand(sidebar: sidebar),
+      // View ▸ Keep Folders on Top, beside Sort By.
+      if (widget.directoryGrouping != null)
+        buildKeepFoldersOnTopCommand(grouping: widget.directoryGrouping!),
       // The rail's active-pane verbs (D21): Add Current Folder to
       // Favorites and Save to Favorites… run from the menus too.
       if (workspace != null && sidebar != null)
@@ -1892,6 +1895,8 @@ class _WorkspaceShellState extends State<WorkspaceShell>
       ?sidebar,
       // The focused plan row drives the compare command's enablement.
       ?_activeSyncSession,
+      // View ▸ Keep Folders on Top's checkmark.
+      ?widget.directoryGrouping,
     ]);
 
     final platform = Theme.of(context).platform;

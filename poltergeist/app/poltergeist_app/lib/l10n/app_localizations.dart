@@ -10423,6 +10423,12 @@ abstract class AppLocalizations {
   /// **'host[:port]'**
   String get quickConnectAddressHostHint;
 
+  /// View menu checked row: folders sort ahead of files when checked, among them when not. Mirrors Settings → General's Keep folders on top switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep Folders on Top'**
+  String get viewKeepFoldersOnTopLabel;
+
   /// View menu submenu: sort the listing by Name, Size, or Date Modified.
   ///
   /// In en, this message translates to:

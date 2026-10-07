@@ -1211,6 +1211,7 @@ const _allowedTechnicalLiterals = <String, Set<String>>{
     "'selection.copyPath'",
     "'view.sortBy'",
     r"'$kViewSortByCommandId:${key.name}'",
+    "'view.keepFoldersOnTop'",
     r"'\n'",
   },
   // The tab strip's widget keys and pane-id name lookup — widget plumbing

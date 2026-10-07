@@ -13,6 +13,7 @@ import 'package:path/path.dart' as p;
 import 'package:poltergeist_app/l10n/app_localizations.dart';
 import 'package:poltergeist_app/l10n/app_localizations_en.dart';
 import 'package:poltergeist_app/services/bookmark_backup_service.dart';
+import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/engine_session.dart';
 import 'package:poltergeist_app/services/pane_tabs_controller.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
@@ -65,8 +66,12 @@ final class _RecordingMenuDelegate extends PlatformMenuDelegate {
 
 /// The real shell over fakes, with every seam that registers a menu row:
 /// the transfer queue, ssh_config import, the bookmark backup, the
-/// update check (Settings…), saved workspaces, and sync.
-Future<void> _pumpShell(WidgetTester tester) async {
+/// update check (Settings…), saved workspaces, sync, and the folders
+/// grouping (Keep Folders on Top).
+Future<void> _pumpShell(
+  WidgetTester tester, {
+  DirectoryGroupingController? grouping,
+}) async {
   final engine = session_test.FakeAppEngine();
   engine.localChannels.addAll([
     session_test.FakeAppBrowseChannel(homePath: '/home/tester'),
@@ -131,6 +136,9 @@ Future<void> _pumpShell(WidgetTester tester) async {
     vaultStore: InMemoryVaultStore(),
   );
 
+  final folders = grouping ?? DirectoryGroupingController();
+  if (grouping == null) addTearDown(folders.dispose);
+
   await tester.pumpWidget(
     MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -145,6 +153,7 @@ Future<void> _pumpShell(WidgetTester tester) async {
         workspaces: workspaces,
         bookmarkBackup: backup,
         updateCheck: UpdateCheckController(),
+        directoryGrouping: folders,
         syncEnvironment: testSyncEnvironment(scratch),
         syncTasks: SyncQueueTasks(),
         sshConfigImport: SshConfigImportSetup(
@@ -295,6 +304,7 @@ const _desktopMenus = <AppMenuId, List<String>>{
     _divider,
     'Show Hidden Files Ctrl+H',
     'Sort By ▸',
+    'Keep Folders on Top',
     _divider,
     'Refresh Ctrl+R',
     _divider,
@@ -412,6 +422,7 @@ const _macMenus = <String, List<String>>{
     _divider,
     'Show Hidden Files ⇧⌘.',
     'Sort By ▸',
+    'Keep Folders on Top',
     _divider,
     'Refresh ⌘R',
     _divider,
@@ -503,6 +514,45 @@ void main() {
     for (final menu in pushed) {
       expect(_macLines(menu), _macMenus[menu.label], reason: menu.label);
     }
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('Keep Folders on Top\'s native checkmark follows a change '
+      'made outside the menu', (tester) async {
+    final delegate = _RecordingMenuDelegate();
+    final original = WidgetsBinding.instance.platformMenuDelegate;
+    WidgetsBinding.instance.platformMenuDelegate = delegate;
+    addTearDown(() => WidgetsBinding.instance.platformMenuDelegate = original);
+    final grouping = DirectoryGroupingController();
+    addTearDown(grouping.dispose);
+    await _pumpShell(tester, grouping: grouping);
+
+    bool? checked() {
+      final view = delegate.menus.cast<PlatformMenu>().firstWhere(
+        (menu) => menu.label == 'View',
+      );
+      for (final member in view.menus) {
+        final items = member is PlatformMenuItemGroup
+            ? member.members
+            : [member];
+        for (final item in items) {
+          if (item is! PlatformMenuItem || item.label != 'Keep Folders on Top') {
+            continue;
+          }
+          return item
+                  .toChannelRepresentation(delegate, getId: (_) => 1)
+                  .single['checked']
+              as bool?;
+        }
+      }
+      return null;
+    }
+
+    expect(checked(), isTrue);
+
+    // Settings writes the model; the pushed menu follows without a click.
+    await grouping.setGrouping(DirectoryGrouping.mixed);
+    await tester.pump();
+    expect(checked(), isFalse);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
   testWidgets('the ☰ main menu is 10 §8\'s table', (tester) async {

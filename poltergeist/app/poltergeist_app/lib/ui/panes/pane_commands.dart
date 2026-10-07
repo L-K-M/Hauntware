@@ -6,16 +6,19 @@ import 'package:flutter/services.dart';
 import 'package:ghost_ui/ghost_ui.dart'
     show GhostChordBinding, GhostChordScope, GhostUnmodifiedChordPolicy;
 import 'package:poltergeist_core/poltergeist_core.dart'
-    show FileSortKey, RemoteFileType;
+    show DirectoryGrouping, FileSortKey, RemoteFileType;
 
 import '../../services/pane_controller.dart';
 import '../../services/pane_permissions.dart' show nameIsFlagged;
 import '../../services/preview_session.dart';
+import '../../services/application_error_reporter.dart';
 import '../../services/registered_command.dart';
+import '../../services/settings_models.dart' show DirectoryGroupingModel;
 import '../../services/workspace_controller.dart';
 import '../../theme/app_theme.dart' show isDesktopPlatform;
 import '../../theme/family_hues.dart';
 import '../layout/pane_allocation.dart' show desktopStageBoundary;
+import '../top_toast.dart';
 import 'pane_view.dart' show PaneView;
 
 const kGoBackCommandId = 'go.back';
@@ -52,9 +55,41 @@ const kTabPreviousCommandId = 'tab.previous';
 const kViewToggleHiddenCommandId = 'view.toggleHidden';
 const kSelectionCopyPathCommandId = 'selection.copyPath';
 const kViewSortByCommandId = 'view.sortBy';
+const kViewKeepFoldersOnTopCommandId = 'view.keepFoldersOnTop';
 
 /// The Details columns `view.sortBy` offers, in header order (D32 §6).
 const _sortColumns = [FileSortKey.name, FileSortKey.size, FileSortKey.modified];
+
+/// View ▸ Keep Folders on Top: the Settings → General switch as a checked
+/// menu row, beside Sort By. App-wide like the setting, so it needs no
+/// listing; a save that fails keeps the change on screen and says so.
+RegisteredCommand buildKeepFoldersOnTopCommand({
+  required DirectoryGroupingModel grouping,
+}) => RegisteredCommand(
+  id: kViewKeepFoldersOnTopCommandId,
+  scope: CommandScope.app,
+  label: (l10n) => l10n.viewKeepFoldersOnTopLabel,
+  icon: Icons.folder_copy_outlined,
+  checked: () => grouping.value == DirectoryGrouping.first,
+  run: (context) async {
+    try {
+      await grouping.setGrouping(switch (grouping.value) {
+        DirectoryGrouping.first => DirectoryGrouping.mixed,
+        DirectoryGrouping.mixed => DirectoryGrouping.first,
+      });
+    } on Object catch (error, stackTrace) {
+      ApplicationErrorReporter().report(error, stackTrace);
+      if (context.mounted) {
+        showTopToastIn(context, message: error.toString());
+      }
+    }
+  },
+  menuPlacement: const CommandMenuPlacement(
+    menu: AppMenuId.view,
+    order: 106,
+    group: 2,
+  ),
+);
 
 /// `selection.copyPath`'s payload for [pane]: the selected rows' paths
 /// in listing order, one per line; else the cursor row's; else the

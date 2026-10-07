@@ -9319,6 +9319,10 @@
   "@quickConnectAddressHostHint": {
     "description": "Helper under the prefilled Quick Connect field: what to type after the user name."
   },
+  "viewKeepFoldersOnTopLabel": "Keep Folders on Top",
+  "@viewKeepFoldersOnTopLabel": {
+    "description": "View menu checked row: folders sort ahead of files when checked, among them when not. Mirrors Settings → General's Keep folders on top switch."
+  },
   "viewSortByLabel": "Sort By",
   "@viewSortByLabel": {
     "description": "View menu submenu: sort the listing by Name, Size, or Date Modified."
