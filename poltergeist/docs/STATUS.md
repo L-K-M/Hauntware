@@ -20,6 +20,19 @@ all three pooled artifacts; all 140 benchmark tests pass and benchmark
 analysis is clean. Main runs still on the old image fail the controlled axis
 after this lands until the rollout finishes. No Séance source or port changed.
 
+## Keep Folders on Top in the View menu (2026-10-07)
+
+View ▸ Keep Folders on Top, after Sort By, is the Settings → General
+switch as a checked row (`view.keepFoldersOnTop`, app scope, so it also
+works from the palette with no listing). It writes the same
+`DirectoryGroupingModel`; the model joins the menus' enablement
+listenable so the native checkmark follows a change from Settings. A
+failed save keeps the change and shows a toast, as the switch does.
+
+Validation: command tests (checked state, both directions, failed save),
+and the macOS and ☰ menu tables in `menu_tree_test.dart`, which failed
+with the row added until 10 §8's table was updated.
+
 ## Keep folders on top setting (2026-10-07)
 
 Settings → General (dialog and Settings window) gains a "Keep folders on

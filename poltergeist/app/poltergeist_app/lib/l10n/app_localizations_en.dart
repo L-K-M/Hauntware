@@ -7423,6 +7423,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quickConnectAddressHostHint => 'host[:port]';
 
   @override
+  String get viewKeepFoldersOnTopLabel => 'Keep Folders on Top';
+
+  @override
   String get viewSortByLabel => 'Sort By';
 
   @override

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:poltergeist_app/l10n/app_localizations.dart';
+import 'package:poltergeist_app/services/directory_grouping_controller.dart';
 import 'package:poltergeist_app/services/pane_controller.dart';
 import 'package:poltergeist_app/services/registered_command.dart';
 import 'package:poltergeist_app/services/workspace_controller.dart';
@@ -1313,6 +1314,63 @@ void main() {
     // The palette path flips the sorted column.
     await sortBy.run(context);
     expect(left.sortDirection, FileSortDirection.ascending);
+  });
+
+  group('view.keepFoldersOnTop', () {
+    Future<BuildContext> host(WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(body: SizedBox.expand()),
+        ),
+      );
+      return tester.element(find.byType(Scaffold));
+    }
+
+    testWidgets('a checked View row beside Sort By that flips the setting', (
+      tester,
+    ) async {
+      final saved = <DirectoryGrouping>[];
+      final grouping = DirectoryGroupingController(
+        save: (value) async => saved.add(value),
+      );
+      addTearDown(grouping.dispose);
+      final command = buildKeepFoldersOnTopCommand(grouping: grouping);
+      final context = await host(tester);
+
+      expect(command.label(AppLocalizations.of(context)), 'Keep Folders on Top');
+      expect(command.scope, CommandScope.app);
+      expect(command.menuPlacement?.menu, AppMenuId.view);
+      expect(command.checked!(), isTrue);
+
+      await command.run(context);
+      expect(grouping.value, DirectoryGrouping.mixed);
+      expect(command.checked!(), isFalse);
+
+      await command.run(context);
+      expect(grouping.value, DirectoryGrouping.first);
+      expect(saved, [DirectoryGrouping.mixed, DirectoryGrouping.first]);
+    });
+
+    testWidgets('a failed save keeps the change and says so', (tester) async {
+      final grouping = DirectoryGroupingController(
+        save: (_) async => throw StateError('disk full'),
+      );
+      addTearDown(grouping.dispose);
+      final command = buildKeepFoldersOnTopCommand(grouping: grouping);
+      final context = await host(tester);
+
+      await command.run(context);
+      await tester.pump();
+
+      expect(grouping.value, DirectoryGrouping.mixed);
+      expect(command.checked!(), isFalse);
+      expect(find.textContaining('disk full'), findsOneWidget);
+      expect(tester.takeException(), isA<StateError>());
+      // Let the toast's dismissal timer run out.
+      await tester.pumpAndSettle(const Duration(seconds: 10));
+    });
   });
 
   testWidgets('selection.copyPath copies the selection, else the folder, '
