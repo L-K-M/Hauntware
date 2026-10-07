@@ -7,7 +7,6 @@ import 'package:ghost_ui/ghost_ui.dart' show formatShortcutActivator;
 /// One command the palette can run: a menu item, named with its path.
 final class PaletteCommand {
   const PaletteCommand({
-    required this.id,
     required this.label,
     required this.path,
     required this.run,
@@ -17,9 +16,6 @@ final class PaletteCommand {
     this.enabled = true,
   });
 
-  /// The menu's stable identifier for the command, so a label that
-  /// changes still resolves.
-  final String id;
   final String label;
 
   /// Where the command lives in the menus, shown on the row so a palette

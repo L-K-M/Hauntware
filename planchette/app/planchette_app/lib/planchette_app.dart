@@ -475,7 +475,6 @@ class _DocumentShellState extends State<_DocumentShell>
             if (!seenIds.add(id)) continue;
             commands.add(
               PaletteCommand(
-                id: id,
                 label: entry.label,
                 path: path,
                 description: tool == null
