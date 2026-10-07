@@ -1387,9 +1387,11 @@ class PaneController extends ChangeNotifier {
 
         final remotePath =
             initialPath ?? _pendingRemotePath ?? bookmark.remotePath;
-        final target = remotePath == null || remotePath == '/'
-            ? channel.homePath
-            : remotePath;
+        final target = switch (remotePath) {
+          null => _startDirectory(config, channel.homePath),
+          '/' => channel.homePath,
+          _ => remotePath,
+        };
         final location = RemotePaneLocation(bookmark.id, target);
         if (_recovery == _RecoveryPhase.waiting &&
             _connectionStatus?.state != ServerConnectionState.connected) {
@@ -1403,6 +1405,27 @@ class PaneController extends ChangeNotifier {
         _pendingRemotePath = null;
       },
     );
+  }
+
+  /// Where a server opened as itself lands (a SERVERS row, or a New Tab
+  /// "home" from one), the only binds with no landing path of their
+  /// own: [ServerConfig.startDirectory] resolved
+  /// against the login home the way the path bar resolves typed input
+  /// (`~/sites` → `/home/me/sites`), else the home itself. Favorites
+  /// carry their own path and never reach this.
+  static String _startDirectory(ServerConfig config, String home) {
+    final start = config.startDirectory;
+    if (start == null) return home;
+
+    // Null only for input the protocol already refuses on read
+    // (normalizeServerStartDirectory); home is the honest landing then.
+    return resolvePanePathInput(
+          raw: start,
+          remote: true,
+          currentPath: home,
+          homePath: home,
+        ) ??
+        home;
   }
 
   ServerConfig _serverConfigForRemote(

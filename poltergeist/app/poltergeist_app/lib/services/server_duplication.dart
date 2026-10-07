@@ -104,6 +104,7 @@ ServerConfig duplicateServerConfig(
   iconEmoji: source.iconEmoji,
   iconImage: source.iconImage,
   loginScript: source.loginScript,
+  startDirectory: source.startDirectory,
   excludeFromSync: source.excludeFromSync,
   // A copy is new, not as old as what it was copied from: `createdAt` is what
   // "added on" would report, and the answer is today.

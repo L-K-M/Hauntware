@@ -4,6 +4,26 @@ Living snapshot of where Poltergeist is, what's proven, and what to pick up
 next. Read [AGENTS.md](../AGENTS.md) for build/test commands and
 [09-PLAYBOOK.md](plan/09-PLAYBOOK.md) for the PR process.
 
+## Server start folder (2026-10-07)
+
+`ServerConfig` (`seance_protocol`) gains an optional, synced
+`startDirectory`: absolute, `~`, `~/…` or relative to the login home,
+normalized on every way in (blank, control characters and `~name` read
+as none). The server editor sets it; a pane binding a server as itself
+(a SERVERS row, or New Tab home from one) resolves it against the
+channel's home with the path bar's rules, while favorites, deep links
+(which always carry a path), retries and restores keep their own path.
+A folder that no longer
+exists is the pane's ordinary listing error. Séance's editor and both
+duplication helpers carry the field, so a Séance save cannot clear it
+by last-writer-wins; builds that predate the field still drop it on
+re-save, like any added field.
+
+Validation: protocol round-trip and normalization tests, pane landing
+tests (home-relative, absolute, missing, own path wins, failed listing),
+editor tests in both apps; Séance's preservation test fails without
+the editor change.
+
 ## Editor problem checks (2026-10-06)
 
 The built-in editor shows the shared editor's problem checks: JSON that
@@ -5180,6 +5200,7 @@ job's tier-B step needs no restructuring, and P4 stays unlanded —
 reported trend-only like the rest of tier B. Local llvmpipe+Xvfb
 evidence is in `tasks/run3-task41/`: five `ok` rows at 168–264 ms per
 switch — environment-scale numbers, not budget reads.
+
 ## M3 — path bar editing + navigation history (2026-09-15)
 
 `go.editPath` (⌘L / Ctrl+L) swaps the segment bar for an in-bar text
@@ -9814,6 +9835,7 @@ subsumption shapes, plus a source-side directory that keeps its copy
 rows) and a `scanned plans` group in `executor_test.dart` that scans
 real trees, diffs and runs them. All but the source-side guard failed
 before the fix. `dart test packages/poltergeist_sync` passes.
+
 ## rsync export: server pairs (2026-09-26)
 
 P2-07. For a pair with a remote side, `buildRsyncCommand` escaped every

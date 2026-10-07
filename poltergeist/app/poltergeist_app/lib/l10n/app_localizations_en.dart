@@ -6261,6 +6261,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get serverEditorKeyPassphrase => 'Key passphrase (optional)';
 
   @override
+  String get serverEditorStartDirectory => 'Start folder (optional)';
+
+  @override
+  String get serverEditorStartDirectoryHint => 'e.g. ~/sites or /var/www';
+
+  @override
+  String get serverEditorStartDirectoryNote =>
+      'Opens when you connect to this server. A relative path starts in your home folder. Blank opens your home folder.';
+
+  @override
+  String get serverEditorStartDirectoryInvalid =>
+      'Enter a folder path such as /var/www or ~/sites.';
+
+  @override
   String get serverEditorLoginScript => 'Login script (optional)';
 
   @override

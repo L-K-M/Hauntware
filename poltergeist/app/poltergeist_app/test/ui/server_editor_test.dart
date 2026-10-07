@@ -274,6 +274,75 @@ void main() {
     });
   });
 
+  // The folder a server opens in, synced with its config.
+  group('start folder', () {
+    Finder startField() =>
+        find.byKey(const ValueKey('serverEditor.startDirectory'));
+
+    Future<void> save(WidgetTester tester) async {
+      await scrollTo(tester, find.widgetWithText(FilledButton, 'Save'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('saves the typed folder, trimmed', (tester) async {
+      await openEditor(tester);
+      await fillRequired(tester);
+      await scrollTo(tester, startField());
+      await tester.enterText(startField(), '  ~/sites  ');
+
+      await save(tester);
+
+      expect(delegate.saved!.$1.startDirectory, '~/sites');
+    });
+
+    testWidgets('an edit shows the stored folder and blank clears it', (
+      tester,
+    ) async {
+      final existing = _server('db').copyWith(startDirectory: '/var/www');
+      delegate.serverList = [existing];
+      await openEditor(tester, existing: existing);
+      await scrollTo(tester, startField());
+      expect(
+        tester.widget<TextFormField>(startField()).controller!.text,
+        '/var/www',
+      );
+
+      await tester.enterText(startField(), '   ');
+      await save(tester);
+
+      expect(delegate.saved!.$1.startDirectory, isNull);
+    });
+
+    testWidgets('an edit that leaves it alone keeps it', (tester) async {
+      final existing = _server('db').copyWith(startDirectory: '/var/www');
+      delegate.serverList = [existing];
+      await openEditor(tester, existing: existing);
+
+      await tester.enterText(field('Label'), 'db (renamed)');
+      await save(tester);
+
+      expect(delegate.saved!.$1.startDirectory, '/var/www');
+    });
+
+    testWidgets("refuses another user's home rather than dropping it", (
+      tester,
+    ) async {
+      await openEditor(tester);
+      await fillRequired(tester);
+      await scrollTo(tester, startField());
+      await tester.enterText(startField(), '~bob/www');
+
+      await save(tester);
+
+      expect(delegate.saved, isNull);
+      expect(
+        find.text('Enter a folder path such as /var/www or ~/sites.'),
+        findsOneWidget,
+      );
+    });
+  });
+
   // D37: the server's own cap on simultaneous transfers, stored on the
   // device beside the config rather than in it.
   group('simultaneous transfers', () {

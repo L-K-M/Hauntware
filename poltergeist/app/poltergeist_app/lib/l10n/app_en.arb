@@ -7763,6 +7763,22 @@
   "@serverEditorKeyPassphrase": {
     "description": "Label of the key-passphrase field."
   },
+  "serverEditorStartDirectory": "Start folder (optional)",
+  "@serverEditorStartDirectory": {
+    "description": "Label of the start-folder field: the remote folder a pane opens when it connects to this server. Synced with the server."
+  },
+  "serverEditorStartDirectoryHint": "e.g. ~/sites or /var/www",
+  "@serverEditorStartDirectoryHint": {
+    "description": "Hint inside the start-folder field."
+  },
+  "serverEditorStartDirectoryNote": "Opens when you connect to this server. A relative path starts in your home folder. Blank opens your home folder.",
+  "@serverEditorStartDirectoryNote": {
+    "description": "Explainer under the start-folder field."
+  },
+  "serverEditorStartDirectoryInvalid": "Enter a folder path such as /var/www or ~/sites.",
+  "@serverEditorStartDirectoryInvalid": {
+    "description": "Validation error when the start folder contains control characters or names another user's home (~name)."
+  },
   "serverEditorLoginScript": "Login script (optional)",
   "@serverEditorLoginScript": {
     "description": "Label of the login-script field — a command typed into the server's shell after connecting (executed by Séance; stored and synced here)."

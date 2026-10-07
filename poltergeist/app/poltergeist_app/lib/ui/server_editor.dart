@@ -281,6 +281,7 @@ class _ServerEditorState extends State<_ServerEditor> {
   final _keyPath = TextEditingController();
   final _keyPassphrase = TextEditingController();
   final _loginScript = TextEditingController();
+  final _startDirectory = TextEditingController();
 
   late AuthMethod _auth;
   late ServerTint _tint;
@@ -341,6 +342,7 @@ class _ServerEditorState extends State<_ServerEditor> {
     _keyPath.text = e?.identityFilePath ?? '';
     _referenceKeyFile = e?.identityFilePath != null;
     _loginScript.text = e?.loginScript ?? '';
+    _startDirectory.text = e?.startDirectory ?? '';
     _storedTransferLimit = e == null
         ? null
         : widget.delegate.transferConcurrencyFor(e.id);
@@ -367,6 +369,7 @@ class _ServerEditorState extends State<_ServerEditor> {
     _keyPath,
     _keyPassphrase,
     _loginScript,
+    _startDirectory,
   ];
 
   /// The fields a connection test's outcome actually depends on.
@@ -570,6 +573,8 @@ class _ServerEditorState extends State<_ServerEditor> {
             const SizedBox(height: 20),
             ..._syncFields(),
             const SizedBox(height: 20),
+            ..._startDirectoryFields(),
+            const SizedBox(height: 20),
             ..._loginScriptFields(),
             const SizedBox(height: 20),
             ..._transferFields(),
@@ -731,6 +736,34 @@ class _ServerEditorState extends State<_ServerEditor> {
           if (!_referenceKeyFile) _syncSecretToggle(),
         ];
     }
+  }
+
+  /// Where a pane opens when it connects to this server as a whole (a
+  /// SERVERS row, not a favorite, which carries its own path). Part of the
+  /// synced config, so every device opens the same folder; Séance carries
+  /// it without showing it.
+  List<Widget> _startDirectoryFields() {
+    final l10n = AppLocalizations.of(context);
+    return [
+      const Divider(),
+      const SizedBox(height: 8),
+      TextFormField(
+        key: const ValueKey('serverEditor.startDirectory'),
+        controller: _startDirectory,
+        decoration: InputDecoration(
+          labelText: l10n.serverEditorStartDirectory,
+          hintText: l10n.serverEditorStartDirectoryHint,
+        ),
+        validator: _validateStartDirectory,
+      ),
+      const SizedBox(height: 4),
+      Text(
+        l10n.serverEditorStartDirectoryNote,
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Theme.of(context).hintColor),
+      ),
+    ];
   }
 
   /// An optional command to run in this server's shell once it opens. Typed
@@ -1036,6 +1069,15 @@ class _ServerEditorState extends State<_ServerEditor> {
     return null;
   }
 
+  /// Blank is the home folder; anything else must be a path the protocol
+  /// keeps, or the save would silently drop it.
+  String? _validateStartDirectory(String? v) {
+    final value = v ?? '';
+    if (value.trim().isEmpty) return null;
+    if (normalizeServerStartDirectory(value) != null) return null;
+    return AppLocalizations.of(context).serverEditorStartDirectoryInvalid;
+  }
+
   /// The server the form currently describes, with [secretRef] as its
   /// credential reference. Shared by Save and Test connection so a test can
   /// never run against a different server than the one about to be saved.
@@ -1078,6 +1120,7 @@ class _ServerEditorState extends State<_ServerEditor> {
       iconEmoji: mark.emoji,
       iconImage: mark.image,
       loginScript: normalizeLoginScript(_loginScript.text),
+      startDirectory: normalizeServerStartDirectory(_startDirectory.text),
       excludeFromSync: _excludeFromSync,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,

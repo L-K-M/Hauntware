@@ -8727,6 +8727,30 @@ abstract class AppLocalizations {
   /// **'Key passphrase (optional)'**
   String get serverEditorKeyPassphrase;
 
+  /// Label of the start-folder field: the remote folder a pane opens when it connects to this server. Synced with the server.
+  ///
+  /// In en, this message translates to:
+  /// **'Start folder (optional)'**
+  String get serverEditorStartDirectory;
+
+  /// Hint inside the start-folder field.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. ~/sites or /var/www'**
+  String get serverEditorStartDirectoryHint;
+
+  /// Explainer under the start-folder field.
+  ///
+  /// In en, this message translates to:
+  /// **'Opens when you connect to this server. A relative path starts in your home folder. Blank opens your home folder.'**
+  String get serverEditorStartDirectoryNote;
+
+  /// Validation error when the start folder contains control characters or names another user's home (~name).
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a folder path such as /var/www or ~/sites.'**
+  String get serverEditorStartDirectoryInvalid;
+
   /// Label of the login-script field — a command typed into the server's shell after connecting (executed by Séance; stored and synced here).
   ///
   /// In en, this message translates to:
