@@ -10,7 +10,6 @@ import 'double_click_action.dart';
 import 'drag_out_controller.dart' show DragOutLeftOut;
 import 'engine_session.dart';
 import 'folder_size.dart';
-import 'listing_filter.dart';
 import 'pane_engine_lanes.dart';
 import 'pane_location.dart';
 import 'pane_path_input.dart';
@@ -4397,7 +4396,7 @@ class PaneController extends ChangeNotifier {
     }
     final folded = _filterQuery.isEmpty
         ? null
-        : ListingFilter(_filterQuery).foldedQuery;
+        : _filterQuery.toLowerCase();
     final rows = <RemoteFileEntry>[];
     final depths = <int>[];
     void add(List<RemoteFileEntry> level, int depth) {
@@ -4844,6 +4843,12 @@ class PaneController extends ChangeNotifier {
   /// case-insensitive substring matches, as an unmodifiable copy so
   /// [entries] keeps its immutable contract. Matching scans the cached
   /// [_loweredNames] — no per-row allocation per keystroke.
+  ///
+  /// Deliberately not the type-ahead fold (`e` must not reach `Étude`)
+  /// nor Quick Select's glob (`*` is an ordinary character). Dart's full
+  /// lowercase stands in for the §2.3 simple fold; where they disagree
+  /// (long s, final sigma) the answer is a miss, never a surprise match.
+  /// [_withExpandedChildren] applies the same test to open folders.
   List<RemoteFileEntry> _filteredListing() {
     // The invariant guards every read, not just filtered ones — a
     // desynced cache is wrong even when no query is active.
@@ -4852,7 +4857,7 @@ class PaneController extends ChangeNotifier {
       '_loweredNames out of sync with _listing — assign via _setListing',
     );
     if (_filterQuery.isEmpty) return _listing;
-    final folded = ListingFilter(_filterQuery).foldedQuery;
+    final folded = _filterQuery.toLowerCase();
     return List.unmodifiable([
       for (var i = 0; i < _listing.length; i++)
         if (_loweredNames[i].contains(folded)) _listing[i],
